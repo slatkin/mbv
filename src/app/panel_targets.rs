@@ -23,24 +23,6 @@ pub(super) enum PanelTarget {
     Cast(CastReceiver),
 }
 
-/// A `PanelTarget`'s identity, used only to re-locate the previously
-/// selected row after a rebuild (`App::rebuild_panel_targets`) -- the two
-/// channels' identifiers live in separate namespaces, so tagging by kind
-/// keeps an Emby session id from ever being confused with a cast receiver
-/// id that happens to collide.
-#[derive(PartialEq, Eq)]
-enum PanelTargetKey {
-    Emby(String),
-    Cast(String),
-}
-
-fn panel_target_key(target: &PanelTarget) -> PanelTargetKey {
-    match target {
-        PanelTarget::Emby(session) => PanelTargetKey::Emby(session.id.clone()),
-        PanelTarget::Cast(receiver) => PanelTargetKey::Cast(receiver.id.clone()),
-    }
-}
-
 /// Concatenates Emby sessions and discovered cast receivers into one list,
 /// Emby first: no dedup, no ordering decision beyond "which channel arrived
 /// first" (8.2). Pure and side-effect free so it is testable without a
@@ -65,21 +47,10 @@ impl super::App {
     /// browse (8.1). Preserves the panel cursor's selection by identity
     /// across the rebuild when possible, falling back to a clamp.
     pub(super) fn rebuild_panel_targets(&mut self) {
-        let selected_key = self
-            .panel_targets
-            .get(self.sessions_cursor)
-            .map(panel_target_key);
+        // SessionsComponent owns the cursor. Preserve only its selected row
+        // identity in the runtime snapshot; the component clamps its cursor
+        // when the replacement list arrives.
         self.panel_targets = build_panel_targets(&self.sessions, &self.cast_receivers);
-        self.sessions_cursor = selected_key
-            .and_then(|key| {
-                self.panel_targets
-                    .iter()
-                    .position(|target| panel_target_key(target) == key)
-            })
-            .unwrap_or_else(|| {
-                self.sessions_cursor
-                    .min(self.panel_targets.len().saturating_sub(1))
-            });
     }
 }
 
@@ -135,26 +106,5 @@ mod tests {
         assert_eq!(targets.len(), 2);
         assert!(matches!(targets[0], PanelTarget::Emby(ref s) if s.id == "shared"));
         assert!(matches!(targets[1], PanelTarget::Cast(ref r) if r.id == "shared"));
-    }
-
-    #[test]
-    fn rebuild_preserves_the_selected_cast_target_across_an_emby_reload() {
-        let mut app = crate::app::tests::make_app_stub();
-        app.cast_receivers = vec![receiver("r1")];
-        app.sessions = vec![session("s1")];
-        app.rebuild_panel_targets();
-        app.sessions_cursor = 1; // the cast row
-        assert!(matches!(app.panel_targets[1], PanelTarget::Cast(_)));
-
-        // Emby session list reloads with a different session; the cast row
-        // stays selected instead of the cursor drifting onto whatever now
-        // sits at index 1.
-        app.sessions = vec![session("s1"), session("s2")];
-        app.rebuild_panel_targets();
-
-        assert!(matches!(
-            app.panel_targets[app.sessions_cursor],
-            PanelTarget::Cast(ref r) if r.id == "r1"
-        ));
     }
 }

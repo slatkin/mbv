@@ -51,6 +51,7 @@ pub(super) enum KeyResolution {
     /// Dispatch this semantic command.
     Command(Command),
     /// Consume the key with no action (e.g. an overlay eating unknown keys).
+    #[allow(dead_code)] // constructed by future surface conversions (help was the first)
     Swallow,
     /// Decline the key; a lower-priority context (or the view handler) handles it.
     FallThrough,
@@ -67,14 +68,6 @@ pub(super) struct InputSnapshot {
     /// is `Some`). While active, Esc must exit track-selection mode rather than
     /// stop playback -- see the `Stop` special-case in `resolve_key`.
     pub track_select_active: bool,
-}
-
-/// Resolve a chord within a single context. Pure: no `App`/`Player` access.
-pub(super) fn help_resolve(chord: KeyChord) -> KeyResolution {
-    match super::action::help_command_for_key(chord) {
-        Some(cmd) => KeyResolution::Command(cmd),
-        None => KeyResolution::Swallow,
-    }
 }
 
 /// Resolve a chord within a single context. Pure: no `App`/`Player` access.
@@ -150,24 +143,8 @@ pub(super) struct ContextEntry {
 /// `docs/adr/0002-centralized-input-handling.md`.
 pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     ContextEntry {
-        name: "context_menu",
-        handler: App::handle_key_context_menu,
-    },
-    ContextEntry {
         name: "selection_modal",
         handler: App::handle_key_selection_modal,
-    },
-    ContextEntry {
-        name: "daemon_lost_modal",
-        handler: App::handle_key_daemon_lost_modal,
-    },
-    ContextEntry {
-        name: "confirm_modal",
-        handler: App::handle_key_confirm_modal,
-    },
-    ContextEntry {
-        name: "remote_reanchor",
-        handler: App::handle_key_remote_reanchor,
     },
     ContextEntry {
         name: "save_playlist",
@@ -176,14 +153,6 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     ContextEntry {
         name: "settings",
         handler: App::handle_key_settings,
-    },
-    ContextEntry {
-        name: "help",
-        handler: App::handle_key_help,
-    },
-    ContextEntry {
-        name: "sessions",
-        handler: App::handle_key_sessions,
     },
     ContextEntry {
         name: "playlists",
@@ -196,10 +165,6 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     ContextEntry {
         name: "queue_column_width",
         handler: App::handle_key_queue_column_width,
-    },
-    ContextEntry {
-        name: "search_sidebar",
-        handler: App::handle_key_search_sidebar,
     },
     ContextEntry {
         name: "lib_search",

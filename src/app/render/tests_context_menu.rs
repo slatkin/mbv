@@ -1,37 +1,15 @@
 use super::test_helpers::buffer_to_string;
-use crate::app::layout::{AppLayout, LayoutMain};
-use crate::app::tests::make_app_stub;
-use crate::app::{ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry, PanelFocus};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 
 fn render_menu(width: u16, height: u16, cursor: usize) -> String {
-    let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Library;
-    app.context_menu = Some(ContextMenu {
-        anchor: ContextMenuAnchor::Pointer { x: 5, y: 5 },
-        entries: vec![
-            ContextMenuEntry {
-                label: "Play",
-                action: Some(ContextAction::Play),
-            },
-            ContextMenuEntry {
-                label: "Queue",
-                action: Some(ContextAction::Play),
-            },
-        ],
-        cursor,
-    });
-    let mut layout = AppLayout::default();
-    layout.main = LayoutMain {
-        left_area: Rect::new(0, 0, width, height),
-        ..layout.main
-    };
+    let entries: &[(&'static str, bool)] = &[("Play", true), ("Queue", true)];
+    let rect = Rect::new(5, 5, 10, 4);
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
-        .draw(|f| app.render_context_menu(f, &mut layout))
+        .draw(|f| crate::app::render::render_context_menu_content(f, rect, entries, cursor))
         .unwrap();
     buffer_to_string(&terminal)
 }

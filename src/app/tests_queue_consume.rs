@@ -118,7 +118,7 @@ fn confirmed_delete_removes_the_active_now_playing_slot_immediately() {
         on_confirm: ConfirmAction::RemoveActiveQueueItem(0),
     });
 
-    app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+    app.handle_key_confirm_modal(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
 
     assert_eq!(
         app.player_tab.emby_items().len(),
@@ -173,7 +173,7 @@ fn confirmed_delete_with_stale_position_does_not_mark_a_pending_delete() {
         on_confirm: ConfirmAction::RemoveActiveQueueItem(1),
     });
 
-    app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+    app.handle_key_confirm_modal(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
 
     assert_eq!(app.player_tab.emby_items().len(), 1);
     assert!(app.pending_delete_slot.is_none());

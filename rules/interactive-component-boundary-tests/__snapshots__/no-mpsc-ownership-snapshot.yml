@@ -1,0 +1,12 @@
+id: no-mpsc-ownership
+snapshots:
+  ? |
+    use std::sync::mpsc::{self, Receiver, Sender};
+    fn channel_stuff() {
+        let (tx, rx) = std::sync::mpsc::channel();
+    }
+  : labels:
+    - source: use std::sync::mpsc::{self, Receiver, Sender};
+      style: primary
+      start: 0
+      end: 46

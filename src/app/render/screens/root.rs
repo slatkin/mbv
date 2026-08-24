@@ -1,4 +1,5 @@
 use crate::app::layout::{AppLayout, LayoutMain, LayoutPlayback};
+use crate::app::render::components::chrome;
 use crate::app::render::components::widgets::{
     render_queue_panel_frame, right_panel_content_area, COLUMN_GAP,
 };
@@ -125,17 +126,8 @@ impl App {
         );
 
         let panel_area = (layout.main.panel_area.width > 0).then_some(layout.main.panel_area);
-        if self.show_sessions {
-            self.render_sessions_overlay(f, panel_area);
-        }
         if self.show_playlists {
             self.render_playlists_panel(f, panel_area);
-        }
-        if self.search_sidebar.is_some() {
-            self.render_search_sidebar(f, panel_area);
-        }
-        if self.show_help {
-            self.render_help_panel(f, panel_area);
         }
         if self.show_settings {
             self.render_settings_panel(f, &mut layout, panel_area);
@@ -157,15 +149,20 @@ impl App {
             "save_playlist_dialog and confirm_modal must not both be active — \
              the backdrop would be dimmed twice"
         );
-        if self.confirm_modal.is_some() {
-            self.render_confirm_modal(f);
-        }
-        if self.remote_reanchor_popup.is_some() {
-            self.render_remote_reanchor_popup(f);
-        }
-        if self.daemon_lost_modal.is_some() {
-            self.render_daemon_lost_modal(f);
-        }
+        // The Confirm modal is rendered by `ConfirmComponent` via the shell's
+        // `render_confirm_overlay` (task 2.2); `App::render` no longer paints
+        // it directly. The `confirm_modal.is_some()` check is still needed for
+        // `any_dim_modal_open` and `any_other_modal_open` below.
+        // The Remote-reanchor popup is rendered by `RemoteReanchorComponent`
+        // via the shell's `render_remote_reanchor_overlay` (task 2.4);
+        // `App::render` no longer paints it directly. The
+        // `remote_reanchor_popup.is_some()` check is still needed for
+        // `any_dim_modal_open` and `any_other_modal_open` below.
+        // The Daemon-lost modal is rendered by `DaemonLostComponent` via the
+        // shell's `render_daemon_lost_overlay` (task 2.3); `App::render` no
+        // longer paints it directly. The `daemon_lost_modal.is_some()` check
+        // is still needed for `any_dim_modal_open` and `any_other_modal_open`
+        // below.
         if self.selection_modal.is_some() {
             self.render_selection_modal(f, &mut layout.main);
         }
@@ -202,11 +199,10 @@ impl App {
             || self.save_playlist_dialog.is_some()
             || self.multiselect_popup.is_some()
             || self.library_routes_popup.is_some()
-            || self.show_help
             || self.show_settings
             || self.show_sessions
             || self.show_playlists
-            || self.search_sidebar.is_some()
+            || self.search_sidebar_open
             || self.selection_modal.is_some()
     }
 }
@@ -275,7 +271,7 @@ impl App {
         } else {
             left_area
         };
-        layout.panel_content_area = Self::left_panel_content_area(layout.panel_area);
+        layout.panel_content_area = chrome::left_panel_content_area(layout.panel_area);
 
         // The queue panel always renders with focused styling whenever it
         // holds real panel focus — including queue-only mode and mini view.

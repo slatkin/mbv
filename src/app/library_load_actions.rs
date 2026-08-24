@@ -195,7 +195,6 @@ impl App {
     }
 
     pub(super) fn open_playlists_panel(&mut self) {
-        self.show_help = false;
         self.show_sessions = false;
         self.close_settings();
         self.show_playlists = true;

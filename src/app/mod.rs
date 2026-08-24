@@ -14,6 +14,7 @@ mod browse_level_actions;
 mod cast_actions;
 mod cast_reattach;
 mod cast_status_actions;
+pub mod components;
 mod construct;
 mod consume_quit_actions;
 mod context_menu_actions;
@@ -45,6 +46,7 @@ mod input_resolver;
 mod input_search_sidebar_keys;
 mod input_selection_modal_keys;
 mod input_settings_keys;
+mod key_policy;
 pub(crate) mod layout;
 mod lib_cursor_actions;
 mod lib_event_actions;
@@ -107,12 +109,16 @@ mod visualizer_worker;
 mod ws_event_actions;
 
 pub use self::app_struct::App;
+mod shell;
+mod shell_gates;
+mod shell_home;
+mod shell_overlays;
+pub use self::shell::Model;
 mod app_init;
 use self::app_init::AppInit;
 use self::bootstrap::{bootstrap_local_daemon_queue, bootstrap_unified_queue};
 use self::notify_actions::ToastSeverity;
 use self::resize::spawn_resize_worker;
-use self::search_sidebar::SearchDrainOutcome;
 use self::types_browse::{
     restore_library_position, AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel,
     LibSearch, SeriesDetail,
@@ -298,7 +304,6 @@ fn start_quit_watchdog(quit_handle: Option<mbv_core::player::QuitHandle>, quit_t
     });
 }
 
-use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::{backend::CrosstermBackend, Terminal};
 
 #[cfg(test)]
@@ -316,374 +321,12 @@ const SETTINGS_PANEL_W: u16 = 40;
 const PLAYLISTS_PANEL_W: u16 = 40;
 const SEARCH_PANEL_W: u16 = 40;
 impl App {
-    pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut terminal = init_terminal()?;
-        terminal.clear()?;
-
-        // Initialise image picker after terminal is in raw mode. The
-        // halfblock picker backs the dimmed-backdrop fallback: while a modal
-        // dims the backdrop, images re-encode to halfblocks so the dim
-        // applies uniformly (#451).
-        self.image_picker = Some(self.build_image_picker());
-        self.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
-
-        // Don't clobber a still-live flash message (e.g. try_auto_reconnect's
-        // outcome, set during App::new) -- only show "Loading..." if there's
-        // no pending flash, mirroring the render loop's own expiry check.
-        let has_live_flash = self.status_expires.is_some_and(|t| t > Instant::now());
-        if !has_live_flash {
-            self.status = self
-                .emby_client()
-                .map(|_| "Loading...".into())
-                .unwrap_or_else(|| service_startup::startup_status(self.emby_runtime.state).into());
-        }
-        self.home_loading = true;
-        terminal.draw(|f| self.render(f))?;
-
-        // Only start the configured Remote Service after the first TUI frame
-        // has been rendered. The selected Player owner and UI therefore never
-        // wait for Emby setup, authentication, or connectivity.
-        if let Some((config, generation)) = self.emby_startup_request.take() {
-            self.emby_startup_rx = Some(service_startup::start(config, generation));
-        }
-        if let Some((config, generation)) = self.audiobookshelf_startup_request.take() {
-            self.audiobookshelf_startup_rx = Some(service_startup::start_audiobookshelf(
-                config,
-                generation,
-                service_startup::AudiobookshelfCompletionKind::Startup,
-            ));
-        }
-
-        // Auto-fetch configured feeds asynchronously so the Feeds tab and the
-        // Home "Feeds" pill are populated shortly after startup instead
-        // of staying empty until the user presses the manual refresh key.
-        self.start_feed_fetch();
-
-        if let Some(client) = self.emby_client() {
-            client.lock().unwrap().register_capabilities();
-        }
-
-        // Home populates from whatever Services are available at this moment;
-        // Emby's independent startup connection merges its portion in when it
-        // completes (apply_emby_bootstrap), so no Emby gate is needed here
-        // (#543 Part 1).
-        match self.fetch_home() {
-            Ok(()) => {
-                let has_live_flash = self.status_expires.is_some_and(|t| t > Instant::now());
-                if !has_live_flash {
-                    self.status.clear();
-                }
-            }
-            Err(e) => self.flash(format!("Couldn't load home: {e}"), ToastSeverity::Warning),
-        }
-        self.home_loading = false;
-        self.maybe_restore_queue_state();
-
-        // Initialize idle feed if configured
-        if self.config.lock().unwrap().idle_feed_rss_url.is_empty() {
-            // No RSS URL configured, skip idle feed
-        } else {
-            let (items_tx, items_rx) = std::sync::mpsc::channel();
-            self.idle_feed = Some(IdleFeed {
-                items: Vec::new(),
-                current_index: 0,
-                last_rotation: Instant::now(),
-                last_fetch: Instant::now(),
-                items_tx,
-                items_rx,
-            });
-            self.spawn_idle_feed_fetch();
-        }
-
-        terminal.draw(|f| self.render(f))?;
-
-        install_signal_handlers();
-        let quit_timeout = Duration::from_secs(self.config.lock().unwrap().quit_timeout_secs);
-        start_quit_watchdog(self.player.quit_handle(), quit_timeout);
-
-        let mut last_render = Instant::now() - Duration::from_secs(2);
-
-        'outer: loop {
-            let mut had_events = false;
-            if QUIT_REQUESTED.load(Ordering::Relaxed) {
-                break;
-            }
-
-            if let Some(worker) = self.emby_startup_rx.take() {
-                match worker.rx.try_recv() {
-                    Ok(completion) => {
-                        had_events = true;
-                        self.apply_emby_completion(completion);
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        self.emby_startup_rx = Some(worker);
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        self.handle_emby_startup_worker_disconnect(worker.generation);
-                        had_events = true;
-                    }
-                }
-            }
-            if let Some(rx) = self.emby_setup_rx.take() {
-                match rx.try_recv() {
-                    Ok(completion) => {
-                        had_events = true;
-                        self.apply_emby_setup_completion(completion);
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        self.emby_setup_rx = Some(rx);
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        self.handle_emby_setup_worker_disconnect();
-                        had_events = true;
-                    }
-                }
-            }
-            had_events |= self.drain_audiobookshelf_events();
-            if let Ok(ev) = self.player_rx.try_recv() {
-                had_events = true;
-                if self.handle_player_event(ev) {
-                    continue 'outer;
-                }
-            }
-
-            had_events |= self.drain_notif_actions();
-
-            while let Ok(ev) = self.lib_rx.try_recv() {
-                had_events = true;
-                self.handle_lib_event(ev);
-            }
-
-            had_events |= self.maybe_flush_search_debounce();
-
-            had_events |= self.drain_search_results();
-
-            had_events |= self.drain_session_events();
-
-            had_events |= self.drain_cast_events();
-
-            had_events |= self.drain_shared_events();
-
-            had_events |= self.drain_feed_tab_results();
-
-            had_events |= self.drain_feed_add_results();
-
-            while let Ok((item_id, img_opt)) = self.card_image_rx.try_recv() {
-                had_events = true;
-                self.card_image_loading.remove(&item_id);
-                self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
-                let entry = self.build_cached_image(&item_id, img_opt);
-                if entry.img.is_some() {
-                    self.image_lru.retain(|k| k != &item_id);
-                    self.image_lru.push_back(item_id.clone());
-                    while self.image_lru.len() > self.image_cache_size_total {
-                        if let Some(evict) = self.image_lru.pop_front() {
-                            self.card_image_states.remove(&evict);
-                        }
-                    }
-                }
-                self.card_image_states.insert(item_id, entry);
-            }
-            self.drain_image_fetches();
-
-            // Apply completed off-thread resize+encode results (#164). A
-            // response for an evicted/replaced/absent key is silently
-            // dropped here; `update_resized_protocol` also guards on
-            // ThreadProtocol's internal id, so a stale response racing a
-            // newer resize request for the same (still-present) key is a
-            // no-op too.
-            while let Ok((key, response)) = self.resize_response_rx.try_recv() {
-                had_events = true;
-                // Responses are tagged with the per-suffix mem-key
-                // ("bare@suffix"); route them into the matching protocol of
-                // the bare-key cache entry.
-                if let Some((bare_key, suffix)) = key.rsplit_once('@') {
-                    if let Some(entry) = self.card_image_states.get_mut(bare_key) {
-                        if let Some(state) = entry.protocols.get_mut(suffix) {
-                            state.update_resized_protocol(response);
-                        }
-                    }
-                }
-            }
-
-            while let Ok(ev) = self.ws_rx.try_recv() {
-                had_events = true;
-                self.handle_ws_event(ev);
-            }
-
-            while let Ok(ev) = self.audiobookshelf_socket_rx.try_recv() {
-                had_events = true;
-                self.handle_audiobookshelf_socket_event(ev);
-            }
-
-            // Drain idle feed items
-            if let Some(ref mut idle_feed) = self.idle_feed {
-                while let Ok(items) = idle_feed.items_rx.try_recv() {
-                    had_events = true;
-                    idle_feed.items = items;
-                    idle_feed.current_index = 0;
-                }
-                // Re-fetch every 30 minutes
-                if idle_feed.last_fetch.elapsed() >= Duration::from_secs(1800) {
-                    idle_feed.last_fetch = Instant::now();
-                    self.spawn_idle_feed_fetch();
-                }
-            }
-
-            self.sync_visualizer();
-
-            if let Some(at) = self.settings_save_at {
-                if Instant::now() >= at {
-                    let cfg = self.config.lock().unwrap().clone();
-                    crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
-                    self.settings_save_at = None;
-                }
-            }
-
-            // Periodic session poll when connected to a remote session
-            if self.connected_session_id.is_some()
-                && self.last_session_poll.elapsed() >= Duration::from_secs(1)
-                && !self.sessions_loading
-            {
-                self.spawn_sessions_load();
-            }
-
-            // Periodic status poll while attached to a cast target (6.1). The
-            // keep-alive heartbeat this poll's background thread sends is not
-            // optional -- see `CAST_STATUS_POLL_INTERVAL`'s doc comment.
-            if self.cast_attachment.is_some()
-                && self.last_cast_poll.elapsed()
-                    >= self::cast_status_actions::CAST_STATUS_POLL_INTERVAL
-                && !self.cast_status_loading
-            {
-                self.spawn_cast_status_poll();
-            }
-
-            // Keep this session visible to other Emby clients
-            if let Some(ref tx) = self.ws_send_tx {
-                if self.last_keepalive.elapsed() >= Duration::from_secs(30) {
-                    let _ = tx.send_text("{\"MessageType\":\"KeepAlive\"}".to_string());
-                    self.last_keepalive = Instant::now();
-                }
-            }
-            if self.ws_send_tx.is_some()
-                && self.last_capabilities.elapsed() >= Duration::from_secs(600)
-            {
-                if let Some(client) = self.emby_snapshot() {
-                    std::thread::spawn(move || client.register_capabilities());
-                }
-                self.last_capabilities = Instant::now();
-            }
-
-            // Break instead of propagating I/O errors: when the terminal closes
-            // (SIGHUP), poll/read fail because the fd is gone. Breaking lets the
-            // post-loop cleanup run (player.stop + join) so the mpv window closes.
-            let poll_timeout = if self.visualizer.is_some() {
-                Duration::from_millis(8)
-            } else {
-                Duration::from_millis(50)
-            };
-            let poll_ready = match event::poll(poll_timeout) {
-                Ok(r) => r,
-                Err(_) => break,
-            };
-            if poll_ready {
-                had_events = true;
-                let ev = match event::read() {
-                    Ok(ev) => ev,
-                    Err(_) => break,
-                };
-                match ev {
-                    Event::Key(key) => {
-                        if key.kind != KeyEventKind::Press {
-                            continue;
-                        }
-                        if self.handle_key(key) {
-                            break;
-                        }
-                    }
-                    Event::Mouse(mouse) => {
-                        self.handle_mouse(mouse);
-                    }
-                    // Terminal resize (SIGWINCH via pty winsize, or a real
-                    // terminal resize in bare mode): reflow + re-emit images
-                    // only. Fixes a resize-corruption bug: ratatui's diffing
-                    // alone left stale content on-screen after a size
-                    // change, since raw image escape sequences aren't
-                    // tracked in its buffer.
-                    Event::Resize(_, _) => {
-                        self.force_clear = true;
-                        self.card_image_states.clear();
-                        self.card_image_loading.clear();
-                    }
-                    Event::FocusGained => self.note_focus_gained(),
-                    Event::FocusLost => self.note_focus_lost(),
-                    _ => {}
-                }
-            }
-
-            self.expire_music_grouping_candidates();
-            self.sync_volume_from_player();
-            self.flush_library_position_if_idle();
-
-            // Advance idle feed rotation
-            self.advance_idle_feed_rotation();
-
-            // See `render_interval`'s doc comment for the fast/slow cadence rules.
-            let render_interval = self.render_interval();
-            if self.wants_terminal_render(had_events, last_render, render_interval) {
-                if self.last_throbber_advance.elapsed() >= std::time::Duration::from_millis(300) {
-                    let playback = self.effective_playback_state();
-                    if playback.active && !self.playback_transport_paused() {
-                        self.now_playing_throbber_index =
-                            self.now_playing_throbber_index.wrapping_add(1);
-                    }
-                    self.last_throbber_advance = std::time::Instant::now();
-                }
-                if self.force_clear {
-                    self.force_clear = false;
-                    if let Err(e) = terminal.clear() {
-                        log::error!(target: "run_loop", "terminal.clear() failed: {e:?} (kind={:?})", e.kind());
-                        return Err(e.into());
-                    }
-                }
-                if self.visualizer.is_some() {
-                    self.sync_visualizer();
-                }
-                if let Err(e) = terminal.draw(|f| self.render(f)) {
-                    log::error!(target: "run_loop", "terminal.draw() failed: {e:?} (kind={:?})", e.kind());
-                    return Err(e.into());
-                }
-                last_render = Instant::now();
-            }
-        }
-
-        self.teardown(quit_timeout);
-        let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
-                                            // Printed only after the terminal is restored (task 7.2): anything
-                                            // written while still in the alternate screen would never be
-                                            // visible once it's left.
-        if let Some(msg) = self.pending_exit_message.take() {
-            println!("{msg}");
-        }
-        Ok(())
-    }
-
     pub(super) fn spawn_search_sidebar_query(&self, client: EmbyClient, query: String) {
         let tx = self.search_tx.clone();
         std::thread::spawn(move || {
             let result = client.search_items(&query, 100);
             let _ = tx.send((query, result));
         });
-    }
-
-    pub(super) fn drain_search_sidebar_results(&mut self, outcome: &mut SearchDrainOutcome) {
-        while let Ok((query, result)) = self.search_rx.try_recv() {
-            outcome.received += 1;
-            if let Some(sidebar) = self.search_sidebar.as_mut() {
-                sidebar.apply_drain(&query, result);
-            }
-        }
     }
 }
 

@@ -3,7 +3,6 @@ use super::types_confirm::ConfirmAction;
 use super::types_playback::PendingQueueAction;
 use mbv_core::player::PlayerCommand;
 
-use super::search_sidebar::SearchDrainOutcome;
 use super::App;
 
 impl App {
@@ -190,40 +189,6 @@ impl App {
             }
         }
         produced
-    }
-
-    /// Drain the search-results channel and apply any results to the
-    /// search sidebar. Extracted from `run()`'s loop body; returns whether
-    /// any results were received so the caller can fold that into `had_events`.
-    pub(super) fn drain_search_results(&mut self) -> bool {
-        let mut outcome = SearchDrainOutcome { received: 0 };
-        self.drain_search_sidebar_results(&mut outcome);
-        let produced = outcome.received > 0;
-        // Errors are surfaced inline in the search sidebar (last_drain_error);
-        // no redundant flash needed.
-        produced
-    }
-
-    /// Flush a debounced search query if the deadline has passed. Called
-    /// from the run loop every frame so queries fire after the user pauses
-    /// typing for SEARCH_DEBOUNCE_MS.
-    pub(super) fn maybe_flush_search_debounce(&mut self) -> bool {
-        let Some(deadline) = self.search_debounce_deadline else {
-            return false;
-        };
-        if std::time::Instant::now() < deadline {
-            return false;
-        }
-        let Some(query) = self.search_debounce_pending.take() else {
-            self.search_debounce_deadline = None;
-            return false;
-        };
-        self.search_debounce_deadline = None;
-        let Some(client) = self.emby_snapshot() else {
-            return true;
-        };
-        self.spawn_search_sidebar_query(client, query);
-        true
     }
 
     /// Drain the sessions-poll channel, dispatching each event to

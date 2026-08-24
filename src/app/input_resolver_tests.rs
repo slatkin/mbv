@@ -10,39 +10,6 @@ fn snap(active: bool, remote: bool) -> InputSnapshot {
 }
 
 #[test]
-fn help_context_maps_bound_key_to_command() {
-    let r = help_resolve(KeyChord::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert_eq!(r, KeyResolution::Command(Command::CloseHelp));
-}
-
-#[test]
-fn help_context_swallows_unbound_key() {
-    // The help overlay consumes every key while open.
-    let r = help_resolve(KeyChord::new(KeyCode::Char('x'), KeyModifiers::NONE));
-    assert_eq!(r, KeyResolution::Swallow);
-}
-
-#[test]
-fn help_context_resolution_ignores_snapshot_fields() {
-    let a = InputSnapshot {
-        player_active: true,
-        has_remote_session: true,
-        track_select_active: false,
-    };
-    let b = InputSnapshot {
-        player_active: false,
-        has_remote_session: false,
-        track_select_active: false,
-    };
-    assert_ne!(a, b, "the snapshots must differ to prove Help ignores them");
-    let chord = KeyChord::new(KeyCode::Esc, KeyModifiers::NONE);
-    assert_eq!(
-        help_resolve(chord),
-        KeyResolution::Command(Command::CloseHelp)
-    );
-}
-
-#[test]
 fn playback_context_maps_gated_key_to_command_when_active() {
     let r = resolve_key(
         InputContext::Playback,

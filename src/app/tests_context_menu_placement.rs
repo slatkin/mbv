@@ -84,7 +84,22 @@ fn context_menu_entries_render_below_the_reserved_top_row() {
     app.open_context_menu();
     let backend = TestBackend::new(100, 40);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|f| app.render(f)).unwrap();
+    // `App::render` does placement only (writes `layout.context_menu_rect`);
+    // the painting is done by `render_context_menu_content` (task 2.5).
+    terminal
+        .draw(|f| {
+            app.render(f);
+            if let Some(rect) = app.layout.context_menu_rect {
+                let menu = app.context_menu.as_ref().unwrap();
+                let entries: Vec<(&'static str, bool)> = menu
+                    .entries
+                    .iter()
+                    .map(|e| (e.label, e.action.is_some()))
+                    .collect();
+                crate::app::render::render_context_menu_content(f, rect, &entries, menu.cursor);
+            }
+        })
+        .unwrap();
 
     let rect = app.layout.context_menu_rect.unwrap();
     let first_label = terminal

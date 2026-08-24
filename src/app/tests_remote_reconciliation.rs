@@ -58,8 +58,11 @@ fn duplicate_reanchor_opens_picker_and_enter_selects_occurrence() {
     app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
     assert_eq!(app.remote_reanchor_popup.as_ref().unwrap().targets.len(), 2);
 
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    // The Remote-reanchor popup is now a TuiRealm component (task 2.4); its
+    // key dispatch goes through `handle_key_remote_reanchor` directly, not
+    // through CONTEXT_STACK.
+    app.handle_key_remote_reanchor(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key_remote_reanchor(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(app.remote_reanchor_popup.is_none());
     assert_eq!(
         app.remote_tracker.as_ref().unwrap().state(),

@@ -49,7 +49,6 @@ impl App {
         let status_h = u16::from(status.is_some());
         let content_h = rows.len() as u16 + status_h + filter_h + spacer_h;
         let height = (content_h + 2).min(SELECTION_MODAL_MAX_HEIGHT);
-
         let inner = render_modal_frame(
             f,
             &mut self.dim_backdrop_active,
@@ -59,7 +58,6 @@ impl App {
             palette::SURFACE_FOCUSED,
         );
         layout.selection_modal_area = inner;
-
         let filter_area = Rect {
             x: inner.x,
             y: inner.y,
@@ -79,7 +77,6 @@ impl App {
                 },
             );
         }
-
         let spacer_area = Rect {
             x: inner.x,
             y: inner.y + filter_h,
@@ -92,7 +89,6 @@ impl App {
                 spacer_area,
             );
         }
-
         let list_area = Rect {
             x: inner.x,
             y: inner.y + filter_h + spacer_h,
@@ -106,7 +102,6 @@ impl App {
         } else {
             0
         };
-
         let row_w = list_area.width as usize;
         let mut lines: Vec<Line> = status
             .into_iter()
@@ -159,7 +154,6 @@ impl App {
                 .collect::<Vec<_>>(),
         );
         f.render_widget(Paragraph::new(lines), list_area);
-
         for (row_index, row) in rows.iter().enumerate().skip(scroll).take(list_h) {
             if matches!(row, SelectionModalRow::Item(_)) {
                 layout.selection_modal_rows.push((

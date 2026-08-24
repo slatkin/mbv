@@ -6,10 +6,11 @@
 //! intercepted and *what* it means, without touching `App` at all. `dispatch`
 //! then owns the state transitions for each `Command` variant.
 //!
-//! Converted so far: `handle_playback_key` (the issue #78 pilot) and
-//! `handle_key_help` (see `src/app/input.rs`). Other modal handlers still
-//! speak directly to `App` and are expected to migrate to this same `Command`
-//! enum over time, one handler at a time.
+//! Converted so far, `handle_playback_key` (the issue #78 pilot). The help
+//! overlay was converted to a TuiRealm Interactive Component
+//! (`src/app/components/help.rs`) and no longer routes through this `Command`
+//! enum. Other modal handlers still speak directly to `App` and are expected to
+//! migrate to this same `Command` enum over time, one handler at a time.
 
 use super::input_resolver::KeyChord;
 use super::notify_actions::ToastSeverity;
@@ -54,23 +55,6 @@ pub(super) enum Command {
     /// `cycle_audio()`, so this action layer no longer re-derives it in each
     /// helper.
     ToggleMuteOrCycleAudio,
-
-    // ── handle_key_help variants ────────────────────────────────────────
-    /// `q` while the help overlay is open.
-    Quit,
-    /// Esc or F1: dismiss the help overlay.
-    CloseHelp,
-    /// F2: dismiss help, open settings.
-    ShowSettings,
-    /// F3: dismiss help, open sessions.
-    ShowSessions,
-    /// F4: dismiss help, open the playlists panel.
-    ShowPlaylists,
-    /// Scroll `help_scroll` by a signed delta: negative clamps at zero
-    /// (`Up`/`PageUp`), positive does not (`Down`/`PageDown`, preserving the
-    /// pre-existing unclamped-scroll-down quirk — see `dispatch`).
-    ScrollBy(i64),
-    ScrollHome,
 
     // ── queue activation (issue #134) ───────────────────────────────────
     /// Activate the item at the visible queue's cursor: `Enter` on the queue
@@ -332,32 +316,6 @@ pub(super) const PLAYBACK_HELP_BINDINGS: &[PlaybackHelpBinding] = &[
     },
 ];
 
-/// Translate a key event into a help-overlay `Command`, or `None` if this key
-/// isn't bound. Pure function; no `App` access.
-///
-/// Unlike `playback_command_for_key`, gating is not per-key here: the caller
-/// (`handle_key_help`) only calls this after confirming `self.show_help`, so
-/// this function does no gating of its own. Also note: unlike the playback
-/// seam, `None` from this function does NOT mean "let the key fall through to
-/// other handlers" — the thin adapter in `input.rs` still swallows the key
-/// (`Some(false)`), matching the old code's `_ => {}` arm followed by an
-/// unconditional `Some(false)`.
-pub(super) fn help_command_for_key(chord: KeyChord) -> Option<Command> {
-    match chord.code {
-        KeyCode::Char('q') if chord.mods.is_empty() => Some(Command::Quit),
-        KeyCode::Esc | KeyCode::F(1) => Some(Command::CloseHelp),
-        KeyCode::F(2) => Some(Command::ShowSettings),
-        KeyCode::F(3) => Some(Command::ShowSessions),
-        KeyCode::F(4) => Some(Command::ShowPlaylists),
-        KeyCode::Up => Some(Command::ScrollBy(-1)),
-        KeyCode::Down => Some(Command::ScrollBy(1)),
-        KeyCode::PageUp => Some(Command::ScrollBy(-10)),
-        KeyCode::PageDown => Some(Command::ScrollBy(10)),
-        KeyCode::Home => Some(Command::ScrollHome),
-        _ => None,
-    }
-}
-
 /// Translate a key event in active inline album track mode.
 ///
 /// This context is only active once `album_track_focus` is already `Some`, so
@@ -393,8 +351,6 @@ impl App {
     /// #78 follow-up).
     pub(super) fn dispatch(&mut self, command: Command) -> bool {
         match command {
-            Command::Quit => return self.try_quit(),
-
             Command::OpenIdleFeedLink => {
                 self.open_idle_feed_link();
             }
@@ -433,32 +389,6 @@ impl App {
                 } else {
                     self.cycle_audio();
                 }
-            }
-
-            Command::CloseHelp => {
-                self.show_help = false;
-            }
-            Command::ShowSettings | Command::ShowSessions | Command::ShowPlaylists => {
-                self.show_help = false;
-                match command {
-                    Command::ShowSettings => self.show_settings = true,
-                    Command::ShowSessions => self.show_sessions = true,
-                    Command::ShowPlaylists => self.open_playlists_panel(),
-                    _ => unreachable!(),
-                }
-            }
-            Command::ScrollBy(delta) => {
-                if delta < 0 {
-                    self.help_scroll = self.help_scroll.saturating_sub((-delta) as u16);
-                } else {
-                    // No upper clamp here, matching the pre-existing quirk in
-                    // the original inline handler (presumably clamped at
-                    // render time instead).
-                    self.help_scroll += delta as u16;
-                }
-            }
-            Command::ScrollHome => {
-                self.help_scroll = 0;
             }
 
             Command::QueuePlayCursor => {

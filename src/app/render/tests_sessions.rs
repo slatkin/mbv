@@ -9,13 +9,26 @@ fn render_sessions(width: u16, height: u16, selected: bool, loading: bool) -> St
     app.sessions_loading = loading;
     if !loading {
         app.sessions = vec![make_session("Living Room", "Emby")];
-        app.sessions_cursor = usize::from(selected);
     }
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
         .draw(|f| {
-            app.render_sessions_overlay(f, Some(Rect::new(0, 0, width, height)));
+            let targets = crate::app::panel_targets::build_panel_targets(&app.sessions, &[]);
+            let mut cursor = usize::from(selected);
+            let mut scroll = 0;
+            crate::app::render::render_sessions_overlay_content(
+                f,
+                Some(Rect::new(0, 0, width, height)),
+                &targets,
+                app.sessions_loading,
+                &mut cursor,
+                &mut scroll,
+                None,
+                false,
+                None,
+                false,
+            );
         })
         .unwrap();
     buffer_to_string(&terminal)

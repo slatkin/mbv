@@ -1,21 +1,14 @@
 use super::library_browse_actions::{
     build_album_index_with, fetch_all_album_index_items, recursive_album_search_eligible,
 };
-use super::search_sidebar::SearchSidebar;
 use super::{
     AlbumIndexState, AlbumSearchEntry, App, BrowseLevel, LibEvent, PAGE_SIZE, PREFETCH_AHEAD,
 };
 impl App {
-    /// Open the global search sidebar. Does not touch `panel_focus` --
-    /// see `design.md` Decision 4: the sidebar locks input via its
-    /// `CONTEXT_STACK` position, not a saved/restored focus.
+    /// Open the global search sidebar. Sets the flag; the shell Model mounts
+    /// the `SearchSidebarComponent` when it syncs after this call (task 3.2).
     pub(super) fn open_search_sidebar(&mut self) {
-        self.search_sidebar = Some(SearchSidebar::new());
-    }
-
-    /// Close the search sidebar without navigating.
-    pub(super) fn dismiss_search_sidebar(&mut self) {
-        self.search_sidebar = None;
+        self.search_sidebar_open = true;
     }
 
     pub(super) fn recursive_album_search_enabled(&self, lib_idx: usize) -> bool {

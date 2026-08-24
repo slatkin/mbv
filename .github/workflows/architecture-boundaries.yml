@@ -1,0 +1,34 @@
+name: Architecture Boundaries
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  interactive-component-boundary:
+    name: interactive-component-boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned ast-grep 0.44.1
+        run: |
+          set -euo pipefail
+          curl -sL -o /tmp/sg.zip \
+            https://github.com/ast-grep/ast-grep/releases/download/0.44.1/app-x86_64-unknown-linux-gnu.zip
+          unzip -o /tmp/sg.zip -d /tmp/sg-bin
+          echo "/tmp/sg-bin" >> "$GITHUB_PATH"
+      - name: Run interactive-component-boundary scan
+        # Scanned path is scoped to src/app/components/ so the job gates the
+        # interactive-component-boundary rules (all of which set `files:
+        # src/app/components/**`). The sibling frontend-boundary rules scope to
+        # src/app/render/screens/** and match nothing here; a full-repo scan is
+        # currently red on pre-existing legacy-screen violations unrelated to
+        # this boundary. Broaden to a bare `ast-grep scan` once those are
+        # resolved.
+        run: |
+          set -euo pipefail
+          ast-grep --version
+          ast-grep --version | grep -q '0.44.1'
+          ast-grep scan src/app/components/

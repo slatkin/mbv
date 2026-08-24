@@ -252,18 +252,6 @@ fn left_does_not_focus_hidden_queue_in_queue_only() {
 }
 
 #[test]
-fn help_overlay_blocks_resize_shortcuts() {
-    let mut app = make_movie_app();
-    app.show_help = true;
-    app.terminal_width = 100;
-
-    let handled = app.handle_key(shift(KeyCode::Right));
-
-    assert!(!handled);
-    assert_eq!(app.queue_column_width, LEFT_WIDTH_DEFAULT);
-}
-
-#[test]
 fn shift_resize_clamps_at_min_and_max_without_resaving_on_noop() {
     let mut app = make_movie_app();
     app.terminal_width = 80;

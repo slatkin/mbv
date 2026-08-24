@@ -212,10 +212,6 @@ impl App {
                 self.route_service_action(ServiceActionIntent::RemoveAudiobookshelf);
             }
             KeyCode::Char('q') if key.modifiers.is_empty() => return Some(self.try_quit()),
-            KeyCode::F(1) => {
-                self.close_settings();
-                self.show_help = true;
-            }
             KeyCode::F(3) => {
                 self.close_settings();
                 self.show_sessions = true;

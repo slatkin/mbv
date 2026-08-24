@@ -1,6 +1,5 @@
 use super::super::super::layout::AppLayout;
 use super::super::super::palette;
-use super::super::super::App;
 use super::super::super::{ContextMenu, ContextMenuAnchor, PanelFocus};
 use crate::app::render::components::backdrop::dim_backdrop;
 use ratatui::layout::Rect;
@@ -8,14 +7,18 @@ use ratatui::style::Style;
 use ratatui::widgets::{Clear, List, ListItem};
 use ratatui::Frame;
 
-impl App {
+impl super::super::super::App {
+    /// Compute context-menu placement and write it to `layout`. The actual
+    /// painting is done by `render_context_menu_content`, called from the
+    /// Interactive Component's `view()` (task 2.5).
+    ///
+    /// Keeps `layout.context_menu_rect` as the mouse hit-test source (read by
+    /// `App::handle_mouse` for click-inside/outside behavior).
     pub(in crate::app::render) fn render_context_menu(
         &mut self,
-        f: &mut Frame,
+        _f: &mut Frame,
         layout: &mut AppLayout,
     ) {
-        // A menu cannot coexist with any other modal/sidebar surface (design
-        // §4): the backdrop is applied exactly once and never dims the menu.
         let Some(ref menu) = self.context_menu else {
             layout.context_menu_rect = None;
             return;
@@ -32,8 +35,6 @@ impl App {
                         (layout.main.queue_area, layout.main.queue_selected_item_rect)
                     }
                 };
-                // A missing selected rect (a supported renderer omitted it
-                // this frame) falls back to the panel's origin.
                 (panel, selected)
             }
             ContextMenuAnchor::Pointer { .. } => {
@@ -69,33 +70,52 @@ impl App {
             height,
         };
         layout.context_menu_rect = Some(rect);
-
-        // Dim the background content before drawing the (undimmed) menu.
-        dim_backdrop(f);
-        f.render_widget(Clear, rect);
-        let list_items: Vec<ListItem> = menu
-            .entries
-            .iter()
-            .enumerate()
-            .map(|(i, entry)| {
-                let style = if entry.action.is_none() {
-                    Style::default().fg(palette::TEXT_SECONDARY)
-                } else if i == menu.cursor {
-                    Style::default()
-                        .fg(palette::TEXT_ON_ACCENT)
-                        .bg(palette::ACCENT_ACTIVE)
-                } else {
-                    Style::default().fg(palette::TEXT_PRIMARY)
-                };
-                ListItem::new(format!(" {} ", entry.label)).style(style)
-            })
-            .collect();
-        let inner = Rect {
-            x,
-            y: y.saturating_add(1),
-            width,
-            height: menu.entries.len() as u16,
-        };
-        f.render_widget(List::new(list_items), inner);
     }
+}
+
+/// Paint the context menu at the given rect.
+///
+/// Extracted from `impl App::render_context_menu` so the Interactive
+/// Component (`src/app/components/context_menu.rs`) can call it without an
+/// `App` reference (design D9). The `rect` is computed by `App::render_context_menu`
+/// (placement, which needs `AppLayout` geometry) and passed to the component
+/// via downcast.
+///
+/// `entries` is a slice of `(label, is_selectable)` pairs — the component
+/// doesn't need the `ContextAction` (which isn't `Clone`), only the label
+/// and whether the entry is a separator (`is_selectable = false`).
+//
+// `pub(in crate::app)` so the Interactive Component can call it.
+pub(in crate::app) fn render_context_menu_content(
+    f: &mut Frame,
+    rect: Rect,
+    entries: &[(&'static str, bool)],
+    cursor: usize,
+) {
+    // Dim the background content before drawing the (undimmed) menu.
+    dim_backdrop(f);
+    f.render_widget(Clear, rect);
+    let list_items: Vec<ListItem> = entries
+        .iter()
+        .enumerate()
+        .map(|(i, (label, is_selectable))| {
+            let style = if !is_selectable {
+                Style::default().fg(palette::TEXT_SECONDARY)
+            } else if i == cursor {
+                Style::default()
+                    .fg(palette::TEXT_ON_ACCENT)
+                    .bg(palette::ACCENT_ACTIVE)
+            } else {
+                Style::default().fg(palette::TEXT_PRIMARY)
+            };
+            ListItem::new(format!(" {} ", label)).style(style)
+        })
+        .collect();
+    let inner = Rect {
+        x: rect.x,
+        y: rect.y.saturating_add(1),
+        width: rect.width,
+        height: entries.len() as u16,
+    };
+    f.render_widget(List::new(list_items), inner);
 }

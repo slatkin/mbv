@@ -1,0 +1,9 @@
+id: no-service-client-deps
+snapshots:
+  ? |
+    struct WithClient { emby: EmbyClient, proxy: PlayerProxy, remote: RemotePlayer }
+  : labels:
+    - source: EmbyClient
+      style: primary
+      start: 26
+      end: 36

@@ -5,6 +5,7 @@ default-members = [".", "crates/mbv-core", "crates/mbvd"]
 [workspace.package]
 version = "0.17.17"
 edition = "2021"
+rust-version = "1.88"
 
 [workspace.dependencies]
 ureq = { version = "3", default-features = false, features = ["json", "native-tls"] }
@@ -28,6 +29,7 @@ nix = { version = "0.31", features = ["fs", "process", "signal", "term", "socket
 name = "mbv"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Terminal UI client for Emby media servers."
 default-run = "mbv"
 
@@ -39,6 +41,7 @@ path = "src/main.rs"
 mbv-core = { path = "crates/mbv-core", features = ["test-support"] }
 ratatui = "0.30"
 crossterm = "0.29"
+tuirealm = "4.1"
 ureq.workspace = true
 native-tls.workspace = true
 serde.workspace = true

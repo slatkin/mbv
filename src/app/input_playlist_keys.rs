@@ -41,10 +41,6 @@ impl App {
                     self.playlists_open_items = Vec::new();
                 }
             }
-            KeyCode::F(1) => {
-                self.show_playlists = false;
-                self.show_help = true;
-            }
             KeyCode::F(2) => {
                 self.show_playlists = false;
                 self.show_settings = true;

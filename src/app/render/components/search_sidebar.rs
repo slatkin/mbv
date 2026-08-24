@@ -1,7 +1,8 @@
 use crate::app::palette;
+use crate::app::render::components::chrome;
 use crate::app::search_sidebar::SearchSidebar;
 use crate::app::ui_util::trunc_str;
-use crate::app::{App, SEARCH_PANEL_W};
+use crate::app::SEARCH_PANEL_W;
 use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -25,59 +26,59 @@ fn badge_for(item_type: &str) -> &'static str {
     }
 }
 
-impl App {
-    pub(in crate::app::render) fn render_search_sidebar(
-        &mut self,
-        f: &mut Frame,
-        area: Option<Rect>,
-    ) {
-        let content = match area {
-            Some(area) => Self::render_panel_shell_at(f, area, "SEARCH", HINTS, true),
-            None => Self::render_panel_shell(f, f.area(), SEARCH_PANEL_W, "SEARCH", HINTS),
-        };
-        let Some(sidebar) = self.search_sidebar.as_mut() else {
-            return;
-        };
-        if content.height == 0 || content.width == 0 {
-            return;
-        }
-
-        render_query_row(
-            f,
-            Rect {
-                x: content.x,
-                y: content.y,
-                width: content.width,
-                height: 1,
-            },
-            sidebar,
-        );
-        if content.height == 1 {
-            return;
-        }
-
-        render_type_chips(
-            f,
-            Rect {
-                x: content.x,
-                y: content.y + 1,
-                width: content.width,
-                height: 1,
-            },
-            sidebar,
-        );
-        if content.height == 2 {
-            return;
-        }
-
-        let list_area = Rect {
-            x: content.x,
-            y: content.y + 2,
-            width: content.width,
-            height: content.height - 2,
-        };
-        render_results(f, list_area, sidebar);
+/// Render the global Search sidebar (design D9, task 3.1/3.2).
+///
+/// Extracted from `impl App::render_search_sidebar` as a free function so
+/// the Interactive Component (`SearchSidebarComponent`) can call it in
+/// `view()` without `App` access. The sidebar state is passed directly.
+pub(in crate::app) fn render_search_sidebar(
+    f: &mut Frame,
+    area: Option<Rect>,
+    sidebar: &mut SearchSidebar,
+) {
+    let content = match area {
+        Some(area) => chrome::render_panel_shell_at(f, area, "SEARCH", HINTS, true),
+        None => chrome::render_panel_shell(f, f.area(), SEARCH_PANEL_W, "SEARCH", HINTS),
+    };
+    if content.height == 0 || content.width == 0 {
+        return;
     }
+
+    render_query_row(
+        f,
+        Rect {
+            x: content.x,
+            y: content.y,
+            width: content.width,
+            height: 1,
+        },
+        sidebar,
+    );
+    if content.height == 1 {
+        return;
+    }
+
+    render_type_chips(
+        f,
+        Rect {
+            x: content.x,
+            y: content.y + 1,
+            width: content.width,
+            height: 1,
+        },
+        sidebar,
+    );
+    if content.height == 2 {
+        return;
+    }
+
+    let list_area = Rect {
+        x: content.x,
+        y: content.y + 2,
+        width: content.width,
+        height: content.height - 2,
+    };
+    render_results(f, list_area, sidebar);
 }
 
 fn render_query_row(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) {
@@ -147,9 +148,9 @@ fn render_results(f: &mut Frame, area: Rect, sidebar: &mut SearchSidebar) {
         };
         let badge = badge_for(&item.item_type);
         let badge_str = format!("{badge:<10} ");
-        let name_max = App::panel_row_text_width(area.width).saturating_sub(badge_str.len());
+        let name_max = chrome::panel_row_text_width(area.width).saturating_sub(badge_str.len());
         let row_y = area.y + vi as u16;
-        App::render_panel_row(
+        chrome::render_panel_row(
             f,
             area.x,
             row_y,
@@ -171,7 +172,7 @@ fn render_results(f: &mut Frame, area: Rect, sidebar: &mut SearchSidebar) {
             ],
         );
     }
-    App::render_sidebar_scrollbar(f, area, filtered.len(), sidebar.scroll);
+    chrome::render_sidebar_scrollbar(f, area, filtered.len(), sidebar.scroll);
 }
 
 fn render_empty_state(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) {

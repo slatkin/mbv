@@ -7,6 +7,7 @@ use super::super::super::types_settings::{ServiceEntry, SettingsDestination, SER
 use super::super::super::ui_util::{cycle_lang, next_subtitle_mode};
 use super::super::super::App;
 use super::super::super::{MultiSelectKind, SettingKey, SETTINGS_PANEL_W, SETTING_SECTIONS};
+use super::chrome;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -154,9 +155,9 @@ impl App {
         let panel = area.is_some();
         let content = match area {
             Some(area) => {
-                Self::render_panel_shell_at(f, area, "SETTINGS", "[Space]toggle [Esc]close", true)
+                chrome::render_panel_shell_at(f, area, "SETTINGS", "[Space]toggle [Esc]close", true)
             }
-            None => Self::render_panel_shell(
+            None => chrome::render_panel_shell(
                 f,
                 f.area(),
                 SETTINGS_PANEL_W,
@@ -252,7 +253,7 @@ impl App {
             Paragraph::new(lines).scroll((self.settings_scroll as u16, 0)),
             content,
         );
-        Self::render_sidebar_scrollbar(f, content, total, self.settings_scroll);
+        chrome::render_sidebar_scrollbar(f, content, total, self.settings_scroll);
     }
 
     fn render_services_panel(
@@ -271,9 +272,9 @@ impl App {
         }
         let content = match area {
             Some(area) => {
-                Self::render_panel_shell_at(f, area, "SERVICES", "[↵]select [Esc]back", true)
+                chrome::render_panel_shell_at(f, area, "SERVICES", "[↵]select [Esc]back", true)
             }
-            None => Self::render_panel_shell(
+            None => chrome::render_panel_shell(
                 f,
                 f.area(),
                 SETTINGS_PANEL_W,
@@ -332,9 +333,9 @@ impl App {
     ) {
         let content = match area {
             Some(area) => {
-                Self::render_panel_shell_at(f, area, "EMBY SETUP", "[↵]submit [Esc]back", true)
+                chrome::render_panel_shell_at(f, area, "EMBY SETUP", "[↵]submit [Esc]back", true)
             }
-            None => Self::render_panel_shell(
+            None => chrome::render_panel_shell(
                 f,
                 f.area(),
                 SETTINGS_PANEL_W,
@@ -400,14 +401,14 @@ impl App {
         area: Option<ratatui::layout::Rect>,
     ) {
         let content = match area {
-            Some(area) => Self::render_panel_shell_at(
+            Some(area) => chrome::render_panel_shell_at(
                 f,
                 area,
                 "AUDIOBOOKSHELF SETUP",
                 "[↵]submit [Esc]back",
                 true,
             ),
-            None => Self::render_panel_shell(
+            None => chrome::render_panel_shell(
                 f,
                 f.area(),
                 SETTINGS_PANEL_W,

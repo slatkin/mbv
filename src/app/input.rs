@@ -83,10 +83,6 @@ impl App {
     }
 
     pub(super) fn handle_key_global_overlay_open(&mut self, key: KeyEvent) -> Option<bool> {
-        if key.code == KeyCode::F(1) {
-            self.show_help = true;
-            return Some(false);
-        }
         if key.code == KeyCode::F(2) {
             self.show_settings = !self.show_settings;
             return Some(false);
@@ -108,7 +104,7 @@ impl App {
         if key.modifiers.contains(KeyModifiers::CONTROL)
             && matches!(key.code, KeyCode::Char('/') | KeyCode::Char('_'))
         {
-            if self.search_sidebar.is_some() {
+            if self.search_sidebar_open {
                 return Some(false);
             }
             self.open_search_sidebar();

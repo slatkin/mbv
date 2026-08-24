@@ -3,6 +3,31 @@ mod components;
 mod screens;
 mod theme;
 
+// Render-seam re-exports for Interactive Components (design D9): the free
+// functions extracted from `impl App` methods are `pub(in crate::app)` inside
+// `render::components::help`, but the `components` module is private. Re-export
+// them here so `crate::app::components::help` can import them without widening
+// the whole `render::components` module.
+pub(in crate::app) use components::confirm_modal::render_confirm_modal_content;
+pub(in crate::app) use components::context_menu::render_context_menu_content;
+pub(in crate::app) use components::daemon_lost_modal::render_daemon_lost_modal_content;
+pub(in crate::app) use components::help::{help_destination, render_help_panel, HelpDestination};
+pub(in crate::app) use components::home::render_home_content;
+pub(in crate::app) use components::home_hero::HomeImagePaint;
+pub(in crate::app) use components::remote_reanchor::render_remote_reanchor_popup_content;
+pub(in crate::app) use components::search_sidebar::render_search_sidebar;
+pub(in crate::app) use components::sessions::render_sessions_overlay_content;
+// Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
+// free functions extracted from `impl App` in `chrome.rs`. Used by the
+// Interactive Components in `crate::app::components` (task 3.2+); the
+// `#[allow(unused_imports)]` silences the dead-code lint until the first
+// component imports them.
+#[allow(unused_imports)]
+pub(in crate::app) use components::chrome::{
+    left_panel_content_area, panel_content_area, panel_row_text_width, render_panel_row,
+    render_panel_shell, render_panel_shell_at, render_sidebar_scrollbar,
+};
+
 // Re-exports so paths that resolved at `render::X` (or, from render's other
 // submodules, `super::X`) before the render/mod.rs split (issue #365 step 2,
 // lane C) keep resolving without editing any call site. The `pub(crate)`

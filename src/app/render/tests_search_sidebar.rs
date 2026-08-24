@@ -1,12 +1,11 @@
 use super::test_helpers::buffer_to_string;
 use crate::app::search_sidebar::SearchSidebar;
-use crate::app::tests::{make_app_stub, make_item};
+use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 
 fn render_sidebar(width: u16, height: u16, selected: bool) -> String {
-    let mut app = make_app_stub();
     let mut sidebar = SearchSidebar::new();
     sidebar.query = "clip".into();
     sidebar.results = vec![
@@ -14,13 +13,15 @@ fn render_sidebar(width: u16, height: u16, selected: bool) -> String {
         make_item("Other Clip", "Series"),
     ];
     sidebar.cursor = usize::from(selected);
-    app.search_sidebar = Some(sidebar);
-
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
         .draw(|f| {
-            app.render_search_sidebar(f, Some(Rect::new(0, 0, width, height)));
+            crate::app::render::render_search_sidebar(
+                f,
+                Some(Rect::new(0, 0, width, height)),
+                &mut sidebar,
+            );
         })
         .unwrap();
     buffer_to_string(&terminal)

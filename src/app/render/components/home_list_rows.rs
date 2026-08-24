@@ -1,7 +1,6 @@
 use super::hero::{inline_display_row, inline_display_row_count, InlineDisplayRow};
 use super::home_video::home_panel_scroll;
-use crate::app::layout::LayoutMain;
-use crate::app::{palette, App};
+use crate::app::palette;
 use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -15,8 +14,18 @@ pub(in crate::app::render) enum DisplayRow {
     Item(usize, Box<QueueItem>),
 }
 
+/// Result of painting a Home list. `layout` is left `None` when the caller
+/// has no `LayoutMain` to write into (the component path); the App-owned
+/// legacy wrapper copies it into `LayoutMain` itself.
+pub(in crate::app::render) struct HomeListRowsOutput {
+    pub(in crate::app::render) hitmap: Vec<(Rect, usize)>,
+    pub(in crate::app::render) selected_item_rect: Option<Rect>,
+    pub(in crate::app::render) hero_area: Option<Rect>,
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(in crate::app::render) fn render_home_list_rows(
-    app: &mut App,
+    scroll: &mut usize,
     f: &mut Frame,
     rows: &[DisplayRow],
     list_area: Rect,
@@ -24,9 +33,8 @@ pub(in crate::app::render) fn render_home_list_rows(
     selection_bg: Color,
     cursor: usize,
     focused: bool,
-    layout: &mut LayoutMain,
     hero_rows: u16,
-) {
+) -> HomeListRowsOutput {
     let cursor_row = rows
         .iter()
         .position(|row| matches!(row, DisplayRow::Item(flat_idx, _) if *flat_idx == cursor))
@@ -36,25 +44,22 @@ pub(in crate::app::render) fn render_home_list_rows(
     let needs_scrollbar = display_content_h > list_area.height;
     let list_w = crate::app::render::content_width(list_area.width, needs_scrollbar) as u16;
     let scroll_y = if hero_rows > 0 {
-        super::hero::inline_detail_flow(
-            cursor_row,
-            hero_rows,
-            list_area.height,
-            app.home.home_scroll,
-        )
-        .map(|flow| flow.offset as u16)
-        .unwrap_or(0)
+        super::hero::inline_detail_flow(cursor_row, hero_rows, list_area.height, *scroll)
+            .map(|flow| flow.offset as u16)
+            .unwrap_or(0)
     } else {
         home_panel_scroll(
-            app.home.home_scroll as u16,
+            *scroll as u16,
             cursor_row as u16,
             cursor_row as u16 + 1,
             display_content_h,
             list_area.height,
         )
     };
-    app.home.home_scroll = scroll_y as usize;
+    *scroll = scroll_y as usize;
 
+    let mut selected_item_rect: Option<Rect> = None;
+    let mut hero_area: Option<Rect> = None;
     let mut hitmap: Vec<(Rect, usize)> = Vec::new();
 
     let visible = list_area
@@ -77,7 +82,7 @@ pub(in crate::app::render) fn render_home_list_rows(
                 if display_row != cursor_row {
                     continue;
                 }
-                layout.selected_item_rect = Some(Rect {
+                selected_item_rect = Some(Rect {
                     x: row_rect.x,
                     y: row_rect.y,
                     width: row_rect.width,
@@ -106,7 +111,7 @@ pub(in crate::app::render) fn render_home_list_rows(
                 DisplayRow::Item(flat_idx, item) => {
                     let selected_row = *flat_idx == cursor;
                     if selected_row {
-                        layout.selected_item_rect = Some(row_rect);
+                        selected_item_rect = Some(row_rect);
                     }
 
                     if selected_row && focused {
@@ -179,12 +184,10 @@ pub(in crate::app::render) fn render_home_list_rows(
         }
     }
 
-    layout.home.hitmap = hitmap;
-
     if hero_rows > 0 {
         let detail_row = cursor_row;
         if detail_row >= scroll_y as usize && detail_row < display_content_h as usize {
-            layout.hero_area = Rect {
+            hero_area = Some(Rect {
                 x: list_area.x,
                 y: list_area.y + (detail_row as u16 - scroll_y),
                 width: list_area.width,
@@ -193,8 +196,7 @@ pub(in crate::app::render) fn render_home_list_rows(
                         .bottom()
                         .saturating_sub(list_area.y + (detail_row as u16 - scroll_y)),
                 ),
-            };
-            layout.inline_hero_area = layout.hero_area;
+            });
         }
     }
 
@@ -207,5 +209,11 @@ pub(in crate::app::render) fn render_home_list_rows(
             scroll_y as usize,
             palette::SCROLLBAR,
         );
+    }
+
+    HomeListRowsOutput {
+        hitmap,
+        selected_item_rect,
+        hero_area,
     }
 }

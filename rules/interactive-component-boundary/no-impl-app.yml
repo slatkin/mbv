@@ -1,0 +1,17 @@
+id: no-impl-app
+language: rust
+severity: error
+message: >-
+  src/app/components/ must not define `impl App` or `impl Trait for App`.
+  Interactive components own presentation state only; the shell Model holds App
+  and runtime authority. See openspec/changes/migrate-tui-to-tuirealm design D10
+  and spec interactive-component-framework "Interactive ownership is
+  mechanically enforced".
+files:
+  - "src/app/components/**"
+rule:
+  kind: impl_item
+  has:
+    kind: type_identifier
+    field: type
+    regex: "^App$"

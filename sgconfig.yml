@@ -1,2 +1,5 @@
 ruleDirs:
   - rules/frontend-boundary
+  - rules/interactive-component-boundary
+testConfigs:
+  - testDir: rules/interactive-component-boundary-tests

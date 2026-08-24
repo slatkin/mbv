@@ -2,6 +2,7 @@ use super::super::super::palette;
 use super::super::super::ui_util::trunc_str;
 use super::super::super::App;
 use super::super::super::{SavePlaylistStage, PLAYLISTS_PANEL_W};
+use super::chrome;
 use crate::app::render::components::modal_frame::render_modal_frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -33,8 +34,8 @@ impl App {
         };
 
         let content = match area {
-            Some(area) => Self::render_panel_shell_at(f, area, &title, &hint, true),
-            None => Self::render_panel_shell(f, f.area(), PLAYLISTS_PANEL_W, &title, &hint),
+            Some(area) => chrome::render_panel_shell_at(f, area, &title, &hint, true),
+            None => chrome::render_panel_shell(f, f.area(), PLAYLISTS_PANEL_W, &title, &hint),
         };
         let ix = content.x;
         let iw = content.width as usize;
@@ -102,9 +103,9 @@ impl App {
                 String::new()
             };
             let name_max =
-                Self::panel_row_text_width(content.width).saturating_sub(count_str.len());
+                chrome::panel_row_text_width(content.width).saturating_sub(count_str.len());
             let row_y = content.y + vi as u16;
-            Self::render_panel_row(
+            chrome::render_panel_row(
                 f,
                 ix,
                 row_y,
@@ -119,7 +120,7 @@ impl App {
                 ],
             );
         }
-        Self::render_sidebar_scrollbar(f, content, self.playlists.len(), self.playlists_scroll);
+        chrome::render_sidebar_scrollbar(f, content, self.playlists.len(), self.playlists_scroll);
     }
 
     fn render_open_playlist_panel(
@@ -202,7 +203,7 @@ impl App {
                 palette::TEXT_PRIMARY
             };
             let num_str = format!("{:>2}. ", abs_idx + 1);
-            let text_w = Self::panel_row_text_width(content.width).saturating_sub(num_str.len());
+            let text_w = chrome::panel_row_text_width(content.width).saturating_sub(num_str.len());
             let indent = " ".repeat(2 + num_str.len());
             let label = item.display_name();
             let (line1, line2) = if label.len() <= text_w {
@@ -215,7 +216,7 @@ impl App {
                 )
             };
             let row_y = content.y + y as u16;
-            Self::render_panel_row(
+            chrome::render_panel_row(
                 f,
                 ix,
                 row_y,
@@ -256,7 +257,7 @@ impl App {
             .iter()
             .map(|i| item_lines(&i.display_name()))
             .sum();
-        Self::render_sidebar_scrollbar(f, content, total_lines, lines_before_scroll);
+        chrome::render_sidebar_scrollbar(f, content, total_lines, lines_before_scroll);
     }
 
     pub(in crate::app::render) fn render_save_playlist_dialog(&mut self, f: &mut Frame) {

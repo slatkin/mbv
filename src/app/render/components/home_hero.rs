@@ -272,69 +272,6 @@ impl App {
         }
     }
 
-    /// Renders a [`KeepWatchingHeroLayout`]'s title/show-name/meta/overview
-    /// block, shared by the Emby Keep Watching hero and the generic
-    /// Audiobookshelf hero (`home.rs`'s narrow-layout beside-image case) --
-    /// only the per-provider `meta_spans` (release date/progress for Emby,
-    /// duration alone for Audiobookshelf) differ.
-    pub(in crate::app::render) fn render_hero_layout_meta(
-        &self,
-        f: &mut Frame,
-        area: Rect,
-        wide_area: Rect,
-        layout: &KeepWatchingHeroLayout,
-        meta_block: HeroMetaBlock,
-        overview_pad: u16,
-        focused: bool,
-    ) {
-        super::hero::render_home_hero_meta_block(
-            f,
-            area,
-            wide_area,
-            &layout.title_lines,
-            &layout.show_name,
-            meta_block.title_suffix,
-            meta_block.meta_rows,
-            &layout.overview_lines,
-            overview_pad,
-            focused,
-        );
-    }
-
-    /// Renders a beside-image inline item: image column then text
-    /// column, unconditionally and in that order for every provider. The
-    /// single call site every inline item with a cover goes through
-    /// (Emby Keep Watching and the generic Audiobookshelf hero), so the two
-    /// can't drift out of sync the way two hand-written call sites can --
-    /// the image render in particular must never be skipped (not even when
-    /// there's no cache key yet), or the image column is left showing
-    /// whatever the terminal had there before, with text drawn over it.
-    #[allow(clippy::too_many_arguments)]
-    pub(in crate::app::render) fn render_beside_image_hero(
-        &mut self,
-        f: &mut Frame,
-        meta_area: Rect,
-        wide_area: Rect,
-        img_area: Rect,
-        layout: &KeepWatchingHeroLayout,
-        meta_block: HeroMetaBlock,
-        image_cache_key: &str,
-        overview_pad: u16,
-        focused: bool,
-        centered: bool,
-    ) {
-        self.render_keep_watching_hero_image(f, img_area, image_cache_key, centered);
-        self.render_hero_layout_meta(
-            f,
-            meta_area,
-            wide_area,
-            layout,
-            meta_block,
-            overview_pad,
-            focused,
-        );
-    }
-
     pub(in crate::app::render) fn render_home_hero_data(
         &mut self,
         f: &mut Frame,
@@ -342,16 +279,31 @@ impl App {
         two_column: bool,
         focused: bool,
     ) {
-        let overview_pad = if two_column {
-            WIDE_OVERVIEW_PAD as u16
-        } else {
-            0
-        };
-        match hero_data {
-            HeroData::Emby(item, meta_area, wide_area, img_area, meta_layout) => {
+        let image_paint =
+            render_home_hero_content(f, hero_data, two_column, focused, self.use_nerd_fonts);
+        self.paint_home_image(f, image_paint);
+    }
+
+    /// Fetches (if needed) and paints the image a [`HomeImagePaint`] request
+    /// describes, using App's image-cache authority. Shared by
+    /// `render_home_hero_data`'s wrapper above and the `App::render_home_list`
+    /// wrapper (`home.rs`), which computes its own `HomeImagePaint` via the
+    /// shared `render_home_content` orchestration and must not re-render the
+    /// hero text a second time by calling `render_home_hero_data` again.
+    pub(in crate::app) fn paint_home_image(
+        &mut self,
+        f: &mut Frame,
+        image_paint: Option<HomeImagePaint>,
+    ) {
+        match image_paint {
+            Some(HomeImagePaint::Emby {
+                area,
+                item,
+                centered,
+            }) => {
                 let cache_key = format!("{}:pwr_kw", item.id);
                 if self.images_enabled() {
-                    let img_types = Self::keep_watching_hero_image_types(item);
+                    let img_types = Self::keep_watching_hero_image_types(&item);
                     self.fetch_card_image(
                         cache_key.clone(),
                         item.id.clone(),
@@ -359,60 +311,157 @@ impl App {
                         img_types,
                     );
                 }
-                let meta_block =
-                    Self::keep_watching_hero_meta_block(item, meta_area.width, self.use_nerd_fonts);
-                self.render_beside_image_hero(
-                    f,
-                    *meta_area,
-                    *wide_area,
-                    *img_area,
-                    meta_layout,
-                    meta_block,
-                    &cache_key,
-                    overview_pad,
-                    focused,
-                    two_column,
-                );
+                self.render_keep_watching_hero_image(f, area, &cache_key, centered);
             }
-            HeroData::GenericBeside(item, meta_area, wide_area, img_area, meta_layout) => {
-                let cache_key = match item {
-                    QueueItem::Audiobookshelf(episode) => self
-                        .audiobookshelf_cover_key(&episode.library_item_id)
-                        .unwrap_or_default(),
-                    _ => String::new(),
-                };
-                let meta_block = HeroMetaBlock {
-                    title_suffix: None,
-                    meta_rows: item
-                        .duration()
-                        .map(|ticks| {
-                            vec![vec![Span::styled(
-                                trunc_str(
-                                    &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
-                                    meta_area.width as usize,
-                                ),
-                                Style::default().fg(palette::TEXT_SECONDARY),
-                            )]]
-                        })
-                        .unwrap_or_default(),
-                };
-                self.render_beside_image_hero(
-                    f,
-                    *meta_area,
-                    *wide_area,
-                    *img_area,
-                    meta_layout,
-                    meta_block,
-                    &cache_key,
-                    0,
-                    focused,
-                    false,
-                );
+            Some(HomeImagePaint::AudiobookshelfCover {
+                area,
+                library_item_id,
+                show_placeholder,
+            }) => {
+                if let Some(cache_key) = self.audiobookshelf_cover_key(&library_item_id) {
+                    if show_placeholder {
+                        self.render_keep_watching_hero_image(f, area, &cache_key, false);
+                    } else if let Some(image) = self.cached_image_protocol_mut(&cache_key) {
+                        type SImg =
+                            ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
+                        f.render_stateful_widget(
+                            SImg::default()
+                                .resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
+                            area,
+                            image,
+                        );
+                    }
+                }
             }
-            HeroData::Generic(item, area) => {
-                self.render_home_latest_detail(f, *area, item, focused, overview_pad as usize);
+            None => {}
+        }
+    }
+}
+
+/// The image an in-progress Home hero render needs painted, computed
+/// without `App` (design D2): the caller (the `App::render_home_hero_data`
+/// wrapper, or the shell on the `HomeComponent`'s behalf) fetches/looks up
+/// the cached protocol and paints it into `area` using App's image-cache
+/// authority right after `view()` returns (task 3.4's confirmed extraction:
+/// share orchestration, defer only the pixel paint).
+pub(in crate::app) enum HomeImagePaint {
+    Emby {
+        area: Rect,
+        item: Box<mbv_core::api::EmbyItem>,
+        centered: bool,
+    },
+    AudiobookshelfCover {
+        area: Rect,
+        library_item_id: String,
+        /// `true` for the narrow beside-image hero (`GenericBeside`), which
+        /// always shows the dim placeholder while uncached, matching every
+        /// other beside-image hero; `false` for the two-column/text `Generic`
+        /// detail block, which renders nothing until the cover is cached (an
+        /// existing, preserved difference between the two call sites).
+        show_placeholder: bool,
+    },
+}
+
+fn render_hero_layout_meta_content(
+    f: &mut Frame,
+    area: Rect,
+    wide_area: Rect,
+    layout: &KeepWatchingHeroLayout,
+    meta_block: HeroMetaBlock,
+    overview_pad: u16,
+    focused: bool,
+) {
+    super::hero::render_home_hero_meta_block(
+        f,
+        area,
+        wide_area,
+        &layout.title_lines,
+        &layout.show_name,
+        meta_block.title_suffix,
+        meta_block.meta_rows,
+        &layout.overview_lines,
+        overview_pad,
+        focused,
+    );
+}
+
+/// Renders a Home hero's non-image content (title/meta/overview text, or --
+/// for the text-only `Generic` variant -- the whole detail block) without
+/// `App`, returning the cover image (if any) still needing paint. Shared by
+/// the legacy `App::render_home_hero_data` wrapper and `HomeComponent`'s
+/// render path so the two can't drift (task 3.4's confirmed extraction).
+pub(in crate::app::render) fn render_home_hero_content(
+    f: &mut Frame,
+    hero_data: &HeroData,
+    two_column: bool,
+    focused: bool,
+    use_nerd_fonts: bool,
+) -> Option<HomeImagePaint> {
+    let overview_pad = if two_column {
+        WIDE_OVERVIEW_PAD as u16
+    } else {
+        0
+    };
+    match hero_data {
+        HeroData::Emby(item, meta_area, wide_area, img_area, meta_layout) => {
+            let meta_block =
+                App::keep_watching_hero_meta_block(item, meta_area.width, use_nerd_fonts);
+            render_hero_layout_meta_content(
+                f,
+                *meta_area,
+                *wide_area,
+                meta_layout,
+                meta_block,
+                overview_pad,
+                focused,
+            );
+            Some(HomeImagePaint::Emby {
+                area: *img_area,
+                item: item.clone(),
+                centered: two_column,
+            })
+        }
+        HeroData::GenericBeside(item, meta_area, wide_area, img_area, meta_layout) => {
+            let meta_block = HeroMetaBlock {
+                title_suffix: None,
+                meta_rows: item
+                    .duration()
+                    .map(|ticks| {
+                        vec![vec![Span::styled(
+                            trunc_str(
+                                &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
+                                meta_area.width as usize,
+                            ),
+                            Style::default().fg(palette::TEXT_SECONDARY),
+                        )]]
+                    })
+                    .unwrap_or_default(),
+            };
+            render_hero_layout_meta_content(
+                f,
+                *meta_area,
+                *wide_area,
+                meta_layout,
+                meta_block,
+                0,
+                focused,
+            );
+            match item {
+                QueueItem::Audiobookshelf(episode) => Some(HomeImagePaint::AudiobookshelfCover {
+                    area: *img_area,
+                    library_item_id: episode.library_item_id.clone(),
+                    show_placeholder: true,
+                }),
+                _ => None,
             }
         }
+        HeroData::Generic(item, area) => super::home_latest_row::render_home_latest_detail_content(
+            f,
+            *area,
+            item,
+            focused,
+            overview_pad as usize,
+        ),
     }
 }
 

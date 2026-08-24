@@ -181,26 +181,6 @@ fn scroll_wheel_on_volume_pill_dispatches_the_same_command_as_the_keys() {
 }
 
 #[test]
-fn panel_bounds_consume_clicks_over_the_physical_sidebar() {
-    let mut app = make_app_stub();
-    app.show_help = true;
-    app.layout.main.panel_area = Rect::new(0, 0, 31, 24);
-    app.layout.main.panel_content_area = Rect::new(2, 3, 27, 19);
-
-    app.handle_mouse(left_down(30, 23));
-    assert!(
-        app.show_help,
-        "clicks inside the resized sidebar must be consumed"
-    );
-
-    app.handle_mouse(left_down(31, 23));
-    assert!(
-        !app.show_help,
-        "clicks beyond the sidebar must dismiss the panel"
-    );
-}
-
-#[test]
 fn settings_mouse_rows_follow_inset_content_area() {
     let mut app = make_app_stub();
     app.show_settings = true;

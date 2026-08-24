@@ -289,89 +289,19 @@ impl App {
         focused: bool,
         overview_pad: usize,
     ) {
-        if area.width == 0 || area.height == 0 {
-            return;
-        }
-
-        // Feed entries have no artwork; use the shared Model A no-image hero
-        // rather than the legacy Home metadata painter. Audiobookshelf keeps
-        // the beside-image path below because its cover is a wide thumbnail.
-        if !matches!(item, QueueItem::Audiobookshelf(_)) {
-            let meta = item
-                .duration()
-                .map(|ticks| fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64));
-            let content = HeroContent {
-                title: Some(item.title()),
-                meta_line: meta.as_deref(),
-                meta_color: palette::TEXT_SECONDARY,
-                show_playing: false,
-                unconditional_spacer_after_meta: false,
-                lines: &[],
-                image: None,
-            };
-            paint_hero_content(f, area, &content, focused);
-            return;
-        }
-
-        let text_w = area.width as usize;
-        let ov_w = text_w.saturating_sub(overview_pad * 2);
-        let HomeLatestDetailText {
-            title_lines,
-            show_name,
-            overview_lines,
-            meta_height,
-        } = home_latest_detail_text(item, text_w, ov_w);
-
-        // Terminal cells are roughly twice as tall as they are wide, so a
-        // 16:9 image needs 9 rows for every 32 columns, matching the Emby hero.
-        let image_height = (area.width.saturating_mul(9).saturating_add(31) / 32)
-            .max(1)
-            .min(area.height.saturating_sub(meta_height + 1));
-        let img_w = area.width;
-
-        super::hero::render_home_hero_meta_block(
-            f,
-            area,
-            area,
-            &title_lines,
-            &show_name,
-            None,
-            item.duration()
-                .map(|ticks| {
-                    vec![vec![Span::styled(
-                        trunc_str(
-                            &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
-                            text_w,
-                        ),
-                        Style::default().fg(palette::TEXT_SECONDARY),
-                    )]]
-                })
-                .unwrap_or_default(),
-            &overview_lines,
-            overview_pad as u16,
-            focused,
-        );
-
-        // Cover art: only Audiobookshelf episodes carry artwork today. The
-        // cover is fetched via `fetch_audiobookshelf_cover` (which routes
-        // through `ImageSource::Audiobookshelf`) and rendered from the cache.
-        let QueueItem::Audiobookshelf(episode) = item else {
+        let Some(super::home_hero::HomeImagePaint::AudiobookshelfCover {
+            area: image_rect,
+            library_item_id,
+            ..
+        }) = render_home_latest_detail_content(f, area, item, focused, overview_pad)
+        else {
             return;
         };
-        if image_height == 0 {
-            return;
-        }
-        let Some(image_key) = self.audiobookshelf_cover_key(&episode.library_item_id) else {
+        let Some(image_key) = self.audiobookshelf_cover_key(&library_item_id) else {
             return;
         };
         let Some(image) = self.cached_image_protocol_mut(&image_key) else {
             return;
-        };
-        let image_rect = Rect {
-            x: area.x,
-            y: area.y + area.height - image_height,
-            width: img_w,
-            height: image_height,
         };
         type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
         f.render_stateful_widget(
@@ -380,6 +310,100 @@ impl App {
             image,
         );
     }
+}
+
+/// Renders the generic Home hero detail's non-image content (title/meta/
+/// overview, or the whole no-image hero for a Feed) without `App`, returning
+/// the Audiobookshelf cover's target `Rect` (if any) still needing paint.
+/// Shared by the `App::render_home_latest_detail` wrapper above and
+/// `HomeComponent`'s render path (task 3.4's confirmed extraction).
+pub(in crate::app::render) fn render_home_latest_detail_content(
+    f: &mut Frame,
+    area: Rect,
+    item: &QueueItem,
+    focused: bool,
+    overview_pad: usize,
+) -> Option<super::home_hero::HomeImagePaint> {
+    if area.width == 0 || area.height == 0 {
+        return None;
+    }
+
+    // Feed entries have no artwork; use the shared Model A no-image hero
+    // rather than the legacy Home metadata painter. Audiobookshelf keeps
+    // the beside-image path below because its cover is a wide thumbnail.
+    if !matches!(item, QueueItem::Audiobookshelf(_)) {
+        let meta = item
+            .duration()
+            .map(|ticks| fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64));
+        let content = HeroContent {
+            title: Some(item.title()),
+            meta_line: meta.as_deref(),
+            meta_color: palette::TEXT_SECONDARY,
+            show_playing: false,
+            unconditional_spacer_after_meta: false,
+            lines: &[],
+            image: None,
+        };
+        paint_hero_content(f, area, &content, focused);
+        return None;
+    }
+
+    let text_w = area.width as usize;
+    let ov_w = text_w.saturating_sub(overview_pad * 2);
+    let HomeLatestDetailText {
+        title_lines,
+        show_name,
+        overview_lines,
+        meta_height,
+    } = home_latest_detail_text(item, text_w, ov_w);
+
+    // Terminal cells are roughly twice as tall as they are wide, so a
+    // 16:9 image needs 9 rows for every 32 columns, matching the Emby hero.
+    let image_height = (area.width.saturating_mul(9).saturating_add(31) / 32)
+        .max(1)
+        .min(area.height.saturating_sub(meta_height + 1));
+    let img_w = area.width;
+
+    super::hero::render_home_hero_meta_block(
+        f,
+        area,
+        area,
+        &title_lines,
+        &show_name,
+        None,
+        item.duration()
+            .map(|ticks| {
+                vec![vec![Span::styled(
+                    trunc_str(
+                        &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
+                        text_w,
+                    ),
+                    Style::default().fg(palette::TEXT_SECONDARY),
+                )]]
+            })
+            .unwrap_or_default(),
+        &overview_lines,
+        overview_pad as u16,
+        focused,
+    );
+
+    // Cover art: only Audiobookshelf episodes carry artwork today.
+    let QueueItem::Audiobookshelf(episode) = item else {
+        return None;
+    };
+    if image_height == 0 {
+        return None;
+    }
+    Some(super::home_hero::HomeImagePaint::AudiobookshelfCover {
+        area: Rect {
+            x: area.x,
+            y: area.y + area.height - image_height,
+            width: img_w,
+            height: image_height,
+        },
+        library_item_id: episode.library_item_id.clone(),
+        show_placeholder: false,
+    })
 }
 
 #[cfg(test)]

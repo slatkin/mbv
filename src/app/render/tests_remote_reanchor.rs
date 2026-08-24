@@ -1,19 +1,24 @@
 use super::test_helpers::buffer_to_string;
-use crate::app::tests::make_app_stub;
-use crate::app::types_playback::RemoteReanchorPopup;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 fn render_reanchor(width: u16, height: u16, cursor: usize) -> String {
-    let mut app = make_app_stub();
-    app.remote_reanchor_popup = Some(RemoteReanchorPopup {
-        targets: vec![(0, "device-a".into()), (1, "device-b".into())],
-        cursor,
-    });
+    let targets = vec![
+        (0usize, "device-a".to_string()),
+        (1, "device-b".to_string()),
+    ];
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
+    let mut dim_flag = false;
     terminal
-        .draw(|f| app.render_remote_reanchor_popup(f))
+        .draw(|f| {
+            crate::app::render::render_remote_reanchor_popup_content(
+                f,
+                &mut dim_flag,
+                &targets,
+                cursor,
+            )
+        })
         .unwrap();
     buffer_to_string(&terminal)
 }

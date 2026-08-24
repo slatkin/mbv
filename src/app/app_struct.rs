@@ -3,7 +3,6 @@ use super::layout;
 use super::panel_targets::PanelTarget;
 use super::render;
 use super::resize::{ResizeRegisterTx, ResizeResponseRx};
-use super::search_sidebar::SearchSidebar;
 use super::types_browse::{AlbumIndexState, SeriesDetail};
 use super::types_cast::{CastAttachment, CastEvent};
 use super::types_confirm::ConfirmModal;
@@ -234,7 +233,6 @@ pub struct App {
     pub(super) dim_backdrop_active: bool,
     pub(super) image_cache_size_total: usize,
     pub(super) context_menu: Option<ContextMenu>,
-    pub(super) show_help: bool,
     pub(super) show_settings: bool,
     pub(super) settings_cursor: usize,
     pub(super) settings_destination: SettingsDestination,
@@ -245,7 +243,6 @@ pub struct App {
     pub(super) multiselect_popup: Option<MultiSelectPopup>,
     pub(super) selection_modal: Option<SelectionModal>,
     pub(super) library_routes_popup: Option<LibraryRoutePopup>,
-    pub(super) help_scroll: u16,
     pub(super) system_notifications: bool,
     pub(super) notif_failed: bool,
     pub(super) notif_action_tx: mpsc::Sender<String>,
@@ -254,19 +251,18 @@ pub struct App {
     pub(super) lib_rx: mpsc::Receiver<LibEvent>,
     pub(super) search_tx: mpsc::Sender<(String, Result<Vec<EmbyItem>, String>)>,
     pub(super) search_rx: mpsc::Receiver<(String, Result<Vec<EmbyItem>, String>)>,
-    pub(super) search_debounce_deadline: Option<Instant>,
-    pub(super) search_debounce_pending: Option<String>,
-    pub(super) search_sidebar: Option<SearchSidebar>,
+    /// Whether the global Search sidebar overlay is open. The
+    /// `SearchSidebarComponent` owns the sidebar state (query, cursor, scroll,
+    /// results, debounce); this flag tells the legacy render/input path the
+    /// overlay is active (task 3.2).
+    pub(super) search_sidebar_open: bool,
     pub(super) sessions: Vec<mbv_core::api::SessionInfo>,
     /// Last cast discovery browse result (8.1), independent of `sessions`'s
     /// own reload cadence -- see `panel_targets::build_panel_targets`.
     pub(super) cast_receivers: Vec<mbv_core::cast_discovery::CastReceiver>,
     /// The F3 panel's merged Emby+Cast target list, rebuilt from `sessions`/
     /// `cast_receivers` by `App::rebuild_panel_targets` (8.1/8.2).
-    /// `sessions_cursor` indexes this list, not `sessions` directly.
     pub(super) panel_targets: Vec<PanelTarget>,
-    pub(super) sessions_cursor: usize,
-    pub(super) sessions_scroll: usize,
     pub(super) sessions_loading: bool,
     pub(super) show_sessions: bool,
     pub(super) playlists: Vec<EmbyItem>,

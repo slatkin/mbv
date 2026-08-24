@@ -29,7 +29,12 @@ pub fn render_sidebar_scrollbar_column(total: usize, visible: u16, scroll: usize
     let backend = TestBackend::new(1, visible);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        App::render_sidebar_scrollbar(f, Rect::new(0, 0, 0, visible), total, scroll);
+        super::components::chrome::render_sidebar_scrollbar(
+            f,
+            Rect::new(0, 0, 0, visible),
+            total,
+            scroll,
+        );
     })
     .unwrap();
     buffer_to_string(&term)

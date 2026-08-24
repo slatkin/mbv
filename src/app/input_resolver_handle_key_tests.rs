@@ -17,15 +17,6 @@ fn input_snapshot_has_remote_session_true_while_cast_attached() {
 }
 
 #[test]
-fn help_f1_closes_help_via_handle_key() {
-    let mut app = make_app_stub();
-    app.show_help = true;
-    let quit = app.handle_key(ev(KeyCode::F(1), KeyModifiers::NONE));
-    assert!(!quit);
-    assert!(!app.show_help, "F1 closes the help overlay");
-}
-
-#[test]
 fn daemon_lost_q_runs_normal_quit_cleanup() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = crate::app::tests::make_local_daemon_app_stub(Vec::new());
@@ -42,7 +33,11 @@ fn daemon_lost_q_runs_normal_quit_cleanup() {
     app.config.lock().unwrap().save_playlist_on_quit = false;
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
 
-    assert!(app.handle_key(ev(KeyCode::Char('q'), KeyModifiers::NONE)));
+    // The Daemon-lost modal is now a TuiRealm component (task 2.3); its key
+    // dispatch goes through `handle_key_daemon_lost_modal` directly, not
+    // through CONTEXT_STACK.
+    let quit = app.handle_key_daemon_lost_modal(ev(KeyCode::Char('q'), KeyModifiers::NONE));
+    assert!(quit.is_some());
     assert!(app.daemon_lost_modal.is_none());
     assert!(
         !app.queue_dirty,
@@ -50,18 +45,6 @@ fn daemon_lost_q_runs_normal_quit_cleanup() {
     );
 
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
-}
-
-#[test]
-fn help_swallows_unbound_key_via_handle_key() {
-    let mut app = make_app_stub();
-    app.show_help = true;
-    let quit = app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
-    assert!(!quit);
-    assert!(
-        app.show_help,
-        "an unbound key is swallowed; help stays open"
-    );
 }
 
 #[test]
@@ -110,13 +93,6 @@ fn repeated_space_dispatches_each_available_toggle() {
 }
 
 #[test]
-fn f1_opens_help_via_handle_key() {
-    let mut app = make_app_stub();
-    app.handle_key(ev(KeyCode::F(1), KeyModifiers::NONE));
-    assert!(app.show_help);
-}
-
-#[test]
 fn f2_opens_settings_via_handle_key() {
     let mut app = make_app_stub();
     assert!(!app.show_settings);
@@ -161,7 +137,10 @@ fn confirm_clear_queue_yes_dispatches_clear_via_handle_key() {
         hint: "[y] Confirm    [Esc] Cancel".into(),
         on_confirm: crate::app::ConfirmAction::ClearQueue,
     });
-    app.handle_key(ev(KeyCode::Char('y'), KeyModifiers::NONE));
+    // The Confirm modal is now a TuiRealm component (task 2.2); its key
+    // dispatch goes through `handle_key_confirm_modal` directly, not through
+    // CONTEXT_STACK.
+    app.handle_key_confirm_modal(ev(KeyCode::Char('y'), KeyModifiers::NONE));
     assert!(
         app.confirm_modal.is_none(),
         "confirm modal clears regardless of answer"
@@ -177,7 +156,7 @@ fn confirm_rescan_no_clears_flag_without_rescan_via_handle_key() {
         hint: "[y] Confirm    [Esc] Cancel".into(),
         on_confirm: crate::app::ConfirmAction::RescanLibrary(0),
     });
-    app.handle_key(ev(KeyCode::Char('n'), KeyModifiers::NONE));
+    app.handle_key_confirm_modal(ev(KeyCode::Char('n'), KeyModifiers::NONE));
     assert!(app.confirm_modal.is_none());
 }
 
@@ -225,7 +204,10 @@ fn x_does_not_cycle_panel_mode_while_context_menu_is_open_via_handle_key() {
     let mut app = make_app_stub();
     app.context_menu = Some(test_empty_context_menu());
     let before = app.panel_mode;
-    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    // The Context menu is now a TuiRealm component (task 2.5); its key
+    // dispatch goes through `handle_key_context_menu` directly, not through
+    // CONTEXT_STACK. 'x' is swallowed by the menu.
+    app.handle_key_context_menu(ev(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(
         app.panel_mode, before,
         "Panel mode must not cycle while a context menu is open"
@@ -254,20 +236,22 @@ fn context_menu_owns_keyboard_navigation_and_dismissal() {
         cursor: 0,
     });
 
-    app.handle_key(ev(KeyCode::Down, KeyModifiers::NONE));
+    // The Context menu is now a TuiRealm component (task 2.5); its key
+    // dispatch goes through `handle_key_context_menu` directly.
+    app.handle_key_context_menu(ev(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(app.context_menu.as_ref().unwrap().cursor, 2);
-    app.handle_key(ev(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key_context_menu(ev(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(app.context_menu.as_ref().unwrap().cursor, 0);
-    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    app.handle_key_context_menu(ev(KeyCode::Char('x'), KeyModifiers::NONE));
     assert!(app.context_menu.is_some(), "unrelated keys are swallowed");
-    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+    app.handle_key_context_menu(ev(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.context_menu.is_none());
 }
 
 #[test]
 fn context_menu_open_is_refused_over_sidebar_surface() {
     let mut app = make_app_stub();
-    app.show_help = true;
+    app.show_sessions = true;
     app.open_context_menu();
     assert!(app.context_menu.is_none());
 }
@@ -290,10 +274,13 @@ fn context_menu_swallow_regression_shortcuts() {
         ev(KeyCode::Char('c'), KeyModifiers::NONE),
         ev(KeyCode::Char('x'), KeyModifiers::NONE),
     ];
+    // The Context menu is now a TuiRealm component (task 2.5); its key
+    // dispatch goes through `handle_key_context_menu` directly, not through
+    // CONTEXT_STACK.
     for key in keys {
-        app.handle_key(key);
+        app.handle_key_context_menu(key);
         assert!(app.context_menu.is_some(), "{key:?} must be swallowed");
-        assert!(!app.show_help && !app.show_settings && !app.show_sessions);
+        assert!(!app.show_settings && !app.show_sessions);
     }
 }
 
@@ -450,11 +437,15 @@ fn c_does_not_prompt_clear_queue_while_context_menu_is_open_via_handle_key() {
     // context menu and silently opened the clear-queue confirmation. It
     // must now fall through to (and be swallowed by) the context-menu
     // layer instead.
+    //
+    // The Context menu is now a TuiRealm component (task 2.5); its key
+    // dispatch goes through `handle_key_context_menu` directly, not through
+    // CONTEXT_STACK. 'c' is swallowed by the menu.
     let mut app = make_app_stub();
     app.player_tab
         .append_item(crate::app::tests::make_item("1", "Track"));
     app.context_menu = Some(test_empty_context_menu());
-    app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
+    app.handle_key_context_menu(ev(KeyCode::Char('c'), KeyModifiers::NONE));
     assert!(
         app.confirm_modal.is_none(),
         "clear-queue confirmation must not open while a context menu is open"
@@ -498,27 +489,21 @@ fn enter_on_queue_tab_dispatches_queue_play_cursor_via_handle_key() {
 fn context_stack_order_is_pinned() {
     // The unified search modal was retired in favor of two surfaces: an
     // inline `lib_search` entry per library tab (restoring the pre-modal
-    // in-list search box) and a `search_sidebar` entry for the global
-    // `Ctrl+/` panel. Both sit where `search_modal` used to, and the
+    // in-list search box) and a global `Ctrl+/` panel (now the
+    // `SearchSidebarComponent`, task 3.2 — its `CONTEXT_STACK` entry was
+    // removed when the sidebar became a TuiRealm component).
     // The context menu owns every key while open and therefore precedes all
     // other modal and view contexts.
     let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
     assert_eq!(
         names,
         vec![
-            "context_menu",
             "selection_modal",
-            "daemon_lost_modal",
-            "confirm_modal",
-            "remote_reanchor",
             "save_playlist",
             "settings",
-            "help",
-            "sessions",
             "playlists",
             "global_overlay_open",
             "queue_column_width",
-            "search_sidebar",
             "lib_search",
             "panel_mode_cycle_x",
             "confirm_skip_intro",

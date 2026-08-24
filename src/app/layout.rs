@@ -76,6 +76,11 @@ pub(crate) struct LayoutMain {
     pub left_row_targets: Vec<Option<LibraryRowTarget>>,
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
+    /// The full area `App::render_home_list` was given (hero + pills + list,
+    /// not just the inner list). The shell reads this to re-paint the
+    /// mounted `HomeComponent`'s `view()` over the same area right after
+    /// `App::render` returns (task 3.4).
+    pub home_area: Rect,
     /// The selected item's hero geometry. Wide screens place it beside `left_area`;
     /// inline screens place the replacement inside the list and use it as the
     /// selected parent's activation geometry.

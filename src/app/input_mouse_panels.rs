@@ -3,26 +3,21 @@
 use crate::app::action::Command;
 use crate::app::layout::LibraryRowTarget;
 use crate::app::{
-    App, PanelFocus, PendingQueueAction, QueueScope, HELP_PANEL_W, PLAYLISTS_PANEL_W,
-    SESSIONS_PANEL_W, SETTINGS_PANEL_W,
+    App, PanelFocus, PendingQueueAction, QueueScope, PLAYLISTS_PANEL_W, SETTINGS_PANEL_W,
 };
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
 use ratatui::layout::Rect;
 use std::time::{Duration, Instant};
 impl App {
-    /// Handle a mouse event when a panel overlay (help/settings/sessions/playlists) is open.
+    /// Handle a mouse event when a panel overlay (settings/sessions/playlists) is open.
     /// Returns true if the event was consumed.
     pub(super) fn handle_mouse_panels(&mut self, mouse: crossterm::event::MouseEvent) -> bool {
         use crossterm::event::{MouseButton, MouseEventKind};
         let col = mouse.column;
         let row = mouse.row;
-        let panel_w: u16 = if self.show_help {
-            HELP_PANEL_W
-        } else if self.show_settings {
+        let panel_w: u16 = if self.show_settings {
             SETTINGS_PANEL_W
-        } else if self.show_sessions {
-            SESSIONS_PANEL_W
         } else if self.show_playlists {
             PLAYLISTS_PANEL_W
         } else {
@@ -45,21 +40,7 @@ impl App {
             if self.show_settings {
                 self.close_settings();
             } else {
-                self.show_help = false;
-                self.show_sessions = false;
                 self.show_playlists = false;
-            }
-            return true;
-        }
-        if self.show_help {
-            match mouse.kind {
-                MouseEventKind::ScrollDown => {
-                    self.help_scroll += 3;
-                }
-                MouseEventKind::ScrollUp => {
-                    self.help_scroll = self.help_scroll.saturating_sub(3);
-                }
-                _ => {}
             }
             return true;
         }
@@ -99,35 +80,6 @@ impl App {
                             self.activate_service_entry();
                         } else {
                             self.handle_settings_activate();
-                        }
-                    }
-                }
-                _ => {}
-            }
-            return true;
-        }
-        if self.show_sessions {
-            const ENTRY_H: u16 = 4;
-            let content_top = if panel { content_area.y } else { 1 };
-            match mouse.kind {
-                MouseEventKind::ScrollDown => {
-                    if !self.panel_targets.is_empty() {
-                        self.sessions_cursor =
-                            (self.sessions_cursor + 1).min(self.panel_targets.len() - 1);
-                    }
-                }
-                MouseEventKind::ScrollUp => {
-                    self.sessions_cursor = self.sessions_cursor.saturating_sub(1);
-                }
-                MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
-                    let idx = ((row - content_top) / ENTRY_H) as usize;
-                    if idx < self.panel_targets.len() {
-                        if self.sessions_cursor == idx {
-                            if let Some(target) = self.panel_targets.get(idx).cloned() {
-                                self.select_panel_target(target);
-                            }
-                        } else {
-                            self.sessions_cursor = idx;
                         }
                     }
                 }

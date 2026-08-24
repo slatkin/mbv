@@ -568,7 +568,6 @@ fn the_f3_panel_labels_a_mixed_emby_and_cast_target_list_by_kind() {
     // on both channels shows as two distinct targets"): the render must
     // still distinguish the two rows by kind tag.
     let mut app = make_app_stub();
-    app.show_sessions = true;
     app.sessions = vec![crate::app::tests::make_session("Living Room", "Emby")];
     app.cast_receivers = vec![mbv_core::cast_discovery::CastReceiver {
         id: "cast-1".to_string(),
@@ -578,7 +577,29 @@ fn the_f3_panel_labels_a_mixed_emby_and_cast_target_list_by_kind() {
     }];
     app.rebuild_panel_targets();
 
-    let text = rendered_text(&mut app, 100, 20);
+    let backend = TestBackend::new(100, 20);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal
+        .draw(|f| {
+            let mut cursor = 0;
+            let mut scroll = 0;
+            let targets =
+                crate::app::panel_targets::build_panel_targets(&app.sessions, &app.cast_receivers);
+            crate::app::render::render_sessions_overlay_content(
+                f,
+                Some(Rect::new(0, 0, 100, 20)),
+                &targets,
+                false,
+                &mut cursor,
+                &mut scroll,
+                None,
+                false,
+                None,
+                false,
+            );
+        })
+        .unwrap();
+    let text = buffer_to_string(&terminal);
 
     assert!(
         text.contains("[EMBY]") && text.contains("[CAST]"),

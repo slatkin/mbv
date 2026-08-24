@@ -141,20 +141,6 @@ fn shift_resize_grows_from_queue_focus_and_persists_pref() {
 }
 
 #[test]
-fn shift_resize_is_blocked_by_help_overlay() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_remote_app_stub(make_items(1), make_items(2));
-    app.show_help = true;
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
-
-    assert!(!handled);
-    assert!(app.show_help);
-    assert!(app.status.is_empty());
-    assert!(!crate::config::prefs_path().exists());
-}
-
-#[test]
 fn shift_resize_clamps_and_reports_minimum_and_maximum() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_remote_app_stub(make_items(1), make_items(2));

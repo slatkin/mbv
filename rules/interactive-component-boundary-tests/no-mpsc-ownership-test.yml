@@ -1,0 +1,12 @@
+id: no-mpsc-ownership
+valid:
+  - |
+    use std::time::Instant;
+    // A Clock token is legitimate presentation input, not a channel.
+    fn tick(clock: Instant) {}
+invalid:
+  - |
+    use std::sync::mpsc::{self, Receiver, Sender};
+    fn channel_stuff() {
+        let (tx, rx) = std::sync::mpsc::channel();
+    }
