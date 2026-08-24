@@ -163,7 +163,7 @@ impl App {
         let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
 
         let final_scroll =
-            self.render_wide_library_rows_with_ctx(f, list_area, ctx, focused, layout);
+            self.render_generic_movies_home_video_rows_with_ctx(f, list_area, ctx, focused, layout);
         if ctx.is_search_active() {
             if let Some(search) = &mut self.libs[lib_idx].search {
                 search.scroll = final_scroll;

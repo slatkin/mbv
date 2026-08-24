@@ -359,15 +359,7 @@ impl App {
                 let visible = list_area.height as usize;
                 // Preview mode starts from the beginning (offset 0);
                 // focused mode keeps the selected track visible.
-                let scroll = if let Some(cursor) = track_cursor {
-                    // Keep cursor visible.
-                    let max_scroll = n.saturating_sub(visible);
-                    let want = cursor.saturating_sub(visible.saturating_sub(1));
-                    want.min(max_scroll)
-                } else {
-                    // Preview mode: start from the beginning.
-                    0
-                };
+                let scroll = album_track_focus_scroll(track_cursor, n, visible);
 
                 let title_col_w = (list_area.width as usize).saturating_sub(DURATION_COL_W);
 
@@ -475,6 +467,17 @@ impl App {
         }
     }
 }
+
+fn album_track_focus_scroll(track_cursor: Option<usize>, count: usize, visible: usize) -> usize {
+    let Some(cursor) = track_cursor else {
+        return 0;
+    };
+    let max_scroll = count.saturating_sub(visible);
+    cursor
+        .saturating_sub(visible.saturating_sub(1))
+        .min(max_scroll)
+}
+
 #[cfg(test)]
 mod tests {
     use super::wide_album_metadata;
