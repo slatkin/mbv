@@ -13,11 +13,13 @@ impl App {
     /// which `ConfirmAction` is pending and re-uses each action's existing
     /// effect, preserving the exact key bindings each confirmation had
     /// before migrating off status-bar toast text / bespoke dialogs.
-    pub(super) fn handle_key_confirm_modal(&mut self, key: KeyEvent) -> Option<bool> {
-        let action = self.confirm_modal.as_ref()?.on_confirm.clone();
+    pub(super) fn apply_confirm_action(
+        &mut self,
+        action: ConfirmAction,
+        key: KeyEvent,
+    ) -> Option<bool> {
         match action {
             ConfirmAction::ClearQueue => {
-                self.confirm_modal = None;
                 if matches!(
                     key.code,
                     KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
@@ -26,7 +28,6 @@ impl App {
                 }
             }
             ConfirmAction::RemoveActiveQueueItem(pos) => {
-                self.confirm_modal = None;
                 if matches!(key.code, KeyCode::Char('y')) {
                     // Remove the slot from the queue model immediately, rather
                     // than deferring it until PlayerEvent::Stopped arrives back
@@ -79,7 +80,6 @@ impl App {
                 }
             }
             ConfirmAction::RescanLibrary(lib_idx) => {
-                self.confirm_modal = None;
                 if matches!(
                     key.code,
                     KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
@@ -89,12 +89,10 @@ impl App {
             }
             ConfirmAction::SaveOverwritePlaylist { existing_id, name } => match key.code {
                 KeyCode::Char('y') => {
-                    self.confirm_modal = None;
                     self.do_overwrite_playlist(&existing_id, &name);
                 }
                 KeyCode::Esc => {
-                    self.confirm_modal = None;
-                    self.save_playlist_dialog = Some(SavePlaylistDialog {
+                    self.open_save_playlist_dialog(SavePlaylistDialog {
                         input: name,
                         stage: SavePlaylistStage::EnterName,
                     });
@@ -103,16 +101,12 @@ impl App {
             },
             ConfirmAction::DeletePlaylist { id, name } => match key.code {
                 KeyCode::Char('y') => {
-                    self.confirm_modal = None;
                     self.spawn_delete_playlist(id, name);
                 }
-                KeyCode::Esc => {
-                    self.confirm_modal = None;
-                }
+                KeyCode::Esc => {}
                 _ => {}
             },
             ConfirmAction::RemoveFeedSubscription(index) => {
-                self.confirm_modal = None;
                 if matches!(key.code, KeyCode::Char('y')) {
                     self.remove_feed_confirmed(index);
                 }
@@ -122,21 +116,17 @@ impl App {
                     key.code,
                     KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
                 ) {
-                    self.confirm_modal = None;
                     self.remove_emby_confirmed();
                 } else if key.code == KeyCode::Esc {
-                    self.confirm_modal = None;
                 }
             }
             ConfirmAction::ReplaceEmby(generation) => {
                 if key.code == KeyCode::Esc {
-                    self.confirm_modal = None;
                     self.pending_emby_replacement = None;
                 } else if matches!(
                     key.code,
                     KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
                 ) {
-                    self.confirm_modal = None;
                     self.replace_emby_confirmed(generation);
                 }
             }
@@ -145,21 +135,17 @@ impl App {
                     key.code,
                     KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
                 ) {
-                    self.confirm_modal = None;
                     self.remove_audiobookshelf_confirmed();
                 } else if key.code == KeyCode::Esc {
-                    self.confirm_modal = None;
                 }
             }
             ConfirmAction::ReplaceAudiobookshelf(generation) => {
                 if key.code == KeyCode::Esc {
-                    self.confirm_modal = None;
                     self.pending_audiobookshelf_replacement = None;
                 } else if matches!(
                     key.code,
                     KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
                 ) {
-                    self.confirm_modal = None;
                     self.replace_audiobookshelf_confirmed(generation);
                 }
             }
@@ -170,7 +156,6 @@ impl App {
                 );
                 match key.code {
                     KeyCode::Char('s') | KeyCode::Char('S') => {
-                        self.confirm_modal = None;
                         self.save_playlist_to_emby();
                         // Keep the replacement queued until the coordinator
                         // reports that this save crossed its mutation boundary.
@@ -178,7 +163,6 @@ impl App {
                         // playlist before the save has executed.
                     }
                     KeyCode::Char('d') | KeyCode::Char('D') => {
-                        self.confirm_modal = None;
                         if let Some(action) = self.pending_queue_action.take() {
                             self.execute_pending_queue_action(action);
                         }
@@ -188,7 +172,6 @@ impl App {
                         }
                     }
                     KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
-                        self.confirm_modal = None;
                         self.pending_queue_action = None;
                     }
                     _ => {}

@@ -56,17 +56,16 @@ impl Model {
     }
 
     pub(super) fn blocking_overlay_active(&self) -> bool {
-        self.overlay_stack().iter().any(|id| {
-            matches!(
-                id,
-                ComponentId::Overlay(OverlayId::ContextMenu)
-                    | ComponentId::Overlay(OverlayId::SelectionModal)
-                    | ComponentId::Modal(ModalId::Confirm)
-                    | ComponentId::Modal(ModalId::DaemonLost)
-                    | ComponentId::Modal(ModalId::RemoteReanchor)
-                    | ComponentId::Modal(ModalId::SavePlaylist)
-            )
-        })
+        [
+            ComponentId::Overlay(OverlayId::ContextMenu),
+            ComponentId::Overlay(OverlayId::SelectionModal),
+            ComponentId::Modal(ModalId::Confirm),
+            ComponentId::Modal(ModalId::DaemonLost),
+            ComponentId::Modal(ModalId::RemoteReanchor),
+            ComponentId::Modal(ModalId::SavePlaylist),
+        ]
+        .iter()
+        .any(|id| self.application.mounted(id))
     }
 }
 

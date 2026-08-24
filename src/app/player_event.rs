@@ -548,21 +548,22 @@ impl App {
     fn raise_daemon_lost_modal(&mut self) {
         self.context_menu = None;
         self.layout.context_menu_rect = None;
-        self.confirm_modal = None;
-        self.save_playlist_dialog = None;
         let last_playing_title = {
             let idx = self.player.status.lock().unwrap().current_idx;
             self.playback_queue()
                 .item_at(idx)
                 .map(|item| item.title().to_string())
         };
-        self.daemon_lost_modal = Some(DaemonLostModal {
-            last_playing_title,
-            daemon_log_path: crate::state_dir()
-                .join("local-daemon.log")
-                .display()
-                .to_string(),
-            restart_error: None,
-        });
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DaemonLost(
+            DaemonLostModal {
+                last_playing_title,
+                daemon_log_path: crate::state_dir()
+                    .join("local-daemon.log")
+                    .display()
+                    .to_string(),
+                restart_error: None,
+            },
+        ));
+        self.blocking_overlay_active = true;
     }
 }

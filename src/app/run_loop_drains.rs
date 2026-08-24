@@ -1,5 +1,4 @@
 use super::notify_actions::ToastSeverity;
-use super::types_confirm::ConfirmAction;
 use super::types_playback::PendingQueueAction;
 use mbv_core::player::PlayerCommand;
 
@@ -174,13 +173,8 @@ impl App {
                     self.status.clear();
                 }
                 "clear:yes" => {
-                    if matches!(
-                        self.confirm_modal.as_ref().map(|m| &m.on_confirm),
-                        Some(ConfirmAction::ClearQueue)
-                    ) {
-                        self.confirm_modal = None;
-                        self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
-                    }
+                    self.dismiss_confirm();
+                    self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
                 }
                 "__notif_failed__" => {
                     self.notif_failed = true;

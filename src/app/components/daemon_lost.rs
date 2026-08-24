@@ -2,7 +2,7 @@
 //!
 //! Owns the modal's display content (last_playing_title, daemon_log_path,
 //! restart_error) set by the shell via downcast before each render. The shell
-//! owns restart/quit dispatch (`App::handle_key_daemon_lost_modal`); the
+//! owns restart/quit dispatch in the shell; the
 //! component forwards every key as
 //! `Msg::Shell(ShellRequest::DaemonLostKey(key))` so the shell can run the
 //! existing handler unchanged. Mouse events are forwarded to the legacy
@@ -42,7 +42,7 @@ impl DaemonLostComponent {
         }
     }
 
-    /// Set the modal's display content from `App::daemon_lost_modal`. Called
+    /// Set the modal's display content from a shell request. Called
     /// by the shell via `get_component_mut`+downcast before each render.
     pub(in crate::app) fn set_content(
         &mut self,
@@ -54,6 +54,10 @@ impl DaemonLostComponent {
         self.daemon_log_path.clear();
         self.daemon_log_path.push_str(daemon_log_path);
         self.restart_error = restart_error.map(|s| s.to_string());
+    }
+
+    pub(in crate::app) fn set_restart_error(&mut self, message: String) {
+        self.restart_error = Some(message);
     }
 }
 

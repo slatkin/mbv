@@ -19,7 +19,7 @@ impl App {
         self.mouse_col = col;
         self.mouse_row = row;
 
-        if self.remote_reanchor_popup.is_some() {
+        if self.blocking_overlay_active {
             return;
         }
 

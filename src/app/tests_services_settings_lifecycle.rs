@@ -324,7 +324,7 @@ fn ready_emby_repair_opens_the_transactional_setup_form() {
     app.open_services_settings();
     app.activate_service_entry();
     assert!(app.emby_setup_form.is_some());
-    assert!(app.confirm_modal.is_none());
+    assert!(!matches!(app.pending_overlay, Some(super::types_overlay::OverlayRequest::Confirm(_))));
 }
 
 #[test]
@@ -361,13 +361,18 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
         }),
     });
     assert!(app.pending_emby_replacement.is_some());
-    assert!(app.confirm_modal.is_some());
+    assert!(matches!(app.pending_overlay, Some(super::types_overlay::OverlayRequest::Confirm(_))));
     assert_eq!(app.config.lock().unwrap().emby_setup, Some(old_setup));
     assert_eq!(
         mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby),
         Some("old-token".into())
     );
-    app.handle_key_confirm_modal(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    let action = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        _ => panic!("confirmation request missing"),
+    };
+    app.apply_confirm_action(action, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    app.dismiss_confirm();
     assert!(app.pending_emby_replacement.is_none());
     assert_eq!(app.emby_runtime.state, ServiceState::Ready);
     assert_eq!(
@@ -387,7 +392,12 @@ fn emby_removal_cancel_is_non_destructive() {
         .unwrap();
     app.open_services_settings();
     app.request_emby_removal();
-    app.handle_key_confirm_modal(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    let action = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        _ => panic!("confirmation request missing"),
+    };
+    app.apply_confirm_action(action, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    app.dismiss_confirm();
     assert_eq!(app.config.lock().unwrap().emby_setup, Some(setup));
     assert_eq!(app.emby_runtime.state, ServiceState::Ready);
     assert_eq!(

@@ -50,7 +50,9 @@ impl App {
         // so every image lookup and fetch trigger in this frame sees the right
         // mem-key. `render_modal_frame` resets it on entry so it stays accurate
         // for the receiver between frames too.
-        self.dim_backdrop_active = self.any_dim_modal_open();
+        self.dim_backdrop_active = self.blocking_overlay_active
+            || self.multiselect_popup.is_some()
+            || self.library_routes_popup.is_some();
 
         // Every render sub-call below writes into this fresh, local value
         // instead of `self.layout` directly. It's swapped into `self.layout`
@@ -132,28 +134,8 @@ impl App {
         if self.show_settings {
             self.render_settings_panel(f, &mut layout, panel_area);
         }
-        if self.save_playlist_dialog.is_some() {
-            self.render_save_playlist_dialog(f);
-        }
-        debug_assert!(
-            !(self.save_playlist_dialog.is_some() && self.confirm_modal.is_some()),
-            "save_playlist_dialog and confirm_modal must not both be active — \
-             the backdrop would be dimmed twice"
-        );
-        // The Confirm modal is rendered by `ConfirmComponent` via the shell's
-        // `render_confirm_overlay` (task 2.2); `App::render` no longer paints
-        // it directly. The `confirm_modal.is_some()` check is still needed for
-        // `any_dim_modal_open` and `any_other_modal_open` below.
-        // The Remote-reanchor popup is rendered by `RemoteReanchorComponent`
-        // via the shell's `render_remote_reanchor_overlay` (task 2.4);
-        // `App::render` no longer paints it directly. The
-        // `remote_reanchor_popup.is_some()` check is still needed for
-        // `any_dim_modal_open` and `any_other_modal_open` below.
-        // The Daemon-lost modal is rendered by `DaemonLostComponent` via the
-        // shell's `render_daemon_lost_overlay` (task 2.3); `App::render` no
-        // longer paints it directly. The `daemon_lost_modal.is_some()` check
-        // is still needed for `any_dim_modal_open` and `any_other_modal_open`
-        // below.
+        // Blocking modal mount exclusivity is asserted by the shell, where the
+        // TuiRealm mount state is available.
         // Record the destination this completed frame was rendered for, on
         // the layout about to be installed. The tag is set only here (never
         // on the intermediate/draft `layout`), so browse mouse handling can
@@ -168,22 +150,8 @@ impl App {
         self.layout = layout;
     }
 
-    fn any_dim_modal_open(&self) -> bool {
-        self.context_menu.is_some()
-            || self.confirm_modal.is_some()
-            || self.daemon_lost_modal.is_some()
-            || self.remote_reanchor_popup.is_some()
-            || self.multiselect_popup.is_some()
-            || self.save_playlist_dialog.is_some()
-            || self.library_routes_popup.is_some()
-            || self.selection_modal.is_some()
-    }
-
     pub(in crate::app) fn any_other_modal_open(&self) -> bool {
-        self.confirm_modal.is_some()
-            || self.daemon_lost_modal.is_some()
-            || self.remote_reanchor_popup.is_some()
-            || self.save_playlist_dialog.is_some()
+        self.blocking_overlay_active
             || self.multiselect_popup.is_some()
             || self.library_routes_popup.is_some()
             || self.show_settings

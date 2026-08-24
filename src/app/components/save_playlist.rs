@@ -10,10 +10,12 @@ use super::legacy_input::to_crossterm_key_event;
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_save_playlist_content;
+use crate::app::SavePlaylistStage;
 
 pub struct SavePlaylistComponent {
     input: String,
     rename: bool,
+    rename_id: Option<String>,
     dim_backdrop_active: bool,
 }
 
@@ -22,6 +24,7 @@ impl SavePlaylistComponent {
         Self {
             input: String::new(),
             rename: false,
+            rename_id: None,
             dim_backdrop_active: false,
         }
     }
@@ -29,6 +32,28 @@ impl SavePlaylistComponent {
     pub(in crate::app) fn set_content(&mut self, input: String, rename: bool) {
         self.input = input;
         self.rename = rename;
+        self.rename_id = None;
+    }
+
+    pub(in crate::app) fn set_dialog(&mut self, input: String, stage: SavePlaylistStage) {
+        self.input = input;
+        self.rename_id = match stage {
+            SavePlaylistStage::EnterName => None,
+            SavePlaylistStage::RenamePlaylist { id } => Some(id),
+        };
+        self.rename = self.rename_id.is_some();
+    }
+
+    pub(in crate::app) fn input(&self) -> &str {
+        &self.input
+    }
+
+    pub(in crate::app) fn is_rename(&self) -> bool {
+        self.rename
+    }
+
+    pub(in crate::app) fn rename_id(&self) -> Option<&str> {
+        self.rename_id.as_deref()
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {

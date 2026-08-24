@@ -40,11 +40,13 @@ impl FeedHomeVideoState {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub(super) enum SavePlaylistStage {
     EnterName,
     RenamePlaylist { id: String },
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub(super) struct SavePlaylistDialog {
     pub(super) input: String,
     pub(super) stage: SavePlaylistStage,

@@ -631,12 +631,12 @@ impl App {
                 self.flash_error(error);
             }
             LibEvent::PlaylistRenamed { new_name } => {
-                self.save_playlist_dialog = None;
+                self.dismiss_save_playlist();
                 self.force_clear = true;
                 self.flash(format!("Renamed to '{new_name}'"), ToastSeverity::Success);
             }
             LibEvent::PlaylistDeleted { name } => {
-                self.confirm_modal = None;
+                self.dismiss_confirm();
                 self.flash(format!("Deleted '{name}'"), ToastSeverity::Success);
             }
             LibEvent::QueueEnriched { items } => {

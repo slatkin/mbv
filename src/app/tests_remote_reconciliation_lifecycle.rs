@@ -238,19 +238,19 @@ fn library_focus_rescan_does_not_trigger_tracking_controls() {
     app.libs.push(LibraryTab::new(lib_item));
     app.remote_tracker = Some(tracker(&["a", "b"]));
 
-    // Ctrl+R in library focus is the established library rescan, not the
-    // queue-context re-anchor.
     app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
     assert!(matches!(
-        app.confirm_modal.as_ref().map(|m| &m.on_confirm),
-        Some(ConfirmAction::RescanLibrary(_))
+        app.pending_overlay.as_ref(),
+        Some(super::types_overlay::OverlayRequest::Confirm(modal))
+            if matches!(&modal.on_confirm, ConfirmAction::RescanLibrary(_))
     ));
-    assert!(app.remote_reanchor_popup.is_none());
+    assert!(!matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::RemoteReanchor(_))
+    ));
     assert!(app.remote_tracker.is_some());
 
-    // Ctrl+T in library focus is swallowed by the library context; tracking
-    // must not be stopped.
-    app.confirm_modal = None;
+    app.dismiss_confirm();
     app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL));
     assert!(app.remote_tracker.is_some());
 }

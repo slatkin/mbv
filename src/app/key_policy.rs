@@ -78,12 +78,6 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         gate: KeyPolicyGate::IsMounted(ComponentId::Overlay(OverlayId::SelectionModal)),
         blocking: true,
     },
-    KeyPolicyEntry {
-        name: "save_playlist",
-        owner: KeyPolicyOwner::Active(Some(ComponentId::Modal(ModalId::SavePlaylist))),
-        gate: KeyPolicyGate::IsMounted(ComponentId::Modal(ModalId::SavePlaylist)),
-        blocking: true,
-    },
     // 7–10 — Non-blocking overlays
     KeyPolicyEntry {
         name: "settings",

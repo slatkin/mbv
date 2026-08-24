@@ -20,11 +20,13 @@ fn input_snapshot_has_remote_session_true_while_cast_attached() {
 fn daemon_lost_q_runs_normal_quit_cleanup() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = crate::app::tests::make_local_daemon_app_stub(Vec::new());
-    app.daemon_lost_modal = Some(crate::app::DaemonLostModal {
-        last_playing_title: None,
-        daemon_log_path: "daemon.log".into(),
-        restart_error: None,
-    });
+    app.pending_overlay = Some(crate::app::types_overlay::OverlayRequest::DaemonLost(
+        crate::app::DaemonLostModal {
+            last_playing_title: None,
+            daemon_log_path: "daemon.log".into(),
+            restart_error: None,
+        },
+    ));
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("playlist-id".into()),
         name: "Saved".into(),
@@ -33,14 +35,17 @@ fn daemon_lost_q_runs_normal_quit_cleanup() {
     app.config.lock().unwrap().save_playlist_on_quit = false;
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
 
-    // The Daemon-lost modal is now a TuiRealm component (task 2.3); its key
-    // dispatch goes through `handle_key_daemon_lost_modal` directly, not
-    // through CONTEXT_STACK.
-    let quit = app.handle_key_daemon_lost_modal(ev(KeyCode::Char('q'), KeyModifiers::NONE));
-    assert!(quit.is_some());
-    assert!(app.daemon_lost_modal.is_none());
+    let mut model = crate::app::Model::new(app);
+    model.sync_modal_requests();
+    let quit = model.handle_daemon_lost_key(ev(KeyCode::Char('q'), KeyModifiers::NONE));
+    assert!(quit);
+    assert!(!model
+        .application
+        .mounted(&crate::app::components::ComponentId::Modal(
+            crate::app::components::ModalId::DaemonLost
+        )));
     assert!(
-        !app.queue_dirty,
+        !model.app.queue_dirty,
         "normal quit cleanup must discard dirty state"
     );
 
@@ -131,18 +136,21 @@ fn f4_opens_playlists_via_handle_key() {
 #[test]
 fn confirm_clear_queue_yes_dispatches_clear_via_handle_key() {
     let mut app = make_app_stub();
-    app.confirm_modal = Some(crate::app::ConfirmModal {
+    app.ask_confirm(crate::app::ConfirmModal {
         title: " Clear Queue ".into(),
         message: "Clear the queue?".into(),
         hint: "[y] Confirm    [Esc] Cancel".into(),
         on_confirm: crate::app::ConfirmAction::ClearQueue,
     });
-    // The Confirm modal is now a TuiRealm component (task 2.2); its key
-    // dispatch goes through `handle_key_confirm_modal` directly, not through
-    // CONTEXT_STACK.
-    app.handle_key_confirm_modal(ev(KeyCode::Char('y'), KeyModifiers::NONE));
+    let mut model = crate::app::Model::new(app);
+    model.sync_modal_requests();
+    model.handle_confirm_key(ev(KeyCode::Char('y'), KeyModifiers::NONE));
     assert!(
-        app.confirm_modal.is_none(),
+        !model
+            .application
+            .mounted(&crate::app::components::ComponentId::Modal(
+                crate::app::components::ModalId::Confirm
+            )),
         "confirm modal clears regardless of answer"
     );
 }
@@ -150,14 +158,20 @@ fn confirm_clear_queue_yes_dispatches_clear_via_handle_key() {
 #[test]
 fn confirm_rescan_no_clears_flag_without_rescan_via_handle_key() {
     let mut app = make_app_stub();
-    app.confirm_modal = Some(crate::app::ConfirmModal {
+    app.ask_confirm(crate::app::ConfirmModal {
         title: " Rescan Library ".into(),
         message: "Rescan 'Movies'?".into(),
         hint: "[y] Confirm    [Esc] Cancel".into(),
         on_confirm: crate::app::ConfirmAction::RescanLibrary(0),
     });
-    app.handle_key_confirm_modal(ev(KeyCode::Char('n'), KeyModifiers::NONE));
-    assert!(app.confirm_modal.is_none());
+    let mut model = crate::app::Model::new(app);
+    model.sync_modal_requests();
+    model.handle_confirm_key(ev(KeyCode::Char('n'), KeyModifiers::NONE));
+    assert!(!model
+        .application
+        .mounted(&crate::app::components::ComponentId::Modal(
+            crate::app::components::ModalId::Confirm
+        )));
 }
 
 #[test]
@@ -424,8 +438,9 @@ fn c_prompts_clear_queue_confirmation_via_handle_key() {
         .append_item(crate::app::tests::make_item("1", "Track"));
     app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
     assert!(matches!(
-        app.confirm_modal.as_ref().map(|m| &m.on_confirm),
-        Some(crate::app::ConfirmAction::ClearQueue)
+        app.pending_overlay.as_ref(),
+        Some(crate::app::types_overlay::OverlayRequest::Confirm(modal))
+            if matches!(&modal.on_confirm, crate::app::ConfirmAction::ClearQueue)
     ));
 }
 
@@ -447,7 +462,10 @@ fn c_does_not_prompt_clear_queue_while_context_menu_is_open_via_handle_key() {
     app.context_menu = Some(test_empty_context_menu());
     app.handle_key_context_menu(ev(KeyCode::Char('c'), KeyModifiers::NONE));
     assert!(
-        app.confirm_modal.is_none(),
+        !matches!(
+            app.pending_overlay.as_ref(),
+            Some(crate::app::types_overlay::OverlayRequest::Confirm(_))
+        ),
         "clear-queue confirmation must not open while a context menu is open"
     );
 }
@@ -498,7 +516,6 @@ fn context_stack_order_is_pinned() {
         names,
         vec![
             "selection_modal",
-            "save_playlist",
             "settings",
             "playlists",
             "global_overlay_open",

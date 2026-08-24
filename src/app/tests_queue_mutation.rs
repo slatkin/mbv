@@ -88,7 +88,7 @@ fn enqueue_stops_tracking_and_applies_immediately() {
     app.remote_tracker = Some(tracking_stub());
 
     app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
-    assert!(app.confirm_modal.is_none());
+    assert!(!matches!(app.pending_overlay, Some(super::types_overlay::OverlayRequest::Confirm(_))));
     assert!(app.remote_tracker.is_none());
     assert_eq!(app.player_tab.emby_items().len(), 1);
 }
@@ -109,7 +109,7 @@ fn tracked_playlist_deletes_apply_immediately() {
     app.remove_from_queue(1);
 
     assert!(app.remote_tracker.is_none());
-    assert!(app.confirm_modal.is_none());
+    assert!(!matches!(app.pending_overlay, Some(super::types_overlay::OverlayRequest::Confirm(_))));
     assert_eq!(
         app.player_tab
             .emby_items()
@@ -250,7 +250,7 @@ fn clearing_tracked_queue_applies_immediately_and_stops_tracking() {
     app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
 
     assert!(app.remote_tracker.is_none());
-    assert!(app.confirm_modal.is_none());
+    assert!(!matches!(app.pending_overlay, Some(super::types_overlay::OverlayRequest::Confirm(_))));
     assert!(app.player_tab.emby_items().is_empty());
 
     app.connected_session_id = Some("session".into());
@@ -375,7 +375,7 @@ fn clearing_remote_queue_does_not_prompt_to_save_local_playlist() {
 
     app.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
 
-    assert!(app.confirm_modal.is_none());
+    assert!(!matches!(app.pending_overlay, Some(super::types_overlay::OverlayRequest::Confirm(_))));
     assert!(app.pending_queue_action.is_none());
     assert!(app
         .remote_player_tab

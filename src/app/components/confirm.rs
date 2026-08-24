@@ -2,7 +2,7 @@
 //!
 //! Owns the modal's display content (title, message, hint) set by the shell
 //! via downcast before each render. The shell owns the `ConfirmAction` and
-//! key-to-action dispatch (`App::handle_key_confirm_modal`); the component
+//! key-to-action dispatch in the shell; the component
 //! forwards every key as `Msg::Shell(ShellRequest::ConfirmKey(key))` so the
 //! shell can run the existing handler unchanged. The component owns rendering
 //! and the blocking-modal swallow semantics (returns `Some(NoOp)` for
@@ -19,6 +19,7 @@ use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
 use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_confirm_modal_content;
+use crate::app::types_confirm::{ConfirmAction, ConfirmModal};
 
 /// The Interactive Component for the Confirm modal.
 ///
@@ -33,6 +34,7 @@ pub struct ConfirmComponent {
     title: String,
     message: String,
     hint: String,
+    on_confirm: Option<ConfirmAction>,
     dim_backdrop_active: bool,
 }
 
@@ -42,11 +44,12 @@ impl ConfirmComponent {
             title: String::new(),
             message: String::new(),
             hint: String::new(),
+            on_confirm: None,
             dim_backdrop_active: false,
         }
     }
 
-    /// Set the modal's display content from `App::confirm_modal`. Called by
+    /// Set the modal's display content from a shell request. Called by
     /// the shell via `get_component_mut`+downcast before each render.
     pub(in crate::app) fn set_content(&mut self, title: &str, message: &str, hint: &str) {
         self.title.clear();
@@ -55,6 +58,15 @@ impl ConfirmComponent {
         self.message.push_str(message);
         self.hint.clear();
         self.hint.push_str(hint);
+    }
+
+    pub(in crate::app) fn set_modal(&mut self, modal: &ConfirmModal) {
+        self.set_content(&modal.title, &modal.message, &modal.hint);
+        self.on_confirm = Some(modal.on_confirm.clone());
+    }
+
+    pub(in crate::app) fn confirm_action(&self) -> Option<ConfirmAction> {
+        self.on_confirm.clone()
     }
 }
 

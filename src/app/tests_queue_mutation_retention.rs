@@ -140,11 +140,22 @@ fn canceled_active_item_removal_leaves_tracking_active() {
     app.remote_tracker = Some(tracking_stub());
 
     app.remove_from_queue(1);
-    assert!(app.confirm_modal.is_some());
+    assert!(matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::Confirm(_))
+    ));
 
-    app.handle_key_confirm_modal(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    let action = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        _ => panic!("confirmation request missing"),
+    };
+    app.apply_confirm_action(action, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    app.dismiss_confirm();
 
-    assert!(app.confirm_modal.is_none());
+    assert!(!matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::Confirm(_))
+    ));
     assert_eq!(app.player_tab.emby_items().len(), 3);
     assert!(app.remote_tracker.is_some());
 }
@@ -164,7 +175,11 @@ fn confirmed_active_item_removal_retires_tracking() {
     app.remote_tracker = Some(tracking_stub());
 
     app.remove_from_queue(1);
-    app.handle_key_confirm_modal(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+    let action = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        _ => panic!("confirmation request missing"),
+    };
+    app.apply_confirm_action(action, KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
 
     assert!(app.remote_tracker.is_none());
     assert_eq!(app.player_tab.emby_items().len(), 2);

@@ -1,6 +1,4 @@
-use super::components::{
-    ComponentId, ModalId, OverlayId, PlaylistsComponent, SavePlaylistComponent,
-};
+use super::components::{ComponentId, ModalId, OverlayId, PlaylistsComponent};
 use super::shell::Model;
 
 impl Model {
@@ -56,32 +54,6 @@ impl Model {
         self.application.view(&id, frame, frame.area());
     }
 
-    pub(super) fn sync_save_playlist(&mut self) {
-        let id = ComponentId::Modal(ModalId::SavePlaylist);
-        let mounted = self.application.mounted(&id);
-        if self.app.save_playlist_dialog.is_some() && !mounted {
-            self.application
-                .mount(id.clone(), Box::new(SavePlaylistComponent::new()), vec![])
-                .expect("mount SavePlaylist");
-            self.application.active(&id).expect("activate SavePlaylist");
-        } else if self.app.save_playlist_dialog.is_none() && mounted {
-            let _ = self.application.umount(&id);
-        }
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(dialog) = comp.as_any_mut().downcast_mut::<SavePlaylistComponent>() {
-                if let Some(snapshot) = self.app.save_playlist_dialog.as_ref() {
-                    dialog.set_content(
-                        snapshot.input.clone(),
-                        matches!(
-                            snapshot.stage,
-                            crate::app::SavePlaylistStage::RenamePlaylist { .. }
-                        ),
-                    );
-                }
-            }
-        }
-    }
-
     pub(super) fn render_save_playlist_overlay(&mut self, frame: &mut ratatui::Frame) {
         let id = ComponentId::Modal(ModalId::SavePlaylist);
         if self.application.mounted(&id) {
@@ -121,12 +93,12 @@ mod tests {
     #[test]
     fn save_playlist_shell_mounts_and_routes_component() {
         let mut app = make_app_stub();
-        app.save_playlist_dialog = Some(crate::app::SavePlaylistDialog {
+        app.open_save_playlist_dialog(crate::app::SavePlaylistDialog {
             input: "Playlist".into(),
             stage: crate::app::SavePlaylistStage::EnterName,
         });
         let mut model = Model::new(app);
-        model.sync_save_playlist();
+        model.sync_modal_requests();
         let id = ComponentId::Modal(ModalId::SavePlaylist);
         let message = model
             .application

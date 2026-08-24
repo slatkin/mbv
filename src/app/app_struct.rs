@@ -7,7 +7,6 @@ use super::types_browse::{AlbumIndexState, SeriesDetail};
 use super::types_cast::{CastAttachment, CastEvent};
 use super::types_confirm::ConfirmModal;
 use super::types_context_menu::{ContextMenu, LibraryRoutePopup, MultiSelectPopup};
-use super::types_daemon_lost::DaemonLostModal;
 use super::types_events::{LibEvent, SessionEvent};
 use super::types_feed::IdleFeed;
 use super::types_feed::SavePlaylistDialog;
@@ -16,7 +15,7 @@ use super::types_feeds_manage::FeedsManagePopup;
 use super::types_library_tab::LibraryTab;
 use super::types_playback::{
     HomeLatestSource, HomePane, PendingQueueAction, PlaylistMutationState, QueueScope,
-    RemoteQueueProjection, RemoteReanchorPopup, SuspendedLocalSession, UndoEntry,
+    RemoteQueueProjection, SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
 use super::types_selection_modal::SelectionModal;
@@ -162,16 +161,13 @@ pub struct App {
     pub(super) last_drag_seek: Instant,
     pub(super) last_space_press: Option<Instant>,
     pub(super) last_esc_press: Option<Instant>,
-    /// The single active yes/no confirmation prompt (clear queue, remove
-    /// now-playing item, rescan library, save-playlist overwrite/discard),
-    /// rendered and dispatched by the shared confirmation-modal component.
-    pub(super) confirm_modal: Option<ConfirmModal>,
-    /// The blocking modal raised on an unannounced local-daemon disconnect
-    /// (task 7.1-7.3). Distinct from `confirm_modal`/`save_playlist_dialog`:
-    /// it has three named choices, not yes/no, and its own diagnostics.
-    /// `raise_daemon_lost_modal` clears the other two when it sets this, so
-    /// only one blocking overlay is ever active.
-    pub(super) daemon_lost_modal: Option<DaemonLostModal>,
+    /// Shell handoff for a modal raised by App-owned effects. The mounted
+    /// component owns the modal after the next Model tick.
+    pub(super) pending_overlay: Option<super::types_overlay::OverlayRequest>,
+    /// Temporary precedence adapter for legacy App readers. The shell writes
+    /// this from TuiRealm mount state each tick; task 5.3d deletes it with the
+    /// remaining mirrors once those readers move into the shell.
+    pub(super) blocking_overlay_active: bool,
     /// Set right before requesting a clean exit on an announced daemon
     /// shutdown (task 7.2); printed once by `run()` after the terminal is
     /// restored, since anything written while still in the alternate screen
@@ -278,7 +274,6 @@ pub struct App {
     pub(super) queue_source: crate::config::QueueSource,
     pub(super) queue_dirty: bool,
     pub(super) pending_queue_action: Option<PendingQueueAction>,
-    pub(super) remote_reanchor_popup: Option<RemoteReanchorPopup>,
     pub(super) use_nerd_fonts: bool,
     pub(super) indicator_style: render::indicators::IndicatorStyle,
     pub(super) ws_send_tx: Option<mbv_core::ws::WsSender>,
@@ -390,7 +385,6 @@ pub struct App {
     pub(super) series_detail_cache: std::collections::HashMap<String, SeriesDetail>,
     pub(super) series_detail_loading: std::collections::HashSet<String>,
     pub(super) series_season_loading: std::collections::HashSet<(String, String)>,
-    pub(super) save_playlist_dialog: Option<SavePlaylistDialog>,
     pub(super) image_protocol: Option<String>,
     pub(super) image_protocol_enabled: bool,
     pub(super) library_position_state: crate::config::LibraryPositionState,
@@ -411,6 +405,28 @@ pub struct App {
 
 impl App {
     pub(super) fn ask_confirm(&mut self, modal: ConfirmModal) {
-        self.confirm_modal = Some(modal);
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::Confirm(modal));
+        self.blocking_overlay_active = true;
+    }
+
+    pub(super) fn open_save_playlist_dialog(&mut self, dialog: SavePlaylistDialog) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::SavePlaylist(dialog));
+        self.blocking_overlay_active = true;
+    }
+
+    pub(super) fn dismiss_confirm(&mut self) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissConfirm);
+    }
+
+    pub(super) fn dismiss_daemon_lost(&mut self) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissDaemonLost);
+    }
+
+    pub(super) fn dismiss_remote_reanchor(&mut self) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissRemoteReanchor);
+    }
+
+    pub(super) fn dismiss_save_playlist(&mut self) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissSavePlaylist);
     }
 }

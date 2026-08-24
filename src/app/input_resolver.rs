@@ -147,10 +147,6 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_selection_modal,
     },
     ContextEntry {
-        name: "save_playlist",
-        handler: App::handle_key_save_playlist_entry,
-    },
-    ContextEntry {
         name: "settings",
         handler: App::handle_key_settings,
     },

@@ -56,20 +56,24 @@ fn duplicate_reanchor_opens_picker_and_enter_selects_occurrence() {
     app.remote_tracker = Some(tracking);
 
     app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
-    assert_eq!(app.remote_reanchor_popup.as_ref().unwrap().targets.len(), 2);
+    assert!(matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::RemoteReanchor(_))
+    ));
 
-    // The Remote-reanchor popup is now a TuiRealm component (task 2.4); its
-    // key dispatch goes through `handle_key_remote_reanchor` directly, not
-    // through CONTEXT_STACK.
-    app.handle_key_remote_reanchor(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    app.handle_key_remote_reanchor(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(app.remote_reanchor_popup.is_none());
+    let mut model = crate::app::Model::new(app);
+    model.sync_modal_requests();
+    model.handle_remote_reanchor_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    model.handle_remote_reanchor_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(!model.application.mounted(&crate::app::components::ComponentId::Modal(
+        crate::app::components::ModalId::RemoteReanchor
+    )));
     assert_eq!(
-        app.remote_tracker.as_ref().unwrap().state(),
+        model.app.remote_tracker.as_ref().unwrap().state(),
         TrackingState::Tracking
     );
     assert_eq!(
-        app.remote_tracker.as_ref().unwrap().current_index(),
+        model.app.remote_tracker.as_ref().unwrap().current_index(),
         Some(1)
     );
 }
@@ -78,10 +82,13 @@ fn duplicate_reanchor_opens_picker_and_enter_selects_occurrence() {
 fn reanchor_popup_blocks_mouse_dispatch() {
     let mut app = attached_app();
     app.player_tab.queue_cursor = 1;
-    app.remote_reanchor_popup = Some(super::types_playback::RemoteReanchorPopup {
-        targets: vec![(0, "a".into())],
-        cursor: 0,
-    });
+    app.pending_overlay = Some(super::types_overlay::OverlayRequest::RemoteReanchor(
+        super::types_playback::RemoteReanchorPopup {
+            targets: vec![(0, "a".into())],
+            cursor: 0,
+        },
+    ));
+    app.blocking_overlay_active = true;
 
     app.handle_mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
@@ -91,19 +98,27 @@ fn reanchor_popup_blocks_mouse_dispatch() {
     });
 
     assert_eq!(app.player_tab.queue_cursor, 1);
-    assert!(app.remote_reanchor_popup.is_some());
+    assert!(matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::RemoteReanchor(_))
+    ));
 }
 
 #[test]
 fn tracking_retirement_clears_reanchor_popup() {
     let mut app = attached_app();
     app.remote_tracker = Some(tracker(&["a", "b"]));
-    app.remote_reanchor_popup = Some(super::types_playback::RemoteReanchorPopup {
-        targets: vec![(0, "a".into())],
-        cursor: 0,
-    });
+    app.pending_overlay = Some(super::types_overlay::OverlayRequest::RemoteReanchor(
+        super::types_playback::RemoteReanchorPopup {
+            targets: vec![(0, "a".into())],
+            cursor: 0,
+        },
+    ));
     app.retire_remote_tracking(false);
-    assert!(app.remote_reanchor_popup.is_none());
+    assert!(matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::DismissRemoteReanchor)
+    ));
 }
 
 #[test]
@@ -145,7 +160,7 @@ fn stop_tracking_and_queue_edits_are_input_gated() {
     app.remote_tracker = Some(tracker(&["a", "b"]));
     app.panel_focus = crate::app::PanelFocus::Library;
     app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
-    assert!(app.confirm_modal.is_none());
+    assert!(!matches!(app.pending_overlay, Some(super::types_overlay::OverlayRequest::Confirm(_))));
     assert_eq!(app.player_tab.emby_items().len(), 3);
     assert!(app.remote_tracker.is_none());
 }

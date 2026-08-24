@@ -3,7 +3,7 @@
 //! Owns the popup's display content (targets, cursor) set by the shell via
 //! downcast before each render. The shell owns reconciliation; the component
 //! forwards keys as `Msg::Shell(ShellRequest::RemoteReanchorKey(key))` so the
-//! shell can run the existing `handle_key_remote_reanchor` unchanged. Mouse
+//! shell can run the reconciliation effect. Mouse
 //! events are forwarded to the legacy `App::handle_mouse` path.
 
 use tuirealm::command::{Cmd, CmdResult};
@@ -33,12 +33,27 @@ impl RemoteReanchorComponent {
         }
     }
 
-    /// Set the popup's display content from `App::remote_reanchor_popup`.
+    /// Set the popup's display content from a shell request.
     /// Called by the shell via `get_component_mut`+downcast before each render.
     pub(in crate::app) fn set_content(&mut self, targets: &[(usize, String)], cursor: usize) {
         self.targets.clear();
         self.targets.extend(targets.iter().cloned());
         self.cursor = cursor;
+    }
+
+    pub(in crate::app) fn move_cursor(&mut self, down: bool) {
+        if down {
+            self.cursor = self
+                .cursor
+                .saturating_add(1)
+                .min(self.targets.len().saturating_sub(1));
+        } else {
+            self.cursor = self.cursor.saturating_sub(1);
+        }
+    }
+
+    pub(in crate::app) fn selected_target(&self) -> Option<usize> {
+        self.targets.get(self.cursor).map(|(target, _)| *target)
     }
 }
 

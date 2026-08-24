@@ -156,7 +156,7 @@ impl App {
                                         source: pl_source,
                                     };
                                     self.replace_queue_or_prompt(action);
-                                    if self.confirm_modal.is_none() {
+                                    if !self.blocking_overlay_active {
                                         self.show_playlists = false;
                                         self.set_panel_focus(PanelFocus::Queue);
                                     }

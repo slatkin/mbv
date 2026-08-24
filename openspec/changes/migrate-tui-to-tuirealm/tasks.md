@@ -199,21 +199,69 @@ contributing surface's group 2–4 conversion to have landed.
   component-owned interaction state and 5.6's gate does not require its removal.
   Loose ends verified: filtered playback selection, unchanged-snapshot cursor preservation, component group count, and exhaustive Feeds mouse routing.
 - [ ] 5.3c **Teardown — overlay/modal cluster.** Requires 2.1–2.5, 3.2, 3.7, 3.8, 3.9, 4.7, 4.8, 4.9, 5.2. Delete the `App` open-flags, overlay state, and the `handle_key_*` handlers the converted overlays still forward to, plus the duplicated variable-row geometry in `input_mouse_panels.rs`. Verify `rtk cargo nextest run -p mbv` + scan.
-  Dispatched as four named units, not as sub-numbered tasks — see
-  `scoping-5.3c-5.3d.md` for the measured breakdown of each:
+  Dispatched as named units, not as sub-numbered tasks. A unit is sized by the
+  **files it forces open**, not by reference count. *Modals* measured 48 files /
+  958 changed lines and consumed one agent's whole context — it compiled and
+  passed 1,216 tests but had nothing left to verify or commit with. Treat
+  **~45 files as the ceiling and ~25 as the target.**
   - [x] *Overlay prep* — `shell_overlays.rs` split by family, `App::ask_confirm`
     added. Behaviour-neutral; no field or clear site deleted (`75702a87`).
-  - [ ] *Modals* — `confirm_modal`, `daemon_lost_modal`, `remote_reanchor_popup`,
-    `save_playlist_dialog`, plus the shell-set `blocking_overlay_active` adapter
-    that replaces the five `impl App` presence reads.
-  - [ ] *Sidebars* — Help, Sessions, Playlists, Settings, Global Search, and the
-    duplicated variable-row geometry in `input_mouse_panels.rs`.
-  - [ ] *Menus and popups* — Context menu, Selection modal, Playback prompts,
-    Settings nested popups.
+  - [x] *Modals* — `confirm_modal`, `daemon_lost_modal`, `remote_reanchor_popup`,
+    `save_playlist_dialog`, replaced by `pending_overlay: Option<OverlayRequest>`
+    (an App→shell raise/dismiss handoff) and the shell-set
+    `blocking_overlay_active` adapter that subsumes the five `impl App` presence
+    reads. Both legacy modal handlers and all four fields are deleted; reset
+    triggers enqueue component dismissals. 48 files — the sizing reference above.
+  - [ ] *Sidebar state prep* — the four open-flags are an undocumented
+    mutually-exclusive state machine: **39 production write sites** spread over
+    `input.rs`, `input_playlist_keys.rs`, `input_settings_keys.rs`,
+    `input_confirm_keys.rs`, `input_mouse_dispatch.rs`, `input_mouse_panels.rs`,
+    `shell.rs`, `shell_settings.rs`, `session_switch.rs`,
+    `library_load_actions.rs`, `run_loop_events_session.rs`,
+    `services_settings.rs` — most of them closing a sibling to keep the
+    exclusion invariant that nothing enforces. Collapse them into one
+    `open_sidebar: Option<SidebarId>` with `open`/`close`/`toggle` transitions,
+    behaviour-preserving, no field deleted. This is why *Sidebars* is not the
+    mechanical unit its file count suggests, and it is the same prep move as
+    `5.3-pre` and *Overlay prep*.
+  - [ ] *Sidebars* — delete `open_sidebar` and the sidebar `handle_key_*` in
+    `input_settings_keys.rs`, `input_playlist_keys.rs`, and
+    `services_settings.rs`. 24 files (20 prod / 4 test), 98 refs; tractable
+    only once the prep above has collapsed the write sites.
+  - [ ] *Selection modal* — `selection_modal` + `input_selection_modal_keys.rs`.
+    44 files (29 / 15), 362 refs, but only **four** write sites, all choked
+    through `selection_modal_actions.rs`; the fan-out is presence-reads and
+    render, which `blocking_overlay_active` already covers. At the ceiling —
+    own unit.
+  - [ ] *Context menu* — `context_menu` + `input_context_menu.rs`, and the
+    duplicated variable-row geometry in `input_mouse_panels.rs` (212 lines).
+    39 files (25 / 14), 199 refs, **nine** write sites — worse per-file fan-out
+    than Selection modal despite the smaller count. Own unit.
+  - [ ] *Settings popups* — `multiselect_popup`, `library_routes_popup`,
+    `feeds_manage_popup` + `input_feeds_manage_keys.rs`. 21 files (15 / 6),
+    132 refs. One unit; the three share a parent and a dismissal path.
 - [ ] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters.
-  Dispatched as three named units, not as sub-numbered tasks: *Album track
-  focus* (independent of 5.3c, may run in parallel), *Mouse geometry* (requires
-  5.3c, and is one lane with 5.4), *Mirrors and framework* (requires everything).
+  Dispatched as named units, sized on the same files-forced-open basis as 5.3c:
+  - [ ] *Album cursor prep* — settle the narrow-mode question (mount
+    `MusicWorkspaceComponent` in narrow, or prove the narrow path cannot reach a
+    `Some`), then move `render/screens/album_cursor.rs`'s three
+    `pub(in crate::app)` entry points into `MusicWorkspaceComponent`.
+    Behaviour-neutral, compiles standalone, deletes no field. Splitting this out
+    is what keeps the next unit inside one context — the role `5.3-pre` and
+    *Overlay prep* played.
+  - [ ] *Album track focus* — delete `LibraryTab.album_track_focus` and re-home
+    its four `= None` resets. 30 files (21 / 9), 113 refs. Independent of 5.3c;
+    may run in parallel with it.
+  - [ ] *Mouse geometry* — **not one unit.** `layout.main.*` is read across 43
+    files (264 refs; 30 sites in `input_mouse.rs`, 16 in
+    `input_mouse_dispatch.rs`, 13 in `lib_cursor_actions.rs`) and 12 components
+    still forward mouse to legacy. Dispatch **one component's `hit_test` per
+    agent**; `AppLayout` and the three `input_mouse*.rs` files are deleted by the
+    last one, not the first. Requires 5.3c. Merge 5.4's six proofs into this
+    lane — they assert exactly what it delivers.
+  - [ ] *Mirrors and framework* — delete the 29 `sync_*` (28 files), then
+    `CONTEXT_STACK`, then `LegacyInput`, in that order. Mechanical, and shrinks
+    as every unit above lands. Requires everything.
   **Also delete `LibraryTab.album_track_focus` here** (deferred from 5.3a — see
   the three reasons recorded there). Its readers can only move once the action
   layer does: relocate `actions.rs`'s focused-track target resolution and

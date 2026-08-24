@@ -274,16 +274,21 @@ fn teardown_retires_remote_tracking_owned_state() {
         )
         .unwrap(),
     );
-    app.remote_reanchor_popup = Some(super::types_playback::RemoteReanchorPopup {
-        targets: vec![(0, "a".into())],
-        cursor: 0,
-    });
+    app.pending_overlay = Some(super::types_overlay::OverlayRequest::RemoteReanchor(
+        super::types_playback::RemoteReanchorPopup {
+            targets: vec![(0, "a".into())],
+            cursor: 0,
+        },
+    ));
 
     app.teardown(Duration::from_secs(1));
 
     assert!(app.remote_tracker.is_none());
     assert!(app.remote_queue_projection.is_none());
-    assert!(app.remote_reanchor_popup.is_none());
+    assert!(matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::DismissRemoteReanchor)
+    ));
 }
 
 #[test]

@@ -7,18 +7,6 @@ use crossterm::event::{KeyCode, KeyEvent};
 use mbv_core::api::EmbyItem;
 
 impl App {
-    pub(super) fn handle_key_save_playlist_entry(&mut self, key: KeyEvent) -> Option<bool> {
-        let is_entry_stage = matches!(
-            self.save_playlist_dialog.as_ref().map(|d| &d.stage),
-            Some(SavePlaylistStage::EnterName | SavePlaylistStage::RenamePlaylist { .. })
-        );
-        if is_entry_stage {
-            Some(self.handle_save_playlist_key(key))
-        } else {
-            None
-        }
-    }
-
     pub(super) fn handle_key_playlists(&mut self, key: KeyEvent) -> Option<bool> {
         if !self.show_playlists {
             return None;
@@ -147,7 +135,7 @@ impl App {
                             source: pl_source,
                         };
                         self.replace_queue_or_prompt(action);
-                        if self.confirm_modal.is_none() {
+                        if !self.blocking_overlay_active {
                             self.show_playlists = false;
                             self.set_panel_focus(PanelFocus::Queue);
                         }
@@ -158,7 +146,7 @@ impl App {
             }
             KeyCode::Char('n') if key.modifiers.is_empty() && self.playlists_open.is_none() => {
                 if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
-                    self.save_playlist_dialog = Some(SavePlaylistDialog {
+                    self.open_save_playlist_dialog(SavePlaylistDialog {
                         input: pl.name,
                         stage: SavePlaylistStage::RenamePlaylist { id: pl.id },
                     });
@@ -195,91 +183,12 @@ impl App {
         Some(false)
     }
 
-    fn handle_save_playlist_key(&mut self, key: KeyEvent) -> bool {
-        let Some(ref dialog) = self.save_playlist_dialog else {
-            return false;
-        };
-        // Only `EnterName` and `RenamePlaylist` are handled here; once a name
-        // collides with an existing playlist, the shared confirmation-modal
-        // dispatcher handles the overwrite decision.
-        if !matches!(
-            dialog.stage,
-            SavePlaylistStage::EnterName | SavePlaylistStage::RenamePlaylist { .. }
-        ) {
-            return false;
-        }
-        match key.code {
-            KeyCode::Esc => {
-                self.save_playlist_dialog = None;
-                self.force_clear = true;
-            }
-            KeyCode::Backspace => {
-                if let Some(d) = &mut self.save_playlist_dialog {
-                    d.input.pop();
-                }
-            }
-            KeyCode::Char(c)
-                if key.modifiers == crossterm::event::KeyModifiers::NONE
-                    || key.modifiers == crossterm::event::KeyModifiers::SHIFT =>
-            {
-                if let Some(d) = &mut self.save_playlist_dialog {
-                    d.input.push(c);
-                }
-            }
-            KeyCode::Enter => {
-                let name = dialog.input.trim().to_string();
-                if name.is_empty() {
-                    return false;
-                }
-                if let SavePlaylistStage::RenamePlaylist { ref id } = dialog.stage {
-                    let id = id.clone();
-                    self.save_playlist_dialog = None;
-                    self.force_clear = true;
-                    self.spawn_rename_playlist(id, name);
-                    return false;
-                }
-                let playlists = {
-                    let Some(client) = self.emby_client() else {
-                        return false;
-                    };
-                    let c = client.lock().unwrap();
-                    c.get_playlists().unwrap_or_default()
-                };
-                let existing = playlists
-                    .into_iter()
-                    .find(|p| p.name.to_lowercase() == name.to_lowercase());
-                if let Some(existing) = existing {
-                    self.save_playlist_dialog = None;
-                    self.ask_confirm(ConfirmModal {
-                        title: " Overwrite Playlist ".into(),
-                        message: format!(
-                            "\"{}\" already exists.",
-                            super::ui_util::trunc_str(&name, 40)
-                        ),
-                        hint: "[y] Overwrite    [Esc] Back".into(),
-                        on_confirm: ConfirmAction::SaveOverwritePlaylist {
-                            existing_id: existing.id,
-                            name,
-                        },
-                    });
-                } else {
-                    self.save_playlist_dialog = None;
-                    self.force_clear = true;
-                    self.save_queue_as_playlist(name);
-                }
-            }
-            _ => {}
-        }
-        false
-    }
-
     /// Effect for `ConfirmAction::SaveOverwritePlaylist`'s "yes" answer
     /// (`y`): deletes the existing playlist and recreates it under the same
     /// name with the current queue's items. Extracted from the old
     /// `SavePlaylistStage::ConfirmOverwrite` key handler so the shared
     /// confirmation-modal dispatcher can call it directly.
     pub(super) fn do_overwrite_playlist(&mut self, existing_id: &str, name: &str) {
-        self.save_playlist_dialog = None;
         self.force_clear = true;
         let mutation_id = self.next_playlist_mutation;
         self.next_playlist_mutation = self.next_playlist_mutation.saturating_add(1);

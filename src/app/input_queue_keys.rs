@@ -223,7 +223,7 @@ impl App {
                     .contains(crossterm::event::KeyModifiers::CONTROL)
                     && self.player_tab.total_queue_len() > 0 =>
             {
-                self.save_playlist_dialog = Some(SavePlaylistDialog {
+                self.open_save_playlist_dialog(SavePlaylistDialog {
                     input: self.queue_playlist_name().to_string(),
                     stage: SavePlaylistStage::EnterName,
                 });

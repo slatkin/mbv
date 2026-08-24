@@ -477,25 +477,16 @@ impl Model {
                             self.umount_help();
                             self.app.open_playlists_panel();
                         }
-                        // Confirm modal: forward the key to the existing
-                        // `handle_key_confirm_modal` handler. The shell owns
-                        // `ConfirmAction` dispatch (task 2.2).
                         Msg::Shell(ShellRequest::ConfirmKey(key)) => {
-                            self.app.handle_key_confirm_modal(key);
+                            self.handle_confirm_key(key);
                         }
-                        // Daemon-lost modal: forward the key to the existing
-                        // `handle_key_daemon_lost_modal` handler. The shell
-                        // owns restart/quit (process-lifecycle effects,
-                        // task 2.3).
                         Msg::Shell(ShellRequest::DaemonLostKey(key)) => {
-                            self.app.handle_key_daemon_lost_modal(key);
+                            if self.handle_daemon_lost_key(key) {
+                                quit = true;
+                            }
                         }
-                        // Remote-reanchor popup: forward the key to the
-                        // existing `handle_key_remote_reanchor` handler. The
-                        // shell owns cursor/targets and reconciliation
-                        // (task 2.4).
                         Msg::Shell(ShellRequest::RemoteReanchorKey(key)) => {
-                            self.app.handle_key_remote_reanchor(key);
+                            self.handle_remote_reanchor_key(key);
                         }
                         // Context menu: forward the key to the existing
                         // `handle_key_context_menu` handler. The shell owns
@@ -597,13 +588,7 @@ impl Model {
                             self.app.handle_mouse_panels(mouse);
                         }
                         Msg::Shell(ShellRequest::SavePlaylistKey(key)) => {
-                            if self
-                                .app
-                                .handle_key_save_playlist_entry(key)
-                                .unwrap_or(false)
-                            {
-                                quit = true;
-                            }
+                            self.handle_save_playlist_key(key);
                         }
                         Msg::Shell(ShellRequest::QueueKey(key)) => {
                             if self.app.handle_queue_key(key) {
@@ -642,15 +627,10 @@ impl Model {
                 }
             }
 
-            // Sync the Confirm modal mount state with `App::confirm_modal`
-            // after processing tick messages. Mounts when an action sets the
-            // modal; unmounts when `handle_key_confirm_modal` clears it
-            // (task 2.2).
+            // Apply App-owned effect handoffs to their mounted components.
             self.sync_settings();
             self.sync_playback();
-            self.sync_confirm_modal();
-            self.sync_daemon_lost_modal();
-            self.sync_remote_reanchor_popup();
+            self.sync_modal_requests();
             self.sync_context_menu();
             self.sync_selection_modal();
             self.sync_multiselect();
@@ -664,7 +644,6 @@ impl Model {
             self.sync_audiobookshelf_book();
             self.sync_queue();
             self.sync_playlists();
-            self.sync_save_playlist();
             self.sync_playback_prompt();
             self.sync_emby_browser();
             self.sync_tv_workspace();

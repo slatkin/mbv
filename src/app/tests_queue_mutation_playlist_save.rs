@@ -137,7 +137,11 @@ fn save_before_replace_executes_pending_action_after_tracked_save() {
 
     app.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
     assert!(app.pending_queue_action.is_some());
-    app.handle_key_confirm_modal(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+    let action = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        _ => panic!("confirmation request missing"),
+    };
+    app.apply_confirm_action(action, KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     assert!(
         app.pending_queue_action.is_some(),
         "the replacement stays queued until the save crosses its boundary"

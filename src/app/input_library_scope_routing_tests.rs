@@ -154,14 +154,16 @@ fn ctrl_r_confirmation_targets_active_library() {
     let handled = app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
     assert!(!handled);
     assert!(matches!(
-        app.confirm_modal.as_ref().map(|m| &m.on_confirm),
-        Some(ConfirmAction::RescanLibrary(_))
+        app.pending_overlay.as_ref(),
+        Some(crate::app::types_overlay::OverlayRequest::Confirm(modal))
+            if matches!(&modal.on_confirm, ConfirmAction::RescanLibrary(_))
     ));
 
-    // The Confirm modal is now a TuiRealm component (task 2.2); its key
-    // dispatch goes through `handle_key_confirm_modal` directly, not through
-    // CONTEXT_STACK.
-    app.handle_key_confirm_modal(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let action = match app.pending_overlay.as_ref() {
+        Some(crate::app::types_overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        _ => panic!("confirmation request missing"),
+    };
+    app.apply_confirm_action(action, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert!(!crate::config::load_library_position_state()
         .libraries

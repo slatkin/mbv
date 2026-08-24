@@ -1,7 +1,7 @@
 use super::super::super::palette;
 use super::super::super::ui_util::trunc_str;
 use super::super::super::App;
-use super::super::super::{SavePlaylistStage, PLAYLISTS_PANEL_W};
+use super::super::super::PLAYLISTS_PANEL_W;
 use super::chrome;
 use crate::app::render::components::modal_frame::render_modal_frame;
 use mbv_core::api::EmbyItem;
@@ -576,17 +576,5 @@ impl App {
             .map(|i| item_lines(&i.display_name()))
             .sum();
         chrome::render_sidebar_scrollbar(f, content, total_lines, lines_before_scroll);
-    }
-
-    pub(in crate::app::render) fn render_save_playlist_dialog(&mut self, f: &mut Frame) {
-        let Some(ref dialog) = self.save_playlist_dialog else {
-            return;
-        };
-        render_save_playlist_content(
-            f,
-            &mut self.dim_backdrop_active,
-            &dialog.input,
-            matches!(dialog.stage, SavePlaylistStage::RenamePlaylist { .. }),
-        );
     }
 }
