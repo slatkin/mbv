@@ -70,13 +70,14 @@ Task 4.10 superseded the scaffold as its own TODO predicted, but:
 - The mount comment and the `.expect` string are stale.
 - `shell_gates.rs` sets `ATTR_SKIP_INTRO_PROMPT_VISIBLE` /
   `ATTR_NEXT_UP_PROMPT_VISIBLE` on `ComponentId::Playback`, which now resolves
-  to `PlaybackComponent`. **Verify `PlaybackComponent` actually persists those
-  attributes** before relying on the two gates that read them — if it dropped
-  the `Props` field, both prompts' guards are silently reading nothing.
+  to `PlaybackComponent`. **Checked: this is correct.** `components/playback.rs`
+  keeps a `Props` field, seeds both attributes in `new()`, and implements
+  `query`/`attr` against it. The two gates read real state.
 
-Either delete `PlaybackGatesComponent` and keep the attributes on
-`PlaybackComponent`, or keep the carrier under its own `ComponentId`. Pick one;
-do not leave both.
+So `PlaybackGatesComponent` is dead code, not a live carrier. Delete it, and fix
+the stale mount comment and `.expect("mount PlaybackGates")` string at
+`shell.rs:106-117`. `PlaybackComponent` becomes the carrier for the new flags
+below.
 
 ## Scope boundary
 
