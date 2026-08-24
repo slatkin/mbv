@@ -111,7 +111,7 @@ impl App {
             );
         }
 
-        let final_scroll = self.render_generic_movies_home_video_rows_with_ctx(
+        let final_scroll = super::list::render_generic_movies_home_video_rows_with_ctx(
             f,
             list_area,
             ctx,

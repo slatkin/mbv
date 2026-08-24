@@ -13,43 +13,42 @@ use crate::app::App;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
-impl App {
-    pub(in crate::app::render) fn render_generic_movies_home_video_rows_with_ctx(
-        &mut self,
-        f: &mut Frame,
-        list_area: Rect,
-        ctx: &LibraryListRenderCtx,
-        focused: bool,
-        layout: &mut LayoutMain,
-    ) -> usize {
-        layout.left_area = list_area;
-        if ctx.items.is_empty() {
-            crate::app::render::render_placeholder(
-                f,
-                list_area,
-                if ctx.loading {
-                    " Loading…"
-                } else {
-                    " (empty)"
-                },
-            );
-            return 0;
-        } else {
-            let row_ctx = ctx.rows(list_area, 1, focused, 0);
-            if !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some()) {
-                self.render_letter_grouped_rows(
-                    f,
-                    row_ctx,
-                    ctx.letter_filter.clone(),
-                    ctx.true_total(),
-                    layout,
-                )
+pub(in crate::app) fn render_generic_movies_home_video_rows_with_ctx(
+    f: &mut Frame,
+    list_area: Rect,
+    ctx: &LibraryListRenderCtx,
+    focused: bool,
+    layout: &mut LayoutMain,
+) -> usize {
+    layout.left_area = list_area;
+    if ctx.items.is_empty() {
+        crate::app::render::render_placeholder(
+            f,
+            list_area,
+            if ctx.loading {
+                " Loading…"
             } else {
-                self.render_plain_rows(f, row_ctx, layout)
-            }
+                " (empty)"
+            },
+        );
+        return 0;
+    } else {
+        let row_ctx = ctx.rows(list_area, 1, focused, 0);
+        if !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some()) {
+            super::list_letter_groups::render_letter_grouped_rows(
+                f,
+                row_ctx,
+                ctx.letter_filter.clone(),
+                ctx.true_total(),
+                layout,
+            )
+        } else {
+            super::list_plain::render_plain_rows(f, row_ctx, layout)
         }
     }
+}
 
+impl App {
     /// Renders the Continue/library list items into `area`.
     /// The title header is now drawn in the top-of-screen FOAM bar.
     pub(in crate::app::render) fn render_list(
@@ -538,7 +537,7 @@ impl App {
                 focused,
                 hero_rows: inline_hero_rows,
             };
-            final_offset = self.render_letter_grouped_rows(
+            final_offset = super::list_letter_groups::render_letter_grouped_rows(
                 f,
                 ctx,
                 active_letter_filter,
@@ -555,7 +554,7 @@ impl App {
                 focused,
                 hero_rows: inline_hero_rows,
             };
-            final_offset = self.render_plain_rows(f, ctx, layout);
+            final_offset = super::list_plain::render_plain_rows(f, ctx, layout);
         }
 
         // Paint the selected replacement after the list has established its

@@ -27,6 +27,8 @@ pub(in crate::app) use components::home_hero::HomeImagePaint;
 pub(in crate::app) use components::library_routes::{
     render_library_routes_content, LibraryRoutesRenderModel,
 };
+pub(in crate::app) use components::list::render_generic_movies_home_video_rows_with_ctx;
+pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };
@@ -187,6 +189,8 @@ mod settings_tests;
 #[cfg(test)]
 #[path = "test_helpers.rs"]
 mod test_helpers;
+#[cfg(test)]
+pub(crate) use test_helpers::make_movie_app;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;

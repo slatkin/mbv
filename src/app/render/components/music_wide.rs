@@ -205,7 +205,7 @@ impl App {
             if search_active {
                 let cols =
                     crate::app::library_column_width::library_column_count(browser_area.width);
-                let scroll = self.render_plain_rows(
+                let scroll = super::list_plain::render_plain_rows(
                     f,
                     ctx.rows(browser_area, cols, right_focused, 0),
                     layout,

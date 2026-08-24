@@ -1,7 +1,6 @@
 use super::super::super::palette;
 use super::super::super::types_feeds_manage::{FeedFormField, FeedsManageStage};
 use super::super::super::ui_util::trunc_str;
-use super::super::super::App;
 use crate::app::render::components::modal_frame::render_modal_frame;
 use mbv_core::config::{FeedKind, FeedSubscription};
 use ratatui::layout::Rect;

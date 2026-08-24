@@ -112,6 +112,7 @@ pub use self::app_struct::App;
 mod shell;
 mod shell_audiobookshelf_book;
 mod shell_audiobookshelf_podcast;
+mod shell_browser;
 mod shell_feeds;
 mod shell_gates;
 mod shell_home;

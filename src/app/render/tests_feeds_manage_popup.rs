@@ -1,4 +1,5 @@
 use super::test_helpers::buffer_to_string;
+use super::{render_feeds_manage_content, FeedsManageRenderModel};
 use crate::app::tests::make_app_stub;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -8,7 +9,22 @@ fn render_feeds_manage(width: u16, height: u16) -> String {
     app.open_feeds_manage_popup();
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|f| app.render_feeds_manage_popup(f)).unwrap();
+    terminal
+        .draw(|f| {
+            let feeds = app.config.lock().unwrap().feeds.clone();
+            let popup = app.feeds_manage_popup.as_ref().unwrap();
+            render_feeds_manage_content(
+                f,
+                &mut app.dim_backdrop_active,
+                FeedsManageRenderModel {
+                    feeds: &feeds,
+                    stage: &popup.stage,
+                    cursor: popup.cursor,
+                    pending_add: popup.pending_add,
+                },
+            );
+        })
+        .unwrap();
     buffer_to_string(&terminal)
 }
 

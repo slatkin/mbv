@@ -10,6 +10,7 @@
 
 pub mod audiobookshelf_book;
 pub mod audiobookshelf_podcast;
+pub mod browser;
 pub mod component_id;
 pub mod confirm;
 pub mod context_menu;
@@ -37,6 +38,7 @@ pub mod user_event;
 
 pub use self::audiobookshelf_book::AudiobookshelfBookComponent;
 pub use self::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
+pub use self::browser::BrowserComponent;
 pub use self::component_id::{BrowserKey, BrowserKind, ComponentId, ModalId, OverlayId, PopupId};
 pub use self::confirm::ConfirmComponent;
 pub use self::context_menu::ContextMenuComponent;
@@ -73,6 +75,9 @@ mod audiobookshelf_book_component_tests;
 #[cfg(test)]
 #[path = "audiobookshelf_podcast_component_tests.rs"]
 mod audiobookshelf_podcast_component_tests;
+#[cfg(test)]
+#[path = "browser_component_tests.rs"]
+mod browser_component_tests;
 #[cfg(test)]
 #[path = "feeds_component_tests.rs"]
 mod feeds_component_tests;

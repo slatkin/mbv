@@ -1,4 +1,5 @@
 use super::test_helpers::buffer_to_string;
+use super::{render_library_routes_content, LibraryRoutesRenderModel};
 use crate::app::tests::make_app_stub;
 use crate::app::{LibraryRoutePopup, LibraryRouteStage};
 use ratatui::backend::TestBackend;
@@ -18,7 +19,17 @@ fn render_routes(width: u16, height: u16, cursor: usize) -> String {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
-        .draw(|f| app.render_library_routes_popup(f))
+        .draw(|f| {
+            let popup = app.library_routes_popup.as_ref().unwrap();
+            render_library_routes_content(
+                f,
+                &mut app.dim_backdrop_active,
+                LibraryRoutesRenderModel {
+                    stage: &popup.stage,
+                    cursor: popup.cursor,
+                },
+            );
+        })
         .unwrap();
     buffer_to_string(&terminal)
 }

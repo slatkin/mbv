@@ -248,7 +248,8 @@ pub(in crate::app::render) struct ListRenderCtx<'a> {
 /// Owned browser-list inputs shared by narrow and wide renderers. The shell
 /// builds this once from the active source; renderers no longer choose between
 /// search results and the navigation level while painting rows.
-pub(in crate::app::render) struct LibraryListRenderCtx {
+#[derive(Clone)]
+pub(in crate::app) struct LibraryListRenderCtx {
     pub(in crate::app::render) items: Vec<mbv_core::api::EmbyItem>,
     pub(in crate::app::render) cursor: usize,
     pub(in crate::app::render) scroll: usize,
@@ -261,6 +262,43 @@ pub(in crate::app::render) struct LibraryListRenderCtx {
 }
 
 impl LibraryListRenderCtx {
+    pub(in crate::app) fn from_items(
+        items: Vec<mbv_core::api::EmbyItem>,
+        cursor: usize,
+        scroll: usize,
+    ) -> Self {
+        let total_count = items.len();
+        Self {
+            items,
+            cursor,
+            scroll,
+            total_count,
+            library_total: None,
+            letter_filter: None,
+            loading: false,
+            search_query: None,
+            search_loading: false,
+        }
+    }
+
+    pub(in crate::app) fn with_cursor_scroll(mut self, cursor: usize, scroll: usize) -> Self {
+        self.cursor = cursor;
+        self.scroll = scroll;
+        self
+    }
+
+    pub(in crate::app) fn item_count(&self) -> usize {
+        self.items.len()
+    }
+
+    pub(in crate::app) fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    pub(in crate::app) fn scroll(&self) -> usize {
+        self.scroll
+    }
+
     pub(in crate::app::render) fn rows(
         &self,
         content_area: Rect,

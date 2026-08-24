@@ -2,7 +2,7 @@ use super::list_rows::LibraryListRenderCtx;
 use crate::app::App;
 
 impl App {
-    pub(in crate::app::render) fn library_list_render_ctx(
+    pub(in crate::app) fn library_list_render_ctx(
         &self,
         lib_idx: usize,
         display_recursive_albums: bool,
