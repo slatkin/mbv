@@ -6,7 +6,9 @@ use crate::app::render::components::album::AlbumRowsCursorCtx;
 use crate::app::render::components::hero::{
     selected_detail_shell, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS, HERO_TITLE_ROWS,
 };
-use crate::app::render::components::list_rows::{ListRenderCtx, SELECTED_BLOCK_SIDE_PADDING};
+use crate::app::render::components::list_rows::{
+    LibraryListRenderCtx, ListRenderCtx, SELECTED_BLOCK_SIDE_PADDING,
+};
 use crate::app::App;
 use ratatui::layout::Rect;
 use ratatui::Frame;
@@ -20,66 +22,51 @@ impl App {
         focused: bool,
         layout: &mut LayoutMain,
     ) {
-        layout.left_area = list_area;
-        let lib = &self.libs[lib_idx];
-        let (items, cursor, stored_scroll, total_count) = if let Some(search) = &lib.search {
-            let items = search
-                .results
-                .iter()
-                .filter_map(|&idx| search.items.get(idx).cloned())
-                .collect::<Vec<_>>();
-            let total = items.len();
-            (items, search.cursor, search.scroll, total)
-        } else {
-            match lib.nav_stack.last() {
-                Some(level) => (
-                    level.items.clone(),
-                    level.cursor,
-                    level.scroll,
-                    level.total_count,
-                ),
-                None => (Vec::new(), 0, 0, 0),
+        let ctx = self.library_list_render_ctx(lib_idx, false);
+        let final_scroll =
+            self.render_wide_library_rows_with_ctx(f, list_area, &ctx, focused, layout);
+        if ctx.is_search_active() {
+            if let Some(search) = &mut self.libs[lib_idx].search {
+                search.scroll = final_scroll;
             }
-        };
+        } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+            level.scroll = final_scroll;
+        }
+    }
 
-        let final_scroll = if items.is_empty() {
-            let loading = self.libs[lib_idx]
-                .nav_stack
-                .last()
-                .is_some_and(|level| level.loading);
+    fn render_wide_library_rows_with_ctx(
+        &mut self,
+        f: &mut Frame,
+        list_area: Rect,
+        ctx: &LibraryListRenderCtx,
+        focused: bool,
+        layout: &mut LayoutMain,
+    ) -> usize {
+        layout.left_area = list_area;
+        if ctx.items.is_empty() {
             crate::app::render::render_placeholder(
                 f,
                 list_area,
-                if loading { " Loading…" } else { " (empty)" },
+                if ctx.loading {
+                    " Loading…"
+                } else {
+                    " (empty)"
+                },
             );
-            0
+            return 0;
         } else {
-            let filter = self.libs[lib_idx]
-                .nav_stack
-                .last()
-                .and_then(|level| level.letter_filter.as_ref())
-                .cloned();
-            let total = self.libs[lib_idx].library_total.unwrap_or(total_count);
-            let ctx = ListRenderCtx {
-                content_area: list_area,
-                items: &items,
-                cursor,
-                stored_scroll,
-                cols: 1,
-                focused,
-                hero_rows: 0,
-            };
-            if self.libs[lib_idx].search.is_none() && (total >= 50 || filter.is_some()) {
-                self.render_letter_grouped_rows(f, ctx, filter, total, layout)
+            let row_ctx = ctx.rows(list_area, 1, focused, 0);
+            if !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some()) {
+                self.render_letter_grouped_rows(
+                    f,
+                    row_ctx,
+                    ctx.letter_filter.clone(),
+                    ctx.true_total(),
+                    layout,
+                )
             } else {
-                self.render_plain_rows(f, ctx, layout)
+                self.render_plain_rows(f, row_ctx, layout)
             }
-        };
-
-        if let Some(search) = &mut self.libs[lib_idx].search {
-            search.scroll = final_scroll;
-        } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-            level.scroll = final_scroll;
         }
     }
 
@@ -147,11 +134,14 @@ impl App {
         // Search is active for the focused Emby library. Its 3-row input box
         // is placed outside the selected replacement in inline view (see the block after
         // `placement-neutral geometry`), so here we only record that it's on.
+        let library_ctx = self
+            .tab
+            .emby_library_index()
+            .map(|lib_idx| self.library_list_render_ctx(lib_idx, true));
         let search_active = focused
-            && self.tab.emby_library_index().is_some()
-            && self.libs[self.tab.emby_library_index().unwrap()]
-                .search
-                .is_some();
+            && library_ctx
+                .as_ref()
+                .is_some_and(LibraryListRenderCtx::is_search_active);
 
         // Home videos' declared element-presence difference (design.md
         // decision 6): a count label row instead of the letter-pill row
@@ -333,10 +323,12 @@ impl App {
         // sit in (`pills_area`); the gap row and list below it are reserved
         // together with the pill row.
         if search_active {
-            let lib_idx = self.tab.emby_library_index().unwrap();
-            let s = self.libs[lib_idx].search.as_ref().unwrap();
+            let ctx = library_ctx.as_ref().expect("library context for search");
             crate::app::render::components::hero::render_search_box(
-                f, pills_area, &s.query, s.loading,
+                f,
+                pills_area,
+                ctx.search_query.as_deref().unwrap_or_default(),
+                ctx.search_loading,
             );
         }
 
@@ -349,32 +341,12 @@ impl App {
             let total = items.len();
             (items, cursor, 0usize, total)
         } else {
-            let lib_idx = self.tab.emby_library_index().unwrap();
-            let lib = &self.libs[lib_idx];
-            let (items, cur, scroll, total) = if let Some(s) = &lib.search {
-                let items: Vec<mbv_core::api::EmbyItem> = s
-                    .results
-                    .iter()
-                    .filter_map(|&i| {
-                        s.items
-                            .get(i)
-                            .map(|item| self.recursive_album_display_item(lib_idx, i, item.clone()))
-                    })
-                    .collect();
-                // Search results are already the full locally-filtered match set,
-                // not paginated, so their length is already the true total.
-                let total = items.len();
-                (items, s.cursor, s.scroll, total)
-            } else {
-                match lib.nav_stack.last() {
-                    // `total_count` comes from Emby's TotalRecordCount, not
-                    // `items.len()` -- with lazy pagination `items` may only hold
-                    // a subset of the library until the user scrolls further.
-                    Some(lvl) => (lvl.items.clone(), lvl.cursor, lvl.scroll, lvl.total_count),
-                    None => (vec![], 0, 0, 0),
-                }
-            };
-            (items, cur, scroll, total)
+            let ctx = library_ctx
+                .as_ref()
+                .expect("library context for library tab");
+            // The context has already selected the active source and applied the
+            // recursive-album display projection used by the narrow browser.
+            (ctx.items.clone(), ctx.cursor, ctx.scroll, ctx.total_count)
         };
 
         // Pre-warm nearby movies' poster images so they're already cached by
@@ -421,7 +393,10 @@ impl App {
         // filtered search-result vector, so the catalog's positions would no longer
         // refer to the same albums.
         let show_grouped = self.tab.emby_library_index().is_some_and(|lib_idx| {
-            self.is_viewing_album_folders(lib_idx) && self.libs[lib_idx].search.is_none()
+            self.is_viewing_album_folders(lib_idx)
+                && !library_ctx
+                    .as_ref()
+                    .is_some_and(LibraryListRenderCtx::is_search_active)
         });
 
         let n = items.len();
@@ -433,26 +408,21 @@ impl App {
         // vs. individual letters) doesn't change out from under the user as
         // more pages lazily load in, and a small filtered slice (< 50 items)
         // still shows headers.
-        let active_letter_filter = self.tab.emby_library_index().and_then(|lib_idx| {
-            self.libs[lib_idx]
-                .nav_stack
-                .last()
-                .and_then(|l| l.letter_filter.as_ref())
-                .cloned()
-        });
-        let ungrouped_total = self
-            .tab
-            .emby_library_index()
-            .map_or(total_count, |lib_idx| {
-                self.libs[lib_idx].library_total.unwrap_or(total_count)
-            });
+        let active_letter_filter = library_ctx
+            .as_ref()
+            .and_then(|ctx| ctx.letter_filter.clone());
+        let ungrouped_total = library_ctx
+            .as_ref()
+            .map_or(total_count, LibraryListRenderCtx::true_total);
         let use_letter_groups = !show_grouped
             && self.tab.emby_library_index().is_some()
             && (ungrouped_total >= 50 || active_letter_filter.is_some())
             && {
                 let lib_idx = self.tab.emby_library_index().unwrap();
                 self.libs[lib_idx].library.collection_type != "music"
-                    && self.libs[lib_idx].search.is_none()
+                    && !library_ctx
+                        .as_ref()
+                        .is_some_and(LibraryListRenderCtx::is_search_active)
             };
 
         layout.left_area = list_area;
@@ -486,10 +456,7 @@ impl App {
                         " (empty)"
                     }
                 } else if self.recursive_album_search_enabled(lib_idx)
-                    && self.libs[lib_idx]
-                        .search
-                        .as_ref()
-                        .is_some_and(|search| search.loading)
+                    && library_ctx.as_ref().is_some_and(|ctx| ctx.search_loading)
                 {
                     "Indexing music library..."
                 } else if self.libs[lib_idx]
@@ -615,10 +582,15 @@ impl App {
         // Persist the scroll offset so the viewport is remembered across frames.
         // tab is always a Library here (tab == Home uses render_home_list).
         if let Some(lib_idx) = self.tab.emby_library_index() {
-            if let Some(s) = &mut self.libs[lib_idx].search {
-                s.scroll = final_offset;
-            } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-                lvl.scroll = final_offset;
+            if library_ctx
+                .as_ref()
+                .is_some_and(LibraryListRenderCtx::is_search_active)
+            {
+                if let Some(search) = &mut self.libs[lib_idx].search {
+                    search.scroll = final_offset;
+                }
+            } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                level.scroll = final_offset;
             }
         }
     }
