@@ -5,6 +5,7 @@ impl App {
     pub(in crate::app::render) fn library_list_render_ctx(
         &self,
         lib_idx: usize,
+        display_recursive_albums: bool,
     ) -> LibraryListRenderCtx {
         let lib = &self.libs[lib_idx];
         let (items, cursor, scroll, total_count, search_query, search_loading) =
@@ -14,7 +15,11 @@ impl App {
                     .iter()
                     .filter_map(|&idx| {
                         search.items.get(idx).map(|item| {
-                            self.recursive_album_display_item(lib_idx, idx, item.clone())
+                            if display_recursive_albums {
+                                self.recursive_album_display_item(lib_idx, idx, item.clone())
+                            } else {
+                                item.clone()
+                            }
                         })
                     })
                     .collect::<Vec<_>>();
