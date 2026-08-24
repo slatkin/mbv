@@ -15,6 +15,9 @@ pub(in crate::app) use components::feeds::{render_feeds_content, FeedsRenderMode
 pub(in crate::app) use components::help::{help_destination, render_help_panel, HelpDestination};
 pub(in crate::app) use components::home::render_home_content;
 pub(in crate::app) use components::home_hero::HomeImagePaint;
+pub(in crate::app) use components::library_routes::{
+    render_library_routes_content, LibraryRoutesRenderModel,
+};
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };

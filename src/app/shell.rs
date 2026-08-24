@@ -540,6 +540,10 @@ impl Model {
                         Msg::Shell(ShellRequest::MultiselectCommit { .. }) => {
                             self.handle_multiselect_commit();
                         }
+                        Msg::Shell(request @ ShellRequest::LibraryRoutesEnter)
+                        | Msg::Shell(request @ ShellRequest::LibraryRoutesEsc) => {
+                            self.handle_library_routes_request(request);
+                        }
                         Msg::Shell(ShellRequest::PlaybackPromptKey(key)) => {
                             if self.app.skip_intro_end_ticks.is_some() {
                                 self.app.handle_key_confirm_skip_intro(key);
@@ -574,6 +578,7 @@ impl Model {
             self.sync_context_menu();
             self.sync_selection_modal();
             self.sync_multiselect();
+            self.sync_library_routes();
             self.sync_search_sidebar();
             self.sync_sessions();
             self.sync_home();
@@ -629,6 +634,7 @@ impl Model {
                     self.render_context_menu_overlay(f);
                     self.render_selection_modal_overlay(f);
                     self.render_multiselect_popup(f);
+                    self.render_library_routes_popup(f);
                     self.render_search_overlay(f);
                     self.render_sessions_overlay(f);
                 }) {

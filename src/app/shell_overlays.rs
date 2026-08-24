@@ -8,9 +8,9 @@
 
 use super::components::{
     ComponentId, ConfirmComponent, ContextMenuComponent, DaemonLostComponent, HelpComponent,
-    ModalId, MultiselectComponent, OverlayId, PlaybackPromptComponent, PopupId,
-    RemoteReanchorComponent, SearchSidebarComponent, SelectionModalComponent, SessionsComponent,
-    ShellRequest,
+    LibraryRoutesComponent, ModalId, MultiselectComponent, OverlayId, PlaybackPromptComponent,
+    PopupId, RemoteReanchorComponent, SearchSidebarComponent, SelectionModalComponent,
+    SessionsComponent, ShellRequest,
 };
 use super::shell::Model;
 
@@ -448,6 +448,70 @@ impl Model {
         }
     }
 
+    // --- Settings Library-routes popup -------------------------------------
+
+    fn library_routes_id() -> ComponentId {
+        ComponentId::Popup(PopupId::LibraryRoutes)
+    }
+
+    pub(super) fn sync_library_routes(&mut self) {
+        let id = Self::library_routes_id();
+        let mounted = self.application.mounted(&id);
+        if self.app.library_routes_popup.is_some() && !mounted {
+            self.application
+                .mount(id.clone(), Box::new(LibraryRoutesComponent::new()), vec![])
+                .expect("mount LibraryRoutes");
+            self.application
+                .active(&id)
+                .expect("activate LibraryRoutes");
+        } else if self.app.library_routes_popup.is_none() && mounted {
+            let _ = self.application.umount(&id);
+        }
+        if let Some(popup) = self.app.library_routes_popup.as_ref() {
+            if let Some(comp) = self.application.get_component_mut(&id) {
+                if let Some(routes) = comp.as_any_mut().downcast_mut::<LibraryRoutesComponent>() {
+                    routes.set_content(popup);
+                }
+            }
+        }
+    }
+
+    fn sync_library_routes_to_app(&mut self) {
+        let id = Self::library_routes_id();
+        let Some((stage, cursor)) = self
+            .application
+            .get_component_mut(&id)
+            .and_then(|component| {
+                component
+                    .as_any_mut()
+                    .downcast_mut::<LibraryRoutesComponent>()
+                    .and_then(|routes| routes.snapshot())
+            })
+        else {
+            return;
+        };
+        if let Some(popup) = self.app.library_routes_popup.as_mut() {
+            popup.stage = stage;
+            popup.cursor = cursor;
+        }
+    }
+
+    pub(super) fn handle_library_routes_request(&mut self, request: ShellRequest) {
+        self.sync_library_routes_to_app();
+        match request {
+            ShellRequest::LibraryRoutesEnter => self.app.handle_library_routes_enter(),
+            ShellRequest::LibraryRoutesEsc => self.app.handle_library_routes_esc(),
+            _ => {}
+        }
+    }
+
+    pub(super) fn render_library_routes_popup(&mut self, f: &mut ratatui::Frame) {
+        let id = Self::library_routes_id();
+        if self.application.mounted(&id) {
+            self.application.view(&id, f, f.area());
+        }
+    }
+
     // --- Search sidebar -----------------------------------------------------
     //
     // The Search sidebar is a non-blocking overlay mounted when
@@ -568,6 +632,7 @@ mod tests {
         Msg, MultiselectComponent, PlaybackPromptComponent, SelectionModalComponent,
     };
     use crate::app::tests::make_app_stub;
+    use crate::app::types_context_menu::{LibraryRoutePopup, LibraryRouteStage};
     use crate::app::types_context_menu::{MultiSelectKind, MultiSelectPopup};
     use crate::app::types_selection_modal::{
         SelectionModal, SelectionModalItem, SelectionModalListState, SelectionModalRow,
@@ -676,6 +741,41 @@ mod tests {
         assert!(matches!(request, ShellRequest::MultiselectCommit { .. }));
         model.sync_multiselect();
         assert!(model.app.multiselect_popup.is_none());
+        assert!(!model.application.mounted(&id));
+    }
+
+    #[test]
+    fn library_routes_shell_syncs_and_routes_escape() {
+        let mut model = Model::new(make_app_stub());
+        model.app.library_routes_popup = Some(LibraryRoutePopup {
+            stage: LibraryRouteStage::PickLibrary {
+                items: vec![("movies".into(), "Movies".into(), None)],
+            },
+            cursor: 0,
+        });
+        model.sync_library_routes();
+
+        let id = ComponentId::Popup(PopupId::LibraryRoutes);
+        let message = {
+            let component = model
+                .application
+                .get_component_mut(&id)
+                .expect("Library routes mounted")
+                .as_any_mut()
+                .downcast_mut::<LibraryRoutesComponent>()
+                .expect("Library routes type");
+            component.on(&Event::Keyboard(KeyEvent {
+                code: Key::Esc,
+                modifiers: KeyModifiers::NONE,
+            }))
+        };
+        let Some(Msg::Shell(request)) = message else {
+            panic!("Library routes should emit a shell request");
+        };
+        model.handle_library_routes_request(request);
+        model.sync_library_routes();
+
+        assert!(model.app.library_routes_popup.is_none());
         assert!(!model.application.mounted(&id));
     }
 }

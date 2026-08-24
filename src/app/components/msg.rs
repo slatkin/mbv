@@ -145,6 +145,10 @@ pub enum ShellRequest {
         kind: crate::app::types_context_menu::MultiSelectKind,
         items: Vec<(String, String, bool)>,
     },
+    /// Advance or leave the nested Library-routes picker through App's
+    /// existing service/config action path.
+    LibraryRoutesEnter,
+    LibraryRoutesEsc,
     /// Forward a playback prompt key to the shell-owned Player handler.
     PlaybackPromptKey(crossterm::event::KeyEvent),
     /// Play the Home item at the component-owned flat cursor (task 3.4).

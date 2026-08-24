@@ -16,6 +16,7 @@ pub mod feeds;
 pub mod help;
 pub mod home;
 pub mod legacy_input;
+pub mod library_routes;
 pub mod msg;
 pub mod multiselect;
 pub mod playback_gates;
@@ -34,6 +35,7 @@ pub use self::feeds::FeedsComponent;
 pub use self::help::HelpComponent;
 pub use self::home::HomeComponent;
 pub use self::legacy_input::LegacyInput;
+pub use self::library_routes::LibraryRoutesComponent;
 pub use self::msg::{LegacyTerminalEvent, Msg, ServiceRequest, ShellRequest};
 pub use self::multiselect::MultiselectComponent;
 pub use self::playback_gates::{
