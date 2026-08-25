@@ -170,6 +170,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
 
     let list_panel = right_pane.list_panel;
     let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
+    layout.tv_wide_list_area = list_area;
     if list_panel.height > 0 {
         f.render_widget(
             Block::default().style(palette::resolve_surface_focus(right_focused)),

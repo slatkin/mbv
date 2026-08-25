@@ -211,20 +211,43 @@ impl App {
         self.open_context_menu_at(col, row);
     }
 
-    pub(super) fn handle_mouse_single_click_tv(&mut self, hit: TvHit) {
-        if matches!(hit, TvHit::SeasonTab(_) | TvHit::EpisodeRow(_)) {
-            self.set_panel_focus(super::PanelFocus::Library);
+    pub(super) fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
+        match hit {
+            TvHit::SeasonTab(_) | TvHit::EpisodeRow(_) => {
+                self.set_panel_focus(super::PanelFocus::Library);
+            }
+            TvHit::SeriesRow(target) => {
+                // The component resolved the series under the click; apply it
+                // to `App`'s library cursor before any further pane effect.
+                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                    level.cursor = target;
+                }
+            }
+            TvHit::EpisodesPane => {}
         }
     }
 
     pub(super) fn handle_mouse_double_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
-        if matches!(hit, TvHit::EpisodeRow(_) | TvHit::SeriesRow) {
+        if let TvHit::SeriesRow(target) = hit {
+            // Apply the clicked series before activating (the click may land
+            // on a series other than the focused one).
+            if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                level.cursor = target;
+            }
+        }
+        if matches!(hit, TvHit::EpisodeRow(_) | TvHit::SeriesRow(_)) {
             self.activate_selected_series(lib_idx);
         }
     }
 
-    pub(super) fn handle_mouse_right_click_tv(&mut self, hit: TvHit, col: u16, row: u16) {
-        self.handle_mouse_single_click_tv(hit);
+    pub(super) fn handle_mouse_right_click_tv(
+        &mut self,
+        lib_idx: usize,
+        hit: TvHit,
+        col: u16,
+        row: u16,
+    ) {
+        self.handle_mouse_single_click_tv(lib_idx, hit);
         self.open_context_menu_at(col, row);
     }
 }

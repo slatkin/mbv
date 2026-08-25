@@ -4,7 +4,9 @@ use mbv_core::playback_queue::QueueItem;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 #[test]
 fn home_down_moves_the_component_cursor_without_app_state() {
@@ -124,4 +126,23 @@ fn home_renders_content_without_app_state() {
         .map(|cell| cell.symbol().to_owned())
         .collect();
     assert!(output.contains("cw1"));
+}
+
+#[test]
+fn home_right_click_uses_the_rendered_row_target() {
+    let mut home = two_section_home();
+    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    terminal
+        .draw(|frame| home.view(frame, frame.area()))
+        .unwrap();
+    let (rect, target) = home.test_hitmap()[1];
+    let message = home.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Right),
+        column: rect.x,
+        row: rect.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(message, Some(Msg::Shell(ShellRequest::HomeClick {
+        region: super::msg::HomeHitRegion::ContextMenu(index), ..
+    })) if index == target));
 }

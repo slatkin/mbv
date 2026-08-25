@@ -1,5 +1,6 @@
 use super::detail::compact_banner_image_cache_key;
 use crate::app::layout::LayoutMain;
+use crate::app::library_column_width::library_column_count;
 use crate::app::render::arrangements::hero_left;
 use crate::app::render::arrangements::library;
 use crate::app::render::components::album::AlbumRowsCursorCtx;
@@ -33,7 +34,7 @@ pub(in crate::app) fn render_generic_movies_home_video_rows_with_ctx(
         );
         return 0;
     } else {
-        let row_ctx = ctx.rows(list_area, 1, focused, 0);
+        let row_ctx = ctx.rows(list_area, library_column_count(list_area.width), focused, 0);
         if !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some()) {
             super::list_letter_groups::render_letter_grouped_rows(
                 f,

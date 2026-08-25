@@ -427,8 +427,10 @@ pub enum TvHit {
     /// Blank/hero space in the Episodes pane (no tab or row under the
     /// cursor): consumed without changing the pane or panel focus.
     EpisodesPane,
-    /// The Series pane (series list: the series row under the cursor).
-    SeriesRow,
+    /// The Series pane (series list): the series row the component resolved
+    /// from its own painted geometry. The shell sets `App`'s library cursor
+    /// to `target` before any pane effect (activation, context menu).
+    SeriesRow(usize),
 }
 
 /// Region of the TV workspace a click resolved to (task 5.3d, tv_workspace

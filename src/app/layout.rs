@@ -131,6 +131,7 @@ pub(crate) struct LayoutMain {
     /// Populated only when the wide Movies hero-on-left layout is active.
     pub movies_wide_right_area: Rect,
     pub tv_wide_right_area: Rect,
+    pub tv_wide_list_area: Rect,
     pub tv_wide_episode_rows: Vec<(Rect, usize)>,
     pub tv_wide_season_tabs: Vec<(Rect, usize)>,
     pub tv_wide_left_area: Rect,

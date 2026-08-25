@@ -723,13 +723,14 @@ impl Model {
                             if let Some(lib_idx) = self.app.tab.emby_library_index() {
                                 match region {
                                     TvHitRegion::ContextMenu(hit) => {
-                                        self.app.handle_mouse_right_click_tv(hit, col, row);
+                                        self.app
+                                            .handle_mouse_right_click_tv(lib_idx, hit, col, row);
                                     }
                                     TvHitRegion::Hit(hit) => {
                                         if self.app.note_browse_double_click(col, row) {
                                             self.app.handle_mouse_double_click_tv(lib_idx, hit);
                                         } else {
-                                            self.app.handle_mouse_single_click_tv(hit);
+                                            self.app.handle_mouse_single_click_tv(lib_idx, hit);
                                         }
                                     }
                                 }

@@ -349,11 +349,13 @@ contributing surface's group 2–4 conversion to have landed.
   paragraph settles on governs both. Verify `rtk cargo check -p mbv` and that no `impl App` interaction handler and no component-local `App` field remains for any surface.
 - [ ] 5.4 Confirm every mouse path reads component-owned geometry (no global hit map); verify the six precedence/mouse proofs (blocking-overlay swallow, parent/global precedence, simultaneous Queue+Library mouse, overlay blocks underlying mutation, deterministic focus restoration, geometry cannot drift).
   **Runs inside the *Mouse geometry* lane's final Framework-deletion unit, not
-  as a separate lane** — it asserts exactly what that unit delivers. Under the
-  verification policy recorded at 5.3d, "geometry cannot drift" is a
-  structural check (`rtk ast-grep scan` plus the absence of `AppLayout` and
-  the three `input_mouse*.rs` files), not a behaviour test, and none of the
-  six may be written as a hand-set-coordinate mouse test. Decide the
+  as a separate lane** — it asserts exactly what that unit delivers. Under D16,
+  the mouse-related proofs can no longer be asserted against behaviour that is
+  accepted-broken, so they become structural checks only (see design D16): the
+  **absence of the three `input_mouse*.rs` entry points and of any global mouse
+  hit map**, not the absence of load-bearing `AppLayout` geometry. `rtk
+  ast-grep scan` is the supporting gate. None of the six may be written as a
+  hand-set-coordinate mouse test. Decide the
   table-vs-runtime question below **before** that unit starts, not after.
   `KEY_POLICY` and `KeyPolicyGate::sub_clause()` are referenced nowhere outside
   `key_policy.rs`'s own ordering test — the file still carries

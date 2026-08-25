@@ -17,6 +17,7 @@ use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
 use super::msg::{BrowserHitRegion, LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
+use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::render::{render_generic_movies_home_video_rows_with_ctx, LibraryListRenderCtx};
 use crate::app::ui_util::move_cursor;
 
@@ -150,16 +151,22 @@ impl BrowserComponent {
                 if self.layout.left_area.contains(position)
                     || self.layout.inline_hero_area.contains(position)
                 {
-                    let region = if self.layout.inline_hero_area.contains(position) {
+                    // Resolve the clicked row from the component's own painted
+                    // geometry *before* building the region, so the emitted
+                    // cursor matches the row under the click (not the
+                    // pre-click cursor). The inline hero is already on the
+                    // selected item, so it carries the current cursor.
+                    let in_hero = self.layout.inline_hero_area.contains(position);
+                    if !in_hero {
+                        if let Some(resolved) = self.resolve_left_cursor(col, row) {
+                            self.cursor = resolved;
+                        }
+                    }
+                    let region = if in_hero {
                         BrowserHitRegion::InlineHero(self.cursor)
                     } else {
                         BrowserHitRegion::LeftRow(self.cursor)
                     };
-                    if let BrowserHitRegion::LeftRow(_) = region {
-                        if let Some(cursor) = self.resolve_left_cursor(col, row) {
-                            self.cursor = cursor;
-                        }
-                    }
                     return Some(Msg::Shell(ShellRequest::BrowserClick { region, col, row }));
                 }
             }
@@ -167,6 +174,15 @@ impl BrowserComponent {
                 if self.layout.left_area.contains(position)
                     || self.layout.inline_hero_area.contains(position)
                 {
+                    // Resolve the row under the click before opening the menu;
+                    // a blank/gap click leaves the cursor unchanged
+                    // (`resolve_left_cursor` returns None for headers/gaps).
+                    let in_hero = self.layout.inline_hero_area.contains(position);
+                    if !in_hero {
+                        if let Some(resolved) = self.resolve_left_cursor(col, row) {
+                            self.cursor = resolved;
+                        }
+                    }
                     return Some(Msg::Shell(ShellRequest::BrowserClick {
                         region: BrowserHitRegion::ContextMenu(self.cursor),
                         col,
@@ -180,17 +196,45 @@ impl BrowserComponent {
     }
 
     /// Resolve the list item under `(col, row)` from the component's own
-    /// `left_row_map` (single-column screen-row → item index). This is the
-    /// local highlight only; the authoritative cursor set (two-column
-    /// cell-target, header/gap no-ops, position save) stays in
-    /// The `BrowserClick` shell arm consumes the resolved cursor target.
+    /// painted `LayoutMain`, mirroring the legacy `App::click_set_cursor`
+    /// Emby branch: the exact cell is picked when the list is two-column, and
+    /// header/gap screen rows are `None` (no-op). Returns `None` for clicks
+    /// outside the list area or on a header/gap cell, leaving the cursor
+    /// unchanged. The `BrowserClick` shell arm consumes the resolved target.
     fn resolve_left_cursor(&self, col: u16, row: u16) -> Option<usize> {
         let la = self.layout.left_area;
         if !la.contains((col, row).into()) {
             return None;
         }
-        let click_y = (row - la.y) as usize;
+        let click_y = (row.saturating_sub(la.y)) as usize;
+        let display_row = self.scroll + click_y;
+        // Cell-aware two-column resolution: pick the exact column under the
+        // click. Single-column and header rows fall back to the row map below.
+        if let Some(items) = self.layout.left_item_rows.get(display_row) {
+            if items.len() > 1 {
+                let cols = self
+                    .layout
+                    .left_item_rows
+                    .iter()
+                    .map(Vec::len)
+                    .max()
+                    .unwrap_or(1);
+                let cell_w = library_cell_width(la, cols) as usize;
+                let x = (col.saturating_sub(la.x)) as usize;
+                let stride = cell_w + LIBRARY_COLUMN_GAP as usize;
+                let cell = x / stride;
+                if cell < items.len() && x % stride < cell_w {
+                    return items.get(cell).copied();
+                }
+                return None;
+            }
+        }
         self.layout.left_row_map.get(click_y).copied().flatten()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_layout(&self) -> &LayoutMain {
+        &self.layout
     }
 }
 

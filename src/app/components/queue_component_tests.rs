@@ -6,7 +6,9 @@ use mbv_core::playback_queue::{PlaybackQueue, QueueItem};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 fn key(code: Key) -> KeyEvent {
     KeyEvent {
@@ -87,4 +89,36 @@ fn queue_component_renders_a_snapshot_without_app_state() {
         .collect();
     assert!(output.contains("one"));
     assert!(output.contains("two"));
+}
+
+#[test]
+fn queue_right_click_uses_the_rendered_slot_target() {
+    let slots = queue();
+    let second = slots[1].slot_id;
+    let mut component = QueueComponent::new();
+    component.set_content(
+        slots,
+        0,
+        0,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let (rect, _) = component.test_rows()[1];
+    let message = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Right),
+        column: rect.x,
+        row: rect.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(
+        matches!(message, Some(Msg::Shell(super::msg::ShellRequest::QueueClick {
+        region: super::msg::QueueHitRegion::ContextMenu(Some(slot_id)), ..
+    })) if slot_id == second)
+    );
 }

@@ -15,6 +15,8 @@ use tuirealm::state::State;
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
 use super::msg::{LegacyTerminalEvent, Msg, ShellRequest, TvHit, TvHitRegion};
 use super::user_event::UserEvent;
+#[cfg(test)]
+use crate::app::layout::LayoutMain;
 use crate::app::render::{render_wide_tv_with_ctx, TvWideRenderCtx};
 use crate::app::ui_util::move_cursor;
 
@@ -220,7 +222,7 @@ impl TvWorkspaceComponent {
                             self.pane = Pane::Episodes;
                             self.episode_cursor = Some(index);
                         }
-                        TvHit::SeriesRow => self.pane = Pane::Series,
+                        TvHit::SeriesRow(_) => self.pane = Pane::Series,
                         TvHit::EpisodesPane => {}
                     }
                     return Some(Msg::Shell(ShellRequest::TvClick {
@@ -290,9 +292,26 @@ impl TvWorkspaceComponent {
             return Some(TvHit::EpisodesPane);
         }
         if self.layout.tv_wide_right_area.contains(position) {
-            return Some(TvHit::SeriesRow);
+            // Resolve the series row under the click from the painted
+            // `left_row_map` relative to the painted series list (None for a
+            // header/gap cell → keep the current series cursor, matching the
+            // legacy blank-space click no-op).
+            let click_y = (position.y.saturating_sub(self.layout.tv_wide_list_area.y)) as usize;
+            let target = self
+                .layout
+                .left_row_map
+                .get(click_y)
+                .copied()
+                .flatten()
+                .unwrap_or(self.cursor);
+            return Some(TvHit::SeriesRow(target));
         }
         None
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_layout(&self) -> &LayoutMain {
+        &self.layout
     }
 }
 

@@ -414,8 +414,17 @@ impl HomeComponent {
             }
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
                 if self.list_area.contains(pos) {
+                    // Resolve the row under the click; a blank click leaves
+                    // the cursor unchanged (no hitmap rect matches), so the
+                    // context menu opens at the current cursor.
+                    let target = self
+                        .hitmap
+                        .iter()
+                        .find(|(rect, _)| rect.contains(pos))
+                        .map(|(_, idx)| *idx)
+                        .unwrap_or(self.cursor);
                     return Some(Msg::Shell(ShellRequest::HomeClick {
-                        region: HomeHitRegion::ContextMenu(self.cursor),
+                        region: HomeHitRegion::ContextMenu(target),
                         col: mouse.column,
                         row: mouse.row,
                     }));
@@ -432,6 +441,11 @@ impl HomeComponent {
             .or(Some(Msg::Legacy(LegacyTerminalEvent::Mouse(
                 crossterm_mouse,
             ))))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_hitmap(&self) -> &[(Rect, usize)] {
+        &self.hitmap
     }
 }
 

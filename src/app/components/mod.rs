@@ -114,3 +114,6 @@ mod save_playlist_component_tests;
 #[cfg(test)]
 #[path = "selection_modal_component_tests.rs"]
 mod selection_modal_component_tests;
+#[cfg(test)]
+#[path = "tv_workspace_component_tests.rs"]
+mod tv_workspace_component_tests;

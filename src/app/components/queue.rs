@@ -216,9 +216,23 @@ impl QueueComponent {
             }
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
                 if self.area.contains(position) {
+                    // Resolve the slot under the click; a blank click keeps
+                    // the previous slot, preserving the legacy no-op.
+                    let slot_id = self
+                        .geometry
+                        .rows
+                        .iter()
+                        .find(|(rect, _)| rect.contains(position))
+                        .map(|(_, slot_id)| *slot_id);
+                    if let Some(id) = slot_id {
+                        if let Some(index) = self.slots.iter().position(|slot| slot.slot_id == id) {
+                            self.cursor = index;
+                        }
+                    }
                     return Some(Msg::Shell(ShellRequest::QueueClick {
                         region: QueueHitRegion::ContextMenu(
-                            self.slots.get(self.cursor).map(|slot| slot.slot_id),
+                            slot_id
+                                .or_else(|| self.slots.get(self.cursor).map(|slot| slot.slot_id)),
                         ),
                         col: mouse.column,
                         row: mouse.row,
@@ -241,6 +255,11 @@ impl QueueComponent {
         }
         Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
     }
+
+    #[cfg(test)]
+    pub(crate) fn test_rows(&self) -> &[(Rect, mbv_core::playback_queue::QueueSlotId)] {
+        &self.geometry.rows
+    }
 }
 
 impl Default for QueueComponent {
@@ -252,6 +271,7 @@ impl Default for QueueComponent {
 impl Component for QueueComponent {
     fn view(&mut self, frame: &mut Frame, area: ratatui::layout::Rect) {
         let area = if self.area.width > 0 { self.area } else { area };
+        self.area = area;
         self.geometry = QueueRenderGeometry::default();
         if let (Some(title_area), Some(title)) = (self.title_area, self.title.as_ref()) {
             render_queue_title_content(frame, title_area, title, &mut self.geometry);
