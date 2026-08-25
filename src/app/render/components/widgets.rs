@@ -519,7 +519,13 @@ impl App {
         // was already normalized to a live index by `render_main`.
         match self.tab {
             TabSelection::Home => {
-                self.render_home_list(f, area, focused, layout);
+                // Home content is painted by the mounted `HomeComponent`
+                // (the shell paints it right after this legacy base frame,
+                // reading `home_area` to size it). The legacy frame only
+                // reserves the full Home destination area here — it paints
+                // no Home rows, pills, hero, or image (task 5.3d, Home
+                // legacy underpaint removal).
+                layout.home_area = area;
             }
             TabSelection::Feeds => {
                 layout.feeds_area = area;

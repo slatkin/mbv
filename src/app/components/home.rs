@@ -67,6 +67,12 @@ pub struct HomeComponent {
     /// `None` when this render produced no selection rect, matching the
     /// legacy copy's own optionality.
     selected_item_rect: Option<Rect>,
+    /// The hero panel `render_home_content` painted this `view` (its
+    /// `hero_area`), retained so the single painter's own geometry is
+    /// observable to characterization tests without any layout mirror (task
+    /// 5.3d, Home legacy underpaint removal). `None` when this render
+    /// painted no hero (too short, or no hero item).
+    hero_area: Option<Rect>,
 }
 
 impl HomeComponent {
@@ -86,6 +92,7 @@ impl HomeComponent {
             image_paint: None,
             list_area: Rect::default(),
             selected_item_rect: None,
+            hero_area: None,
         }
     }
 
@@ -153,6 +160,18 @@ impl HomeComponent {
     /// render produced no selection rect.
     pub(in crate::app) fn menu_placement_geometry(&self) -> (Rect, Option<Rect>) {
         (self.list_area, self.selected_item_rect)
+    }
+
+    /// The hero panel `view()` painted this render (the single painter's own
+    /// geometry, for characterization), `None` when it painted none. Not a
+    /// layout mirror — the component owns every Home `view`-painted rect.
+    pub(in crate::app) fn hero_area(&self) -> Option<Rect> {
+        self.hero_area
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_pill_targets(&self) -> &[(Rect, usize)] {
+        &self.pill_targets
     }
 
     fn new_sections(&self) -> Vec<usize> {
@@ -509,6 +528,7 @@ impl Component for HomeComponent {
         self.list_area = result.left_area;
         self.selected_item_rect = result.selected_item_rect;
         self.image_paint = result.image_paint;
+        self.hero_area = result.hero_area;
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

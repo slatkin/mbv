@@ -292,6 +292,33 @@ pub fn render_app_to_terminal(app: &mut App, width: u16, height: u16) -> Termina
     term
 }
 
+/// Render the Home destination exactly as the live shell does (task 5.3d,
+/// Home legacy underpaint removal): draw the legacy `App::render` base frame
+/// — which for Home now only reserves `home_area` — then paint the mounted
+/// `HomeComponent` through the real `Model::render_home_component` shell
+/// path (which sizes the component by `home_area` and paints the cover image
+/// it returned). Returns the model, so tests can read the component's own
+/// painted geometry and App state, together with the terminal. This is the
+/// Home characterization path once the legacy underpaint is gone.
+pub fn render_home_shell(
+    mut app: App,
+    width: u16,
+    height: u16,
+) -> (crate::app::shell::Model, Terminal<TestBackend>) {
+    app.terminal_width = width;
+    app.terminal_height = height;
+    let mut model = crate::app::shell::Model::new(app);
+    model.sync_home();
+    let backend = TestBackend::new(width, height);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| {
+        model.app.render(f);
+        model.render_home_component(f);
+    })
+    .unwrap();
+    (model, term)
+}
+
 pub fn render_view(app: &mut App, width: u16, height: u16) -> LayoutMain {
     render_view_to_terminal(app, width, height).1
 }

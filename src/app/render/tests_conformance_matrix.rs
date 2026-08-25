@@ -1,8 +1,8 @@
 use super::test_helpers::{
-    buffer_to_string, make_movie_app, make_music_group_app, render_view_to_terminal,
+    buffer_to_string, make_movie_app, make_music_group_app, render_home_shell,
 };
 use super::*;
-use crate::app::components::FeedsComponent;
+use crate::app::components::{ComponentId, FeedsComponent, HomeComponent};
 use crate::app::layout::LayoutMain;
 use crate::app::render::audiobookshelf_book_tests::make_audiobookshelf_book_app;
 use crate::app::tests::make_item;
@@ -305,6 +305,64 @@ fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
     }
 }
 
+/// Task 5.3d, Home legacy underpaint removal: the Home leg of the pill-bar
+/// conformance now reads the mounted `HomeComponent`'s own `pill_targets`
+/// (the single painter) instead of `LayoutMain.selector_tabs`, which the
+/// legacy frame no longer populates for Home. The assertions mirror
+/// `assert_one_pill_row_and_spacer` exactly for that surface: targets share
+/// one row, exactly one pill bar is painted, and the pill spacer stays
+/// consistent below it.
+fn assert_home_one_pill_row_and_spacer(
+    model: &crate::app::shell::Model,
+    terminal: &Terminal<TestBackend>,
+) {
+    let home = model
+        .application
+        .get_component(&ComponentId::Home)
+        .expect("Home component mounted")
+        .as_any()
+        .downcast_ref::<HomeComponent>()
+        .expect("Home component type");
+    let targets = home.test_pill_targets();
+    let first = targets
+        .first()
+        .unwrap_or_else(|| panic!("Home should publish pill targets"))
+        .0;
+    assert!(
+        targets
+            .iter()
+            .all(|(rect, _)| rect.y == first.y && rect.height == 1),
+        "pill targets must share one row: {:?}",
+        targets
+    );
+
+    let buffer = terminal.backend().buffer();
+    let painted_rows = (0..buffer.area().height)
+        .filter(|y| {
+            targets.iter().all(|(rect, _)| {
+                buffer[(rect.x, *y)].symbol() == "◢"
+                    && buffer[(rect.right() - 1, *y)].symbol() == "◤"
+            })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        painted_rows,
+        vec![first.y],
+        "Home should paint exactly one pill bar"
+    );
+
+    let last = targets.last().unwrap().0;
+    assert!(first.bottom() < buffer.area().height);
+    let spacer_bg = buffer[(first.x, first.y + 1)].style().bg;
+    for x in first.x..last.right() {
+        assert_eq!(
+            buffer[(x, first.y + 1)].style().bg,
+            spacer_bg,
+            "pill spacer spilled at x={x}"
+        );
+    }
+}
+
 #[test]
 fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
     let cases = [
@@ -328,8 +386,11 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
         );
     }
 
-    let (terminal, layout) = render_view_to_terminal(&mut mixed_home_app(), 60, 30);
-    assert_one_pill_row_and_spacer("Home", &terminal, &layout);
+    // Home (task 5.3d, legacy underpaint removal) renders through the
+    // mounted component; assert its pill bar from the component's own painted
+    // targets.
+    let (model, terminal) = render_home_shell(mixed_home_app(), 60, 30);
+    assert_home_one_pill_row_and_spacer(&model, &terminal);
     assert!(
         !buffer_to_string(&terminal).is_empty(),
         "Home did not paint a buffer"
@@ -355,7 +416,6 @@ fn matrix_mini_presentations_do_not_admit_a_full_hero() {
         ("Music", make_music_group_app()),
         ("Podcasts", crate::app::tests_podcast::audiobookshelf_app()),
         ("Books", make_audiobookshelf_book_app()),
-        ("Home", mixed_home_app()),
         ("Feeds", feed_app()),
     ];
     for (surface, mut app) in cases {
@@ -368,4 +428,22 @@ fn matrix_mini_presentations_do_not_admit_a_full_hero() {
             app.layout.main.hero_area
         );
     }
+
+    // Home (task 5.3d, legacy underpaint removal) is painted by the mounted
+    // component, so its mini-view hero is asserted from the component's own
+    // geometry: the reserved home area is empty and the component paints no
+    // hero.
+    let (model, _terminal) = render_home_shell(mixed_home_app(), 60, 8);
+    let home = model
+        .application
+        .get_component(&ComponentId::Home)
+        .expect("Home component mounted")
+        .as_any()
+        .downcast_ref::<HomeComponent>()
+        .expect("Home component type");
+    assert_eq!(
+        home.hero_area().map(|a| a.height).unwrap_or(0),
+        0,
+        "Home mini presentation should not admit a hero"
+    );
 }

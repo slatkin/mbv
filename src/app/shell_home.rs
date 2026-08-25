@@ -116,6 +116,14 @@ impl Model {
 
     /// Mirror `App.home`'s content and runtime render flags into the mounted
     /// `HomeComponent`. Its cursor, section, and scroll are component-local.
+    /// As the content is mirrored, the one-time persisted-pill restore that
+    /// used to run in the legacy `App::render_home_list` is applied (task
+    /// 5.3d, Home legacy underpaint removal): the saved section preference is
+    /// restored via `HomeComponent::restore_section` only once a section with
+    /// the pending source identity exists (sections arrive asynchronously
+    /// across providers), kept pending until then, cleared once applied, and
+    /// mirrored once into `App.home.section` so the action layer and
+    /// `save_prefs` see the same restored selection.
     pub(super) fn sync_home(&mut self) {
         let continue_items: Vec<QueueItem> = self
             .app
@@ -134,11 +142,29 @@ impl Model {
             .collect();
         let focused = !matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
         let use_nerd_fonts = self.app.use_nerd_fonts;
+        // Resolve the pending persisted-pill restore before the component
+        // borrow, so the source identity is stable for the restore and the
+        // one-time App-side `section` mirror that goes with it.
+        let pending = self.app.home_section_pending.clone();
+        let pending_section = pending.as_ref().and_then(|pending_source| {
+            self.app
+                .home
+                .latest
+                .iter()
+                .position(|(_, source, _, _)| source == pending_source)
+                .map(|idx| idx + 1)
+        });
         if let Some(comp) = self.application.get_component_mut(&ComponentId::Home) {
             if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
                 home.set_content(continue_items, latest, self.app.home_loading);
                 home.set_focused(focused);
                 home.set_use_nerd_fonts(use_nerd_fonts);
+                if let (Some(pending_source), Some(section)) = (&pending, pending_section) {
+                    if home.restore_section(pending_source) {
+                        self.app.home.section = section;
+                        self.app.home_section_pending = None;
+                    }
+                }
             }
         }
     }
@@ -172,6 +198,78 @@ mod tests {
     use std::time::Duration;
     use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+    /// Task 5.3d, Home legacy underpaint removal: the one-time persisted-pill
+    /// restore that used to run in the deleted legacy `App::render_home_list`
+    /// now runs on the shell's `sync_home` path. It restores the section via
+    /// `HomeComponent::restore_section` only once a section with the pending
+    /// source identity exists (sections arrive asynchronously), keeps the
+    /// preference pending until then, mirrors the restored section once into
+    /// `App.home.section` so the action layer and `save_prefs` agree, and
+    /// clears the pending when applied.
+    #[test]
+    fn shell_sync_home_restores_persisted_home_section_and_clears_pending() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut model = Model::new(make_app_stub());
+        model.app.home_section_pending =
+            Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
+
+        // No matching source yet: the preference stays pending and the
+        // component section stays at its default (Continue Watching).
+        model.sync_home();
+        {
+            let home = model
+                .application
+                .get_component(&ComponentId::Home)
+                .expect("Home component mounted")
+                .as_any()
+                .downcast_ref::<HomeComponent>()
+                .expect("Home component type");
+            assert_eq!(
+                home.section(),
+                0,
+                "pending must not apply before the section exists"
+            );
+        }
+        assert_eq!(
+            model.app.home_section_pending,
+            Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into())),
+            "preference must stay pending while the matching section is absent"
+        );
+
+        // The "books" section arrives; the next sync restores it into the
+        // component (section 1), mirrors it into `App.home.section`, and
+        // clears the pending.
+        model.app.home.latest = vec![(
+            "Books".into(),
+            crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()),
+            vec![],
+            0,
+        )];
+        model.sync_home();
+        {
+            let home = model
+                .application
+                .get_component(&ComponentId::Home)
+                .expect("Home component mounted")
+                .as_any()
+                .downcast_ref::<HomeComponent>()
+                .expect("Home component type");
+            assert_eq!(
+                home.section(),
+                1,
+                "restored section must land in the component"
+            );
+        }
+        assert_eq!(
+            model.app.home.section, 1,
+            "restored section must be mirrored into App.home.section"
+        );
+        assert_eq!(
+            model.app.home_section_pending, None,
+            "pending must be cleared once restored"
+        );
+    }
 
     #[test]
     fn shell_sync_keeps_home_component_cursor_local() {

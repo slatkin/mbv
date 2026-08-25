@@ -1,4 +1,4 @@
-use crate::app::layout::LayoutMain;
+use crate::app::palette;
 use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::home as home_arrangement;
 use crate::app::render::arrangements::library as library_arrangement;
@@ -13,7 +13,6 @@ use crate::app::render::components::home_pills::{home_pill_labels, render_home_p
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::types_playback::HomeLatestSource;
 use crate::app::ui_util::*;
-use crate::app::{palette, App};
 use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -593,81 +592,6 @@ pub(in crate::app) fn render_home_content(
         left_area,
         selected_item_rect: list_rows_output.selected_item_rect,
         resolved_section: section,
-    }
-}
-
-impl App {
-    /// Legacy render entry point, kept byte-for-byte behaviour-preserving
-    /// (App-based Home characterization tests are unchanged): resolves the
-    /// pill-restore-from-prefs step (a one-time App/prefs concern, not a
-    /// per-render one — see `HomeComponent::restore_section`), then delegates
-    /// to the shared `render_home_content` orchestration and copies its
-    /// output back into `self.home`/`LayoutMain` exactly where the inline
-    /// version used to write them directly.
-    pub(in crate::app::render) fn render_home_list(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        focused: bool,
-        layout: &mut LayoutMain,
-    ) {
-        layout.home_area = area;
-        // Restore the last-selected Home pill from prefs once a section with
-        // that source identity exists (sections arrive asynchronously across
-        // providers). Keep it pending until the section appears.
-        if let Some(pending) = self.home_section_pending.as_ref() {
-            if let Some((idx, _)) = self
-                .home
-                .latest
-                .iter()
-                .enumerate()
-                .find(|(_, (_, source, _, _))| source == pending)
-            {
-                self.home.section = idx + 1;
-                self.home_section_pending = None;
-            }
-        }
-
-        let continue_items: Vec<QueueItem> = self
-            .home
-            .continue_items
-            .iter()
-            .cloned()
-            .map(|item| QueueItem::Emby(Box::new(item)))
-            .collect();
-        let latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)> = self
-            .home
-            .latest
-            .iter()
-            .map(|(title, source, items, _cursor)| (title.clone(), source.clone(), items.clone()))
-            .collect();
-
-        // Scroll is component-owned (`HomeComponent::scroll`); the legacy path
-        // paints from a throwaway scratch so no App state retains it.
-        let mut scratch_scroll = 0;
-        let result = render_home_content(
-            f,
-            area,
-            focused,
-            &continue_items,
-            &latest,
-            self.home.section,
-            &mut self.home.home_cursor,
-            &mut scratch_scroll,
-            self.use_nerd_fonts,
-        );
-
-        self.home.section = result.resolved_section;
-        if let Some(hero_area) = result.hero_area {
-            layout.hero_area = hero_area;
-        }
-        layout.left_area = result.left_area;
-        if let Some(rect) = result.selected_item_rect {
-            layout.selected_item_rect = Some(rect);
-        }
-        layout.home.hitmap = result.hitmap;
-        layout.selector_tabs = result.pill_targets;
-        self.paint_home_image(f, result.image_paint);
     }
 }
 

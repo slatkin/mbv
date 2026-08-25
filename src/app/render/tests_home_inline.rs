@@ -1,4 +1,5 @@
 use super::test_helpers::*;
+use crate::app::components::{ComponentId, HomeComponent};
 use crate::app::tests::make_app_stub;
 use crate::app::types_playback::HomeLatestSource;
 use crate::app::{PanelFocus, TabSelection};
@@ -16,6 +17,13 @@ fn home_emby_app() -> crate::app::App {
     app
 }
 
+/// Task 5.3d, Home legacy underpaint removal: this renders through the
+/// mounted `HomeComponent` (shell-equivalent `render_home_shell`), and the
+/// text-only hero is characterized from the component's own painted
+/// `hero_area` rather than a legacy `LayoutMain` copy. The behavioral
+/// assertions are preserved: the text-only feed hero still paints its row
+/// title and duration metadata, still sizes to its content (height 7) rather
+/// than a tall artwork hero, and still requests no card artwork.
 #[test]
 fn narrow_home_feed_renders_text_only_without_artwork() {
     let mut app = make_app_stub();
@@ -43,20 +51,31 @@ fn narrow_home_feed_renders_text_only_without_artwork() {
     app.home.section = 1;
     app.home.home_cursor = 0;
 
-    let (terminal, layout) = render_view_to_terminal(&mut app, 60, 20);
+    let (model, terminal) = render_home_shell(app, 60, 20);
     let output = buffer_to_string(&terminal);
 
     assert!(output.contains("Home Feed entry"), "title: {output:?}");
     assert!(output.contains("1:05"), "duration metadata: {output:?}");
+    let home = model
+        .application
+        .get_component(&ComponentId::Home)
+        .expect("Home component mounted")
+        .as_any()
+        .downcast_ref::<HomeComponent>()
+        .expect("Home component type");
     assert_eq!(
-        layout.hero_area.height, 7,
-        "text-only hero: {:?}",
-        layout.hero_area
+        home.hero_area().map(|a| a.height),
+        Some(7),
+        "text-only hero"
     );
-    assert!(app.card_image_loading.is_empty());
-    assert!(app.card_image_states.is_empty());
+    assert!(model.app.card_image_loading.is_empty());
+    assert!(model.app.card_image_states.is_empty());
 }
 
+/// Task 5.3d, Home legacy underpaint removal: renders through the mounted
+/// `HomeComponent`; the narrow inline-detail flow is characterized from the
+/// component's own painted hero and list rects (single painter) instead of
+/// `LayoutMain` copies.
 #[test]
 fn narrow_home_inserts_selected_detail_into_the_section_flow() {
     let mut app = home_emby_app();
@@ -64,17 +83,39 @@ fn narrow_home_inserts_selected_detail_into_the_section_flow() {
     // all; opt into the library side so this test exercises the narrow
     // inline-detail flow it was written for.
     app.mini_view_focus = PanelFocus::Library;
-    let layout = render_view(&mut app, 60, 40);
+    let (model, _terminal) = render_home_shell(app, 60, 40);
 
-    assert!(layout.hero_area.height > 0);
-    assert!(layout.hero_area.y >= layout.left_area.y);
+    let home = model
+        .application
+        .get_component(&ComponentId::Home)
+        .expect("Home component mounted")
+        .as_any()
+        .downcast_ref::<HomeComponent>()
+        .expect("Home component type");
+    let hero = home
+        .hero_area()
+        .expect("narrow detail flow should admit a hero");
+    let (left_area, _) = home.menu_placement_geometry();
+    assert!(hero.height > 0);
+    assert!(hero.y >= left_area.y);
 }
 
+/// Task 5.3d, Home legacy underpaint removal: renders through the mounted
+/// `HomeComponent`; a viewport too short for the inline detail suppresses
+/// the hero — the reserved home area is empty, so the component paints no
+/// hero at all — asserted from the component's own painted geometry.
 #[test]
 fn narrow_home_suppresses_detail_when_the_viewport_is_too_short() {
     let mut app = home_emby_app();
     app.mini_view_focus = PanelFocus::Library;
-    let layout = render_view(&mut app, 60, 4);
+    let (model, _terminal) = render_home_shell(app, 60, 4);
 
-    assert_eq!(layout.hero_area.height, 0);
+    let home = model
+        .application
+        .get_component(&ComponentId::Home)
+        .expect("Home component mounted")
+        .as_any()
+        .downcast_ref::<HomeComponent>()
+        .expect("Home component type");
+    assert_eq!(home.hero_area(), None);
 }
