@@ -1,5 +1,5 @@
 use super::browser::BrowserComponent;
-use crate::app::components::msg::{LegacyTerminalEvent, Msg};
+use crate::app::components::msg::{LegacyTerminalEvent, Msg, ShellRequest};
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::{make_item, make_items};
@@ -9,12 +9,13 @@ use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-/// Local keyboard navigation before `Msg::Legacy` forwarding is stopped
-/// (task 5.3d prep): while focused, the component moves its own cursor
-/// exactly the way the legacy `App::move_lib_cursor_rows`/
-/// `jump_lib_cursor` bindings move the App cursor, and still forwards the
-/// raw key as `Msg::Legacy` so both paths coexist in lockstep. A 40-item
-/// flat list rendered 100 columns wide packs two items per row and pages
+/// Local keyboard navigation routes through typed `ShellRequest`s (task
+/// 5.3d): while focused, the component moves its own cursor exactly the way
+/// the legacy `App::move_lib_cursor_rows`/`jump_lib_cursor` bindings move
+/// the App cursor, and returns the typed request in place of the raw
+/// `Msg::Legacy` key so the shell drives the App cursor through the same
+/// App methods (never in addition — no double movement). A 40-item flat
+/// list rendered 100 columns wide packs two items per row and pages
 /// `(height - 1) * cols = 9 * 2 = 18` items — every case below lands on
 /// the legacy stride, and the two clamp cases pin the ends.
 #[test]
@@ -56,9 +57,10 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
             expected,
             "{key:?} from cursor {from} in a two-column flat list"
         );
-        assert!(
-            matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))),
-            "{key:?} must still forward Msg::Legacy while both paths coexist"
+        assert_eq!(
+            message,
+            Some(Msg::Shell(expected_movement_request(key))),
+            "{key:?} must return the typed movement request in place of the raw legacy key"
         );
     }
 
@@ -98,6 +100,26 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
             matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))),
             "unfocused {key:?} must still forward legacy"
         );
+    }
+}
+
+/// The typed movement request the focused two-column browser must return
+/// for each navigation key (task 5.3d), asserted against the emitted
+/// `Msg::Shell` payload by `browser_local_navigation_mirrors_legacy_flat_movement`.
+/// The page payload is the painted display-row stride `(height - 1) = 9`
+/// the 100-wide, 10-tall test list reports via `page_rows()` — the App
+/// applies its own column count to that stride, exactly like the legacy arm.
+fn expected_movement_request(key: KeyCode) -> ShellRequest {
+    match key {
+        KeyCode::Up | KeyCode::Char('k') => ShellRequest::BrowserMoveRows { rows: -1 },
+        KeyCode::Down | KeyCode::Char('j') => ShellRequest::BrowserMoveRows { rows: 1 },
+        KeyCode::PageUp => ShellRequest::BrowserMoveRows { rows: -9 },
+        KeyCode::PageDown => ShellRequest::BrowserMoveRows { rows: 9 },
+        KeyCode::Home => ShellRequest::BrowserJumpCursor { to_end: false },
+        KeyCode::End => ShellRequest::BrowserJumpCursor { to_end: true },
+        KeyCode::Left | KeyCode::Char('h') => ShellRequest::BrowserMoveColumn { delta: -1 },
+        KeyCode::Right | KeyCode::Char('l') => ShellRequest::BrowserMoveColumn { delta: 1 },
+        _ => unreachable!("{key:?} must be a browsed navigation key"),
     }
 }
 
@@ -172,8 +194,9 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
 /// right rail strides ONE item per row — exactly the legacy
 /// `current_library_columns` result (the wide renderer shows the list in
 /// the right rail even when that rail is wide enough to pack two columns).
-/// Down from 0 lands at 1, not 2; Left/Right/h/l stay unbound locally
-/// (one-column list) while the raw key still forwards as `Msg::Legacy`.
+/// Down from 0 lands at 1, not 2, and returns the typed rows request;
+/// Left/Right/h/l stay unbound locally (one-column list) while the raw key
+/// still forwards as `Msg::Legacy`.
 #[test]
 fn browser_local_navigation_strides_one_column_for_wide_movies() {
     let mut browser = BrowserComponent::new();
@@ -191,9 +214,10 @@ fn browser_local_navigation_strides_one_column_for_wide_movies() {
         1,
         "wide-Movies rail Down must stride one item, not two"
     );
-    assert!(
-        matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))),
-        "wide-Movies Down must still forward Msg::Legacy"
+    assert_eq!(
+        message,
+        Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows: 1 })),
+        "wide-Movies Down must return the typed rows request"
     );
 
     browser.handle_crossterm_key(KeyEvent::new(KeyCode::Down, CrosstermKeyModifiers::NONE));

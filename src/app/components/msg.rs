@@ -480,6 +480,48 @@ pub enum ShellRequest {
     BrowserCycleLetterPill {
         delta: i64,
     },
+    /// Up/Down/k/j/PageUp/PageDown on the focused generic/Movies/home-video
+    /// `BrowserComponent` (task 5.3d, Emby browser local navigation): the
+    /// component reports the display-row delta it already applied to its own
+    /// cursor, and the shell derives the active Emby library index from its
+    /// own tab state and runs `App::move_lib_cursor_rows` on it — the same
+    /// method the legacy `handle_lib_key` movement arms call — so the App
+    /// cursor mirrors the component through the typed path. The payload is
+    /// display rows (Up/k `-1`, Down/j `1`, PageUp `-page_rows()`, PageDown
+    /// `page_rows()`); the App method applies its own painted column count
+    /// to stride, exactly like the legacy arm. Calling the App method (never
+    /// a raw cursor-field write) preserves `save_default_library_position` /
+    /// `mark_library_navigation` / `maybe_fetch_next_page` / `last_nav_at`
+    /// idle side effects byte-for-byte. The legacy season-grid branch is
+    /// unreachable here: the Browser mount gate excludes TV.
+    BrowserMoveRows {
+        rows: i64,
+    },
+    /// Left/Right/h/l on the focused generic/Movies/home-video
+    /// `BrowserComponent` with a multi-column painted list (task 5.3d, Emby
+    /// browser local navigation): the component reports the column delta it
+    /// already applied to its own cursor, and the shell derives the active
+    /// Emby library index from its own tab state and runs
+    /// `App::move_lib_cursor` on it — the same method the legacy
+    /// `handle_lib_key` column arms call (`-1` for Left/h, `1` for
+    /// Right/l), preserving the same navigation side effects as
+    /// `BrowserMoveRows`. A one-column list never emits this request: those
+    /// keys stay unbound (matching legacy `handle_lib_key`'s 1-column
+    /// guard) and the raw key still falls through to the legacy bridge.
+    BrowserMoveColumn {
+        delta: i64,
+    },
+    /// Home/End on the focused generic/Movies/home-video `BrowserComponent`
+    /// (task 5.3d, Emby browser local navigation): the component reports the
+    /// jump direction it already applied to its own cursor (`false` jumps to
+    /// the first item, `true` to the last), and the shell derives the active
+    /// Emby library index from its own tab state and runs
+    /// `App::jump_lib_cursor` on it — the same method the legacy
+    /// `handle_lib_key` Home/End arms call, preserving the same navigation
+    /// side effects as `BrowserMoveRows`.
+    BrowserJumpCursor {
+        to_end: bool,
+    },
 }
 
 /// Region of the generic Emby browser a click resolved to, reported by

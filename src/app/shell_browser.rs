@@ -76,6 +76,34 @@ impl Model {
             ShellRequest::BrowserCycleLetterPill { delta } => {
                 self.app.cycle_letter_pill(lib_idx, delta)
             }
+            // Up/Down/k/j/PageUp/PageDown move the App cursor by display
+            // rows (task 5.3d, Emby browser local navigation): the component
+            // reports the row deltas it already applied to its own cursor
+            // (Up/k -1, Down/j 1, PageUp/PageDown ±page_rows), and the
+            // shell derives the active Emby library index from its own tab
+            // state and runs `App::move_lib_cursor_rows` — the same call
+            // the legacy `handle_lib_key` movement arms made — applying the
+            // App's own painted column stride. Calling the App method, never
+            // a raw cursor-field write, preserves `save_default_library_position` /
+            // `mark_library_navigation` / `maybe_fetch_next_page` /
+            // `last_nav_at` idle side effects byte-for-byte. The legacy
+            // season-grid branch is unreachable here (the Browser mount
+            // gate excludes TV).
+            ShellRequest::BrowserMoveRows { rows } => self.app.move_lib_cursor_rows(lib_idx, rows),
+            // Left/Right/h/l move the App cursor within a row on a
+            // multi-column list (task 5.3d, Emby browser local navigation):
+            // the component reports the column delta it already applied, and
+            // the shell runs `App::move_lib_cursor` — the same call the
+            // legacy `handle_lib_key` column arms made, with the same
+            // navigation side effects as `BrowserMoveRows`.
+            ShellRequest::BrowserMoveColumn { delta } => self.app.move_lib_cursor(lib_idx, delta),
+            // Home/End jump the App cursor to the first/last item (task
+            // 5.3d, Emby browser local navigation): the component reports
+            // the jump direction it already applied, and the shell runs
+            // `App::jump_lib_cursor` — the same call the legacy
+            // `handle_lib_key` Home/End arms made, with the same navigation
+            // side effects as `BrowserMoveRows`.
+            ShellRequest::BrowserJumpCursor { to_end } => self.app.jump_lib_cursor(lib_idx, to_end),
             _ => {}
         }
     }
@@ -156,8 +184,10 @@ mod tests {
     use super::*;
     use crate::app::components::{BrowserComponent, LegacyTerminalEvent, Msg};
     use crate::app::render::make_movie_app;
-    use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{App, BrowseLevel, ContextAction, LibraryTab, TabSelection};
+    use crate::app::tests::{make_app_stub, make_item, make_items};
+    use crate::app::{App, BrowseLevel, ContextAction, LibraryTab, PanelMode, TabSelection};
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     /// Task 5.3d, Emby browser effect decoupling: `BrowserComponent` resolves
@@ -185,10 +215,12 @@ mod tests {
         let id = model.emby_browser_id.clone().expect("browser mounted");
 
         // Drive the component cursor onto the movie (index 1) while App's
-        // nav cursor stays parked on the folder (index 0).
+        // nav cursor stays parked on the folder (index 0). The movement key
+        // now returns the typed rows request (task 5.3d, Emby browser local
+        // navigation) — the component cursor still advances in place.
         assert!(matches!(
             drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE),
-            Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+            Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows: 1 }))
         ));
 
         // Enter: the component emits BrowserActivate for its own selected
@@ -545,10 +577,15 @@ mod tests {
                     modifiers: KeyModifiers::NONE,
                 }))
         };
-        let Some(Msg::Legacy(LegacyTerminalEvent::Key(key))) = message else {
-            panic!("browser movement should forward to the legacy handler");
+        // The focused browser's Down now routes through the typed rows
+        // request (task 5.3d, Emby browser local navigation) instead of
+        // forwarding the raw legacy key; the shell arm moves the App cursor
+        // through `App::move_lib_cursor_rows` the way `handle_lib_key` did.
+        let Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows })) = message else {
+            panic!("browser movement should emit the typed rows request");
         };
-        assert!(!model.app.handle_key(key));
+        assert_eq!(rows, 1, "Down must carry one display row");
+        model.handle_browser_request(ShellRequest::BrowserMoveRows { rows });
         model.sync_emby_browser();
         assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
         assert!(model
@@ -558,5 +595,188 @@ mod tests {
             .as_any()
             .downcast_ref::<BrowserComponent>()
             .is_some());
+    }
+
+    /// Task 5.3d, Emby browser local navigation through the Model boundary:
+    /// the focused `BrowserComponent` returns typed `BrowserMoveRows` /
+    /// `BrowserMoveColumn` / `BrowserJumpCursor` requests in place of the
+    /// raw legacy key, and the shell derives the active Emby library index
+    /// from its own tab state and runs the same `App` cursor methods the
+    /// legacy `handle_lib_key` movement arms call. The App cursor must move
+    /// through that typed path (never a raw cursor-field write): a
+    /// two-column painted list strides the App cursor by the column count
+    /// per row (Down +2), Home/End jump to the first/last item, and
+    /// Left/Right move within the row; a one-column list keeps Left/Right/
+    /// h/l unbound (raw key still forwarded as `Msg::Legacy`, App cursor
+    /// unchanged) while the row keys keep their typed stride of one.
+    #[test]
+    fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = browser_app_with_flat_movies(10);
+        // LibraryOnly hides the queue column so the library pane spans the
+        // full window and clears the two-column threshold at render width;
+        // the panel mode is a state the app already supports, not hand-set
+        // layout rects (the whole frame is painted into a TestBackend).
+        app.panel_mode = PanelMode::LibraryOnly;
+        let mut model = Model::new(app);
+        model.sync_emby_browser();
+        let id = model.emby_browser_id.clone().expect("browser mounted");
+
+        // Paint the App and the mounted browser at 150 columns: both derive
+        // the same two-column stride from the same painted geometry (the
+        // generic library never takes the wide-Movies 1-column rail).
+        render_browser_model(&mut model, 150, 40);
+        model.sync_emby_browser();
+
+        // Down: the focused component returns `BrowserMoveRows { rows: 1 }`
+        // (one display row, in place of the raw key), and the shell runs
+        // `App::move_lib_cursor_rows` — its own painted two-column stride
+        // lands the App cursor on item 2, exactly like the legacy arm.
+        let Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows })) =
+            drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE)
+        else {
+            panic!("focused browser Down must emit BrowserMoveRows, got no typed request");
+        };
+        assert_eq!(rows, 1, "Down must carry one display row");
+        model.handle_browser_request(ShellRequest::BrowserMoveRows { rows });
+        assert_eq!(
+            model.app.libs[0].nav_stack[0].cursor, 2,
+            "two-column Down must move the App cursor two items via move_lib_cursor_rows"
+        );
+
+        // End/Home jump the App cursor to the last/first item through
+        // `App::jump_lib_cursor`.
+        let Some(Msg::Shell(ShellRequest::BrowserJumpCursor { to_end })) =
+            drive_browser_key(&mut model, &id, Key::End, KeyModifiers::NONE)
+        else {
+            panic!("focused browser End must emit BrowserJumpCursor, got no typed request");
+        };
+        assert!(to_end, "End must carry to_end: true");
+        model.handle_browser_request(ShellRequest::BrowserJumpCursor { to_end });
+        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 9);
+        let Some(Msg::Shell(ShellRequest::BrowserJumpCursor { to_end })) =
+            drive_browser_key(&mut model, &id, Key::Home, KeyModifiers::NONE)
+        else {
+            panic!("focused browser Home must emit BrowserJumpCursor, got no typed request");
+        };
+        assert!(!to_end, "Home must carry to_end: false");
+        model.handle_browser_request(ShellRequest::BrowserJumpCursor { to_end });
+        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
+
+        // Right/Left move the App cursor within the row via
+        // `App::move_lib_cursor` (the two-column list claims them).
+        let Some(Msg::Shell(ShellRequest::BrowserMoveColumn { delta })) =
+            drive_browser_key(&mut model, &id, Key::Right, KeyModifiers::NONE)
+        else {
+            panic!("focused two-column browser Right must emit BrowserMoveColumn, got no typed request");
+        };
+        assert_eq!(delta, 1, "Right must carry +1");
+        model.handle_browser_request(ShellRequest::BrowserMoveColumn { delta });
+        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
+        let Some(Msg::Shell(ShellRequest::BrowserMoveColumn { delta })) =
+            drive_browser_key(&mut model, &id, Key::Char('h'), KeyModifiers::NONE)
+        else {
+            panic!(
+                "focused two-column browser h must emit BrowserMoveColumn, got no typed request"
+            );
+        };
+        assert_eq!(delta, -1, "h must carry -1");
+        model.handle_browser_request(ShellRequest::BrowserMoveColumn { delta });
+        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
+
+        // One-column list (queue panel restored at a width whose library
+        // pane stays below the 82-column threshold): Left/Right/h/l stay
+        // unbound locally and still forward `Msg::Legacy` — no movement
+        // request, App cursor unchanged — while the row keys keep their
+        // typed stride of one item.
+        model.app.panel_mode = PanelMode::Both;
+        render_browser_model(&mut model, 100, 40);
+        model.sync_emby_browser();
+        for key in [Key::Left, Key::Right, Key::Char('h'), Key::Char('l')] {
+            assert!(
+                matches!(
+                    drive_browser_key(&mut model, &id, key, KeyModifiers::NONE),
+                    Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+                ),
+                "one-column focused {key:?} must fall through to Msg::Legacy"
+            );
+        }
+        let comp_cursor = model
+            .application
+            .get_component(&id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<BrowserComponent>()
+            .unwrap()
+            .cursor();
+        assert_eq!(
+            comp_cursor, 0,
+            "one-column Left/Right/h/l must not move the component cursor"
+        );
+        assert_eq!(
+            model.app.libs[0].nav_stack[0].cursor, 0,
+            "one-column Left/Right/h/l must not move the App cursor"
+        );
+        let Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows })) =
+            drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE)
+        else {
+            panic!("focused one-column browser Down must still emit BrowserMoveRows, got no typed request");
+        };
+        assert_eq!(rows, 1);
+        model.handle_browser_request(ShellRequest::BrowserMoveRows { rows });
+        assert_eq!(
+            model.app.libs[0].nav_stack[0].cursor, 1,
+            "one-column Down must stride the App cursor one item"
+        );
+    }
+
+    /// Paint the App base frame and then the mounted Emby browser into a
+    /// `TestBackend` of the given size — the same two-step the live shell's
+    /// draw closure performs, so the App layout and the component's own
+    /// painted `LayoutMain` agree on the column stride.
+    fn render_browser_model(model: &mut Model, width: u16, height: u16) {
+        let backend = TestBackend::new(width, height);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            model.app.render(f);
+            model.render_emby_browser_component(f);
+        })
+        .unwrap();
+    }
+
+    /// A generic (non-Movies) Emby library with `n` flat Movie items: below
+    /// the 82-column breakpoint it never takes the wide-Movies hero-on-left
+    /// rail, so whatever column count the painted pane derives is the plain
+    /// flat-list stride for both the App and the mounted browser.
+    fn browser_app_with_flat_movies(n: usize) -> App {
+        let mut app = make_app_stub();
+        app.tab = TabSelection::EmbyLibrary(0);
+
+        let mut library = make_item("Films", "CollectionFolder");
+        library.id = "lib-films".into();
+        library.is_folder = true;
+        library.collection_type = "generic".into();
+
+        app.libs.push(LibraryTab {
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-films".into(),
+                title: "Films".into(),
+                items: make_items(n),
+                total_count: n,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+                music_grouping: None,
+            }],
+            ..LibraryTab::new(library)
+        });
+
+        app
     }
 }

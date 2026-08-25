@@ -683,7 +683,10 @@ impl Model {
                             | ShellRequest::BrowserRefresh
                             | ShellRequest::BrowserRescan
                             | ShellRequest::BrowserBack
-                            | ShellRequest::BrowserCycleLetterPill { .. }),
+                            | ShellRequest::BrowserCycleLetterPill { .. }
+                            | ShellRequest::BrowserMoveRows { .. }
+                            | ShellRequest::BrowserMoveColumn { .. }
+                            | ShellRequest::BrowserJumpCursor { .. }),
                         ) => self.handle_browser_request(request),
                         Msg::Shell(ShellRequest::BrowserClick { region, col, row }) => match region
                         {

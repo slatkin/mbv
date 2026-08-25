@@ -107,43 +107,67 @@ impl BrowserComponent {
             }
             _ => {}
         }
-        // Local keyboard navigation mirrors the legacy generic/Movies/
-        // home-video `App::move_lib_cursor_rows`/`jump_lib_cursor`
-        // movement while BOTH paths still coexist (task 5.3d prep): the
-        // component mutates only its own `self.cursor` through the row/
-        // column helpers below, and the key is still forwarded as
-        // `Msg::Legacy` at the bottom so the App cursor mirrors the same
-        // movement. Focused-gated exactly like the legacy Library-panel
-        // gate: while unfocused (Queue/playback own panel focus) the
-        // component does not touch its cursor and the raw key passes
-        // through unchanged, keeping those surfaces authoritative.
+        // Local keyboard navigation routes through typed `ShellRequest`s
+        // (task 5.3d): the component mutates only its own `self.cursor`
+        // through the row/column helpers below, then returns the typed
+        // request in place of the raw key so the shell drives the App
+        // cursor through the same `App::move_lib_cursor_rows` /
+        // `App::move_lib_cursor` / `App::jump_lib_cursor` methods the
+        // legacy `handle_lib_key` movement arms call — never in addition to
+        // the raw key (no double movement). Focused-gated exactly like the
+        // legacy Library-panel gate: while unfocused (Queue/playback own
+        // panel focus) the component does not touch its cursor and the raw
+        // key passes through unchanged, keeping those surfaces
+        // authoritative.
         if self.focused {
             match key.code {
                 crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Char('k') => {
-                    self.move_rows(-1)
+                    self.move_rows(-1);
+                    return Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows: -1 }));
                 }
                 crossterm::event::KeyCode::Down | crossterm::event::KeyCode::Char('j') => {
-                    self.move_rows(1)
+                    self.move_rows(1);
+                    return Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows: 1 }));
                 }
-                crossterm::event::KeyCode::PageUp => self.move_rows(-self.page_rows()),
-                crossterm::event::KeyCode::PageDown => self.move_rows(self.page_rows()),
-                crossterm::event::KeyCode::Home => self.jump_cursor(false),
-                crossterm::event::KeyCode::End => self.jump_cursor(true),
+                crossterm::event::KeyCode::PageUp => {
+                    let rows = -self.page_rows();
+                    self.move_rows(rows);
+                    return Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows }));
+                }
+                crossterm::event::KeyCode::PageDown => {
+                    let rows = self.page_rows();
+                    self.move_rows(rows);
+                    return Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows }));
+                }
+                crossterm::event::KeyCode::Home => {
+                    self.jump_cursor(false);
+                    return Some(Msg::Shell(ShellRequest::BrowserJumpCursor {
+                        to_end: false,
+                    }));
+                }
+                crossterm::event::KeyCode::End => {
+                    self.jump_cursor(true);
+                    return Some(Msg::Shell(ShellRequest::BrowserJumpCursor { to_end: true }));
+                }
                 // Column navigation applies only to a painted list with
                 // more than one column (the legacy
                 // `current_library_columns(lib_idx) > 1` guard): a
                 // one-column list leaves Left/Right/h/l unbound locally
-                // and the raw key still falls through to the legacy
-                // bridge below.
+                // (legacy `handle_lib_key` does not claim them in 1-col
+                // either — they fall through to other CONTEXT_STACK
+                // handlers), so they emit no movement request and the raw
+                // key is still forwarded to the legacy bridge below.
                 crossterm::event::KeyCode::Left | crossterm::event::KeyCode::Char('h')
                     if self.columns() > 1 =>
                 {
-                    self.move_cursor_delta(-1)
+                    self.move_cursor_delta(-1);
+                    return Some(Msg::Shell(ShellRequest::BrowserMoveColumn { delta: -1 }));
                 }
                 crossterm::event::KeyCode::Right | crossterm::event::KeyCode::Char('l')
                     if self.columns() > 1 =>
                 {
-                    self.move_cursor_delta(1)
+                    self.move_cursor_delta(1);
+                    return Some(Msg::Shell(ShellRequest::BrowserMoveColumn { delta: 1 }));
                 }
                 _ => {}
             }
