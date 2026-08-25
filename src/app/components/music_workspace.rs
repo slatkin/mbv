@@ -30,6 +30,7 @@ pub struct MusicWorkspaceComponent {
     last_mirrored_track: Option<usize>,
     layout: LayoutMain,
     image_paint: Option<MusicImagePaint>,
+    inline_track_focus_enabled: bool,
 }
 
 impl MusicWorkspaceComponent {
@@ -59,6 +60,14 @@ impl MusicWorkspaceComponent {
             last_mirrored_track: None,
             layout: LayoutMain::default(),
             image_paint: None,
+            inline_track_focus_enabled: false,
+        }
+    }
+
+    pub(in crate::app) fn set_inline_track_focus_enabled(&mut self, enabled: bool) {
+        self.inline_track_focus_enabled = enabled;
+        if !enabled {
+            self.track_cursor = None;
         }
     }
 
@@ -129,11 +138,12 @@ impl MusicWorkspaceComponent {
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
         match key.code {
             Key::Enter if self.track_cursor.is_none() => {
-                if self
-                    .context
-                    .album_tracks
-                    .as_ref()
-                    .is_some_and(|tracks| !tracks.is_empty())
+                if self.inline_track_focus_enabled
+                    && self
+                        .context
+                        .album_tracks
+                        .as_ref()
+                        .is_some_and(|tracks| !tracks.is_empty())
                 {
                     self.track_cursor = Some(0);
                 }

@@ -82,6 +82,35 @@ fn music_workspace_vertical_move_follows_album_display_order() {
 }
 
 #[test]
+fn music_workspace_enter_ignored_when_inline_track_focus_disabled() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+    let message = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.track_cursor(), None);
+    assert!(matches!(
+        message,
+        Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+    ));
+}
+
+#[test]
+fn music_workspace_enter_sets_track_cursor_when_inline_track_focus_enabled() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+    component.set_inline_track_focus_enabled(true);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.track_cursor(), Some(0));
+    component.set_inline_track_focus_enabled(false);
+    assert_eq!(component.track_cursor(), None);
+}
+
+#[test]
 fn music_workspace_renders_without_app() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_content(context(None));

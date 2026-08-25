@@ -48,10 +48,12 @@ impl Model {
         };
         let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index);
         let columns = self.app.current_library_columns(index);
+        let wide = self.app.layout.main.is_wide_music_active();
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(music) = comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>() {
                 music.set_content(context);
                 music.set_album_columns(columns);
+                music.set_inline_track_focus_enabled(wide);
             }
         }
     }
@@ -122,5 +124,67 @@ mod tests {
             .expect("narrow Music workspace mounted");
         assert!(model.application.mounted(&id));
         assert_eq!(model.app.layout.main.wide_music_area, wide_area);
+    }
+
+    #[test]
+    fn narrow_music_workspace_ignores_enter_for_inline_track_focus() {
+        let mut model = Model::new(make_music_group_app());
+        assert!(!model.app.layout.main.is_wide_music_active());
+        model.sync_music_workspace();
+        let id = model
+            .music_workspace_id
+            .clone()
+            .expect("narrow Music workspace mounted");
+        model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Enter,
+                modifiers: KeyModifiers::NONE,
+            }));
+        let component = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<MusicWorkspaceComponent>()
+            .unwrap();
+        assert_eq!(component.track_cursor(), None);
+    }
+
+    #[test]
+    fn wide_music_workspace_allows_enter_for_inline_track_focus() {
+        let mut model = Model::new(make_music_group_app());
+        let mut track = crate::app::tests::make_item("Track One", "Audio");
+        track.id = "track-1".into();
+        model
+            .app
+            .album_tracks_cache
+            .insert("album-1".into(), vec![track]);
+        model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+        model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+        assert!(model.app.layout.main.is_wide_music_active());
+        model.sync_music_workspace();
+        let id = model
+            .music_workspace_id
+            .clone()
+            .expect("wide Music workspace mounted");
+        model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Enter,
+                modifiers: KeyModifiers::NONE,
+            }));
+        let component = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<MusicWorkspaceComponent>()
+            .unwrap();
+        assert_eq!(component.track_cursor(), Some(0));
     }
 }
