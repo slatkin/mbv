@@ -109,6 +109,39 @@ still emit `Msg::Legacy(...)` / `ShellRequest::*Key` / `NoOp`.
   cursor/section/scroll fields, the legacy Home renderer, `handle_key_home`,
   `CONTEXT_STACK`, and `LegacyInput` all remain. One focused Model-boundary
   test drives each typed effect.
+- **5.3d re-home** `0d93e43f` — full `App.home`/`App.home_loading` deletion;
+  Home content (continue-items, per-pill latest, CW column cursor) + the
+  loading flag move to new Model-owned `HomeContent`
+  (`Model.home_content`, `types_playback.rs`). Delivery mechanism: the fetch
+  is never deferred — `fetch_home` computes and returns `HomeContent`
+  synchronously (its App-side side effects are order-sensitive), shell-side
+  callers (startup `fetch_home_at_startup`, multiselect commit) assign the
+  return directly; App-internal writers deliver through lib_tx/lib_rx via
+  `LibEvent::HomeContentRefreshed(Box<HomeContent>)` (context-menu
+  refresh/remove/toggle, `refresh_after_stop`, `UserDataChanged`),
+  `HomeContentCleared` (`clear_emby_memory`), and the section-delta variants
+  `AudiobookshelfLatestRebuilt`/`FeedsLatestRebuilt` (shelf-fetch / feed
+  drain; the ABS delta is drained in the same lib_rx pass, the Feeds delta
+  one loop pass later — a bounded one-iteration latency on the Feeds pill,
+  the known residual). `apply_emby_completion`/`apply_emby_setup_completion`
+  now return `Option<HomeContent>` (bootstrap merges Emby pills into the
+  shell-supplied current `latest`; `None` on stale/error/replace-decline).
+  `push_home_content` + all 11 phase-1 seams read `home_content`; the
+  persisted-pill restore and semantic-pref reconcile are untouched
+  (`home_section_*` stay in App; `save_prefs` untouched). Effects take
+  resolved items at the boundary: `home_play_target`/`home_enqueue_target`
+  (shell resolves the flat cursor via `Model::home_flat_target`),
+  `cw_play`/`cw_enqueue`/`cw_toggle_watched`/`remove_from_continue_watching`
+  take the CW item (`Model::home_cw_item`), and the CW item is threaded
+  through the keyboard `CONTEXT_STACK` (`handle_key_with_home_context` +
+  every handler) and `build_context_menu_for`/`open_context_menu*` for the
+  `.`-on-Home and queue-coupling menus; `cw_move_cursor` is now a Model
+  method over `home_content` with the identical clamp. Render legacy branch
+  deleted (`render_list` is only reached under EmbyLibrary).
+  `Model`-side Home content helpers live in new `shell_home_content.rs`
+  (assign/merge/clear/resolve/drain methods keep `shell.rs`/`shell_home.rs`
+  net-delta ≤ 0). Tests adapt to the returned-content/Model-hosted APIs.
+  Ledger Home row stays `component` (2a owns no ledger edit).
 
 **Not yet landed** (remain, in required order): the per-surface interaction
 mirrors whose `App` state still holds the cursor (`sync_home`,
