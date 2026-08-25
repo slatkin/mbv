@@ -251,6 +251,26 @@ contributing surface's group 2–4 conversion to have landed.
     132 refs. One unit; the three share a parent and a dismissal path.
 - [ ] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters.
   Dispatched as named units, sized on the same files-forced-open basis as 5.3c:
+
+  **Verification policy for the remaining units (decided 2026-08-25).** The
+  compiler is the primary gate: `layout.main.*` alone is 158 production refs
+  across 34 files, and deleting a field turns every stale reader into a build
+  error — coverage no test suite here approaches. The per-unit gate is
+  therefore `rtk cargo check -p mbv`, `rtk cargo clippy --workspace
+  --all-targets`, `rtk cargo nextest run -p mbv` (existing coverage only),
+  `rtk ast-grep scan`, and `rtk make check-code-file-lines`, with the
+  maintainer's manual pass as acceptance. Do **not** write
+  behaviour-preservation tests. This migration moves behaviour that has already
+  drifted, so a test asserting current output pins the drift and will be
+  "fixed" back the next time the underlying bug is addressed. Differential
+  tests — two paths agree, no expected values encoded — are permitted only
+  while both paths coexist, and are deleted together with the second path.
+  Mouse units must never assert against a hand-set `layout.main.*` rect: a
+  fabricated coordinate tests arithmetic against itself and can pass while the
+  real app hits the wrong row. If a mouse test is written at all, it renders
+  into a `TestBackend` at a known size and hit-tests the geometry that render
+  produced. Regression tests for defects introduced *by* the migration are the
+  one exception and are kept.
   - [x] *Album cursor prep* — settle the narrow-mode question (mount
     `MusicWorkspaceComponent` in narrow, or prove the narrow path cannot reach a
     `Some`), then move `render/screens/album_cursor.rs`'s three
@@ -280,13 +300,32 @@ contributing surface's group 2–4 conversion to have landed.
     `handle_mouse_scroll_browse`. Behaviour-neutral, deletes no field. This is
     what makes the twelve *Mouse geometry* agents independent — today they would
     all edit the same four nested matches.
-  - [ ] *Mouse geometry* — **not one unit.** `layout.main.*` is read across 43
-    files (264 refs; 30 sites in `input_mouse.rs`, 16 in
-    `input_mouse_dispatch.rs`, 13 in `lib_cursor_actions.rs`) and 12 components
-    still forward mouse to legacy. Dispatch **one component's `hit_test` per
-    agent**; `AppLayout` and the three `input_mouse*.rs` files are deleted by the
-    last one, not the first. Requires 5.3c. Merge 5.4's six proofs into this
-    lane — they assert exactly what it delivers.
+  - [ ] *Mouse geometry* — **not one unit.** Re-counted 2026-08-25: 215
+    `layout.main.*` refs across 41 files (158 production across 34 files, 57
+    test across 7), and **nine** components still forward mouse to legacy, none
+    of which has a `hit_test` today: `browser`, `confirm`, `daemon_lost`,
+    `home`, `music_workspace`, `playback_prompt`, `queue`, `remote_reanchor`,
+    `tv_workspace`. (`legacy_input.rs` matches the same grep but is the bridge,
+    not a surface; the earlier "12 components" predates three landed units.)
+    Seven units, six to eleven runs depending on bundling. Requires 5.3c and
+    *Mouse gesture prep*:
+    - [ ] `browser` `hit_test` — real row/hit geometry, one unit.
+    - [ ] `home` `hit_test` — real row/hit geometry, one unit.
+    - [ ] `queue` `hit_test` — real row/hit geometry, one unit.
+    - [ ] `tv_workspace` `hit_test` — two focusable panes, one unit.
+    - [ ] `music_workspace` `hit_test` — album grid plus inline track list.
+    - [ ] Blocking modals and prompt — `confirm`, `daemon_lost`,
+      `remote_reanchor`, `playback_prompt`. Geometry is a containment check
+      against a single rect (two legacy-mouse refs each), so these share one
+      unit; split only if one proves to have real geometry.
+    - [ ] Framework deletion — `input_mouse.rs` (653 lines),
+      `input_mouse_dispatch.rs` (406), `input_mouse_gestures.rs` (172), and
+      `AppLayout`. Cannot start until the nine surfaces above land: the
+      ordering is one-directional, so this lane parallelises at the start and
+      not at the end. Existing mouse tests that hand-set `layout.main.*`
+      (`tests_mouse_browse_dispatch.rs` at 18 refs, plus the other six test
+      files holding the remaining 57) are deleted with the fields they
+      reference, not ported.
   - [ ] *Mirrors and framework* — delete the 29 `sync_*` (28 files), then
     `CONTEXT_STACK`, then `LegacyInput`, in that order. Mechanical, and shrinks
     as every unit above lands. Requires everything.
@@ -312,7 +351,14 @@ contributing surface's group 2–4 conversion to have landed.
   resets (lines 98, 147, 206 and the gate at 166) are the same reset this
   teardown has to re-home anyway. Whichever narrow-mode answer the previous
   paragraph settles on governs both. Verify `rtk cargo check -p mbv` and that no `impl App` interaction handler and no component-local `App` field remains for any surface.
-- [ ] 5.4 Confirm every mouse path reads component-owned geometry (no global hit map); verify the six precedence/mouse proofs (blocking-overlay swallow, parent/global precedence, simultaneous Queue+Library mouse, overlay blocks underlying mutation, deterministic focus restoration, geometry cannot drift) as tests.
+- [ ] 5.4 Confirm every mouse path reads component-owned geometry (no global hit map); verify the six precedence/mouse proofs (blocking-overlay swallow, parent/global precedence, simultaneous Queue+Library mouse, overlay blocks underlying mutation, deterministic focus restoration, geometry cannot drift).
+  **Runs inside the *Mouse geometry* lane's final Framework-deletion unit, not
+  as a separate lane** — it asserts exactly what that unit delivers. Under the
+  verification policy recorded at 5.3d, "geometry cannot drift" is a
+  structural check (`rtk ast-grep scan` plus the absence of `AppLayout` and
+  the three `input_mouse*.rs` files), not a behaviour test, and none of the
+  six may be written as a hand-set-coordinate mouse test. Decide the
+  table-vs-runtime question below **before** that unit starts, not after.
   `KEY_POLICY` and `KeyPolicyGate::sub_clause()` are referenced nowhere outside
   `key_policy.rs`'s own ordering test — the file still carries
   `#![allow(dead_code)]`. 5.2 turned the gate descriptions into real
