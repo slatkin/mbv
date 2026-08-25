@@ -151,6 +151,19 @@ impl BrowserComponent {
                 crossterm::event::KeyCode::Char('.') => {
                     selected.map(|item| ShellRequest::BrowserContextMenu { item })
                 }
+                // Ctrl+S shuffles the component-selected item (task 5.3d,
+                // Emby browser shuffle decoupling). Control-modifier guarded
+                // exactly as the legacy `handle_lib_key` arm it replaces; when
+                // no item is selected the key is forwarded to the legacy
+                // bridge below, which shuffles the current browse-level parent
+                // through `shuffle_play` exactly as before.
+                crossterm::event::KeyCode::Char('s')
+                    if key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                {
+                    selected.map(|item| ShellRequest::BrowserShuffle { item })
+                }
                 _ => None,
             };
             // The component owns the selection: the item is resolved at the

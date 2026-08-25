@@ -31,6 +31,13 @@ impl Model {
             // guards that this is an EmbyLibrary tab), never a `BrowseLevel`
             // cursor re-read.
             ShellRequest::BrowserContextMenu { item } => self.app.open_context_menu_for(item),
+            // Ctrl+S shuffles the supplied item with the preserved
+            // `shuffle_play` tail: a folder item shuffles the folder itself;
+            // a non-folder item shuffles the current browse level's parent
+            // (falling back to the library id). The folder target comes from
+            // the component-resolved item, never a `BrowseLevel.cursor`
+            // re-read.
+            ShellRequest::BrowserShuffle { item } => self.app.shuffle_play_selected(lib_idx, item),
             _ => {}
         }
     }
@@ -251,6 +258,23 @@ mod tests {
                     | ContextAction::EnqueueFolder(_)
             )),
             "context menu must target the supplied movie, not the parked folder, got: {actions:?}"
+        );
+
+        // Ctrl+S: the component emits BrowserShuffle carrying its own
+        // selected movie — not the parked folder that a legacy `shuffle_play`
+        // on the App cursor would have resolved. The shell's preserved
+        // `shuffle_play` tail then takes the non-folder branch (current
+        // browse-level parent) for the supplied movie; the emitted payload is
+        // decisive that the component-local cursor selected the target.
+        model.app.status.clear();
+        let Some(Msg::Shell(ShellRequest::BrowserShuffle { item })) =
+            drive_browser_key(&mut model, &id, Key::Char('s'), KeyModifiers::CONTROL)
+        else {
+            panic!("browser Ctrl+S must emit BrowserShuffle, got no typed request");
+        };
+        assert_eq!(
+            item.id, "movie-b",
+            "shuffle must carry the component-selected movie, not the parked BrowseLevel.cursor folder"
         );
     }
 

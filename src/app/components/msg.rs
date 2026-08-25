@@ -428,6 +428,16 @@ pub enum ShellRequest {
     BrowserContextMenu {
         item: EmbyItem,
     },
+    /// Ctrl+S on the mounted generic/Movies/home-video `BrowserComponent`
+    /// (task 5.3d, Emby browser shuffle decoupling): the component resolves
+    /// its own selected `EmbyItem` from its component-local cursor/content,
+    /// and the shell shuffles that supplied item — the folder itself when it
+    /// is a folder, otherwise the current browse level's parent (falling back
+    /// to the library id) — via the preserved `shuffle_play` tail, never by
+    /// re-reading `BrowseLevel.cursor`.
+    BrowserShuffle {
+        item: EmbyItem,
+    },
 }
 
 /// Region of the generic Emby browser a click resolved to, reported by

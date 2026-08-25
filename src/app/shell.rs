@@ -678,7 +678,8 @@ impl Model {
                             | ShellRequest::BrowserPlay { .. }
                             | ShellRequest::BrowserEnqueue { .. }
                             | ShellRequest::BrowserToggleWatched { .. }
-                            | ShellRequest::BrowserContextMenu { .. }),
+                            | ShellRequest::BrowserContextMenu { .. }
+                            | ShellRequest::BrowserShuffle { .. }),
                         ) => self.handle_browser_request(request),
                         Msg::Shell(ShellRequest::BrowserClick { region, col, row }) => match region
                         {

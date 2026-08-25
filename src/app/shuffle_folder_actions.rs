@@ -1,6 +1,7 @@
 use super::notify_actions::ToastSeverity;
 use super::ui_util::natural_sort_key;
 use super::{App, PanelFocus};
+use mbv_core::api::EmbyItem;
 use rand::seq::SliceRandom;
 
 impl App {
@@ -12,16 +13,56 @@ impl App {
         if lib_idx >= self.libs.len() {
             return;
         }
+        // Resolve the folder target at the selected browse item, delegating
+        // the current-parent fallback to the shared tail below. Cloning this
+        // resolution into a `shuffle_play_target` call keeps the legacy
+        // `shuffle_play(lib_idx)` behaviour byte-for-byte identical while
+        // letting the component-sourced browser Ctrl+S path reuse the same
+        // explicit-target tail without this cursor read.
         let parent_id = {
             let lib = &self.libs[lib_idx];
             let item = lib
                 .nav_stack
                 .last()
                 .and_then(|lvl| lvl.items.get(lvl.cursor));
-            item.filter(|i| i.is_folder)
-                .map(|i| i.id.clone())
-                .or_else(|| lib.nav_stack.last().map(|l| l.parent_id.clone()))
-                .unwrap_or_else(|| lib.library.id.clone())
+            item.filter(|i| i.is_folder).map(|i| i.id.clone())
+        };
+        self.shuffle_play_target(lib_idx, parent_id);
+    }
+
+    /// Shuffle from the generic Emby browser's component-resolved selected
+    /// item (task 5.3d, Emby browser shuffle decoupling). `BrowserComponent`
+    /// resolved the item at its component-local cursor; when that item is a
+    /// folder the folder itself is shuffled, otherwise the current browse
+    /// level's parent is shuffled (falling back to the library id exactly as
+    /// `shuffle_play` did). The folder target comes from the supplied item,
+    /// never from re-reading `BrowseLevel.cursor`.
+    pub(super) fn shuffle_play_selected(&mut self, lib_idx: usize, item: EmbyItem) {
+        let explicit_folder = item.is_folder.then_some(item.id.clone());
+        self.shuffle_play_target(lib_idx, explicit_folder);
+    }
+
+    /// Shared explicit-target tail for both shuffle entry points. `explicit_folder`
+    /// is the folder id to shuffle when the caller already knows the selected
+    /// item is a folder (the typed browser path supplies it from the
+    /// component-resolved item); when `None`, the current browse level's
+    /// parent is shuffled, falling back to the library id exactly as the
+    /// legacy `shuffle_play` did.
+    fn shuffle_play_target(&mut self, lib_idx: usize, explicit_folder: Option<String>) {
+        // Defensive bounds check (see `shuffle_play` comment; the shell also
+        // derives a fresh `lib_idx`, so a synchronous tab change can race in).
+        if lib_idx >= self.libs.len() {
+            return;
+        }
+        let parent_id = match explicit_folder {
+            Some(id) => id,
+            None => {
+                let lib = &self.libs[lib_idx];
+                lib.nav_stack
+                    .last()
+                    .map(|l| l.parent_id.clone())
+                    .unwrap_or_else(|| lib.library.id.clone())
+            }
         };
         // Delegate to the same fetch the context menu's Shuffle action uses
         // (`ContextAction::ShuffleFolder` -> `shuffle_folder`), rather than
