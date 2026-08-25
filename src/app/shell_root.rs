@@ -2,29 +2,18 @@ use super::components::{ComponentId, ModalId, OverlayId, PopupId, UiRootComponen
 use super::shell::Model;
 
 impl Model {
-    pub(super) fn sync_overlay_stack(&mut self) {
-        let mounted: Vec<_> = UiRootComponent::overlay_ids()
+    /// Overlay paint order is the canonical `OVERLAY_IDS` order filtered by
+    /// mount state (the deleted `sync_overlay_stack`/`UiRootComponent::sync_overlay_order`
+    /// mirror kept a retained mount order; TuiRealm's native LIFO focus stack
+    /// owns actual stacking, so the paint order only needs to be a stable
+    /// canonical order — task 5.3d).
+    pub(super) fn render_overlay_stack(&mut self, frame: &mut ratatui::Frame) {
+        let mounted: Vec<ComponentId> = UiRootComponent::overlay_ids()
             .iter()
             .filter(|id| self.application.mounted(id))
             .cloned()
             .collect();
-        if let Some(component) = self.application.get_component_mut(&ComponentId::UiRoot) {
-            if let Some(root) = component.as_any_mut().downcast_mut::<UiRootComponent>() {
-                root.sync_overlay_order(&mounted);
-            }
-        }
-    }
-
-    pub(super) fn overlay_stack(&self) -> Vec<ComponentId> {
-        self.application
-            .get_component(&ComponentId::UiRoot)
-            .and_then(|component| component.as_any().downcast_ref::<UiRootComponent>())
-            .map(|root| root.overlay_order().to_vec())
-            .unwrap_or_default()
-    }
-
-    pub(super) fn render_overlay_stack(&mut self, frame: &mut ratatui::Frame) {
-        for id in self.overlay_stack() {
+        for id in mounted {
             match id {
                 ComponentId::Overlay(OverlayId::Settings) => self.render_settings_overlay(frame),
                 ComponentId::Overlay(OverlayId::Playlists) => self.render_playlists_overlay(frame),

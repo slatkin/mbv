@@ -856,7 +856,6 @@ impl Model {
             self.sync_music_workspace();
             self.sync_inline_search();
             self.sync_library_parent();
-            self.sync_overlay_stack();
 
             self.app.expire_music_grouping_candidates();
             self.app.sync_volume_from_player();
