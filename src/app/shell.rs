@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
-use super::components::msg::{AlbumCursorKind, BrowserHitRegion};
+use super::components::msg::{AlbumCursorKind, BrowserHitRegion, HomeHitRegion};
 use super::components::{
     ComponentId, LegacyTerminalEvent, LibraryComponent, Msg, OverlayId, PlaybackComponent,
     ShellRequest, UiRootComponent, UserEvent,
@@ -648,6 +648,33 @@ impl Model {
                                             ratatui::layout::Position { x: col, y: row },
                                         );
                                     }
+                                } else {
+                                    self.app.click_set_cursor(col, row);
+                                }
+                            }
+                        },
+                        // Home (cross-Service) mouse geometry lives in
+                        // `HomeComponent`, which forwards the hit region; the
+                        // shell decides *when* it counts via `App`'s 400ms
+                        // double-click / 30ms wheel fields (task 5.3d, home
+                        // hit_test).
+                        Msg::Shell(ShellRequest::HomeScroll { delta }) => {
+                            if self.app.note_browse_scroll() {
+                                self.app.handle_mouse_scroll_browse(delta);
+                            }
+                        }
+                        Msg::Shell(ShellRequest::HomeClick { region, col, row }) => match region {
+                            HomeHitRegion::Pill(target) => {
+                                self.app.last_click_time = Instant::now();
+                                self.app.last_click_pos = (col, row);
+                                self.app.handle_mouse_selector_click_home(target);
+                            }
+                            HomeHitRegion::ContextMenu => {
+                                self.app.handle_mouse_right_click_home(col, row);
+                            }
+                            HomeHitRegion::Row => {
+                                if self.app.note_browse_double_click(col, row) {
+                                    self.app.handle_mouse_double_click_home(true);
                                 } else {
                                     self.app.click_set_cursor(col, row);
                                 }

@@ -310,7 +310,7 @@ contributing surface's group 2–4 conversion to have landed.
     Seven units, six to eleven runs depending on bundling. Requires 5.3c and
     *Mouse gesture prep*:
     - [x] `browser` `hit_test` — real row/hit geometry, one unit.
-    - [ ] `home` `hit_test` — real row/hit geometry, one unit.
+    - [x] `home` `hit_test` — real row/hit geometry, one unit.
     - [ ] `queue` `hit_test` — real row/hit geometry, one unit.
     - [ ] `tv_workspace` `hit_test` — two focusable panes, one unit.
     - [ ] `music_workspace` `hit_test` — album grid plus inline track list.

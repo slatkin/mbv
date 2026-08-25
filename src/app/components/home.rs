@@ -12,9 +12,10 @@
 //! to per-surface conversion, not yet built). Content is mirrored from the
 //! shell, while cursor/section/scroll state remains local to this component.
 //! `handle_crossterm_key`/`handle_crossterm_mouse` and the typed
-//! `ShellRequest::Home*` messages below are implemented and tested but not
-//! yet the live input path; they are the intended hand-off target for the
-//! follow-up task that gives Home real input ownership.
+//! `ShellRequest::Home*` messages below are the live input path: as the
+//! Library parent's active child on the Home tab, the component receives
+//! terminal events and claims Home's own gestures (task 5.3d, home hit_test;
+//! keyboard still falls through to the legacy `App::handle_key`).
 
 use ratatui::layout::Rect;
 use ratatui::Frame;
@@ -25,7 +26,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{HomeHitRegion, LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::HomeImagePaint;
 use crate::app::types_playback::HomeLatestSource;
@@ -52,8 +53,13 @@ pub struct HomeComponent {
     /// `take_image_paint` right after `application.view()` returns and
     /// paints it using `App::paint_home_image`.
     image_paint: Option<HomeImagePaint>,
-    last_click_time: Option<std::time::Instant>,
-    last_click_pos: (u16, u16),
+    /// The list area (`render_home_content`'s `left_area`) `view()` painted
+    /// the rows into. Rebuilt every `view` like `hitmap`/`pill_targets`; this
+    /// is Home's whole claim rect, so a click or wheel anywhere inside it is
+    /// reported to the shell as a typed `HomeClick`/`HomeScroll` (the shell
+    /// decides `App`'s cursor/focus/activation meaning). The component holds
+    /// no double-click or scroll timing state — `App` owns that.
+    list_area: Rect,
 }
 
 impl HomeComponent {
@@ -71,8 +77,7 @@ impl HomeComponent {
             hitmap: Vec::new(),
             pill_targets: Vec::new(),
             image_paint: None,
-            last_click_time: None,
-            last_click_pos: (0, 0),
+            list_area: Rect::default(),
         }
     }
 
@@ -341,55 +346,85 @@ impl HomeComponent {
     }
 
     /// Handle a mouse event using crossterm types directly. `None` means
-    /// the event isn't Home's to handle (outside its own painted geometry,
-    /// or a wheel scroll — see the wheel-scroll doc note below); the caller
-    /// falls through to the legacy mouse dispatch unchanged.
+    /// the event isn't Home's to handle (outside Home's own painted
+    /// geometry — tab bar, queue panel, playback controls, the hero in
+    /// two-column layout, ...); the caller falls through to the legacy
+    /// mouse dispatch unchanged.
+    ///
+    /// The component owns *where* a Home click lands: it hit-tests against
+    /// its own painted geometry (`list_area`, `hitmap`, `pill_targets`,
+    /// rebuilt every `view`) and emits a typed `Msg::Shell` naming the region.
+    /// It holds no double-click or scroll timing — the shell decides *when* a
+    /// click counts against `App`'s own timing fields. Wheel scroll over the
+    /// list area is claimed as `HomeScroll`: the legacy path's scroll also
+    /// moves the independent Continue Watching column's cursor
+    /// (`handle_mouse_scroll_browse` → `cw_move_cursor`), a pre-existing quirk
+    /// this migration preserves rather than fixes (task 5.3d, home hit_test).
     pub(in crate::app) fn handle_crossterm_mouse(
         &mut self,
         mouse: crossterm::event::MouseEvent,
     ) -> Option<Msg> {
         let pos: ratatui::layout::Position = (mouse.column, mouse.row).into();
         match mouse.kind {
+            crossterm::event::MouseEventKind::ScrollDown
+            | crossterm::event::MouseEventKind::ScrollUp => {
+                let delta: i64 = if matches!(mouse.kind, crossterm::event::MouseEventKind::ScrollUp)
+                {
+                    -1
+                } else {
+                    1
+                };
+                if self.list_area.contains(pos) {
+                    return Some(Msg::Shell(ShellRequest::HomeScroll { delta }));
+                }
+            }
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                let pill_hit = self
+                // Section pills sit above the list area; claim them before
+                // the row hit-test. `select_section` keeps the component's
+                // own render state (section/cursor) authoritative; the shell
+                // arm mirrors App's side via `home_select_section`.
+                if let Some(section_idx) = self
                     .pill_targets
                     .iter()
                     .find(|(rect, _)| rect.contains(pos))
-                    .map(|(_, section_idx)| *section_idx);
-                if let Some(section_idx) = pill_hit {
-                    let changed = self.select_section(section_idx);
-                    return Some(self.section_msg(changed));
+                    .map(|(_, section_idx)| *section_idx)
+                {
+                    self.select_section(section_idx);
+                    return Some(Msg::Shell(ShellRequest::HomeClick {
+                        region: HomeHitRegion::Pill(section_idx),
+                        col: mouse.column,
+                        row: mouse.row,
+                    }));
                 }
-                let row_hit = self
-                    .hitmap
-                    .iter()
-                    .find(|(rect, _)| rect.contains(pos))
-                    .map(|(_, flat_idx)| *flat_idx);
-                let Some(flat_idx) = row_hit else {
-                    // Outside Home's own geometry (tab bar, queue panel,
-                    // playback controls, ...): not Home's event.
-                    return None;
-                };
-                let now = std::time::Instant::now();
-                let is_double = self
-                    .last_click_time
-                    .is_some_and(|t| now.duration_since(t) < std::time::Duration::from_millis(400))
-                    && self.last_click_pos == (mouse.column, mouse.row);
-                self.last_click_time = Some(now);
-                self.last_click_pos = (mouse.column, mouse.row);
-                self.cursor = flat_idx;
-                if is_double {
-                    Some(Msg::Shell(ShellRequest::HomePlay(self.cursor)))
-                } else {
-                    Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                if self.list_area.contains(pos) {
+                    // Local highlight only: the authoritative cursor set
+                    // (row-map resolution, panel focus) stays in
+                    // `App::click_set_cursor`, reached via the `HomeClick`
+                    // shell arm.
+                    if let Some((_, flat_idx)) =
+                        self.hitmap.iter().find(|(rect, _)| rect.contains(pos))
+                    {
+                        self.cursor = *flat_idx;
+                    }
+                    return Some(Msg::Shell(ShellRequest::HomeClick {
+                        region: HomeHitRegion::Row,
+                        col: mouse.column,
+                        row: mouse.row,
+                    }));
                 }
             }
-            // Wheel scroll on Home does not move the flat cursor in the
-            // legacy path either (it moves the independent Continue
-            // Watching column's cursor instead, a pre-existing quirk this
-            // migration preserves rather than fixes): not Home's event.
-            _ => None,
+            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
+                if self.list_area.contains(pos) {
+                    return Some(Msg::Shell(ShellRequest::HomeClick {
+                        region: HomeHitRegion::ContextMenu,
+                        col: mouse.column,
+                        row: mouse.row,
+                    }));
+                }
+            }
+            _ => {}
         }
+        None
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
@@ -423,6 +458,7 @@ impl Component for HomeComponent {
         self.section = result.resolved_section;
         self.hitmap = result.hitmap;
         self.pill_targets = result.pill_targets;
+        self.list_area = result.left_area;
         self.image_paint = result.image_paint;
     }
 

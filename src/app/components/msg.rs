@@ -250,6 +250,26 @@ pub enum ShellRequest {
     /// Persist the newly selected Home pill (section index) as the restored
     /// preference, matching `home_select_section`'s `save_prefs` call.
     HomeSectionSelected(usize),
+    /// A Home-surface wheel scroll over the component's own list area
+    /// (`list_area`, rebuilt every `view`; task 5.3d, home hit_test). The
+    /// shell runs `App`'s 30ms wheel throttle against `App::last_scroll_at`
+    /// and then calls `App::handle_mouse_scroll_browse`; the component holds
+    /// no timing state.
+    HomeScroll {
+        delta: i64,
+    },
+    /// A Home-surface click the component resolved to a region of its own
+    /// geometry (task 5.3d, home hit_test). The component reports *where* it
+    /// landed; the shell decides *when* it counts — it runs `App`'s 400ms
+    /// double-click comparison against `App::last_click_time`/`last_click_pos`
+    /// and then calls the matching extracted gesture method
+    /// (`click_set_cursor`, `handle_mouse_double_click_home`,
+    /// `handle_mouse_right_click_home`, `handle_mouse_selector_click_home`).
+    HomeClick {
+        region: HomeHitRegion,
+        col: u16,
+        row: u16,
+    },
     /// Forward Audiobookshelf podcast effects to the legacy App handler while
     /// the browser's local state remains component-owned.
     AudiobookshelfPodcastKey(crossterm::event::KeyEvent),
@@ -317,5 +337,21 @@ pub enum BrowserHitRegion {
     /// Selector-tab pill; `target` is the pill index the component resolved.
     SelectorTab(usize),
     /// Right-click → Emby context menu after the row is focused.
+    ContextMenu,
+}
+
+/// Region of the Home surface a click resolved to, reported by
+/// `HomeComponent` (task 5.3d, home hit_test). The shell turns this plus
+/// `col`/`row` into the right gesture call; the component holds no double-click
+/// or scroll timing state of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HomeHitRegion {
+    /// The Home list area (`list_area`): a single click selects/focuses via
+    /// `App::click_set_cursor`, a double-click activates via
+    /// `App::handle_mouse_double_click_home` (the shell decides which).
+    Row,
+    /// Section pill; `target` is the section index the component resolved.
+    Pill(usize),
+    /// Right-click → Home context menu after the row is focused.
     ContextMenu,
 }
