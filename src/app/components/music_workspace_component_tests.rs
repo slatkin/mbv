@@ -1,4 +1,5 @@
 use super::music_workspace::MusicWorkspaceComponent;
+use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
 use crate::app::components::{LegacyTerminalEvent, Msg};
 use crate::app::render::{LibraryListRenderCtx, MusicWideRenderCtx};
 use crate::app::tests::make_item;
@@ -24,6 +25,33 @@ fn context(track_cursor: Option<usize>) -> MusicWideRenderCtx {
         true,
         true,
         Some(vec![track, second_track]),
+        false,
+        track_cursor,
+    )
+}
+
+fn grouped_context(
+    cursor: usize,
+    order: Vec<usize>,
+    focused: bool,
+    track_cursor: Option<usize>,
+) -> MusicWideRenderCtx {
+    let albums: Vec<_> = (0..4)
+        .map(|index| make_item(&format!("Album {index}"), "MusicAlbum"))
+        .collect();
+    MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(albums.clone(), cursor, 0),
+        Some(albums[cursor].clone()),
+        "Artist".into(),
+        vec![make_item("Artist", "MusicArtist")],
+        0,
+        (0..4)
+            .map(|index| ("Artist".into(), "2024".into(), format!("Album {index}")))
+            .collect(),
+        order,
+        focused,
+        true,
+        None,
         false,
         track_cursor,
     )
@@ -77,7 +105,10 @@ fn music_workspace_vertical_move_follows_album_display_order() {
     assert_eq!(component.album_cursor(), 3);
     assert!(matches!(
         message,
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+            target: 3,
+            kind: AlbumCursorKind::Move,
+        }))
     ));
 }
 
@@ -124,4 +155,56 @@ fn music_workspace_renders_without_app() {
         .content()
         .iter()
         .any(|cell| cell.symbol() == "F"));
+}
+
+#[test]
+fn music_workspace_horizontal_move_is_ignored_at_one_column() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(grouped_context(1, vec![0, 1, 2, 3], true, None));
+    component.set_album_columns(1);
+
+    for key in [Key::Char('h'), Key::Char('l')] {
+        let message = component.on(&Event::Keyboard(KeyEvent {
+            code: key,
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert!(matches!(
+            message,
+            Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+        ));
+        assert_eq!(component.album_cursor(), 1);
+    }
+}
+
+#[test]
+fn music_workspace_page_moves_saturate_at_both_ends() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(grouped_context(0, vec![0, 1, 2, 3], true, None));
+    component.set_album_columns(2);
+    component.set_page_rows(2);
+
+    for key in [Key::PageUp, Key::PageDown, Key::PageDown, Key::PageUp] {
+        component.on(&Event::Keyboard(KeyEvent {
+            code: key,
+            modifiers: KeyModifiers::NONE,
+        }));
+    }
+    assert_eq!(component.album_cursor(), 0);
+}
+
+#[test]
+fn music_workspace_does_not_emit_album_intent_while_tracks_are_focused() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(grouped_context(1, vec![0, 1, 2, 3], true, Some(0)));
+    component.set_album_columns(2);
+
+    let message = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        message,
+        Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+    ));
+    assert_eq!(component.album_cursor(), 1);
 }

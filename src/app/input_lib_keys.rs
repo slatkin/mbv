@@ -163,13 +163,23 @@ impl App {
                 self.move_lib_cursor(lib_idx, -1)
             }
             KeyCode::PageUp => {
-                if !self.page_grouped_album_cursor(lib_idx, false) {
+                let page = self
+                    .current_library_columns(lib_idx)
+                    .max(1)
+                    .saturating_mul((self.layout.main.left_area.height as usize).max(1));
+                let target = self.rendered_album_target(lib_idx, -(page as i64), false);
+                if !target.is_some_and(|target| self.page_grouped_album_cursor(lib_idx, target)) {
                     let p = self.lib_page_size();
                     self.move_lib_cursor_rows(lib_idx, -(p as i64));
                 }
             }
             KeyCode::PageDown => {
-                if !self.page_grouped_album_cursor(lib_idx, true) {
+                let page = self
+                    .current_library_columns(lib_idx)
+                    .max(1)
+                    .saturating_mul((self.layout.main.left_area.height as usize).max(1));
+                let target = self.rendered_album_target(lib_idx, page as i64, false);
+                if !target.is_some_and(|target| self.page_grouped_album_cursor(lib_idx, target)) {
                     let p = self.lib_page_size();
                     self.move_lib_cursor_rows(lib_idx, p as i64);
                 }

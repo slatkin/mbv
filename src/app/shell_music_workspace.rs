@@ -53,6 +53,7 @@ impl Model {
             if let Some(music) = comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>() {
                 music.set_content(context);
                 music.set_album_columns(columns);
+                music.set_page_rows(self.app.layout.main.left_area.height as usize);
                 music.set_inline_track_focus_enabled(wide);
             }
         }
@@ -79,7 +80,8 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::{LegacyTerminalEvent, Msg};
+    use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
+    use crate::app::components::Msg;
     use crate::app::render::make_music_group_app;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -103,8 +105,91 @@ mod tests {
             }));
         assert!(matches!(
             message,
-            Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+            Some(Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
         ));
+    }
+
+    #[test]
+    fn grouped_music_cursor_routing_matches_legacy_after_each_key() {
+        let prepare = |app: &mut crate::app::App| {
+            let mut albums = app.libs[0].nav_stack[1].items.clone();
+            for (name, artist) in [
+                ("Beta Album", "Beta"),
+                ("Alpha Album", "Alpha"),
+                ("Gamma Album", "Gamma"),
+            ] {
+                let mut album = crate::app::tests::make_item(name, "MusicAlbum");
+                album.artist = artist.into();
+                albums.push(album);
+            }
+            app.libs[0].nav_stack[1].items = albums;
+            let backend = ratatui::backend::TestBackend::new(200, 30);
+            let mut terminal = ratatui::Terminal::new(backend).unwrap();
+            terminal.draw(|frame| app.render(frame)).unwrap();
+            app.layout.main.left_area.width = 82;
+            app.layout.main.left_area.height = 10;
+            assert!(app.layout.main.left_sorted_indices.len() >= 4);
+        };
+
+        let mut legacy_app = make_music_group_app();
+        let mut routed_model = Model::new(make_music_group_app());
+        prepare(&mut legacy_app);
+        prepare(&mut routed_model.app);
+        routed_model.sync_music_workspace();
+        assert!(
+            routed_model.app.current_library_columns(0) > 1,
+            "expected multi-column layout, got {}",
+            routed_model.app.current_library_columns(0)
+        );
+        let id = routed_model.music_workspace_id.clone().unwrap();
+        let keys = [
+            (Key::Down, crossterm::event::KeyCode::Down),
+            (Key::Down, crossterm::event::KeyCode::Down),
+            (Key::Char('l'), crossterm::event::KeyCode::Char('l')),
+            (Key::Char('h'), crossterm::event::KeyCode::Char('h')),
+            (Key::End, crossterm::event::KeyCode::End),
+            (Key::Home, crossterm::event::KeyCode::Home),
+            (Key::PageDown, crossterm::event::KeyCode::PageDown),
+            (Key::PageUp, crossterm::event::KeyCode::PageUp),
+        ];
+        let mut legacy_cursors = Vec::new();
+        let mut routed_cursors = Vec::new();
+
+        for (component_key, legacy_key) in keys {
+            legacy_app.handle_key(crossterm::event::KeyEvent::new(
+                legacy_key,
+                crossterm::event::KeyModifiers::NONE,
+            ));
+            legacy_cursors.push(legacy_app.libs[0].nav_stack[1].cursor);
+
+            let message =
+                routed_model
+                    .application
+                    .get_component_mut(&id)
+                    .unwrap()
+                    .on(&Event::Keyboard(KeyEvent {
+                        code: component_key,
+                        modifiers: KeyModifiers::NONE,
+                    }));
+            let Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target, kind })) = message else {
+                panic!("grouped Music key must emit an album cursor intent: {component_key:?}");
+            };
+            match kind {
+                AlbumCursorKind::Move => {
+                    assert!(routed_model.app.move_music_group_display_cursor(0, target));
+                }
+                AlbumCursorKind::Jump => {
+                    assert!(routed_model.app.jump_music_group_display_cursor(0, target));
+                }
+                AlbumCursorKind::Page => {
+                    assert!(routed_model.app.page_grouped_album_cursor(0, target));
+                }
+            }
+            routed_model.sync_music_workspace();
+            routed_cursors.push(routed_model.app.libs[0].nav_stack[1].cursor);
+            assert_eq!(legacy_cursors.last(), routed_cursors.last());
+        }
+        assert_eq!(legacy_cursors, routed_cursors);
     }
 
     #[test]

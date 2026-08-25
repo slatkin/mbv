@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
+use super::components::msg::AlbumCursorKind;
 use super::components::{
     ComponentId, LegacyTerminalEvent, LibraryComponent, Msg, OverlayId, PlaybackComponent,
     ShellRequest, UiRootComponent, UserEvent,
@@ -465,6 +466,35 @@ impl Model {
                         // set, preserving the legacy "poll-ready ⇒ dirty"
                         // behaviour (design D12).
                         Msg::Legacy(LegacyTerminalEvent::NoOp) => {}
+                        Msg::Shell(ShellRequest::MusicAlbumCursor { target, kind }) => {
+                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                match kind {
+                                    AlbumCursorKind::Move => {
+                                        let idle = self.app.list_image_fetches_allowed();
+                                        let now = Instant::now();
+                                        self.app.last_nav_at = now;
+                                        self.app.mark_library_navigation(now);
+                                        if self.app.move_music_group_display_cursor(lib_idx, target)
+                                        {
+                                            self.app.save_default_library_position(lib_idx);
+                                            if idle {
+                                                self.app.maybe_fetch_next_page(lib_idx);
+                                            }
+                                        }
+                                    }
+                                    AlbumCursorKind::Jump => {
+                                        if self.app.jump_music_group_display_cursor(lib_idx, target)
+                                        {
+                                            self.app.save_default_library_position(lib_idx);
+                                            self.app.maybe_fetch_next_page(lib_idx);
+                                        }
+                                    }
+                                    AlbumCursorKind::Page => {
+                                        self.app.page_grouped_album_cursor(lib_idx, target);
+                                    }
+                                }
+                            }
+                        }
                         // Help overlay cross-boundary requests (design D4).
                         Msg::Shell(ShellRequest::Quit) => quit = true,
                         Msg::Shell(ShellRequest::DismissHelp) => self.umount_help(),

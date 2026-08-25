@@ -131,12 +131,22 @@ pub enum PersistRequest {
     SettingsKey { cursor: usize, key: KeyEvent },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlbumCursorKind {
+    Move,
+    Jump,
+    Page,
+}
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
 /// Shell-level requests from Interactive Components: mount/dismiss overlays,
 // quit, switch panels, toast. Fleshed out per-surface as components convert.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShellRequest {
+    MusicAlbumCursor {
+        target: usize,
+        kind: AlbumCursorKind,
+    },
     /// Quit the application.
     Quit,
     /// Dismiss the Help overlay (Esc/F1 while help is open).

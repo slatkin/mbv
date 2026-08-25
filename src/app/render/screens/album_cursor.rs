@@ -67,7 +67,7 @@ impl App {
     pub(in crate::app) fn move_music_group_display_cursor(
         &mut self,
         lib_idx: usize,
-        delta: i64,
+        target: usize,
     ) -> bool {
         if !self.is_viewing_album_folders(lib_idx) {
             return false;
@@ -78,29 +78,12 @@ impl App {
         if level.items.is_empty() {
             return true;
         }
-        let cursor = level.cursor;
-        let albums = level.items.clone();
-        let targets = self.music_group_navigation(lib_idx, &albums, cursor);
-        if targets.is_empty() {
-            return true;
-        }
-        let current_pos = targets
-            .iter()
-            .position(|target| matches!(target, LibraryRowTarget::Album(idx) if *idx == cursor))
-            .unwrap_or(0);
-        let new_pos = Self::grouped_cursor_target(&targets, current_pos, delta);
-        let target = targets[new_pos].clone();
-        match target {
-            LibraryRowTarget::Album(idx) => {
-                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                    if level.cursor != idx {
-                        level.cursor = idx;
-                        self.libs[lib_idx].album_track_focus = None;
-                    }
-                }
+        if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+            let idx = target;
+            if level.cursor != idx {
+                level.cursor = idx;
+                self.libs[lib_idx].album_track_focus = None;
             }
-            // `music_group_navigation` (Emby-only) never produces this.
-            LibraryRowTarget::Book(_) => {}
         }
         true
     }
@@ -120,7 +103,7 @@ impl App {
     pub(in crate::app) fn jump_music_group_display_cursor(
         &mut self,
         lib_idx: usize,
-        to_end: bool,
+        target: usize,
     ) -> bool {
         if !self.is_music_group_view(lib_idx) {
             return false;
@@ -131,24 +114,10 @@ impl App {
         if level.items.is_empty() {
             return true;
         }
-        let albums = level.items.clone();
-        let targets = self.music_group_navigation(lib_idx, &albums, level.cursor);
-        let Some(target) = (if to_end {
-            targets.last().cloned()
-        } else {
-            targets.first().cloned()
-        }) else {
-            return true;
-        };
-        match target {
-            LibraryRowTarget::Album(idx) => {
-                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                    level.cursor = idx;
-                    self.libs[lib_idx].album_track_focus = None;
-                }
-            }
-            // `music_group_navigation` (Emby-only) never produces this.
-            LibraryRowTarget::Book(_) => {}
+        if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+            let idx = target;
+            level.cursor = idx;
+            self.libs[lib_idx].album_track_focus = None;
         }
         true
     }
@@ -156,7 +125,7 @@ impl App {
     pub(in crate::app) fn page_grouped_album_cursor(
         &mut self,
         lib_idx: usize,
-        page_down: bool,
+        target: usize,
     ) -> bool {
         if self.tab.emby_library_index() != Some(lib_idx)
             || !matches!(
@@ -181,34 +150,11 @@ impl App {
             return true;
         }
 
-        let cursor = level.cursor;
-        let albums = level.items.clone();
-        let cols = self.current_library_columns(lib_idx);
-        // A page is one viewport of *rows*, each holding `cols` albums.
-        let page_rows = (self.layout.main.left_area.height as usize).max(1);
-        let page = cols.max(1).saturating_mul(page_rows);
-        let targets = self.music_group_navigation(lib_idx, &albums, cursor);
-        if let Some(current_pos) = targets
-            .iter()
-            .position(|target| matches!(target, LibraryRowTarget::Album(idx) if *idx == cursor))
-        {
-            let target_pos = if page_down {
-                current_pos.saturating_add(page).min(targets.len() - 1)
-            } else {
-                current_pos.saturating_sub(page)
-            };
-            let target = targets[target_pos].clone();
-            match target {
-                LibraryRowTarget::Album(new_cursor) => {
-                    if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                        if level.cursor != new_cursor {
-                            level.cursor = new_cursor;
-                            self.libs[lib_idx].album_track_focus = None;
-                        }
-                    }
-                }
-                // `music_group_navigation` (Emby-only) never produces this.
-                LibraryRowTarget::Book(_) => {}
+        if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+            let new_cursor = target;
+            if level.cursor != new_cursor {
+                level.cursor = new_cursor;
+                self.libs[lib_idx].album_track_focus = None;
             }
         }
         if idle {

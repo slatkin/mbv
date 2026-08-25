@@ -12,7 +12,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg};
+use super::msg::{AlbumCursorKind, LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
 use crate::app::render::{render_wide_music_group_with_ctx, MusicImagePaint, MusicWideRenderCtx};
@@ -22,6 +22,7 @@ pub struct MusicWorkspaceComponent {
     context: MusicWideRenderCtx,
     album_cursor: usize,
     album_columns: usize,
+    page_rows: usize,
     album_scroll: usize,
     track_cursor: Option<usize>,
     initialized: bool,
@@ -52,6 +53,7 @@ impl MusicWorkspaceComponent {
             ),
             album_cursor: 0,
             album_columns: 1,
+            page_rows: 1,
             album_scroll: 0,
             track_cursor: None,
             initialized: false,
@@ -107,21 +109,39 @@ impl MusicWorkspaceComponent {
         self.album_columns = columns.max(1);
     }
 
+    pub(in crate::app) fn set_page_rows(&mut self, rows: usize) {
+        self.page_rows = rows.max(1);
+    }
+
     pub(in crate::app) fn album_cursor(&self) -> usize {
         self.album_cursor
     }
 
-    fn move_album_rows(&mut self, rows: i64) {
+    fn move_album_rows(&mut self, rows: i64, columns: usize, wrap: bool) -> Option<usize> {
         let order = &self.context.album_order;
         if order.is_empty() {
-            return;
+            return None;
         }
         let position = order
             .iter()
             .position(|&index| index == self.album_cursor)
             .unwrap_or(0);
-        let delta = rows.saturating_mul(self.album_columns as i64);
-        self.album_cursor = order[move_cursor(position, delta, order.len())];
+        let delta = rows.saturating_mul(columns.max(1) as i64);
+        let target_position = if wrap {
+            move_cursor(position, delta, order.len())
+        } else if delta.is_negative() {
+            position.saturating_sub(delta.unsigned_abs() as usize)
+        } else {
+            position
+                .saturating_add(delta as usize)
+                .min(order.len().saturating_sub(1))
+        };
+        self.album_cursor = order[target_position];
+        Some(self.album_cursor)
+    }
+
+    fn can_emit_album_cursor(&self) -> bool {
+        self.context.focused && self.track_cursor.is_none() && !self.context.album_order.is_empty()
     }
 
     pub(in crate::app) fn track_cursor(&self) -> Option<usize> {
@@ -151,8 +171,68 @@ impl MusicWorkspaceComponent {
             Key::Esc | Key::Backspace => self.track_cursor = None,
             Key::Up | Key::Char('k') if self.track_cursor.is_some() => self.move_track(-1),
             Key::Down | Key::Char('j') if self.track_cursor.is_some() => self.move_track(1),
-            Key::Up | Key::Char('k') => self.move_album_rows(-1),
-            Key::Down | Key::Char('j') => self.move_album_rows(1),
+            Key::Up | Key::Char('k') if self.can_emit_album_cursor() => {
+                let target = self.move_album_rows(-1, self.album_columns, true).unwrap();
+                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                    target,
+                    kind: AlbumCursorKind::Move,
+                }));
+            }
+            Key::Down | Key::Char('j') if self.can_emit_album_cursor() => {
+                let target = self.move_album_rows(1, self.album_columns, true).unwrap();
+                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                    target,
+                    kind: AlbumCursorKind::Move,
+                }));
+            }
+            Key::Char('h') if self.album_columns > 1 && self.can_emit_album_cursor() => {
+                let target = self.move_album_rows(-1, 1, true).unwrap();
+                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                    target,
+                    kind: AlbumCursorKind::Move,
+                }));
+            }
+            Key::Char('l') if self.album_columns > 1 && self.can_emit_album_cursor() => {
+                let target = self.move_album_rows(1, 1, true).unwrap();
+                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                    target,
+                    kind: AlbumCursorKind::Move,
+                }));
+            }
+            Key::Home if self.can_emit_album_cursor() => {
+                let target = self.context.album_order[0];
+                self.album_cursor = target;
+                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                    target,
+                    kind: AlbumCursorKind::Jump,
+                }));
+            }
+            Key::End if self.can_emit_album_cursor() => {
+                let target = *self.context.album_order.last().unwrap();
+                self.album_cursor = target;
+                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                    target,
+                    kind: AlbumCursorKind::Jump,
+                }));
+            }
+            Key::PageUp if self.can_emit_album_cursor() => {
+                let target = self
+                    .move_album_rows(-(self.page_rows as i64), self.album_columns, false)
+                    .unwrap();
+                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                    target,
+                    kind: AlbumCursorKind::Page,
+                }));
+            }
+            Key::PageDown if self.can_emit_album_cursor() => {
+                let target = self
+                    .move_album_rows(self.page_rows as i64, self.album_columns, false)
+                    .unwrap();
+                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                    target,
+                    kind: AlbumCursorKind::Page,
+                }));
+            }
             _ => {}
         }
         Some(Msg::Legacy(LegacyTerminalEvent::Key(
