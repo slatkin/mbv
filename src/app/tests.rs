@@ -236,6 +236,7 @@ pub(crate) fn make_app_stub() -> App {
         panel_mode: PanelMode::default(),
         mini_view_focus: PanelFocus::Queue,
         library_tab_pending: 0,
+        home_section_pref_semantic: None,
         home_section_pending: None,
         queue_scroll: 0,
         last_played_item_id: None,

@@ -648,9 +648,10 @@ fn home_latest_source_pref_key_round_trips() {
 
 #[test]
 fn home_section_pref_is_empty_for_continue_watching() {
+    let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    // A populated `latest` is what exposes the off-by-one: with section 0,
-    // the old `saturating_sub(1)` returned `latest[0]`'s key (the next pill).
+    // A populated `latest` is what exposes the off-by-one: Continue Watching
+    // (section 0) must never resolve to `latest[0]`'s key (the next pill).
     app.home.latest = vec![
         (
             "Movies".into(),
@@ -666,17 +667,101 @@ fn home_section_pref_is_empty_for_continue_watching() {
         ),
     ];
 
-    // Section 0 (Continue Watching) must persist as the empty sentinel, never
-    // as a `latest` pill's key.
-    app.home.section = 0;
+    // Continue Watching (section 0) must persist as the empty sentinel, never
+    // as a `latest` pill's key — driven through the real selection path so
+    // the semantic preference the persistence reads stays in step.
+    app.home_select_section(0);
     assert!(
         app.home_section_pref().is_empty(),
         "Continue Watching persists as no section key"
     );
 
-    // A real pill index must still persist its own key.
-    app.home.section = 1;
+    // A real pill selection must persist its own key.
+    app.home_select_section(1);
     assert_eq!(app.home_section_pref(), "emby:lib-movies");
-    app.home.section = 2;
+    app.home_select_section(2);
     assert_eq!(app.home_section_pref(), "abs:abs-pod");
+}
+
+/// Task 5.3d, Home persisted-section identity seam: after a Home source is
+/// selected, an unrelated `save_prefs()` (persisting other preferences only)
+/// must retain that source identity. Before the seam, `save_prefs` derived
+/// `home_section` from numeric `App.home.section`; now it reads the
+/// shell-owned semantic preference, so a transient numeric section value can
+/// never clobber the selected identity.
+#[test]
+fn unrelated_save_prefs_retains_selected_home_source() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.home.latest = vec![(
+        "Movies".into(),
+        HomeLatestSource::Emby("lib-movies".into()),
+        vec![QueueItem::Emby(Box::new(make_item("Movie one", "Movie")))],
+        0,
+    )];
+
+    // The transient numeric section points at a different pill than the
+    // selected source, simulating the component-local numeric state the seam
+    // decouples persistence from — `save_prefs` must still keep the source
+    // identity the user actually selected.
+    app.home_select_section(1);
+    app.home.section = 0;
+
+    // An unrelated preference save persists the retained identity, not the
+    // transient numeric section.
+    app.save_prefs();
+    let saved = crate::config::prefs_path();
+    let parsed: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(saved).expect("prefs written")).unwrap();
+    assert_eq!(
+        parsed["home_section"],
+        "emby:lib-movies",
+        "unrelated save must keep the selected Home source identity"
+    );
+}
+
+/// Task 5.3d, Home persisted-section identity seam: while a one-time persisted
+/// restore is still pending (its source has not arrived), an actual async
+/// section rebuild/clamp path must not replace the loaded semantic source with
+/// the temporary numeric section identity (still Continue Watching / section
+/// 0). An unrelated `save_prefs()` after that clamp must keep the pending
+/// source identity on disk.
+#[test]
+fn async_clamp_keeps_pending_home_source_until_restored() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    // Simulate a startup that loaded a saved `home_section` whose source has
+    // not yet arrived: both the semantic preference and the pending restore
+    // marker carry the saved identity, while `home.latest` is empty so the
+    // numeric section is still 0 (Continue Watching).
+    app.home_section_pref_semantic = Some(HomeLatestSource::Audiobookshelf("book-lib".into()));
+    app.home_section_pending = Some(HomeLatestSource::Audiobookshelf("book-lib".into()));
+
+    // Run an actual async clamp/rebuild path. With no Emby client and no
+    // cached Audiobookshelf/Feeds sections this rebuilds an empty `latest`
+    // and clamps the numeric section back to 0.
+    app.fetch_home().expect("fetch_home succeeds with no sources");
+
+    assert_eq!(
+        app.home_section_pending,
+        Some(HomeLatestSource::Audiobookshelf("book-lib".into())),
+        "pending restore must remain pending while the source is absent"
+    );
+    assert_eq!(
+        app.home_section_pref(),
+        "abs:book-lib",
+        "async clamp must not clear the pending semantic source"
+    );
+
+    // An unrelated preference save must retain the pending source identity on
+    // disk, not overwrite it with the temporary numeric section (section 0).
+    app.save_prefs();
+    let saved = crate::config::prefs_path();
+    let parsed: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(saved).expect("prefs written")).unwrap();
+    assert_eq!(
+        parsed["home_section"],
+        "abs:book-lib",
+        "unrelated save must keep the pending Home source while restoration is pending"
+    );
 }

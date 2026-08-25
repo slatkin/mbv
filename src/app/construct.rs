@@ -135,6 +135,13 @@ impl App {
             // Always start on Home. The saved queue is restored independently;
             // the saved library tab remains available for runtime persistence.
             library_tab_pending: 0,
+            // The shell-owned semantic identity of the last-select Home pill
+            // plus the one-time restore marker below; both are initialized
+            // from the same saved `home_section` key (task 5.3d). None/absent
+            // means Continue Watching (the empty sentinel).
+            home_section_pref_semantic: prefs["home_section"]
+                .as_str()
+                .and_then(HomeLatestSource::from_pref_key),
             // The last-selected Home pill, restored by source identity once a
             // matching section exists. Absent/empty means Continue Watching.
             home_section_pending: prefs["home_section"]

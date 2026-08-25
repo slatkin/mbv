@@ -191,7 +191,18 @@ pub struct App {
     pub(super) queue_column_width: u16,
     pub(super) panel_mode: PanelMode,
     pub(super) library_tab_pending: usize, // restored from prefs; applied once libs have loaded
-    pub(super) home_section_pending: Option<HomeLatestSource>, // restored from prefs; applied once a Home pill matching it exists
+    /// The shell-owned semantic identity of the currently selected Home
+    /// source, the sole thing `home_section_pref()`/`save_prefs()` persist
+    /// (task 5.3d). Section 0 (Continue Watching) has no `latest` entry and
+    /// stays `None` (the empty-string sentinel). Kept in step with every
+    /// numeric `App.home.section` write via `update_home_section_pref()`, so
+    /// unrelated preference saves never depend on the (soon-deleted) numeric
+    /// section state.
+    pub(super) home_section_pref_semantic: Option<HomeLatestSource>,
+    // Restored from prefs; applied once a Home pill matching it exists. This
+    // is the distinct one-time restore marker (task 5.3d); the steady-state
+    // semantic identity lives in `home_section_pref_semantic` above.
+    pub(super) home_section_pending: Option<HomeLatestSource>,
     pub(super) queue_scroll: usize,
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,

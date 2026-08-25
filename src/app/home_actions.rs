@@ -1,4 +1,5 @@
 use super::notify_actions::ToastSeverity;
+use super::types_playback::HomeLatestSource;
 use super::ui_util::is_playable;
 use super::App;
 use mbv_core::api::EmbyItem;
@@ -45,6 +46,46 @@ impl App {
         section_idx == 0 || self.home_new_sections().contains(&section_idx)
     }
 
+    /// The semantic identity currently selected by `home.section`: section 0
+    /// (Continue Watching) has no `latest` entry and resolves to `None` (the
+    /// empty-string persistence sentinel); any real pill resolves to its
+    /// `HomeLatestSource` (task 5.3d). Resolving by section here keeps the
+    /// off-by-one rule in one place; `home_section_pref()` persists the
+    /// resolved identity, never the numeric index.
+    pub(super) fn home_section_identity(&self) -> Option<HomeLatestSource> {
+        if self.home.section == 0 {
+            return None;
+        }
+        self.home
+            .latest
+            .get(self.home.section - 1)
+            .map(|(_, source, _, _)| source.clone())
+    }
+
+    /// Stash the identity resolved from the current `home.section` into the
+    /// shell-owned semantic preference, so an unrelated `save_prefs()` reads a
+    /// stable identity instead of deriving it from the numeric section state
+    /// (which is soon deleted, task 5.3d). Call after every numeric
+    /// `home.section` write: explicit selection, one-time persisted
+    /// restoration, and both asynchronous section rebuild/clamp paths.
+    pub(super) fn update_home_section_pref(&mut self) {
+        self.home_section_pref_semantic = self.home_section_identity();
+    }
+
+    /// Async section rebuild/clamp variant of `update_home_section_pref`:
+    /// update the semantic preference only when no one-time persisted restore
+    /// is still pending. While a pending source has not arrived, the numeric
+    /// `home.section` is still 0 (Continue Watching), so resolving it here
+    /// would clear the loaded semantic source and let an unrelated
+    /// `save_prefs()` overwrite it before restoration (task 5.3d). Once
+    /// restoration succeeds (`home_section_pending` clears), later clamps
+    /// track the resulting source again. Shared by both async clamp sites.
+    pub(super) fn update_home_section_pref_guarded(&mut self) {
+        if self.home_section_pending.is_none() {
+            self.update_home_section_pref();
+        }
+    }
+
     pub(super) fn home_select_section(&mut self, section_idx: usize) {
         let section_idx = if self.home_section_is_valid(section_idx) {
             section_idx
@@ -52,9 +93,11 @@ impl App {
             *first
         } else {
             self.home.section = 0;
+            self.home_section_pref_semantic = None;
             return;
         };
         self.home.section = section_idx;
+        self.update_home_section_pref();
         // Persist the selection so the pill is restored on the next launch.
         self.save_prefs();
     }

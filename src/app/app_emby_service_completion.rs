@@ -297,6 +297,7 @@ impl App {
         );
         let sections = 1 + self.home.latest.len();
         self.home.section = self.home.section.min(sections.saturating_sub(1));
+        self.update_home_section_pref_guarded();
         self.home_loading = false;
     }
 }

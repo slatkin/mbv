@@ -388,6 +388,7 @@ impl App {
         if self.home.section >= n {
             self.home.section = n.saturating_sub(1);
         }
+        self.update_home_section_pref_guarded();
         Ok(())
     }
 

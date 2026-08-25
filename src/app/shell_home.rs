@@ -163,6 +163,7 @@ impl Model {
                 if let (Some(pending_source), Some(section)) = (&pending, pending_section) {
                     if home.restore_section(pending_source) {
                         self.app.home.section = section;
+                        self.app.update_home_section_pref();
                         self.app.home_section_pending = None;
                     }
                 }
@@ -265,6 +266,11 @@ mod tests {
         assert_eq!(
             model.app.home.section, 1,
             "restored section must be mirrored into App.home.section"
+        );
+        assert_eq!(
+            model.app.home_section_pref(),
+            "abs:books",
+            "restored identity must be reflected in the persisted semantic preference"
         );
         assert_eq!(
             model.app.home_section_pending, None,
