@@ -7,12 +7,46 @@
 //! deliberate: the twelve *Mouse geometry* agents each own one method and
 //! never touch a shared dispatch match.
 
+use super::action::Command;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
-use super::App;
+use super::{App, PanelFocus, QueueScope, TabSelection};
 use ratatui::layout::Position;
 
 impl App {
     // ---- selector-tab click (match at input_mouse_dispatch.rs :203) ----
+
+    // ---- Queue mouse geometry (task 5.3d) ----
+
+    pub(super) fn handle_mouse_selector_click_queue(&mut self, scope: QueueScope) {
+        self.set_queue_scope(scope);
+    }
+
+    pub(super) fn handle_mouse_scroll_queue(&mut self, delta: i64) {
+        let n = self.displayed_queue().total_queue_len();
+        if n > 0 {
+            let queue = self.displayed_queue_mut();
+            queue.queue_cursor = super::ui_util::move_cursor(queue.queue_cursor, delta * 3, n);
+        }
+    }
+
+    pub(super) fn handle_mouse_double_click_queue(&mut self) {
+        if matches!(self.effective_panel_focus(), PanelFocus::Queue)
+            && self.displayed_queue().queue_cursor < self.displayed_queue().total_queue_len()
+        {
+            self.dispatch(Command::QueuePlayCursor);
+        }
+    }
+
+    pub(super) fn handle_mouse_right_click_queue(&mut self, col: u16, row: u16) {
+        match self.tab {
+            TabSelection::Home => self.handle_mouse_right_click_home(col, row),
+            TabSelection::EmbyLibrary(_) => self.handle_mouse_right_click_emby(col, row),
+            TabSelection::AudiobookshelfLibrary(_) => {
+                self.handle_mouse_right_click_audiobookshelf(col, row)
+            }
+            TabSelection::Feeds => self.handle_mouse_right_click_feeds(col, row),
+        }
+    }
 
     pub(super) fn handle_mouse_selector_click_home(&mut self, target: usize) {
         self.home_select_section(target);

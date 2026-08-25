@@ -302,6 +302,23 @@ pub enum ShellRequest {
     SavePlaylistKey(crossterm::event::KeyEvent),
     /// Forward queue keys whose effects are still shell-owned.
     QueueKey(crossterm::event::KeyEvent),
+    /// A Queue-surface wheel scroll over the component's own list area
+    /// (`area`, rebuilt every `view`; task 5.3d, queue hit_test). The shell
+    /// runs `App`'s 30ms wheel throttle against `App::last_scroll_at` and
+    /// then calls the extracted queue scroll gesture; the component holds no
+    /// timing state.
+    QueueScroll {
+        delta: i64,
+    },
+    /// A Queue-surface click the component resolved to a region of its own
+    /// geometry (task 5.3d, queue hit_test). The component reports *where*
+    /// it landed; the shell decides *when* it counts via App's single
+    /// double-click clock, then calls the extracted queue gesture method.
+    QueueClick {
+        region: QueueHitRegion,
+        col: u16,
+        row: u16,
+    },
     /// Browse-surface scroll over the browser list, hit-tested locally by
     /// `BrowserComponent` against its own `LayoutMain` (task 5.3d, browser
     /// hit_test). The shell runs `App`'s 30ms wheel throttle against
@@ -353,5 +370,23 @@ pub enum HomeHitRegion {
     /// Section pill; `target` is the section index the component resolved.
     Pill(usize),
     /// Right-click → Home context menu after the row is focused.
+    ContextMenu,
+}
+
+/// Region of the Queue surface a click resolved to, reported by
+/// `QueueComponent` (task 5.3d, queue hit_test). The shell turns this plus
+/// `col`/`row` into the matching App gesture; the component holds no
+/// double-click or scroll timing state of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueHitRegion {
+    /// Queue list area: a single click selects/focuses via
+    /// `App::click_set_cursor`, while the shell decides whether the same
+    /// coordinates form a double-click activation.
+    Row,
+    /// Local queue scope pill.
+    ScopeLocal,
+    /// Remote queue scope pill.
+    ScopeRemote,
+    /// Right-click in the queue list area.
     ContextMenu,
 }

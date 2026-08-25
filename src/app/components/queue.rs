@@ -1,5 +1,3 @@
-use std::time::{Duration, Instant};
-
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
@@ -9,13 +7,13 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg, QueueMove, QueueRequest, ShellRequest};
+use super::msg::{LegacyTerminalEvent, Msg, QueueHitRegion, QueueMove, QueueRequest, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{
     render_queue_content, render_queue_title_content, QueueRenderGeometry, QueueTitleModel,
 };
 use crate::app::types_playback::{PlaybackState, QueueScope};
-use mbv_core::playback_queue::{QueueSlot, QueueSlotId};
+use mbv_core::playback_queue::QueueSlot;
 
 pub struct QueueComponent {
     slots: Vec<QueueSlot>,
@@ -29,7 +27,6 @@ pub struct QueueComponent {
     title_area: Option<Rect>,
     area: Rect,
     geometry: QueueRenderGeometry,
-    last_click: Option<(Instant, QueueSlotId)>,
 }
 
 impl QueueComponent {
@@ -46,7 +43,6 @@ impl QueueComponent {
             title_area: None,
             area: Rect::default(),
             geometry: QueueRenderGeometry::default(),
-            last_click: None,
         }
     }
 
@@ -169,64 +165,75 @@ impl QueueComponent {
         ))))
     }
 
+    /// The component owns *where* a Queue event lands: it hit-tests its
+    /// painted geometry (`area`, `rows`, and scope-pill targets, rebuilt
+    /// every `view`) and emits typed shell intent. It holds no double-click
+    /// or scroll timing; the shell decides *when* using App's shared fields.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         let mouse = to_crossterm_mouse_event(mouse);
         let position: Position = (mouse.column, mouse.row).into();
-        if matches!(
-            mouse.kind,
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
-            if self.title.is_some() {
-                if self.geometry.scope_local_area.contains(position) {
-                    self.scope = QueueScope::Local;
-                    return Some(Msg::Queue(QueueRequest::Scope(self.scope)));
+        match mouse.kind {
+            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+                if self.title.is_some() {
+                    if self.geometry.scope_local_area.contains(position) {
+                        self.scope = QueueScope::Local;
+                        return Some(Msg::Shell(ShellRequest::QueueClick {
+                            region: QueueHitRegion::ScopeLocal,
+                            col: mouse.column,
+                            row: mouse.row,
+                        }));
+                    }
+                    if self.geometry.scope_remote_area.contains(position) {
+                        self.scope = QueueScope::Remote;
+                        return Some(Msg::Shell(ShellRequest::QueueClick {
+                            region: QueueHitRegion::ScopeRemote,
+                            col: mouse.column,
+                            row: mouse.row,
+                        }));
+                    }
                 }
-                if self.geometry.scope_remote_area.contains(position) {
-                    self.scope = QueueScope::Remote;
-                    return Some(Msg::Queue(QueueRequest::Scope(self.scope)));
-                }
-            }
-        }
-        if matches!(
-            mouse.kind,
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
-            if let Some((_, slot_id)) = self
-                .geometry
-                .rows
-                .iter()
-                .find(|(rect, _)| rect.contains(position))
-            {
-                if let Some(index) = self.slots.iter().position(|slot| slot.slot_id == *slot_id) {
-                    self.cursor = index;
-                }
-                let now = Instant::now();
-                let double_click = self.last_click.is_some_and(|(at, previous)| {
-                    previous == *slot_id && now.duration_since(at) < Duration::from_millis(400)
-                });
-                self.last_click = Some((now, *slot_id));
-                if double_click {
-                    return Some(Msg::Queue(QueueRequest::Play {
-                        scope: self.scope,
-                        slot_id: *slot_id,
+                if self.area.contains(position) {
+                    if let Some((_, slot_id)) = self
+                        .geometry
+                        .rows
+                        .iter()
+                        .find(|(rect, _)| rect.contains(position))
+                    {
+                        if let Some(index) =
+                            self.slots.iter().position(|slot| slot.slot_id == *slot_id)
+                        {
+                            self.cursor = index;
+                        }
+                    }
+                    return Some(Msg::Shell(ShellRequest::QueueClick {
+                        region: QueueHitRegion::Row,
+                        col: mouse.column,
+                        row: mouse.row,
                     }));
                 }
-                return self.cursor_message();
             }
-        }
-        if matches!(
-            mouse.kind,
+            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
+                if self.area.contains(position) {
+                    return Some(Msg::Shell(ShellRequest::QueueClick {
+                        region: QueueHitRegion::ContextMenu,
+                        col: mouse.column,
+                        row: mouse.row,
+                    }));
+                }
+            }
             crossterm::event::MouseEventKind::ScrollUp
-                | crossterm::event::MouseEventKind::ScrollDown
-        ) && self.area.contains(position)
-        {
-            return self.move_cursor(
-                if matches!(mouse.kind, crossterm::event::MouseEventKind::ScrollUp) {
-                    -3
+            | crossterm::event::MouseEventKind::ScrollDown
+                if self.area.contains(position) =>
+            {
+                let delta: i64 = if matches!(mouse.kind, crossterm::event::MouseEventKind::ScrollUp)
+                {
+                    -1
                 } else {
-                    3
-                },
-            );
+                    1
+                };
+                return Some(Msg::Shell(ShellRequest::QueueScroll { delta }));
+            }
+            _ => {}
         }
         Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
     }

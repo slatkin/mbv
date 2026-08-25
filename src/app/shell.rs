@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
-use super::components::msg::{AlbumCursorKind, BrowserHitRegion, HomeHitRegion};
+use super::components::msg::{AlbumCursorKind, BrowserHitRegion, HomeHitRegion, QueueHitRegion};
 use super::components::{
     ComponentId, LegacyTerminalEvent, LibraryComponent, Msg, OverlayId, PlaybackComponent,
     ShellRequest, UiRootComponent, UserEvent,
@@ -30,7 +30,7 @@ use super::types_feeds_manage::FeedsManagePopup;
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
-use super::{App, IdleFeed, ToastSeverity};
+use super::{App, IdleFeed, QueueScope, ToastSeverity};
 
 /// How often the TuiRealm crossterm listener worker polls the terminal for
 /// events. The listener's `poll` blocks for half of this; the worker cycle is
@@ -675,6 +675,38 @@ impl Model {
                             HomeHitRegion::Row => {
                                 if self.app.note_browse_double_click(col, row) {
                                     self.app.handle_mouse_double_click_home(true);
+                                } else {
+                                    self.app.click_set_cursor(col, row);
+                                }
+                            }
+                        },
+                        // Queue mouse geometry lives in `QueueComponent`;
+                        // the shell decides *when* a row click is a double-click
+                        // and shares App's 30ms wheel throttle with browse/home.
+                        Msg::Shell(ShellRequest::QueueScroll { delta }) => {
+                            if self.app.note_browse_scroll() {
+                                self.app.handle_mouse_scroll_queue(delta);
+                            }
+                        }
+                        Msg::Shell(ShellRequest::QueueClick { region, col, row }) => match region {
+                            QueueHitRegion::ScopeLocal => {
+                                self.app.last_click_time = Instant::now();
+                                self.app.last_click_pos = (col, row);
+                                self.app
+                                    .handle_mouse_selector_click_queue(QueueScope::Local);
+                            }
+                            QueueHitRegion::ScopeRemote => {
+                                self.app.last_click_time = Instant::now();
+                                self.app.last_click_pos = (col, row);
+                                self.app
+                                    .handle_mouse_selector_click_queue(QueueScope::Remote);
+                            }
+                            QueueHitRegion::ContextMenu => {
+                                self.app.handle_mouse_right_click_queue(col, row);
+                            }
+                            QueueHitRegion::Row => {
+                                if self.app.note_browse_double_click(col, row) {
+                                    self.app.handle_mouse_double_click_queue();
                                 } else {
                                     self.app.click_set_cursor(col, row);
                                 }
