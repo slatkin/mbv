@@ -145,9 +145,12 @@ still emit `Msg::Legacy(...)` / `ShellRequest::*Key` / `NoOp`.
 - **Wave 6** `4f98154` — Home ownership completion: moved the semantic section
   preference and one-time restore marker from `App` to `Model`, made
   `save_prefs` preserve the shell-owned `home_section` key, and persisted only
-  on actual shell-side preference changes. Home is now fully migrated; the
-  ledger row records the focused Home/Model boundary and full `mbv` nextest
-  verification.
+  on actual shell-side preference changes. Home content/state/preference
+  ownership is complete, but Home still falls through to the legacy
+  `App::handle_key` Home catch-all and `LegacyInput`/`CONTEXT_STACK` teardown
+  has not landed, so the ledger row stays `component` (moved back from
+  `migrated`) until the framework teardown lands; the focused Home/Model
+  boundary and full `mbv` nextest verification are recorded there.
 
 **Not yet landed** (remain, in required order): the per-surface interaction
 mirrors whose `App` state still holds the cursor (`sync_emby_browser`,
