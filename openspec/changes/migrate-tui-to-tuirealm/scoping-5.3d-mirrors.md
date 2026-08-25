@@ -142,10 +142,16 @@ still emit `Msg::Legacy(...)` / `ShellRequest::*Key` / `NoOp`.
   (assign/merge/clear/resolve/drain methods keep `shell.rs`/`shell_home.rs`
   net-delta ≤ 0). Tests adapt to the returned-content/Model-hosted APIs.
   Ledger Home row stays `component` (2a owns no ledger edit).
+- **Wave 6** `4f98154` — Home ownership completion: moved the semantic section
+  preference and one-time restore marker from `App` to `Model`, made
+  `save_prefs` preserve the shell-owned `home_section` key, and persisted only
+  on actual shell-side preference changes. Home is now fully migrated; the
+  ledger row records the focused Home/Model boundary and full `mbv` nextest
+  verification.
 
 **Not yet landed** (remain, in required order): the per-surface interaction
-mirrors whose `App` state still holds the cursor (`sync_home`,
-`sync_emby_browser`, `sync_tv_workspace`, `sync_music_workspace`,
+mirrors whose `App` state still holds the cursor (`sync_emby_browser`,
+`sync_tv_workspace`, `sync_music_workspace`,
 `sync_audiobookshelf_podcast`, `sync_audiobookshelf_book`)
 — each needs the full 5.3a-style ownership move (component keys + typed Msg +
 App-field deletion + legacy render branch); then `CONTEXT_STACK`/`handle_key_*`
