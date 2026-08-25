@@ -843,7 +843,6 @@ impl Model {
             self.update_settings_content();
             self.sync_playback();
             self.sync_modal_requests();
-            self.sync_feeds_manage();
             self.sync_home();
             self.sync_feeds();
             self.sync_audiobookshelf_podcast();

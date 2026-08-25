@@ -1,12 +1,13 @@
 use super::test_helpers::buffer_to_string;
 use super::{render_feeds_manage_content, FeedsManageRenderModel};
-use crate::app::types_feeds_manage::FeedsManagePopup;
+use crate::app::types_feeds_manage::{FeedsManagePopup, FeedsManageStage};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 fn render_feeds_manage(width: u16, height: u16) -> String {
     let popup = FeedsManagePopup::new();
     let feeds = Vec::new();
+    let stage = FeedsManageStage::List;
     let mut dim_backdrop_active = false;
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
@@ -17,8 +18,8 @@ fn render_feeds_manage(width: u16, height: u16) -> String {
                 &mut dim_backdrop_active,
                 FeedsManageRenderModel {
                     feeds: &feeds,
-                    stage: &popup.stage,
-                    cursor: popup.cursor,
+                    stage: &stage,
+                    cursor: 0,
                     pending_add: popup.pending_add,
                 },
             );

@@ -1,15 +1,15 @@
-//! Shell-owned feeds-management popup behaviour (task 5.3c).
+//! Shell-owned feeds-management popup effects (tasks 5.3c / 5.3d).
 //!
 //! The `FeedsManageComponent` owns the interaction state (stage/cursor/form
-//! edits) and mirrors `stage`/`cursor`/`feeds`/`pending_add` from
-//! `Model::feeds_manage` each tick. This module owns the effect dispatch the
-//! component's key forwarding cannot perform (network fetch, confirm dialog,
-//! config persistence) and the background add-feed channel that cannot live
-//! in the component.
+//! edits): the two-way per-tick mirror (`sync_feeds_manage` /
+//! `sync_feeds_manage_to_app`) is deleted. This module owns only the effects
+//! the component's key forwarding cannot perform — network fetch, confirm
+//! dialog, config persistence — and the background add-feed channel that
+//! cannot live in the component (`Model::feeds_manage`).
 
-use super::components::FeedsManageComponent;
+use super::components::{ComponentId, FeedsManageComponent, PopupId};
 use super::types_feeds_manage::{
-    FeedAddResult, FeedForm, FeedFormField, FeedsManagePopup, FeedsManageStage,
+    FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage,
 };
 use super::App;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -25,89 +25,104 @@ impl App {
 }
 
 impl super::shell::Model {
-    /// Mount the feeds-management component and seed it from a fresh
-    /// `FeedsManagePopup` (task 5.3c). The component owns the stage/cursor;
-    /// `Model::feeds_manage` carries the background add-feed channel.
+    /// Mount the feeds-management component and seed it (task 5.3c/5.3d).
+    /// The component owns the stage/cursor; `Model::feeds_manage` carries
+    /// only the background add-feed channel, the pending-add marker and the
+    /// add-attempt id counter.
     pub(in crate::app) fn open_feeds_manage(&mut self) {
         if self.feeds_manage.is_none() {
             self.feeds_manage = Some(FeedsManagePopup::new());
         }
-        let id = super::components::ComponentId::Popup(super::components::PopupId::FeedManage);
+        let id = ComponentId::Popup(PopupId::FeedManage);
         if !self.application.mounted(&id) {
             self.application
                 .mount(id.clone(), Box::new(FeedsManageComponent::new()), vec![])
                 .expect("mount FeedManage");
             self.application.active(&id).expect("activate FeedManage");
         }
-        self.sync_feeds_manage();
+        self.push_feeds_manage_content();
+        // A fresh component starts with no stage; open the popup at the List
+        // stage (task 5.3d — no per-tick stage mirror).
+        if let Some(component) = self.feeds_manage_component_mut() {
+            if component.stage_clone().is_none() {
+                component.set_stage(FeedsManageStage::List);
+            }
+        }
     }
 
-    /// Route a forwarded feeds-management key after mirroring the component's
-    /// live draft into `Model::feeds_manage` (task 5.3c).
+    /// Push the shell-owned content the component paints (config feeds and
+    /// the pending-add marker). Stage/cursor/form edits stay component-local.
+    fn push_feeds_manage_content(&mut self) {
+        let feeds = self.app.config.lock().unwrap().feeds.clone();
+        let pending = self.feeds_manage.as_ref().and_then(|p| p.pending_add);
+        if let Some(component) = self.feeds_manage_component_mut() {
+            component.set_feeds(feeds);
+            component.set_pending_add(pending);
+        }
+    }
+
+    fn feeds_manage_component_mut(&mut self) -> Option<&mut FeedsManageComponent> {
+        let id = ComponentId::Popup(PopupId::FeedManage);
+        if !self.application.mounted(&id) {
+            return None;
+        }
+        self.application
+            .get_component_mut(&id)
+            .and_then(|component| component.as_any_mut().downcast_mut::<FeedsManageComponent>())
+    }
+
+    fn feeds_manage_stage(&mut self) -> Option<FeedsManageStage> {
+        self.feeds_manage_component_mut()?.stage_clone()
+    }
+
+    fn feeds_manage_cursor(&mut self) -> usize {
+        self.feeds_manage_component_mut()
+            .map(|component| component.cursor())
+            .unwrap_or(0)
+    }
+
+    /// Route a forwarded feeds-management key against the component's live
+    /// stage (task 5.3d — no `sync_feeds_manage_to_app` mirror first).
     pub(in crate::app) fn handle_feeds_manage_key(&mut self, key: KeyEvent) {
-        self.sync_feeds_manage_to_app();
-        let Some(popup) = self.feeds_manage.as_ref() else {
+        let Some(stage) = self.feeds_manage_stage() else {
             return;
         };
-        let stage = popup.stage.clone();
         match stage {
             FeedsManageStage::List => self.handle_feeds_manage_list_key(key),
             FeedsManageStage::Form(form) => self.handle_feeds_manage_form_key(key, form),
         }
-        self.sync_feeds_manage();
     }
 
     fn handle_feeds_manage_list_key(&mut self, key: KeyEvent) {
-        let count = self.app.config.lock().unwrap().feeds.len();
         match key.code {
             KeyCode::Esc => self.dismiss_feeds_manage(),
-            KeyCode::Up => {
-                if let Some(popup) = &mut self.feeds_manage {
-                    popup.cursor = popup.cursor.saturating_sub(1);
-                }
-            }
-            KeyCode::Down => {
-                if count > 0 {
-                    if let Some(popup) = &mut self.feeds_manage {
-                        popup.cursor = (popup.cursor + 1).min(count - 1);
-                    }
-                }
-            }
             KeyCode::Char('a') => self.start_add_feed(),
-            KeyCode::Enter | KeyCode::Char('e') if count > 0 => self.start_edit_feed(),
-            KeyCode::Char('d') if count > 0 => self.confirm_remove_feed(),
+            KeyCode::Enter | KeyCode::Char('e') if self.config_feed_count() > 0 => {
+                self.start_edit_feed()
+            }
+            KeyCode::Char('d') if self.config_feed_count() > 0 => self.confirm_remove_feed(),
             _ => {}
         }
     }
 
-    fn handle_feeds_manage_form_key(&mut self, key: KeyEvent, form: FeedForm) {
+    fn handle_feeds_manage_form_key(&mut self, key: KeyEvent, _form: FeedForm) {
         let submitting = self
             .feeds_manage
             .as_ref()
-            .map(|p| p.pending_add.is_some())
-            .unwrap_or(false);
+            .is_some_and(|p| p.pending_add.is_some());
         match key.code {
             KeyCode::Esc => self.cancel_feed_form(),
-            KeyCode::Tab if !submitting => self.feed_form_next_field(),
-            KeyCode::BackTab if !submitting => self.feed_form_prev_field(),
             KeyCode::Enter if !submitting => self.submit_feed_form(),
-            KeyCode::Left | KeyCode::Right if !submitting && form.focus == FeedFormField::Kind => {
-                self.toggle_feed_form_kind();
-            }
-            KeyCode::Backspace if !submitting => self.feed_form_backspace(),
-            KeyCode::Char(c)
-                if !submitting
-                    && (key.modifiers == KeyModifiers::NONE
-                        || key.modifiers == KeyModifiers::SHIFT) =>
-            {
-                self.feed_form_push_char(c);
-            }
             _ => {}
         }
     }
 
+    fn config_feed_count(&self) -> usize {
+        self.app.config.lock().unwrap().feeds.len()
+    }
+
     fn dismiss_feeds_manage(&mut self) {
-        let id = super::components::ComponentId::Popup(super::components::PopupId::FeedManage);
+        let id = ComponentId::Popup(PopupId::FeedManage);
         if self.application.mounted(&id) {
             let _ = self.application.umount(&id);
         }
@@ -115,30 +130,24 @@ impl super::shell::Model {
     }
 
     fn start_add_feed(&mut self) {
-        if let Some(popup) = &mut self.feeds_manage {
-            popup.stage = FeedsManageStage::Form(FeedForm::new_add());
+        if let Some(component) = self.feeds_manage_component_mut() {
+            component.set_stage(FeedsManageStage::Form(FeedForm::new_add()));
         }
     }
 
     fn start_edit_feed(&mut self) {
-        let Some(popup) = &self.feeds_manage else {
-            return;
-        };
-        let index = popup.cursor;
+        let index = self.feeds_manage_cursor();
         let sub = self.app.config.lock().unwrap().feeds.get(index).cloned();
         let Some(sub) = sub else {
             return;
         };
-        if let Some(popup) = &mut self.feeds_manage {
-            popup.stage = FeedsManageStage::Form(FeedForm::new_edit(index, &sub));
+        if let Some(component) = self.feeds_manage_component_mut() {
+            component.set_stage(FeedsManageStage::Form(FeedForm::new_edit(index, &sub)));
         }
     }
 
     fn confirm_remove_feed(&mut self) {
-        let Some(popup) = &self.feeds_manage else {
-            return;
-        };
-        let index = popup.cursor;
+        let index = self.feeds_manage_cursor();
         let name = self
             .app
             .config
@@ -167,92 +176,25 @@ impl super::shell::Model {
     pub(in crate::app) fn cancel_feed_form(&mut self) {
         if let Some(popup) = &mut self.feeds_manage {
             popup.pending_add = None;
-            popup.stage = FeedsManageStage::List;
         }
-    }
-
-    fn feed_form_mut(&mut self) -> Option<&mut FeedForm> {
-        match &mut self.feeds_manage {
-            Some(popup) => match &mut popup.stage {
-                FeedsManageStage::Form(form) => Some(form),
-                FeedsManageStage::List => None,
-            },
-            None => None,
-        }
-    }
-
-    /// Cycles focus among the form's fields. Edit mode (`editing_index`
-    /// set) skips the read-only URL field (§6.3, design.md decision 10).
-    fn feed_form_next_field(&mut self) {
-        let Some(form) = self.feed_form_mut() else {
-            return;
-        };
-        let editing = form.editing_index.is_some();
-        form.focus = match (form.focus, editing) {
-            (FeedFormField::Name, true) => FeedFormField::Kind,
-            (FeedFormField::Name, false) => FeedFormField::Url,
-            (FeedFormField::Url, _) => FeedFormField::Kind,
-            (FeedFormField::Kind, _) => FeedFormField::Name,
-        };
-    }
-
-    fn feed_form_prev_field(&mut self) {
-        let Some(form) = self.feed_form_mut() else {
-            return;
-        };
-        let editing = form.editing_index.is_some();
-        form.focus = match (form.focus, editing) {
-            (FeedFormField::Name, _) => FeedFormField::Kind,
-            (FeedFormField::Url, _) => FeedFormField::Name,
-            (FeedFormField::Kind, true) => FeedFormField::Name,
-            (FeedFormField::Kind, false) => FeedFormField::Url,
-        };
-    }
-
-    fn toggle_feed_form_kind(&mut self) {
-        let Some(form) = self.feed_form_mut() else {
-            return;
-        };
-        form.kind = match form.kind {
-            FeedKind::Audio => FeedKind::Video,
-            FeedKind::Video => FeedKind::Audio,
-        };
-    }
-
-    fn feed_form_push_char(&mut self, c: char) {
-        let Some(form) = self.feed_form_mut() else {
-            return;
-        };
-        match form.focus {
-            FeedFormField::Name => form.name.push(c),
-            FeedFormField::Url if form.editing_index.is_none() => form.url.push(c),
-            _ => {}
-        }
-    }
-
-    fn feed_form_backspace(&mut self) {
-        let Some(form) = self.feed_form_mut() else {
-            return;
-        };
-        match form.focus {
-            FeedFormField::Name => {
-                form.name.pop();
-            }
-            FeedFormField::Url if form.editing_index.is_none() => {
-                form.url.pop();
-            }
-            _ => {}
+        if let Some(component) = self.feeds_manage_component_mut() {
+            component.set_pending_add(None);
+            component.set_stage(FeedsManageStage::List);
         }
     }
 
     pub(in crate::app) fn submit_feed_form(&mut self) {
-        let Some(popup) = &self.feeds_manage else {
-            return;
-        };
-        if popup.pending_add.is_some() {
+        if self
+            .feeds_manage
+            .as_ref()
+            .is_some_and(|p| p.pending_add.is_some())
+        {
             return;
         }
-        let FeedsManageStage::Form(form) = popup.stage.clone() else {
+        let Some(form) = self.feeds_manage_stage().and_then(|stage| match stage {
+            FeedsManageStage::Form(form) => Some(form),
+            FeedsManageStage::List => None,
+        }) else {
             return;
         };
         match form.editing_index {
@@ -291,9 +233,10 @@ impl super::shell::Model {
                 })
                 .collect()
         };
-        self.app.persist_feeds(feeds);
-        if let Some(popup) = &mut self.feeds_manage {
-            popup.stage = FeedsManageStage::List;
+        self.app.persist_feeds(feeds.clone());
+        if let Some(component) = self.feeds_manage_component_mut() {
+            component.set_stage(FeedsManageStage::List);
+            component.set_feeds(feeds);
         }
         self.app.flash(
             format!("Updated '{name}'"),
@@ -351,6 +294,9 @@ impl super::shell::Model {
                 result,
             });
         });
+        if let Some(component) = self.feeds_manage_component_mut() {
+            component.set_pending_add(Some(id));
+        }
         self.app.flash(
             "Fetching feed…".into(),
             super::notify_actions::ToastSeverity::Neutral,
@@ -387,13 +333,15 @@ impl super::shell::Model {
                     });
                     feeds
                 };
-                self.app.persist_feeds(feeds);
+                self.app.persist_feeds(feeds.clone());
                 self.app.flash(
                     format!("Added '{}'", result.name),
                     super::notify_actions::ToastSeverity::Success,
                 );
-                if let Some(popup) = &mut self.feeds_manage {
-                    popup.stage = FeedsManageStage::List;
+                if let Some(component) = self.feeds_manage_component_mut() {
+                    component.set_stage(FeedsManageStage::List);
+                    component.set_feeds(feeds);
+                    component.set_pending_add(None);
                 }
             }
             Err(e) => {
@@ -401,6 +349,9 @@ impl super::shell::Model {
                     format!("Couldn't add feed: {e}"),
                     super::notify_actions::ToastSeverity::Error,
                 );
+                if let Some(component) = self.feeds_manage_component_mut() {
+                    component.set_pending_add(None);
+                }
             }
         }
         true

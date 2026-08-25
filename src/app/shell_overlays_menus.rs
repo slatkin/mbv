@@ -672,42 +672,6 @@ impl Model {
         ComponentId::Popup(PopupId::FeedManage)
     }
 
-    pub(in crate::app) fn sync_feeds_manage(&mut self) {
-        let id = Self::feeds_manage_id();
-        if !self.application.mounted(&id) {
-            return;
-        }
-        let Some(popup) = self.feeds_manage.as_ref() else {
-            return;
-        };
-        let feeds = self.app.config.lock().unwrap().feeds.clone();
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(feeds_manage) = comp.as_any_mut().downcast_mut::<FeedsManageComponent>() {
-                feeds_manage.set_content(popup, feeds);
-            }
-        }
-    }
-
-    pub(in crate::app) fn sync_feeds_manage_to_app(&mut self) {
-        let id = Self::feeds_manage_id();
-        let Some((stage, cursor)) = self
-            .application
-            .get_component_mut(&id)
-            .and_then(|component| {
-                component
-                    .as_any_mut()
-                    .downcast_mut::<FeedsManageComponent>()
-                    .and_then(|feeds_manage| feeds_manage.snapshot())
-            })
-        else {
-            return;
-        };
-        if let Some(popup) = self.feeds_manage.as_mut() {
-            popup.stage = stage;
-            popup.cursor = cursor;
-        }
-    }
-
     pub(in crate::app) fn handle_feeds_manage_request(&mut self, key: crossterm::event::KeyEvent) {
         self.handle_feeds_manage_key(key);
     }

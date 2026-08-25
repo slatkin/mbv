@@ -12,7 +12,7 @@ use super::legacy_input::to_crossterm_key_event;
 use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_feeds_manage_content, FeedsManageRenderModel};
-use crate::app::types_feeds_manage::{FeedForm, FeedFormField, FeedsManagePopup, FeedsManageStage};
+use crate::app::types_feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
 use mbv_core::config::{FeedKind, FeedSubscription};
 
 pub struct FeedsManageComponent {
@@ -34,28 +34,31 @@ impl FeedsManageComponent {
         }
     }
 
-    /// Mirror the shell snapshot without overwriting local form edits. A
-    /// changed stage is an App action result and replaces the local draft.
-    pub(in crate::app) fn set_content(
-        &mut self,
-        popup: &FeedsManagePopup,
-        feeds: Vec<FeedSubscription>,
-    ) {
-        let same_stage = self
-            .stage
-            .as_ref()
-            .is_some_and(|stage| same_stage_kind(stage, &popup.stage));
-        if !same_stage {
-            self.stage = Some(popup.stage.clone());
-            self.cursor = popup.cursor;
-        }
+    /// The shell pushes only stage transitions and content changes (task
+    /// 5.3d): the component owns the draft (`stage`/`cursor`/form edits), so
+    /// no per-tick mirror runs. `set_stage` replaces the current stage
+    /// (open-add/edit, cancel, submit completion); `set_feeds` pushes the
+    /// current `config.feeds` on change; `set_pending_add` carries the shell
+    /// add-fetch marker (`submitting`).
+    pub(in crate::app) fn set_stage(&mut self, stage: FeedsManageStage) {
+        self.stage = Some(stage);
+    }
+
+    pub(in crate::app) fn set_feeds(&mut self, feeds: Vec<FeedSubscription>) {
         self.feeds = feeds;
-        self.pending_add = popup.pending_add;
         self.cursor = self.cursor.min(self.feeds.len().saturating_sub(1));
     }
 
-    pub(in crate::app) fn snapshot(&self) -> Option<(FeedsManageStage, usize)> {
-        self.stage.clone().map(|stage| (stage, self.cursor))
+    pub(in crate::app) fn set_pending_add(&mut self, pending_add: Option<u64>) {
+        self.pending_add = pending_add;
+    }
+
+    pub(in crate::app) fn stage_clone(&self) -> Option<FeedsManageStage> {
+        self.stage.clone()
+    }
+
+    pub(in crate::app) fn cursor(&self) -> usize {
+        self.cursor
     }
 
     fn submitting(&self) -> bool {
@@ -190,14 +193,6 @@ impl FeedsManageComponent {
     }
 }
 
-fn same_stage_kind(left: &FeedsManageStage, right: &FeedsManageStage) -> bool {
-    matches!(
-        (left, right),
-        (FeedsManageStage::List, FeedsManageStage::List)
-            | (FeedsManageStage::Form(_), FeedsManageStage::Form(_))
-    )
-}
-
 impl Default for FeedsManageComponent {
     fn default() -> Self {
         Self::new()
@@ -252,10 +247,6 @@ mod tests {
     use ratatui::Terminal;
     use tuirealm::event::KeyModifiers;
 
-    fn popup() -> FeedsManagePopup {
-        FeedsManagePopup::new()
-    }
-
     fn key(code: Key) -> Event<UserEvent> {
         Event::Keyboard(KeyEvent {
             code,
@@ -266,9 +257,7 @@ mod tests {
     #[test]
     fn settings_popup_feeds_manage_form_edits_are_local() {
         let mut component = FeedsManageComponent::new();
-        let mut popup = popup();
-        popup.stage = FeedsManageStage::Form(FeedForm::new_add());
-        component.set_content(&popup, Vec::new());
+        component.set_stage(FeedsManageStage::Form(FeedForm::new_add()));
         component.on(&key(Key::Char('x')));
 
         let Some(FeedsManageStage::Form(form)) = component.stage else {
@@ -280,9 +269,7 @@ mod tests {
     #[test]
     fn settings_popup_feeds_manage_submit_is_typed() {
         let mut component = FeedsManageComponent::new();
-        let mut popup = popup();
-        popup.stage = FeedsManageStage::Form(FeedForm::new_add());
-        component.set_content(&popup, Vec::new());
+        component.set_stage(FeedsManageStage::Form(FeedForm::new_add()));
 
         assert!(matches!(
             component.on(&key(Key::Enter)),
@@ -293,7 +280,7 @@ mod tests {
     #[test]
     fn settings_popup_feeds_manage_renders_without_app_state() {
         let mut component = FeedsManageComponent::new();
-        component.set_content(&popup(), Vec::new());
+        component.set_stage(FeedsManageStage::List);
         let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
         terminal
             .draw(|frame| component.view(frame, frame.area()))

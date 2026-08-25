@@ -3,9 +3,20 @@ use super::types_feeds_manage::{
     FeedAddResult, FeedForm, FeedFormField, FeedsManagePopup, FeedsManageStage,
 };
 use super::*;
+use crate::app::components::{ComponentId, FeedsManageComponent, PopupId};
 use crate::app::tests::make_app_stub;
 use crate::app::Model;
 use mbv_core::config::{FeedKind, FeedSubscription};
+
+fn fm_component(model: &mut Model) -> &mut FeedsManageComponent {
+    model
+        .application
+        .get_component_mut(&ComponentId::Popup(PopupId::FeedManage))
+        .expect("FeedManage component mounted")
+        .as_any_mut()
+        .downcast_mut::<FeedsManageComponent>()
+        .expect("FeedManage component type")
+}
 
 fn sub(name: &str, url: &str, kind: FeedKind) -> FeedSubscription {
     FeedSubscription {
@@ -39,14 +50,13 @@ fn edit_changes_name_and_kind_but_not_url() {
         "https://example.test/original",
         FeedKind::Video,
     )];
-    let mut popup = FeedsManagePopup::new();
+    model.open_feeds_manage();
     let mut form = FeedForm::new_edit(0, &model.app.config.lock().unwrap().feeds[0].clone());
     form.name = "New Name".to_string();
     form.url = "https://example.test/attempted-change".to_string();
     form.kind = FeedKind::Audio;
     form.focus = FeedFormField::Name;
-    popup.stage = FeedsManageStage::Form(form);
-    model.feeds_manage = Some(popup);
+    fm_component(&mut model).set_stage(FeedsManageStage::Form(form));
 
     model.submit_feed_form();
 
@@ -254,10 +264,13 @@ fn cancelled_add_result_is_dropped() {
 #[test]
 fn matching_add_result_appends_feed_and_returns_to_list() {
     let mut model = Model::new(make_app_stub());
-    let mut popup = FeedsManagePopup::new();
-    popup.pending_add = Some(7);
-    popup.stage = FeedsManageStage::Form(FeedForm::new_add());
-    popup
+    model.open_feeds_manage();
+    model.feeds_manage.as_mut().unwrap().pending_add = Some(7);
+    fm_component(&mut model).set_stage(FeedsManageStage::Form(FeedForm::new_add()));
+    model
+        .feeds_manage
+        .as_mut()
+        .unwrap()
         .add_tx
         .send(FeedAddResult {
             id: 7,
@@ -267,7 +280,6 @@ fn matching_add_result_appends_feed_and_returns_to_list() {
             result: Ok(()),
         })
         .unwrap();
-    model.feeds_manage = Some(popup);
 
     model.drain_feed_add_results();
 
@@ -275,8 +287,8 @@ fn matching_add_result_appends_feed_and_returns_to_list() {
     assert_eq!(feeds.len(), 1);
     assert_eq!(feeds[0].name, "New Feed");
     assert!(matches!(
-        model.feeds_manage.as_ref().unwrap().stage,
-        FeedsManageStage::List
+        fm_component(&mut model).stage_clone(),
+        Some(FeedsManageStage::List)
     ));
     assert_eq!(model.feeds_manage.as_ref().unwrap().pending_add, None);
 }
