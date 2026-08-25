@@ -159,8 +159,6 @@ pub(super) struct HomePane {
     pub(super) section: usize, // 0=continue, 1..=latest
     /// Flat cursor for the home list (spans continue_items then all latest sections).
     pub(super) home_cursor: usize,
-    /// Viewport scroll offset for the home list.
-    pub(super) home_scroll: usize,
 }
 
 pub(super) struct SuspendedLocalSession {

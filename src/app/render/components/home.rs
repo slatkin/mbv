@@ -642,6 +642,9 @@ impl App {
             .map(|(title, source, items, _cursor)| (title.clone(), source.clone(), items.clone()))
             .collect();
 
+        // Scroll is component-owned (`HomeComponent::scroll`); the legacy path
+        // paints from a throwaway scratch so no App state retains it.
+        let mut scratch_scroll = 0;
         let result = render_home_content(
             f,
             area,
@@ -650,7 +653,7 @@ impl App {
             &latest,
             self.home.section,
             &mut self.home.home_cursor,
-            &mut self.home.home_scroll,
+            &mut scratch_scroll,
             self.use_nerd_fonts,
         );
 

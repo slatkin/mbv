@@ -206,7 +206,6 @@ pub(crate) fn make_app_stub() -> App {
             latest: Vec::new(),
             section: 0,
             home_cursor: 0,
-            home_scroll: 0,
         },
         libs: Vec::new(),
         status: String::new(),

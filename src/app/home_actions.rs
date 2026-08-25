@@ -69,7 +69,6 @@ impl App {
             return;
         };
         self.home.section = section_idx;
-        self.home.home_scroll = 0;
         if let Some((start, len)) = self.home_section_range(section_idx) {
             self.home.home_cursor = if len == 0 {
                 start
