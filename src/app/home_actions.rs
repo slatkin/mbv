@@ -139,7 +139,7 @@ impl App {
 
     /// Remove the Continue Watching item at the component-provided flat
     /// `cursor` from the resume row, guarding on the CW range exactly like the
-    /// legacy `handle_cw_key` Delete arm. Non-CW cursors are ignored, and the
+    /// legacy Delete arm. Non-CW cursors are ignored, and the
     /// CW column cursor is saved/restored around the removal just like the
     /// legacy arm (task 5.3d, Home typed-effect prep).
     pub(super) fn home_delete(&mut self, cursor: usize) {

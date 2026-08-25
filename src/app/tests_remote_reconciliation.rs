@@ -131,11 +131,13 @@ fn stop_tracking_and_queue_edits_are_input_gated() {
     app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL));
     assert!(app.remote_tracker.is_none());
 
-    // Enqueue is an ordinary queue edit from Home focus: it applies without
-    // a tracking-specific confirmation and retires tracking.
+    // Enqueue is an ordinary queue edit from Home: it applies without
+    // a tracking-specific confirmation and retires tracking. The Ctrl+A
+    // chord is component-owned (task 5.3d); the App boundary is the
+    // `home_enqueue` effect it routes to.
     app.remote_tracker = Some(tracker(&["a", "b"]));
     app.panel_focus = crate::app::PanelFocus::Library;
-    app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
+    app.home_enqueue(app.home.home_cursor);
     assert!(!matches!(
         app.pending_overlay,
         Some(super::types_overlay::OverlayRequest::Confirm(_))

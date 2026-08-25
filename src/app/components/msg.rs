@@ -253,8 +253,8 @@ pub enum ShellRequest {
     /// Enqueue the Home item at the component-owned flat cursor.
     HomeEnqueue(usize),
     /// Remove the Home item at the component-owned flat cursor from
-    /// Continue Watching (Delete), matching the legacy `handle_cw_key`
-    /// Delete arm's cw-range guard.
+    /// Continue Watching (Delete), keeping the cw-range guard the legacy
+    /// Delete arm applied.
     HomeDelete(usize),
     /// Toggle the watched state of the Continue Watching column's own
     /// (independently tracked) cursor item -- Ctrl+W on Home. Matches the

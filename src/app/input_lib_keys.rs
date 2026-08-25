@@ -12,11 +12,12 @@ impl App {
     }
 
     /// Global view keys shared by the left-column handlers (`handle_lib_key`,
-    /// `handle_queue_key`, and Home nav via `handle_cw_key`): quit, tab
-    /// cycling, digit tab-jump, and the context-menu key. Each handler calls
-    /// this at the point in its own precedence order where these keys used
-    /// to be independently matched; genuinely per-view behavior (`/` search,
-    /// `Ctrl+a` enqueue) stays local. See
+    /// `handle_queue_key`; Home reaches them through the shared front-door
+    /// dispatch in `handle_key_view_dispatch`, not a per-view Home handler):
+    /// quit, tab cycling, digit tab-jump, and the context-menu key. Each
+    /// handler calls this at the point in its own precedence order where these
+    /// keys used to be independently matched; genuinely per-view behavior (`/`
+    /// search, `Ctrl+a` enqueue) stays local. See
     /// docs/adr/0002-centralized-input-handling.md, phase 3 (#132).
     pub(super) fn handle_global_view_key(&mut self, key: KeyEvent) -> Option<bool> {
         match key.code {
@@ -252,48 +253,6 @@ impl App {
             // mean "not a playback key" → let it fall through (`None`).
             super::input_resolver::KeyResolution::FallThrough
             | super::input_resolver::KeyResolution::Swallow => None,
-        }
-    }
-
-    /// Handle a key for the focused home list (all groups: CW + library
-    /// latest). Local navigation (Up/Down/PageUp/PageDown/Home/End/`[`/`]`)
-    /// is owned by `HomeComponent` (task 5.3d, Home local keyboard
-    /// navigation) and no longer reaches this handler; the arms kept here
-    /// are the typed effects (Enter/Ctrl+Enter/Ctrl+a/Ctrl+w/Delete) and
-    /// the context-menu key. Returns true if the key was consumed (others
-    /// fall through to focus nav).
-    pub(super) fn handle_cw_key(&mut self, key: KeyEvent) -> bool {
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        match key.code {
-            KeyCode::Enter if ctrl => {
-                self.home_enqueue(self.home.home_cursor);
-                true
-            }
-            KeyCode::Enter => {
-                self.home_play(self.home.home_cursor);
-                true
-            }
-            // Ctrl+a: enqueue (issue #209). Replaces the old Ctrl+q/Alt+q
-            // bindings, which no longer enqueue — see
-            // `handle_enqueue_selected_key`'s doc comment for why Ctrl+a
-            // specifically had to become the enqueue key here.
-            KeyCode::Char('a') if ctrl => {
-                self.home_enqueue(self.home.home_cursor);
-                true
-            }
-            KeyCode::Char('w') if ctrl => {
-                self.cw_toggle_watched();
-                true
-            }
-            KeyCode::Char('.') => {
-                self.open_context_menu();
-                true
-            }
-            KeyCode::Delete => {
-                self.home_delete(self.home.home_cursor);
-                true
-            }
-            _ => false,
         }
     }
 }

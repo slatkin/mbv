@@ -1,8 +1,6 @@
 use super::*;
 use crate::app::tests::*;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-
 #[cfg(test)]
 #[path = "tests_queue_mutation_playlist_save.rs"]
 mod tests_queue_mutation_playlist_save;
@@ -24,23 +22,26 @@ fn tracking_stub() -> mbv_core::remote_reconciliation::ReconciliationTracker {
     .unwrap()
 }
 
+/// Task 5.3d, Home typed-effect keyboard ownership: the Ctrl+A chord is
+/// component-owned and reaches this effect as `ShellRequest::HomeEnqueue`
+/// (see `home_component_tests` + `shell_home_effects`); the App boundary is
+/// `App::home_enqueue`, which enqueues the targeted cursor immediately.
 #[test]
-fn ctrl_a_enqueues_from_home_view() {
+fn home_enqueue_from_home_view_applies_immediately() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.home.section = 0;
     app.home.continue_items = make_items(1);
     app.home.continue_cursor = 0;
 
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
+    app.home_enqueue(app.home.home_cursor);
 
-    assert!(!handled);
     assert_eq!(app.player_tab.emby_items().len(), 1);
     assert_eq!(app.player_tab.emby_items()[0].id, "id0");
 }
 
 #[test]
-fn ctrl_a_appends_to_direct_remote_queue() {
+fn home_enqueue_appends_to_direct_remote_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
     let local_items = make_items(2);
     let remote_items = make_items(3);
@@ -50,9 +51,8 @@ fn ctrl_a_appends_to_direct_remote_queue() {
     app.home.continue_items = make_items(1);
     app.home.continue_cursor = 0;
 
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
+    app.home_enqueue(app.home.home_cursor);
 
-    assert!(!handled);
     assert_eq!(
         app.remote_player_tab
             .as_ref()
@@ -87,7 +87,7 @@ fn enqueue_stops_tracking_and_applies_immediately() {
     app.home.continue_cursor = 0;
     app.remote_tracker = Some(tracking_stub());
 
-    app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
+    app.home_enqueue(app.home.home_cursor);
     assert!(!matches!(
         app.pending_overlay,
         Some(super::types_overlay::OverlayRequest::Confirm(_))

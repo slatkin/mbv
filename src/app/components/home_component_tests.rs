@@ -119,6 +119,27 @@ fn enter_emits_typed_play_at_the_flat_cursor() {
 }
 
 #[test]
+fn ctrl_enter_and_ctrl_a_enqueue_at_the_flat_cursor() {
+    // Task 5.3d, Home typed-effect keyboard ownership: both the Ctrl+Enter
+    // and Ctrl+A chords enqueue the component's flat cursor target via the
+    // typed `ShellRequest::HomeEnqueue`, mirroring the two legacy
+    // `handle_cw_key` enqueue arms they replace.
+    let mut home = two_section_home();
+    home.on(&key(Key::Down));
+    let msg = home.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::CONTROL,
+    }));
+    assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomeEnqueue(1))));
+
+    let msg = home.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('a'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+    assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomeEnqueue(1))));
+}
+
+#[test]
 fn delete_emits_typed_remove_at_the_flat_cursor() {
     let mut home = two_section_home();
     let msg = home.on(&key(Key::Delete));

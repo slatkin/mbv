@@ -252,16 +252,18 @@ impl HomeComponent {
         self.select_section(sections[next_pos])
     }
 
-    /// Handle a keyboard event using crossterm types directly, matching the
-    /// legacy `handle_cw_key`'s key set exactly. `None` means the key isn't
-    /// Home's to handle: the caller falls through to the legacy top-level
-    /// dispatch (`App::handle_key`'s `CONTEXT_STACK`) unchanged, exactly as
-    /// if Home had never converted (design D11/D13). Global keys the
-    /// `CONTEXT_STACK` already claims ahead of Home (`q`, Tab/BackTab,
+    /// Handle a keyboard event using crossterm types directly. The local
+    /// navigation set and the typed effect-key family (Enter, Ctrl+Enter,
+    /// Ctrl+A, Ctrl+W, Delete) are Home's to claim. `None` means the key
+    /// isn't Home's to handle: the caller falls through to the legacy
+    /// top-level dispatch (`App::handle_key`'s `CONTEXT_STACK`) unchanged,
+    /// exactly as if Home had never converted (design D11/D13). Global keys
+    /// the `CONTEXT_STACK` already claims ahead of Home (`q`, Tab/BackTab,
     /// 1-9, `.`) are deliberately *not* matched here for that reason: `.`
-    /// in particular is already consumed by `handle_global_view_key` before
-    /// `handle_cw_key` ever runs, so its own `.` arm there is unreachable —
-    /// this component reproduces the reachable set, not the unreachable one.
+    /// is consumed by `handle_global_view_key` before the browse dispatch (and
+    /// the deleted `handle_cw_key`) ever run, so the global context-menu
+    /// routing stays at its original precedence — this component reproduces
+    /// the reachable set, not the unreachable one.
     ///
     /// The component claims Home's keys only while its Library panel is
     /// focused (`self.focused`, mirrored from the shell's effective panel

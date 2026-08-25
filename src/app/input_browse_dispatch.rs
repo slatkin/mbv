@@ -60,14 +60,12 @@ impl App {
         }
     }
 
-    /// Home / Continue Watching keys: the local navigation set (`[` / `]`,
-    /// Up/Down, PageUp/PageDown, Home/End) is owned by `HomeComponent`
-    /// (task 5.3d); what remains on the legacy path here is the typed-effect
-    /// set (`Ctrl+W`, `Ctrl+A`, Enter/Delete, and `.` context menu, see
-    /// `handle_cw_key`). Every other key is consumed so it never reaches
-    /// queue-item handling while Home is focused.
-    fn handle_key_home(&mut self, key: KeyEvent) -> Option<bool> {
-        self.handle_cw_key(key);
+    /// Home / Continue Watching keys: the local navigation set and the typed
+    /// effect-key family (Enter, Ctrl+Enter, Ctrl+A, Ctrl+W, Delete) are
+    /// owned by `HomeComponent` (task 5.3d). Nothing remains on the legacy
+    /// path here; this handler only preserves Home's catch-all swallow so no
+    /// key falls through to queue-item handling while Home is focused.
+    fn handle_key_home(&mut self, _key: KeyEvent) -> Option<bool> {
         Some(false)
     }
 
