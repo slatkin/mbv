@@ -197,7 +197,8 @@ pub struct App {
     /// stays `None` (the empty-string sentinel). It is set at the Model
     /// boundary from the mounted `HomeComponent`'s selected source (explicit
     /// keyboard/pill selection and the one-time persisted restore), and
-    /// reconciled from the component each `sync_home` clamp — no numeric
+    /// reconciled from the component at each `push_home_content` clamp — the
+    /// per-frame `sync_home` mirror is deleted (task 5.3d). No numeric
     /// `App.home.section` exists to derive it from.
     pub(super) home_section_pref_semantic: Option<HomeLatestSource>,
     // Restored from prefs; applied once a Home pill matching it exists. This

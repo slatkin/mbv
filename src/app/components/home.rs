@@ -134,7 +134,7 @@ impl HomeComponent {
 
     /// Restore a persisted pill selection once a section matching `source`
     /// exists, mirroring the `home_section_pending` restore the shell applies
-    /// on `sync_home`. Returns `true` once restored (the shell clears the
+    /// on `push_home_content`. Returns `true` once restored (the shell clears the
     /// pending marker afterward).
     pub(in crate::app) fn restore_section(&mut self, source: &HomeLatestSource) -> bool {
         if let Some(idx) = self.latest.iter().position(|(_, s, _)| s == source) {
