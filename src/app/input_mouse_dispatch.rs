@@ -403,4 +403,29 @@ impl App {
             TabSelection::Feeds => {}
         }
     }
+
+    /// True when a browse left-click at `(col, row)` is a double-click against
+    /// `App`'s own 400ms window, updating `last_click_time`/`last_click_pos`.
+    /// The shell calls this from the `BrowserClick` arm so the browser
+    /// component never owns click timing (task 5.3d correction to b5799185).
+    pub(super) fn note_browse_double_click(&mut self, col: u16, row: u16) -> bool {
+        let now = Instant::now();
+        let is_double = now.duration_since(self.last_click_time) < Duration::from_millis(400)
+            && self.last_click_pos == (col, row);
+        self.last_click_time = now;
+        self.last_click_pos = (col, row);
+        is_double
+    }
+
+    /// True when a browse wheel scroll passes `App`'s own 30ms throttle,
+    /// updating `last_scroll_at`. The shell calls this from the `BrowserScroll`
+    /// arm (task 5.3d correction to b5799185).
+    pub(super) fn note_browse_scroll(&mut self) -> bool {
+        let now = Instant::now();
+        let allow = now.duration_since(self.last_scroll_at) >= Duration::from_millis(30);
+        if allow {
+            self.last_scroll_at = now;
+        }
+        allow
+    }
 }

@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
-use super::components::msg::AlbumCursorKind;
+use super::components::msg::{AlbumCursorKind, BrowserHitRegion};
 use super::components::{
     ComponentId, LegacyTerminalEvent, LibraryComponent, Msg, OverlayId, PlaybackComponent,
     ShellRequest, UiRootComponent, UserEvent,
@@ -618,31 +618,41 @@ impl Model {
                         Msg::Shell(ShellRequest::AudiobookshelfBookMouse(mouse)) => {
                             self.handle_audiobookshelf_book_mouse(mouse);
                         }
-                        // Browser (generic Emby) mouse geometry now lives in
-                        // `BrowserComponent`, which hit-tests its own layout and
-                        // forwards intent here (task 5.3d, browser hit_test).
-                        // Each arm calls the gesture's extracted `App` method
-                        // rather than re-deriving effects.
+                        // Browser (generic Emby) mouse geometry lives in
+                        // `BrowserComponent`, which forwards the hit region; the
+                        // shell decides *when* it counts via `App`'s 400ms
+                        // double-click / 30ms wheel fields (task 5.3d, correction to b5799185).
                         Msg::Shell(ShellRequest::BrowserScroll { delta }) => {
-                            self.app.handle_mouse_scroll_browse(delta);
-                        }
-                        Msg::Shell(ShellRequest::BrowserRowSelect { col, row }) => {
-                            self.app.click_set_cursor(col, row);
-                        }
-                        Msg::Shell(ShellRequest::BrowserActivate { in_left, pos }) => {
-                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                self.app
-                                    .handle_mouse_double_click_emby(lib_idx, in_left, pos);
+                            if self.app.note_browse_scroll() {
+                                self.app.handle_mouse_scroll_browse(delta);
                             }
                         }
-                        Msg::Shell(ShellRequest::BrowserContextMenu { col, row }) => {
-                            self.app.handle_mouse_right_click_emby(col, row);
-                        }
-                        Msg::Shell(ShellRequest::BrowserSelectorClick { target }) => {
-                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                self.app.handle_mouse_selector_click_emby(lib_idx, target);
+                        Msg::Shell(ShellRequest::BrowserClick { region, col, row }) => match region
+                        {
+                            BrowserHitRegion::SelectorTab(target) => {
+                                self.app.last_click_time = Instant::now();
+                                self.app.last_click_pos = (col, row);
+                                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                    self.app.handle_mouse_selector_click_emby(lib_idx, target);
+                                }
                             }
-                        }
+                            BrowserHitRegion::ContextMenu => {
+                                self.app.handle_mouse_right_click_emby(col, row);
+                            }
+                            BrowserHitRegion::LeftRow | BrowserHitRegion::InlineHero => {
+                                if self.app.note_browse_double_click(col, row) {
+                                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                        self.app.handle_mouse_double_click_emby(
+                                            lib_idx,
+                                            true,
+                                            ratatui::layout::Position { x: col, y: row },
+                                        );
+                                    }
+                                } else {
+                                    self.app.click_set_cursor(col, row);
+                                }
+                            }
+                        },
                         Msg::Shell(
                             request @ (ShellRequest::PlaylistsBack
                             | ShellRequest::PlaylistsOpen(_)

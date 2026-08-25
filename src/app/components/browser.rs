@@ -7,7 +7,6 @@
 
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
-use std::time::{Duration, Instant};
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, MouseEvent};
@@ -15,7 +14,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{BrowserHitRegion, LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{render_generic_movies_home_video_rows_with_ctx, LibraryListRenderCtx};
@@ -30,9 +29,6 @@ pub struct BrowserComponent {
     last_mirrored_cursor: usize,
     last_mirrored_scroll: usize,
     layout: LayoutMain,
-    last_click_time: Instant,
-    last_click_pos: (u16, u16),
-    last_scroll_at: Instant,
 }
 
 impl BrowserComponent {
@@ -46,9 +42,6 @@ impl BrowserComponent {
             last_mirrored_cursor: 0,
             last_mirrored_scroll: 0,
             layout: LayoutMain::default(),
-            last_click_time: Instant::now(),
-            last_click_pos: (0, 0),
-            last_scroll_at: Instant::now(),
         }
     }
 
@@ -121,12 +114,14 @@ impl BrowserComponent {
         let col = mouse.column;
         let row = mouse.row;
         let position: Position = (col, row).into();
-        // The component owns the browse surface's mouse meaning: it hit-tests
+        // The component owns *where* a browse click lands: it hit-tests
         // against its own painted geometry (`self.layout`, rebuilt every
-        // `view`) and emits a typed `Msg::Shell` for each gesture it claims.
-        // Anything outside every browse rect is forwarded as a raw legacy
-        // event so `App::handle_mouse` keeps handling the surrounding chrome
-        // (tabs, playback pills, queue, the un-migrated tv/music surfaces).
+        // `view`) and emits a typed `Msg::Shell` naming the region. It holds
+        // no double-click or scroll timing — the shell decides *when* a click
+        // counts against `App`'s own timing fields. Clicks outside every
+        // browse rect are forwarded as a raw legacy event so `App::handle_mouse`
+        // keeps handling the surrounding chrome (tabs, playback pills, queue,
+        // the un-migrated tv/music surfaces).
         match mouse.kind {
             crossterm::event::MouseEventKind::ScrollDown
             | crossterm::event::MouseEventKind::ScrollUp => {
@@ -137,11 +132,7 @@ impl BrowserComponent {
                     1
                 };
                 if self.layout.left_area.contains(position) {
-                    let now = Instant::now();
-                    if now.duration_since(self.last_scroll_at) >= Duration::from_millis(30) {
-                        self.last_scroll_at = now;
-                        return Some(Msg::Shell(ShellRequest::BrowserScroll { delta }));
-                    }
+                    return Some(Msg::Shell(ShellRequest::BrowserScroll { delta }));
                 }
             }
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
@@ -149,39 +140,38 @@ impl BrowserComponent {
                 // before the row-select hit-test.
                 for (rect, target) in self.layout.selector_tabs.iter() {
                     if rect.contains(position) {
-                        return Some(Msg::Shell(ShellRequest::BrowserSelectorClick {
-                            target: *target,
+                        return Some(Msg::Shell(ShellRequest::BrowserClick {
+                            region: BrowserHitRegion::SelectorTab(*target),
+                            col,
+                            row,
                         }));
                     }
                 }
                 if self.layout.left_area.contains(position)
                     || self.layout.inline_hero_area.contains(position)
                 {
-                    let now = Instant::now();
-                    let is_double = now.duration_since(self.last_click_time)
-                        < Duration::from_millis(400)
-                        && self.last_click_pos == (col, row);
-                    self.last_click_time = now;
-                    self.last_click_pos = (col, row);
-                    if is_double {
-                        let in_left = self.layout.left_area.contains(position)
-                            || self.layout.inline_hero_area.contains(position);
-                        return Some(Msg::Shell(ShellRequest::BrowserActivate {
-                            in_left,
-                            pos: position,
-                        }));
+                    let region = if self.layout.inline_hero_area.contains(position) {
+                        BrowserHitRegion::InlineHero
+                    } else {
+                        BrowserHitRegion::LeftRow
+                    };
+                    if let BrowserHitRegion::LeftRow = region {
+                        if let Some(cursor) = self.resolve_left_cursor(col, row) {
+                            self.cursor = cursor;
+                        }
                     }
-                    if let Some(cursor) = self.resolve_left_cursor(col, row) {
-                        self.cursor = cursor;
-                    }
-                    return Some(Msg::Shell(ShellRequest::BrowserRowSelect { col, row }));
+                    return Some(Msg::Shell(ShellRequest::BrowserClick { region, col, row }));
                 }
             }
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
                 if self.layout.left_area.contains(position)
                     || self.layout.inline_hero_area.contains(position)
                 {
-                    return Some(Msg::Shell(ShellRequest::BrowserContextMenu { col, row }));
+                    return Some(Msg::Shell(ShellRequest::BrowserClick {
+                        region: BrowserHitRegion::ContextMenu,
+                        col,
+                        row,
+                    }));
                 }
             }
             _ => {}
@@ -193,7 +183,7 @@ impl BrowserComponent {
     /// `left_row_map` (single-column screen-row → item index). This is the
     /// local highlight only; the authoritative cursor set (two-column
     /// cell-target, header/gap no-ops, position save) stays in
-    /// `App::click_set_cursor`, reached via the `BrowserRowSelect` shell arm.
+    /// `App::click_set_cursor`, reached via the `BrowserClick` shell arm.
     fn resolve_left_cursor(&self, col: u16, row: u16) -> Option<usize> {
         let la = self.layout.left_area;
         if !la.contains((col, row).into()) {

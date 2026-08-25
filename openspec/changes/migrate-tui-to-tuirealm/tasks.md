@@ -309,7 +309,7 @@ contributing surface's group 2–4 conversion to have landed.
     not a surface; the earlier "12 components" predates three landed units.)
     Seven units, six to eleven runs depending on bundling. Requires 5.3c and
     *Mouse gesture prep*:
-    - [ ] `browser` `hit_test` — real row/hit geometry, one unit.
+    - [x] `browser` `hit_test` — real row/hit geometry, one unit.
     - [ ] `home` `hit_test` — real row/hit geometry, one unit.
     - [ ] `queue` `hit_test` — real row/hit geometry, one unit.
     - [ ] `tv_workspace` `hit_test` — two focusable panes, one unit.
