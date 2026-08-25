@@ -215,7 +215,12 @@ fn device_id_in(data_home: std::path::PathBuf) -> String {
     id
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+// Task 5.3d (Emby browser effect decoupling): `PartialEq` is required so the
+// TuiRealm shell `Msg`/`ShellRequest` enums (which are `#[derive(PartialEq)]`
+// — the Application requires `Msg: PartialEq`) can carry the component-resolved
+// item as the explicit owned target of a typed effect. Additive derive only;
+// no semantics change.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EmbyItem {
     pub id: String,
     pub name: String,

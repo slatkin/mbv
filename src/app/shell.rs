@@ -669,6 +669,16 @@ impl Model {
                                 self.app.handle_mouse_scroll_browse(delta);
                             }
                         }
+                        // Browser selected-item typed effects (task 5.3d, Emby
+                        // browser effect decoupling): the component reports the
+                        // explicit `EmbyItem` target; the shell forwards it
+                        // straight to the App effect (no App-cursor re-read).
+                        Msg::Shell(
+                            request @ (ShellRequest::BrowserActivate { .. }
+                            | ShellRequest::BrowserPlay { .. }
+                            | ShellRequest::BrowserEnqueue { .. }
+                            | ShellRequest::BrowserToggleWatched { .. }),
+                        ) => self.handle_browser_request(request),
                         Msg::Shell(ShellRequest::BrowserClick { region, col, row }) => match region
                         {
                             BrowserHitRegion::SelectorTab(target) => {

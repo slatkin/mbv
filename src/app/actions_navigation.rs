@@ -12,6 +12,28 @@ impl App {
         self.select_item(lib_idx, item);
     }
 
+    /// Ctrl+P activation tail for an explicitly supplied library item (task
+    /// 5.3d, Emby browser effect decoupling): folder items play the folder
+    /// through the collection queue source and save the queue, non-folder
+    /// items activate via `select_item`. Extracted verbatim from the legacy
+    /// `handle_lib_key` Ctrl+P arm (the legacy arm resolves
+    /// `current_lib_item` and calls this; the `BrowserComponent` resolves its
+    /// own selected item and routes it through the same tail) so the two
+    /// paths share one body — the effect acts on the supplied item directly,
+    /// never on a re-read App cursor.
+    pub(super) fn play_or_activate_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
+        if item.is_folder {
+            let ct = self.libs[lib_idx].library.collection_type.clone();
+            self.queue_source = crate::config::QueueSource::Collection {
+                collection_type: ct,
+            };
+            self.play_folder(&item.id.clone());
+            self.save_queue_state();
+        } else {
+            self.select_item(lib_idx, item);
+        }
+    }
+
     pub(super) fn select_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             let lib = &mut self.libs[lib_idx];

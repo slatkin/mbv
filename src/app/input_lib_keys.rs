@@ -167,16 +167,7 @@ impl App {
             KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 let item = self.current_lib_item(lib_idx);
                 if let Some(item) = item {
-                    if item.is_folder {
-                        let ct = self.libs[lib_idx].library.collection_type.clone();
-                        self.queue_source = crate::config::QueueSource::Collection {
-                            collection_type: ct,
-                        };
-                        self.play_folder(&item.id.clone());
-                        self.save_queue_state();
-                    } else {
-                        self.select(lib_idx);
-                    }
+                    self.play_or_activate_lib_item(lib_idx, item);
                 }
             }
             KeyCode::Enter => self.select(lib_idx),

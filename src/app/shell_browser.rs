@@ -1,9 +1,33 @@
-use super::components::{BrowserComponent, BrowserKey, BrowserKind, ComponentId};
+use super::components::{BrowserComponent, BrowserKey, BrowserKind, ComponentId, ShellRequest};
 use super::shell::Model;
 use super::{PanelFocus, TabSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
+    /// Route the generic Emby browser's selected-item typed effects (task
+    /// 5.3d, Emby browser effect decoupling) to their `App` handlers with the
+    /// component-resolved owned target. `BrowserComponent` resolves its own
+    /// selected `EmbyItem` from its component-local cursor/content; the
+    /// effect acts on that supplied item directly — never by copying the
+    /// component cursor into a `BrowseLevel.cursor` and re-reading it. The
+    /// active library index is derived from the shell's own tab state (the
+    /// browser is mounted only for the active generic/Movies/home-video
+    /// `EmbyLibrary` tab, same derivation as the `BrowserClick` mouse arms).
+    /// A missing library index is a defensive no-op.
+    pub(super) fn handle_browser_request(&mut self, request: ShellRequest) {
+        let Some(lib_idx) = self.app.tab.emby_library_index() else {
+            return;
+        };
+        match request {
+            ShellRequest::BrowserActivate { item } => self.app.select_item(lib_idx, item),
+            ShellRequest::BrowserPlay { item } => self.app.play_or_activate_lib_item(lib_idx, item),
+            ShellRequest::BrowserEnqueue { item } => self.app.enqueue_lib_item(lib_idx, item),
+            ShellRequest::BrowserToggleWatched { item } => {
+                self.app.toggle_watched_item(lib_idx, item)
+            }
+            _ => {}
+        }
+    }
     fn emby_browser_component_id(&self) -> Option<ComponentId> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
@@ -73,7 +97,174 @@ mod tests {
     use super::*;
     use crate::app::components::{BrowserComponent, LegacyTerminalEvent, Msg};
     use crate::app::render::make_movie_app;
+    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::{App, BrowseLevel, LibraryTab, TabSelection};
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+    /// Task 5.3d, Emby browser effect decoupling: `BrowserComponent` resolves
+    /// its own selected `EmbyItem` from its component-local cursor over the
+    /// mirrored content, and the shell routes each typed effect to an `App`
+    /// handler that acts on the supplied item directly (never by copying the
+    /// component cursor into a `BrowseLevel.cursor` and re-reading it).
+    ///
+    /// The regression parks App's nav cursor on the folder at the top of the
+    /// list while the component selects the playable movie below it — the
+    /// legacy Enter/Ctrl+P/Ctrl+A/Ctrl+W arms on the parked folder would
+    /// navigate into the folder, play the folder, enqueue the folder, or
+    /// silently skip respectively — and proves each of the four effects acts
+    /// on the component-selected movie instead. Requests are captured from
+    /// the mounted component itself, so the emitted payload is the
+    /// component-resolved item; every assertion is on the effect's outcome
+    /// (nav-stack depth/cursor, queued item id, or the unavailable-Service
+    /// toast), never on a hand-set coordinate.
+    #[test]
+    fn shell_emby_browser_effects_honor_component_target() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut model = Model::new(browser_app_with_folder_and_movie());
+        model.sync_emby_browser();
+        let id = model.emby_browser_id.clone().expect("browser mounted");
+
+        // Drive the component cursor onto the movie (index 1) while App's
+        // nav cursor stays parked on the folder (index 0).
+        assert!(matches!(
+            drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE),
+            Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+        ));
+
+        // Enter: the component emits BrowserActivate for its own selected
+        // movie; routed with App's cursor parked on the folder, the effect
+        // activates the supplied movie (cursor jumps to it, nav stack does
+        // NOT grow into the folder, and the emby-gated play flashes the
+        // unavailable Service) instead of the legacy folder navigation.
+        let Some(Msg::Shell(ShellRequest::BrowserActivate { item })) =
+            drive_browser_key(&mut model, &id, Key::Enter, KeyModifiers::NONE)
+        else {
+            panic!("browser Enter must emit BrowserActivate, got no typed request");
+        };
+        assert_eq!(
+            item.id, "movie-b",
+            "component must resolve its own selection"
+        );
+        model.app.libs[0].nav_stack[0].cursor = 0;
+        model.handle_browser_request(ShellRequest::BrowserActivate { item });
+        assert_eq!(
+            model.app.libs[0].nav_stack.len(),
+            1,
+            "playable activation must not navigate into the parked folder"
+        );
+        assert_eq!(
+            model.app.libs[0].nav_stack[0].cursor, 1,
+            "the effect must select the supplied movie, not the parked cursor"
+        );
+        assert_eq!(model.app.status, "Emby is unavailable");
+
+        // Ctrl+P: non-folder activation of the supplied movie, again with
+        // the App cursor re-parked on the folder — same decisive signals as
+        // Enter (folder play would have diverted to `play_folder`).
+        model.app.status.clear();
+        let Some(Msg::Shell(ShellRequest::BrowserPlay { item })) =
+            drive_browser_key(&mut model, &id, Key::Char('p'), KeyModifiers::CONTROL)
+        else {
+            panic!("browser Ctrl+P must emit BrowserPlay, got no typed request");
+        };
+        assert_eq!(item.id, "movie-b");
+        model.app.libs[0].nav_stack[0].cursor = 0;
+        model.handle_browser_request(ShellRequest::BrowserPlay { item });
+        assert_eq!(model.app.libs[0].nav_stack.len(), 1);
+        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
+        assert_eq!(model.app.status, "Emby is unavailable");
+
+        // Ctrl+A: the supplied movie (not the parked folder) is enqueued.
+        model.app.status.clear();
+        let Some(Msg::Shell(ShellRequest::BrowserEnqueue { item })) =
+            drive_browser_key(&mut model, &id, Key::Char('a'), KeyModifiers::CONTROL)
+        else {
+            panic!("browser Ctrl+A must emit BrowserEnqueue, got no typed request");
+        };
+        assert_eq!(item.id, "movie-b");
+        model.app.libs[0].nav_stack[0].cursor = 0;
+        model.handle_browser_request(ShellRequest::BrowserEnqueue { item });
+        let queued = model.app.player_tab.emby_items();
+        assert_eq!(queued.len(), 1);
+        assert_eq!(
+            queued[0].id, "movie-b",
+            "enqueue must queue the supplied movie, not the parked folder"
+        );
+
+        // Ctrl+W: the supplied movie is toggled (the emby-gated effect
+        // flashes the unavailable Service) even though a legacy arm on the
+        // parked folder would skip silently via the folder guard.
+        model.app.status.clear();
+        let Some(Msg::Shell(ShellRequest::BrowserToggleWatched { item })) =
+            drive_browser_key(&mut model, &id, Key::Char('w'), KeyModifiers::CONTROL)
+        else {
+            panic!("browser Ctrl+W must emit BrowserToggleWatched, got no typed request");
+        };
+        assert_eq!(item.id, "movie-b");
+        model.app.libs[0].nav_stack[0].cursor = 0;
+        model.handle_browser_request(ShellRequest::BrowserToggleWatched { item });
+        assert_eq!(
+            model.app.status, "Emby is unavailable",
+            "watched toggle must act on the supplied movie, not skip on the parked folder"
+        );
+    }
+
+    /// Drive one key into the mounted `BrowserComponent` and return its `Msg`
+    /// (test helper for the Model-boundary regression above).
+    fn drive_browser_key(
+        model: &mut Model,
+        id: &ComponentId,
+        key: Key,
+        modifiers: KeyModifiers,
+    ) -> Option<Msg> {
+        model
+            .application
+            .get_component_mut(id)
+            .expect("browser mounted")
+            .on(&Event::Keyboard(KeyEvent {
+                code: key,
+                modifiers,
+            }))
+    }
+
+    fn browser_app_with_folder_and_movie() -> App {
+        let mut app = make_app_stub();
+        app.tab = TabSelection::EmbyLibrary(0);
+
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        library.collection_type = "movies".into();
+
+        let mut folder = make_item("Folder A", "CollectionFolder");
+        folder.id = "folder-a".into();
+        folder.is_folder = true;
+
+        let mut movie = make_item("Movie B", "Movie");
+        movie.id = "movie-b".into();
+
+        app.libs.push(LibraryTab {
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: vec![folder, movie],
+                total_count: 2,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+                music_grouping: None,
+            }],
+            ..LibraryTab::new(library)
+        });
+
+        app
+    }
 
     #[test]
     fn shell_mounts_and_syncs_the_generic_emby_browser() {

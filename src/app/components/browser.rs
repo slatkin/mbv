@@ -103,7 +103,70 @@ impl BrowserComponent {
             crossterm::event::KeyCode::End => self.cursor = count.saturating_sub(1),
             _ => {}
         }
+        // Task 5.3d, Emby browser effect decoupling: the selected-item
+        // keyboard effects resolve their target from the component's own
+        // local cursor/content and ride a typed `ShellRequest` carrying the
+        // owned `EmbyItem`, so the Model/App effect acts on that supplied
+        // item directly (never by copying the component cursor into a
+        // `BrowseLevel.cursor` and re-reading it). `focused` preserves the
+        // legacy Library-panel gate exactly (`effective_panel_focus() ==
+        // Library` → these keys reach `handle_lib_key`); when no item is
+        // selected (empty nav level) or while unfocused, the key is forwarded
+        // to the legacy bridge so legacy resolution (e.g. Enter on the
+        // library root) is preserved unchanged. A typed request is returned
+        // in place of the raw legacy key, never in addition to it — no
+        // double execution.
+        if self.focused {
+            let selected = self.selected_effect_item();
+            let request = match key.code {
+                crossterm::event::KeyCode::Enter => {
+                    selected.map(|item| ShellRequest::BrowserActivate { item })
+                }
+                crossterm::event::KeyCode::Char('p')
+                    if key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                {
+                    selected.map(|item| ShellRequest::BrowserPlay { item })
+                }
+                crossterm::event::KeyCode::Char('a')
+                    if key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                {
+                    selected.map(|item| ShellRequest::BrowserEnqueue { item })
+                }
+                crossterm::event::KeyCode::Char('w')
+                    if key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                {
+                    selected.map(|item| ShellRequest::BrowserToggleWatched { item })
+                }
+                _ => None,
+            };
+            // The component owns the selection: the item is resolved at the
+            // component-local cursor in the mirrored content, never a re-read
+            // of an App field.
+            if let Some(request) = request {
+                return Some(Msg::Shell(request));
+            }
+        }
         Some(Msg::Legacy(LegacyTerminalEvent::Key(key)))
+    }
+
+    /// Resolve the item at the component's own local cursor over the mirrored
+    /// content (task 5.3d, Emby browser effect decoupling). The mirrored
+    /// `context` still carries the App cursor/scroll values; the component's
+    /// local `self.cursor` is authoritative for effect targets, so the item
+    /// is resolved at that cursor — never by re-reading an App field. `None`
+    /// when the list is empty (forwarded to the legacy bridge by the caller).
+    fn selected_effect_item(&self) -> Option<mbv_core::api::EmbyItem> {
+        self.context
+            .clone()
+            .with_cursor_scroll(self.cursor, self.scroll)
+            .selected_item()
+            .cloned()
     }
 
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {

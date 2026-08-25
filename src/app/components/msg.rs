@@ -6,6 +6,7 @@
 //! surface converts (see per-type TODOs).
 
 use crossterm::event::{KeyEvent, MouseEvent};
+use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueSlotId;
 
 /// The single TuiRealm outbound type, grouping surface output enums (design
@@ -373,6 +374,47 @@ pub enum ShellRequest {
         region: BrowserHitRegion,
         col: u16,
         row: u16,
+    },
+    /// Enter on the mounted generic/Movies/home-video `BrowserComponent`
+    /// (task 5.3d, Emby browser effect decoupling): the component resolved
+    /// its own selected `EmbyItem` from its component-local cursor/content,
+    /// and the shell runs `App::select_item` on that supplied item directly
+    /// (folder/library navigation and playable behavior preserved) — never
+    /// by copying the component cursor into a `BrowseLevel.cursor` and
+    /// re-reading it. The shell derives the active library index from its own
+    /// tab state (the browser is mounted only for that tab).
+    BrowserActivate {
+        item: EmbyItem,
+    },
+    /// Ctrl+P on the mounted generic/Movies/home-video `BrowserComponent`
+    /// (task 5.3d, Emby browser effect decoupling): the component resolves
+    /// its selected item and the shell applies the preserved Ctrl+P tail to
+    /// it — folder items play the folder through the collection queue source
+    /// (`play_folder` + `save_queue_state`), non-folder items activate via
+    /// `select_item` — acting on the supplied item, never an App cursor
+    /// re-read.
+    BrowserPlay {
+        item: EmbyItem,
+    },
+    /// Ctrl+A on the mounted generic/Movies/home-video `BrowserComponent`
+    /// (task 5.3d, Emby browser effect decoupling): the component resolves
+    /// its selected item and the shell enqueues that supplied item through
+    /// the existing item-targeted seam (`App::enqueue_lib_item`), preserving
+    /// the folder/non-playable guards, route-conflict, local/remote queue,
+    /// and reconciliation behavior.
+    BrowserEnqueue {
+        item: EmbyItem,
+    },
+    /// Ctrl+W on the mounted generic/Movies/home-video `BrowserComponent`
+    /// (task 5.3d, Emby browser effect decoupling): the component resolves
+    /// its selected item and the shell toggles that supplied item's watched
+    /// state through `App::toggle_watched_item` — folder/audio guards, the
+    /// mark played/unplayed API, unplayed-only/feed-home-video removal,
+    /// refresh, and unavailable-Service/error toasts all preserved, acting
+    /// on the supplied item identity (not the legacy `BrowseLevel.cursor`
+    /// re-read).
+    BrowserToggleWatched {
+        item: EmbyItem,
     },
 }
 

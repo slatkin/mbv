@@ -243,6 +243,24 @@ impl App {
         let Some(item) = self.current_lib_item(lib_idx) else {
             return;
         };
+        self.toggle_watched_item(lib_idx, item);
+    }
+
+    /// Ctrl+W / context-menu watched toggle for an explicitly supplied
+    /// library item (task 5.3d, Emby browser effect decoupling): the shared
+    /// tail behind the legacy `toggle_watched` (which resolves
+    /// `current_lib_item` and delegates here) and the `BrowserComponent`
+    /// Ctrl+W route (which supplies its own selected item), so the effect
+    /// acts on the supplied item directly, never on a re-read App cursor.
+    /// Folder/audio guards, mark played/unplayed API behavior,
+    /// unplayed-only/feed-home-video removal, refresh, and
+    /// unavailable-Service/error toasts are preserved exactly. The
+    /// unplayed-only removal previously used `lvl.cursor` (the App cursor,
+    /// which the legacy call always resolves to the toggled item); it now
+    /// targets the supplied item's identity — identical in the legacy flow,
+    /// and correct when the component-selected item differs from a parked
+    /// App cursor.
+    pub(super) fn toggle_watched_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder || item.is_audio() {
             return;
         }
@@ -268,9 +286,11 @@ impl App {
                         self.log_feed_home_video_state(lib_idx, "toggle_watched_feed");
                     } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                         if lvl.unplayed_only {
-                            lvl.items.remove(lvl.cursor);
-                            lvl.total_count = lvl.total_count.saturating_sub(1);
-                            lvl.cursor = lvl.cursor.min(lvl.items.len().saturating_sub(1));
+                            if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
+                                lvl.items.remove(pos);
+                                lvl.total_count = lvl.total_count.saturating_sub(1);
+                                lvl.cursor = pos.min(lvl.items.len().saturating_sub(1));
+                            }
                         }
                     }
                 }
