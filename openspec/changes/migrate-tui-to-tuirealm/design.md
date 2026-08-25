@@ -768,3 +768,56 @@ flips them to `migrated`.
   tick and best matches the current one-event-per-iteration loop. It is
   **behaviour-bearing** (batched strategies reorder active-vs-subscription
   messages), so it is a contract, not a cadence tweak.
+
+### **D16 — Mouse is accepted-broken for alpha; the framework is deleted rather than migrated.**
+
+Decided 2026-08-25 by the maintainer, superseding the per-surface plan recorded
+under 5.3d *Mouse geometry*.
+
+**The decision.** The remaining legacy mouse framework — `input_mouse.rs`,
+`input_mouse_dispatch.rs`, `input_mouse_gestures.rs`, and the layout fields that
+exist only to serve them — is deleted outright. The surfaces that had not yet
+taken ownership of their own hit geometry (`music_workspace`, and the
+`confirm` / `daemon_lost` / `remote_reanchor` / `playback_prompt` bundle) are
+**not** migrated first. Mouse interaction on those surfaces is allowed to be
+broken in the alpha build and will be verified and repaired at a later date,
+against real usage rather than against reconstructed reachability arguments.
+
+**Why this is not a regression in the migration's terms.** 5.3d's deliverable
+was never mouse correctness; it was removing the parallel legacy interaction
+framework so 5.6's gate can pass. mbv is a terminal client and keyboard is the
+product surface. The five units that did land (`browser` `24c550bc`, `home`
+`c7784c47`, `queue` `d6d4fada`+`1cce9cd6`, `tv_workspace` `c70e3e0`) are what
+make blunt deletion safe rather than total: each of those components already
+hit-tests its own painted geometry and sets its own cursors before forwarding,
+so removing the legacy sink degrades mouse on the unmigrated surfaces instead
+of removing mouse everywhere. Deleting on day one would have had the latter
+effect.
+
+**What this cost, deliberately.** Two open questions are closed by deletion
+rather than answered. `c70e3e0` removed the episode-row and season-tab branches
+from `click_set_cursor` on the unverified premise that a podcast library never
+selects an `item_type == "Series"` item — the render gate is
+`is_wide_tv_library || is_podcast_library` (`list.rs:125`) while the component
+mount gate is `collection_type == "tvshows"` (`shell_tv_workspace.rs:13`), and
+the two predicates were never proven to coincide. That premise no longer
+matters, because `click_set_cursor` is deleted with the rest. Separately, the
+`tv_wide_*` / `wide_music_*` fields on `LayoutMain` are screen-named geometry
+describing hero-on-left's child panels, and `is_wide_tv_active()` infers
+arrangement state from whether those fields were painted. That naming misled at
+least one implementer into treating shared geometry as surface-exclusive. It is
+not renamed here; whatever survives deletion inherits the problem.
+
+**What is deferred, and what would close it.** Mouse verification is deferred to
+a post-alpha pass driven by manual use. Closing it means deciding, per surface,
+whether the gesture is worth restoring at all, and restoring it the same way the
+five landed units did — component hit-tests its own geometry, emits a typed
+`Msg::Shell`, shell owns timing via `App`'s single click/scroll clock. Do not
+reintroduce a global hit map or a second clock.
+
+**Effect on 5.4.** 5.4's six precedence proofs were scheduled to run inside this
+deletion unit. The three that concern mouse — simultaneous Queue+Library mouse,
+blocking-overlay swallow of mouse, and "geometry cannot drift" — cannot be
+asserted against behaviour that is accepted-broken. They become structural
+checks only: the absence of the three `input_mouse*.rs` files and of any global
+hit map. The keyboard precedence proofs are unaffected.

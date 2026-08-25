@@ -10,6 +10,21 @@ reframed as migration of the existing TUI framework to TuiRealm. Rows move from
 `legacy` to `component` during the mirror-first implementation stage, then to
 `migrated` after teardown.
 
+## Mouse ownership is out of scope for `migrated` (2026-08-25)
+
+Per **D16** in `openspec/changes/migrate-tui-to-tuirealm/design.md`, the legacy
+mouse framework is deleted rather than migrated, and mouse interaction is
+accepted-broken for the alpha build. A row therefore reaches `migrated` on its
+keyboard, state, rendering, and geometry ownership alone; mouse behaviour is
+**not** part of the verification record for any row, and a row must not be held
+at `component` because its mouse gestures are unverified.
+
+Five surfaces did take ownership of their own hit geometry before the decision
+(`browser`, `home`, `queue`, `tv_workspace`, and partially `music_workspace`);
+that work stands and is why deletion degrades mouse rather than removing it.
+The remaining surfaces will be verified and repaired in a post-alpha pass driven
+by manual use, tracked outside this ledger.
+
 ## States
 
 - `legacy`: local state, input, update, rendering, or render-derived interaction
