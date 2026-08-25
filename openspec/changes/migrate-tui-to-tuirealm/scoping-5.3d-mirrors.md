@@ -65,6 +65,13 @@ still emit `Msg::Legacy(...)` / `ShellRequest::*Key` / `NoOp`.
   replaced by direct `sync_active_destination` (idempotent `active()`);
   `LibraryComponent` (inert after the mirror) deleted with its mount and the
   mirror-pinning tests; new Model-boundary routing tests.
+- **Wave 5** `f35ed7f6` — first surface-mirror deletion: `sync_inline_search`
+  replaced by `push_inline_search_content()` at the search's actual input
+  change points (open, flat-result apply, album-index `Ready` completion and
+  async nav completions via the `lib_rx` drain tail, activation, resize), with
+  stale-mount release when an async completion moves the tab; placement flows
+  through the render seam (component paints the `view`-time rect, `self.area`
+  removed). Ledger row moved to `migrated`.
 - **Prep (sync_home typed-effects)** `d2b24d0c` — bounded routing seam ahead
   of the `sync_home` deletion (not the ownership move itself):
   `HomeComponent` already emits `HomePlay`/`HomeEnqueue`/`HomeDelete`/
@@ -84,7 +91,7 @@ still emit `Msg::Legacy(...)` / `ShellRequest::*Key` / `NoOp`.
 **Not yet landed** (remain, in required order): the per-surface interaction
 mirrors whose `App` state still holds the cursor (`sync_home`,
 `sync_emby_browser`, `sync_tv_workspace`, `sync_music_workspace`,
-`sync_inline_search`, `sync_audiobookshelf_podcast`, `sync_audiobookshelf_book`)
+`sync_audiobookshelf_podcast`, `sync_audiobookshelf_book`)
 — each needs the full 5.3a-style ownership move (component keys + typed Msg +
 App-field deletion + legacy render branch); then `CONTEXT_STACK`/`handle_key_*`
 endpoints; then `LegacyInput`/`Msg::Legacy`/`LegacyTerminalEvent` + every
