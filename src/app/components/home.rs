@@ -60,6 +60,13 @@ pub struct HomeComponent {
     /// decides `App`'s cursor/focus/activation meaning). The component holds
     /// no double-click or scroll timing state — `App` owns that.
     list_area: Rect,
+    /// The selected row's painted rect (`render_home_content`'s
+    /// `selected_item_rect`), retained for the shell to anchor the Home
+    /// context menu against what the component actually painted rather than
+    /// the legacy `AppLayout` copy (task 5.3d, Home menu-placement geometry).
+    /// `None` when this render produced no selection rect, matching the
+    /// legacy copy's own optionality.
+    selected_item_rect: Option<Rect>,
 }
 
 impl HomeComponent {
@@ -78,6 +85,7 @@ impl HomeComponent {
             pill_targets: Vec::new(),
             image_paint: None,
             list_area: Rect::default(),
+            selected_item_rect: None,
         }
     }
 
@@ -136,6 +144,15 @@ impl HomeComponent {
 
     pub(in crate::app) fn section(&self) -> usize {
         self.section
+    }
+
+    /// Home's whole painted panel rect (`list_area`) and its selected-row
+    /// rect, for the shell to place the context menu over what this component
+    /// actually painted rather than the legacy `AppLayout` copies (task 5.3d,
+    /// Home menu-placement geometry). `selected_item_rect` is `None` when this
+    /// render produced no selection rect.
+    pub(in crate::app) fn menu_placement_geometry(&self) -> (Rect, Option<Rect>) {
+        (self.list_area, self.selected_item_rect)
     }
 
     fn new_sections(&self) -> Vec<usize> {
@@ -490,6 +507,7 @@ impl Component for HomeComponent {
         self.hitmap = result.hitmap;
         self.pill_targets = result.pill_targets;
         self.list_area = result.left_area;
+        self.selected_item_rect = result.selected_item_rect;
         self.image_paint = result.image_paint;
     }
 

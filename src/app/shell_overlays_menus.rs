@@ -1,5 +1,5 @@
 use super::super::components::{
-    ComponentId, ContextMenuComponent, FeedsManageComponent, LibraryRoutesComponent,
+    ComponentId, ContextMenuComponent, FeedsManageComponent, HomeComponent, LibraryRoutesComponent,
     MultiselectComponent, OverlayId, PopupId, SelectionModalComponent, ShellRequest,
 };
 use super::super::shell::Model;
@@ -7,7 +7,7 @@ use crate::app::types_context_menu::{
     ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup, LibraryRouteStage,
     MultiSelectKind, MultiSelectPopup,
 };
-use crate::app::PanelFocus;
+use crate::app::{PanelFocus, TabSelection};
 use ratatui::layout::Rect;
 
 impl Model {
@@ -17,17 +17,46 @@ impl Model {
         ComponentId::Overlay(OverlayId::ContextMenu)
     }
 
-    /// Compute the context menu's painted rect from the current `AppLayout`
-    /// and the menu's anchor/entries. Replaces the old `layout.context_menu_rect`
+    /// The mounted `HomeComponent`'s painted panel rect (list area) and
+    /// selected-row rect, when Home is the active destination with the Library
+    /// panel focused. Returns `None` otherwise, so the caller falls back to the
+    /// legacy `AppLayout` geometry. The component gains this geometry from its
+    /// own `view()` paint (`render_home_content`), so the menu placement tracks
+    /// the component's real paint rather than any copied-back legacy geometry.
+    fn home_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
+        if !matches!(self.app.tab, TabSelection::Home)
+            || !matches!(self.app.effective_panel_focus(), PanelFocus::Library)
+        {
+            return None;
+        }
+        self.application
+            .get_component(&ComponentId::Home)
+            .and_then(|c| c.as_any().downcast_ref::<HomeComponent>())
+            .map(HomeComponent::menu_placement_geometry)
+    }
+
+    /// Compute the context menu's painted rect from the current anchor/entries
+    /// and the owning surface's geometry. Replaces the old `layout.context_menu_rect`
     /// global written during `App::render` (task 5.3c); the component now owns
     /// its rect and hit test.
     fn context_menu_rect(&self, anchor: ContextMenuAnchor, entries: &[ContextMenuEntry]) -> Rect {
         let layout = &self.app.layout;
         let size = ContextMenu::rendered_size(entries);
+        // When Home is the active destination with the Library panel focused,
+        // the panel/selection placement geometry comes from the mounted
+        // `HomeComponent`'s own painted geometry (its `list_area` claim rect
+        // and `selected_item_rect`), not the legacy `AppLayout` copies, so the
+        // menu tracks what the component actually painted (task 5.3d, Home
+        // menu-placement geometry). Other destinations and Queue focus keep
+        // using `AppLayout` as before.
+        let home = self.home_menu_geometry();
         let (panel_rect, anchor_rect): (Rect, Option<Rect>) = match &anchor {
             ContextMenuAnchor::SelectedItem(focus) => {
                 let (panel, selected) = match focus {
-                    PanelFocus::Library => (layout.main.left_area, layout.main.selected_item_rect),
+                    PanelFocus::Library => match home {
+                        Some((panel, selected)) => (panel, selected),
+                        None => (layout.main.left_area, layout.main.selected_item_rect),
+                    },
                     PanelFocus::Queue => {
                         (layout.main.queue_area, layout.main.queue_selected_item_rect)
                     }
@@ -36,6 +65,9 @@ impl Model {
             }
             ContextMenuAnchor::Pointer { .. } => {
                 let panel = match self.app.effective_panel_focus() {
+                    // Home is not a wide-TV destination; when it is active the
+                    // pointer panel is the component's own list-area claim rect.
+                    PanelFocus::Library if home.is_some() => home.unwrap().0,
                     PanelFocus::Library if layout.main.is_wide_tv_active() => {
                         let pos = match &anchor {
                             ContextMenuAnchor::Pointer { x, y } => (*x, *y).into(),
