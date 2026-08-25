@@ -72,6 +72,28 @@ still emit `Msg::Legacy(...)` / `ShellRequest::*Key` / `NoOp`.
   stale-mount release when an async completion moves the tab; placement flows
   through the render seam (component paints the `view`-time rect, `self.area`
   removed). Ledger row moved to `migrated`.
+- **Prep (sync_home mirror deletion)** `7c1168a2` — deletes the per-frame
+  `sync_home` mirror (phase 1 of the `sync_home` move; the App-field re-home
+  to shell/component ownership is the follow-up unit, scheduled separately —
+  no `App.home.*` deletion here). `HomeComponent` is now driven by
+  `push_home_content()` at the writers of its projected inputs: the shell's
+  startup `fetch_home` (with `home_loading` around it), the Emby
+  startup/setup drains (`apply_emby_bootstrap`), the player/lib/feed/ws
+  drains (`refresh_after_stop`, `AudiobookshelfShelfFetched` →
+  `rebuild_audiobookshelf_latest`, `rebuild_feeds_latest`,
+  `UserDataChanged`), the legacy key seam (panel-focus + key-driven
+  `fetch_home`), the context-menu/confirm/multiselect seams, the
+  `HomeDelete`/`HomeToggleWatched` refetch arms and `Row`/`ContextMenu` Home
+  clicks (panel focus), and the queue-click seam. `set_content` clamps the
+  section synchronously so the persisted-pill restore and the semantic-pref
+  reconcile preserve their exact ordering (pending restored → cleared →
+  reconcile records the restored source; kept pending while absent so an
+  unrelated `save_prefs` never overwrites it); `[`/`]`/pill selection already
+  reaches the shell via the typed `HomeSectionSelected`/`HomeClick::Pill`
+  notifications, so no new section-changed notification was needed. The CW
+  wheel quirk (`cw_move_cursor`) is untouched. Tests adapt `sync_home()`
+  calls to drive `push_home_content()`. Ledger Home row stays `component`
+  (no ledger edit).
 - **Prep (sync_home typed-effects)** `d2b24d0c` — bounded routing seam ahead
   of the `sync_home` deletion (not the ownership move itself):
   `HomeComponent` already emits `HomePlay`/`HomeEnqueue`/`HomeDelete`/
