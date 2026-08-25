@@ -1,4 +1,3 @@
-use super::types_playback::HomeLatestSource;
 use super::{App, PanelFocus, SidebarId, TabSelection};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::api::EmbyItem;
@@ -275,19 +274,6 @@ impl App {
             .unwrap_or_default()
     }
 
-    /// The currently selected Home pill's persistent identity, or an empty
-    /// string when Continue Watching (section 0) is selected. Reads the
-    /// shell-owned semantic preference (task 5.3d) rather than deriving it
-    /// from numeric `App.home.section`, so unrelated preference saves never
-    /// depend on the component-local numeric section state. `None` (Continue
-    /// Watching) persists as an empty string, its restore sentinel.
-    pub(super) fn home_section_pref(&self) -> String {
-        self.home_section_pref_semantic
-            .as_ref()
-            .map(HomeLatestSource::pref_key)
-            .unwrap_or_default()
-    }
-
     pub(super) fn save_prefs(&self) {
         let path = crate::config::prefs_path();
         // New keys only (#361) -- readers still fall back to the old
@@ -295,7 +281,11 @@ impl App {
         // `load_prefs`'s callers; that fallback can be deleted a release
         // later. `tab_idx` is gone outright, not migrated: it was
         // Standard-view-only state.
-        let v = serde_json::json!({
+        let existing_home_section = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+            .and_then(|prefs| prefs.get("home_section").cloned());
+        let mut v = serde_json::json!({
             "ui_volume": self.ui_volume,
             "mute_on": self.mute_on,
             "pre_mute_volume": self.pre_mute_volume,
@@ -304,8 +294,10 @@ impl App {
                 .tab
                 .to_position_with_counts(self.libs.len(), self.feeds_tab_pos()),
             "queue_column_width": self.queue_column_width,
-            "home_section": self.home_section_pref(),
         });
+        if let Some(home_section) = existing_home_section {
+            v["home_section"] = home_section;
+        }
         if let Ok(s) = serde_json::to_string(&v) {
             let _ = std::fs::write(path, s);
         }

@@ -139,8 +139,6 @@ fn mixed_home_app() -> App {
     // (task 5.3d, numeric Home section deletion). The pill data itself is
     // Model-owned `home_content.latest` (task 5.3d), seeded by
     // `mixed_home_latest()` at the render call.
-    app.home_section_pending =
-        Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
     app
 }
 
@@ -405,6 +403,8 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
     // mounted component; assert its pill bar from the component's own painted
     // targets. The pill data is Model-owned `home_content.latest` (5.3d).
     let (model, terminal) = render_home_shell_with(mixed_home_app(), 60, 30, |m| {
+        m.home_section_pending =
+            Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
         m.home_content.latest = mixed_home_latest();
     });
     assert_home_one_pill_row_and_spacer(&model, &terminal);
@@ -451,6 +451,8 @@ fn matrix_mini_presentations_do_not_admit_a_full_hero() {
     // geometry: the reserved home area is empty and the component paints no
     // hero. The pill data is Model-owned `home_content.latest` (5.3d).
     let (model, _terminal) = render_home_shell_with(mixed_home_app(), 60, 8, |m| {
+        m.home_section_pending =
+            Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
         m.home_content.latest = mixed_home_latest();
     });
     let home = model

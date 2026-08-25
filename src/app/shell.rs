@@ -29,7 +29,7 @@ use super::components::{
 };
 use super::service_startup;
 use super::types_feeds_manage::FeedsManagePopup;
-use super::types_playback::HomeContent;
+use super::types_playback::{HomeContent, HomeLatestSource};
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
@@ -76,6 +76,9 @@ pub struct Model {
     /// `HomeComponent`; App-internal writers deliver computed snapshots via
     /// lib_tx; `loading` mirrors the deleted `App.home_loading`.
     pub(super) home_content: HomeContent,
+    /// Shell-owned semantic Home section preference and one-time restore marker.
+    pub(super) home_section_pref_semantic: Option<HomeLatestSource>,
+    pub(super) home_section_pending: Option<HomeLatestSource>,
 }
 
 impl Model {
@@ -88,6 +91,9 @@ impl Model {
             LEGACY_INPUT_LISTENER_MAX_POLL,
         );
         let application = Application::init(listener_cfg);
+        let home_section = App::load_prefs()["home_section"]
+            .as_str()
+            .and_then(HomeLatestSource::from_pref_key);
         let mut model = Self {
             app,
             application,
@@ -100,6 +106,8 @@ impl Model {
             music_track_focus_request: None,
             feeds_manage: None,
             home_content: HomeContent::new(),
+            home_section_pref_semantic: home_section.clone(),
+            home_section_pending: home_section,
         };
         // UiRoot owns overlay z-order and delegates terminal translation to the
         // temporary bridge while converted surfaces still mirror App state.

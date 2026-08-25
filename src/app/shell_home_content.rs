@@ -233,8 +233,40 @@ impl Model {
         else {
             return;
         };
-        self.app.home_section_pref_semantic = source;
-        // Persist the selection so the pill is restored on the next launch.
-        self.app.save_prefs();
+        if self.home_section_pref_semantic != source {
+            self.home_section_pref_semantic = source;
+            self.persist_home_section_pref();
+        }
+    }
+
+    pub(super) fn home_section_pref(&self) -> String {
+        self.home_section_pref_semantic
+            .as_ref()
+            .map(super::types_playback::HomeLatestSource::pref_key)
+            .unwrap_or_default()
+    }
+
+    pub(super) fn persist_home_section_pref(&self) {
+        let path = crate::config::prefs_path();
+        let mut prefs = super::App::load_prefs();
+        if !prefs.is_object() {
+            prefs = serde_json::json!({});
+        }
+        let value = self
+            .home_section_pref_semantic
+            .as_ref()
+            .map(super::types_playback::HomeLatestSource::pref_key)
+            .unwrap_or_default();
+        if prefs
+            .get("home_section")
+            .and_then(serde_json::Value::as_str)
+            == Some(value.as_str())
+        {
+            return;
+        }
+        prefs["home_section"] = serde_json::Value::String(value);
+        if let Ok(serialized) = serde_json::to_string(&prefs) {
+            let _ = std::fs::write(path, serialized);
+        }
     }
 }

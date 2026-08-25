@@ -46,10 +46,10 @@ fn build_restores_home_section_pending_from_prefs() {
     )
     .expect("write prefs");
 
-    let app = make_built_app();
+    let model = Model::new(make_built_app());
 
     assert_eq!(
-        app.home_section_pending,
+        model.home_section_pending,
         Some(HomeLatestSource::Audiobookshelf("lib-1".into())),
         "the saved pill identity is loaded, to be applied once the section exists"
     );

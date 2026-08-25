@@ -1,4 +1,4 @@
-use super::types_playback::{HomeLatestSource, QueueScope};
+use super::types_playback::QueueScope;
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode};
 use super::types_tab_selection::TabSelection;
@@ -128,18 +128,6 @@ impl App {
             // Always start on Home. The saved queue is restored independently;
             // the saved library tab remains available for runtime persistence.
             library_tab_pending: 0,
-            // The shell-owned semantic identity of the last-select Home pill
-            // plus the one-time restore marker below; both are initialized
-            // from the same saved `home_section` key (task 5.3d). None/absent
-            // means Continue Watching (the empty sentinel).
-            home_section_pref_semantic: prefs["home_section"]
-                .as_str()
-                .and_then(HomeLatestSource::from_pref_key),
-            // The last-selected Home pill, restored by source identity once a
-            // matching section exists. Absent/empty means Continue Watching.
-            home_section_pending: prefs["home_section"]
-                .as_str()
-                .and_then(HomeLatestSource::from_pref_key),
             queue_scroll: 0,
             ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
             pre_mute_volume: prefs["pre_mute_volume"].as_u64().map(|v| v as u8),

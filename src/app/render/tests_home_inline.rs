@@ -40,11 +40,12 @@ fn narrow_home_feed_renders_text_only_without_artwork() {
     // `push_home_content` restores the Feeds section once its pill exists.
     // Home content is Model-owned (task 5.3d), so the pill data is seeded on
     // `home_content.latest` right after `Model::new`.
-    app.home_section_pending = Some(HomeLatestSource::Feeds);
 
-    // Home content is Model-owned (task 5.3d): seed `home_content.latest`
-    // right after `Model::new`, before the push that restores the Feeds pill.
+    // Home content is Model-owned (task 5.3d): seed the pending source and
+    // `home_content.latest` right after `Model::new`, before the push that
+    // restores the Feeds pill.
     let (model, terminal) = render_home_shell_with(app, 60, 20, |m| {
+        m.home_section_pending = Some(HomeLatestSource::Feeds);
         m.home_content.latest = vec![(
             "Feeds".into(),
             HomeLatestSource::Feeds,

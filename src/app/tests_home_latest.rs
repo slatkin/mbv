@@ -661,33 +661,35 @@ fn home_latest_source_pref_key_round_trips() {
 #[test]
 fn async_clamp_keeps_pending_home_source_until_restored() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    // Simulate a startup that loaded a saved `home_section` whose source has
-    // not yet arrived: both the semantic preference and the pending restore
-    // marker carry the saved identity, while the computed `latest` is empty
-    // so the numeric section is still 0 (Continue Watching).
-    app.home_section_pref_semantic = Some(HomeLatestSource::Audiobookshelf("book-lib".into()));
-    app.home_section_pending = Some(HomeLatestSource::Audiobookshelf("book-lib".into()));
+    std::fs::write(
+        crate::config::prefs_path(),
+        serde_json::json!({ "home_section": "abs:book-lib" }).to_string(),
+    )
+    .expect("write prefs");
+    let mut model = Model::new(make_app_stub());
 
-    // Run an actual async clamp/rebuild path. With no Emby client and no
+    // Simulate an actual async clamp/rebuild path. With no Emby client and no
     // cached Audiobookshelf/Feeds sections this rebuilds an empty `latest`
-    // and clamps the numeric section back to 0.
-    let _content = app.fetch_home().expect("fetch_home succeeds with no sources");
+    // while the pending restore remains in Model-owned shell state.
+    let _content = model
+        .app
+        .fetch_home()
+        .expect("fetch_home succeeds with no sources");
 
     assert_eq!(
-        app.home_section_pending,
+        model.home_section_pending,
         Some(HomeLatestSource::Audiobookshelf("book-lib".into())),
         "pending restore must remain pending while the source is absent"
     );
     assert_eq!(
-        app.home_section_pref(),
+        model.home_section_pref(),
         "abs:book-lib",
         "async clamp must not clear the pending semantic source"
     );
 
-    // An unrelated preference save must retain the pending source identity on
-    // disk, not overwrite it with the temporary numeric section (section 0).
-    app.save_prefs();
+    // An unrelated App preference save must retain the shell-owned pending
+    // source identity on disk, not overwrite it with Continue Watching.
+    model.app.save_prefs();
     let saved = crate::config::prefs_path();
     let parsed: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(saved).expect("prefs written")).unwrap();

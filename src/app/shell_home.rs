@@ -170,7 +170,7 @@ impl Model {
         // Snapshot the pending persisted-pill restore before the component
         // borrow so the source identity is stable; arriving sources are
         // applied by `restore_section` only once a matching section exists.
-        let pending = self.app.home_section_pending.clone();
+        let pending = self.home_section_pending.clone();
         if let Some(comp) = self.application.get_component_mut(&ComponentId::Home) {
             if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
                 home.set_content(continue_items, latest, self.home_content.loading);
@@ -181,7 +181,7 @@ impl Model {
                         // Successful restore retains the pending source and
                         // clears the marker; the semantic preference is then
                         // reconciled from the component below.
-                        self.app.home_section_pending = None;
+                        self.home_section_pending = None;
                     }
                 }
             }
@@ -194,14 +194,17 @@ impl Model {
         // must be retained (that would clear it to Continue Watching before
         // restoration). A successful restore above clears pending first, so
         // the reconcile then records the restored source.
-        if self.app.home_section_pending.is_none() {
+        if self.home_section_pending.is_none() {
             let source = self
                 .application
                 .get_component(&ComponentId::Home)
                 .and_then(|c| c.as_any().downcast_ref::<HomeComponent>())
                 .map(|home| home.source_for_section(home.section()))
-                .unwrap_or_else(|| self.app.home_section_pref_semantic.clone());
-            self.app.home_section_pref_semantic = source;
+                .unwrap_or_else(|| self.home_section_pref_semantic.clone());
+            if self.home_section_pref_semantic != source {
+                self.home_section_pref_semantic = source;
+                self.persist_home_section_pref();
+            }
         }
     }
 
@@ -250,9 +253,9 @@ mod tests {
         let mut model = Model::new(make_app_stub());
         // Simulate real startup: both the semantic preference and the pending
         // marker carry the saved source identity.
-        model.app.home_section_pref_semantic =
+        model.home_section_pref_semantic =
             Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
-        model.app.home_section_pending =
+        model.home_section_pending =
             Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
 
         // No matching source yet: the preference stays pending, the semantic
@@ -274,12 +277,12 @@ mod tests {
             );
         }
         assert_eq!(
-            model.app.home_section_pending,
+            model.home_section_pending,
             Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into())),
             "preference must stay pending while the matching section is absent"
         );
         assert_eq!(
-            model.app.home_section_pref(),
+            model.home_section_pref(),
             "abs:books",
             "an absent pending source must be retained for an unrelated save"
         );
@@ -309,12 +312,12 @@ mod tests {
             );
         }
         assert_eq!(
-            model.app.home_section_pref(),
+            model.home_section_pref(),
             "abs:books",
             "restored identity must be reflected in the persisted semantic preference"
         );
         assert_eq!(
-            model.app.home_section_pending, None,
+            model.home_section_pending, None,
             "pending must be cleared once restored"
         );
     }
@@ -428,7 +431,7 @@ mod tests {
         // supplied explicitly (App holds no numeric section to read).
         model.handle_home_request(ShellRequest::HomeSectionSelected(1));
         assert_eq!(
-            model.app.home_section_pref(),
+            model.home_section_pref(),
             "emby:lib",
             "section preference must be the requested pill's source"
         );
@@ -467,15 +470,15 @@ mod tests {
         // as a `latest` pill's key.
         model.handle_home_request(ShellRequest::HomeSectionSelected(0));
         assert!(
-            model.app.home_section_pref().is_empty(),
+            model.home_section_pref().is_empty(),
             "Continue Watching persists as no section key"
         );
 
         // Real pills persist their own keys (off-by-one: section 1 == latest[0]).
         model.handle_home_request(ShellRequest::HomeSectionSelected(1));
-        assert_eq!(model.app.home_section_pref(), "emby:lib-movies");
+        assert_eq!(model.home_section_pref(), "emby:lib-movies");
         model.handle_home_request(ShellRequest::HomeSectionSelected(2));
-        assert_eq!(model.app.home_section_pref(), "abs:abs-pod");
+        assert_eq!(model.home_section_pref(), "abs:abs-pod");
     }
 
     /// Task 5.3d, numeric Home section deletion: after a Home source is
@@ -576,7 +579,7 @@ mod tests {
         // Model-boundary selection (`select_home_section_from_component`).
         model.handle_home_click(HomeHitRegion::Pill(1), 6, 6);
         assert_eq!(
-            model.app.home_section_pref(),
+            model.home_section_pref(),
             "emby:lib",
             "pill click must persist the clicked pill's source"
         );
