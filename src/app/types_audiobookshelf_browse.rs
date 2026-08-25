@@ -330,8 +330,9 @@ pub(super) struct AudiobookshelfBookBrowseState {
     pub detail_loading: bool,
     pub progress: HashMap<String, AudiobookshelfBookProgress>,
     /// Which chapter row is focused within the always-visible hero/chapters
-    /// pane (`Some`), analogous to Music's `album_track_focus`, or the
-    /// right-pane book browser is focused (`None`). No longer gates which
+    /// pane (`Some`), or the right-pane book browser is focused (`None`)
+    /// -- the same focus shape Music's inline track focus uses
+    /// (component-owned `track_cursor`). No longer gates which
     /// pane renders -- both panes are always visible; see
     /// `render_audiobookshelf_books`.
     pub chapter_selection: Option<usize>,

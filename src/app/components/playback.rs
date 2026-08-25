@@ -27,8 +27,6 @@ pub const ATTR_NEXT_UP_PROMPT_VISIBLE: Attribute = Attribute::Custom("next_up_pr
 pub const ATTR_BLOCKING_OVERLAY_ACTIVE: Attribute = Attribute::Custom("blocking_overlay_active");
 /// Set while the active Emby library has inline Search open.
 pub const ATTR_LIB_SEARCH_ACTIVE: Attribute = Attribute::Custom("lib_search_active");
-/// Set while the active Music browser is focused on album tracks.
-pub const ATTR_ALBUM_TRACK_FOCUSED: Attribute = Attribute::Custom("album_track_focused");
 
 #[derive(Clone, Debug, PartialEq)]
 pub(in crate::app) struct PlaybackProjection {
@@ -73,7 +71,6 @@ impl PlaybackComponent {
         props.set(ATTR_NEXT_UP_PROMPT_VISIBLE, AttrValue::Flag(false));
         props.set(ATTR_BLOCKING_OVERLAY_ACTIVE, AttrValue::Flag(false));
         props.set(ATTR_LIB_SEARCH_ACTIVE, AttrValue::Flag(false));
-        props.set(ATTR_ALBUM_TRACK_FOCUSED, AttrValue::Flag(false));
         Self {
             projection: PlaybackProjection {
                 state: PlaybackState::default(),

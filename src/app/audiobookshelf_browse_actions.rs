@@ -448,8 +448,8 @@ impl App {
     /// toggles pane focus without hiding either pane"), replacing the old
     /// Enter-to-enter/Esc-to-leave modal transition. `chapter_selection`
     /// doubles as the focus flag -- `Some` focuses the hero's chapter list,
-    /// `None` focuses the right-pane browser -- analogous to Music's
-    /// `album_track_focus`.
+    /// `None` focuses the right-pane browser -- the same shape Music's
+    /// inline track focus uses (component-owned `track_cursor`).
     pub(super) fn focus_audiobookshelf_book_chapters(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;

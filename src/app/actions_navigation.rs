@@ -156,15 +156,6 @@ impl App {
                     })
                     .unwrap_or(item)
             };
-            let in_track_focus_mode = self.is_viewing_album_folders(lib_idx)
-                && self.libs[lib_idx].album_track_focus.is_some();
-            if in_track_focus_mode {
-                if let Some(album) = self.selected_album_item(lib_idx) {
-                    if self.play_album_track(&album.id, &fresh) {
-                        return;
-                    }
-                }
-            }
             let autoload = self.config.lock().unwrap().autoload;
             if autoload {
                 let parent_id = if self.is_feed_home_video_group_view(lib_idx) {
@@ -248,34 +239,18 @@ impl App {
     /// click so the two paths cannot drift (see #145 / mouse-click parity fix).
     /// Precondition: caller has confirmed `is_viewing_album_folders(lib_idx)`.
     ///
-    /// Wide keeps entering the in-hero `album_track_focus` mode (design.md
-    /// decision 6); narrow has no inline track list to focus (see
-    /// `render_album_hero_detail`), so it opens the selection modal instead.
+    /// Wide track-focus entry is owned by `MusicWorkspaceComponent` (Enter on
+    /// an album row is component-local), so the wide arm is a no-op that only
+    /// exists because the Enter key may still fall through to legacy while the
+    /// album's tracks are loading. Narrow has no inline track list to focus
+    /// (see `render_album_hero_detail`), so it opens the selection modal
+    /// instead (design.md decision 6).
     pub(super) fn activate_album_folder_row(&mut self, lib_idx: usize) {
-        if self.libs[lib_idx].album_track_focus.is_none() {
-            if self.layout.main.is_wide_music_active() {
-                self.libs[lib_idx].album_track_focus = Some(0);
-            } else if let Some(album) = self.selected_album_item(lib_idx) {
-                self.open_album_selection_modal(&album);
-            }
-        } else {
-            let has_focused_track = self
-                .selected_album_item(lib_idx)
-                .and_then(|album| {
-                    self.album_tracks_cache.get(&album.id).and_then(|tracks| {
-                        self.libs[lib_idx]
-                            .album_track_focus
-                            .and_then(|idx| tracks.get(idx))
-                    })
-                })
-                .is_some();
-            if !has_focused_track {
-                return;
-            }
-            // Track already focused: play it. Reuses `select()` (track-focus
-            // aware via `current_lib_item()`) rather than duplicating
-            // queue-build logic here.
-            self.select(lib_idx);
+        if self.layout.main.is_wide_music_active() {
+            return;
+        }
+        if let Some(album) = self.selected_album_item(lib_idx) {
+            self.open_album_selection_modal(&album);
         }
     }
 

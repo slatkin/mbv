@@ -5,7 +5,6 @@ fn snap(active: bool, remote: bool) -> InputSnapshot {
     InputSnapshot {
         player_active: active,
         has_remote_session: remote,
-        track_select_active: false,
     }
 }
 
@@ -41,28 +40,24 @@ fn playback_context_falls_through_on_unbound_key() {
 }
 
 #[test]
-fn playback_context_esc_stops_when_track_select_inactive() {
-    let mut snapshot = snap(true, false);
-    snapshot.track_select_active = false;
+fn playback_context_esc_stops_when_player_active() {
+    // Inline album track-mode Esc handling moved into
+    // `MusicWorkspaceComponent` (the component consumes Esc while a track is
+    // focused, so the legacy Stop binding never sees it); the Playback gate
+    // itself is a plain gated Stop with no track-mode special case left.
     let r = resolve_key(
         InputContext::Playback,
-        &snapshot,
+        &snap(true, false),
         KeyChord::new(KeyCode::Esc, KeyModifiers::NONE),
     );
     assert_eq!(r, KeyResolution::Command(Command::Stop));
 }
 
 #[test]
-fn playback_context_esc_falls_through_when_track_select_active() {
-    // Esc must not stop a playing track while inline album
-    // track-selection mode is active -- it should fall through so the
-    // `album_track_mode` context can treat it as "exit
-    // track-selection mode" instead (same as Backspace).
-    let mut snapshot = snap(true, false);
-    snapshot.track_select_active = true;
+fn playback_context_esc_falls_through_when_playback_inactive() {
     let r = resolve_key(
         InputContext::Playback,
-        &snapshot,
+        &snap(false, false),
         KeyChord::new(KeyCode::Esc, KeyModifiers::NONE),
     );
     assert_eq!(r, KeyResolution::FallThrough);

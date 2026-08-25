@@ -101,40 +101,19 @@ impl App {
             }
         }
 
-        // Track-selection mode (#145 task 3): while the left panel is sitting
-        // on the album-folder-listing nav level, Enter/Escape/Up/Down are
-        // reinterpreted for moving a track focus within the currently
-        // displayed album instead of drilling into `nav_stack` (`select`) or
-        // moving the album cursor (`move_lib_cursor`). Alt-modified keys are
-        // already handled by `handle_key_view_dispatch`; this is scoped to
-        // `is_viewing_album_folders` (so movies/series/
-        // home-video panels and other tabs are completely unaffected).
+        // Album-folder-listing activation: Enter opens the narrow selection
+        // modal. Wide track-focus entry is owned by
+        // `MusicWorkspaceComponent` (Enter on an album row is
+        // component-local), so this legacy arm is the non-component path
+        // (`is_viewing_album_folders` is also reached for plain album
+        // browsing outside the group view). The legacy track-mutation paths
+        // (Enter/Up/Down reinterpreting a focused track) were deleted with
+        // the inline track-focus field (task 5.3d, Album track focus).
         if self.is_viewing_album_folders(lib_idx) {
             match key.code {
                 KeyCode::Enter => {
                     self.activate_album_folder_row(lib_idx);
                     return Some(false);
-                }
-                KeyCode::Esc | KeyCode::Backspace => {
-                    if self.libs[lib_idx].album_track_focus.is_some() {
-                        self.libs[lib_idx].album_track_focus = None;
-                        return Some(false);
-                    }
-                }
-                KeyCode::Up | KeyCode::Down => {
-                    if let Some(idx) = self.libs[lib_idx].album_track_focus {
-                        let track_count = self
-                            .selected_album_item(lib_idx)
-                            .and_then(|item| self.album_tracks_cache.get(&item.id))
-                            .map(|tracks| tracks.len())
-                            .unwrap_or(0);
-                        if track_count > 0 {
-                            let delta: i64 = if key.code == KeyCode::Up { -1 } else { 1 };
-                            let new_idx = super::ui_util::move_cursor(idx, delta, track_count);
-                            self.libs[lib_idx].album_track_focus = Some(new_idx);
-                        }
-                        return Some(false);
-                    }
                 }
                 _ => {}
             }

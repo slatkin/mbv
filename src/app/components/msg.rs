@@ -147,6 +147,20 @@ pub enum ShellRequest {
         target: usize,
         kind: AlbumCursorKind,
     },
+    /// Activate the focused inline album track (Enter, or Ctrl+P while a
+    /// track is focused): the shell resolves the track from
+    /// `MusicWorkspaceComponent::track_cursor()` and plays it through the
+    /// album queue path (`App::play_album_track`).
+    MusicTrackActivate,
+    /// Enqueue the focused inline album track (Ctrl+A while a track is
+    /// focused): the shell resolves the track from the component cursor and
+    /// enqueues it via the library-view enqueue path.
+    MusicTrackEnqueue,
+    /// Open the context menu targeted at the focused inline album track
+    /// ('.' while a track is focused): the shell resolves the track item and
+    /// raises the menu through `App` (target resolution lives at the
+    /// shell/component boundary).
+    MusicTrackContextMenu,
     /// Quit the application.
     Quit,
     /// Dismiss the Help overlay (Esc/F1 while help is open).

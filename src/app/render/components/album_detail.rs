@@ -212,9 +212,11 @@ impl App {
         if row < max_y && show_hint {
             if selected_region_gutter {
                 let hint_w = (area.width as usize).saturating_sub(gutter_w);
-                // `focused` mirrors `album_track_focus.is_some()` at the call
-                // site: once track-selection mode is entered, swap the
-                // "show tracks" hint for the exit hint.
+                // `focused` is passed explicitly by the caller: wide passes
+                // the component's track focus, narrow always passes `false`
+                // (narrow never holds inline track focus). Once track-selection
+                // mode is entered, swap the "show tracks" hint for the exit
+                // hint.
                 let trailing_hint = if focused {
                     "BACK: Exit"
                 } else {

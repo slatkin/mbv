@@ -58,6 +58,14 @@ pub struct Model {
     pub(super) inline_search_id: Option<ComponentId>,
     pub(super) abs_podcast_id: Option<ComponentId>,
     pub(super) abs_book_id: Option<ComponentId>,
+    /// One-shot shell→component request for the mounted Music workspace's
+    /// inline track focus, applied at the next `sync_music_workspace` after
+    /// the component is mounted/synced (so mount-timing never loses it).
+    /// `Some(true)` = enter focus (recursive album activation);
+    /// `Some(false)` = clear focus (position restore). Neither mirrors App
+    /// state: the component owns the cursor, the shell only delivers the
+    /// trigger that used to write the deleted inline track-focus field.
+    pub(super) music_track_focus_request: Option<bool>,
     /// Shell-owned mirror of the feeds-management popup's interaction state
     /// plus its background add-feed channel (task 5.3c). The
     /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
@@ -84,6 +92,7 @@ impl Model {
             inline_search_id: None,
             abs_podcast_id: None,
             abs_book_id: None,
+            music_track_focus_request: None,
             feeds_manage: None,
         };
         // UiRoot owns overlay z-order and delegates terminal translation to the
@@ -274,6 +283,22 @@ impl Model {
                         parent_id,
                         items,
                     } => self.apply_inline_search_items(lib_idx, parent_id, items),
+                    // Recursive album activation used to write `Some(0)` on
+                    // the deleted inline track-focus field directly; the
+                    // component owns the cursor now, so the shell delivers
+                    // the same trigger as a one-shot request consumed at the
+                    // next sync (wide only -- narrow keeps track focus off).
+                    super::LibEvent::RecursiveAlbumActivated { .. } => {
+                        self.app.handle_lib_event(ev);
+                        self.music_track_focus_request = Some(true);
+                    }
+                    // Position restore used to clear the deleted track-focus
+                    // field; route the same reset to the component at the
+                    // next sync.
+                    super::LibEvent::RestoreLibraryPosition { .. } => {
+                        self.app.handle_lib_event(ev);
+                        self.music_track_focus_request = Some(false);
+                    }
                     ev => self.app.handle_lib_event(ev),
                 }
             }
@@ -493,6 +518,34 @@ impl Model {
                                         self.app.page_grouped_album_cursor(lib_idx, target);
                                     }
                                 }
+                            }
+                        }
+                        // Inline album-track activation/enqueue/context-menu
+                        // target resolution: the component owns the cursor,
+                        // the shell resolves it to the cached track and runs
+                        // the App effect (task 5.3d, Album track focus).
+                        Msg::Shell(ShellRequest::MusicTrackActivate) => {
+                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                if let Some((album_id, track)) = self.focused_music_track(lib_idx) {
+                                    self.app.play_album_track(&album_id, &track);
+                                }
+                            }
+                        }
+                        Msg::Shell(ShellRequest::MusicTrackEnqueue) => {
+                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                if let Some((_, track)) = self.focused_music_track(lib_idx) {
+                                    self.app.enqueue_lib_item(lib_idx, track);
+                                }
+                            }
+                        }
+                        Msg::Shell(ShellRequest::MusicTrackContextMenu) => {
+                            if let Some((_, track)) = self
+                                .app
+                                .tab
+                                .emby_library_index()
+                                .and_then(|lib_idx| self.focused_music_track(lib_idx))
+                            {
+                                self.app.open_context_menu_for(track);
                             }
                         }
                         // Help overlay cross-boundary requests (design D4).

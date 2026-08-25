@@ -290,9 +290,35 @@ contributing surface's group 2–4 conversion to have landed.
     nextest run -p mbv` (full suite), `rtk cargo check -p mbv`, `rtk cargo clippy
     --workspace --all-targets`, `rtk cargo fmt --all -- --check`, and `rtk make
     check-code-file-lines`.
-  - [ ] *Album track focus* — delete `LibraryTab.album_track_focus` and re-home
+  - [x] *Album track focus* — delete `LibraryTab.album_track_focus` and re-home
     its four `= None` resets. 30 files (21 / 9), 113 refs. Independent of 5.3c;
     may run in parallel with it.
+    **Landed.** `MusicWorkspaceComponent::track_cursor` is the
+    sole owner of inline track focus. The field, its initializer,
+    `clear_music_focus`, the `ATTR_ALBUM_TRACK_FOCUSED` projection/gate, the
+    `AlbumTrackMove`/`AlbumTrackDismiss`/`AlbumTrackEnter` commands, the
+    `album_track_mode` `CONTEXT_STACK`/`KEY_POLICY` entries, and the legacy
+    track-mutation arms in `input_browse_dispatch.rs`/`input_lib_keys.rs` are
+    deleted; `grep` proves no `album_track_focus`, `ATTR_ALBUM_TRACK_FOCUSED`,
+    `AlbumTrackMove`, or `AlbumTrackDismiss` remains. Focused-track target
+    resolution moved to the shell (`Model::focused_music_track`) via typed
+    `ShellRequest::{MusicTrackActivate, MusicTrackEnqueue, MusicTrackContextMenu}`;
+    Enter/Ctrl+P activate, Ctrl+A enqueues, `.` opens the track menu.
+    Narrow stays explicitly unfocused: the component is mounted there but
+    `set_inline_track_focus_enabled(false)` keeps `track_cursor` `None`,
+    narrow activation keeps its selection-modal path, and the narrow render
+    reads are explicit `0`/`false`. The narrow render branches and the
+    `RecursiveAlbumActivated`/`RestoreLibraryPosition` writers are deleted;
+    wide enters focus, narrow stays `None`, via a one-shot
+    `music_track_focus_request` consumed at `sync_music_workspace`. Album
+    identity changes (`last_album_id`) and wide→narrow resizes clear the
+    cursor. Verified: `rtk cargo nextest run -p mbv music_workspace album_track`
+    (25 passed), full `rtk cargo nextest run -p mbv` (1138 passed), `rtk cargo
+    check -p mbv`, `rtk cargo clippy --workspace --all-targets` (no new
+    warnings in touched files), `rtk cargo fmt --all -- --check` clean, and
+    `rtk ast-grep scan` (69 pre-existing render/screens-boundary errors
+    unchanged, none in touched files; the tasks-specific rules pass). Source
+    numstats show edits, no renames/copies.
   - [x] *Mouse gesture prep* — extract the three remaining `match self.tab`
     dispatch points in `App::handle_mouse` (`input_mouse_dispatch.rs`: selector-tab
     click, double-click activate, right-click menu) into one named method per
@@ -346,7 +372,13 @@ contributing surface's group 2–4 conversion to have landed.
   component-owned render geometry, and their four `album_track_focus = None`
   resets (lines 98, 147, 206 and the gate at 166) are the same reset this
   teardown has to re-home anyway. Whichever narrow-mode answer the previous
-  paragraph settles on governs both. Verify `rtk cargo check -p mbv` and that no `impl App` interaction handler and no component-local `App` field remains for any surface.
+  paragraph settles on governs both. **This paragraph is superseded on the
+  field side: the Album track focus unit above landed all of it (narrow mode
+  resolves to "component mounted with inline track focus disabled"; the
+  `album_cursor.rs` resets/gate and the `album_track_focus = None` lines are
+  gone); what remains for the Mirrors/framework unit is only the framework
+  deletion itself.** Verify `rtk cargo check -p mbv` and that no `impl App`
+  interaction handler and no component-local `App` field remains for any surface.
 - [x] 5.4 Confirm every mouse path reads component-owned geometry (no global hit map); verify the six precedence/mouse proofs (blocking-overlay swallow, parent/global precedence, simultaneous Queue+Library mouse, overlay blocks underlying mutation, deterministic focus restoration, geometry cannot drift).
   **Runs inside the *Mouse geometry* lane's final Framework-deletion unit, not
   as a separate lane** — it asserts exactly what that unit delivers. Under D16,

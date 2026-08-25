@@ -10,8 +10,8 @@
 //! never rendered or downcast into.
 
 use super::components::{
-    ComponentId, ATTR_ALBUM_TRACK_FOCUSED, ATTR_BLOCKING_OVERLAY_ACTIVE, ATTR_LIB_SEARCH_ACTIVE,
-    ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE,
+    ComponentId, ATTR_BLOCKING_OVERLAY_ACTIVE, ATTR_LIB_SEARCH_ACTIVE, ATTR_NEXT_UP_PROMPT_VISIBLE,
+    ATTR_SKIP_INTRO_PROMPT_VISIBLE,
 };
 use super::shell::Model;
 use tuirealm::props::AttrValue;
@@ -22,14 +22,6 @@ impl Model {
         let next_up_visible = self.app.next_up_item.is_some();
         let blocking_overlay_active = self.blocking_overlay_active();
         let lib_search_active = self.inline_search_id.is_some();
-        let album_track_focused = match self.app.tab {
-            super::TabSelection::EmbyLibrary(index) => self
-                .app
-                .libs
-                .get(index)
-                .is_some_and(|library| library.album_track_focus.is_some()),
-            _ => false,
-        };
         let _ = self.application.attr(
             &ComponentId::Playback,
             ATTR_SKIP_INTRO_PROMPT_VISIBLE,
@@ -49,11 +41,6 @@ impl Model {
             &ComponentId::Playback,
             ATTR_LIB_SEARCH_ACTIVE,
             AttrValue::Flag(lib_search_active),
-        );
-        let _ = self.application.attr(
-            &ComponentId::Playback,
-            ATTR_ALBUM_TRACK_FOCUSED,
-            AttrValue::Flag(album_track_focused),
         );
     }
 }

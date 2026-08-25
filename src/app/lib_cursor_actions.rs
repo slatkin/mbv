@@ -103,8 +103,7 @@ impl App {
         // frame's laid-out item rows. The grouped-album view also publishes
         // `left_sorted_indices` but resolves movement through its own
         // column-aware cursor (see `album_cursor.rs`), so it is excluded.
-        if self.libs[lib_idx].album_track_focus.is_none()
-            && !self.is_viewing_album_folders(lib_idx)
+        if !self.is_viewing_album_folders(lib_idx)
             && !self.layout.main.left_sorted_indices.is_empty()
         {
             if let Some(delta) = self.letter_vertical_delta(lib_idx, item_rows) {

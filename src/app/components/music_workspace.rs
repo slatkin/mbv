@@ -7,7 +7,7 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, MouseEvent};
+use tuirealm::event::{Event, Key, KeyModifiers, MouseEvent};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
@@ -28,7 +28,11 @@ pub struct MusicWorkspaceComponent {
     initialized: bool,
     last_mirrored_cursor: usize,
     last_mirrored_scroll: usize,
-    last_mirrored_track: Option<usize>,
+    /// Selected-album identity from the last pushed context. When it changes
+    /// (group switch, recursive-album activation, position restore), inline
+    /// track focus must reset: a focused track index refers to the previous
+    /// album's track list.
+    last_album_id: Option<String>,
     layout: LayoutMain,
     image_paint: Option<MusicImagePaint>,
     inline_track_focus_enabled: bool,
@@ -59,7 +63,7 @@ impl MusicWorkspaceComponent {
             initialized: false,
             last_mirrored_cursor: 0,
             last_mirrored_scroll: 0,
-            last_mirrored_track: None,
+            last_album_id: None,
             layout: LayoutMain::default(),
             image_paint: None,
             inline_track_focus_enabled: false,
@@ -74,10 +78,19 @@ impl MusicWorkspaceComponent {
     }
 
     pub(in crate::app) fn set_content(&mut self, context: MusicWideRenderCtx) {
+        let album_changed = self.last_album_id.as_deref()
+            != context
+                .selected_album
+                .as_ref()
+                .map(|album| album.id.as_str());
         if !self.initialized {
             self.album_cursor = context.list.cursor();
             self.album_scroll = context.list.scroll();
             self.track_cursor = context.track_cursor;
+            self.last_album_id = context
+                .selected_album
+                .as_ref()
+                .map(|album| album.id.clone());
             self.initialized = true;
         } else {
             if self.album_cursor == self.last_mirrored_cursor {
@@ -86,8 +99,11 @@ impl MusicWorkspaceComponent {
             if self.album_scroll == self.last_mirrored_scroll {
                 self.album_scroll = context.list.scroll();
             }
-            if self.track_cursor == self.last_mirrored_track {
-                self.track_cursor = context.track_cursor;
+            // Inline track focus is owned here; the only external resets are
+            // the selected-album identity changing and narrow mode disabling
+            // the feature (both leave `track_cursor` `None`).
+            if album_changed {
+                self.track_cursor = None;
             }
         }
         self.context = context;
@@ -102,7 +118,6 @@ impl MusicWorkspaceComponent {
         }
         self.last_mirrored_cursor = self.context.list.cursor();
         self.last_mirrored_scroll = self.context.list.scroll();
-        self.last_mirrored_track = self.context.track_cursor;
     }
 
     pub(in crate::app) fn set_album_columns(&mut self, columns: usize) {
@@ -144,8 +159,43 @@ impl MusicWorkspaceComponent {
         self.context.focused && self.track_cursor.is_none()
     }
 
+    /// Whether the active panel is the Library panel (track-mode keys are
+    /// only tracked while the Library panel owns the keys -- with the Queue
+    /// panel focused, Up/Down etc. keep their queue meaning).
+    fn library_panel_active(&self) -> bool {
+        self.context.focused
+    }
+
     pub(in crate::app) fn track_cursor(&self) -> Option<usize> {
         self.track_cursor
+    }
+
+    /// Whether inline track focus can be entered right now: wide mode
+    /// (`inline_track_focus_enabled`) with the selected album's tracks
+    /// cached. Narrow mode keeps `track_cursor` `None` by construction.
+    fn can_enter_track_focus(&self) -> bool {
+        self.inline_track_focus_enabled
+            && self.context.focused
+            && self
+                .context
+                .album_tracks
+                .as_ref()
+                .is_some_and(|tracks| !tracks.is_empty())
+    }
+
+    /// Shell-driven entry into inline track focus (recursive album
+    /// activation): enters only when the feature is enabled and the selected
+    /// album's tracks are cached; a no-op in narrow mode.
+    pub(in crate::app) fn enter_track_focus(&mut self) {
+        if self.can_enter_track_focus() {
+            self.track_cursor = Some(0);
+        }
+    }
+
+    /// Shell-driven clear of inline track focus (position restore): the
+    /// deleted track-focus-clear rehome.
+    pub(in crate::app) fn clear_track_focus(&mut self) {
+        self.track_cursor = None;
     }
 
     fn move_track(&mut self, delta: i64) {
@@ -157,20 +207,63 @@ impl MusicWorkspaceComponent {
 
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
         match key.code {
+            // Activation while an inline album track is focused: play the
+            // focused track through the album queue path. The shell resolves
+            // the track from `track_cursor()` (target resolution lives at
+            // the shell/component boundary, not in `App`).
+            Key::Enter if self.track_cursor.is_some() => {
+                return Some(Msg::Shell(ShellRequest::MusicTrackActivate));
+            }
+            // Ctrl+P keeps its "play current" meaning: with a focused track
+            // that is the track, exactly like Enter.
+            Key::Char('p')
+                if key.modifiers.contains(KeyModifiers::CONTROL) && self.track_cursor.is_some() =>
+            {
+                return Some(Msg::Shell(ShellRequest::MusicTrackActivate));
+            }
+            // Enter on an album row (Library panel): enter inline track
+            // focus when wide with cached tracks; otherwise fall through to
+            // legacy activation (narrow opens the selection modal).
             Key::Enter if self.track_cursor.is_none() => {
-                if self.inline_track_focus_enabled
-                    && self
-                        .context
-                        .album_tracks
-                        .as_ref()
-                        .is_some_and(|tracks| !tracks.is_empty())
-                {
+                if self.can_enter_track_focus() {
                     self.track_cursor = Some(0);
+                    return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
                 }
             }
-            Key::Esc | Key::Backspace => self.track_cursor = None,
-            Key::Up | Key::Char('k') if self.track_cursor.is_some() => self.move_track(-1),
-            Key::Down | Key::Char('j') if self.track_cursor.is_some() => self.move_track(1),
+            // Exit inline track focus locally; the key must not reach legacy
+            // (its Esc/Stop semantics belong to the unprefixed panel).
+            Key::Esc | Key::Backspace if self.track_cursor.is_some() => {
+                self.track_cursor = None;
+                return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+            }
+            // Track moves are local to the component while a track is
+            // focused and the Library panel owns the keys; with the Queue
+            // panel focused the keys fall through to legacy queue handling.
+            Key::Up | Key::Char('k')
+                if self.track_cursor.is_some() && self.library_panel_active() =>
+            {
+                self.move_track(-1);
+                return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+            }
+            Key::Down | Key::Char('j')
+                if self.track_cursor.is_some() && self.library_panel_active() =>
+            {
+                self.move_track(1);
+                return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+            }
+            // Enqueue / context menu target the focused track while one is
+            // focused (Library panel); otherwise keep their legacy meaning
+            // (queue view handling / album target).
+            Key::Char('a')
+                if key.modifiers.contains(KeyModifiers::CONTROL)
+                    && self.track_cursor.is_some()
+                    && self.library_panel_active() =>
+            {
+                return Some(Msg::Shell(ShellRequest::MusicTrackEnqueue));
+            }
+            Key::Char('.') if self.track_cursor.is_some() && self.library_panel_active() => {
+                return Some(Msg::Shell(ShellRequest::MusicTrackContextMenu));
+            }
             Key::Up | Key::Char('k') if self.can_emit_album_cursor() => {
                 let target = self
                     .move_album_rows(-1, self.album_columns, true)

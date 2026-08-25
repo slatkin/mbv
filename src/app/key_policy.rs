@@ -18,7 +18,7 @@
 #![allow(dead_code)]
 
 use super::components::component_id::OverlayId;
-use super::components::{ComponentId, ATTR_ALBUM_TRACK_FOCUSED, ATTR_BLOCKING_OVERLAY_ACTIVE};
+use super::components::{ComponentId, ATTR_BLOCKING_OVERLAY_ACTIVE};
 use tuirealm::props::{AttrValue, Attribute};
 use tuirealm::subscription::SubClause;
 
@@ -173,18 +173,12 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         gate: KeyPolicyGate::Always,
         blocking: false,
     },
-    // 23 — Inline album-track mode
-    KeyPolicyEntry {
-        name: "album_track_mode",
-        owner: KeyPolicyOwner::Active(None),
-        gate: KeyPolicyGate::HasAttrValue(
-            ComponentId::Playback,
-            ATTR_ALBUM_TRACK_FOCUSED,
-            AttrValue::Flag(true),
-        ),
-        blocking: false,
-    },
-    // 24 — View dispatch (catch-all; resolves to focused Library leaf at runtime)
+    // 23 — View dispatch (catch-all; resolves to focused Library leaf at runtime).
+    // (The former `album_track_mode` entry was removed with the legacy
+    // track-mutation path: inline album track mode now lives in the active
+    // MusicWorkspaceComponent, which owns its keys locally and routes only
+    // activation across the boundary — there is no precedence-gate entry left
+    // for it. Task 5.3d, Album track focus.)
     KeyPolicyEntry {
         name: "view_dispatch",
         owner: KeyPolicyOwner::Active(None),

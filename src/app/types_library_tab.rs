@@ -6,11 +6,6 @@ pub(super) struct LibraryTab {
     pub(super) library: EmbyItem,
     pub(super) nav_stack: Vec<BrowseLevel>,
     pub(super) feed_home_video: Option<FeedHomeVideoState>,
-    /// `Some(idx)` = track-selection mode is active for the album currently
-    /// shown inline at the album-folder-listing nav level (#145 task 3);
-    /// `idx` indexes into that album's cached track list
-    /// (`App::album_tracks_cache`). `None` = normal album-list navigation.
-    pub(super) album_track_focus: Option<usize>,
     /// The library's TRUE unfiltered `TotalRecordCount`, captured from the
     /// first unfiltered fetch of the library's top level. `None` until that
     /// first load completes. Used to gate the letter pill row and per-letter
@@ -25,13 +20,8 @@ impl LibraryTab {
             library,
             nav_stack: Vec::new(),
             feed_home_video: None,
-            album_track_focus: None,
             library_total: None,
         }
-    }
-
-    pub(super) fn clear_music_focus(&mut self) {
-        self.album_track_focus = None;
     }
 
     pub(super) fn library_position_snapshot(&self) -> crate::config::LibraryPosition {
@@ -66,7 +56,6 @@ impl LibraryTab {
     ) {
         self.library_total = position.levels.first().and_then(|l| l.library_total);
         self.nav_stack = nav_stack;
-        self.clear_music_focus();
         if let Some(state) = self.feed_home_video.as_mut() {
             state.selected_group = position.feed_selected_group;
             state.video_cursor = position.feed_video_cursor;

@@ -495,8 +495,11 @@ impl App {
                 };
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     lib.nav_stack = nav_stack;
-                    lib.album_track_focus = Some(0);
                 }
+                // Entering inline track focus for the activated album is the
+                // shell's job now (the component owns the cursor; the shell
+                // delivers a one-shot enter request at the next sync — wide
+                // only, narrow stays unfocused).
                 self.save_default_library_position(lib_idx);
             }
             LibEvent::AllItemsPrefetched {

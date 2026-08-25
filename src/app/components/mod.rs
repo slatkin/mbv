@@ -63,8 +63,8 @@ pub use self::multiselect::MultiselectComponent;
 pub use self::music_workspace::MusicWorkspaceComponent;
 pub(in crate::app) use self::playback::{PlaybackComponent, PlaybackProjection};
 pub use self::playback::{
-    ATTR_ALBUM_TRACK_FOCUSED, ATTR_BLOCKING_OVERLAY_ACTIVE, ATTR_LIB_SEARCH_ACTIVE,
-    ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE,
+    ATTR_BLOCKING_OVERLAY_ACTIVE, ATTR_LIB_SEARCH_ACTIVE, ATTR_NEXT_UP_PROMPT_VISIBLE,
+    ATTR_SKIP_INTRO_PROMPT_VISIBLE,
 };
 pub use self::playback_prompt::PlaybackPromptComponent;
 pub use self::playlists::PlaylistsComponent;

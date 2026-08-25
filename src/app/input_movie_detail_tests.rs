@@ -504,12 +504,11 @@ fn ctrl_z_while_queue_panel_focused_does_trigger_undo() {
 // (the left-panel key dispatch match block and `open_context_menu`), but
 // are untouched by tasks 1-4: the queue PageUp/PageDown block is a
 // separate `if` gated on `PanelFocus::Queue`, entirely outside the
-// `is_viewing_album_folders`-gated block added for track-selection mode;
-// and `open_context_menu`'s non-folder branch (which a `Movie` item
-// takes) doesn't consult `album_track_focus` or `is_viewing_album_folders`
-// at all -- only `current_lib_item()` does, and that new branch is
-// itself gated on `is_viewing_album_folders`, which is always false for
-// a movies library (`collection_type != "music"`).
+// `is_viewing_album_folders`-gated album activation added for the Music
+// workspace; and `open_context_menu`'s non-folder branch (which a `Movie`
+// item takes) doesn't consult `is_viewing_album_folders` at
+// all -- only `current_lib_item()` does, and that resolved item is always
+// the nav_stack item for a movies library (`collection_type != "music"`).
 
 #[test]
 fn queue_page_up_and_down_move_queue_cursor_when_queue_panel_focused() {

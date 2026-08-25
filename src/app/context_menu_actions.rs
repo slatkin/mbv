@@ -2,6 +2,7 @@ use super::notify_actions::ToastSeverity;
 use super::types_context_menu::ContextMenu;
 use super::types_overlay::OverlayRequest;
 use super::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, PanelFocus};
+use mbv_core::api::EmbyItem;
 
 impl App {
     pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
@@ -315,6 +316,15 @@ impl App {
     /// Build the context menu for the current panel/destination, or `None`
     /// when no menu applies or it would be empty.
     fn build_context_menu(&mut self) -> Option<ContextMenu> {
+        self.build_context_menu_for(None)
+    }
+
+    /// `build_context_menu` with an explicitly resolved Emby-library item
+    /// (task 5.3d, Album track focus): while an inline album track is
+    /// focused, the shell resolves the track (the component owns the cursor)
+    /// and passes it here so '.' targets the focused track instead of the
+    /// album row. All other arms resolve exactly as `build_context_menu`.
+    fn build_context_menu_for(&mut self, tracked_item: Option<EmbyItem>) -> Option<ContextMenu> {
         if self.any_other_modal_open() {
             return None;
         }
@@ -350,7 +360,7 @@ impl App {
                 .get(self.home.continue_cursor)
                 .cloned(),
             (crate::app::PanelFocus::Library, crate::app::TabSelection::EmbyLibrary(lib_idx)) => {
-                self.current_lib_item(lib_idx)
+                tracked_item.or_else(|| self.current_lib_item(lib_idx))
             }
             (
                 crate::app::PanelFocus::Library,
@@ -494,6 +504,14 @@ impl App {
 
     pub(super) fn open_context_menu(&mut self) {
         if let Some(menu) = self.build_context_menu() {
+            self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+        }
+    }
+
+    /// Open the context menu targeted at an explicitly resolved item (a
+    /// focused inline album track reached through the shell boundary).
+    pub(super) fn open_context_menu_for(&mut self, item: EmbyItem) {
+        if let Some(menu) = self.build_context_menu_for(Some(item)) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
     }

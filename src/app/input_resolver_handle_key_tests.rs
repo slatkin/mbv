@@ -572,7 +572,6 @@ fn context_stack_order_is_pinned() {
             "playback",
             "ctrl_l_force_clear",
             "f5_refresh",
-            "album_track_mode",
             "view_dispatch",
         ],
         "precedence order must match handle_key's pre-phase-2 branch order; \

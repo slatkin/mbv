@@ -301,19 +301,15 @@ impl App {
         selected_block_bounds: Option<(usize, usize)>,
         abs_row_idx: usize,
         selected_art_reserved_w: u16,
-        lib_idx: usize,
         focused: bool,
     ) {
         let in_selected_block = selected_block_bounds
             .is_some_and(|(top, bottom)| abs_row_idx > top && abs_row_idx < bottom);
-        let hint = if in_music_group_view
-            && in_selected_block
-            && self.libs[lib_idx].album_track_focus.is_some()
-        {
-            "^P: Play | ^A: Enqueue | ^S: Shuffle | BACK: Exit"
-        } else {
-            "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks"
-        };
+        // Narrow never holds inline track focus, so the hint is always the
+        // "show tracks" affordance (the track-focus "BACK: Exit" variant was
+        // tied to the deleted inline track-focus field, which narrow could no
+        // longer reach once the component owned narrow's focus).
+        let hint = "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks";
         let gutter_w = if in_music_group_view && in_selected_block {
             2
         } else {

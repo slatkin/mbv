@@ -125,10 +125,7 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
     app.tab = TabSelection::EmbyLibrary(0);
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
-    app.libs.push(LibraryTab {
-        album_track_focus: Some(0),
-        ..LibraryTab::new(library)
-    });
+    app.libs.push(LibraryTab::new(library));
     let stale = crate::config::LibraryPosition {
         levels: vec![
             crate::config::LibraryPositionLevel {
@@ -206,7 +203,6 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
         saved.libraries.get("lib-movies").cloned(),
         Some(expected_position)
     );
-    assert!(app.libs[0].album_track_focus.is_none());
 }
 
 #[test]

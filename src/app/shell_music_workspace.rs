@@ -2,9 +2,32 @@ use super::components::{BrowserKey, BrowserKind, ComponentId, MusicWorkspaceComp
 use super::render::MusicWideRenderCtx;
 use super::shell::Model;
 use super::TabSelection;
+use mbv_core::api::EmbyItem;
 use mbv_core::config::ServiceKind;
 
 impl Model {
+    /// Resolve the focused track of the active Music workspace: the
+    /// component owns the cursor index, the shell owns the target resolution
+    /// (album + cached track list). Returns `None` when no track is focused,
+    /// the cache has no entry, or the cursor is out of bounds.
+    pub(super) fn focused_music_track(&self, lib_idx: usize) -> Option<(String, EmbyItem)> {
+        let id = self.music_workspace_id.as_ref()?;
+        let cursor = self
+            .application
+            .get_component(id)?
+            .as_any()
+            .downcast_ref::<MusicWorkspaceComponent>()?
+            .track_cursor()?;
+        let album = self.app.selected_album_item(lib_idx)?;
+        let track = self
+            .app
+            .album_tracks_cache
+            .get(&album.id)?
+            .get(cursor)?
+            .clone();
+        Some((album.id.clone(), track))
+    }
+
     fn music_workspace_component_id(&self) -> Option<ComponentId> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
@@ -41,6 +64,11 @@ impl Model {
         }
 
         let Some(id) = self.music_workspace_id.as_ref() else {
+            // No Music workspace is mounted right now: a pending focus
+            // request (recursive album activation / position restore that
+            // landed on a non-mountable state) cannot be delivered, and must
+            // not fire later on an unrelated album.
+            self.music_track_focus_request = None;
             return;
         };
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
@@ -55,6 +83,16 @@ impl Model {
                 music.set_album_columns(columns);
                 music.set_page_rows(self.app.layout.main.left_area.height as usize);
                 music.set_inline_track_focus_enabled(wide);
+                // Consume the one-shot track-focus request after the content
+                // push, so it cannot be clobbered by `set_content`'s album
+                // identity reset on the same tick.
+                if let Some(request) = self.music_track_focus_request.take() {
+                    if request {
+                        music.enter_track_focus();
+                    } else {
+                        music.clear_track_focus();
+                    }
+                }
             }
         }
     }
@@ -321,5 +359,97 @@ mod tests {
             .downcast_mut::<MusicWorkspaceComponent>()
             .unwrap();
         assert_eq!(component.track_cursor(), Some(0));
+    }
+
+    #[test]
+    fn recursive_album_activation_enters_track_focus_only_in_wide() {
+        // Recursive album activation used to write
+        // `Some(0)` on the deleted inline track-focus field; the shell now delivers a
+        // one-shot enter request consumed at the next sync -- wide only, so
+        // narrow stays explicitly unfocused.
+        let mut model = Model::new(make_music_group_app());
+        let mut track = crate::app::tests::make_item("Track One", "Audio");
+        track.id = "track-1".into();
+        model
+            .app
+            .album_tracks_cache
+            .insert("album-1".into(), vec![track]);
+        model.sync_music_workspace();
+        assert!(!model.app.layout.main.is_wide_music_active());
+        let id = model
+            .music_workspace_id
+            .clone()
+            .expect("narrow Music workspace mounted");
+
+        model.music_track_focus_request = Some(true);
+        model.sync_music_workspace();
+        let component = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<MusicWorkspaceComponent>()
+            .unwrap();
+        assert_eq!(
+            component.track_cursor(),
+            None,
+            "narrow keeps inline track focus explicitly off"
+        );
+
+        model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+        model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+        model.music_track_focus_request = Some(true);
+        model.sync_music_workspace();
+        let component = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<MusicWorkspaceComponent>()
+            .unwrap();
+        assert_eq!(
+            component.track_cursor(),
+            Some(0),
+            "wide recursive activation enters track focus"
+        );
+    }
+
+    #[test]
+    fn position_restore_request_clears_track_focus_at_next_sync() {
+        let mut model = Model::new(make_music_group_app());
+        let mut track = crate::app::tests::make_item("Track One", "Audio");
+        track.id = "track-1".into();
+        model
+            .app
+            .album_tracks_cache
+            .insert("album-1".into(), vec![track]);
+        model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+        model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+        model.sync_music_workspace();
+        let id = model
+            .music_workspace_id
+            .clone()
+            .expect("wide Music workspace mounted");
+        model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Enter,
+                modifiers: KeyModifiers::NONE,
+            }));
+
+        // The deleted track-focus-clear rehome: a position-restore request
+        // clears the component's inline track focus at the next sync.
+        model.music_track_focus_request = Some(false);
+        model.sync_music_workspace();
+        let component = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<MusicWorkspaceComponent>()
+            .unwrap();
+        assert_eq!(component.track_cursor(), None);
     }
 }

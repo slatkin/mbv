@@ -68,17 +68,6 @@ pub(super) enum Command {
     /// from this index if the visible queue isn't the one currently playing.
     QueuePlayCursor,
 
-    // ──  inline album track mode ───────────────────────────────────
-    /// `Enter` while an inline album track is focused.
-    AlbumTrackEnter(usize),
-    /// `Esc`/`Backspace` while an inline album track is focused.
-    AlbumTrackDismiss(usize),
-    /// `Up`/`Down` while an inline album track is focused.
-    AlbumTrackMove {
-        lib_idx: usize,
-        delta: i64,
-    },
-
     /// `x`: cycle the Power View layout through both, queue-only, and
     /// library-only (see `PanelMode`); below the mini-view threshold it
     /// toggles queue-only and library-only.
@@ -315,30 +304,6 @@ pub(super) const PLAYBACK_HELP_BINDINGS: &[PlaybackHelpBinding] = &[
         gated: false,
     },
 ];
-
-/// Translate a key event in active inline album track mode.
-///
-/// This context is only active once `album_track_focus` is already `Some`, so
-/// entering track mode from the album row remains in the library-panel view
-/// handler. The command keeps `lib_idx` because the library panel can
-/// point at any library tab.
-pub(super) fn album_track_command_for_key(chord: KeyChord, lib_idx: usize) -> Option<Command> {
-    let is_nav = matches!(
-        chord.code,
-        KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
-    ) && chord.mods.contains(KeyModifiers::ALT);
-    if is_nav {
-        return None;
-    }
-
-    match chord.code {
-        KeyCode::Enter => Some(Command::AlbumTrackEnter(lib_idx)),
-        KeyCode::Esc | KeyCode::Backspace => Some(Command::AlbumTrackDismiss(lib_idx)),
-        KeyCode::Up => Some(Command::AlbumTrackMove { lib_idx, delta: -1 }),
-        KeyCode::Down => Some(Command::AlbumTrackMove { lib_idx, delta: 1 }),
-        _ => None,
-    }
-}
 
 impl App {
     /// Own the state transitions for a `Command`. Returns whether the app
@@ -578,37 +543,6 @@ impl App {
                 }
             }
 
-            Command::AlbumTrackEnter(lib_idx) => {
-                if self
-                    .selected_album_item(lib_idx)
-                    .and_then(|album| {
-                        self.album_tracks_cache.get(&album.id).and_then(|tracks| {
-                            self.libs[lib_idx]
-                                .album_track_focus
-                                .and_then(|idx| tracks.get(idx))
-                        })
-                    })
-                    .is_some()
-                {
-                    self.select(lib_idx);
-                }
-            }
-            Command::AlbumTrackDismiss(lib_idx) => {
-                self.libs[lib_idx].album_track_focus = None;
-            }
-            Command::AlbumTrackMove { lib_idx, delta } => {
-                if let Some(idx) = self.libs[lib_idx].album_track_focus {
-                    let track_count = self
-                        .selected_album_item(lib_idx)
-                        .and_then(|item| self.album_tracks_cache.get(&item.id))
-                        .map(|tracks| tracks.len())
-                        .unwrap_or(0);
-                    if track_count > 0 {
-                        let new_idx = super::ui_util::move_cursor(idx, delta, track_count);
-                        self.libs[lib_idx].album_track_focus = Some(new_idx);
-                    }
-                }
-            }
             Command::CyclePanelMode => {
                 // Narrow terminal (< MINI_VIEW_THRESHOLD columns): mini view
                 // toggles exactly two states, library-only ⇄ queue-only.

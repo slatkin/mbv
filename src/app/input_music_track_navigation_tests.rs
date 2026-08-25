@@ -2,130 +2,236 @@
 
 use super::music_track_test_support::*;
 use super::*;
+use crate::app::components::msg::{LegacyTerminalEvent, ShellRequest};
+use crate::app::components::music_workspace::MusicWorkspaceComponent;
+use crate::app::components::{ComponentId, Msg};
+use crate::app::render::{LibraryListRenderCtx, MusicWideRenderCtx};
+use crate::app::shell::Model;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::io::{Read, Write};
+use tuirealm::component::AppComponent;
+use tuirealm::event::{
+    Event, Key as TuiKey, KeyEvent as TuiKeyEvent, KeyModifiers as TuiKeyModifiers,
+};
+
+/// Wide music-group fixture with `album-1`'s cached tracks mirroring the
+/// legacy `make_music_album_app` + `push_tracks` setup.
+fn wide_track_focus_model(track_count: usize) -> (Model, ComponentId) {
+    let mut app = make_music_album_app();
+    push_tracks(&mut app, "album-1", track_count);
+    let mut model = Model::new(app);
+    model.app.layout.main.wide_music_area = Rect::new(0, 0, 100, 30);
+    model.app.layout.main.wide_music_right_area = Rect::new(50, 0, 50, 30);
+    model.sync_music_workspace();
+    let id = model
+        .music_workspace_id
+        .clone()
+        .expect("wide Music workspace mounted");
+    (model, id)
+}
+
+fn drive(model: &mut Model, id: &ComponentId, code: TuiKey) -> Option<Msg> {
+    model
+        .application
+        .get_component_mut(id)
+        .unwrap()
+        .on(&Event::Keyboard(TuiKeyEvent {
+            code,
+            modifiers: TuiKeyModifiers::NONE,
+        }))
+}
+
+/// A component with the selected album's tracks cached and inline track
+/// focus enabled (wide), ready to enter track mode.
+fn component_with_tracks() -> MusicWorkspaceComponent {
+    component_with_tracks_ctx(true)
+}
+
+/// `component_with_tracks` with the given panel focus (`focused`): the
+/// Queue-panel regression needs `false` so track-mode keys fall through to
+/// legacy queue handling.
+fn component_with_tracks_ctx(focused: bool) -> MusicWorkspaceComponent {
+    let album = make_item("First Album", "MusicAlbum");
+    let tracks: Vec<_> = (0..3)
+        .map(|i| {
+            let mut t = make_item(&format!("Track {i}"), "Audio");
+            t.id = format!("track-{i}");
+            t
+        })
+        .collect();
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![album.clone()], 0, 0),
+        Some(album),
+        "Artist".into(),
+        vec![make_item("Artist", "MusicArtist")],
+        0,
+        vec![("Artist".into(), "2024".into(), "First Album".into())],
+        vec![0],
+        focused,
+        true,
+        Some(tracks),
+        false,
+        None,
+    ));
+    component.set_inline_track_focus_enabled(true);
+    component
+}
+
 #[test]
 fn up_down_in_track_mode_move_only_track_focus_and_clamp() {
-    let mut app = make_music_album_app();
-    push_tracks(&mut app, "album-1", 3);
-    app.libs[0].album_track_focus = Some(1);
-    let album_cursor_before = app.libs[0].nav_stack.last().unwrap().cursor;
+    let (mut model, id) = wide_track_focus_model(3);
 
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert_eq!(app.libs[0].album_track_focus, Some(2));
+    // Enter enters track mode at row 0.
+    drive(&mut model, &id, TuiKey::Enter);
+
+    drive(&mut model, &id, TuiKey::Down);
+    drive(&mut model, &id, TuiKey::Down);
+    drive(&mut model, &id, TuiKey::Down);
+
+    let component = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<MusicWorkspaceComponent>()
+        .unwrap();
     // Clamp at the end -- no wrap.
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert_eq!(app.libs[0].album_track_focus, Some(2));
+    assert_eq!(component.track_cursor(), Some(2));
 
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    assert_eq!(app.libs[0].album_track_focus, Some(0));
+    drive(&mut model, &id, TuiKey::Up);
+    drive(&mut model, &id, TuiKey::Up);
+    drive(&mut model, &id, TuiKey::Up);
+
+    let component = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<MusicWorkspaceComponent>()
+        .unwrap();
     // Clamp at the start -- no wrap.
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    assert_eq!(app.libs[0].album_track_focus, Some(0));
+    assert_eq!(component.track_cursor(), Some(0));
 
     assert_eq!(
-        app.libs[0].nav_stack.last().unwrap().cursor,
-        album_cursor_before,
+        model.app.libs[0].nav_stack.last().unwrap().cursor,
+        0,
         "track-mode Up/Down must not move the album cursor"
     );
 }
 
 #[test]
 fn track_mode_down_does_not_move_track_focus_when_queue_panel_has_focus() {
-    let mut app = make_music_album_app();
-    push_tracks(&mut app, "album-1", 3);
-    app.libs[0].album_track_focus = Some(1);
-    app.panel_focus = PanelFocus::Queue;
-    let album_cursor_before = app.libs[0].nav_stack.last().unwrap().cursor;
-
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-
-    assert_eq!(app.libs[0].album_track_focus, Some(1));
-    assert_eq!(
-        app.libs[0].nav_stack.last().unwrap().cursor,
-        album_cursor_before
-    );
+    // With the Queue panel focused (`context.focused == false`), track-mode
+    // Up/Down fall through to legacy queue handling instead of moving the
+    // focused track -- the component must not intercept them.
+    let mut component = component_with_tracks_ctx(false);
+    component.set_inline_track_focus_enabled(true);
+    let msg = component.on(&Event::Keyboard(TuiKeyEvent {
+        code: TuiKey::Down,
+        modifiers: TuiKeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        msg,
+        Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+    ));
+    assert_eq!(component.track_cursor(), None);
 }
 
 #[test]
 fn selecting_music_group_clears_track_focus() {
-    let mut app = make_music_album_app();
+    let (mut model, id) = wide_track_focus_model(3);
     let mut group2 = make_item("Beta", "MusicArtist");
     group2.id = "group-1".into();
     group2.is_folder = true;
-    app.libs[0].nav_stack[0].items.push(group2);
-    app.libs[0].album_track_focus = Some(1);
+    model.app.libs[0].nav_stack[0].items.push(group2);
 
-    app.select_music_group(0, 1);
+    drive(&mut model, &id, TuiKey::Enter);
+    model.app.select_music_group(0, 1);
+    model.sync_music_workspace();
 
-    assert!(app.libs[0].album_track_focus.is_none());
+    let component = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<MusicWorkspaceComponent>()
+        .unwrap();
+    assert_eq!(component.track_cursor(), None);
 }
 
 #[test]
 fn switching_music_group_clears_track_focus() {
-    let mut app = make_music_album_app();
+    let (mut model, id) = wide_track_focus_model(3);
     let mut group2 = make_item("Beta", "MusicArtist");
     group2.id = "group-1".into();
     group2.is_folder = true;
-    app.libs[0].nav_stack[0].items.push(group2);
-    app.libs[0].album_track_focus = Some(1);
+    model.app.libs[0].nav_stack[0].items.push(group2);
 
-    app.switch_music_group(0, 1);
+    drive(&mut model, &id, TuiKey::Enter);
+    model.app.switch_music_group(0, 1);
+    model.sync_music_workspace();
 
-    assert!(app.libs[0].album_track_focus.is_none());
+    let component = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<MusicWorkspaceComponent>()
+        .unwrap();
+    assert_eq!(component.track_cursor(), None);
 }
 
 #[test]
 fn up_down_in_track_mode_with_no_cached_tracks_is_noop() {
-    let mut app = make_music_album_app();
-    // No `push_tracks` call -- album_tracks_cache has no entry for
-    // "album-1", mirroring "not yet loaded".
-    app.libs[0].album_track_focus = Some(0);
+    // No `push_tracks` -- album_tracks_cache has no entry for "album-1",
+    // mirroring "not yet loaded". A focused cursor over an empty track list
+    // stays put (the move clamps to zero rows).
+    let (mut model, id) = wide_track_focus_model(0);
+    drive(&mut model, &id, TuiKey::Enter); // cannot enter: no tracks
 
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-
-    assert!(!handled);
-    assert_eq!(app.libs[0].album_track_focus, Some(0));
+    let component = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<MusicWorkspaceComponent>()
+        .unwrap();
+    assert_eq!(component.track_cursor(), None);
+    // The album cursor still owns the keys.
+    drive(&mut model, &id, TuiKey::Down);
+    let component = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<MusicWorkspaceComponent>()
+        .unwrap();
+    assert_eq!(component.track_cursor(), None);
 }
 
 #[test]
 fn escape_in_track_mode_clears_focus_without_go_back() {
-    let mut app = make_music_album_app();
-    push_tracks(&mut app, "album-1", 3);
-    app.libs[0].album_track_focus = Some(2);
-    let nav_len_before = app.libs[0].nav_stack.len();
-    let album_cursor_before = app.libs[0].nav_stack.last().unwrap().cursor;
+    let mut component = component_with_tracks();
+    let _ = component.on(&Event::Keyboard(TuiKeyEvent {
+        code: TuiKey::Enter,
+        modifiers: TuiKeyModifiers::NONE,
+    }));
+    assert_eq!(component.track_cursor(), Some(0));
 
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-
-    assert!(!handled);
-    assert!(app.libs[0].album_track_focus.is_none());
-    assert_eq!(
-        app.libs[0].nav_stack.len(),
-        nav_len_before,
-        "Escape in track mode must not pop nav_stack (not a go_back)"
-    );
-    assert_eq!(
-        app.libs[0].nav_stack.last().unwrap().cursor,
-        album_cursor_before
-    );
-}
-
-#[test]
-fn up_down_outside_track_mode_still_move_album_cursor() {
-    let mut app = make_music_album_app();
-    assert!(app.libs[0].album_track_focus.is_none());
-
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-
-    assert!(app.libs[0].album_track_focus.is_none());
-    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
+    // Esc exits track mode locally; the message is a draw-only NoOp, never a
+    // legacy Esc (which would reach `go_back`).
+    let msg = component.on(&Event::Keyboard(TuiKeyEvent {
+        code: TuiKey::Esc,
+        modifiers: TuiKeyModifiers::NONE,
+    }));
+    assert_eq!(component.track_cursor(), None);
+    assert!(matches!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp))));
 }
 
 #[test]
@@ -135,16 +241,14 @@ fn escape_outside_track_mode_still_calls_go_back_unchanged() {
     // len == 2), which `go_back`'s own pre-existing guard already
     // no-ops on ("don't pop when already at the root of a synthetic
     // group view" -- see `go_back`'s doc comment in actions.rs). The
-    // regression this proves is narrower than "pops": Task 3 must route
-    // Escape to the exact same `go_back()` call as before when
-    // `album_track_focus` is `None`, whatever `go_back()` itself does --
-    // demonstrated by comparing `handle_key(Esc)` against calling
-    // `go_back()` directly on an identical, freshly-built app.
+    // regression this proves: outside track mode the Esc key still routes
+    // to the exact same `go_back()` call as before, whatever `go_back()`
+    // itself does -- demonstrated by comparing `handle_key(Esc)` against
+    // calling `go_back()` directly on an identical, freshly-built app.
     let mut via_go_back = make_music_album_app();
     via_go_back.go_back(0);
 
     let mut via_escape_key = make_music_album_app();
-    assert!(via_escape_key.libs[0].album_track_focus.is_none());
     let handled = via_escape_key.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
     assert!(!handled);
@@ -181,7 +285,6 @@ fn page_down_in_album_list_mode_pages_by_rendered_rows_with_hero() {
         cursor_after >= 19,
         "PageDown should move by rendered display rows, not raw album count; got cursor {cursor_after}"
     );
-    assert!(app.libs[0].album_track_focus.is_none());
 }
 
 #[test]
@@ -205,7 +308,6 @@ fn page_up_in_album_list_mode_pages_by_rendered_rows_with_hero() {
         cursor_after <= 35,
         "PageUp should move backwards; got cursor {cursor_after}"
     );
-    assert!(app.libs[0].album_track_focus.is_none());
 }
 
 #[test]
@@ -251,14 +353,12 @@ fn paging_from_non_selectable_hint_and_header_rows_chooses_nearest_album_by_dire
     // render in the music-group view until track-selection mode is
     // entered (Enter pressed), so paging can no longer land on those --
     // browsing-mode paging is disabled entirely once track-selection
-    // mode is active (see `page_grouped_album_cursor`'s
-    // `album_track_focus.is_some()` guard). The two non-selectable rows
-    // paging can still land on while merely *browsing* the album list
-    // are: the artist header, and the collapsed action-hint row that
-    // sits directly under the selected album.
+    // mode is active (see `page_grouped_album_cursor`'s shell gate). The
+    // two non-selectable rows paging can still land on while merely
+    // *browsing* the album list are: the artist header, and the collapsed
+    // action-hint row that sits directly under the selected album.
     let mut down_app = make_music_album_list_app(10, 0);
     render_full_app(&mut down_app, 100, 40);
-    assert!(down_app.libs[0].album_track_focus.is_none());
     down_app.layout.main.left_area.height = 1;
 
     let handled = down_app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
@@ -274,7 +374,6 @@ fn paging_from_non_selectable_hint_and_header_rows_chooses_nearest_album_by_dire
 
     let mut up_app = make_music_album_list_app(10, 3);
     render_full_app(&mut up_app, 100, 40);
-    assert!(up_app.libs[0].album_track_focus.is_none());
     up_app.layout.main.left_area.height = 4;
 
     let handled = up_app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));

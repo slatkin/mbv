@@ -19,7 +19,6 @@ impl App {
             let idx = target;
             if level.cursor != idx {
                 level.cursor = idx;
-                self.libs[lib_idx].album_track_focus = None;
             }
         }
         true
@@ -42,7 +41,6 @@ impl App {
         if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
             let idx = target;
             level.cursor = idx;
-            self.libs[lib_idx].album_track_focus = None;
         }
         true
     }
@@ -57,7 +55,6 @@ impl App {
                 self.effective_panel_focus(),
                 crate::app::PanelFocus::Library
             )
-            || self.libs[lib_idx].album_track_focus.is_some()
             || !self.is_viewing_album_folders(lib_idx)
         {
             return false;
@@ -79,7 +76,6 @@ impl App {
             let new_cursor = target;
             if level.cursor != new_cursor {
                 level.cursor = new_cursor;
-                self.libs[lib_idx].album_track_focus = None;
             }
         }
         if idle {

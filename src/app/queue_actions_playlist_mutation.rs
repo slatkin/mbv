@@ -428,20 +428,29 @@ impl App {
             let Some(item) = self.current_lib_item(lib_idx) else {
                 return;
             };
-            if item.is_folder {
-                self.do_enqueue_folder(item);
-                return;
-            }
-            if !is_playable(&item) {
-                return;
-            }
-            log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?} source=library-view", item.id, item.name);
-            let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
-            if self.enqueue_route_conflict(resolved) {
-                return;
-            }
-            self.append_item_to_queue_and_sync(item);
+            self.enqueue_lib_item(lib_idx, item);
         }
+    }
+
+    /// Enqueue an explicitly resolved library-view item (task 5.3d, Album
+    /// track focus): the shared Emby branch of `enqueue_selected`, extracted
+    /// so the shell can enqueue a focused album track whose item resolution
+    /// lives at the shell/component boundary rather than in
+    /// `current_lib_item`.
+    pub(in crate::app) fn enqueue_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
+        if item.is_folder {
+            self.do_enqueue_folder(item);
+            return;
+        }
+        if !is_playable(&item) {
+            return;
+        }
+        log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?} source=library-view", item.id, item.name);
+        let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
+        if self.enqueue_route_conflict(resolved) {
+            return;
+        }
+        self.append_item_to_queue_and_sync(item);
     }
 
     /// Shared append/sync/rollback tail for a single-item enqueue

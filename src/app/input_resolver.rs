@@ -64,10 +64,6 @@ pub(super) enum KeyResolution {
 pub(super) struct InputSnapshot {
     pub player_active: bool,
     pub has_remote_session: bool,
-    /// Inline album track-selection mode is active (`album_track_focus`
-    /// is `Some`). While active, Esc must exit track-selection mode rather than
-    /// stop playback -- see the `Stop` special-case in `resolve_key`.
-    pub track_select_active: bool,
 }
 
 /// Resolve a chord within a single context. Pure: no `App`/`Player` access.
@@ -79,24 +75,12 @@ pub(super) fn resolve_key(
     match context {
         // Playback keys are gated; an unbound or gate-closed key falls through
         // to the handlers below it in `handle_key`.
-        InputContext::Playback => {
-            match super::action::playback_command_for_key(
-                chord,
-                snapshot.player_active,
-                snapshot.has_remote_session,
-            ) {
-                // Esc's Stop binding must not fire while inline album
-                // track-selection mode is active -- fall through so the
-                // lower-priority `album_track_mode` context can treat
-                // Esc as "exit track-selection mode" instead (same as
-                // Backspace).
-                Some(super::action::Command::Stop) if snapshot.track_select_active => {
-                    KeyResolution::FallThrough
-                }
-                Some(cmd) => KeyResolution::Command(cmd),
-                None => KeyResolution::FallThrough,
-            }
-        }
+        InputContext::Playback => super::action::playback_command_for_key(
+            chord,
+            snapshot.player_active,
+            snapshot.has_remote_session,
+        )
+        .map_or(KeyResolution::FallThrough, KeyResolution::Command),
     }
 }
 
@@ -112,7 +96,6 @@ impl App {
             has_remote_session: self.connected_session_id.is_some()
                 || self.player.is_remote()
                 || self.is_cast_attached(),
-            track_select_active: self.active_album_track_lib_idx().is_some(),
         }
     }
 }
@@ -181,10 +164,6 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     ContextEntry {
         name: "f5_refresh",
         handler: App::handle_key_f5_refresh,
-    },
-    ContextEntry {
-        name: "album_track_mode",
-        handler: App::handle_key_album_track_mode,
     },
     ContextEntry {
         name: "view_dispatch",

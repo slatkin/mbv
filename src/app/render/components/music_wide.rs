@@ -162,7 +162,10 @@ impl App {
             self.images_enabled(),
             album_tracks,
             album_tracks_loading,
-            lib.album_track_focus,
+            // The App side never owns inline track focus: the wide
+            // `MusicWorkspaceComponent` repaints over this underpaint with
+            // its local cursor, and narrow keeps track focus explicitly off.
+            None,
         )
     }
 }

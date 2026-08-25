@@ -7,7 +7,6 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
-
 fn context(track_cursor: Option<usize>) -> MusicWideRenderCtx {
     let album = make_item("First Album", "MusicAlbum");
     let mut track = make_item("Track One", "Audio");
@@ -193,9 +192,39 @@ fn music_workspace_page_moves_saturate_at_both_ends() {
 }
 
 #[test]
-fn music_workspace_does_not_emit_album_intent_while_tracks_are_focused() {
+fn music_workspace_track_keys_are_consumed_locally_and_do_not_move_album_cursor() {
+    // With a track focused (wide), Down moves the track cursor only: the
+    // component consumes the key locally (a draw-only NoOp -- never a legacy
+    // forward, which would move the album cursor underneath), and no album
+    // intent is emitted.
     let mut component = MusicWorkspaceComponent::new();
-    component.set_content(grouped_context(1, vec![0, 1, 2, 3], true, Some(0)));
+    let albums: Vec<_> = (0..4)
+        .map(|index| make_item(&format!("Album {index}"), "MusicAlbum"))
+        .collect();
+    let tracks: Vec<_> = (0..3)
+        .map(|i| {
+            let mut t = make_item(&format!("Track {i}"), "Audio");
+            t.index_number = i + 1;
+            t
+        })
+        .collect();
+    component.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(albums.clone(), 1, 0),
+        Some(albums[1].clone()),
+        "Artist".into(),
+        vec![make_item("Artist", "MusicArtist")],
+        0,
+        (0..4)
+            .map(|index| ("Artist".into(), "2024".into(), format!("Album {index}")))
+            .collect(),
+        vec![0, 1, 2, 3],
+        true,
+        true,
+        Some(tracks),
+        false,
+        Some(0),
+    ));
+    component.set_inline_track_focus_enabled(true);
     component.set_album_columns(2);
 
     let message = component.on(&Event::Keyboard(KeyEvent {
@@ -204,7 +233,109 @@ fn music_workspace_does_not_emit_album_intent_while_tracks_are_focused() {
     }));
     assert!(matches!(
         message,
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
     ));
+    assert_eq!(component.track_cursor(), Some(1));
     assert_eq!(component.album_cursor(), 1);
+}
+
+#[test]
+fn music_workspace_enter_on_focused_track_emits_activation() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+    component.set_inline_track_focus_enabled(true);
+    // Enter enters track mode; Enter again activates the focused track.
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let message = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::MusicTrackActivate))
+    ));
+}
+
+#[test]
+fn music_workspace_track_esc_exits_locally_without_forwarding() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+    component.set_inline_track_focus_enabled(true);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let message = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Esc,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.track_cursor(), None);
+    assert!(matches!(
+        message,
+        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+    ));
+}
+
+#[test]
+fn music_workspace_album_change_clears_track_focus() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+    component.set_inline_track_focus_enabled(true);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.track_cursor(), Some(0));
+
+    // A different selected album (group switch / recursive activation)
+    // resets the stale track cursor.
+    let mut other = make_item("Other Album", "MusicAlbum");
+    other.id = "album-2".into();
+    component.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![other.clone()], 0, 0),
+        Some(other),
+        "Artist".into(),
+        vec![make_item("Artist", "MusicArtist")],
+        0,
+        vec![("Artist".into(), "2024".into(), "Other Album".into())],
+        vec![0],
+        true,
+        true,
+        Some(vec![make_item("Other Track", "Audio")]),
+        false,
+        None,
+    ));
+    assert_eq!(component.track_cursor(), None);
+}
+
+#[test]
+fn music_workspace_track_targeted_actions_emit_typed_messages() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+    component.set_inline_track_focus_enabled(true);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+
+    let enqueue = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('a'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+    assert!(matches!(
+        enqueue,
+        Some(Msg::Shell(ShellRequest::MusicTrackEnqueue))
+    ));
+
+    let menu = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('.'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        menu,
+        Some(Msg::Shell(ShellRequest::MusicTrackContextMenu))
+    ));
 }

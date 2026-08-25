@@ -13,7 +13,6 @@ fn home_video_library_is_never_album_folders_and_renders_via_original_list_path(
         "a homevideos library must never satisfy is_viewing_album_folders"
     );
     assert!(app.is_home_video_view(lib_idx));
-    assert!(app.libs[lib_idx].album_track_focus.is_none());
 
     let mut layout = LayoutMain::default();
     let out = render_library_to_string(&mut app, &mut layout);
@@ -26,10 +25,6 @@ fn home_video_library_is_never_album_folders_and_renders_via_original_list_path(
     assert!(
         app.album_tracks_cache.is_empty(),
         "home-video rendering must never touch the album-tracks cache added by #145"
-    );
-    assert!(
-        app.libs[lib_idx].album_track_focus.is_none(),
-        "home-video rendering must never set track-selection mode"
     );
 }
 

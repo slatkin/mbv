@@ -1,31 +1,9 @@
-use super::action::{album_track_command_for_key, Command};
-use super::input_resolver::KeyChord;
-use super::{App, ConfirmAction, ConfirmModal, PanelFocus};
+use super::action::Command;
+use super::{App, ConfirmAction, ConfirmModal};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::{Duration, Instant};
 
 impl App {
-    pub(super) fn active_album_track_lib_idx(&self) -> Option<usize> {
-        let lib_idx = self.tab.emby_library_index()?;
-        let lib = self.libs.get(lib_idx)?;
-        if lib.album_track_focus.is_some() && self.is_viewing_album_folders(lib_idx) {
-            Some(lib_idx)
-        } else {
-            None
-        }
-    }
-
-    pub(super) fn handle_key_album_track_mode(&mut self, key: KeyEvent) -> Option<bool> {
-        if matches!(self.effective_panel_focus(), PanelFocus::Queue)
-            && matches!(key.code, KeyCode::Up | KeyCode::Down)
-        {
-            return None;
-        }
-        let lib_idx = self.active_album_track_lib_idx()?;
-        let command = album_track_command_for_key(KeyChord::from_key(key), lib_idx)?;
-        Some(self.dispatch(command))
-    }
-
     pub(super) fn handle_key_panel_mode_cycle(&mut self, key: KeyEvent) -> Option<bool> {
         if key.code != KeyCode::Char('x') || !key.modifiers.is_empty() {
             return None;

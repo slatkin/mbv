@@ -54,7 +54,7 @@ pub(in crate::app) fn render_wide_left_tracks(
 
     let n = tracks.len();
     let visible = track_content.height as usize;
-    let scroll = album_track_focus_scroll(track_cursor, n, visible);
+    let scroll = track_focus_scroll(track_cursor, n, visible);
     let title_col_w = (track_content.width as usize).saturating_sub(DURATION_COL_W);
     layout.wide_music_track_hitmap.clear();
 
@@ -142,7 +142,7 @@ pub(in crate::app) fn render_wide_left_tracks(
     let _ = album;
 }
 
-fn album_track_focus_scroll(track_cursor: Option<usize>, count: usize, visible: usize) -> usize {
+fn track_focus_scroll(track_cursor: Option<usize>, count: usize, visible: usize) -> usize {
     let Some(cursor) = track_cursor else {
         return 0;
     };

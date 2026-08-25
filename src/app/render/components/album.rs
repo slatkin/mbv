@@ -104,13 +104,14 @@ impl App {
         }
 
         let in_music_group_view = self.is_music_group_view(lib_idx);
-        // Inline track expansion for the selected album: in the music-group
-        // (pill selector) view, only expand once the user has pressed Enter
-        // to enter track-selection mode (`album_track_focus`); elsewhere
-        // (plain album-folder browsing) the existing always-expand behavior
-        // is unchanged.
-        let expand_selected =
-            !in_music_group_view || self.libs[lib_idx].album_track_focus.is_some();
+        // Inline track expansion for the selected album. Narrow keeps inline
+        // track focus explicitly off (`MusicWorkspaceComponent` is mounted
+        // there with inline track focus disabled, and narrow activation opens
+        // the selection modal), so in the music-group (pill selector) view the
+        // expansion is never entered from this renderer; elsewhere (plain
+        // album-folder browsing) the existing always-expand behavior is
+        // unchanged.
+        let expand_selected = !in_music_group_view;
         let mut plan = self.build_grouped_album_display_plan(
             albums,
             &album_info,
@@ -248,9 +249,11 @@ impl App {
             sr.pop();
         }
         let screen_offset = display_screen_rows.get(offset).copied().unwrap_or(0);
-        if self.libs[lib_idx].album_track_focus.is_none() {
-            // Authoritative selected-cell rect (two-column packed cells use
-            // `cell_w = area.width / cols`; the last column takes the rest).
+        // Authoritative selected-cell rect (two-column packed cells use
+        // `cell_w = area.width / cols`; the last column takes the rest).
+        // Narrow never holds inline track focus, so this rect is always the
+        // selected album cell.
+        {
             let cn = cols.max(1) as usize;
             let cw = area.width / cn as u16;
             layout.selected_item_rect = selected_cell_rect(
@@ -461,6 +464,8 @@ impl App {
                     if height > 1 {
                         if let Some(tracks) = self.album_tracks_cache.get(&albums[*idx].id).cloned()
                         {
+                            // Narrow keeps inline track focus explicitly off:
+                            // no focused track cursor and no focus highlight.
                             self.render_album_detail(
                                 f,
                                 Rect {
@@ -469,8 +474,8 @@ impl App {
                                     ..row_area
                                 },
                                 &tracks,
-                                self.libs[lib_idx].album_track_focus.unwrap_or(0),
-                                self.libs[lib_idx].album_track_focus.is_some(),
+                                0,
+                                false,
                                 false,
                                 false,
                                 true,
@@ -489,7 +494,6 @@ impl App {
                         selected_block_bounds,
                         abs_row_idx,
                         selected_art_reserved_w,
-                        lib_idx,
                         focused,
                     );
                 }
@@ -505,8 +509,11 @@ impl App {
                         })
                         .count() as u16;
                     if let Some(tracks) = self.album_tracks_cache.get(&albums[*idx].id).cloned() {
-                        let cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
-                        let detail_focused = self.libs[lib_idx].album_track_focus.is_some();
+                        // Narrow keeps inline track focus explicitly off: the
+                        // track block paints unfocused (cursor 0, no focus
+                        // highlight).
+                        let cursor: usize = 0;
+                        let detail_focused = false;
                         let track_area = Rect {
                             x: row_area.x + TRACK_BLOCK_MARGIN + TRACK_TEXT_MARGIN,
                             y: row_area.y,

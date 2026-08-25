@@ -43,8 +43,6 @@ impl App {
             return;
         }
 
-        self.libs[lib_idx].clear_music_focus();
-
         // Pop the album level.
         self.libs[lib_idx].nav_stack.pop();
         let cur = self.libs[lib_idx]
@@ -106,7 +104,6 @@ impl App {
         if group_cursor >= n {
             return;
         }
-        self.libs[lib_idx].clear_music_focus();
         self.libs[lib_idx].nav_stack.pop();
         if let Some(group_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             group_lvl.cursor = group_cursor;

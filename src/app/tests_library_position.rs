@@ -26,7 +26,6 @@ fn library_position_snapshot_captures_path_focus_and_feed_group() {
             video_scroll: 3,
             ..Default::default()
         }),
-        album_track_focus: Some(1),
         ..LibraryTab::new(make_item("Movies", "CollectionFolder"))
     };
     lib.library.id = "lib-movies".into();
@@ -249,10 +248,9 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
 }
 
 #[test]
-fn applying_library_position_clears_non_position_ui_state() {
+fn applying_library_position_preserves_persisted_feed_group_state() {
     let mut lib = LibraryTab {
         feed_home_video: Some(FeedHomeVideoState::default()),
-        album_track_focus: Some(2),
         ..LibraryTab::new(make_item("Movies", "CollectionFolder"))
     };
     let position = crate::config::LibraryPosition {
@@ -283,7 +281,6 @@ fn applying_library_position_clears_non_position_ui_state() {
     );
 
     assert_eq!(lib.nav_stack.len(), 1);
-    assert!(lib.album_track_focus.is_none());
     let feed = lib.feed_home_video.as_ref().unwrap();
     assert_eq!(feed.selected_group, 3);
     assert_eq!(feed.video_cursor, 5);
