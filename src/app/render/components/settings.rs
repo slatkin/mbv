@@ -179,7 +179,6 @@ impl App {
         } else {
             Self::settings_content_area(content)
         };
-        layout.settings_content_area = content;
 
         let cfg = self.config.lock().unwrap().clone();
         let ui = self.ui_config_snapshot();
@@ -256,7 +255,6 @@ impl App {
         }
         let total = lines.len();
         self.settings_scroll = self.settings_scroll.min(total.saturating_sub(visible));
-        layout.settings_line_of_cursor = line_of_cursor;
 
         f.render_widget(
             Paragraph::new(lines).scroll((self.settings_scroll as u16, 0)),
@@ -291,7 +289,6 @@ impl App {
                 "[↵]select [Esc]back",
             ),
         };
-        layout.settings_content_area = content;
         let cursor = self.services_cursor;
         let mut lines = Vec::with_capacity(SERVICE_ENTRIES.len());
         let mut line_of_cursor = Vec::with_capacity(SERVICE_ENTRIES.len());
@@ -330,14 +327,12 @@ impl App {
             ]));
         }
         f.render_widget(Paragraph::new(lines), content);
-        layout.settings_line_of_cursor = line_of_cursor;
-        layout.settings_area = content;
     }
 
     fn render_emby_setup_panel(
         &mut self,
         f: &mut Frame,
-        layout: &mut AppLayout,
+        _layout: &mut AppLayout,
         area: Option<ratatui::layout::Rect>,
     ) {
         let content = match area {
@@ -352,7 +347,6 @@ impl App {
                 "[↵]submit [Esc]back",
             ),
         };
-        layout.settings_content_area = content;
         let Some(form) = self.emby_setup_form.as_ref() else {
             return;
         };
@@ -400,13 +394,12 @@ impl App {
             }),
         )));
         f.render_widget(Paragraph::new(lines), content);
-        layout.settings_area = content;
     }
 
     fn render_audiobookshelf_setup_panel(
         &mut self,
         f: &mut Frame,
-        layout: &mut AppLayout,
+        _layout: &mut AppLayout,
         area: Option<ratatui::layout::Rect>,
     ) {
         let content = match area {
@@ -425,7 +418,6 @@ impl App {
                 "[↵]submit [Esc]back",
             ),
         };
-        layout.settings_content_area = content;
         let Some(form) = self.audiobookshelf_setup_form.as_ref() else {
             return;
         };
@@ -471,6 +463,5 @@ impl App {
             }),
         )));
         f.render_widget(Paragraph::new(lines), content);
-        layout.settings_area = content;
     }
 }

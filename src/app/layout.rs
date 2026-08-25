@@ -237,9 +237,4 @@ pub(crate) struct AppLayout {
     pub playback: LayoutPlayback,
     pub main: LayoutMain,
     pub tabs_area: Rect,
-    pub settings_area: Rect,
-    /// Inset content bounds used by the Settings renderer and mouse hit-testing.
-    pub settings_content_area: Rect,
-    /// Mouse-row -> settings-line mapping, set each time the settings panel renders.
-    pub settings_line_of_cursor: Vec<usize>,
 }

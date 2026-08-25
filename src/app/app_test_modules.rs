@@ -23,9 +23,6 @@ mod tests_library_position_activation;
 mod tests_library_position_restore;
 
 #[cfg(test)]
-#[path = "tests_mouse_browse_dispatch.rs"]
-mod tests_mouse_browse_dispatch;
-
 #[cfg(test)]
 #[path = "tests_panel_focus.rs"]
 mod tests_panel_focus;

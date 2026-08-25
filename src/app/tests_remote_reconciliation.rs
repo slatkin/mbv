@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_item, make_session};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::remote_reconciliation::{
     ReconciliationTracker, RemoteObservation, SubmittedOccurrence, TrackingState,
@@ -65,9 +65,11 @@ fn duplicate_reanchor_opens_picker_and_enter_selects_occurrence() {
     model.sync_modal_requests();
     model.handle_remote_reanchor_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     model.handle_remote_reanchor_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(!model.application.mounted(&crate::app::components::ComponentId::Modal(
-        crate::app::components::ModalId::RemoteReanchor
-    )));
+    assert!(!model
+        .application
+        .mounted(&crate::app::components::ComponentId::Modal(
+            crate::app::components::ModalId::RemoteReanchor
+        )));
     assert_eq!(
         model.app.remote_tracker.as_ref().unwrap().state(),
         TrackingState::Tracking
@@ -76,32 +78,6 @@ fn duplicate_reanchor_opens_picker_and_enter_selects_occurrence() {
         model.app.remote_tracker.as_ref().unwrap().current_index(),
         Some(1)
     );
-}
-
-#[test]
-fn reanchor_popup_blocks_mouse_dispatch() {
-    let mut app = attached_app();
-    app.player_tab.queue_cursor = 1;
-    app.pending_overlay = Some(super::types_overlay::OverlayRequest::RemoteReanchor(
-        super::types_playback::RemoteReanchorPopup {
-            targets: vec![(0, "a".into())],
-            cursor: 0,
-        },
-    ));
-    app.blocking_overlay_active = true;
-
-    app.handle_mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: 2,
-        row: 2,
-        modifiers: KeyModifiers::NONE,
-    });
-
-    assert_eq!(app.player_tab.queue_cursor, 1);
-    assert!(matches!(
-        app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::RemoteReanchor(_))
-    ));
 }
 
 #[test]
@@ -160,7 +136,10 @@ fn stop_tracking_and_queue_edits_are_input_gated() {
     app.remote_tracker = Some(tracker(&["a", "b"]));
     app.panel_focus = crate::app::PanelFocus::Library;
     app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
-    assert!(!matches!(app.pending_overlay, Some(super::types_overlay::OverlayRequest::Confirm(_))));
+    assert!(!matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::Confirm(_))
+    ));
     assert_eq!(app.player_tab.emby_items().len(), 3);
     assert!(app.remote_tracker.is_none());
 }

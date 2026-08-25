@@ -448,9 +448,7 @@ impl Model {
                                 quit = true;
                             }
                         }
-                        Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)) => {
-                            self.app.handle_mouse(mouse);
-                        }
+                        Msg::Legacy(LegacyTerminalEvent::Mouse(_mouse)) => {}
                         Msg::Legacy(LegacyTerminalEvent::Resize) => {
                             self.app.force_clear = true;
                             self.app.card_image_states.clear();
@@ -609,16 +607,10 @@ impl Model {
                                 quit = true;
                             }
                         }
-                        Msg::Shell(ShellRequest::AudiobookshelfPodcastMouse(mouse)) => {
-                            self.handle_audiobookshelf_podcast_mouse(mouse);
-                        }
                         Msg::Shell(ShellRequest::AudiobookshelfBookKey(key)) => {
                             if self.handle_audiobookshelf_book_key(key) {
                                 quit = true;
                             }
-                        }
-                        Msg::Shell(ShellRequest::AudiobookshelfBookMouse(mouse)) => {
-                            self.handle_audiobookshelf_book_mouse(mouse);
                         }
                         // Browser (generic Emby) mouse geometry lives in
                         // `BrowserComponent`, which forwards the hit region; the

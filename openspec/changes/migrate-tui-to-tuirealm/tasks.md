@@ -249,7 +249,7 @@ contributing surface's group 2–4 conversion to have landed.
   - [x] *Settings popups* — `multiselect_popup`, `library_routes_popup`,
     `feeds_manage_popup` + `input_feeds_manage_keys.rs`. 21 files (15 / 6),
     132 refs. One unit; the three share a parent and a dismissal path.
-- [ ] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters.
+- [x] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters.
   Dispatched as named units, sized on the same files-forced-open basis as 5.3c:
 
   **Verification policy for the remaining units (decided 2026-08-25).** The
@@ -313,12 +313,12 @@ contributing surface's group 2–4 conversion to have landed.
     - [x] `home` `hit_test` — real row/hit geometry, one unit.
     - [x] `queue` `hit_test` — real row/hit geometry, one unit.
     - [x] `tv_workspace` `hit_test` — two focusable panes, one unit.
-    - [ ] `music_workspace` `hit_test` — album grid plus inline track list.
-    - [ ] Blocking modals and prompt — `confirm`, `daemon_lost`,
+     - [ ] `music_workspace` `hit_test` — superseded by D16; not migrated for alpha.
+     - [ ] Blocking modals and prompt — superseded by D16; not migrated for alpha.
       `remote_reanchor`, `playback_prompt`. Geometry is a containment check
       against a single rect (two legacy-mouse refs each), so these share one
       unit; split only if one proves to have real geometry.
-    - [ ] Framework deletion — `input_mouse.rs` (653 lines),
+     - [x] Framework deletion — `input_mouse.rs` (653 lines),
       `input_mouse_dispatch.rs` (406), `input_mouse_gestures.rs` (172), and
       `AppLayout`. Cannot start until the nine surfaces above land: the
       ordering is one-directional, so this lane parallelises at the start and
@@ -369,16 +369,9 @@ contributing surface's group 2–4 conversion to have landed.
   Read decision **D15** in `design.md` before choosing: it scopes adopting
   `Component::perform(Cmd)` as the table's execution path (`Cmd` in, `Msg`
   out), and requires an explicit note here if 5.4 declines it.
-- [ ] *Manual check before PR* — `c70e3e0` deleted the episode-row and
-  season-tab branches from `click_set_cursor`, on the unverified premise that a
-  podcast library never selects an `item_type == "Series"` item and so never
-  populates those child panels. The render gate is
-  `is_wide_tv_library || is_podcast_library` (`list.rs:125`) but the component
-  mount gate is `collection_type == "tvshows"` (`shell_tv_workspace.rs:13`),
-  so the predicates disagree. In a podcast library at hero-on-left, click a
-  season tab and an episode row: they must select. If no child panels render,
-  the question is moot.
-- [ ] *Orphan cleanup* (fold into any later unit, not its own run) — `ccc75e30`
+ - [x] *Orphan cleanup* (folded into this unit) — `ccc75e30` deleted the dead
+   `GroupedAlbumGroup.start`/`.end` and `GroupedAlbumCatalog.groups` fields and
+   their builders.
   deleted `music_group_navigation`, the only reader of
   `GroupedAlbumGroup.start`/`.end` and `GroupedAlbumCatalog.groups`
   (`src/app/music_grouping.rs:41,42,56`). rustc now reports all three dead.

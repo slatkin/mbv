@@ -154,11 +154,8 @@ pub struct App {
     /// renderer fills the reserved area with skeleton placeholders instead of
     /// collapsing to just the sections that happen to be populated so far.
     pub(super) home_loading: bool,
-    pub(super) mouse_col: u16,
-    pub(super) mouse_row: u16,
     pub(super) last_click_time: Instant,
     pub(super) last_click_pos: (u16, u16),
-    pub(super) last_drag_seek: Instant,
     pub(super) last_space_press: Option<Instant>,
     pub(super) last_esc_press: Option<Instant>,
     /// Shell handoff for a modal raised by App-owned effects. The mounted

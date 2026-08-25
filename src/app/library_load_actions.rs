@@ -486,19 +486,6 @@ impl App {
             })
             .unwrap_or_default()
     }
-
-    pub(super) fn settings_scroll_follow(&mut self) {
-        let cursor = self.settings_cursor;
-        let Some(&cursor_line) = self.layout.settings_line_of_cursor.get(cursor) else {
-            return;
-        };
-        let visible = self.layout.settings_content_area.height.max(1) as usize;
-        if cursor_line < self.settings_scroll {
-            self.settings_scroll = cursor_line;
-        } else if cursor_line >= self.settings_scroll + visible {
-            self.settings_scroll = cursor_line + 1 - visible;
-        }
-    }
 }
 
 /// Position- and cursor-preserving splice for `HomePane.latest`: drops every

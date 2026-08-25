@@ -107,12 +107,6 @@ fn narrow_books_have_one_pill_bar_and_valid_targets() {
         Some(ratatui::style::Color::Reset),
         "the visible bar's spacer keeps the reset background"
     );
-
-    app.layout.main = layout;
-    app.layout.main.browse_destination = Some(app.tab);
-    let first_bar_x = app.layout.main.selector_tabs[0].0.x + 1;
-    assert!(app.click_set_cursor(first_bar_x, 0));
-    assert_eq!(app.audiobookshelf_book_browse[0].selected_bucket, 0);
 }
 
 #[test]
@@ -125,44 +119,6 @@ fn narrow_book_has_no_chapter_targets() {
     app.layout.main = layout;
     app.layout.main.browse_destination = Some(app.tab);
     assert_eq!(app.audiobookshelf_book_browse[0].chapter_selection, None);
-}
-
-#[test]
-fn narrow_book_detail_is_suppressed_in_a_short_viewport() {
-    let mut app = make_audiobookshelf_book_app();
-    let mut layout = LayoutMain::default();
-    let out = render_library_to_string_sized(&mut app, &mut layout, 60, 4);
-
-    assert_eq!(layout.hero_area.height, 0);
-    assert_eq!(layout.inline_hero_area.height, 0);
-    assert!(out.contains("Alpha Tales"));
-    assert!(layout
-        .left_row_targets
-        .contains(&Some(LibraryRowTarget::Book(0))));
-
-    app.layout.main = layout;
-    app.layout.main.browse_destination = Some(app.tab);
-    app.refocus_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(1));
-    let row = app
-        .layout
-        .main
-        .left_row_targets
-        .iter()
-        .position(|target| *target == Some(LibraryRowTarget::Book(0)))
-        .expect("ordinary fallback target") as u16;
-    let click = crossterm::event::MouseEvent {
-        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
-        column: app.layout.main.left_area.x + 1,
-        row: app.layout.main.left_area.y + row,
-        modifiers: crossterm::event::KeyModifiers::NONE,
-    };
-    app.handle_mouse(click);
-    app.handle_mouse(click);
-    assert!(!matches!(
-        app.pending_overlay.as_ref(),
-        Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
-    ));
-    assert_eq!(app.status, "Audiobookshelf playback owner is unavailable");
 }
 
 #[test]
@@ -255,36 +211,4 @@ fn wide_book_enter_uses_the_completed_100x20_layout_for_chapter_workspace() {
     ));
     assert_eq!(app.audiobookshelf_book_browse[0].chapter_selection, Some(0));
     assert_ne!(app.status, "Audiobookshelf playback owner is unavailable");
-}
-
-#[test]
-fn wide_book_chapter_target_keeps_mouse_activation_path() {
-    let mut app = make_audiobookshelf_book_app();
-    let mut layout = LayoutMain::default();
-    let _ = render_library_to_string_sized(&mut app, &mut layout, 100, 20);
-    let (rect, chapter) = layout
-        .audiobookshelf_book_chapter_rows
-        .first()
-        .copied()
-        .expect("wide Books must publish a chapter target");
-
-    app.layout.main = layout;
-    app.layout.main.browse_destination = Some(app.tab);
-    app.refocus_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(1));
-    let click = crossterm::event::MouseEvent {
-        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
-        column: rect.x + 1,
-        row: rect.y,
-        modifiers: crossterm::event::KeyModifiers::NONE,
-    };
-    app.handle_mouse(click);
-    assert_eq!(
-        app.audiobookshelf_book_browse[0].chapter_selection,
-        Some(chapter)
-    );
-    app.handle_mouse(click);
-    assert!(!matches!(
-        app.pending_overlay.as_ref(),
-        Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
-    ));
 }

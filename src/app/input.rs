@@ -270,16 +270,9 @@ impl App {
 }
 
 #[cfg(test)]
-#[path = "input_playback_header_mouse_tests.rs"]
-mod playback_header_mouse_tests;
-
-#[cfg(test)]
 #[path = "input_movie_detail_tests.rs"]
 mod movie_detail_tests;
 
-#[cfg(test)]
-#[path = "input_music_track_focus_tests.rs"]
-mod music_track_focus_tests;
 #[cfg(test)]
 #[path = "input_music_track_navigation_tests.rs"]
 mod music_track_navigation_tests;

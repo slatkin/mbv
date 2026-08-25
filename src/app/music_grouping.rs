@@ -34,14 +34,6 @@ pub(super) struct GroupedAlbumEntry {
     pub(super) name: String,
 }
 
-#[derive(Clone)]
-pub(super) struct GroupedAlbumGroup {
-    #[allow(dead_code)] // used in tests
-    pub(super) artist: String,
-    pub(super) start: usize,
-    pub(super) end: usize,
-}
-
 /// A settled, source-derived grouping for one music album browse level:
 /// resolved artist identities, display metadata, precomputed sort keys,
 /// sorted album order, group boundaries, and identity lookups.
@@ -52,8 +44,6 @@ pub(super) struct GroupedAlbumCatalog {
     /// Entries sorted by `sort_key`; `entries[i].album_index` indexes the
     /// raw `items` slice the catalog was built from.
     pub(super) entries: Vec<GroupedAlbumEntry>,
-    /// Artist groups as `[start, end)` ranges into `entries`.
-    pub(super) groups: Vec<GroupedAlbumGroup>,
     /// raw album index -> position in `entries`.
     pub(super) index_to_entry: HashMap<usize, usize>,
     /// album id -> position in `entries`.
@@ -142,18 +132,6 @@ pub(super) fn build_grouped_album_catalog(
     }
     entries.sort_by_key(|e| e.sort_key.clone());
 
-    let mut groups: Vec<GroupedAlbumGroup> = Vec::new();
-    let mut start = 0;
-    while start < entries.len() {
-        let artist = entries[start].artist.clone();
-        let mut end = start + 1;
-        while end < entries.len() && entries[end].artist == artist {
-            end += 1;
-        }
-        groups.push(GroupedAlbumGroup { artist, start, end });
-        start = end;
-    }
-
     let mut index_to_entry = HashMap::with_capacity(entries.len());
     let mut id_to_entry = HashMap::with_capacity(entries.len());
     for (pos, entry) in entries.iter().enumerate() {
@@ -165,7 +143,6 @@ pub(super) fn build_grouped_album_catalog(
         revision: 0,
         parent_id: String::new(),
         entries,
-        groups,
         index_to_entry,
         id_to_entry,
     }

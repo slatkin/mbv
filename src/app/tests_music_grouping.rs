@@ -140,9 +140,6 @@ fn catalog_publication_groups_by_artist() {
     let resolved: HashMap<String, String> = HashMap::new();
     let catalog = build_grouped_album_catalog(&[a1, a2, a3], &resolved);
 
-    assert_eq!(catalog.groups.len(), 2, "should have two artist groups");
-    assert_eq!(catalog.groups[0].artist, "Alpha");
-    assert_eq!(catalog.groups[1].artist, "Beta");
     assert_eq!(catalog.entries.len(), 3);
     assert_eq!(catalog.entries[0].artist, "Alpha");
     assert_eq!(catalog.entries[1].artist, "Alpha");
@@ -346,19 +343,6 @@ fn repeated_same_items_produce_stable_catalog_order() {
             .map(|e| e.artist.as_str())
             .collect::<Vec<_>>(),
         "same items should produce identical catalog order"
-    );
-    assert_eq!(
-        catalog1
-            .groups
-            .iter()
-            .map(|g| g.artist.as_str())
-            .collect::<Vec<_>>(),
-        catalog2
-            .groups
-            .iter()
-            .map(|g| g.artist.as_str())
-            .collect::<Vec<_>>(),
-        "same items should produce identical group boundaries"
     );
 }
 

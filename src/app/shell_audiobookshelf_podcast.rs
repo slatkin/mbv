@@ -12,13 +12,6 @@ impl Model {
         self.app.handle_key(key)
     }
 
-    pub(super) fn handle_audiobookshelf_podcast_mouse(
-        &mut self,
-        mouse: crossterm::event::MouseEvent,
-    ) {
-        self.app.handle_mouse(mouse);
-    }
-
     fn abs_podcast_component_id(&self, index: usize) -> Option<ComponentId> {
         let library = self.app.audiobookshelf_libraries.get(index)?;
         Some(ComponentId::Browser(BrowserKey {

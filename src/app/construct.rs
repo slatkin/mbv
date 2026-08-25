@@ -101,10 +101,7 @@ impl App {
             terminal_height: 24,
 
             home_loading: true,
-            mouse_col: 0,
-            mouse_row: 0,
             last_click_time: Instant::now(),
-            last_drag_seek: Instant::now() - Duration::from_secs(1),
             last_space_press: None,
             last_esc_press: None,
             last_click_pos: (u16::MAX, u16::MAX),

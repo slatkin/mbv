@@ -97,22 +97,6 @@ fn left_focus_brackets_do_not_switch_queue_scope() {
 }
 
 #[test]
-fn queue_scope_switch_via_click_uses_rendered_hitboxes() {
-    let mut app = make_remote_app_stub(make_items(1), make_items(2));
-    app.panel_focus = PanelFocus::Library;
-    app.set_queue_scope(QueueScope::Local);
-    let _ = render_app_to_string(&mut app, 90, 28);
-
-    let remote = app.layout.main.queue_scope_remote_area;
-    app.handle_mouse(left_down(remote.x, remote.y));
-    assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
-
-    let local = app.layout.main.queue_scope_local_area;
-    app.handle_mouse(left_down(local.x, local.y));
-    assert_eq!(app.visible_queue_scope(), QueueScope::Local);
-}
-
-#[test]
 fn scope_keys_are_ignored_outside_queue_tab() {
     let mut app = make_remote_app_stub(make_items(1), make_items(2));
     app.set_queue_scope(QueueScope::Local);
