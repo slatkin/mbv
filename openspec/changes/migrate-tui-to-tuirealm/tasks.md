@@ -369,5 +369,10 @@ contributing surface's group 2–4 conversion to have landed.
   Read decision **D15** in `design.md` before choosing: it scopes adopting
   `Component::perform(Cmd)` as the table's execution path (`Cmd` in, `Msg`
   out), and requires an explicit note here if 5.4 declines it.
+- [ ] *Orphan cleanup* (fold into any later unit, not its own run) — `ccc75e30`
+  deleted `music_group_navigation`, the only reader of
+  `GroupedAlbumGroup.start`/`.end` and `GroupedAlbumCatalog.groups`
+  (`src/app/music_grouping.rs:41,42,56`). rustc now reports all three dead.
+  Delete the fields and whatever builds them.
 - [ ] 5.5 Flip all `docs/architecture/interactive-surface-ledger.md` rows to `migrated` with verification records; verify no `legacy` **and no `component`** row remains (see 1.10).
 - [ ] 5.6 Final gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`, and `rtk make check-code-file-lines` all pass; confirm no parallel legacy interaction framework remains and the shell Model holds only shell/runtime authority plus the TuiRealm `Application`.
