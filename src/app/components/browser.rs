@@ -143,6 +143,14 @@ impl BrowserComponent {
                 {
                     selected.map(|item| ShellRequest::BrowserToggleWatched { item })
                 }
+                // '.' opens the context menu for the component-selected item
+                // (task 5.3d, Emby browser context-menu decoupling). No
+                // modifier guard: the legacy `handle_global_view_key` arm it
+                // replaces matched `Char('.')` with any modifiers, so this
+                // preserves the legacy '.' modifier behavior exactly.
+                crossterm::event::KeyCode::Char('.') => {
+                    selected.map(|item| ShellRequest::BrowserContextMenu { item })
+                }
                 _ => None,
             };
             // The component owns the selection: the item is resolved at the

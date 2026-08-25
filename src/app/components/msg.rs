@@ -416,6 +416,18 @@ pub enum ShellRequest {
     BrowserToggleWatched {
         item: EmbyItem,
     },
+    /// '.' on the mounted generic/Movies/home-video `BrowserComponent`
+    /// (task 5.3d, Emby browser context-menu decoupling): the component
+    /// resolves its own selected `EmbyItem` from its component-local
+    /// cursor/content, and the shell opens the context menu for that supplied
+    /// item via the existing item-targeted seam `App::open_context_menu_for`
+    /// — never by copying the component cursor into a `BrowseLevel.cursor`
+    /// and re-reading it. The library/podcast menu content (mark-watched vs
+    /// mark-played labels, bulk actions) derives from the shell's own tab
+    /// state (the browser is mounted only for that tab).
+    BrowserContextMenu {
+        item: EmbyItem,
+    },
 }
 
 /// Region of the generic Emby browser a click resolved to, reported by

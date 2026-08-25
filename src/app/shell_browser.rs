@@ -25,6 +25,12 @@ impl Model {
             ShellRequest::BrowserToggleWatched { item } => {
                 self.app.toggle_watched_item(lib_idx, item)
             }
+            // '.' raises the context menu for the supplied item via the
+            // existing item-targeted seam; the non-folder/mark-watched menu
+            // content derives from the shell's own tab state (`lib_idx` just
+            // guards that this is an EmbyLibrary tab), never a `BrowseLevel`
+            // cursor re-read.
+            ShellRequest::BrowserContextMenu { item } => self.app.open_context_menu_for(item),
             _ => {}
         }
     }
@@ -98,7 +104,7 @@ mod tests {
     use crate::app::components::{BrowserComponent, LegacyTerminalEvent, Msg};
     use crate::app::render::make_movie_app;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{App, BrowseLevel, LibraryTab, TabSelection};
+    use crate::app::{App, BrowseLevel, ContextAction, LibraryTab, TabSelection};
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     /// Task 5.3d, Emby browser effect decoupling: `BrowserComponent` resolves
@@ -109,14 +115,15 @@ mod tests {
     ///
     /// The regression parks App's nav cursor on the folder at the top of the
     /// list while the component selects the playable movie below it — the
-    /// legacy Enter/Ctrl+P/Ctrl+A/Ctrl+W arms on the parked folder would
-    /// navigate into the folder, play the folder, enqueue the folder, or
-    /// silently skip respectively — and proves each of the four effects acts
-    /// on the component-selected movie instead. Requests are captured from
-    /// the mounted component itself, so the emitted payload is the
-    /// component-resolved item; every assertion is on the effect's outcome
-    /// (nav-stack depth/cursor, queued item id, or the unavailable-Service
-    /// toast), never on a hand-set coordinate.
+    /// legacy Enter/Ctrl+P/Ctrl+A/Ctrl+W/'.' arms on the parked folder would
+    /// navigate into the folder, play the folder, enqueue the folder, toggle
+    /// the folder, or raise the folder-scoped context menu respectively — and
+    /// proves each of the five effects acts on the component-selected movie
+    /// instead. Requests are captured from the mounted component itself, so
+    /// the emitted payload is the component-resolved item; every assertion is
+    /// on the effect's outcome (nav-stack depth/cursor, queued item id, the
+    /// unavailable-Service toast, or the raised menu's actions), never on a
+    /// hand-set coordinate.
     #[test]
     fn shell_emby_browser_effects_honor_component_target() {
         let _guard = crate::config::TestStateDirGuard::new();
@@ -206,6 +213,44 @@ mod tests {
         assert_eq!(
             model.app.status, "Emby is unavailable",
             "watched toggle must act on the supplied movie, not skip on the parked folder"
+        );
+
+        // '.': the component emits BrowserContextMenu for its own selected
+        // movie; the shell raises the menu for that supplied item via
+        // `open_context_menu_for`. Legacy resolution on the parked folder
+        // would raise the folder-scoped menu (Play All/Shuffle/Add to Queue),
+        // so the menu must offer the generic per-item Play and no folder
+        // actions — decisive that the menu targets the component-selected
+        // movie, not the parked `BrowseLevel` cursor.
+        let Some(Msg::Shell(ShellRequest::BrowserContextMenu { item })) =
+            drive_browser_key(&mut model, &id, Key::Char('.'), KeyModifiers::NONE)
+        else {
+            panic!("browser '.' must emit BrowserContextMenu, got no typed request");
+        };
+        assert_eq!(item.id, "movie-b");
+        model.app.libs[0].nav_stack[0].cursor = 0;
+        model.handle_browser_request(ShellRequest::BrowserContextMenu { item });
+        let menu = match model.app.pending_overlay.as_ref() {
+            Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+            _ => panic!("context menu must open for the supplied movie"),
+        };
+        let actions: Vec<_> = menu
+            .entries
+            .iter()
+            .filter_map(|e| e.action.clone())
+            .collect();
+        assert!(
+            actions.iter().any(|a| matches!(a, ContextAction::Play)),
+            "context menu must offer the generic per-item Play, got: {actions:?}"
+        );
+        assert!(
+            !actions.iter().any(|a| matches!(
+                a,
+                ContextAction::PlayFolder(_)
+                    | ContextAction::ShuffleFolder(_)
+                    | ContextAction::EnqueueFolder(_)
+            )),
+            "context menu must target the supplied movie, not the parked folder, got: {actions:?}"
         );
     }
 
