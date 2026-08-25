@@ -213,13 +213,7 @@ impl App {
         }
     }
 
-    pub(super) fn toggle_watched_home(&mut self) {
-        let Some(item) = self.current_home_item().and_then(|item| match item {
-            mbv_core::playback_queue::QueueItem::Emby(item) => Some(*item),
-            _ => None,
-        }) else {
-            return;
-        };
+    pub(super) fn toggle_watched_home_item(&mut self, item: EmbyItem) {
         if item.is_folder || item.is_audio() {
             return;
         }

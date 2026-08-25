@@ -1,93 +1,10 @@
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
-use super::{App, BrowseLevel, HomeLatestSource};
+use super::{App, BrowseLevel};
 use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::QueueItem;
 
 use super::notify_actions::ToastSeverity;
 
 impl App {
-    pub(super) fn select_home(&mut self) {
-        let Some(item) = self.current_home_item() else {
-            return;
-        };
-        let item = match item {
-            QueueItem::Emby(item) => *item,
-            // Only Emby items host the folder-browse/Library route Home
-            // supports; other providers select through their own tabs
-            // (#543 Part 2).
-            _ => return,
-        };
-        if item.is_folder {
-            if let Some(i) = self.libs.iter().position(|l| l.library.id == item.id) {
-                self.set_library_tab(i + 1);
-                return;
-            }
-            let sec = self.home.section;
-            if sec > 0 {
-                let lib_id =
-                    self.home
-                        .latest
-                        .get(sec - 1)
-                        .and_then(|(_, source, _, _)| match source {
-                            HomeLatestSource::Emby(lib_id) => Some(lib_id.clone()),
-                            _ => None,
-                        });
-                if let Some(lib_id) = lib_id {
-                    if let Some(lib_idx) = self.libs.iter().position(|l| l.library.id == lib_id) {
-                        let lib = &mut self.libs[lib_idx];
-                        lib.nav_stack.push(BrowseLevel {
-                            parent_id: item.id.clone(),
-                            title: item.name.clone(),
-                            items: vec![],
-                            total_count: 0,
-                            cursor: 0,
-                            item_types: None,
-                            unplayed_only: false,
-                            sort_by: "SortName".into(),
-                            sort_order: "Ascending".into(),
-                            loading: true,
-                            scroll: 0,
-                            all_items: None,
-                            letter_filter: None,
-                            music_grouping: None,
-                        });
-                        self.set_library_tab(lib_idx + 1);
-                        self.spawn_browse(
-                            lib_idx,
-                            item.id,
-                            item.name,
-                            None,
-                            false,
-                            "SortName".into(),
-                            "Ascending".into(),
-                        );
-                    }
-                }
-            }
-            return;
-        }
-        if is_playable(&item) {
-            let fresh = {
-                let Some(client) = self.emby_client() else {
-                    self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-                    return;
-                };
-                let c = client.lock().unwrap();
-                c.get_items_by_ids(std::slice::from_ref(&item.id))
-                    .ok()
-                    .and_then(|mut v| {
-                        if v.is_empty() {
-                            None
-                        } else {
-                            Some(v.remove(0))
-                        }
-                    })
-                    .unwrap_or(item)
-            };
-            self.play_item(fresh);
-        }
-    }
-
     pub(super) fn select(&mut self, lib_idx: usize) {
         let Some(item) = self.current_lib_item(lib_idx) else {
             return;

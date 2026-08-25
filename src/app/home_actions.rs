@@ -1,4 +1,7 @@
+use super::notify_actions::ToastSeverity;
+use super::ui_util::is_playable;
 use super::App;
+use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 
 impl App {
@@ -68,13 +71,13 @@ impl App {
         }
         let cw_len = self.home.continue_items.len();
         if cursor < cw_len {
-            // CW items: use select_home for proper resume handling.
-            let (saved_sec, saved_cursor) = (self.home.section, self.home.continue_cursor);
-            self.home.section = 0;
-            self.home.continue_cursor = cursor;
-            self.select_home();
-            self.home.section = saved_sec;
-            self.home.continue_cursor = saved_cursor;
+            // CW items resume through the item-targeted tail with the
+            // already-resolved item (task 5.3d, Home effect decoupling)
+            // instead of temporarily forcing `home.section` to 0 and
+            // re-reading it via `select_home`.
+            if let QueueItem::Emby(item) = item {
+                self.play_home_cw_item(*item);
+            }
         } else {
             match item {
                 QueueItem::Emby(item) => self.play_item(*item),
@@ -92,18 +95,19 @@ impl App {
     /// Home typed-effect prep). Uses the supplied target directly instead of
     /// any App-owned cursor.
     pub(super) fn home_enqueue(&mut self, cursor: usize) {
+        let Some(item) = self.home_current_item(cursor) else {
+            return;
+        };
         let cw_len = self.home.continue_items.len();
         if cursor < cw_len {
-            let (saved_sec, saved_cursor) = (self.home.section, self.home.continue_cursor);
-            self.home.section = 0;
-            self.home.continue_cursor = cursor;
-            self.enqueue_selected(None);
-            self.home.section = saved_sec;
-            self.home.continue_cursor = saved_cursor;
+            // CW items enqueue through the item-targeted helper with the
+            // already-resolved item (task 5.3d, Home effect decoupling)
+            // instead of temporarily forcing `home.section` to 0 and
+            // re-reading it via `enqueue_selected(None)`.
+            if let QueueItem::Emby(item) = item {
+                self.enqueue_home_item(*item);
+            }
         } else {
-            let Some(item) = self.home_current_item(cursor) else {
-                return;
-            };
             match item {
                 QueueItem::Emby(item) => self.do_enqueue_folder(*item),
                 other => {
@@ -111,6 +115,37 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Resume the given Continue Watching Emby item (task 5.3d, Home effect
+    /// decoupling): the playable tail of the deleted `select_home`, extracted
+    /// so the Home and CW effects pass an already-resolved item directly
+    /// instead of temporarily pointing `home.section` at section 0 and
+    /// re-reading it. Folder guards stay with the callers
+    /// (`home_play`/`cw_play` pre-filter them, matching today's reachable
+    /// behavior); non-playable items are a silent no-op, as in `select_home`.
+    pub(super) fn play_home_cw_item(&mut self, item: EmbyItem) {
+        if !is_playable(&item) {
+            return;
+        }
+        let fresh = {
+            let Some(client) = self.emby_client() else {
+                self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                return;
+            };
+            let c = client.lock().unwrap();
+            c.get_items_by_ids(std::slice::from_ref(&item.id))
+                .ok()
+                .and_then(|mut v| {
+                    if v.is_empty() {
+                        None
+                    } else {
+                        Some(v.remove(0))
+                    }
+                })
+                .unwrap_or(item)
+        };
+        self.play_item(fresh);
     }
 
     /// Remove the Continue Watching item at the component-provided flat

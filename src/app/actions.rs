@@ -127,20 +127,6 @@ impl App {
         self.layout.main.queue_area.height.saturating_sub(1).max(1) as usize
     }
 
-    pub(super) fn current_home_item(&self) -> Option<QueueItem> {
-        let sec = self.home.section;
-        if sec == 0 {
-            self.home
-                .continue_items
-                .get(self.home.continue_cursor)
-                .cloned()
-                .map(|item| QueueItem::Emby(Box::new(item)))
-        } else {
-            let col = self.home.latest.get(sec - 1)?;
-            col.2.get(col.3).cloned()
-        }
-    }
-
     pub(super) fn current_lib_item(&self, lib_idx: usize) -> Option<EmbyItem> {
         let lib = self.libs.get(lib_idx)?;
         if lib.nav_stack.is_empty() {

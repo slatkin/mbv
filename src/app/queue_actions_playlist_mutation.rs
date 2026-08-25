@@ -3,7 +3,6 @@
 //! within the repository's file-size limit.
 
 use super::*;
-use mbv_core::playback_queue::QueueItem;
 
 impl App {
     pub(super) fn start_playlist_mutation(&mut self, playlist_id: &str) {
@@ -396,40 +395,39 @@ impl App {
     }
 
     pub(in crate::app) fn enqueue_selected(&mut self, lib_idx: Option<usize>) {
-        if self.tab.is_home() {
-            let Some(item) = self.current_home_item().and_then(|item| match item {
-                QueueItem::Emby(item) => Some(*item),
-                // Non-Emby Home items are enqueued through their own
-                // providers' actions (#543 Part 2).
-                _ => None,
-            }) else {
-                return;
-            };
-            if item.is_folder {
-                self.do_enqueue_folder(item);
-                return;
-            }
-            if !is_playable(&item) {
-                return;
-            }
-            log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
-            let resolved = self.route_for_item_via_ancestors(&item.id).map(|(n, _)| n);
-            if self.enqueue_route_conflict(resolved) {
-                return;
-            }
-            self.append_item_to_queue_and_sync(item);
-        } else {
-            // The Emby branch receives the explicitly matched library index
-            // from the dispatch (Some) or no index at all (None) -- never a
-            // library-zero default.
-            let Some(lib_idx) = lib_idx else {
-                return;
-            };
-            let Some(item) = self.current_lib_item(lib_idx) else {
-                return;
-            };
-            self.enqueue_lib_item(lib_idx, item);
+        // The Emby branch receives the explicitly matched library index
+        // from the dispatch (Some) or no index at all (None) -- never a
+        // library-zero default.
+        let Some(lib_idx) = lib_idx else {
+            return;
+        };
+        let Some(item) = self.current_lib_item(lib_idx) else {
+            return;
+        };
+        self.enqueue_lib_item(lib_idx, item);
+    }
+
+    /// Enqueue an explicitly resolved Home Continue Watching item (task 5.3d,
+    /// Home effect decoupling): the shared Home branch of the former
+    /// `enqueue_selected`, extracted so the CW effects pass the already-
+    /// resolved item directly instead of temporarily pointing `home.section`
+    /// at section 0 and re-reading `current_home_item`. Folder/non-playable
+    /// guards and the ancestor-route resolution match the legacy Home branch
+    /// exactly.
+    pub(in crate::app) fn enqueue_home_item(&mut self, item: EmbyItem) {
+        if item.is_folder {
+            self.do_enqueue_folder(item);
+            return;
         }
+        if !is_playable(&item) {
+            return;
+        }
+        log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?} source=home", item.id, item.name);
+        let resolved = self.route_for_item_via_ancestors(&item.id).map(|(n, _)| n);
+        if self.enqueue_route_conflict(resolved) {
+            return;
+        }
+        self.append_item_to_queue_and_sync(item);
     }
 
     /// Enqueue an explicitly resolved library-view item (task 5.3d, Album

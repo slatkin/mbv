@@ -119,7 +119,7 @@ fn failed_folder_enqueue_leaves_tracking_active() {
 
     // The stub client has no server URL configured, so the enqueue fetch
     // fails at the HTTP layer before anything can be appended.
-    app.enqueue_selected(None);
+    app.enqueue_home_item(app.home.continue_items[0].clone());
 
     assert!(app.remote_tracker.is_some());
     assert!(app.player_tab.emby_items().is_empty());

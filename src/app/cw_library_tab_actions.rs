@@ -103,8 +103,14 @@ impl App {
     }
 
     // The Continue Watching column shares state with the Home tab's
-    // Continue Watching section, so these reuse the Home actions by briefly
-    // pointing the Home context at that section.
+    // Continue Watching section, so these act on the column's own
+    // `continue_cursor` item directly (task 5.3d, Home effect decoupling):
+    // each resolves the item under `continue_cursor` and passes it into the
+    // item-targeted effect helper, instead of temporarily forcing
+    // `home.section` to section 0 and re-reading it through the
+    // section-dependent `select_home`/`enqueue_selected(None)`/
+    // `toggle_watched_home` wrappers. `continue_cursor` stays the sole,
+    // unchanged authoritative target.
     pub(super) fn cw_play(&mut self) {
         let Some(item) = self
             .home
@@ -117,23 +123,30 @@ impl App {
         if item.is_folder {
             return;
         }
-        let saved_sec = self.home.section;
-        self.home.section = 0;
-        self.select_home();
-        self.home.section = saved_sec;
+        self.play_home_cw_item(item);
     }
 
     pub(super) fn cw_enqueue(&mut self) {
-        let saved_sec = self.home.section;
-        self.home.section = 0;
-        self.enqueue_selected(None);
-        self.home.section = saved_sec;
+        let Some(item) = self
+            .home
+            .continue_items
+            .get(self.home.continue_cursor)
+            .cloned()
+        else {
+            return;
+        };
+        self.enqueue_home_item(item);
     }
 
     pub(super) fn cw_toggle_watched(&mut self) {
-        let saved_sec = self.home.section;
-        self.home.section = 0;
-        self.toggle_watched_home();
-        self.home.section = saved_sec;
+        let Some(item) = self
+            .home
+            .continue_items
+            .get(self.home.continue_cursor)
+            .cloned()
+        else {
+            return;
+        };
+        self.toggle_watched_home_item(item);
     }
 }
