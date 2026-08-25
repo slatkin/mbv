@@ -185,7 +185,12 @@ impl HomeComponent {
         }
     }
 
-    fn move_local_cursor(&mut self, delta: i64) {
+    /// Move the flat cursor within the currently visible section (clamped to
+    /// its bounds), matching `ui_util::move_cursor`. This is the section-local
+    /// cursor movement the keyboard navigation and the Model-boundary wheel
+    /// scroll both use (task 5.3d, Home wheel-scroll ownership); the shell
+    /// calls it with the same delta semantics as keyboard Up/Down.
+    pub(in crate::app) fn move_local_cursor(&mut self, delta: i64) {
         let indices = self.visible_indices();
         if indices.is_empty() {
             self.cursor = 0;
@@ -365,10 +370,11 @@ impl HomeComponent {
     /// rebuilt every `view`) and emits a typed `Msg::Shell` naming the region.
     /// It holds no double-click or scroll timing — the shell decides *when* a
     /// click counts against `App`'s own timing fields. Wheel scroll over the
-    /// list area is claimed as `HomeScroll`: the legacy path's scroll also
-    /// moves the independent Continue Watching column's cursor
-    /// (`handle_mouse_scroll_browse` → `cw_move_cursor`), a pre-existing quirk
-    /// this migration preserves rather than fixes (task 5.3d, home hit_test).
+    /// list area is claimed as `HomeScroll`: the shell moves the component's
+    /// local cursor and, as a preserved pre-existing quirk, the independent
+    /// Continue Watching column's cursor (`Model::handle_home_scroll` →
+    /// `App::cw_move_cursor`), which this migration preserves rather than
+    /// fixes (task 5.3d, Home wheel-scroll ownership).
     pub(in crate::app) fn handle_crossterm_mouse(
         &mut self,
         mouse: crossterm::event::MouseEvent,

@@ -698,11 +698,13 @@ impl Model {
                         // `HomeComponent`, which forwards the hit region; the
                         // shell decides *when* it counts via `App`'s 400ms
                         // double-click / 30ms wheel fields (task 5.3d, home
-                        // hit_test).
+                        // hit_test). Accepted wheel scroll is routed at the
+                        // Model boundary, which moves the mounted component's
+                        // section-local cursor and, as a preserved legacy
+                        // quirk, the Continue Watching column's independent
+                        // cursor (task 5.3d, Home wheel-scroll ownership).
                         Msg::Shell(ShellRequest::HomeScroll { delta }) => {
-                            if self.app.note_browse_scroll() {
-                                self.app.handle_mouse_scroll_browse(delta);
-                            }
+                            self.handle_home_scroll(delta);
                         }
                         Msg::Shell(ShellRequest::HomeClick { region, col, row }) => {
                             self.handle_home_click(region, col, row);

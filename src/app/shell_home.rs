@@ -78,6 +78,33 @@ impl Model {
         }
     }
 
+    /// Route the Home wheel scroll (task 5.3d, Home wheel-scroll ownership)
+    /// at the Model boundary, keeping the legacy gate order and quirk:
+    /// `App`'s 30ms wheel throttle (`note_browse_scroll`) and browse-
+    /// readiness gate (`browse_mouse_ready`) accept the event first; only
+    /// then does the mounted `HomeComponent` move its section-local cursor
+    /// with the same clamped semantics as its keyboard navigation
+    /// (`move_local_cursor`), and the independent Continue Watching column's
+    /// `continue_cursor` follows through `App::cw_move_cursor` — the
+    /// pre-existing quirk the migration preserves rather than fixes.
+    pub(super) fn handle_home_scroll(&mut self, delta: i64) {
+        if !self.app.note_browse_scroll() {
+            return;
+        }
+        if !self.app.browse_mouse_ready() {
+            return;
+        }
+        if let Some(comp) = self.application.get_component_mut(&ComponentId::Home) {
+            if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
+                home.move_local_cursor(delta);
+            }
+        }
+        // Preserve the Continue Watching column quirk: the legacy wheel scroll
+        // also moved the column's independent `continue_cursor`, which is not
+        // the Home component's flat cursor mirror.
+        self.app.cw_move_cursor(delta);
+    }
+
     /// Mount `HomeComponent` for the session. Called once from `Model::new`;
     /// never unmounted (Home is always available, matching `App.tab`
     /// defaulting to `TabSelection::Home`).
@@ -142,6 +169,7 @@ mod tests {
     use super::*;
     use crate::app::components::msg::{LegacyTerminalEvent, Msg};
     use crate::app::tests::{make_app_stub, make_item, make_items};
+    use std::time::Duration;
     use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -350,6 +378,64 @@ mod tests {
                 .iter()
                 .any(|e| e.label == "Remove from Continue Watching"),
             "menu target must be the Continue Watching item, not the folder under home_cursor"
+        );
+    }
+
+    fn home_component_cursor(model: &Model) -> usize {
+        model
+            .application
+            .get_component(&ComponentId::Home)
+            .expect("Home component mounted")
+            .as_any()
+            .downcast_ref::<HomeComponent>()
+            .expect("Home component type")
+            .cursor()
+    }
+
+    /// Task 5.3d, Home wheel-scroll ownership: an accepted `HomeScroll`
+    /// (App's 30ms wheel throttle and browse-readiness gate both pass) moves
+    /// the mounted component's section-local cursor *and* the independent
+    /// Continue Watching column cursor (`continue_cursor`, the preserved
+    /// legacy quirk); a throttled event — the next wheel inside the App-owned
+    /// 30ms window — moves neither.
+    #[test]
+    fn shell_home_wheel_moves_component_and_continue_cursor() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut model = Model::new(make_app_stub());
+        model.app.home.continue_items = make_items(3);
+        model.sync_home();
+
+        // Accepted scroll: both the component-local cursor and the Continue
+        // Watching column's independent cursor advance by the delta. Pin the
+        // wheel throttle far in the past so acceptance is deterministic
+        // regardless of wall-clock execution time.
+        model.app.last_scroll_at = Instant::now() - Duration::from_secs(1);
+        model.handle_home_scroll(1);
+        assert_eq!(
+            model.app.home.continue_cursor, 1,
+            "accepted wheel must move the Continue Watching column cursor"
+        );
+        assert_eq!(
+            home_component_cursor(&model),
+            1,
+            "accepted wheel must move the component-local cursor"
+        );
+
+        // Throttled scroll: pin the wheel throttle into the future so the
+        // next event is deterministically blocked inside App's 30ms window —
+        // `duration_since` saturates to zero even if this thread is
+        // descheduled past the window before the call — rather than relying
+        // on the two calls landing <30ms apart; neither cursor moves.
+        model.app.last_scroll_at = Instant::now() + Duration::from_secs(1);
+        model.handle_home_scroll(1);
+        assert_eq!(
+            model.app.home.continue_cursor, 1,
+            "throttled wheel must not move the Continue Watching column cursor"
+        );
+        assert_eq!(
+            home_component_cursor(&model),
+            1,
+            "throttled wheel must not move the component-local cursor"
         );
     }
 }

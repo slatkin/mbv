@@ -266,9 +266,11 @@ pub enum ShellRequest {
     HomeSectionSelected(usize),
     /// A Home-surface wheel scroll over the component's own list area
     /// (`list_area`, rebuilt every `view`; task 5.3d, home hit_test). The
-    /// shell runs `App`'s 30ms wheel throttle against `App::last_scroll_at`
-    /// and then calls `App::handle_mouse_scroll_browse`; the component holds
-    /// no timing state.
+    /// shell runs `App`'s 30ms wheel throttle and browse-readiness gate and
+    /// then, at the Model boundary, moves the mounted component's
+    /// section-local cursor plus the Continue Watching column's independent
+    /// cursor (`Model::handle_home_scroll`, task 5.3d, Home wheel-scroll
+    /// ownership); the component holds no timing state.
     HomeScroll {
         delta: i64,
     },
