@@ -135,14 +135,52 @@ fn home_right_click_uses_the_rendered_row_target() {
     terminal
         .draw(|frame| home.view(frame, frame.area()))
         .unwrap();
+
+    // Right-click on a rendered row resolves the painted target and moves
+    // the component-local cursor to it, so the emitted `ContextMenu` region
+    // and `home.cursor()` agree on the row under the click.
     let (rect, target) = home.test_hitmap()[1];
-    let message = home.on(&Event::Mouse(MouseEvent {
+    let row_message = home.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Right),
         column: rect.x,
         row: rect.y,
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(matches!(message, Some(Msg::Shell(ShellRequest::HomeClick {
+    assert_eq!(
+        home.cursor(),
+        target,
+        "right-click moves the local cursor to the painted row"
+    );
+    assert!(
+        matches!(row_message, Some(Msg::Shell(ShellRequest::HomeClick {
         region: super::msg::HomeHitRegion::ContextMenu(index), ..
-    })) if index == target));
+    })) if index == target)
+    );
+
+    // A right-click on rendered blank space inside the list (the rows below
+    // the last painted hitmap row) opens the menu at the current cursor and
+    // leaves the cursor unchanged.
+    let cursor_before = home.cursor();
+    let blank_y = home
+        .test_hitmap()
+        .iter()
+        .map(|(r, _)| r.bottom())
+        .max()
+        .unwrap();
+    let blank_message = home.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Right),
+        column: 0,
+        row: blank_y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(
+        home.cursor(),
+        cursor_before,
+        "blank-space right-click leaves the cursor unchanged"
+    );
+    assert!(
+        matches!(blank_message, Some(Msg::Shell(ShellRequest::HomeClick {
+        region: super::msg::HomeHitRegion::ContextMenu(index), ..
+    })) if index == cursor_before)
+    );
 }
