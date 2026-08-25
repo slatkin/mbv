@@ -239,6 +239,11 @@ impl Model {
         }
     }
 
+    /// Test-only accessor (the production path persists via
+    /// `persist_home_section_pref`; shell_home.rs and tests_home_latest.rs
+    /// assert through this). Gated to avoid a dead-code warning in
+    /// non-test builds (task 5.3d, 2c cleanup).
+    #[cfg(test)]
     pub(super) fn home_section_pref(&self) -> String {
         self.home_section_pref_semantic
             .as_ref()
