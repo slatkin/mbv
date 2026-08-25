@@ -1,12 +1,224 @@
 use super::browser::BrowserComponent;
+use crate::app::components::msg::{LegacyTerminalEvent, Msg};
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::render::LibraryListRenderCtx;
-use crate::app::tests::make_item;
+use crate::app::tests::{make_item, make_items};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers as CrosstermKeyModifiers};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+/// Local keyboard navigation before `Msg::Legacy` forwarding is stopped
+/// (task 5.3d prep): while focused, the component moves its own cursor
+/// exactly the way the legacy `App::move_lib_cursor_rows`/
+/// `jump_lib_cursor` bindings move the App cursor, and still forwards the
+/// raw key as `Msg::Legacy` so both paths coexist in lockstep. A 40-item
+/// flat list rendered 100 columns wide packs two items per row and pages
+/// `(height - 1) * cols = 9 * 2 = 18` items — every case below lands on
+/// the legacy stride, and the two clamp cases pin the ends.
+#[test]
+fn browser_local_navigation_mirrors_legacy_flat_movement() {
+    let cases = [
+        // (key, from, expected)
+        (KeyCode::Down, 0, 2),
+        (KeyCode::Char('j'), 0, 2),
+        (KeyCode::Up, 4, 2),
+        (KeyCode::Char('k'), 4, 2),
+        (KeyCode::Left, 4, 3),
+        (KeyCode::Char('h'), 4, 3),
+        (KeyCode::Right, 4, 5),
+        (KeyCode::Char('l'), 4, 5),
+        (KeyCode::Down, 39, 39),  // clamp at the last item
+        (KeyCode::Up, 1, 0),      // clamp at the first item
+        (KeyCode::Left, 0, 0),    // clamp at the left edge
+        (KeyCode::Right, 39, 39), // clamp at the right edge
+        // PageDown/PageUp stride (height - 1) * cols — the page excludes
+        // the count/search header line, not the full painted height.
+        (KeyCode::PageDown, 10, 28),
+        (KeyCode::PageUp, 28, 10),
+        (KeyCode::Home, 39, 0),
+        (KeyCode::End, 0, 39),
+    ];
+    for (key, from, expected) in cases {
+        let mut browser = BrowserComponent::new();
+        browser.set_content(
+            LibraryListRenderCtx::from_items(make_items(40), from, 0),
+            true,
+        );
+        let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
+        terminal
+            .draw(|frame| browser.view(frame, frame.area()))
+            .unwrap();
+        let message = browser.handle_crossterm_key(KeyEvent::new(key, CrosstermKeyModifiers::NONE));
+        assert_eq!(
+            browser.cursor(),
+            expected,
+            "{key:?} from cursor {from} in a two-column flat list"
+        );
+        assert!(
+            matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))),
+            "{key:?} must still forward Msg::Legacy while both paths coexist"
+        );
+    }
+
+    // Unfocused (Queue/playback own panel focus): the movement keys do not
+    // mutate the component cursor and the raw key is still forwarded
+    // unchanged, keeping those surfaces authoritative.
+    let mut browser = BrowserComponent::new();
+    browser.set_content(
+        LibraryListRenderCtx::from_items(make_items(40), 7, 0),
+        false,
+    );
+    let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    for key in [
+        KeyCode::Up,
+        KeyCode::Down,
+        KeyCode::Left,
+        KeyCode::Right,
+        KeyCode::PageUp,
+        KeyCode::PageDown,
+        KeyCode::Home,
+        KeyCode::End,
+        KeyCode::Char('h'),
+        KeyCode::Char('j'),
+        KeyCode::Char('k'),
+        KeyCode::Char('l'),
+    ] {
+        let message = browser.handle_crossterm_key(KeyEvent::new(key, CrosstermKeyModifiers::NONE));
+        assert_eq!(
+            browser.cursor(),
+            7,
+            "unfocused {key:?} must not move the cursor"
+        );
+        assert!(
+            matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))),
+            "unfocused {key:?} must still forward legacy"
+        );
+    }
+}
+
+/// Letter-grouped lists (60 items render bucketed rows with a header row
+/// between buckets and a ragged trailing row per bucket) striding one
+/// PAINTED item row per Up/Down, exactly like `App::letter_vertical_delta`:
+/// headers do not participate and a ragged target row falls back to its
+/// last item. The painted (2-column) item rows are
+///   A\u{2013}C: [0,1]..[26,27],[28]   (ragged: item 28 alone)
+///   D\u{2013}F: [29,30]..[43,44]
+///   G\u{2013}I: [45,46]..[57,58],[59] (ragged: item 59 alone)
+/// Flat arithmetic (the pre-align +1 and the naive +2) lands on a
+/// different item in every bracketed case, so each assertion is decisive.
+#[test]
+fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
+    let mut items = Vec::new();
+    for i in 0..15 {
+        let mut item = make_item(&format!("Alpha {i}"), "Movie");
+        item.id = format!("a{i}");
+        items.push(item);
+    }
+    for i in 0..14 {
+        let mut item = make_item(&format!("Beta {i}"), "Movie");
+        item.id = format!("b{i}");
+        items.push(item);
+    }
+    for i in 0..16 {
+        let mut item = make_item(&format!("Delta {i}"), "Movie");
+        item.id = format!("d{i}");
+        items.push(item);
+    }
+    for i in 0..15 {
+        let mut item = make_item(&format!("Gamma {i}"), "Movie");
+        item.id = format!("g{i}");
+        items.push(item);
+    }
+    assert_eq!(items.len(), 60);
+
+    let cases = [
+        // (key, from, expected) — letter-grouped 2-column layout
+        (KeyCode::Down, 27, 28), // ragged target row [28]: fall back to its last item
+        (KeyCode::Down, 28, 29), // across the D–F header: next *item* row is [29,30]
+        (KeyCode::Up, 29, 28),   // back across the header
+        (KeyCode::Down, 59, 59), // clamp at the very last item
+        (KeyCode::Up, 0, 0),     // clamp at the very first item
+        (KeyCode::Home, 59, 0),  // sorted order first
+        (KeyCode::End, 0, 59),   // sorted order last
+        (KeyCode::Left, 4, 3),   // sorted-order ±1 (column adjacency)
+        (KeyCode::Right, 4, 5),
+    ];
+    for (key, from, expected) in cases {
+        let mut browser = BrowserComponent::new();
+        browser.set_content(
+            LibraryListRenderCtx::from_items(items.clone(), from, 0),
+            true,
+        );
+        let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
+        terminal
+            .draw(|frame| browser.view(frame, frame.area()))
+            .unwrap();
+        browser.handle_crossterm_key(KeyEvent::new(key, CrosstermKeyModifiers::NONE));
+        assert_eq!(
+            browser.cursor(),
+            expected,
+            "{key:?} from cursor {from} in the letter-grouped list"
+        );
+    }
+}
+
+/// Wide-Movies exact parity (task 5.3d prep): with the shell's
+/// `set_wide_movies` projection set on a >=82-wide rendered list, the
+/// right rail strides ONE item per row — exactly the legacy
+/// `current_library_columns` result (the wide renderer shows the list in
+/// the right rail even when that rail is wide enough to pack two columns).
+/// Down from 0 lands at 1, not 2; Left/Right/h/l stay unbound locally
+/// (one-column list) while the raw key still forwards as `Msg::Legacy`.
+#[test]
+fn browser_local_navigation_strides_one_column_for_wide_movies() {
+    let mut browser = BrowserComponent::new();
+    browser.set_content(LibraryListRenderCtx::from_items(make_items(12), 0, 0), true);
+    browser.set_wide_movies(true);
+    let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+
+    let message =
+        browser.handle_crossterm_key(KeyEvent::new(KeyCode::Down, CrosstermKeyModifiers::NONE));
+    assert_eq!(
+        browser.cursor(),
+        1,
+        "wide-Movies rail Down must stride one item, not two"
+    );
+    assert!(
+        matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))),
+        "wide-Movies Down must still forward Msg::Legacy"
+    );
+
+    browser.handle_crossterm_key(KeyEvent::new(KeyCode::Down, CrosstermKeyModifiers::NONE));
+    assert_eq!(browser.cursor(), 2);
+    browser.handle_crossterm_key(KeyEvent::new(KeyCode::Up, CrosstermKeyModifiers::NONE));
+    assert_eq!(browser.cursor(), 1);
+
+    for key in [
+        KeyCode::Left,
+        KeyCode::Right,
+        KeyCode::Char('h'),
+        KeyCode::Char('l'),
+    ] {
+        let message = browser.handle_crossterm_key(KeyEvent::new(key, CrosstermKeyModifiers::NONE));
+        assert_eq!(
+            browser.cursor(),
+            1,
+            "wide-Movies rail {key:?} must stay unbound locally"
+        );
+        assert!(
+            matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))),
+            "wide-Movies {key:?} must still forward Msg::Legacy"
+        );
+    }
+}
 
 #[test]
 fn browser_keeps_cursor_local_between_shell_syncs() {

@@ -127,6 +127,14 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {
                 browser.set_content(context, focused);
+                // Task 5.3d prep, wide-Movies exact parity: the shell
+                // projects whether the current App layout is the wide
+                // Movies/home-videos hero-on-left presentation. The
+                // component's own `LayoutMain` never publishes
+                // `movies_wide_right_area` (same reason the music workspace
+                // gets its page size pushed in via `set_page_rows`), so the
+                // 1-column right-rail stride has to ride this field.
+                browser.set_wide_movies(self.app.layout.main.is_wide_movies_active());
             }
         }
     }
