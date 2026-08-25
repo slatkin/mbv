@@ -181,6 +181,16 @@ impl BrowserComponent {
                     Some(ShellRequest::BrowserRescan)
                 }
                 crossterm::event::KeyCode::Char('r') => Some(ShellRequest::BrowserRefresh),
+                // Esc or Backspace go back through the browse history (task
+                // 5.3d, Emby browser back): moves off `Msg::Legacy` for the
+                // focused browser. No modifier guard — the legacy
+                // `handle_lib_key` `Esc | Backspace` arm matched any
+                // modifiers, so this preserves that modifier-insensitive
+                // behavior exactly. The shell owns the effect (`go_back`) and
+                // derives the active library index from its own tab state.
+                crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Backspace => {
+                    Some(ShellRequest::BrowserBack)
+                }
                 _ => None,
             };
             // The component owns the selection: the item is resolved at the

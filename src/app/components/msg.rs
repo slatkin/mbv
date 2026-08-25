@@ -455,6 +455,17 @@ pub enum ShellRequest {
     /// derived from the shell's own tab state). No item is carried: the rescan
     /// confirmation covers the whole active library.
     BrowserRescan,
+    /// Esc or Backspace on the focused generic/Movies/home-video
+    /// `BrowserComponent` (task 5.3d, Emby browser back): back-navigation
+    /// moves off `Msg::Legacy`. The component emits `BrowserBack` for
+    /// `KeyCode::Esc`/`KeyCode::Backspace` with any modifier (matching the
+    /// legacy `handle_lib_key` arm, which guarded neither), and the shell
+    /// derives the active Emby library index from its own tab state and runs
+    /// `App::go_back` on it — preserving its synthetic-group/root guards,
+    /// parent-cursor restoration, season-level skip, persistence, and
+    /// stale-index behavior. No item is carried: back targets the browse
+    /// history, not a selected row.
+    BrowserBack,
 }
 
 /// Region of the generic Emby browser a click resolved to, reported by

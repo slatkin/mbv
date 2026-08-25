@@ -57,6 +57,14 @@ impl Model {
                     on_confirm: ConfirmAction::RescanLibrary(lib_idx),
                 });
             }
+            // Esc/Backspace go back through the browse history (task 5.3d,
+            // Emby browser back): the shell derives the active Emby library
+            // index from its own tab state and runs `App::go_back` on it, the
+            // same call the legacy `handle_lib_key` `Esc | Backspace` arm
+            // made — preserving synthetic-group/root guards, parent-cursor
+            // restoration, season-level skip, persistence, and stale-index
+            // behavior.
+            ShellRequest::BrowserBack => self.app.go_back(lib_idx),
             _ => {}
         }
     }
@@ -342,6 +350,53 @@ mod tests {
             }
             _ => panic!("Ctrl+r must raise the Rescan Library confirmation"),
         }
+
+        // Esc/Backspace move back-navigation off `Msg::Legacy` (task 5.3d,
+        // Emby browser back): with the browser focused, both keys emit a
+        // typed `BrowserBack` — not a raw legacy key — and the shell routes
+        // it to `App::go_back`, which pops the child level and restores the
+        // parent cursor to the folder the child came from. Drive the parent
+        // cursor off the folder first so the restoration is observable.
+        model.app.libs[0].nav_stack[0].cursor = 1;
+        model.app.libs[0].nav_stack.push(BrowseLevel {
+            parent_id: "folder-a".into(),
+            title: "Folder A".into(),
+            items: vec![],
+            total_count: 0,
+            cursor: 0,
+            scroll: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        });
+        let Some(Msg::Shell(ShellRequest::BrowserBack)) =
+            drive_browser_key(&mut model, &id, Key::Esc, KeyModifiers::NONE)
+        else {
+            panic!("focused browser Esc must emit BrowserBack, got no typed request");
+        };
+        model.handle_browser_request(ShellRequest::BrowserBack);
+        assert_eq!(
+            model.app.libs[0].nav_stack.len(),
+            1,
+            "BrowserBack must pop the child browse level via go_back"
+        );
+        assert_eq!(
+            model.app.libs[0].nav_stack[0].cursor, 0,
+            "go_back must restore the parent cursor to the folder the child came from"
+        );
+
+        // Backspace routes the same way (the legacy arm matched both keys
+        // with no modifier guard).
+        let Some(Msg::Shell(ShellRequest::BrowserBack)) =
+            drive_browser_key(&mut model, &id, Key::Backspace, KeyModifiers::NONE)
+        else {
+            panic!("focused browser Backspace must emit BrowserBack, got no typed request");
+        };
     }
 
     /// Drive one key into the mounted `BrowserComponent` and return its `Msg`
