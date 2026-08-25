@@ -381,7 +381,7 @@ impl App {
     /// Wheel-scroll in the library panel dispatches by destination (design
     /// §4). Each Service reads only its own cursor state / episode mode; no
     /// default-to-Emby branch. A stale completed-frame layout no-ops.
-    fn handle_mouse_scroll_browse(&mut self, delta: i64) {
+    pub(super) fn handle_mouse_scroll_browse(&mut self, delta: i64) {
         if !self.browse_mouse_ready() {
             return;
         }

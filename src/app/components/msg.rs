@@ -7,6 +7,7 @@
 
 use crossterm::event::{KeyEvent, MouseEvent};
 use mbv_core::playback_queue::QueueSlotId;
+use ratatui::layout::Position;
 
 /// The single TuiRealm outbound type, grouping surface output enums (design
 /// D4). `Application` requires `Msg: PartialEq`; convenience `Debug`/`Clone`
@@ -282,4 +283,36 @@ pub enum ShellRequest {
     SavePlaylistKey(crossterm::event::KeyEvent),
     /// Forward queue keys whose effects are still shell-owned.
     QueueKey(crossterm::event::KeyEvent),
+    /// Browse-surface scroll over the browser list, hit-tested locally by
+    /// `BrowserComponent` against its own `LayoutMain` (task 5.3d, browser
+    /// hit_test). The shell calls `App::handle_mouse_scroll_browse`.
+    BrowserScroll {
+        delta: i64,
+    },
+    /// Browse left-click the component claims as a row select. The component
+    /// hit-tests `left_area`/`inline_hero_area` and forwards the raw position;
+    /// the shell calls `App::click_set_cursor` so the legacy cell/row-map
+    /// resolution stays authoritative.
+    BrowserRowSelect {
+        col: u16,
+        row: u16,
+    },
+    /// Browse double-click the component claims as activation. `in_left`/`pos`
+    /// are computed from the component's own geometry; the shell calls
+    /// `App::handle_mouse_double_click_emby`.
+    BrowserActivate {
+        in_left: bool,
+        pos: Position,
+    },
+    /// Browse right-click the component claims as a context-menu open. The
+    /// shell calls `App::handle_mouse_right_click_emby`.
+    BrowserContextMenu {
+        col: u16,
+        row: u16,
+    },
+    /// Browse selector-tab click the component claims. The shell resolves the
+    /// `EmbyLibrary` index and calls `App::handle_mouse_selector_click_emby`.
+    BrowserSelectorClick {
+        target: usize,
+    },
 }

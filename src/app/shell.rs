@@ -618,6 +618,31 @@ impl Model {
                         Msg::Shell(ShellRequest::AudiobookshelfBookMouse(mouse)) => {
                             self.handle_audiobookshelf_book_mouse(mouse);
                         }
+                        // Browser (generic Emby) mouse geometry now lives in
+                        // `BrowserComponent`, which hit-tests its own layout and
+                        // forwards intent here (task 5.3d, browser hit_test).
+                        // Each arm calls the gesture's extracted `App` method
+                        // rather than re-deriving effects.
+                        Msg::Shell(ShellRequest::BrowserScroll { delta }) => {
+                            self.app.handle_mouse_scroll_browse(delta);
+                        }
+                        Msg::Shell(ShellRequest::BrowserRowSelect { col, row }) => {
+                            self.app.click_set_cursor(col, row);
+                        }
+                        Msg::Shell(ShellRequest::BrowserActivate { in_left, pos }) => {
+                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                self.app
+                                    .handle_mouse_double_click_emby(lib_idx, in_left, pos);
+                            }
+                        }
+                        Msg::Shell(ShellRequest::BrowserContextMenu { col, row }) => {
+                            self.app.handle_mouse_right_click_emby(col, row);
+                        }
+                        Msg::Shell(ShellRequest::BrowserSelectorClick { target }) => {
+                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                self.app.handle_mouse_selector_click_emby(lib_idx, target);
+                            }
+                        }
                         Msg::Shell(
                             request @ (ShellRequest::PlaylistsBack
                             | ShellRequest::PlaylistsOpen(_)
