@@ -105,11 +105,6 @@ impl App {
         }
     }
 
-    pub(super) fn handle_mouse_single_click_home(&mut self, target: usize) {
-        self.set_panel_focus(super::PanelFocus::Library);
-        self.home.home_cursor = target;
-    }
-
     pub(super) fn handle_mouse_single_click_emby(&mut self, lib_idx: usize, target: usize) {
         self.set_panel_focus(super::PanelFocus::Library);
         if let Some(level) = self
@@ -148,10 +143,6 @@ impl App {
         self.set_queue_scope(scope);
     }
 
-    pub(super) fn handle_mouse_selector_click_home(&mut self, target: usize) {
-        self.home_select_section(target);
-    }
-
     pub(super) fn handle_mouse_selector_click_emby(&mut self, lib_idx: usize, target: usize) {
         if self.is_music_group_view(lib_idx) {
             self.select_music_group(lib_idx, target);
@@ -160,11 +151,6 @@ impl App {
         } else if self.should_show_letter_pills(lib_idx) {
             self.select_letter_pill(lib_idx, target);
         }
-    }
-
-    pub(super) fn handle_mouse_double_click_home(&mut self, target: usize) {
-        self.handle_mouse_single_click_home(target);
-        self.home_play(target);
     }
 
     pub(super) fn handle_mouse_double_click_emby(&mut self, lib_idx: usize, target: usize) {
@@ -183,11 +169,6 @@ impl App {
         if self.handle_mouse_single_click_queue(slot_id) {
             self.dispatch(Command::QueuePlayCursor);
         }
-    }
-
-    pub(super) fn handle_mouse_right_click_home(&mut self, target: usize, col: u16, row: u16) {
-        self.handle_mouse_single_click_home(target);
-        self.open_context_menu_at(col, row);
     }
 
     pub(super) fn handle_mouse_right_click_emby(

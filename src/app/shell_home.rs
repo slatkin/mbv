@@ -8,6 +8,9 @@
 //! component's `view()` over the legacy frame. Cursor/section/scroll state
 //! stays in the component and is not pushed back in from `App`.
 
+use std::time::Instant;
+
+use super::components::msg::HomeHitRegion;
 use super::components::{ComponentId, HomeComponent, ShellRequest};
 use super::shell::Model;
 use super::{PanelFocus, TabSelection};
@@ -29,6 +32,49 @@ impl Model {
             ShellRequest::HomeToggleWatched => self.app.cw_toggle_watched(),
             ShellRequest::HomeSectionSelected(section) => self.app.home_select_section(section),
             _ => {}
+        }
+    }
+
+    /// Route the Home click family (task 5.3d, Home mouse-click handoff) at
+    /// the Model boundary. `HomeComponent` owns the hit geometry and has
+    /// already moved its local cursor/section before emitting the region;
+    /// the shell finishes only the cross-boundary side of each gesture:
+    ///
+    /// - `Pill` — persist the section preference through the existing
+    ///   section-selection mechanism (`home_select_section`) and mark the
+    ///   click timestamp so a follow-up row click isn't misread.
+    /// - `Row` single click — focus the Library panel, as a Home click does
+    ///   today. The clicked row is **not** copied into
+    ///   `App::home.home_cursor`; the component owns the cursor.
+    /// - `Row` double click — focus the Library panel and activate the
+    ///   component-provided flat target directly via `home_play(target)`.
+    /// - `ContextMenu` — focus the Library panel and open the menu at the
+    ///   pointer, preserving the existing eligibility, menu actions, and
+    ///   `continue_cursor` target semantics (the Home menu target is not the
+    ///   clicked `home_cursor`, so no cursor copy is required).
+    ///
+    /// Double-click/scroll timing stays `App`-owned
+    /// (`note_browse_double_click` against `last_click_time`/`last_click_pos`
+    /// and the wheel throttle), so the 400ms window is preserved.
+    pub(super) fn handle_home_click(&mut self, region: HomeHitRegion, col: u16, row: u16) {
+        match region {
+            HomeHitRegion::Pill(target) => {
+                self.app.last_click_time = Instant::now();
+                self.app.last_click_pos = (col, row);
+                self.app.home_select_section(target);
+            }
+            HomeHitRegion::ContextMenu(_target) => {
+                self.app.set_panel_focus(PanelFocus::Library);
+                self.app.open_context_menu_at(col, row);
+            }
+            HomeHitRegion::Row(target) => {
+                if self.app.note_browse_double_click(col, row) {
+                    self.app.set_panel_focus(PanelFocus::Library);
+                    self.app.home_play(target);
+                } else {
+                    self.app.set_panel_focus(PanelFocus::Library);
+                }
+            }
         }
     }
 
@@ -211,6 +257,99 @@ mod tests {
         assert_eq!(
             model.app.home.section, 1,
             "section preference must be the requested target"
+        );
+    }
+
+    /// Task 5.3d, Home mouse-click handoff: the shell routes each typed
+    /// `HomeClick` region at the Model boundary. A pill persists the section
+    /// through the existing section-selection mechanism; a single row click
+    /// focuses the Library panel but does **not** copy the clicked row into
+    /// `App::home.home_cursor` (the component owns the cursor); a double
+    /// click additionally activates the component-provided flat target; a
+    /// right-click focuses Library and opens a Pointer-anchored context menu
+    /// whose target stays the Continue Watching `continue_cursor` item — not
+    /// the clicked row or the parked `App::home.home_cursor`.
+    #[test]
+    fn shell_home_click_family_routes_at_model_boundary() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut model = Model::new(make_app_stub());
+        // Two Continue Watching rows (movies, ids id0/id1) plus one latest
+        // folder so a parked home_cursor can sit on a non-CW folder target.
+        model.app.home.continue_items = make_items(2);
+        let mut folder = make_item("folder", "CollectionFolder");
+        folder.is_folder = true;
+        model.app.home.latest = vec![(
+            "Folder".into(),
+            crate::app::types_playback::HomeLatestSource::Emby("lib".into()),
+            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
+            0,
+        )];
+        let folder_flat = model.app.home.continue_items.len(); // flat index of the folder
+
+        // Single click on CW row 0: focuses the Library panel, but does not
+        // copy the row into home_cursor (kept parked on the folder) and does
+        // not activate.
+        model.app.home.home_cursor = folder_flat;
+        model.app.status.clear();
+        model.handle_home_click(HomeHitRegion::Row(0), 5, 5);
+        assert_eq!(
+            model.app.effective_panel_focus(),
+            PanelFocus::Library,
+            "single click must focus the Library panel"
+        );
+        assert_eq!(
+            model.app.home.home_cursor, folder_flat,
+            "single click must not copy the row into App::home.home_cursor"
+        );
+        assert!(
+            model.app.status.is_empty(),
+            "single click must not activate"
+        );
+
+        // Double click on CW row 0 (same coords within the App-owned 400ms
+        // window): activates the flat target via home_play, which flashes on
+        // the missing Emby service, while home_cursor stays parked elsewhere.
+        model.handle_home_click(HomeHitRegion::Row(0), 5, 5);
+        assert_eq!(
+            model.app.status, "Emby is unavailable",
+            "double click must activate the clicked flat target"
+        );
+        assert_eq!(
+            model.app.home.home_cursor, folder_flat,
+            "double click still must not copy the row into home_cursor"
+        );
+
+        // Pill click: the requested section is persisted via the existing
+        // section-selection mechanism (home_select_section).
+        model.handle_home_click(HomeHitRegion::Pill(1), 6, 6);
+        assert_eq!(
+            model.app.home.section, 1,
+            "pill click must select the section"
+        );
+
+        // Right-click: focuses Library and opens a Pointer-anchored context
+        // menu whose entries resolve from the Continue Watching
+        // `continue_cursor` item — a CW movie, not the folder sitting under
+        // the parked home_cursor. (The Home menu target is continue_cursor,
+        // never the clicked row, so preserving it needs no cursor copy.)
+        model.app.home.home_cursor = folder_flat;
+        model.app.home.continue_cursor = 0;
+        model.handle_home_click(HomeHitRegion::ContextMenu(0), 70, 20);
+        let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) =
+            model.app.pending_overlay
+        else {
+            panic!("right-click must open a context menu");
+        };
+        assert_eq!(
+            menu.anchor,
+            crate::app::types_context_menu::ContextMenuAnchor::Pointer { x: 70, y: 20 },
+            "right-click must keep the pointer anchor"
+        );
+        assert!(
+            menu.entries
+                .iter()
+                .any(|e| e.label == "Remove from Continue Watching"),
+            "menu target must be the Continue Watching item, not the folder under home_cursor"
         );
     }
 }

@@ -276,9 +276,8 @@ pub enum ShellRequest {
     /// geometry (task 5.3d, home hit_test). The component reports *where* it
     /// landed; the shell decides *when* it counts — it runs `App`'s 400ms
     /// double-click comparison against `App::last_click_time`/`last_click_pos`
-    /// and then calls the matching extracted gesture method
-    /// (`handle_mouse_single_click_home`, `handle_mouse_double_click_home`,
-    /// `handle_mouse_right_click_home`, `handle_mouse_selector_click_home`).
+    /// and then routes the region through `Model::handle_home_click` (task
+    /// 5.3d, Home mouse-click handoff).
     HomeClick {
         region: HomeHitRegion,
         col: u16,
@@ -396,9 +395,10 @@ pub enum BrowserHitRegion {
 /// or scroll timing state of its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HomeHitRegion {
-    /// The Home list area (`list_area`): a single click selects/focuses via
-    /// The resolved row target is applied by the shell; a double-click activates via
-    /// `App::handle_mouse_double_click_home` (the shell decides which).
+    /// The Home list area (`list_area`): the component resolves the row
+    /// under the click; the shell decides whether the same coordinates form
+    /// a single click (focus Library) or a double-click activation of the
+    /// resolved flat target.
     Row(usize),
     /// Section pill; `target` is the section index the component resolved.
     Pill(usize),

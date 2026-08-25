@@ -704,23 +704,9 @@ impl Model {
                                 self.app.handle_mouse_scroll_browse(delta);
                             }
                         }
-                        Msg::Shell(ShellRequest::HomeClick { region, col, row }) => match region {
-                            HomeHitRegion::Pill(target) => {
-                                self.app.last_click_time = Instant::now();
-                                self.app.last_click_pos = (col, row);
-                                self.app.handle_mouse_selector_click_home(target);
-                            }
-                            HomeHitRegion::ContextMenu(target) => {
-                                self.app.handle_mouse_right_click_home(target, col, row);
-                            }
-                            HomeHitRegion::Row(target) => {
-                                if self.app.note_browse_double_click(col, row) {
-                                    self.app.handle_mouse_double_click_home(target);
-                                } else {
-                                    self.app.handle_mouse_single_click_home(target);
-                                }
-                            }
-                        },
+                        Msg::Shell(ShellRequest::HomeClick { region, col, row }) => {
+                            self.handle_home_click(region, col, row);
+                        }
                         // Home typed effects (task 5.3d, Home typed-effect
                         // prep): `HomeComponent` owns the cursor and reports the
                         // flat target index it resolved; the shell forwards it
