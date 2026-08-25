@@ -20,7 +20,9 @@ use std::time::{Duration, Instant};
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
-use super::components::msg::{AlbumCursorKind, BrowserHitRegion, HomeHitRegion, QueueHitRegion};
+use super::components::msg::{
+    AlbumCursorKind, BrowserHitRegion, HomeHitRegion, QueueHitRegion, TvHitRegion,
+};
 use super::components::{
     ComponentId, LegacyTerminalEvent, LibraryComponent, Msg, OverlayId, PlaybackComponent,
     ShellRequest, UiRootComponent, UserEvent,
@@ -712,6 +714,37 @@ impl Model {
                                 }
                             }
                         },
+                        // TV workspace mouse geometry lives in
+                        // `TvWorkspaceComponent`, which resolves the pane +
+                        // hit (two focusable panes); the shell decides *when*
+                        // a click is a double-click via App's 400ms window
+                        // and shares the 30ms wheel throttle (task 5.3d,
+                        // tv_workspace hit_test).
+                        Msg::Shell(ShellRequest::TvScroll { delta }) => {
+                            if self.app.note_browse_scroll() {
+                                self.app.handle_mouse_scroll_browse(delta);
+                            }
+                        }
+                        Msg::Shell(ShellRequest::TvClick { region, col, row }) => {
+                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                match region {
+                                    TvHitRegion::ContextMenu(hit) => {
+                                        self.app
+                                            .handle_mouse_right_click_tv(lib_idx, hit, col, row);
+                                    }
+                                    TvHitRegion::Hit(hit) => {
+                                        if self.app.note_browse_double_click(col, row) {
+                                            self.app
+                                                .handle_mouse_double_click_tv(lib_idx, col, row);
+                                        } else {
+                                            self.app.handle_mouse_single_click_tv(
+                                                lib_idx, hit, col, row,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         Msg::Shell(
                             request @ (ShellRequest::PlaylistsBack
                             | ShellRequest::PlaylistsOpen(_)

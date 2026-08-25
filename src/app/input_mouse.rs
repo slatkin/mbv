@@ -230,19 +230,6 @@ impl App {
             }
             if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
                 let pos = (col, row).into();
-                if self.layout.main.is_wide_tv_active() {
-                    if self
-                        .layout
-                        .main
-                        .tv_wide_episode_rows
-                        .iter()
-                        .find(|(rect, _)| rect.contains(pos))
-                        .is_some()
-                    {
-                        self.set_panel_focus(PanelFocus::Library);
-                        return true;
-                    }
-                }
                 if self.is_music_group_view(lib_idx) && self.layout.main.is_wide_music_active() {
                     if let Some(track) = self.layout.main.wide_music_track_at(pos) {
                         self.set_panel_focus(PanelFocus::Library);
@@ -285,39 +272,15 @@ impl App {
             // separate rect. Track hits in the left pane flow through the
             // existing left_area block (wide left pane IS left_area).
             if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
-                if self.layout.main.is_wide_tv_active() {
-                    let pos = (col, row).into();
-                    if self
-                        .layout
-                        .main
-                        .tv_wide_season_tabs
-                        .iter()
-                        .find(|(rect, _)| rect.contains(pos))
-                        .is_some()
-                    {
-                        self.set_panel_focus(PanelFocus::Library);
-                        return true;
-                    }
-                    if self.layout.main.tv_wide_left_area.contains(pos) {
-                        return true;
-                    }
-                    let right = self.layout.main.tv_wide_right_area;
-                    if right.contains(pos) {
-                        let click_y = (row.saturating_sub(self.layout.main.left_area.y)) as usize;
-                        let target = self
-                            .layout
-                            .main
-                            .left_row_map
-                            .get(click_y)
-                            .copied()
-                            .flatten();
-                        if let Some(target) = target {
-                            if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                                level.cursor = target;
-                            }
-                        }
-                        return true;
-                    }
+                // Wide hero-on-left panes: tvshows clicks are claimed by
+                // `TvWorkspaceComponent` (episode rows and season pills are
+                // resolved there); this branch survives for wide Emby
+                // podcast libraries, which render the same panes but mount
+                // no component (task 5.3d, tv_workspace hit_test).
+                if self.layout.main.is_wide_tv_active()
+                    && self.wide_tv_panes_click(lib_idx, col, row)
+                {
+                    return true;
                 }
                 if self.is_music_group_view(lib_idx) && self.layout.main.is_wide_music_active() {
                     let pos = (col, row).into();

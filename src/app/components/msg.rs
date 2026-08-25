@@ -319,6 +319,27 @@ pub enum ShellRequest {
         col: u16,
         row: u16,
     },
+    /// A TV-workspace wheel scroll over the component's own series list
+    /// (`layout.left_area`, the right-pane list area, rebuilt every `view`;
+    /// task 5.3d, tv_workspace hit_test). The shell runs `App`'s 30ms wheel
+    /// throttle against `App::last_scroll_at` and then calls
+    /// `App::handle_mouse_scroll_browse`; the component holds no timing
+    /// state.
+    TvScroll {
+        delta: i64,
+    },
+    /// A TV-workspace click the component resolved to a region of its own
+    /// geometry (task 5.3d, tv_workspace hit_test). The component painted
+    /// the two panes, so it resolves which pane a click lands in and the hit
+    /// within it; the shell never re-derives the pane from `col`/`row`. The
+    /// shell decides *when* it counts — via `App`'s 400ms double-click
+    /// window (`note_browse_double_click`) — then calls the matching
+    /// extracted gesture method.
+    TvClick {
+        region: TvHitRegion,
+        col: u16,
+        row: u16,
+    },
     /// Browse-surface scroll over the browser list, hit-tested locally by
     /// `BrowserComponent` against its own `LayoutMain` (task 5.3d, browser
     /// hit_test). The shell runs `App`'s 30ms wheel throttle against
@@ -389,4 +410,42 @@ pub enum QueueHitRegion {
     ScopeRemote,
     /// Right-click in the queue list area.
     ContextMenu,
+}
+
+/// Pane + hit within the TV workspace a click resolved to, reported by
+/// `TvWorkspaceComponent` (task 5.3d, tv_workspace hit_test). The TV
+/// workspace has two focusable panes, so a click's meaning depends on which
+/// pane it lands in: Episodes-pane hits (season pill, episode row, blank
+/// hero space) move the component's local pane focus to `Episodes` and pull
+/// App's panel focus to the Library; Series-pane hits move the component's
+/// pane to `Series` and set the library cursor in App. The component painted
+/// the panes, so it resolves both; the shell never re-derives the pane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TvHit {
+    /// Season pill in the Episodes pane; index resolved by the component.
+    SeasonTab(usize),
+    /// Episode row in the Episodes pane; index resolved by the component.
+    EpisodeRow(usize),
+    /// Blank/hero space in the Episodes pane (no tab or row under the
+    /// cursor): consumed without changing the pane or panel focus.
+    EpisodesPane,
+    /// The Series pane (series list: the series row under the cursor).
+    SeriesRow,
+}
+
+/// Region of the TV workspace a click resolved to (task 5.3d, tv_workspace
+/// hit_test). The component resolves the pane and the hit within it; the
+/// shell turns the region into the matching App gesture — single vs
+/// double-click decided there via App's 400ms window — without re-deriving
+/// the pane from the click coordinates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TvHitRegion {
+    /// A left click on the carried `TvHit`.
+    Hit(TvHit),
+    /// A right click; the carried `TvHit` is the pane + hit the click
+    /// resolved to, so the shell applies the same pane-appropriate
+    /// single-click effect (panel focus for Episodes-pane hits, series
+    /// cursor for Series-pane hits) before opening the context menu at the
+    /// click position.
+    ContextMenu(TvHit),
 }

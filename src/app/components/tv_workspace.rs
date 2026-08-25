@@ -13,7 +13,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg};
+use super::msg::{LegacyTerminalEvent, Msg, ShellRequest, TvHit, TvHitRegion};
 use super::user_event::UserEvent;
 use crate::app::render::{render_wide_tv_with_ctx, TvWideRenderCtx};
 use crate::app::ui_util::move_cursor;
@@ -191,35 +191,108 @@ impl TvWorkspaceComponent {
         )))
     }
 
+    /// The component owns *where* a TV event lands: it hit-tests its painted
+    /// panes (`tv_wide_season_tabs`, `tv_wide_episode_rows`, and the two
+    /// pane rects — all rebuilt every `view`) and resolves pane + hit into a
+    /// typed region. A click in a pane moves the component's local focus
+    /// there (its `pane` plus the pane cursors below); the shell decides
+    /// *when* a click counts (App's 400ms double-click window, 30ms wheel
+    /// throttle) via App's shared fields — the component holds no timing
+    /// state.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         let mouse = to_crossterm_mouse_event(mouse);
-        if matches!(
-            mouse.kind,
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
-            let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
-            if let Some((_, index)) = self
-                .layout
-                .tv_wide_season_tabs
-                .iter()
-                .find(|(rect, _)| rect.contains(position))
-            {
-                self.pane = Pane::Episodes;
-                self.season_cursor = *index;
-                self.episode_cursor = Some(0);
-            } else if let Some((_, index)) = self
-                .layout
-                .tv_wide_episode_rows
-                .iter()
-                .find(|(rect, _)| rect.contains(position))
-            {
-                self.pane = Pane::Episodes;
-                self.episode_cursor = Some(*index);
-            } else if self.layout.tv_wide_right_area.contains(position) {
-                self.pane = Pane::Series;
+        let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
+        match mouse.kind {
+            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+                if let Some(hit) = self.resolve_hit(position) {
+                    // A click in the unfocused pane moves local focus there;
+                    // a click in the already-focused pane keeps it (the hit
+                    // only re-targets the pane's cursor). Clicking a season
+                    // pill also selects that season; blank Episodes-pane
+                    // space is consumed without changing the pane.
+                    match hit {
+                        TvHit::SeasonTab(index) => {
+                            self.pane = Pane::Episodes;
+                            self.season_cursor = index;
+                            self.episode_cursor = Some(0);
+                        }
+                        TvHit::EpisodeRow(index) => {
+                            self.pane = Pane::Episodes;
+                            self.episode_cursor = Some(index);
+                        }
+                        TvHit::SeriesRow => self.pane = Pane::Series,
+                        TvHit::EpisodesPane => {}
+                    }
+                    return Some(Msg::Shell(ShellRequest::TvClick {
+                        region: TvHitRegion::Hit(hit),
+                        col: mouse.column,
+                        row: mouse.row,
+                    }));
+                }
             }
+            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
+                if let Some(hit) = self.resolve_hit(position) {
+                    // Right-click carries the same resolved pane + hit so
+                    // the shell applies the pane-appropriate single-click
+                    // effect before opening the menu; it never moves the
+                    // component's pane or cursors (mirroring the legacy
+                    // right-click arm, which only ever opened the menu).
+                    return Some(Msg::Shell(ShellRequest::TvClick {
+                        region: TvHitRegion::ContextMenu(hit),
+                        col: mouse.column,
+                        row: mouse.row,
+                    }));
+                }
+            }
+            crossterm::event::MouseEventKind::ScrollUp
+            | crossterm::event::MouseEventKind::ScrollDown
+                if self.layout.left_area.contains(position) =>
+            {
+                // Wheel scroll over the series list (`left_area` is the
+                // right-pane list area this renderer publishes — the exact
+                // region the legacy scroll arm hit-tested). The Episodes
+                // pane has no legacy wheel behaviour, so those scrolls stay
+                // legacy-forwarded (where they no-op).
+                let delta: i64 = if matches!(mouse.kind, crossterm::event::MouseEventKind::ScrollUp)
+                {
+                    -1
+                } else {
+                    1
+                };
+                return Some(Msg::Shell(ShellRequest::TvScroll { delta }));
+            }
+            _ => {}
         }
         Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
+    }
+
+    /// Resolve a workspace position to the pane + hit it lands in, from the
+    /// component's own painted geometry. `None` = outside every TV rect
+    /// (the clicks that stay `Msg::Legacy`).
+    fn resolve_hit(&self, position: ratatui::layout::Position) -> Option<TvHit> {
+        if let Some((_, index)) = self
+            .layout
+            .tv_wide_season_tabs
+            .iter()
+            .find(|(rect, _)| rect.contains(position))
+        {
+            return Some(TvHit::SeasonTab(*index));
+        }
+        if let Some((_, index)) = self
+            .layout
+            .tv_wide_episode_rows
+            .iter()
+            .find(|(rect, _)| rect.contains(position))
+        {
+            return Some(TvHit::EpisodeRow(*index));
+        }
+        if self.layout.tv_wide_left_area.contains(position) {
+            return Some(TvHit::EpisodesPane);
+        }
+        if self.layout.tv_wide_right_area.contains(position) {
+            return Some(TvHit::SeriesRow);
+        }
+        None
     }
 }
 

@@ -312,7 +312,7 @@ contributing surface's group 2–4 conversion to have landed.
     - [x] `browser` `hit_test` — real row/hit geometry, one unit.
     - [x] `home` `hit_test` — real row/hit geometry, one unit.
     - [x] `queue` `hit_test` — real row/hit geometry, one unit.
-    - [ ] `tv_workspace` `hit_test` — two focusable panes, one unit.
+    - [x] `tv_workspace` `hit_test` — two focusable panes, one unit.
     - [ ] `music_workspace` `hit_test` — album grid plus inline track list.
     - [ ] Blocking modals and prompt — `confirm`, `daemon_lost`,
       `remote_reanchor`, `playback_prompt`. Geometry is a containment check

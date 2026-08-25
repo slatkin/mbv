@@ -9,7 +9,8 @@
 
 use super::action::Command;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
-use super::{App, PanelFocus, QueueScope, TabSelection};
+use super::{App, QueueScope, TabSelection};
+use crate::app::components::msg::TvHit;
 use ratatui::layout::Position;
 
 impl App {
@@ -19,6 +20,108 @@ impl App {
 
     pub(super) fn handle_mouse_selector_click_queue(&mut self, scope: QueueScope) {
         self.set_queue_scope(scope);
+    }
+
+    // ---- TV workspace mouse geometry (task 5.3d) ----
+
+    /// Single-click select in the TV workspace (tvshows shell arm). The
+    /// component resolved the pane + hit; this applies the App-side effects
+    /// the legacy `click_set_cursor` TV branches performed: Episodes-pane
+    /// hits (episode rows and season pills) pull panel focus to the Library,
+    /// Series-pane hits move the library cursor, blank Episodes-pane space
+    /// is consumed.
+    pub(super) fn handle_mouse_single_click_tv(
+        &mut self,
+        lib_idx: usize,
+        hit: TvHit,
+        col: u16,
+        row: u16,
+    ) {
+        match hit {
+            TvHit::SeasonTab(_) | TvHit::EpisodeRow(_) => {
+                self.set_panel_focus(super::PanelFocus::Library);
+            }
+            TvHit::SeriesRow => {
+                self.wide_tv_panes_click(lib_idx, col, row);
+            }
+            TvHit::EpisodesPane => {}
+        }
+    }
+
+    /// Double-click activate in the wide hero-on-left layout, shared by the
+    /// TV workspace and wide Emby podcast libraries (which render the same
+    /// panes but mount no component, so they still route through
+    /// `handle_mouse`). Episode rows and series rows activate the selected
+    /// series; season pills and blank space no-op. tvshows clicks arrive
+    /// from the `TvClick` shell arm with the hit already resolved; this
+    /// method keeps the geometry hit-test because the legacy podcast path
+    /// needs it — one implementation for both paths.
+    pub(super) fn handle_mouse_double_click_tv(&mut self, lib_idx: usize, col: u16, row: u16) {
+        let pos: Position = (col, row).into();
+        if self
+            .layout
+            .main
+            .tv_wide_episode_rows
+            .iter()
+            .any(|(rect, _)| rect.contains(pos))
+            || self.layout.main.tv_wide_right_area.contains(pos)
+        {
+            self.activate_selected_series(lib_idx);
+        }
+    }
+
+    /// Right-click context menu in the TV workspace: applies the same
+    /// pane-appropriate single-click effect as a left click (via the
+    /// caller-resolved `hit`), then opens the context menu at the click —
+    /// mirroring the legacy `click_set_cursor`-then-menu flow.
+    pub(super) fn handle_mouse_right_click_tv(
+        &mut self,
+        lib_idx: usize,
+        hit: TvHit,
+        col: u16,
+        row: u16,
+    ) {
+        match hit {
+            TvHit::SeasonTab(_) | TvHit::EpisodeRow(_) => {
+                self.set_panel_focus(super::PanelFocus::Library);
+            }
+            TvHit::SeriesRow => {
+                self.wide_tv_panes_click(lib_idx, col, row);
+            }
+            TvHit::EpisodesPane => {}
+        }
+        self.open_context_menu_at(col, row);
+    }
+
+    /// Single click on the wide hero-on-left panes, shared by the legacy
+    /// podcast path in `click_set_cursor` and the tvshows `SeriesRow` arm:
+    /// consumes clicks in the left pane, resolves a right-pane click to the
+    /// library cursor via the rendered row map. `click_set_cursor` still
+    /// needs this for wide Emby podcast libraries, which render the same
+    /// panes but mount no component.
+    pub(super) fn wide_tv_panes_click(&mut self, lib_idx: usize, col: u16, row: u16) -> bool {
+        let pos: Position = (col, row).into();
+        if self.layout.main.tv_wide_left_area.contains(pos) {
+            return true;
+        }
+        let right = self.layout.main.tv_wide_right_area;
+        if right.contains(pos) {
+            let click_y = (row.saturating_sub(self.layout.main.left_area.y)) as usize;
+            let target = self
+                .layout
+                .main
+                .left_row_map
+                .get(click_y)
+                .copied()
+                .flatten();
+            if let Some(target) = target {
+                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                    level.cursor = target;
+                }
+            }
+            return true;
+        }
+        false
     }
 
     pub(super) fn handle_mouse_scroll_queue(&mut self, delta: i64) {

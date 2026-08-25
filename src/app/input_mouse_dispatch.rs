@@ -174,17 +174,12 @@ impl App {
                         // is no default-to-Emby branch.
                         if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
                             if self.layout.main.is_wide_tv_active() {
-                                let pos = (col, row).into();
-                                if self
-                                    .layout
-                                    .main
-                                    .tv_wide_episode_rows
-                                    .iter()
-                                    .any(|(rect, _)| rect.contains(pos))
-                                    || self.layout.main.tv_wide_right_area.contains(pos)
-                                {
-                                    self.activate_selected_series(lib_idx);
-                                }
+                                // tvshows double-clicks are claimed by
+                                // `TvWorkspaceComponent` (shell `TvClick`
+                                // arm); this branch remains for wide Emby
+                                // podcast libraries, which render the same
+                                // panes but mount no component.
+                                self.handle_mouse_double_click_tv(lib_idx, col, row);
                                 return;
                             }
                         }
