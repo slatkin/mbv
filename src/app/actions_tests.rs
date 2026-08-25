@@ -189,7 +189,6 @@ fn recursive_album_search_matches_ancestor_labels() {
         }]),
         false,
         true,
-        ratatui::layout::Rect::new(0, 0, 40, 5),
     );
     for key in "deep grp".chars() {
         component.on(&tuirealm::event::Event::Keyboard(
@@ -212,7 +211,6 @@ fn album_only_music_keeps_visible_list_search() {
         crate::app::components::SearchPool::Items(vec![album("album-1", "Visible Record")]),
         false,
         true,
-        ratatui::layout::Rect::new(0, 0, 40, 5),
     );
     for key in "visible rec".chars() {
         component.on(&tuirealm::event::Event::Keyboard(
@@ -232,7 +230,6 @@ fn album_index_completion_updates_the_open_current_query() {
         crate::app::components::SearchPool::Albums(Vec::new()),
         true,
         true,
-        ratatui::layout::Rect::new(0, 0, 40, 5),
     );
     for key in "remote group".chars() {
         component.on(&tuirealm::event::Event::Keyboard(
@@ -254,7 +251,6 @@ fn album_index_completion_updates_the_open_current_query() {
         }]),
         false,
         true,
-        ratatui::layout::Rect::new(0, 0, 40, 5),
     );
     assert_eq!(
         component.selected_item().unwrap().name,

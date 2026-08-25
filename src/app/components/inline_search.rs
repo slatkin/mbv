@@ -3,6 +3,9 @@
 //! The shell supplies the validated, ordered candidate pool. Plain browser
 //! searches use `Items`; recursive music searches use `Albums`. App retains
 //! the search worker, album index, and activation effects until group 5.
+//! The shell passes the placement rect at `view` time (the deleted per-frame
+//! `sync_inline_search` area mirror); the component paints only into that
+//! rect, exactly like every other mounted component.
 
 use ratatui::layout::Rect;
 use ratatui::Frame;
@@ -59,7 +62,6 @@ pub struct InlineSearchComponent {
     cursor: usize,
     scroll: usize,
     focused: bool,
-    area: Rect,
     layout: crate::app::layout::LayoutMain,
 }
 
@@ -72,18 +74,11 @@ impl InlineSearchComponent {
             cursor: 0,
             scroll: 0,
             focused: false,
-            area: Rect::default(),
             layout: Default::default(),
         }
     }
 
-    pub(in crate::app) fn set_content(
-        &mut self,
-        pool: SearchPool,
-        loading: bool,
-        focused: bool,
-        area: Rect,
-    ) {
+    pub(in crate::app) fn set_content(&mut self, pool: SearchPool, loading: bool, focused: bool) {
         self.pool = pool;
         if loading {
             self.loading = true;
@@ -95,7 +90,6 @@ impl InlineSearchComponent {
                 .saturating_sub(1),
         );
         self.focused = focused;
-        self.area = area;
     }
 
     pub(in crate::app) fn set_loading(&mut self, loading: bool) {
@@ -182,14 +176,14 @@ impl Default for InlineSearchComponent {
 }
 
 impl Component for InlineSearchComponent {
-    fn view(&mut self, frame: &mut Frame, _area: Rect) {
+    fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = Default::default();
         let items = self.pool.filtered_items(&self.query);
         let context = LibraryListRenderCtx::from_items(items, self.cursor, self.scroll)
             .with_search(self.query.clone(), self.loading);
         self.scroll = render_generic_movies_home_video_rows_with_ctx(
             frame,
-            self.area,
+            area,
             &context,
             self.focused,
             &mut self.layout,
@@ -234,23 +228,13 @@ mod tests {
     fn inline_library_search_query_and_cursor_survive_shell_mirrors() {
         let mut component = InlineSearchComponent::new();
         let items = vec![make_item("One", "Movie"), make_item("Only", "Movie")];
-        component.set_content(
-            SearchPool::Items(items.clone()),
-            false,
-            true,
-            Rect::new(0, 0, 40, 5),
-        );
+        component.set_content(SearchPool::Items(items.clone()), false, true);
         component.on(&Event::Keyboard(KeyEvent {
             code: Key::Char('x'),
             modifiers: KeyModifiers::NONE,
         }));
         component.query = "on".into();
-        component.set_content(
-            SearchPool::Items(items),
-            false,
-            true,
-            Rect::new(0, 0, 40, 5),
-        );
+        component.set_content(SearchPool::Items(items), false, true);
         component.on(&Event::Keyboard(KeyEvent {
             code: Key::Down,
             modifiers: KeyModifiers::NONE,
@@ -267,7 +251,6 @@ mod tests {
             SearchPool::Items(vec![make_item("One", "Movie")]),
             false,
             true,
-            Rect::new(0, 0, 40, 5),
         );
         let mut terminal = Terminal::new(TestBackend::new(40, 5)).unwrap();
         terminal
@@ -286,12 +269,7 @@ mod tests {
         let mut component = InlineSearchComponent::new();
         let item = make_item("One", "Movie");
         component.query = "one".into();
-        component.set_content(
-            SearchPool::Items(vec![item.clone()]),
-            false,
-            true,
-            Rect::new(0, 0, 40, 5),
-        );
+        component.set_content(SearchPool::Items(vec![item.clone()]), false, true);
 
         let message = component.on(&Event::Keyboard(KeyEvent {
             code: Key::Enter,

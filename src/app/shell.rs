@@ -290,8 +290,9 @@ impl Model {
                     super::LibEvent::RestoreLibraryPosition { .. } => {
                         self.app.handle_lib_event(ev);
                         self.music_track_focus_request = Some(false);
+                        self.push_inline_search_content();
                     }
-                    ev => self.app.handle_lib_event(ev),
+                    ev => self.handle_inline_search_lib_event(ev),
                 }
             }
 
@@ -473,6 +474,9 @@ impl Model {
                             self.app.force_clear = true;
                             self.app.card_image_states.clear();
                             self.app.card_image_loading.clear();
+                            // Resize is the only reachable focus/layout change
+                            // while the search is mounted (it swallows keys).
+                            self.push_inline_search_content();
                         }
                         Msg::Legacy(LegacyTerminalEvent::FocusGained) => {
                             self.app.note_focus_gained();
@@ -877,7 +881,6 @@ impl Model {
             self.sync_emby_browser();
             self.sync_tv_workspace();
             self.sync_music_workspace();
-            self.sync_inline_search();
             self.sync_active_destination();
 
             self.app.expire_music_grouping_candidates();

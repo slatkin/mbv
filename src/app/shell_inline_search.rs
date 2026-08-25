@@ -12,6 +12,7 @@ impl Model {
             library_id: library.library.id.clone(),
             kind: BrowserKind::from_collection_type(&library.library.collection_type),
         });
+        // `Some` exactly when the mounted search belongs to this library.
         (self.inline_search_id.as_ref() == Some(&expected)).then_some(expected)
     }
 
@@ -28,32 +29,32 @@ impl Model {
         }
     }
 
-    pub(super) fn sync_inline_search(&mut self) {
-        let next_id = match self.app.tab {
-            TabSelection::EmbyLibrary(index) => self.inline_search_component_id(index),
-            _ => None,
-        };
-        if self.inline_search_id != next_id {
-            if let Some(id) = self.inline_search_id.take() {
-                let _ = self.application.umount(&id);
-            }
-            if let Some(id) = next_id.clone() {
-                self.application
-                    .mount(id.clone(), Box::new(InlineSearchComponent::new()), vec![])
-                    .expect("mount inline library Search");
-                self.application
-                    .active(&id)
-                    .expect("activate inline library Search");
-                self.inline_search_id = Some(id);
-            }
-        }
-
+    /// Event-scoped projection replacing the deleted per-frame
+    /// `sync_inline_search`. Runs only where the search's inputs actually
+    /// change: `open_inline_search`, `activate_inline_search_item`, the
+    /// `apply_inline_search_items` flat-result push (kept verbatim below),
+    /// async library completions in the shell's `lib_rx` drain, and terminal
+    /// resize. The projection is deterministic in `App` state, so pushing the
+    /// same value again is idempotent; because the mounted search swallows
+    /// keyboard and mouse (D16), panel-focus, panel-mode and tab transitions
+    /// are unreachable while it is open except at those boundaries.
+    ///
+    /// Also releases the stale mount when the active tab no longer belongs to
+    /// the library the search opened from — the deleted mirror's per-frame
+    /// key-mismatch unmount, now driven by the async `NavigateTo`/load flows
+    /// that can move the tab while the component is mounted.
+    pub(super) fn push_inline_search_content(&mut self) {
         let Some(id) = self.inline_search_id.as_ref().cloned() else {
             return;
         };
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
+            self.dismiss_inline_search();
             return;
         };
+        if self.inline_search_component_id(index).is_none() {
+            self.dismiss_inline_search();
+            return;
+        }
         let recursive = self.app.recursive_album_search_enabled(index);
         let library_id = self.app.libs[index].library.id.clone();
         let loading = recursive
@@ -79,13 +80,12 @@ impl Model {
                 .unwrap_or_default();
             SearchPool::Items(items)
         };
-        let area = self.inline_search_area();
         let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(search_component) =
                 comp.as_any_mut().downcast_mut::<InlineSearchComponent>()
             {
-                search_component.set_content(pool, loading, focused, area);
+                search_component.set_content(pool, loading, focused);
                 if recursive {
                     search_component.set_loading(loading);
                 }
@@ -129,7 +129,9 @@ impl Model {
                 self.app.spawn_search_items_load(index);
             }
         }
-        self.sync_inline_search();
+        // Initial pool/loading/focus push (the deleted mirror's first-frame
+        // projection, at the open event).
+        self.push_inline_search_content();
         if (recursive
             && matches!(
                 self.app.album_indexes.get(&self.app.libs[index].library.id),
@@ -176,6 +178,10 @@ impl Model {
         {
             self.app.select_item(lib_idx, item);
         }
+        // Activation may have navigated (flat folder push) or queued
+        // playback; re-project the pool/focus at this event point, exactly
+        // as the deleted per-frame mirror did on the following tick.
+        self.push_inline_search_content();
     }
 
     fn set_inline_search_loading(&mut self, loading: bool) {
@@ -189,6 +195,27 @@ impl Model {
             {
                 search.set_loading(loading);
             }
+        }
+    }
+
+    /// Drain tail for the inline search (called from the shell's `lib_rx`
+    /// loop): completions that can change the mounted search's projected pool
+    /// — flat `nav_stack` items/`all_items`, recursive `album_indexes`, or the
+    /// tab itself via `NavigateTo` — re-push it after the App handles the
+    /// event. The deleted per-frame mirror's projection, driven at async
+    /// event boundaries. `NavigateTo` may move the tab, which the push
+    /// releases as a stale mount.
+    pub(super) fn handle_inline_search_lib_event(&mut self, ev: super::LibEvent) {
+        let pushes_inline_search = matches!(
+            ev,
+            super::LibEvent::Refreshed { .. }
+                | super::LibEvent::AllItemsPrefetched { .. }
+                | super::LibEvent::AlbumIndexBuilt { .. }
+                | super::LibEvent::NavigateTo { .. }
+        );
+        self.app.handle_lib_event(ev);
+        if pushes_inline_search {
+            self.push_inline_search_content();
         }
     }
 
@@ -215,13 +242,12 @@ impl Model {
         let Some(id) = self.inline_search_id.as_ref() else {
             return;
         };
-        let area = self.inline_search_area();
         if let Some(component) = self.application.get_component_mut(id) {
             if let Some(search) = component
                 .as_any_mut()
                 .downcast_mut::<InlineSearchComponent>()
             {
-                search.set_content(SearchPool::Items(items), false, true, area);
+                search.set_content(SearchPool::Items(items), false, true);
                 search.set_loading(false);
             }
         }

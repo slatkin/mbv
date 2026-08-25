@@ -121,7 +121,6 @@ fn wide_tv_selected_series_follows_inline_search_cursor() {
         crate::app::components::SearchPool::Items(vec![second.clone()]),
         false,
         true,
-        ratatui::layout::Rect::new(0, 0, 40, 5),
     );
     use tuirealm::component::AppComponent;
     for key in "search".chars() {
