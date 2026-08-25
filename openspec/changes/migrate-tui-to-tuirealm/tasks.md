@@ -293,7 +293,7 @@ contributing surface's group 2–4 conversion to have landed.
   - [x] *Album track focus* — delete `LibraryTab.album_track_focus` and re-home
     its four `= None` resets. 30 files (21 / 9), 113 refs. Independent of 5.3c;
     may run in parallel with it.
-    **Landed.** `MusicWorkspaceComponent::track_cursor` is the
+    **Landed (`6b2977d4`).** `MusicWorkspaceComponent::track_cursor` is the
     sole owner of inline track focus. The field, its initializer,
     `clear_music_focus`, the `ATTR_ALBUM_TRACK_FOCUSED` projection/gate, the
     `AlbumTrackMove`/`AlbumTrackDismiss`/`AlbumTrackEnter` commands, the
