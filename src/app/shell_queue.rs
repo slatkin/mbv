@@ -14,7 +14,7 @@ impl Model {
         }
 
         let queue_focused = matches!(self.app.effective_panel_focus(), PanelFocus::Queue)
-            && !self.app.any_other_modal_open();
+            && !self.blocking_overlay_active();
         if queue_focused {
             if self.application.focus() != Some(&id) {
                 self.application.active(&id).expect("activate Queue");

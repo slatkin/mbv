@@ -222,7 +222,6 @@ pub(crate) fn make_app_stub() -> App {
         last_esc_press: None,
         last_click_pos: (u16::MAX, u16::MAX),
         pending_overlay: None,
-        blocking_overlay_active: false,
         pending_exit_message: None,
         pending_delete_slot: None,
         pending_queue_removal: None,

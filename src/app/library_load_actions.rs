@@ -239,7 +239,7 @@ impl App {
             },
         };
         self.replace_queue_or_prompt(action);
-        if !self.blocking_overlay_active {
+        if self.pending_overlay.is_none() {
             self.request_sidebar_dismiss(super::SidebarId::Playlists);
             self.set_panel_focus(PanelFocus::Queue);
         }

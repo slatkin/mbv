@@ -52,7 +52,6 @@ impl Model {
     pub(in crate::app) fn sync_modal_requests(&mut self) {
         let Some(request) = self.app.pending_overlay.take() else {
             self.assert_modal_mount_exclusive();
-            self.app.blocking_overlay_active = self.blocking_overlay_active();
             return;
         };
         match request {
@@ -204,7 +203,6 @@ impl Model {
             }
         }
         self.assert_modal_mount_exclusive();
-        self.app.blocking_overlay_active = self.blocking_overlay_active();
     }
 
     fn assert_modal_mount_exclusive(&self) {

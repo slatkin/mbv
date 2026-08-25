@@ -327,7 +327,7 @@ impl App {
         // Stay-alive (local daemon) indicator: red when the daemon is the active
         // target (stay-alive's brand colour), yellow when the daemon is lost —
         // the error state since red already means active, grey when not in use.
-        let alive_color = if self.blocking_overlay_active {
+        let alive_color = if self.dim_backdrop_active {
             palette::TEXT_FOCUS_ACCENT
         } else if self.is_local_daemon() {
             palette::STATUS_ERROR

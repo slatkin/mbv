@@ -566,6 +566,5 @@ impl App {
                 restart_error: None,
             },
         ));
-        self.blocking_overlay_active = true;
     }
 }

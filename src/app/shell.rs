@@ -843,8 +843,6 @@ impl Model {
             self.update_settings_content();
             self.sync_playback();
             self.sync_modal_requests();
-            self.sync_multiselect();
-            self.sync_library_routes();
             self.sync_feeds_manage();
             self.sync_home();
             self.sync_feeds();
@@ -859,7 +857,6 @@ impl Model {
             self.sync_inline_search();
             self.sync_library_parent();
             self.sync_overlay_stack();
-            self.sync_precedence_gates();
 
             self.app.expire_music_grouping_candidates();
             self.app.sync_volume_from_player();
@@ -898,6 +895,12 @@ impl Model {
                     self.app.sync_visualizer();
                 }
                 if let Err(e) = terminal.draw(|f| {
+                    // The legacy base frame reads the blocking-overlay state
+                    // for its dim backdrop and stay-alive indicator; that
+                    // fact now lives in TuiRealm mount state, so the shell
+                    // computes it once per frame (the deleted App-level
+                    // `blocking_overlay_active` adapter, task 5.3d).
+                    self.app.dim_backdrop_active = self.blocking_overlay_active();
                     self.app.render(f);
                     self.render_playback_component(f);
                     self.render_home_component(f);

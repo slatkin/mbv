@@ -222,13 +222,6 @@ impl Model {
         ComponentId::Popup(PopupId::Multiselect)
     }
 
-    pub(in crate::app) fn sync_multiselect(&mut self) {
-        // The `MultiselectComponent` owns its `kind`/`items`/`cursor`; the
-        // shell mounts it from `OverlayRequest::OpenMultiselect` and commits
-        // through `handle_multiselect_commit` (task 5.3c). No per-tick mirror
-        // is needed once the component is the source of truth.
-    }
-
     pub(in crate::app) fn handle_multiselect_commit(&mut self) {
         let id = Self::multiselect_id();
         let Some((kind, items)) = self
@@ -396,12 +389,6 @@ impl Model {
 
     fn library_routes_id() -> ComponentId {
         ComponentId::Popup(PopupId::LibraryRoutes)
-    }
-
-    pub(in crate::app) fn sync_library_routes(&mut self) {
-        // The `LibraryRoutesComponent` owns its `stage`/`cursor`; the shell
-        // mounts it from `OverlayRequest::OpenLibraryRoutes` and drives stage
-        // transitions through `handle_library_routes_enter`/`esc` (task 5.3c).
     }
 
     pub(in crate::app) fn handle_library_routes_request(&mut self, request: ShellRequest) {

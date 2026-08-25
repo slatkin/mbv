@@ -109,7 +109,6 @@ mod shell_audiobookshelf_podcast;
 mod shell_browser;
 mod shell_feeds;
 mod shell_feeds_manage;
-mod shell_gates;
 mod shell_home;
 mod shell_inline_search;
 mod shell_library;

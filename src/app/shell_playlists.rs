@@ -103,7 +103,7 @@ impl Model {
                             },
                         },
                     );
-                    if !self.app.blocking_overlay_active {
+                    if self.app.pending_overlay.is_none() {
                         self.dismiss_sidebar(super::SidebarId::Playlists);
                         self.app.set_panel_focus(super::PanelFocus::Queue);
                     }

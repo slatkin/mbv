@@ -325,9 +325,6 @@ impl App {
     /// and passes it here so '.' targets the focused track instead of the
     /// album row. All other arms resolve exactly as `build_context_menu`.
     fn build_context_menu_for(&mut self, tracked_item: Option<EmbyItem>) -> Option<ContextMenu> {
-        if self.any_other_modal_open() {
-            return None;
-        }
         let mut entries: Vec<ContextMenuEntry> = vec![];
 
         let cw_focused = matches!(

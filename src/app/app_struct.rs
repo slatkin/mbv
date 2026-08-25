@@ -161,10 +161,6 @@ pub struct App {
     /// Shell handoff for a modal raised by App-owned effects. The mounted
     /// component owns the modal after the next Model tick.
     pub(super) pending_overlay: Option<super::types_overlay::OverlayRequest>,
-    /// Temporary precedence adapter for legacy App readers. The shell writes
-    /// this from TuiRealm mount state each tick; task 5.3d deletes it with the
-    /// remaining mirrors once those readers move into the shell.
-    pub(super) blocking_overlay_active: bool,
     /// Set right before requesting a clean exit on an announced daemon
     /// shutdown (task 7.2); printed once by `run()` after the terminal is
     /// restored, since anything written while still in the alternate screen
@@ -406,12 +402,10 @@ impl App {
 
     pub(super) fn ask_confirm(&mut self, modal: ConfirmModal) {
         self.pending_overlay = Some(super::types_overlay::OverlayRequest::Confirm(modal));
-        self.blocking_overlay_active = true;
     }
 
     pub(super) fn open_save_playlist_dialog(&mut self, dialog: SavePlaylistDialog) {
         self.pending_overlay = Some(super::types_overlay::OverlayRequest::SavePlaylist(dialog));
-        self.blocking_overlay_active = true;
     }
 
     pub(super) fn dismiss_confirm(&mut self) {

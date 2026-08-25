@@ -181,7 +181,6 @@ impl App {
             self.pending_overlay = Some(super::types_overlay::OverlayRequest::RemoteReanchor(
                 super::RemoteReanchorPopup { targets, cursor: 0 },
             ));
-            self.blocking_overlay_active = true;
         }
     }
 
