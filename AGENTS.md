@@ -14,8 +14,6 @@ playback belongs to the terminal, Local daemon, or packaged `mbvd`.
   Issues/discussions (`slatkin/mbv`) and gists for ad-hoc notes.
 - Commit specs/plans/docs with code; merge applied deltas into `openspec/specs/`
   and archive completed changes.
-- For code exploration, Serena can be used and should be scoped to the
-  current worktree.
 
 ## Boundaries
 
