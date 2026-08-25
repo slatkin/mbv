@@ -3,7 +3,7 @@
 Working notes for the final framework teardown. Deletion order is normative:
 **surface mirrors → CONTEXT_STACK → LegacyInput**, each wave committed green.
 
-## Recount (2026-08-xx)
+## Recount (2026-08-25)
 
 Production sync/framework definitions as of `7de7d409` — 19 `Model` methods plus
 `UiRootComponent::sync_overlay_order` = 20 candidates. Classified by ownership:
@@ -44,7 +44,7 @@ still emit `Msg::Legacy(...)` / `ShellRequest::*Key` / `NoOp`.
 - no surface mirror / temporary adapter (incl. `ShellRequest::*Key` fallbacks)
 - no remaining `impl App` interaction ownership
 
-## Landed so far (2026-08-xx, commits from clean 7de7d409)
+## Landed so far (2026-08-25, commits from clean 7de7d409)
 
 - **Wave 1** `4ce46d0a` — delete `App::blocking_overlay_active` (temporary
   precedence adapter) + no-op mirrors `sync_multiselect`/`sync_library_routes`
@@ -65,6 +65,21 @@ still emit `Msg::Legacy(...)` / `ShellRequest::*Key` / `NoOp`.
   replaced by direct `sync_active_destination` (idempotent `active()`);
   `LibraryComponent` (inert after the mirror) deleted with its mount and the
   mirror-pinning tests; new Model-boundary routing tests.
+- **Prep (sync_home typed-effects)** `d2b24d0c` — bounded routing seam ahead
+  of the `sync_home` deletion (not the ownership move itself):
+  `HomeComponent` already emits `HomePlay`/`HomeEnqueue`/`HomeDelete`/
+  `HomeToggleWatched`/`HomeSectionSelected`, but the shell had no consumers
+  (they fell into the catch-all `_` arm). Shell now routes them via
+  `Model::handle_home_request` to the legacy effects, and the effects
+  (`home_play`/`home_enqueue`/`home_current_item` + new `home_delete`) take
+  the component-provided flat cursor instead of reading
+  `App::home.home_cursor` — the requested target is honored even when the
+  App cursor differs. Legacy `handle_cw_key`/double-click pass their resolved
+  cursor explicitly; CW resume, enqueue, delete, watched-toggle, and
+  section-preference behavior unchanged. `sync_home`, the Home
+  cursor/section/scroll fields, the legacy Home renderer, `handle_key_home`,
+  `CONTEXT_STACK`, and `LegacyInput` all remain. One focused Model-boundary
+  test drives each typed effect.
 
 **Not yet landed** (remain, in required order): the per-surface interaction
 mirrors whose `App` state still holds the cursor (`sync_home`,
