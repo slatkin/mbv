@@ -384,11 +384,6 @@ impl App {
         // (never a network fetch here), re-applying `hidden_latest`.
         self.rebuild_feeds_latest();
 
-        let n = 1 + self.home.latest.len();
-        if self.home.section >= n {
-            self.home.section = n.saturating_sub(1);
-        }
-        self.update_home_section_pref_guarded();
         Ok(())
     }
 

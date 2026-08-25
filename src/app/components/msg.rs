@@ -262,7 +262,8 @@ pub enum ShellRequest {
     /// cursor (preserved, not fixed).
     HomeToggleWatched,
     /// Persist the newly selected Home pill (section index) as the restored
-    /// preference, matching `home_select_section`'s `save_prefs` call.
+    /// preference, resolved via the mounted component's `source_for_section`
+    /// at the Model boundary (task 5.3d, numeric Home section deletion).
     HomeSectionSelected(usize),
     /// A Home-surface wheel scroll over the component's own list area
     /// (`list_area`, rebuilt every `view`; task 5.3d, home hit_test). The

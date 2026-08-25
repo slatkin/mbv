@@ -421,7 +421,6 @@ fn home_play_and_enqueue_leave_audiobookshelf_tab_state_untouched() {
         vec![QueueItem::Audiobookshelf(abs_episode("1"))],
         0,
     )];
-    app.home_select_section(1);
     assert!(app.home_current_item(0).unwrap().is_audiobookshelf());
 
     app.home_enqueue(0);
@@ -546,40 +545,12 @@ fn home_play_and_enqueue_leave_feeds_tab_state_untouched() {
             .collect(),
         0,
     )];
-    app.home_select_section(1);
     assert!(app.home_current_item(0).unwrap().is_feed());
 
     app.home_enqueue(0);
     app.home_play(0);
 
     assert_eq!(app.feed_tab.all_entries.len(), 2);
-}
-
-#[test]
-fn empty_abs_library_section_is_still_a_selectable_pill() {
-    // Home pill convention: every section in `home.latest` is a real pill
-    // (an ABS library, an Emby view, or Feeds), empty or not — matching
-    // Continue Watching, which always renders and shows "(empty)" when bare.
-    // An empty ABS library must be selectable so the feature is discoverable
-    // even before any episode has been published/fetched.
-    let mut app = make_app_stub();
-    app.home.latest = vec![(
-        "Podcasts".into(),
-        HomeLatestSource::Audiobookshelf("abs-pod".into()),
-        Vec::new(),
-        0,
-    )];
-
-    assert!(
-        app.home_section_is_valid(1),
-        "an empty ABS library section must still be a valid pill"
-    );
-
-    app.home_select_section(1);
-    assert_eq!(
-        app.home.section, 1,
-        "selecting the empty pill keeps section 1"
-    );
 }
 
 #[test]
@@ -644,80 +615,6 @@ fn home_latest_source_pref_key_round_trips() {
     }
     assert_eq!(HomeLatestSource::from_pref_key(""), None);
     assert_eq!(HomeLatestSource::from_pref_key("unknown:2"), None);
-}
-
-#[test]
-fn home_section_pref_is_empty_for_continue_watching() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    // A populated `latest` is what exposes the off-by-one: Continue Watching
-    // (section 0) must never resolve to `latest[0]`'s key (the next pill).
-    app.home.latest = vec![
-        (
-            "Movies".into(),
-            HomeLatestSource::Emby("lib-movies".into()),
-            vec![QueueItem::Emby(Box::new(make_item("Movie one", "Movie")))],
-            0,
-        ),
-        (
-            "Podcasts".into(),
-            HomeLatestSource::Audiobookshelf("abs-pod".into()),
-            vec![QueueItem::Audiobookshelf(abs_episode("1"))],
-            0,
-        ),
-    ];
-
-    // Continue Watching (section 0) must persist as the empty sentinel, never
-    // as a `latest` pill's key — driven through the real selection path so
-    // the semantic preference the persistence reads stays in step.
-    app.home_select_section(0);
-    assert!(
-        app.home_section_pref().is_empty(),
-        "Continue Watching persists as no section key"
-    );
-
-    // A real pill selection must persist its own key.
-    app.home_select_section(1);
-    assert_eq!(app.home_section_pref(), "emby:lib-movies");
-    app.home_select_section(2);
-    assert_eq!(app.home_section_pref(), "abs:abs-pod");
-}
-
-/// Task 5.3d, Home persisted-section identity seam: after a Home source is
-/// selected, an unrelated `save_prefs()` (persisting other preferences only)
-/// must retain that source identity. Before the seam, `save_prefs` derived
-/// `home_section` from numeric `App.home.section`; now it reads the
-/// shell-owned semantic preference, so a transient numeric section value can
-/// never clobber the selected identity.
-#[test]
-fn unrelated_save_prefs_retains_selected_home_source() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    app.home.latest = vec![(
-        "Movies".into(),
-        HomeLatestSource::Emby("lib-movies".into()),
-        vec![QueueItem::Emby(Box::new(make_item("Movie one", "Movie")))],
-        0,
-    )];
-
-    // The transient numeric section points at a different pill than the
-    // selected source, simulating the component-local numeric state the seam
-    // decouples persistence from — `save_prefs` must still keep the source
-    // identity the user actually selected.
-    app.home_select_section(1);
-    app.home.section = 0;
-
-    // An unrelated preference save persists the retained identity, not the
-    // transient numeric section.
-    app.save_prefs();
-    let saved = crate::config::prefs_path();
-    let parsed: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(saved).expect("prefs written")).unwrap();
-    assert_eq!(
-        parsed["home_section"],
-        "emby:lib-movies",
-        "unrelated save must keep the selected Home source identity"
-    );
 }
 
 /// Task 5.3d, Home persisted-section identity seam: while a one-time persisted

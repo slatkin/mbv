@@ -31,8 +31,8 @@ pub(in crate::app) struct HomeContentOutput {
     pub(in crate::app) left_area: Rect,
     pub(in crate::app) selected_item_rect: Option<Rect>,
     /// The `section` actually rendered, after the invalid-section clamp
-    /// (matches `App::render_home_list`'s original in-place clamp of
-    /// `self.home.section`, which the legacy wrapper writes back).
+    /// (the single painter's `view` writes it back into `HomeComponent`'s
+    /// section, the component's own state).
     pub(in crate::app) resolved_section: usize,
 }
 

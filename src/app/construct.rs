@@ -88,7 +88,6 @@ impl App {
                 continue_items: Vec::new(),
                 continue_cursor: 0,
                 latest: Vec::new(),
-                section: 0,
             },
             libs: Vec::new(),
             status: String::new(),

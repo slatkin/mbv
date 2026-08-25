@@ -30,7 +30,6 @@ fn tracking_stub() -> mbv_core::remote_reconciliation::ReconciliationTracker {
 fn home_enqueue_from_home_view_applies_immediately() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.home.section = 0;
     app.home.continue_items = make_items(1);
     app.home.continue_cursor = 0;
 
@@ -47,7 +46,6 @@ fn home_enqueue_appends_to_direct_remote_queue() {
     let remote_items = make_items(3);
     let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(local_items, remote_items.clone());
     app.queue_scope = QueueScope::Remote;
-    app.home.section = 0;
     app.home.continue_items = make_items(1);
     app.home.continue_cursor = 0;
 
@@ -82,7 +80,6 @@ fn home_enqueue_appends_to_direct_remote_queue() {
 fn enqueue_stops_tracking_and_applies_immediately() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.home.section = 0;
     app.home.continue_items = make_items(1);
     app.home.continue_cursor = 0;
     app.remote_tracker = Some(tracking_stub());

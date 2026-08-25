@@ -155,6 +155,60 @@ fn section_bracket_moves_into_the_next_section_and_persists() {
     assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomeSectionSelected(1))));
 }
 
+/// Task 5.3d, numeric Home section deletion: an empty latest pill is still a
+/// selectable section (the component is the sole owner of the numeric
+/// section). An empty pill yields a valid selected section (so it remains
+/// discoverable) while its (empty) range leaves the flat cursor clamped to 0.
+#[test]
+fn empty_latest_pill_is_a_selectable_section() {
+    let mut home = HomeComponent::new();
+    home.set_focused(true);
+    home.set_content(
+        vec![],
+        vec![(
+            "Podcasts".into(),
+            crate::app::types_playback::HomeLatestSource::Audiobookshelf("abs-pod".into()),
+            vec![],
+        )],
+        false,
+    );
+
+    let msg = home.on(&key(Key::Char(']')));
+    assert_eq!(home.section(), 1, "empty pill must be selectable");
+    assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomeSectionSelected(1))));
+    assert_eq!(
+        home.cursor(),
+        0,
+        "an empty section leaves the cursor clamped"
+    );
+}
+
+/// Task 5.3d, numeric Home section deletion: `source_for_section` keeps the
+/// off-by-one rule in the component — section 0 (Continue Watching) is `None`
+/// (the empty persistence sentinel), section 1 maps to `latest[0]`, and an
+/// out-of-range index is `None`.
+#[test]
+fn source_for_section_maps_numeric_to_semantic_source() {
+    let home = two_section_home();
+    assert_eq!(
+        home.source_for_section(0),
+        None,
+        "Continue Watching resolves to None"
+    );
+    assert_eq!(
+        home.source_for_section(1),
+        Some(crate::app::types_playback::HomeLatestSource::Emby(
+            "movies".into()
+        )),
+        "section 1 resolves to latest[0]'s source"
+    );
+    assert_eq!(
+        home.source_for_section(2),
+        None,
+        "out-of-range section is None"
+    );
+}
+
 #[test]
 fn unmatched_key_bounces_to_the_legacy_dispatch() {
     let mut home = two_section_home();

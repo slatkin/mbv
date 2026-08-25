@@ -30,17 +30,44 @@ impl Model {
             ShellRequest::HomeEnqueue(cursor) => self.app.home_enqueue(cursor),
             ShellRequest::HomeDelete(cursor) => self.app.home_delete(cursor),
             ShellRequest::HomeToggleWatched => self.app.cw_toggle_watched(),
-            ShellRequest::HomeSectionSelected(section) => self.app.home_select_section(section),
+            ShellRequest::HomeSectionSelected(section) => {
+                self.select_home_section_from_component(section)
+            }
             _ => {}
         }
+    }
+
+    /// Resolve a selected section's semantic source from the mounted
+    /// `HomeComponent` and persist it (task 5.3d, numeric Home section
+    /// deletion). The component has already moved its own numeric section by
+    /// the time a keyboard `[`/`]` / `HomeSectionSelected` or a pill click /
+    /// `HomeClick::Pill` reaches the shell; the shell never copies that
+    /// numeric index back into App — it maps the requested section to its
+    /// `HomeLatestSource` via the component and stores that in the shell-
+    /// owned semantic preference, then persists through the unchanged
+    /// `App::save_prefs`. Continue Watching (section 0) resolves to `None`
+    /// (the empty-string persistence sentinel). A missing component is a
+    /// defensive no-op (Home is mounted for the whole session).
+    fn select_home_section_from_component(&mut self, section: usize) {
+        let Some(source) = self
+            .application
+            .get_component(&ComponentId::Home)
+            .and_then(|c| c.as_any().downcast_ref::<HomeComponent>())
+            .map(|home| home.source_for_section(section))
+        else {
+            return;
+        };
+        self.app.home_section_pref_semantic = source;
+        // Persist the selection so the pill is restored on the next launch.
+        self.app.save_prefs();
     }
 
     /// The authoritative "is Continue Watching selected?" fact for the
     /// context-menu builder, resolved at the Model boundary from the mounted
     /// `HomeComponent` (task 5.3d, Home context-menu section decoupling).
-    /// Reading `HomeComponent::section() == 0` here replaces the former
-    /// numeric `App.home.section == 0` read in `App::build_context_menu_for`;
-    /// the value is passed into the App-owned builder and never copied into a
+    /// Reading `HomeComponent::section() == 0` here replaces the deleted
+    /// numeric `App.home.section == 0` read; the
+    /// value is passed into the App-owned builder and never copied into a
     /// new App field or boolean mirror. With no mounted Home component the
     /// fact defaults to `false` (the component is mounted for the whole
     /// session, so this is only a defensive fallback).
@@ -59,8 +86,10 @@ impl Model {
     /// the shell finishes only the cross-boundary side of each gesture:
     ///
     /// - `Pill` — persist the section preference through the existing
-    ///   section-selection mechanism (`home_select_section`) and mark the
-    ///   click timestamp so a follow-up row click isn't misread.
+    ///   section-selection boundary (`select_home_section_from_component`,
+    ///   which maps the clicked pill to its `HomeLatestSource` in the
+    ///   component and calls `save_prefs`) and mark the click timestamp so a
+    ///   follow-up row click isn't misread.
     /// - `Row` single click — focus the Library panel, as a Home click does
     ///   today. The clicked row is **not** copied into an App flat cursor;
     ///   the component owns the cursor, and App's independent Continue
@@ -80,7 +109,7 @@ impl Model {
             HomeHitRegion::Pill(target) => {
                 self.app.last_click_time = Instant::now();
                 self.app.last_click_pos = (col, row);
-                self.app.home_select_section(target);
+                self.select_home_section_from_component(target);
             }
             HomeHitRegion::ContextMenu(_target) => {
                 self.app.set_panel_focus(PanelFocus::Library);
@@ -135,15 +164,18 @@ impl Model {
     }
 
     /// Mirror `App.home`'s content and runtime render flags into the mounted
-    /// `HomeComponent`. Its cursor, section, and scroll are component-local.
-    /// As the content is mirrored, the one-time persisted-pill restore that
-    /// used to run in the legacy `App::render_home_list` is applied (task
-    /// 5.3d, Home legacy underpaint removal): the saved section preference is
+    /// `HomeComponent`. Its cursor, section, and scroll are component-local
+    /// and never pushed back into App (the numeric section was deleted, task
+    /// 5.3d). As the content is mirrored, the one-time persisted-pill restore
+    /// that used to run in the legacy `App::render_home_list` is applied
+    /// (task 5.3d, Home legacy underpaint removal): `home_section_pending` is
     /// restored via `HomeComponent::restore_section` only once a section with
     /// the pending source identity exists (sections arrive asynchronously
-    /// across providers), kept pending until then, cleared once applied, and
-    /// mirrored once into `App.home.section` so the action layer and
-    /// `save_prefs` see the same restored selection.
+    /// across providers), kept pending until then, and cleared once applied.
+    /// `home_section_pending` retains the pending source while it is absent so an
+    /// unrelated `App::save_prefs` never overwrites it; after a successful
+    /// restore (or with no restore pending) the shell-owned semantic
+    /// preference is reconciled from the component's selected source.
     pub(super) fn sync_home(&mut self) {
         let continue_items: Vec<QueueItem> = self
             .app
@@ -162,31 +194,41 @@ impl Model {
             .collect();
         let focused = !matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
         let use_nerd_fonts = self.app.use_nerd_fonts;
-        // Resolve the pending persisted-pill restore before the component
-        // borrow, so the source identity is stable for the restore and the
-        // one-time App-side `section` mirror that goes with it.
+        // Snapshot the pending persisted-pill restore before the component
+        // borrow so the source identity is stable; arriving sources are
+        // applied by `restore_section` only once a matching section exists.
         let pending = self.app.home_section_pending.clone();
-        let pending_section = pending.as_ref().and_then(|pending_source| {
-            self.app
-                .home
-                .latest
-                .iter()
-                .position(|(_, source, _, _)| source == pending_source)
-                .map(|idx| idx + 1)
-        });
         if let Some(comp) = self.application.get_component_mut(&ComponentId::Home) {
             if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
                 home.set_content(continue_items, latest, self.app.home_loading);
                 home.set_focused(focused);
                 home.set_use_nerd_fonts(use_nerd_fonts);
-                if let (Some(pending_source), Some(section)) = (&pending, pending_section) {
+                if let Some(pending_source) = &pending {
                     if home.restore_section(pending_source) {
-                        self.app.home.section = section;
-                        self.app.update_home_section_pref();
+                        // Successful restore retains the pending source and
+                        // clears the marker; the semantic preference is then
+                        // reconciled from the component below.
                         self.app.home_section_pending = None;
                     }
                 }
             }
+        }
+        // Reconcile the shell-owned semantic persistence identity from the
+        // component only while no one-time restore remains pending: with the
+        // numeric section owned by the component, this keeps
+        // `home_section_pref_semantic` tracking the clamped selection across
+        // async content rebuilds — but never while a pending absent source
+        // must be retained (that would clear it to Continue Watching before
+        // restoration). A successful restore above clears pending first, so
+        // the reconcile then records the restored source.
+        if self.app.home_section_pending.is_none() {
+            let source = self
+                .application
+                .get_component(&ComponentId::Home)
+                .and_then(|c| c.as_any().downcast_ref::<HomeComponent>())
+                .map(|home| home.source_for_section(home.section()))
+                .unwrap_or_else(|| self.app.home_section_pref_semantic.clone());
+            self.app.home_section_pref_semantic = source;
         }
     }
 
@@ -220,22 +262,28 @@ mod tests {
     use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-    /// Task 5.3d, Home legacy underpaint removal: the one-time persisted-pill
-    /// restore that used to run in the deleted legacy `App::render_home_list`
-    /// now runs on the shell's `sync_home` path. It restores the section via
-    /// `HomeComponent::restore_section` only once a section with the pending
-    /// source identity exists (sections arrive asynchronously), keeps the
-    /// preference pending until then, mirrors the restored section once into
-    /// `App.home.section` so the action layer and `save_prefs` agree, and
-    /// clears the pending when applied.
+    /// Task 5.3d, Home legacy underpaint removal + numeric section deletion:
+    /// the one-time persisted-pill restore that used to run in the deleted
+    /// legacy `App::render_home_list` now runs on the shell's `sync_home`
+    /// path. It restores the section via `HomeComponent::restore_section` only
+    /// once a section with the pending source identity exists (sections
+    /// arrive asynchronously), keeps the preference pending until then (an
+    /// unrelated save must retain it), clears the pending when applied, and
+    /// reconciles the shell-owned semantic preference from the component. No
+    /// numeric section is mirrored back into App.
     #[test]
     fn shell_sync_home_restores_persisted_home_section_and_clears_pending() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_app_stub());
+        // Simulate real startup: both the semantic preference and the pending
+        // marker carry the saved source identity.
+        model.app.home_section_pref_semantic =
+            Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
         model.app.home_section_pending =
             Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
 
-        // No matching source yet: the preference stays pending and the
+        // No matching source yet: the preference stays pending, the semantic
+        // identity is retained (not clobbered to Continue Watching), and the
         // component section stays at its default (Continue Watching).
         model.sync_home();
         {
@@ -257,10 +305,15 @@ mod tests {
             Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into())),
             "preference must stay pending while the matching section is absent"
         );
+        assert_eq!(
+            model.app.home_section_pref(),
+            "abs:books",
+            "an absent pending source must be retained for an unrelated save"
+        );
 
         // The "books" section arrives; the next sync restores it into the
-        // component (section 1), mirrors it into `App.home.section`, and
-        // clears the pending.
+        // component (section 1), clears the pending, and the reconcile
+        // records the restored source in the semantic preference.
         model.app.home.latest = vec![(
             "Books".into(),
             crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()),
@@ -282,10 +335,6 @@ mod tests {
                 "restored section must land in the component"
             );
         }
-        assert_eq!(
-            model.app.home.section, 1,
-            "restored section must be mirrored into App.home.section"
-        );
         assert_eq!(
             model.app.home_section_pref(),
             "abs:books",
@@ -336,9 +385,9 @@ mod tests {
     /// Task 5.3d, Home typed-effect prep + cursor deletion: the shell routes
     /// each typed Home effect to its `App` handler with the component's
     /// target, and the effect acts on that supplied target even when App's
-    /// remaining section-specific state (`section`, `continue_cursor`)
-    /// points elsewhere. Enqueue is proven by the queued item's id; the
-    /// section preference by the resulting `home.section`. The emby-gated
+    /// remaining state (`continue_cursor`) points elsewhere. Enqueue is
+    /// proven by the queued item's id; the section preference by the semantic
+    /// preference persisted at the Model boundary. The emby-gated
     /// effects prove their target by acting at all: absent a live Emby
     /// service they flash "Emby is unavailable", while a non-CW flat target
     /// (play on the folder, delete past the CW range) would skip silently.
@@ -349,9 +398,9 @@ mod tests {
         // Three Continue Watching rows (ids id0..id2) plus one latest pill
         // holding a folder, so a flat target past the CW range makes
         // `home_play` return early via the folder guard — a clean "wrong
-        // target" signal. App's remaining section state is parked on the
-        // latest pill / a different CW column row so the effects must act on
-        // their explicit target, not that parked state.
+        // target" signal. `continue_cursor` is parked on a different CW
+        // column row so the effects must act on their explicit target, not
+        // that parked state.
         model.app.home.continue_items = make_items(3);
         let mut folder = make_item("folder", "CollectionFolder");
         folder.is_folder = true;
@@ -361,7 +410,7 @@ mod tests {
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
             0,
         )];
-        model.app.home.section = 1; // App section points at the latest pill, not CW
+        model.sync_home();
 
         // HomeEnqueue: the requested CW row (id2) is queued, not row 0.
         model.handle_home_request(ShellRequest::HomeEnqueue(2));
@@ -401,12 +450,89 @@ mod tests {
             "toggle must act on the continue_cursor target, not skip on parked state"
         );
 
-        // HomeSectionSelected: the requested pill index is persisted even
-        // though App's section state was elsewhere.
+        // HomeSectionSelected: the requested pill index is mapped to its
+        // semantic source in the component and persisted, even though it is
+        // supplied explicitly (App holds no numeric section to read).
         model.handle_home_request(ShellRequest::HomeSectionSelected(1));
         assert_eq!(
-            model.app.home.section, 1,
-            "section preference must be the requested target"
+            model.app.home_section_pref(),
+            "emby:lib",
+            "section preference must be the requested pill's source"
+        );
+    }
+
+    /// Task 5.3d, numeric Home section deletion: explicit pill selection at
+    /// the Model boundary persists the selected section's semantic
+    /// `HomeLatestSource` (or `None`/empty for Continue Watching section 0),
+    /// never a numeric index — resolved through the mounted component's
+    /// `source_for_section`, driven via `HomeSectionSelected`.
+    #[test]
+    fn shell_home_section_selection_persists_semantic_source() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut model = Model::new(make_app_stub());
+        model.app.home.latest = vec![
+            (
+                "Movies".into(),
+                crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
+                vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
+                    make_item("Movie one", "Movie"),
+                ))],
+                0,
+            ),
+            (
+                "Podcasts".into(),
+                crate::app::types_playback::HomeLatestSource::Audiobookshelf("abs-pod".into()),
+                vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
+                    make_item("Episode one", "Episode"),
+                ))],
+                0,
+            ),
+        ];
+        model.sync_home();
+
+        // Continue Watching (section 0) persists as the empty sentinel, never
+        // as a `latest` pill's key.
+        model.handle_home_request(ShellRequest::HomeSectionSelected(0));
+        assert!(
+            model.app.home_section_pref().is_empty(),
+            "Continue Watching persists as no section key"
+        );
+
+        // Real pills persist their own keys (off-by-one: section 1 == latest[0]).
+        model.handle_home_request(ShellRequest::HomeSectionSelected(1));
+        assert_eq!(model.app.home_section_pref(), "emby:lib-movies");
+        model.handle_home_request(ShellRequest::HomeSectionSelected(2));
+        assert_eq!(model.app.home_section_pref(), "abs:abs-pod");
+    }
+
+    /// Task 5.3d, numeric Home section deletion: after a Home source is
+    /// selected through the real component/Model-boundary path, an unrelated
+    /// `save_prefs()` retains that semantic identity on disk — there is no
+    /// numeric App section to clobber it (the selection wrote
+    /// `home_section_pref_semantic`).
+    #[test]
+    fn shell_home_unrelated_save_retains_selected_source() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut model = Model::new(make_app_stub());
+        model.app.home.latest = vec![(
+            "Movies".into(),
+            crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
+            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
+                make_item("Movie one", "Movie"),
+            ))],
+            0,
+        )];
+        model.sync_home();
+        model.handle_home_request(ShellRequest::HomeSectionSelected(1));
+
+        // An unrelated preference save persists the retained semantic source.
+        model.app.save_prefs();
+        let saved = crate::config::prefs_path();
+        let parsed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(saved).expect("prefs written")).unwrap();
+        assert_eq!(
+            parsed["home_section"], "emby:lib-movies",
+            "unrelated save must keep the selected Home source identity"
         );
     }
 
@@ -436,6 +562,7 @@ mod tests {
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
             0,
         )];
+        model.sync_home();
 
         // Single click on CW row 0: focuses the Library panel, but does not
         // mutate App's independent Continue Watching column cursor or the
@@ -472,12 +599,13 @@ mod tests {
             "double click must activate the clicked flat target"
         );
 
-        // Pill click: the requested section is persisted via the existing
-        // section-selection mechanism (home_select_section).
+        // Pill click: the clicked pill's semantic source is persisted via the
+        // Model-boundary selection (`select_home_section_from_component`).
         model.handle_home_click(HomeHitRegion::Pill(1), 6, 6);
         assert_eq!(
-            model.app.home.section, 1,
-            "pill click must select the section"
+            model.app.home_section_pref(),
+            "emby:lib",
+            "pill click must persist the clicked pill's source"
         );
 
         // Right-click: focuses Library and opens a Pointer-anchored context
@@ -507,12 +635,10 @@ mod tests {
         // Task 5.3d, Home context-menu section decoupling: the authoritative
         // "is Continue Watching selected?" fact comes from the mounted
         // `HomeComponent` at the Model boundary (`home_continue_watching_selected`),
-        // not from numeric `App.home.section`, and it is load-bearing in the
-        // odd Queue-focus coupling — the queue context menu shows "Remove from
-        // Continue Watching" iff the Home component has Continue Watching
-        // selected. To prove the source, park the legacy `App.home.section` on
-        // CW while moving the *component* off CW: the menu must follow the
-        // component, not the numeric field.
+        // and it is load-bearing in the odd Queue-focus coupling — the queue
+        // context menu shows "Remove from Continue Watching" iff the Home
+        // component has Continue Watching selected. There is no App numeric
+        // section to fall back on, so the menu follows the component.
         model.sync_home();
         {
             let home = model
@@ -529,10 +655,9 @@ mod tests {
                 "restore to the Folder section must succeed"
             );
         }
-        model.app.home.section = 0; // legacy field parked on CW
         assert!(
             !model.home_continue_watching_selected(),
-            "resolver must report the component's non-CW section, not App.home.section"
+            "resolver must report the component's non-CW section"
         );
 
         // Keyboard '.' path under Queue panel focus while Home is the active
@@ -541,8 +666,7 @@ mod tests {
         // `handle_key_with_home_context`) opens the queue menu, and the odd
         // coupling entry is present iff the mounted Home component has
         // Continue Watching selected. With the component on a non-CW section
-        // the entry must be absent even though the legacy App.home.section
-        // is 0 — the menu follows the component, not the numeric field.
+        // the entry must be absent — the menu follows the component.
         model.app.player_tab.set_queue_items(
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
                 make_item("Queued", "Movie"),
@@ -571,7 +695,7 @@ mod tests {
                 .entries
                 .iter()
                 .any(|e| e.label == "Remove from Continue Watching"),
-            "component on a non-CW section must drop the keyboard-menu CW entry despite App.home.section == 0"
+            "component on a non-CW section must drop the keyboard-menu CW entry"
         );
         assert!(
             matches!(model.app.effective_panel_focus(), PanelFocus::Queue),

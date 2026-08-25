@@ -444,9 +444,9 @@ impl App {
                     }
                 }
                 // `home_cw_selected` is the component-derived authoritative
-                // fact (resolved at the Model boundary), replacing the former
-                // numeric `App.home.section == 0` read before that field is
-                // deleted. `cw_focused` (Library focus + Home tab) already
+                // fact (resolved at the Model boundary), replacing the deleted
+                // numeric `App.home.section == 0` read. `cw_focused` (Library
+                // focus + Home tab) already
                 // subsumes it on the Home keyboard / Home right-click paths;
                 // the `home_cw_selected` arm preserves the odd Queue-focus
                 // coupling: with the Queue panel focused while Home is the

@@ -11,7 +11,6 @@ fn home_emby_app() -> crate::app::App {
     let mut app = make_app_stub();
     let movie_app = make_movie_app();
     app.home.continue_items = vec![movie_app.libs[0].nav_stack[0].items[0].clone()];
-    app.home.section = 0;
     app.tab = TabSelection::Home;
     app.panel_focus = PanelFocus::Library;
     app
@@ -30,6 +29,9 @@ fn narrow_home_feed_renders_text_only_without_artwork() {
     app.tab = TabSelection::Home;
     app.panel_focus = PanelFocus::Library;
     app.mini_view_focus = PanelFocus::Library;
+    // Select the Feeds pill through the real pending-source boundary (task
+    // 5.3d, numeric Home section deletion): `render_home_shell`'s `sync_home`
+    // restores the Feeds section once its pill exists.
     app.home.latest = vec![(
         "Feeds".into(),
         HomeLatestSource::Feeds,
@@ -48,7 +50,7 @@ fn narrow_home_feed_renders_text_only_without_artwork() {
         })],
         0,
     )];
-    app.home.section = 1;
+    app.home_section_pending = Some(HomeLatestSource::Feeds);
 
     let (model, terminal) = render_home_shell(app, 60, 20);
     let output = buffer_to_string(&terminal);

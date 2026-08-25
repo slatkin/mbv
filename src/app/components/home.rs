@@ -97,7 +97,8 @@ impl HomeComponent {
     }
 
     /// Replace the shell-owned content snapshot. Section/cursor clamp to
-    /// the new content, matching `home_select_section`'s bounds handling.
+    /// the new content (this is the async section clamp; the component is
+    /// the sole owner of the numeric section).
     pub(in crate::app) fn set_content(
         &mut self,
         continue_items: Vec<QueueItem>,
@@ -132,9 +133,9 @@ impl HomeComponent {
     }
 
     /// Restore a persisted pill selection once a section matching `source`
-    /// exists, mirroring the legacy `home_section_pending` restore in
-    /// `render_home_section_pills_row`. Returns `true` once restored (the
-    /// shell should stop calling this for the same preference afterward).
+    /// exists, mirroring the `home_section_pending` restore the shell applies
+    /// on `sync_home`. Returns `true` once restored (the shell clears the
+    /// pending marker afterward).
     pub(in crate::app) fn restore_section(&mut self, source: &HomeLatestSource) -> bool {
         if let Some(idx) = self.latest.iter().position(|(_, s, _)| s == source) {
             self.section = idx + 1;
@@ -151,6 +152,21 @@ impl HomeComponent {
 
     pub(in crate::app) fn section(&self) -> usize {
         self.section
+    }
+
+    /// The semantic `HomeLatestSource` of a numeric section index: `None` for
+    /// Continue Watching (section 0, the empty-string persistence sentinel),
+    /// otherwise the selected latest section's source. Resolving by section
+    /// here keeps the off-by-one rule in the component (the sole numeric
+    /// section owner); the shell persists this identity, never the index
+    /// (task 5.3d).
+    pub(in crate::app) fn source_for_section(&self, section: usize) -> Option<HomeLatestSource> {
+        if section == 0 {
+            return None;
+        }
+        self.latest
+            .get(section - 1)
+            .map(|(_, source, _)| source.clone())
     }
 
     /// Home's whole painted panel rect (`list_area`) and its selected-row
@@ -252,9 +268,9 @@ impl HomeComponent {
         }
     }
 
-    /// Select `section_idx` (clamped to the nearest valid section, matching
-    /// `home_select_section`). Returns `true` when the selection actually
-    /// changed, so the caller emits the persist `Msg` only on a real change.
+    /// Select `section_idx` (clamped to the nearest valid section). Returns
+    /// `true` when the selection actually changed, so the caller emits the
+    /// persist `Msg` only on a real change.
     fn select_section(&mut self, section_idx: usize) -> bool {
         let resolved = if self.section_is_valid(section_idx) {
             section_idx
@@ -433,7 +449,7 @@ impl HomeComponent {
                 // Section pills sit above the list area; claim them before
                 // the row hit-test. `select_section` keeps the component's
                 // own render state (section/cursor) authoritative; the shell
-                // arm mirrors App's side via `home_select_section`.
+                // arm persists the selected source at the Model boundary.
                 if let Some(section_idx) = self
                     .pill_targets
                     .iter()
