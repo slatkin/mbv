@@ -8,9 +8,7 @@
 //! cannot live in the component (`Model::feeds_manage`).
 
 use super::components::{ComponentId, FeedsManageComponent, PopupId};
-use super::types_feeds_manage::{
-    FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage,
-};
+use super::types_feeds_manage::{FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage};
 use super::App;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::config::{FeedKind, FeedSubscription};
@@ -68,7 +66,11 @@ impl super::shell::Model {
         }
         self.application
             .get_component_mut(&id)
-            .and_then(|component| component.as_any_mut().downcast_mut::<FeedsManageComponent>())
+            .and_then(|component| {
+                component
+                    .as_any_mut()
+                    .downcast_mut::<FeedsManageComponent>()
+            })
     }
 
     fn feeds_manage_stage(&mut self) -> Option<FeedsManageStage> {
