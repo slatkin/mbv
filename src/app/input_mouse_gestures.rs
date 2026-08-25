@@ -29,10 +29,13 @@ impl App {
         }
     }
 
-    pub(super) fn handle_mouse_double_click_queue(&mut self) {
-        if matches!(self.effective_panel_focus(), PanelFocus::Queue)
-            && self.displayed_queue().queue_cursor < self.displayed_queue().total_queue_len()
+    pub(super) fn handle_mouse_double_click_queue(&mut self, col: u16, row: u16) {
+        let queue = self.displayed_queue();
+        if queue.queue_cursor < queue.total_queue_len()
+            && self.layout.main.queue_area.contains((col, row).into())
         {
+            // Spatial hit-test stays local (issue #134); the activation is
+            // the same QueuePlayCursor command as queue Enter.
             self.dispatch(Command::QueuePlayCursor);
         }
     }

@@ -706,7 +706,7 @@ impl Model {
                             }
                             QueueHitRegion::Row => {
                                 if self.app.note_browse_double_click(col, row) {
-                                    self.app.handle_mouse_double_click_queue();
+                                    self.app.handle_mouse_double_click_queue(col, row);
                                 } else {
                                     self.app.click_set_cursor(col, row);
                                 }

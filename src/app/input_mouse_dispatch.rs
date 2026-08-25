@@ -102,13 +102,7 @@ impl App {
                 let queue_area = self.layout.main.queue_area;
                 let left_area = self.layout.main.left_area;
                 if queue_area.contains((col, row).into()) {
-                    let n = self.displayed_queue().total_queue_len();
-                    if n > 0 {
-                        let delta = delta * 3;
-                        let queue = self.displayed_queue_mut();
-                        queue.queue_cursor =
-                            super::ui_util::move_cursor(queue.queue_cursor, delta, n);
-                    }
+                    self.handle_mouse_scroll_queue(delta);
                 } else if let TabSelection::AudiobookshelfLibrary(index) = self.tab {
                     let is_book = matches!(
                         self.audiobookshelf_kind_at(index),
@@ -171,18 +165,7 @@ impl App {
                         return;
                     }
                     if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
-                        let queue = self.displayed_queue();
-                        let t = queue.queue_cursor;
-                        // Spatial hit-test stays local (issue #134); the
-                        // activation itself is the same `Command` the queue
-                        // tab's `Enter` key dispatches, so double-click and
-                        // `Enter` can't drift again the way they did before
-                        // a70ad7a.
-                        if t < queue.total_queue_len()
-                            && self.layout.main.queue_area.contains((col, row).into())
-                        {
-                            self.dispatch(Command::QueuePlayCursor);
-                        }
+                        self.handle_mouse_double_click_queue(col, row);
                     } else if self.browse_mouse_ready() {
                         // Browse-located double-click: dispatch by the
                         // selected destination before interpreting any
@@ -354,14 +337,7 @@ impl App {
                 if !self.browse_mouse_ready() {
                     return;
                 }
-                match self.tab {
-                    TabSelection::Home => self.handle_mouse_right_click_home(col, row),
-                    TabSelection::EmbyLibrary(_) => self.handle_mouse_right_click_emby(col, row),
-                    TabSelection::AudiobookshelfLibrary(_) => {
-                        self.handle_mouse_right_click_audiobookshelf(col, row)
-                    }
-                    TabSelection::Feeds => self.handle_mouse_right_click_feeds(col, row),
-                }
+                self.handle_mouse_right_click_queue(col, row);
             }
             MouseEventKind::Drag(MouseButton::Left)
                 if self

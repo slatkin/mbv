@@ -149,7 +149,7 @@ impl App {
                 .queue_scope_local_area
                 .contains((col, row).into())
             {
-                self.set_queue_scope(QueueScope::Local);
+                self.handle_mouse_selector_click_queue(QueueScope::Local);
                 return true;
             }
             if self
@@ -158,7 +158,7 @@ impl App {
                 .queue_scope_remote_area
                 .contains((col, row).into())
             {
-                self.set_queue_scope(QueueScope::Remote);
+                self.handle_mouse_selector_click_queue(QueueScope::Remote);
                 return true;
             }
         }
