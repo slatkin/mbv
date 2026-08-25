@@ -6,6 +6,14 @@
 //!
 //! Pre-wiring scaffolding: the table and its types are declared here as tested
 //! dead code. Live wiring is deferred to per-surface conversion.
+//!
+//! **Static-table proof path (decision D15, task 5.4).** The six
+//! precedence/mouse proofs are asserted *directly against this table* plus the
+//! structural mouse checks recorded in task 5.4 — `Component::perform(Cmd)` is
+//! **not** adopted as the table's execution path, because that adoption is not
+//! incrementally valid while `LegacyInput` and `CONTEXT_STACK` still route keys
+//! (and it would broaden this unit into the later Mirrors/framework teardown).
+//! `#![allow(dead_code)]` therefore stays in place, naming this decision.
 
 #![allow(dead_code)]
 
@@ -222,7 +230,7 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
 #[cfg(test)]
 mod tests {
     use super::super::input_resolver::CONTEXT_STACK;
-    use super::KEY_POLICY;
+    use super::*;
 
     #[test]
     fn key_policy_order_matches_context_stack() {
@@ -236,5 +244,125 @@ mod tests {
             policy_names, context_names,
             "KEY_POLICY must mirror the remaining legacy CONTEXT_STACK order; converted TuiRealm surfaces are excluded"
         );
+    }
+
+    // Contract 1 (ADR 0002 Swallow, expressed as first-match table order): a
+    // blocking context must sit above every parent/global (Sub) binding so it
+    // claims the key before any lower-priority or global binding can. The
+    // ordering test above already pins the table's order against
+    // CONTEXT_STACK; this proves the *precedence relationship* among the
+    // entries that the order implies, plus the gate that makes the swallow
+    // real for the global binding.
+    #[test]
+    fn blocking_contexts_swallow_before_lower_and_global_entries() {
+        let blocking_indices: Vec<usize> = KEY_POLICY
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.blocking)
+            .map(|(i, _)| i)
+            .collect();
+        assert!(
+            !blocking_indices.is_empty(),
+            "KEY_POLICY must retain at least one blocking context"
+        );
+
+        let sub_indices: Vec<usize> = KEY_POLICY
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| matches!(e.owner, KeyPolicyOwner::Sub(_)))
+            .map(|(i, _)| i)
+            .collect();
+
+        for &b in &blocking_indices {
+            for &s in &sub_indices {
+                assert!(
+                    b < s,
+                    "blocking context at index {b} must precede sub (parent/global) entry at index {s}"
+                );
+            }
+        }
+
+        // The swallow mechanism for the global overlay-open binding: while a
+        // blocking overlay is active (ATTR_BLOCKING_OVERLAY_ACTIVE on Playback),
+        // the global sub is gated off, so the key dies with the overlay and
+        // cannot reach a lower/global handler.
+        let global_open = KEY_POLICY
+            .iter()
+            .find(|e| e.name == "global_overlay_open")
+            .expect("global_overlay_open binding must exist");
+        assert!(
+            matches!(
+                &global_open.gate,
+                KeyPolicyGate::NotHasAttrValue(
+                    ComponentId::Playback,
+                    ATTR_BLOCKING_OVERLAY_ACTIVE,
+                    AttrValue::Flag(true),
+                )
+            ),
+            "global_overlay_open must be gated off while a blocking overlay is active"
+        );
+    }
+
+    // Contract 2 (parent/global bindings retain their precedence and owners):
+    // each parent/global binding keeps the owner design Table B assigns, and
+    // the unconditional (Always) global bindings stay the lowest-priority subs
+    // — every parent binding outranks them, mirroring CONTEXT_STACK's
+    // parent-over-global order. (The gated global_overlay_open binding sits
+    // above the parents by design; its swallow gate is proven separately.)
+    #[test]
+    fn parent_and_global_bindings_retain_precedence_and_owners() {
+        let expected_owner: &[(&str, ComponentId)] = &[
+            ("queue_column_width", ComponentId::Queue),
+            ("panel_mode_cycle_x", ComponentId::Library),
+            ("clear_queue_prompt_c", ComponentId::Queue),
+            ("confirm_skip_intro", ComponentId::Playback),
+            ("confirm_next_up", ComponentId::Playback),
+            ("visualizer", ComponentId::Playback),
+            ("playback", ComponentId::Playback),
+            ("global_overlay_open", ComponentId::UiRoot),
+            ("ctrl_l_force_clear", ComponentId::UiRoot),
+            ("f5_refresh", ComponentId::UiRoot),
+        ];
+        for (name, owner) in expected_owner {
+            let entry = KEY_POLICY
+                .iter()
+                .find(|e| e.name == *name)
+                .unwrap_or_else(|| panic!("binding {name} missing from KEY_POLICY"));
+            assert!(
+                matches!(entry.owner, KeyPolicyOwner::Sub(ref c) if *c == *owner),
+                "binding {name} must retain its documented owner"
+            );
+        }
+
+        let parent_indices: Vec<usize> = KEY_POLICY
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| {
+                matches!(
+                    e.owner,
+                    KeyPolicyOwner::Sub(
+                        ComponentId::Queue | ComponentId::Library | ComponentId::Playback
+                    )
+                )
+            })
+            .map(|(i, _)| i)
+            .collect();
+        let always_global_indices: Vec<usize> = KEY_POLICY
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| {
+                matches!(e.owner, KeyPolicyOwner::Sub(ComponentId::UiRoot))
+                    && matches!(e.gate, KeyPolicyGate::Always)
+            })
+            .map(|(i, _)| i)
+            .collect();
+        for &p in &parent_indices {
+            for &g in &always_global_indices {
+                assert!(
+                    p < g,
+                    "parent binding at index {p} must precede always-global binding at index {g}"
+                );
+            }
+        }
     }
 }

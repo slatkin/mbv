@@ -347,7 +347,7 @@ contributing surface's group 2–4 conversion to have landed.
   resets (lines 98, 147, 206 and the gate at 166) are the same reset this
   teardown has to re-home anyway. Whichever narrow-mode answer the previous
   paragraph settles on governs both. Verify `rtk cargo check -p mbv` and that no `impl App` interaction handler and no component-local `App` field remains for any surface.
-- [ ] 5.4 Confirm every mouse path reads component-owned geometry (no global hit map); verify the six precedence/mouse proofs (blocking-overlay swallow, parent/global precedence, simultaneous Queue+Library mouse, overlay blocks underlying mutation, deterministic focus restoration, geometry cannot drift).
+- [x] 5.4 Confirm every mouse path reads component-owned geometry (no global hit map); verify the six precedence/mouse proofs (blocking-overlay swallow, parent/global precedence, simultaneous Queue+Library mouse, overlay blocks underlying mutation, deterministic focus restoration, geometry cannot drift).
   **Runs inside the *Mouse geometry* lane's final Framework-deletion unit, not
   as a separate lane** — it asserts exactly what that unit delivers. Under D16,
   the mouse-related proofs can no longer be asserted against behaviour that is
@@ -370,5 +370,67 @@ contributing surface's group 2–4 conversion to have landed.
    - [x] *Orphan cleanup* (folded into this unit) — `ccc75e30` deleted the dead
    `GroupedAlbumGroup.start`/`.end` and `GroupedAlbumCatalog.groups` fields and
    their builders.
+
+  **Completed — static-table proof path; D15 declined (explicit).** Per the
+  task instruction, 5.4 takes D15's *static-table proof path*: it does **not**
+  adopt `Component::perform(Cmd)`/`SubClause` as the table's execution path,
+  because that adoption is not incrementally valid while `LegacyInput` and
+  `CONTEXT_STACK` still route keys (and would broaden this unit into the later
+  Mirrors/framework teardown). `key_policy.rs` keeps `#![allow(dead_code)]` with
+  a module note naming this decision. The six proofs are established as
+  follows:
+
+  - **(1) blocking-overlay swallow** — `src/app/key_policy.rs` test
+    `blocking_contexts_swallow_before_lower_and_global_entries`: every
+    `blocking` entry precedes every `Sub` (parent/global) entry in first-match
+    order, and `global_overlay_open`'s gate is
+    `NotHasAttrValue(Playback, ATTR_BLOCKING_OVERLAY_ACTIVE, Flag(true))` — the
+    swallow mechanism that kills the key with the overlay.
+  - **(2) parent/global precedence + owners** — `src/app/key_policy.rs` test
+    `parent_and_global_bindings_retain_precedence_and_owners`: each parent/global
+    binding keeps its documented `Table B` owner (`matches!(owner,
+    KeyPolicyOwner::Sub(c) if c == owner)`), and the unconditional (`Always`)
+    global bindings (`ctrl_l_force_clear`, `f5_refresh`) rank below every parent
+    binding — the parent-over-global precedence order.
+  - **(3) table ordered consistently with CONTEXT_STACK** — `src/app/key_policy.rs`
+    test `key_policy_order_matches_context_stack` (reused, not duplicated) pins
+    the table order against `CONTEXT_STACK`. This backs the ordering invariant
+    for proofs (1) and (2); it is the third surviving keyboard contract.
+  - **(4) simultaneous Queue+Library mouse** — D16 structural: the three
+    `input_mouse*.rs` entry points are **absent** (`ls src/app/input_mouse*.rs`
+    fails), and no global mouse hit router/map remains (`rg` for
+    `hit_map|hit_router|dispatch_mouse|route_mouse` finds none; `shell.rs`
+    consumes `Msg::Legacy(_mouse)` as a no-op). Components self-filter by their
+    own painted geometry, so Queue and the active Library destination both see
+    the broadcast and each claim only its own region.
+  - **(5) overlay blocks underlying mutation** — D16 structural: the legacy
+    `input_mouse*.rs` routing is gone (no coordinate dispatch to underlying
+    regions), the global hit map is gone, and the table's
+    `global_overlay_open` gate (`NotHasAttrValue(...,
+    ATTR_BLOCKING_OVERLAY_ACTIVE, ...)`) encodes the block; `shell_gates.rs`
+    sets `ATTR_BLOCKING_OVERLAY_ACTIVE` on `Playback` while a blocking overlay is
+    mounted. No underlying region is reached while a blocking overlay is up.
+  - **(6) geometry cannot drift** — D16 structural: mouse hit geometry is
+    interpreted by the component that painted it. Multiple components own a
+    `handle_mouse` that hit-tests their own `view()`-painted `Rect`/rows
+    (`home.rs`, `tv_workspace`, `browser`, `queue`, `playlists`, `settings`, …)
+    and emit `Msg::Shell`/legacy; `AppLayout` survives only for load-bearing
+    rendering/non-routing effect data (D16), not as a hit map.
+
+  **Deterministic focus restoration** (the sixth named proof in the 5.4 list,
+  *deterministic focus restoration*) is covered by the existing
+  `src/app/shell_root.rs` test `root_ui_uses_native_lifo_focus_restoration`,
+  which fully exercises active Help, a stacked Confirm modal, restoration to
+  Help, then to `UiRoot` via TuiRealm's native LIFO focus stack — reused, not
+  duplicated.
+
+  Verification: `rtk cargo nextest run -p mbv key_policy
+  root_ui_uses_native_lifo_focus_restoration` → 4 passed; full `rtk cargo
+  nextest run -p mbv` → 1133 passed; `rtk cargo check -p mbv`, `rtk cargo
+  clippy --workspace --all-targets`, `rtk cargo fmt --all -- --check` clean
+  (pre-existing screen-boundary warnings only). `rtk ast-grep scan` reports 69
+  pre-existing `render/screens` boundary errors unrelated to this unit (none in
+  `key_policy.rs`); the task-specific architecture rules (D15 static-table
+  path, D16 structural mouse proofs) pass. 5.3d kept unchecked.
 - [ ] 5.5 Flip all `docs/architecture/interactive-surface-ledger.md` rows to `migrated` with verification records; verify no `legacy` **and no `component`** row remains (see 1.10).
 - [ ] 5.6 Final gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`, and `rtk make check-code-file-lines` all pass; confirm no parallel legacy interaction framework remains and the shell Model holds only shell/runtime authority plus the TuiRealm `Application`.
