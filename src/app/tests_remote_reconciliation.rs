@@ -137,7 +137,7 @@ fn stop_tracking_and_queue_edits_are_input_gated() {
     // `home_enqueue` effect it routes to.
     app.remote_tracker = Some(tracker(&["a", "b"]));
     app.panel_focus = crate::app::PanelFocus::Library;
-    app.home_enqueue(app.home.home_cursor);
+    app.home_enqueue(0);
     assert!(!matches!(
         app.pending_overlay,
         Some(super::types_overlay::OverlayRequest::Confirm(_))

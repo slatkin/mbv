@@ -49,7 +49,6 @@ fn narrow_home_feed_renders_text_only_without_artwork() {
         0,
     )];
     app.home.section = 1;
-    app.home.home_cursor = 0;
 
     let (model, terminal) = render_home_shell(app, 60, 20);
     let output = buffer_to_string(&terminal);

@@ -72,7 +72,6 @@ impl App {
         self.last_played_completed = false;
         self.home.continue_items.clear();
         self.home.latest.clear();
-        self.home.home_cursor = 0;
         self.home.continue_cursor = 0;
         self.libs.clear();
         self.sessions.clear();

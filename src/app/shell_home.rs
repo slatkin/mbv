@@ -20,8 +20,8 @@ impl Model {
     /// Route the Home typed effects (task 5.3d, Home typed-effect prep) to
     /// their `App` handlers with the component-provided target index.
     /// `HomeComponent` owns the cursor; the effect must act on the requested
-    /// target directly — never by copying it into `App::home.home_cursor`
-    /// and re-reading that field. `HomeToggleWatched` carries no index: it
+    /// target directly — never by copying it into a (now deleted) App flat
+    /// cursor and re-reading that field. `HomeToggleWatched` carries no index: it
     /// targets the Continue Watching column's own cursor (`continue_cursor`),
     /// matching the legacy `cw_toggle_watched` (preserved, not fixed).
     pub(super) fn handle_home_request(&mut self, request: ShellRequest) {
@@ -44,14 +44,15 @@ impl Model {
     ///   section-selection mechanism (`home_select_section`) and mark the
     ///   click timestamp so a follow-up row click isn't misread.
     /// - `Row` single click — focus the Library panel, as a Home click does
-    ///   today. The clicked row is **not** copied into
-    ///   `App::home.home_cursor`; the component owns the cursor.
+    ///   today. The clicked row is **not** copied into an App flat cursor;
+    ///   the component owns the cursor, and App's independent Continue
+    ///   Watching / per-latest cursors are left untouched.
     /// - `Row` double click — focus the Library panel and activate the
     ///   component-provided flat target directly via `home_play(target)`.
     /// - `ContextMenu` — focus the Library panel and open the menu at the
     ///   pointer, preserving the existing eligibility, menu actions, and
     ///   `continue_cursor` target semantics (the Home menu target is not the
-    ///   clicked `home_cursor`, so no cursor copy is required).
+    ///   clicked flat row, so no cursor copy is required).
     ///
     /// Double-click/scroll timing stays `App`-owned
     /// (`note_browse_double_click` against `last_click_time`/`last_click_pos`
@@ -307,21 +308,25 @@ mod tests {
         assert_eq!(component.cursor(), 1);
     }
 
-    /// Task 5.3d, Home typed-effect prep: the shell routes each typed Home
-    /// effect to its `App` handler with the component's target, and the effect
-    /// acts on that target even when `App::home.home_cursor` points elsewhere.
-    /// Enqueue is proven by the queued item's id; the section preference by
-    /// the resulting `home.section`. The emby-gated effects prove their target
-    /// by acting at all: absent a live Emby service they flash
-    /// "Emby is unavailable", while a `home_cursor` parked on the latest
-    /// folder (play) or past the CW range (delete/toggle) would skip silently.
+    /// Task 5.3d, Home typed-effect prep + cursor deletion: the shell routes
+    /// each typed Home effect to its `App` handler with the component's
+    /// target, and the effect acts on that supplied target even when App's
+    /// remaining section-specific state (`section`, `continue_cursor`)
+    /// points elsewhere. Enqueue is proven by the queued item's id; the
+    /// section preference by the resulting `home.section`. The emby-gated
+    /// effects prove their target by acting at all: absent a live Emby
+    /// service they flash "Emby is unavailable", while a non-CW flat target
+    /// (play on the folder, delete past the CW range) would skip silently.
     #[test]
-    fn shell_home_effects_honor_component_target_not_app_home_cursor() {
+    fn shell_home_effects_honor_component_target() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_app_stub());
         // Three Continue Watching rows (ids id0..id2) plus one latest pill
-        // holding a folder, so a home_cursor parked there makes `home_play`
-        // return early via the folder guard — a clean "wrong target" signal.
+        // holding a folder, so a flat target past the CW range makes
+        // `home_play` return early via the folder guard — a clean "wrong
+        // target" signal. App's remaining section state is parked on the
+        // latest pill / a different CW column row so the effects must act on
+        // their explicit target, not that parked state.
         model.app.home.continue_items = make_items(3);
         let mut folder = make_item("folder", "CollectionFolder");
         folder.is_folder = true;
@@ -331,54 +336,48 @@ mod tests {
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
             0,
         )];
-        let cw_len = model.app.home.continue_items.len();
-        let folder_flat = cw_len; // flat index of the latest folder item
+        model.app.home.section = 1; // App section points at the latest pill, not CW
 
-        // HomeEnqueue: the requested CW row (id2) is queued, not the row
-        // under home_cursor (id0).
-        model.app.home.home_cursor = 0;
+        // HomeEnqueue: the requested CW row (id2) is queued, not row 0.
         model.handle_home_request(ShellRequest::HomeEnqueue(2));
         let queued = model.app.player_tab.emby_items();
         assert_eq!(queued.len(), 1);
         assert_eq!(queued[0].id, "id2");
 
         // HomePlay: the requested CW row (id0) is resumed — the emby-gated
-        // resume flashes "Emby is unavailable" — while a home_cursor parked
-        // on the latest folder would return early (folder guard).
+        // resume flashes "Emby is unavailable" — while a folder-flat target
+        // would return early (folder guard).
         model.app.status.clear();
-        model.app.home.home_cursor = folder_flat;
         model.handle_home_request(ShellRequest::HomePlay(0));
         assert_eq!(
             model.app.status, "Emby is unavailable",
-            "play must act on the CW target, not the home_cursor folder"
+            "play must act on the supplied CW target, not skip on the parked section state"
         );
 
-        // HomeDelete: the requested CW row (in range) is removed — again the
-        // emby-gated removal flashes — while a home_cursor past the CW range
+        // HomeDelete: the requested CW row (0, in range) is removed — again
+        // the emby-gated removal flashes — while an out-of-range flat target
         // would be skipped by the delete guard.
         model.app.status.clear();
-        model.app.home.home_cursor = folder_flat; // >= cw_len
         model.handle_home_request(ShellRequest::HomeDelete(0));
         assert_eq!(
             model.app.status, "Emby is unavailable",
-            "delete must act on the CW target, not skip on an out-of-range home_cursor"
+            "delete must act on the supplied CW target, not skip on an out-of-range target"
         );
 
         // HomeToggleWatched: carries no index; it targets the Continue
-        // Watching column's own cursor (continue_cursor row 1), not
-        // home_cursor.
+        // Watching column's own cursor. Park `continue_cursor` on row 1 while
+        // the emby-gated effect still acts (flashes unavailable) rather than
+        // skipping.
         model.app.status.clear();
         model.app.home.continue_cursor = 1;
-        model.app.home.home_cursor = folder_flat;
         model.handle_home_request(ShellRequest::HomeToggleWatched);
         assert_eq!(
             model.app.status, "Emby is unavailable",
-            "toggle must act on the continue_cursor target, not home_cursor"
+            "toggle must act on the continue_cursor target, not skip on parked state"
         );
 
         // HomeSectionSelected: the requested pill index is persisted even
-        // though home_cursor pointed elsewhere.
-        model.app.home.home_cursor = 0;
+        // though App's section state was elsewhere.
         model.handle_home_request(ShellRequest::HomeSectionSelected(1));
         assert_eq!(
             model.app.home.section, 1,
@@ -389,18 +388,20 @@ mod tests {
     /// Task 5.3d, Home mouse-click handoff: the shell routes each typed
     /// `HomeClick` region at the Model boundary. A pill persists the section
     /// through the existing section-selection mechanism; a single row click
-    /// focuses the Library panel but does **not** copy the clicked row into
-    /// `App::home.home_cursor` (the component owns the cursor); a double
-    /// click additionally activates the component-provided flat target; a
-    /// right-click focuses Library and opens a Pointer-anchored context menu
-    /// whose target stays the Continue Watching `continue_cursor` item — not
-    /// the clicked row or the parked `App::home.home_cursor`.
+    /// focuses the Library panel but does **not** mutate App's independent
+    /// Continue Watching `continue_cursor` or the per-latest pill cursors
+    /// (the component owns the flat cursor); a double click additionally
+    /// activates the component-provided flat target; a right-click focuses
+    /// Library and opens a Pointer-anchored context menu whose target stays
+    /// the Continue Watching `continue_cursor` item — not the clicked row.
     #[test]
     fn shell_home_click_family_routes_at_model_boundary() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_app_stub());
         // Two Continue Watching rows (movies, ids id0/id1) plus one latest
-        // folder so a parked home_cursor can sit on a non-CW folder target.
+        // folder so a double-click on a CW row provably differs from the
+        // non-CW folder target (play on the folder skips silently via the
+        // folder guard).
         model.app.home.continue_items = make_items(2);
         let mut folder = make_item("folder", "CollectionFolder");
         folder.is_folder = true;
@@ -410,12 +411,12 @@ mod tests {
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
             0,
         )];
-        let folder_flat = model.app.home.continue_items.len(); // flat index of the folder
 
         // Single click on CW row 0: focuses the Library panel, but does not
-        // copy the row into home_cursor (kept parked on the folder) and does
-        // not activate.
-        model.app.home.home_cursor = folder_flat;
+        // mutate App's independent Continue Watching column cursor or the
+        // per-latest pill cursor, and does not activate.
+        model.app.home.continue_cursor = 1;
+        model.app.home.latest[0].3 = 7;
         model.app.status.clear();
         model.handle_home_click(HomeHitRegion::Row(0), 5, 5);
         assert_eq!(
@@ -424,8 +425,12 @@ mod tests {
             "single click must focus the Library panel"
         );
         assert_eq!(
-            model.app.home.home_cursor, folder_flat,
-            "single click must not copy the row into App::home.home_cursor"
+            model.app.home.continue_cursor, 1,
+            "single click must not mutate the Continue Watching column cursor"
+        );
+        assert_eq!(
+            model.app.home.latest[0].3, 7,
+            "single click must not mutate the per-latest pill cursor"
         );
         assert!(
             model.app.status.is_empty(),
@@ -434,15 +439,12 @@ mod tests {
 
         // Double click on CW row 0 (same coords within the App-owned 400ms
         // window): activates the flat target via home_play, which flashes on
-        // the missing Emby service, while home_cursor stays parked elsewhere.
+        // the missing Emby service — proving it acted on the clicked CW
+        // target, not the non-CW folder.
         model.handle_home_click(HomeHitRegion::Row(0), 5, 5);
         assert_eq!(
             model.app.status, "Emby is unavailable",
             "double click must activate the clicked flat target"
-        );
-        assert_eq!(
-            model.app.home.home_cursor, folder_flat,
-            "double click still must not copy the row into home_cursor"
         );
 
         // Pill click: the requested section is persisted via the existing
@@ -455,10 +457,9 @@ mod tests {
 
         // Right-click: focuses Library and opens a Pointer-anchored context
         // menu whose entries resolve from the Continue Watching
-        // `continue_cursor` item — a CW movie, not the folder sitting under
-        // the parked home_cursor. (The Home menu target is continue_cursor,
-        // never the clicked row, so preserving it needs no cursor copy.)
-        model.app.home.home_cursor = folder_flat;
+        // `continue_cursor` item — a CW movie, not the folder. (The Home menu
+        // target is continue_cursor, never the clicked row, so preserving it
+        // needs no cursor copy.)
         model.app.home.continue_cursor = 0;
         model.handle_home_click(HomeHitRegion::ContextMenu(0), 70, 20);
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) =
@@ -475,7 +476,7 @@ mod tests {
             menu.entries
                 .iter()
                 .any(|e| e.label == "Remove from Continue Watching"),
-            "menu target must be the Continue Watching item, not the folder under home_cursor"
+            "menu target must be the Continue Watching item, not the clicked folder"
         );
     }
 

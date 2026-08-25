@@ -287,11 +287,10 @@ fn shelf_cache_drives_and_hides_audiobookshelf_pills_without_fetching() {
 }
 
 /// Task 10.1: `home_current_item` resolves the flat cursor across
-/// continue-items, Emby pills, and Audiobookshelf pills as one list.
-/// Selecting a pill lands the flat cursor on its first item. Flat-list
-/// *movement* is component-owned (task 5.3d, Home local keyboard
-/// navigation), so intermediate positions are set directly to pin the
-/// section-selection landing + resolution, not the deleted App navigation.
+/// continue-items, Emby pills, and Audiobookshelf pills as one list,
+/// using the supplied explicit flat target (task 5.3d, Home cursor
+/// deletion: the flat cursor is component-owned, so resolution is pinned
+/// with explicit target indices, not a deleted App cursor).
 #[test]
 fn flat_cursor_resolution_spans_emby_and_audiobookshelf_sections() {
     let mut app = make_app_stub();
@@ -320,37 +319,31 @@ fn flat_cursor_resolution_spans_emby_and_audiobookshelf_sections() {
         ),
     ];
 
-    // Section 0 (Continue Watching): cursor on the CW item.
-    app.home_select_section(0);
-    app.home.home_cursor = 0;
+    // Flat index 0 is the Continue Watching item.
     assert!(matches!(
-        app.home_current_item(app.home.home_cursor),
+        app.home_current_item(0),
         Some(QueueItem::Emby(item)) if item.display_name() == "CW item"
     ));
 
-    // Selecting the Emby pill lands on its first item; its flat range sits
-    // right after Continue Watching.
-    app.home_select_section(1);
+    // The Emby pill's flat range sits right after Continue Watching: flat
+    // index 1 is "Movie one", 2 is "Movie two".
     assert!(matches!(
-        app.home_current_item(app.home.home_cursor),
+        app.home_current_item(1),
         Some(QueueItem::Emby(item)) if item.display_name() == "Movie one"
     ));
-    app.home.home_cursor = 2;
     assert!(matches!(
-        app.home_current_item(app.home.home_cursor),
+        app.home_current_item(2),
         Some(QueueItem::Emby(item)) if item.display_name() == "Movie two"
     ));
 
-    // The Audiobookshelf pill is a selectable section; its flat range sits
-    // right after the Emby pill's.
-    app.home_select_section(2);
+    // The Audiobookshelf pill's flat range sits right after the Emby pill's:
+    // flat index 3 is "Episode 1", 4 is "Episode 2".
     assert!(matches!(
-        app.home_current_item(app.home.home_cursor),
+        app.home_current_item(3),
         Some(QueueItem::Audiobookshelf(item)) if item.title == "Episode 1"
     ));
-    app.home.home_cursor = 4;
     assert!(matches!(
-        app.home_current_item(app.home.home_cursor),
+        app.home_current_item(4),
         Some(QueueItem::Audiobookshelf(item)) if item.title == "Episode 2"
     ));
 }
@@ -429,10 +422,10 @@ fn home_play_and_enqueue_leave_audiobookshelf_tab_state_untouched() {
         0,
     )];
     app.home_select_section(1);
-    assert!(app.home_current_item(app.home.home_cursor).unwrap().is_audiobookshelf());
+    assert!(app.home_current_item(0).unwrap().is_audiobookshelf());
 
-    app.home_enqueue(app.home.home_cursor);
-    app.home_play(app.home.home_cursor);
+    app.home_enqueue(0);
+    app.home_play(0);
 
     let state = &app.audiobookshelf_browse[0];
     assert_eq!(
@@ -554,10 +547,10 @@ fn home_play_and_enqueue_leave_feeds_tab_state_untouched() {
         0,
     )];
     app.home_select_section(1);
-    assert!(app.home_current_item(app.home.home_cursor).unwrap().is_feed());
+    assert!(app.home_current_item(0).unwrap().is_feed());
 
-    app.home_enqueue(app.home.home_cursor);
-    app.home_play(app.home.home_cursor);
+    app.home_enqueue(0);
+    app.home_play(0);
 
     assert_eq!(app.feed_tab.all_entries.len(), 2);
 }

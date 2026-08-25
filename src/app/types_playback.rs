@@ -157,8 +157,6 @@ pub(super) struct HomePane {
     pub(super) continue_cursor: usize,
     pub(super) latest: Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)>, // (title, source, items, cursor)
     pub(super) section: usize, // 0=continue, 1..=latest
-    /// Flat cursor for the home list (spans continue_items then all latest sections).
-    pub(super) home_cursor: usize,
 }
 
 pub(super) struct SuspendedLocalSession {

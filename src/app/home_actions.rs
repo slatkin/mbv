@@ -6,8 +6,9 @@ impl App {
 
     /// The QueueItem at the given flat `cursor` (the Home component's
     /// target index), or None. The caller supplies the cursor — the effect
-    /// never consults `App::home.home_cursor`, so the component's target is
-    /// honored even when the two differ (task 5.3d, Home typed-effect prep).
+    /// never reads an App-owned cursor, so the component's target is honored
+    /// even when App's remaining section-specific state differs (task 5.3d,
+    /// Home typed-effect prep + cursor deletion).
     pub(super) fn home_current_item(&self, cursor: usize) -> Option<QueueItem> {
         let mut pos = 0usize;
         for item in &self.home.continue_items {
@@ -23,24 +24,6 @@ impl App {
                 }
                 pos += 1;
             }
-        }
-        None
-    }
-
-    /// Flat cursor range for a home section. Section 0 is Keep Watching;
-    /// non-empty latest sections keep their regular Home section index.
-    fn home_section_range(&self, section_idx: usize) -> Option<(usize, usize)> {
-        let mut pos = 0usize;
-        if section_idx == 0 {
-            return Some((0, self.home.continue_items.len()));
-        }
-        pos += self.home.continue_items.len();
-        for (idx, (_, _, items, _)) in self.home.latest.iter().enumerate() {
-            let current_section = idx + 1;
-            if current_section == section_idx {
-                return Some((pos, items.len()));
-            }
-            pos += items.len();
         }
         None
     }
@@ -69,20 +52,13 @@ impl App {
             return;
         };
         self.home.section = section_idx;
-        if let Some((start, len)) = self.home_section_range(section_idx) {
-            self.home.home_cursor = if len == 0 {
-                start
-            } else {
-                self.home.home_cursor.clamp(start, start + len - 1)
-            };
-        }
         // Persist the selection so the pill is restored on the next launch.
         self.save_prefs();
     }
 
     /// Play the item at the component-provided flat `cursor`. Uses the
-    /// supplied target directly instead of `App::home.home_cursor`, so the
-    /// request's own target is honored (task 5.3d, Home typed-effect prep).
+    /// supplied target directly instead of any App-owned cursor, so the
+    /// request's own target is honored (task 5.3d, Home typed-effect prep + cursor deletion).
     pub(super) fn home_play(&mut self, cursor: usize) {
         let Some(item) = self.home_current_item(cursor) else {
             return;
@@ -114,7 +90,7 @@ impl App {
 
     /// Enqueue the item at the component-provided flat `cursor` (task 5.3d,
     /// Home typed-effect prep). Uses the supplied target directly instead of
-    /// `App::home.home_cursor`.
+    /// any App-owned cursor.
     pub(super) fn home_enqueue(&mut self, cursor: usize) {
         let cw_len = self.home.continue_items.len();
         if cursor < cw_len {

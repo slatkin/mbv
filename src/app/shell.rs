@@ -713,7 +713,7 @@ impl Model {
                         // prep): `HomeComponent` owns the cursor and reports the
                         // flat target index it resolved; the shell forwards it
                         // straight to the `App` effect so the requested target
-                        // is acted on even when `App::home.home_cursor` differs.
+                        // is acted on directly (no App-owned flat cursor remains).
                         Msg::Shell(
                             request @ (ShellRequest::HomePlay(_)
                             | ShellRequest::HomeEnqueue(_)

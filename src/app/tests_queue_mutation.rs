@@ -34,7 +34,7 @@ fn home_enqueue_from_home_view_applies_immediately() {
     app.home.continue_items = make_items(1);
     app.home.continue_cursor = 0;
 
-    app.home_enqueue(app.home.home_cursor);
+    app.home_enqueue(0);
 
     assert_eq!(app.player_tab.emby_items().len(), 1);
     assert_eq!(app.player_tab.emby_items()[0].id, "id0");
@@ -51,7 +51,7 @@ fn home_enqueue_appends_to_direct_remote_queue() {
     app.home.continue_items = make_items(1);
     app.home.continue_cursor = 0;
 
-    app.home_enqueue(app.home.home_cursor);
+    app.home_enqueue(0);
 
     assert_eq!(
         app.remote_player_tab
@@ -87,7 +87,7 @@ fn enqueue_stops_tracking_and_applies_immediately() {
     app.home.continue_cursor = 0;
     app.remote_tracker = Some(tracking_stub());
 
-    app.home_enqueue(app.home.home_cursor);
+    app.home_enqueue(0);
     assert!(!matches!(
         app.pending_overlay,
         Some(super::types_overlay::OverlayRequest::Confirm(_))

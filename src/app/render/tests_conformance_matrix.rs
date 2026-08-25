@@ -172,7 +172,6 @@ fn mixed_home_app() -> App {
         ),
     ];
     app.home.section = 1;
-    app.home.home_cursor = 0;
     app
 }
 
