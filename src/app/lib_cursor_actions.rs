@@ -1,6 +1,5 @@
 use super::{
-    App, PanelFocus, SelectionModalFilter, SelectionModalListState, SelectionModalRow,
-    SelectionModalSource,
+    App, SelectionModalFilter, SelectionModalListState, SelectionModalRow, SelectionModalSource,
 };
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use crate::app::types_selection_modal::SelectionModalItem;
@@ -181,47 +180,6 @@ impl App {
         self.move_lib_cursor_inner(lib_idx, delta);
     }
 
-    pub(super) fn rendered_album_target(
-        &self,
-        lib_idx: usize,
-        delta: i64,
-        wrap: bool,
-    ) -> Option<usize> {
-        if !self.is_viewing_album_folders(lib_idx) {
-            return None;
-        }
-        let order = &self.layout.main.left_sorted_indices;
-        let cursor = self.libs[lib_idx].nav_stack.last()?.cursor;
-        if order.is_empty() {
-            return None;
-        }
-        let position = order.iter().position(|&index| index == cursor).unwrap_or(0);
-        let target_position = if wrap {
-            super::ui_util::move_cursor(position, delta, order.len())
-        } else if delta.is_negative() {
-            position.saturating_sub(delta.unsigned_abs() as usize)
-        } else {
-            position
-                .saturating_add(delta as usize)
-                .min(order.len().saturating_sub(1))
-        };
-        Some(order[target_position])
-    }
-
-    fn rendered_album_jump_target(&self, lib_idx: usize, to_end: bool) -> Option<usize> {
-        if !self.is_music_group_view(lib_idx) {
-            return None;
-        }
-        let order = &self.layout.main.left_sorted_indices;
-        order
-            .get(if to_end {
-                order.len().saturating_sub(1)
-            } else {
-                0
-            })
-            .copied()
-    }
-
     fn move_lib_cursor_inner(&mut self, lib_idx: usize, delta: i64) {
         // Defensive bounds check; see `move_lib_cursor_rows` for the stale
         // index contract. Never substitute library zero on a miss.
@@ -229,19 +187,6 @@ impl App {
         let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
         self.last_nav_at = now;
         self.mark_library_navigation(now);
-
-        let album_target = self.rendered_album_target(lib_idx, delta, true);
-        if matches!(self.effective_panel_focus(), PanelFocus::Library)
-            && self.libs[lib_idx].album_track_focus.is_none()
-            && album_target
-                .is_some_and(|target| self.move_music_group_display_cursor(lib_idx, target))
-        {
-            self.save_default_library_position(lib_idx);
-            if idle {
-                self.maybe_fetch_next_page(lib_idx);
-            }
-            return;
-        }
 
         if self.is_feed_home_video_group_view(lib_idx) {
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
@@ -298,16 +243,6 @@ impl App {
         // Defensive bounds check; see `move_lib_cursor_rows` for the stale
         // index contract. Never substitute library zero on a miss.
         if lib_idx >= self.libs.len() {
-            return;
-        }
-        let album_target = self.rendered_album_jump_target(lib_idx, to_end);
-        if matches!(self.effective_panel_focus(), PanelFocus::Library)
-            && self.libs[lib_idx].album_track_focus.is_none()
-            && album_target
-                .is_some_and(|target| self.jump_music_group_display_cursor(lib_idx, target))
-        {
-            self.save_default_library_position(lib_idx);
-            self.maybe_fetch_next_page(lib_idx);
             return;
         }
 

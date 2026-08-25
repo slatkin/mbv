@@ -251,13 +251,25 @@ contributing surface's group 2–4 conversion to have landed.
     132 refs. One unit; the three share a parent and a dismissal path.
 - [ ] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters.
   Dispatched as named units, sized on the same files-forced-open basis as 5.3c:
-  - [ ] *Album cursor prep* — settle the narrow-mode question (mount
+  - [x] *Album cursor prep* — settle the narrow-mode question (mount
     `MusicWorkspaceComponent` in narrow, or prove the narrow path cannot reach a
     `Some`), then move `render/screens/album_cursor.rs`'s three
     `pub(in crate::app)` entry points into `MusicWorkspaceComponent`.
     Behaviour-neutral, compiles standalone, deletes no field. Splitting this out
     is what keeps the next unit inside one context — the role `5.3-pre` and
-    *Overlay prep* played.
+    *Overlay prep* played. The component is now the single owner of grouped-Music
+    album cursor targeting: it always emits `MusicAlbumCursor` for Up/k/Down/j/h/
+    l/Home/End/PageUp/PageDown whenever it is focused and no track is focused,
+    fall-through target included, so the two legacy order sources
+    (`rendered_album_target` / `rendered_album_jump_target` and the
+    `move_lib_cursor_inner` / `jump_lib_cursor` grouped-Music branches, plus the
+    `input_lib_keys` `page_grouped_album_cursor` attempts) are deleted. Verified
+    with `rtk cargo nextest run -p mbv music_workspace`, `rtk cargo nextest run -p
+    mbv album_track`, `rtk cargo nextest run -p mbv
+    up_down_at_group_boundary_moves_between_groups_skipping_headers`, `rtk cargo
+    nextest run -p mbv` (full suite), `rtk cargo check -p mbv`, `rtk cargo clippy
+    --workspace --all-targets`, `rtk cargo fmt --all -- --check`, and `rtk make
+    check-code-file-lines`.
   - [ ] *Album track focus* — delete `LibraryTab.album_track_focus` and re-home
     its four `= None` resets. 30 files (21 / 9), 113 refs. Independent of 5.3c;
     may run in parallel with it.

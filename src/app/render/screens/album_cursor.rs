@@ -1,69 +1,6 @@
-use super::album_plan::{GroupedAlbumDisplayPlan, HeaderFocusCtx};
-use crate::app::layout::LibraryRowTarget;
-use crate::app::music_grouping::GroupedAlbumCatalog;
 use crate::app::App;
-use mbv_core::api::EmbyItem;
 
 impl App {
-    fn grouped_album_navigation_targets(plan: &GroupedAlbumDisplayPlan) -> Vec<LibraryRowTarget> {
-        plan.rows
-            .iter()
-            .filter_map(|row| row.row_target())
-            .collect()
-    }
-
-    /// Navigation targets for the settled catalog: every album in display
-    /// order. Artist headers are display-only and not navigation targets.
-    fn catalog_album_navigation_targets(
-        catalog: &GroupedAlbumCatalog,
-        albums_len: usize,
-    ) -> Vec<LibraryRowTarget> {
-        let mut targets = Vec::new();
-        for group in &catalog.groups {
-            for entry in &catalog.entries[group.start..group.end] {
-                if entry.album_index < albums_len {
-                    targets.push(LibraryRowTarget::Album(entry.album_index));
-                }
-            }
-        }
-        targets
-    }
-
-    /// Navigation targets for the current music album level, sourced from
-    /// the settled catalog when available and a synchronous display plan
-    /// otherwise. Callers must have already checked the level is non-empty.
-    fn music_group_navigation(
-        &mut self,
-        lib_idx: usize,
-        albums: &[EmbyItem],
-        cursor: usize,
-    ) -> Vec<LibraryRowTarget> {
-        let catalog = self.libs[lib_idx]
-            .nav_stack
-            .last()
-            .and_then(|l| l.music_grouping.as_ref())
-            .and_then(|s| s.settled.as_ref());
-        if let Some(cat) = catalog {
-            return Self::catalog_album_navigation_targets(cat, albums.len());
-        }
-        let album_info = self.group_album_info(albums, None);
-        let order = crate::app::render::sorted_group_album_order(&album_info);
-        let plan = self.build_grouped_album_display_plan(
-            albums,
-            &album_info,
-            &order,
-            cursor,
-            false,
-            HeaderFocusCtx {
-                in_music_group_view: false,
-                expand_selected: false,
-            },
-            None,
-            false, // hero_handles_detail: cursor needs the full plan
-        );
-        Self::grouped_album_navigation_targets(&plan)
-    }
-
     pub(in crate::app) fn move_music_group_display_cursor(
         &mut self,
         lib_idx: usize,
@@ -86,18 +23,6 @@ impl App {
             }
         }
         true
-    }
-
-    /// Target position for a `delta`-item move within a grouped album
-    /// list. `delta` is already column-scaled by the caller: `±cols` for
-    /// vertical up/down moves (one rendered row) and `±1` for horizontal
-    /// left/right moves (one album). With `cols == 1` the two coincide.
-    fn grouped_cursor_target(targets: &[LibraryRowTarget], pos: usize, delta: i64) -> usize {
-        let len = targets.len();
-        if len == 0 {
-            return pos;
-        }
-        crate::app::ui_util::move_cursor(pos, delta, len)
     }
 
     pub(in crate::app) fn jump_music_group_display_cursor(

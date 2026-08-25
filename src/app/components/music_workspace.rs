@@ -141,7 +141,7 @@ impl MusicWorkspaceComponent {
     }
 
     fn can_emit_album_cursor(&self) -> bool {
-        self.context.focused && self.track_cursor.is_none() && !self.context.album_order.is_empty()
+        self.context.focused && self.track_cursor.is_none()
     }
 
     pub(in crate::app) fn track_cursor(&self) -> Option<usize> {
@@ -172,35 +172,48 @@ impl MusicWorkspaceComponent {
             Key::Up | Key::Char('k') if self.track_cursor.is_some() => self.move_track(-1),
             Key::Down | Key::Char('j') if self.track_cursor.is_some() => self.move_track(1),
             Key::Up | Key::Char('k') if self.can_emit_album_cursor() => {
-                let target = self.move_album_rows(-1, self.album_columns, true).unwrap();
+                let target = self
+                    .move_album_rows(-1, self.album_columns, true)
+                    .unwrap_or(self.album_cursor);
                 return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Move,
                 }));
             }
             Key::Down | Key::Char('j') if self.can_emit_album_cursor() => {
-                let target = self.move_album_rows(1, self.album_columns, true).unwrap();
+                let target = self
+                    .move_album_rows(1, self.album_columns, true)
+                    .unwrap_or(self.album_cursor);
                 return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Move,
                 }));
             }
             Key::Char('h') if self.album_columns > 1 && self.can_emit_album_cursor() => {
-                let target = self.move_album_rows(-1, 1, true).unwrap();
+                let target = self
+                    .move_album_rows(-1, 1, true)
+                    .unwrap_or(self.album_cursor);
                 return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Move,
                 }));
             }
             Key::Char('l') if self.album_columns > 1 && self.can_emit_album_cursor() => {
-                let target = self.move_album_rows(1, 1, true).unwrap();
+                let target = self
+                    .move_album_rows(1, 1, true)
+                    .unwrap_or(self.album_cursor);
                 return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Move,
                 }));
             }
             Key::Home if self.can_emit_album_cursor() => {
-                let target = self.context.album_order[0];
+                let target = self
+                    .context
+                    .album_order
+                    .first()
+                    .copied()
+                    .unwrap_or(self.album_cursor);
                 self.album_cursor = target;
                 return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
@@ -208,7 +221,12 @@ impl MusicWorkspaceComponent {
                 }));
             }
             Key::End if self.can_emit_album_cursor() => {
-                let target = *self.context.album_order.last().unwrap();
+                let target = self
+                    .context
+                    .album_order
+                    .last()
+                    .copied()
+                    .unwrap_or(self.album_cursor);
                 self.album_cursor = target;
                 return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
@@ -218,7 +236,7 @@ impl MusicWorkspaceComponent {
             Key::PageUp if self.can_emit_album_cursor() => {
                 let target = self
                     .move_album_rows(-(self.page_rows as i64), self.album_columns, false)
-                    .unwrap();
+                    .unwrap_or(self.album_cursor);
                 return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Page,
@@ -227,7 +245,7 @@ impl MusicWorkspaceComponent {
             Key::PageDown if self.can_emit_album_cursor() => {
                 let target = self
                     .move_album_rows(self.page_rows as i64, self.album_columns, false)
-                    .unwrap();
+                    .unwrap_or(self.album_cursor);
                 return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Page,

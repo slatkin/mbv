@@ -193,6 +193,56 @@ mod tests {
     }
 
     #[test]
+    fn grouped_music_cursor_no_fallthrough_when_left_sorted_indices_empty() {
+        let mut model = Model::new(make_music_group_app());
+        // Add sibling albums so the display order (sorted by name) differs
+        // from raw insertion order: raw [0 "First Album", 1 "Zebra Album",
+        // 2 "Mango Album"] sorts to display order [0, 2, 1].
+        let mut zebra = crate::app::tests::make_item("Zebra Album", "MusicAlbum");
+        zebra.artist = "Charlie".into();
+        let mut mango = crate::app::tests::make_item("Mango Album", "MusicAlbum");
+        mango.artist = "Bravo".into();
+        model.app.libs[0].nav_stack[1].items.extend([zebra, mango]);
+        // Force a single column so the display-order move is deterministic.
+        model.app.layout.main.left_area.width = 40;
+
+        // No library-list render has run, so the render-output order the
+        // legacy fallback would have read is empty.
+        assert!(model.app.layout.main.left_sorted_indices.is_empty());
+
+        model.sync_music_workspace();
+        let id = model.music_workspace_id.clone().expect("mounted");
+
+        let order = model.app.wide_music_render_ctx(0).album_order.clone();
+        assert_eq!(order, vec![0, 2, 1], "display order must differ from raw");
+
+        let message = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Down,
+                modifiers: KeyModifiers::NONE,
+            }));
+        let target = match message {
+            Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                target,
+                kind: AlbumCursorKind::Move,
+            })) => target,
+            other => panic!("Down must emit an album cursor intent, got {other:?}"),
+        };
+        // The target is the display-order successor of raw index 0 (== order[1]),
+        // never the raw successor (1) the legacy empty-left_sorted_indices path used.
+        assert_eq!(target, order[1]);
+        assert_ne!(target, 1, "must not fall through to raw-index navigation");
+
+        // The shell arm applies the target via the display-order cursor setter,
+        // which must not fall through to raw-index navigation.
+        assert!(model.app.move_music_group_display_cursor(0, target));
+        assert_eq!(model.app.libs[0].nav_stack[1].cursor, order[1]);
+    }
+
+    #[test]
     fn shell_mounts_music_workspace_in_narrow_mode() {
         let mut model = Model::new(make_music_group_app());
         assert!(model.app.is_music_group_view(0));
