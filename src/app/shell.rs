@@ -682,7 +682,8 @@ impl Model {
                             | ShellRequest::BrowserShuffle { .. }
                             | ShellRequest::BrowserRefresh
                             | ShellRequest::BrowserRescan
-                            | ShellRequest::BrowserBack),
+                            | ShellRequest::BrowserBack
+                            | ShellRequest::BrowserCycleLetterPill { .. }),
                         ) => self.handle_browser_request(request),
                         Msg::Shell(ShellRequest::BrowserClick { region, col, row }) => match region
                         {

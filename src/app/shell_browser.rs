@@ -65,6 +65,17 @@ impl Model {
             // restoration, season-level skip, persistence, and stale-index
             // behavior.
             ShellRequest::BrowserBack => self.app.go_back(lib_idx),
+            // `[`/`]` cycle the letter-range pill row (task 5.3d, Emby
+            // browser selector cycling): the shell derives the active Emby
+            // library index from its own tab state and runs
+            // `App::cycle_letter_pill` on it, the same call the legacy
+            // `handle_key_emby_library` arm made — preserving the
+            // `should_show_letter_pills` no-op guard and the existing
+            // wrap/select behavior (the component's mount gate has already
+            // excluded the Music and feed-home-video group branches).
+            ShellRequest::BrowserCycleLetterPill { delta } => {
+                self.app.cycle_letter_pill(lib_idx, delta)
+            }
             _ => {}
         }
     }
@@ -397,6 +408,61 @@ mod tests {
         else {
             panic!("focused browser Backspace must emit BrowserBack, got no typed request");
         };
+
+        // `[`/`]` cycle the letter-range pill row (task 5.3d, Emby browser
+        // selector cycling): the focused browser emits a typed
+        // `BrowserCycleLetterPill` carrying the delta — never a raw legacy
+        // key — and the shell derives the library index from its own tab
+        // state and runs `App::cycle_letter_pill`, whose select effect lands
+        // on the top browse level. The fixture's Movies library already sits
+        // at its top browse level, so capturing a true total is the only
+        // missing `should_show_letter_pills` piece.
+        model.app.libs[0].library_total = Some(1000);
+        let Some(Msg::Shell(ShellRequest::BrowserCycleLetterPill { delta })) =
+            drive_browser_key(&mut model, &id, Key::Char(']'), KeyModifiers::NONE)
+        else {
+            panic!("focused browser ] must emit BrowserCycleLetterPill, got no typed request");
+        };
+        assert_eq!(delta, 1, "']' must carry +1");
+        model.handle_browser_request(ShellRequest::BrowserCycleLetterPill { delta });
+        assert_eq!(
+            model.app.libs[0].nav_stack[0]
+                .letter_filter
+                .as_ref()
+                .map(|f| f.index),
+            Some(1),
+            "']' must advance from the default A\u{2013}C pill to the next bucket"
+        );
+
+        // `[` cycles back the other way (the default is bucket 0, so this
+        // round-trips to it).
+        let Some(Msg::Shell(ShellRequest::BrowserCycleLetterPill { delta })) =
+            drive_browser_key(&mut model, &id, Key::Char('['), KeyModifiers::NONE)
+        else {
+            panic!("focused browser [ must emit BrowserCycleLetterPill, got no typed request");
+        };
+        assert_eq!(delta, -1, "'[' must carry -1");
+        model.handle_browser_request(ShellRequest::BrowserCycleLetterPill { delta });
+        assert_eq!(
+            model.app.libs[0].nav_stack[0]
+                .letter_filter
+                .as_ref()
+                .map(|f| f.index),
+            Some(0),
+            "'[' must cycle back to the A\u{2013}C pill"
+        );
+
+        // Ctrl/Alt brackets are NOT letter-pill cycling: the legacy guard
+        // excluded CONTROL and ALT, so those combinations continue through
+        // `Msg::Legacy` unchanged.
+        assert!(matches!(
+            drive_browser_key(&mut model, &id, Key::Char('['), KeyModifiers::CONTROL),
+            Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+        ));
+        assert!(matches!(
+            drive_browser_key(&mut model, &id, Key::Char(']'), KeyModifiers::ALT),
+            Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+        ));
     }
 
     /// Drive one key into the mounted `BrowserComponent` and return its `Msg`

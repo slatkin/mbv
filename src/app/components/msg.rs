@@ -466,6 +466,20 @@ pub enum ShellRequest {
     /// stale-index behavior. No item is carried: back targets the browse
     /// history, not a selected row.
     BrowserBack,
+    /// `[`/`]` on the focused generic/Movies/home-video `BrowserComponent`
+    /// (task 5.3d, Emby browser selector cycling): the component reports the
+    /// letter-range-pill cycle delta (-1 for `[`, +1 for `]`) with neither
+    /// CONTROL nor ALT — exactly the legacy `handle_key_emby_library` guard —
+    /// and the shell derives the active Emby library index from its own tab
+    /// state and runs `App::cycle_letter_pill` on it. The component's mount
+    /// gate already excludes Music and feed-home-video group views, so its
+    /// bracket keys can only mean letter-pill cycling; `cycle_letter_pill`
+    /// keeps its `should_show_letter_pills` no-op guard and wrap/select
+    /// behavior. No item is carried: the pill row is a whole-library control,
+    /// not a selected row.
+    BrowserCycleLetterPill {
+        delta: i64,
+    },
 }
 
 /// Region of the generic Emby browser a click resolved to, reported by

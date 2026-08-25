@@ -191,6 +191,29 @@ impl BrowserComponent {
                 crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Backspace => {
                     Some(ShellRequest::BrowserBack)
                 }
+                // `[`/`]` cycle the letter-range pill row for the focused
+                // generic/Movies/home-video browser (task 5.3d, Emby browser
+                // selector cycling): a typed request carries the delta (-1 for
+                // `[`, +1 for `]`), and the shell derives the active Emby
+                // library index from its own tab state and runs
+                // `App::cycle_letter_pill` on it — whose existing
+                // `should_show_letter_pills` no-op guard and wrap/select
+                // behavior are preserved unchanged. That is the whole effect
+                // for this component: its mount gate already excludes Music
+                // and feed-home-video group views, the two branches the
+                // legacy `handle_key_emby_library` consumed before it reached
+                // the letter pills. Neither CONTROL nor ALT (exactly the
+                // legacy guard); Ctrl/Alt brackets fall through to the legacy
+                // bridge below via `_ => None`.
+                crossterm::event::KeyCode::Char(c @ ('[' | ']'))
+                    if !key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL)
+                        && !key.modifiers.contains(crossterm::event::KeyModifiers::ALT) =>
+                {
+                    let delta = if c == '[' { -1 } else { 1 };
+                    Some(ShellRequest::BrowserCycleLetterPill { delta })
+                }
                 _ => None,
             };
             // The component owns the selection: the item is resolved at the
