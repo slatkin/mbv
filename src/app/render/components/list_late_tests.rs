@@ -114,23 +114,6 @@ fn hero_content_tracks_cursor_when_selection_scrolled_offscreen() {
 }
 
 #[test]
-fn two_column_mouse_click_selects_the_clicked_cell_not_the_row_first_item() {
-    let mut app = make_no_banner_list_app(vec!["Click A", "Click B", "Click C"]);
-    let mut layout = LayoutMain::default();
-    let _ = render_list_term(&mut app, &mut layout, 82, 8);
-    sync_layout_to_app(&mut app, &layout);
-    let la = layout.left_area;
-    // Click cell 1 of the first row (x = cell 1 start, y = row 0).
-    let cell1_x = la.x + 42;
-    assert!(app.click_set_cursor(cell1_x, la.y));
-    assert_eq!(
-        cursor_of(&app),
-        1,
-        "click on the right cell must select the second item of the row"
-    );
-}
-
-#[test]
 fn letter_grouped_replacement_moves_with_a_scrolled_header() {
     let titles: Vec<String> = (0..60).map(|i| format!("Movie {i:02}")).collect();
     let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();

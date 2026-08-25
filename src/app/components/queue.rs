@@ -206,7 +206,9 @@ impl QueueComponent {
                         }
                     }
                     return Some(Msg::Shell(ShellRequest::QueueClick {
-                        region: QueueHitRegion::Row,
+                        region: QueueHitRegion::Row(
+                            self.slots.get(self.cursor).map(|slot| slot.slot_id),
+                        ),
                         col: mouse.column,
                         row: mouse.row,
                     }));
@@ -215,7 +217,9 @@ impl QueueComponent {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
                 if self.area.contains(position) {
                     return Some(Msg::Shell(ShellRequest::QueueClick {
-                        region: QueueHitRegion::ContextMenu,
+                        region: QueueHitRegion::ContextMenu(
+                            self.slots.get(self.cursor).map(|slot| slot.slot_id),
+                        ),
                         col: mouse.column,
                         row: mouse.row,
                     }));

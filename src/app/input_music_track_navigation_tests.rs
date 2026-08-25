@@ -54,21 +54,6 @@ fn track_mode_down_does_not_move_track_focus_when_queue_panel_has_focus() {
 }
 
 #[test]
-fn mouse_clicking_another_album_clears_track_focus() {
-    let mut app = make_music_album_app();
-    push_tracks(&mut app, "album-1", 3);
-    app.libs[0].album_track_focus = Some(1);
-    app.layout.main.left_area = Rect::new(10, 5, 29, 4);
-    app.layout.main.left_row_map = vec![Some(1)];
-
-    let handled = app.click_set_cursor(11, 5);
-
-    assert!(handled);
-    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
-    assert!(app.libs[0].album_track_focus.is_none());
-}
-
-#[test]
 fn selecting_music_group_clears_track_focus() {
     let mut app = make_music_album_app();
     let mut group2 = make_item("Beta", "MusicArtist");

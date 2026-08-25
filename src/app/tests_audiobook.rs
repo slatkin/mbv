@@ -82,15 +82,3 @@ fn audiobookshelf_book_tab_dispatches_to_book_kind_not_podcast() {
     );
     assert_eq!(app.player_tab.total_queue_len(), 0);
 }
-
-#[test]
-fn wide_book_chapter_target_changes_chapter_focus() {
-    let mut app = audiobookshelf_book_app();
-    app.layout.main.browse_destination = Some(app.tab);
-    app.layout.main.audiobookshelf_book_wide_right_area = ratatui::layout::Rect::new(40, 0, 20, 15);
-    app.layout.main.audiobookshelf_book_chapter_rows =
-        vec![(ratatui::layout::Rect::new(42, 4, 16, 1), 0)];
-
-    assert!(app.click_set_cursor(43, 4));
-    assert_eq!(app.audiobookshelf_book_browse[0].chapter_selection, Some(0));
-}

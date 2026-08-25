@@ -14,7 +14,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{Msg, ShellRequest};
+use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry};
 use crate::app::types_audiobookshelf_browse::{
@@ -192,7 +192,7 @@ impl AudiobookshelfPodcastComponent {
                 }
             }
         }
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastMouse(mouse)))
+        Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
     }
 }
 

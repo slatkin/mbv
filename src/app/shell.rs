@@ -630,20 +630,22 @@ impl Model {
                                     self.app.handle_mouse_selector_click_emby(lib_idx, target);
                                 }
                             }
-                            BrowserHitRegion::ContextMenu => {
-                                self.app.handle_mouse_right_click_emby(col, row);
+                            BrowserHitRegion::ContextMenu(target) => {
+                                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                    self.app
+                                        .handle_mouse_right_click_emby(lib_idx, target, col, row);
+                                }
                             }
-                            BrowserHitRegion::LeftRow | BrowserHitRegion::InlineHero => {
+                            BrowserHitRegion::LeftRow(target)
+                            | BrowserHitRegion::InlineHero(target) => {
                                 if self.app.note_browse_double_click(col, row) {
                                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                        self.app.handle_mouse_double_click_emby(
-                                            lib_idx,
-                                            true,
-                                            ratatui::layout::Position { x: col, y: row },
-                                        );
+                                        self.app.handle_mouse_double_click_emby(lib_idx, target);
                                     }
                                 } else {
-                                    self.app.click_set_cursor(col, row);
+                                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                        self.app.handle_mouse_single_click_emby(lib_idx, target);
+                                    }
                                 }
                             }
                         },
@@ -663,14 +665,14 @@ impl Model {
                                 self.app.last_click_pos = (col, row);
                                 self.app.handle_mouse_selector_click_home(target);
                             }
-                            HomeHitRegion::ContextMenu => {
-                                self.app.handle_mouse_right_click_home(col, row);
+                            HomeHitRegion::ContextMenu(target) => {
+                                self.app.handle_mouse_right_click_home(target, col, row);
                             }
-                            HomeHitRegion::Row => {
+                            HomeHitRegion::Row(target) => {
                                 if self.app.note_browse_double_click(col, row) {
-                                    self.app.handle_mouse_double_click_home(true);
+                                    self.app.handle_mouse_double_click_home(target);
                                 } else {
-                                    self.app.click_set_cursor(col, row);
+                                    self.app.handle_mouse_single_click_home(target);
                                 }
                             }
                         },
@@ -695,14 +697,14 @@ impl Model {
                                 self.app
                                     .handle_mouse_selector_click_queue(QueueScope::Remote);
                             }
-                            QueueHitRegion::ContextMenu => {
-                                self.app.handle_mouse_right_click_queue(col, row);
+                            QueueHitRegion::ContextMenu(slot_id) => {
+                                self.app.handle_mouse_right_click_queue(slot_id, col, row);
                             }
-                            QueueHitRegion::Row => {
+                            QueueHitRegion::Row(slot_id) => {
                                 if self.app.note_browse_double_click(col, row) {
-                                    self.app.handle_mouse_double_click_queue(col, row);
+                                    self.app.handle_mouse_double_click_queue(slot_id);
                                 } else {
-                                    self.app.click_set_cursor(col, row);
+                                    self.app.handle_mouse_single_click_queue(slot_id);
                                 }
                             }
                         },
@@ -721,17 +723,13 @@ impl Model {
                             if let Some(lib_idx) = self.app.tab.emby_library_index() {
                                 match region {
                                     TvHitRegion::ContextMenu(hit) => {
-                                        self.app
-                                            .handle_mouse_right_click_tv(lib_idx, hit, col, row);
+                                        self.app.handle_mouse_right_click_tv(hit, col, row);
                                     }
                                     TvHitRegion::Hit(hit) => {
                                         if self.app.note_browse_double_click(col, row) {
-                                            self.app
-                                                .handle_mouse_double_click_tv(lib_idx, col, row);
+                                            self.app.handle_mouse_double_click_tv(lib_idx, hit);
                                         } else {
-                                            self.app.handle_mouse_single_click_tv(
-                                                lib_idx, hit, col, row,
-                                            );
+                                            self.app.handle_mouse_single_click_tv(hit);
                                         }
                                     }
                                 }

@@ -399,15 +399,14 @@ impl HomeComponent {
                 if self.list_area.contains(pos) {
                     // Local highlight only: the authoritative cursor set
                     // (row-map resolution, panel focus) stays in
-                    // `App::click_set_cursor`, reached via the `HomeClick`
-                    // shell arm.
+                    // The `HomeClick` shell arm consumes the resolved cursor.
                     if let Some((_, flat_idx)) =
                         self.hitmap.iter().find(|(rect, _)| rect.contains(pos))
                     {
                         self.cursor = *flat_idx;
                     }
                     return Some(Msg::Shell(ShellRequest::HomeClick {
-                        region: HomeHitRegion::Row,
+                        region: HomeHitRegion::Row(self.cursor),
                         col: mouse.column,
                         row: mouse.row,
                     }));
@@ -416,7 +415,7 @@ impl HomeComponent {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
                 if self.list_area.contains(pos) {
                     return Some(Msg::Shell(ShellRequest::HomeClick {
-                        region: HomeHitRegion::ContextMenu,
+                        region: HomeHitRegion::ContextMenu(self.cursor),
                         col: mouse.column,
                         row: mouse.row,
                     }));

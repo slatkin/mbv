@@ -263,7 +263,7 @@ pub enum ShellRequest {
     /// landed; the shell decides *when* it counts — it runs `App`'s 400ms
     /// double-click comparison against `App::last_click_time`/`last_click_pos`
     /// and then calls the matching extracted gesture method
-    /// (`click_set_cursor`, `handle_mouse_double_click_home`,
+    /// (`handle_mouse_single_click_home`, `handle_mouse_double_click_home`,
     /// `handle_mouse_right_click_home`, `handle_mouse_selector_click_home`).
     HomeClick {
         region: HomeHitRegion,
@@ -273,11 +273,9 @@ pub enum ShellRequest {
     /// Forward Audiobookshelf podcast effects to the legacy App handler while
     /// the browser's local state remains component-owned.
     AudiobookshelfPodcastKey(crossterm::event::KeyEvent),
-    AudiobookshelfPodcastMouse(crossterm::event::MouseEvent),
     /// Forward Audiobookshelf book effects to the legacy App handler while
     /// the browser's local state remains component-owned.
     AudiobookshelfBookKey(crossterm::event::KeyEvent),
-    AudiobookshelfBookMouse(crossterm::event::MouseEvent),
     /// Close the nested playlist view without dismissing the sidebar.
     PlaylistsBack,
     /// Load the selected playlist's items.
@@ -353,7 +351,7 @@ pub enum ShellRequest {
     /// landed; the shell decides *when* it counts — it runs `App`'s 400ms
     /// double-click comparison against `App::last_click_time`/`last_click_pos`
     /// and then calls the matching extracted gesture method
-    /// (`click_set_cursor`, `handle_mouse_double_click_emby`,
+    /// (`handle_mouse_single_click_emby`, `handle_mouse_double_click_emby`,
     /// `handle_mouse_right_click_emby`, `handle_mouse_selector_click_emby`).
     BrowserClick {
         region: BrowserHitRegion,
@@ -369,13 +367,13 @@ pub enum ShellRequest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BrowserHitRegion {
     /// Left list area; the component resolves the row via `left_row_map`.
-    LeftRow,
+    LeftRow(usize),
     /// Inline hero (browse surface for the two Services that publish one).
-    InlineHero,
+    InlineHero(usize),
     /// Selector-tab pill; `target` is the pill index the component resolved.
     SelectorTab(usize),
     /// Right-click → Emby context menu after the row is focused.
-    ContextMenu,
+    ContextMenu(usize),
 }
 
 /// Region of the Home surface a click resolved to, reported by
@@ -385,13 +383,13 @@ pub enum BrowserHitRegion {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HomeHitRegion {
     /// The Home list area (`list_area`): a single click selects/focuses via
-    /// `App::click_set_cursor`, a double-click activates via
+    /// The resolved row target is applied by the shell; a double-click activates via
     /// `App::handle_mouse_double_click_home` (the shell decides which).
-    Row,
+    Row(usize),
     /// Section pill; `target` is the section index the component resolved.
     Pill(usize),
     /// Right-click → Home context menu after the row is focused.
-    ContextMenu,
+    ContextMenu(usize),
 }
 
 /// Region of the Queue surface a click resolved to, reported by
@@ -401,15 +399,15 @@ pub enum HomeHitRegion {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueueHitRegion {
     /// Queue list area: a single click selects/focuses via
-    /// `App::click_set_cursor`, while the shell decides whether the same
+    /// The resolved slot target is applied by the shell, while the shell decides whether the same
     /// coordinates form a double-click activation.
-    Row,
+    Row(Option<QueueSlotId>),
     /// Local queue scope pill.
     ScopeLocal,
     /// Remote queue scope pill.
     ScopeRemote,
     /// Right-click in the queue list area.
-    ContextMenu,
+    ContextMenu(Option<QueueSlotId>),
 }
 
 /// Pane + hit within the TV workspace a click resolved to, reported by

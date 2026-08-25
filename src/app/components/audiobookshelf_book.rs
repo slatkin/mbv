@@ -7,7 +7,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{Msg, ShellRequest};
+use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{
     render_audiobookshelf_book_content, AudiobookshelfBookGeometry, HomeImagePaint,
@@ -180,7 +180,7 @@ impl AudiobookshelfBookComponent {
                 }
             }
         }
-        Some(Msg::Shell(ShellRequest::AudiobookshelfBookMouse(mouse)))
+        Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
     }
 }
 

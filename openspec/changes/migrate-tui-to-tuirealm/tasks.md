@@ -249,7 +249,7 @@ contributing surface's group 2–4 conversion to have landed.
   - [x] *Settings popups* — `multiselect_popup`, `library_routes_popup`,
     `feeds_manage_popup` + `input_feeds_manage_keys.rs`. 21 files (15 / 6),
     132 refs. One unit; the three share a parent and a dismissal path.
-- [x] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters.
+- [ ] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters.
   Dispatched as named units, sized on the same files-forced-open basis as 5.3c:
 
   **Verification policy for the remaining units (decided 2026-08-25).** The
@@ -314,18 +314,14 @@ contributing surface's group 2–4 conversion to have landed.
     - [x] `queue` `hit_test` — real row/hit geometry, one unit.
     - [x] `tv_workspace` `hit_test` — two focusable panes, one unit.
      - [ ] `music_workspace` `hit_test` — superseded by D16; not migrated for alpha.
-     - [ ] Blocking modals and prompt — superseded by D16; not migrated for alpha.
-      `remote_reanchor`, `playback_prompt`. Geometry is a containment check
-      against a single rect (two legacy-mouse refs each), so these share one
-      unit; split only if one proves to have real geometry.
-     - [x] Framework deletion — `input_mouse.rs` (653 lines),
-      `input_mouse_dispatch.rs` (406), `input_mouse_gestures.rs` (172), and
-      `AppLayout`. Cannot start until the nine surfaces above land: the
-      ordering is one-directional, so this lane parallelises at the start and
-      not at the end. Existing mouse tests that hand-set `layout.main.*`
-      (`tests_mouse_browse_dispatch.rs` at 18 refs, plus the other six test
-      files holding the remaining 57) are deleted with the fields they
-      reference, not ported.
+     - [ ] Blocking modals and prompt (`confirm`, `daemon_lost`,
+       `remote_reanchor`, `playback_prompt`) — superseded by D16; not migrated
+       for alpha.
+     - [x] Framework deletion — delete the three legacy `input_mouse*.rs`
+       entry points and their global coordinate routing. D16 supersedes the
+       remaining `music_workspace` and modal/prompt mouse work; load-bearing
+       `AppLayout` geometry remains. Existing mouse tests that hand-set
+       `layout.main.*` are deleted with the paths they exercised, not ported.
   - [ ] *Mirrors and framework* — delete the 29 `sync_*` (28 files), then
     `CONTEXT_STACK`, then `LegacyInput`, in that order. Mechanical, and shrinks
     as every unit above lands. Requires everything.
@@ -369,12 +365,8 @@ contributing surface's group 2–4 conversion to have landed.
   Read decision **D15** in `design.md` before choosing: it scopes adopting
   `Component::perform(Cmd)` as the table's execution path (`Cmd` in, `Msg`
   out), and requires an explicit note here if 5.4 declines it.
- - [x] *Orphan cleanup* (folded into this unit) — `ccc75e30` deleted the dead
+   - [x] *Orphan cleanup* (folded into this unit) — `ccc75e30` deleted the dead
    `GroupedAlbumGroup.start`/`.end` and `GroupedAlbumCatalog.groups` fields and
    their builders.
-  deleted `music_group_navigation`, the only reader of
-  `GroupedAlbumGroup.start`/`.end` and `GroupedAlbumCatalog.groups`
-  (`src/app/music_grouping.rs:41,42,56`). rustc now reports all three dead.
-  Delete the fields and whatever builds them.
 - [ ] 5.5 Flip all `docs/architecture/interactive-surface-ledger.md` rows to `migrated` with verification records; verify no `legacy` **and no `component`** row remains (see 1.10).
 - [ ] 5.6 Final gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`, and `rtk make check-code-file-lines` all pass; confirm no parallel legacy interaction framework remains and the shell Model holds only shell/runtime authority plus the TuiRealm `Application`.

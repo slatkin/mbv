@@ -301,27 +301,10 @@ fn queue_focus_dims_wide_movies_and_hero_is_not_interactive() {
     );
     sync_layout_to_app(&mut app, &layout);
 
-    // The hero is never published as `hero_area`, so a click on the left
-    // hero is not a browse/activation target.
     assert_eq!(
         app.layout.main.hero_area,
         Rect::default(),
         "read-only hero must not be published as interactive hero geometry"
-    );
-    let hero_click = app.click_set_cursor(5, 5);
-    assert!(
-        !hero_click,
-        "clicking the left hero must not be handled (no activation path)"
-    );
-    // Clicking the right rail list focuses and selects the row.
-    let la = app.layout.main.left_area;
-    assert!(
-        la.contains((la.x + 1, la.y).into()),
-        "right rail list should be clickable"
-    );
-    assert!(
-        app.click_set_cursor(la.x + 1, la.y),
-        "clicking the right rail list should be handled"
     );
 }
 

@@ -151,11 +151,11 @@ impl BrowserComponent {
                     || self.layout.inline_hero_area.contains(position)
                 {
                     let region = if self.layout.inline_hero_area.contains(position) {
-                        BrowserHitRegion::InlineHero
+                        BrowserHitRegion::InlineHero(self.cursor)
                     } else {
-                        BrowserHitRegion::LeftRow
+                        BrowserHitRegion::LeftRow(self.cursor)
                     };
-                    if let BrowserHitRegion::LeftRow = region {
+                    if let BrowserHitRegion::LeftRow(_) = region {
                         if let Some(cursor) = self.resolve_left_cursor(col, row) {
                             self.cursor = cursor;
                         }
@@ -168,7 +168,7 @@ impl BrowserComponent {
                     || self.layout.inline_hero_area.contains(position)
                 {
                     return Some(Msg::Shell(ShellRequest::BrowserClick {
-                        region: BrowserHitRegion::ContextMenu,
+                        region: BrowserHitRegion::ContextMenu(self.cursor),
                         col,
                         row,
                     }));
@@ -183,7 +183,7 @@ impl BrowserComponent {
     /// `left_row_map` (single-column screen-row → item index). This is the
     /// local highlight only; the authoritative cursor set (two-column
     /// cell-target, header/gap no-ops, position save) stays in
-    /// `App::click_set_cursor`, reached via the `BrowserClick` shell arm.
+    /// The `BrowserClick` shell arm consumes the resolved cursor target.
     fn resolve_left_cursor(&self, col: u16, row: u16) -> Option<usize> {
         let la = self.layout.left_area;
         if !la.contains((col, row).into()) {

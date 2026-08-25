@@ -256,26 +256,6 @@ impl App {
         state.set_episode_filter(AudiobookshelfEpisodeFilter::ALL[next]);
     }
 
-    pub(super) fn podcast_filter_target_active(&self, index: usize) -> bool {
-        self.audiobookshelf_browse
-            .get(index)
-            .is_some_and(|state| state.episode_selection.is_some())
-    }
-
-    pub(super) fn select_audiobookshelf_filter(&mut self, target: usize) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(filter) = AudiobookshelfEpisodeFilter::ALL.get(target).copied() else {
-            return;
-        };
-        if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
-            if state.episode_selection.is_some() {
-                state.set_episode_filter(filter);
-            }
-        }
-    }
-
     /// Resolve the selected downloaded episode at the Audiobookshelf playback
     /// boundary. Queue submission remains the responsibility of the later
     /// action stage; browse state never sees credentials or playback state.
