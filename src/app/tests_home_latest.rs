@@ -321,19 +321,19 @@ fn flat_cursor_navigation_spans_emby_and_audiobookshelf_sections() {
     app.home_select_section(0);
     app.home.home_cursor = 0;
     assert!(matches!(
-        app.home_current_item(),
+        app.home_current_item(app.home.home_cursor),
         Some(QueueItem::Emby(item)) if item.display_name() == "CW item"
     ));
 
     // Move into the Emby pill, then across its items.
     app.home_select_section(1);
     assert!(matches!(
-        app.home_current_item(),
+        app.home_current_item(app.home.home_cursor),
         Some(QueueItem::Emby(item)) if item.display_name() == "Movie one"
     ));
     app.home_move_cursor(1);
     assert!(matches!(
-        app.home_current_item(),
+        app.home_current_item(app.home.home_cursor),
         Some(QueueItem::Emby(item)) if item.display_name() == "Movie two"
     ));
 
@@ -341,18 +341,18 @@ fn flat_cursor_navigation_spans_emby_and_audiobookshelf_sections() {
     // right after the Emby pill's.
     app.home_select_section(2);
     assert!(matches!(
-        app.home_current_item(),
+        app.home_current_item(app.home.home_cursor),
         Some(QueueItem::Audiobookshelf(item)) if item.title == "Episode 1"
     ));
     app.home_move_cursor(1);
     assert!(matches!(
-        app.home_current_item(),
+        app.home_current_item(app.home.home_cursor),
         Some(QueueItem::Audiobookshelf(item)) if item.title == "Episode 2"
     ));
     // Clamped at the end of the pill.
     app.home_move_cursor(1);
     assert!(matches!(
-        app.home_current_item(),
+        app.home_current_item(app.home.home_cursor),
         Some(QueueItem::Audiobookshelf(item)) if item.title == "Episode 2"
     ));
 }
@@ -431,10 +431,10 @@ fn home_play_and_enqueue_leave_audiobookshelf_tab_state_untouched() {
         0,
     )];
     app.home_select_section(1);
-    assert!(app.home_current_item().unwrap().is_audiobookshelf());
+    assert!(app.home_current_item(app.home.home_cursor).unwrap().is_audiobookshelf());
 
-    app.home_enqueue();
-    app.home_play();
+    app.home_enqueue(app.home.home_cursor);
+    app.home_play(app.home.home_cursor);
 
     let state = &app.audiobookshelf_browse[0];
     assert_eq!(
@@ -556,10 +556,10 @@ fn home_play_and_enqueue_leave_feeds_tab_state_untouched() {
         0,
     )];
     app.home_select_section(1);
-    assert!(app.home_current_item().unwrap().is_feed());
+    assert!(app.home_current_item(app.home.home_cursor).unwrap().is_feed());
 
-    app.home_enqueue();
-    app.home_play();
+    app.home_enqueue(app.home.home_cursor);
+    app.home_play(app.home.home_cursor);
 
     assert_eq!(app.feed_tab.all_entries.len(), 2);
 }

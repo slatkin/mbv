@@ -721,6 +721,18 @@ impl Model {
                                 }
                             }
                         },
+                        // Home typed effects (task 5.3d, Home typed-effect
+                        // prep): `HomeComponent` owns the cursor and reports the
+                        // flat target index it resolved; the shell forwards it
+                        // straight to the `App` effect so the requested target
+                        // is acted on even when `App::home.home_cursor` differs.
+                        Msg::Shell(
+                            request @ (ShellRequest::HomePlay(_)
+                            | ShellRequest::HomeEnqueue(_)
+                            | ShellRequest::HomeDelete(_)
+                            | ShellRequest::HomeToggleWatched
+                            | ShellRequest::HomeSectionSelected(_)),
+                        ) => self.handle_home_request(request),
                         // Queue mouse geometry lives in `QueueComponent`;
                         // the shell decides *when* a row click is a double-click
                         // and shares App's 30ms wheel throttle with browse/home.

@@ -164,7 +164,7 @@ impl App {
 
     pub(super) fn handle_mouse_double_click_home(&mut self, target: usize) {
         self.handle_mouse_single_click_home(target);
-        self.home_play();
+        self.home_play(target);
     }
 
     pub(super) fn handle_mouse_double_click_emby(&mut self, lib_idx: usize, target: usize) {

@@ -4,9 +4,11 @@ use mbv_core::playback_queue::QueueItem;
 impl App {
     // ── Home flat list ───────────────────────────────────────────────────────
 
-    /// The QueueItem at the current flat `home_cursor`, or None.
-    pub(super) fn home_current_item(&self) -> Option<QueueItem> {
-        let cursor = self.home.home_cursor;
+    /// The QueueItem at the given flat `cursor` (the Home component's
+    /// target index), or None. The caller supplies the cursor — the effect
+    /// never consults `App::home.home_cursor`, so the component's target is
+    /// honored even when the two differ (task 5.3d, Home typed-effect prep).
+    pub(super) fn home_current_item(&self, cursor: usize) -> Option<QueueItem> {
         let mut pos = 0usize;
         for item in &self.home.continue_items {
             if pos == cursor {
@@ -146,15 +148,16 @@ impl App {
         self.home_select_section(sections[next_pos]);
     }
 
-    /// Play the item under the flat home cursor.
-    pub(super) fn home_play(&mut self) {
-        let Some(item) = self.home_current_item() else {
+    /// Play the item at the component-provided flat `cursor`. Uses the
+    /// supplied target directly instead of `App::home.home_cursor`, so the
+    /// request's own target is honored (task 5.3d, Home typed-effect prep).
+    pub(super) fn home_play(&mut self, cursor: usize) {
+        let Some(item) = self.home_current_item(cursor) else {
             return;
         };
         if matches!(&item, QueueItem::Emby(inner) if inner.is_folder) {
             return;
         }
-        let cursor = self.home.home_cursor;
         let cw_len = self.home.continue_items.len();
         if cursor < cw_len {
             // CW items: use select_home for proper resume handling.
@@ -177,9 +180,10 @@ impl App {
         }
     }
 
-    /// Enqueue the item under the flat home cursor.
-    pub(super) fn home_enqueue(&mut self) {
-        let cursor = self.home.home_cursor;
+    /// Enqueue the item at the component-provided flat `cursor` (task 5.3d,
+    /// Home typed-effect prep). Uses the supplied target directly instead of
+    /// `App::home.home_cursor`.
+    pub(super) fn home_enqueue(&mut self, cursor: usize) {
         let cw_len = self.home.continue_items.len();
         if cursor < cw_len {
             let (saved_sec, saved_cursor) = (self.home.section, self.home.continue_cursor);
@@ -189,7 +193,7 @@ impl App {
             self.home.section = saved_sec;
             self.home.continue_cursor = saved_cursor;
         } else {
-            let Some(item) = self.home_current_item() else {
+            let Some(item) = self.home_current_item(cursor) else {
                 return;
             };
             match item {
@@ -199,5 +203,21 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Remove the Continue Watching item at the component-provided flat
+    /// `cursor` from the resume row, guarding on the CW range exactly like the
+    /// legacy `handle_cw_key` Delete arm. Non-CW cursors are ignored, and the
+    /// CW column cursor is saved/restored around the removal just like the
+    /// legacy arm (task 5.3d, Home typed-effect prep).
+    pub(super) fn home_delete(&mut self, cursor: usize) {
+        let cw_len = self.home.continue_items.len();
+        if cursor >= cw_len {
+            return;
+        }
+        let saved = self.home.continue_cursor;
+        self.home.continue_cursor = cursor;
+        self.remove_from_continue_watching();
+        self.home.continue_cursor = saved;
     }
 }

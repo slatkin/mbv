@@ -293,11 +293,11 @@ impl App {
                 true
             }
             KeyCode::Enter if ctrl => {
-                self.home_enqueue();
+                self.home_enqueue(self.home.home_cursor);
                 true
             }
             KeyCode::Enter => {
-                self.home_play();
+                self.home_play(self.home.home_cursor);
                 true
             }
             // Ctrl+a: enqueue (issue #209). Replaces the old Ctrl+q/Alt+q
@@ -305,7 +305,7 @@ impl App {
             // `handle_enqueue_selected_key`'s doc comment for why Ctrl+a
             // specifically had to become the enqueue key here.
             KeyCode::Char('a') if ctrl => {
-                self.home_enqueue();
+                self.home_enqueue(self.home.home_cursor);
                 true
             }
             KeyCode::Char('w') if ctrl => {
@@ -317,14 +317,7 @@ impl App {
                 true
             }
             KeyCode::Delete => {
-                let cursor = self.home.home_cursor;
-                let cw_len = self.home.continue_items.len();
-                if cursor < cw_len {
-                    let saved = self.home.continue_cursor;
-                    self.home.continue_cursor = cursor;
-                    self.remove_from_continue_watching();
-                    self.home.continue_cursor = saved;
-                }
+                self.home_delete(self.home.home_cursor);
                 true
             }
             _ => false,
