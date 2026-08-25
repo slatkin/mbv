@@ -369,6 +369,15 @@ contributing surface's group 2–4 conversion to have landed.
   Read decision **D15** in `design.md` before choosing: it scopes adopting
   `Component::perform(Cmd)` as the table's execution path (`Cmd` in, `Msg`
   out), and requires an explicit note here if 5.4 declines it.
+- [ ] *Manual check before PR* — `c70e3e0` deleted the episode-row and
+  season-tab branches from `click_set_cursor`, on the unverified premise that a
+  podcast library never selects an `item_type == "Series"` item and so never
+  populates those child panels. The render gate is
+  `is_wide_tv_library || is_podcast_library` (`list.rs:125`) but the component
+  mount gate is `collection_type == "tvshows"` (`shell_tv_workspace.rs:13`),
+  so the predicates disagree. In a podcast library at hero-on-left, click a
+  season tab and an episode row: they must select. If no child panels render,
+  the question is moot.
 - [ ] *Orphan cleanup* (fold into any later unit, not its own run) — `ccc75e30`
   deleted `music_group_navigation`, the only reader of
   `GroupedAlbumGroup.start`/`.end` and `GroupedAlbumCatalog.groups`
