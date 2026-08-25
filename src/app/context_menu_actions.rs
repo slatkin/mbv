@@ -309,8 +309,16 @@ impl App {
 
     /// Build the context menu for the current panel/destination, or `None`
     /// when no menu applies or it would be empty.
-    fn build_context_menu(&mut self) -> Option<ContextMenu> {
-        self.build_context_menu_for(None)
+    ///
+    /// `home_cw_selected` is the authoritative "is Continue Watching selected?"
+    /// fact, resolved by the shell from the mounted `HomeComponent` (task
+    /// 5.3d, Home context-menu section decoupling) — never copied into an App
+    /// field. It is consulted only by the Queue-focus arm below (the odd
+    /// queue-menu coupling): with the Queue panel focused while Home is the
+    /// active Tab selection, "Remove from Continue Watching" appears exactly
+    /// when the Home component has Continue Watching selected.
+    fn build_context_menu(&mut self, home_cw_selected: bool) -> Option<ContextMenu> {
+        self.build_context_menu_for(None, home_cw_selected)
     }
 
     /// `build_context_menu` with an explicitly resolved Emby-library item
@@ -318,7 +326,11 @@ impl App {
     /// focused, the shell resolves the track (the component owns the cursor)
     /// and passes it here so '.' targets the focused track instead of the
     /// album row. All other arms resolve exactly as `build_context_menu`.
-    fn build_context_menu_for(&mut self, tracked_item: Option<EmbyItem>) -> Option<ContextMenu> {
+    fn build_context_menu_for(
+        &mut self,
+        tracked_item: Option<EmbyItem>,
+        home_cw_selected: bool,
+    ) -> Option<ContextMenu> {
         let mut entries: Vec<ContextMenuEntry> = vec![];
 
         let cw_focused = matches!(
@@ -431,7 +443,16 @@ impl App {
                         );
                     }
                 }
-                if cw_focused || (self.tab.is_home() && self.home.section == 0) {
+                // `home_cw_selected` is the component-derived authoritative
+                // fact (resolved at the Model boundary), replacing the former
+                // numeric `App.home.section == 0` read before that field is
+                // deleted. `cw_focused` (Library focus + Home tab) already
+                // subsumes it on the Home keyboard / Home right-click paths;
+                // the `home_cw_selected` arm preserves the odd Queue-focus
+                // coupling: with the Queue panel focused while Home is the
+                // active Tab selection, the entry appears exactly when the
+                // Home component has Continue Watching selected.
+                if cw_focused || (self.tab.is_home() && home_cw_selected) {
                     Self::push_context_action(
                         &mut entries,
                         "Remove from Continue Watching",
@@ -493,22 +514,39 @@ impl App {
         })
     }
 
-    pub(super) fn open_context_menu(&mut self) {
-        if let Some(menu) = self.build_context_menu() {
+    /// Keyboard '.' entry (the shared `handle_global_view_key` front door
+    /// reached by Home/library/queue views). `home_cw_selected` is the
+    /// authoritative Continue-Watching-selected fact, threaded from the shell
+    /// (which resolves it from the mounted `HomeComponent`) through
+    /// `App::handle_key_with_home_context` → the `CONTEXT_STACK` →
+    /// `handle_global_view_key` (task 5.3d, Home context-menu section
+    /// decoupling). It is load-bearing under Queue panel focus while Home is
+    /// the active Tab selection; the `self.tab.is_home()` guard short-circuits
+    /// it on all other paths.
+    pub(super) fn open_context_menu(&mut self, home_cw_selected: bool) {
+        if let Some(menu) = self.build_context_menu(home_cw_selected) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
     }
 
     /// Open the context menu targeted at an explicitly resolved item (a
-    /// focused inline album track reached through the shell boundary).
+    /// focused inline album track reached through the shell boundary). This
+    /// is never a Home-tab menu, so `home_cw_selected` is a harmless `false`
+    /// (the `self.tab.is_home()` guard short-circuits it).
     pub(super) fn open_context_menu_for(&mut self, item: EmbyItem) {
-        if let Some(menu) = self.build_context_menu_for(Some(item)) {
+        if let Some(menu) = self.build_context_menu_for(Some(item), false) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
     }
 
-    pub(super) fn open_context_menu_at(&mut self, x: u16, y: u16) {
-        let Some(mut menu) = self.build_context_menu() else {
+    /// Pointer right-click entry. `home_cw_selected` is the authoritative
+    /// Continue-Watching-selected fact resolved by the shell from the mounted
+    /// `HomeComponent` (task 5.3d, Home context-menu section decoupling). On
+    /// the Home/Queue right-click paths it is genuinely load-bearing for the
+    /// Queue-focus coupling above; for non-Home right-clicks it is a harmless
+    /// `false` (the `self.tab.is_home()` guard already short-circuits it).
+    pub(super) fn open_context_menu_at(&mut self, x: u16, y: u16, home_cw_selected: bool) {
+        let Some(mut menu) = self.build_context_menu(home_cw_selected) else {
             return;
         };
         menu.anchor = ContextMenuAnchor::Pointer { x, y };

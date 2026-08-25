@@ -36,13 +36,19 @@ impl App {
     /// dispatch without any destination-specific handling. Unsupported keys
     /// are consumed by the Service handler so they never fall through to
     /// another destination or the queue.
-    pub(super) fn handle_key_browse_dispatch(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_browse_dispatch(
+        &mut self,
+        key: KeyEvent,
+        home_cw_selected: bool,
+    ) -> Option<bool> {
         if self.normalize_stale_browse_destination() {
             return Some(false);
         }
         match self.tab {
             TabSelection::Home => self.handle_key_home(key),
-            TabSelection::EmbyLibrary(index) => self.handle_key_emby_library(index, key),
+            TabSelection::EmbyLibrary(index) => {
+                self.handle_key_emby_library(index, key, home_cw_selected)
+            }
             TabSelection::AudiobookshelfLibrary(index) => {
                 let Some(kind) = self.audiobookshelf_kind_at(index) else {
                     return Some(false);
@@ -75,7 +81,12 @@ impl App {
     /// through `handle_lib_key`. Every other key is consumed here (the
     /// view's historical final catch-all), never falling through to
     /// queue-item handling.
-    fn handle_key_emby_library(&mut self, lib_idx: usize, key: KeyEvent) -> Option<bool> {
+    fn handle_key_emby_library(
+        &mut self,
+        lib_idx: usize,
+        key: KeyEvent,
+        home_cw_selected: bool,
+    ) -> Option<bool> {
         // Season switching: [ = previous season, ] = next season.
         if !key.modifiers.contains(KeyModifiers::CONTROL)
             && !key.modifiers.contains(KeyModifiers::ALT)
@@ -131,7 +142,7 @@ impl App {
 
         // Tab/BackTab are consumed by `handle_global_view_key` in
         // `handle_key_view_dispatch` before browse dispatch is reached.
-        if let Some(quit) = self.handle_lib_key(lib_idx, key) {
+        if let Some(quit) = self.handle_lib_key(lib_idx, key, home_cw_selected) {
             return Some(quit);
         }
         // Every other key is consumed here, never falling through to

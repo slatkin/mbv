@@ -461,7 +461,10 @@ impl Model {
                                 && !self.is_blocking_overlay_open()
                             {
                                 self.mount_help();
-                            } else if self.app.handle_key(key) {
+                            } else if self.app.handle_key_with_home_context(
+                                key,
+                                self.home_continue_watching_selected(),
+                            ) {
                                 quit = true;
                             }
                         }
@@ -743,7 +746,17 @@ impl Model {
                                     .handle_mouse_selector_click_queue(QueueScope::Remote);
                             }
                             QueueHitRegion::ContextMenu(slot_id) => {
-                                self.app.handle_mouse_right_click_queue(slot_id, col, row);
+                                // The authoritative Continue-Watching-selected
+                                // fact is resolved here (Model boundary) and
+                                // passed into the App builder, so the odd
+                                // queue→Home coupling reflects the mounted
+                                // Home component's section (task 5.3d).
+                                self.app.handle_mouse_right_click_queue(
+                                    slot_id,
+                                    col,
+                                    row,
+                                    self.home_continue_watching_selected(),
+                                );
                             }
                             QueueHitRegion::Row(slot_id) => {
                                 if self.app.note_browse_double_click(col, row) {
@@ -807,9 +820,9 @@ impl Model {
                         }
                         Msg::Shell(ShellRequest::PlaybackPromptKey(key)) => {
                             if self.app.skip_intro_end_ticks.is_some() {
-                                self.app.handle_key_confirm_skip_intro(key);
+                                self.app.handle_key_confirm_skip_intro(key, false);
                             } else if self.app.next_up_item.is_some() {
-                                self.app.handle_key_confirm_next_up(key);
+                                self.app.handle_key_confirm_next_up(key, false);
                             }
                         }
                         Msg::Service(request) => {

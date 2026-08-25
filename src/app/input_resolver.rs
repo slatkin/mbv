@@ -111,6 +111,8 @@ impl App {
 /// the explicit precedence order this stack exists to make assertable. The
 /// `pub(super)` visibility on these handlers is required for the fn-pointer
 /// table below, not an invitation to call them from elsewhere in `app`.
+pub(super) type ContextHandler = fn(&mut App, KeyEvent, bool) -> Option<bool>;
+
 #[derive(Clone, Copy)]
 pub(super) struct ContextEntry {
     // Only read by the `context_stack_order_is_pinned` characterization test
@@ -118,7 +120,7 @@ pub(super) struct ContextEntry {
     // intended (debugging/assertion) purpose, not test-only scaffolding.
     #[allow(dead_code)]
     pub name: &'static str,
-    pub handler: fn(&mut App, KeyEvent) -> Option<bool>,
+    pub handler: ContextHandler,
 }
 
 /// The full keyboard context-priority stack, first-match-wins, in the exact

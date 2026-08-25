@@ -4,7 +4,11 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::{Duration, Instant};
 
 impl App {
-    pub(super) fn handle_key_panel_mode_cycle(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_panel_mode_cycle(
+        &mut self,
+        key: KeyEvent,
+        _home_cw_selected: bool,
+    ) -> Option<bool> {
         if key.code != KeyCode::Char('x') || !key.modifiers.is_empty() {
             return None;
         }
@@ -19,7 +23,11 @@ impl App {
     /// keys used to be independently matched; genuinely per-view behavior (`/`
     /// search, `Ctrl+a` enqueue) stays local. See
     /// docs/adr/0002-centralized-input-handling.md, phase 3 (#132).
-    pub(super) fn handle_global_view_key(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_global_view_key(
+        &mut self,
+        key: KeyEvent,
+        home_cw_selected: bool,
+    ) -> Option<bool> {
         match key.code {
             KeyCode::Char('q') if key.modifiers.is_empty() => Some(self.try_quit()),
             KeyCode::Tab => {
@@ -38,7 +46,7 @@ impl App {
                 Some(false)
             }
             KeyCode::Char('.') => {
-                self.open_context_menu();
+                self.open_context_menu(home_cw_selected);
                 Some(false)
             }
             _ => None,
@@ -75,11 +83,16 @@ impl App {
     /// into the query and moving the result cursor must not interleave.
     /// To navigate results, close the search (Esc) and use the flat-list
     /// bindings, which include h/j/k/l in 2-col mode.
-    pub(super) fn handle_lib_key(&mut self, lib_idx: usize, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_lib_key(
+        &mut self,
+        lib_idx: usize,
+        key: KeyEvent,
+        home_cw_selected: bool,
+    ) -> Option<bool> {
         if let Some(quit) = self.handle_enqueue_selected_key(lib_idx, key) {
             return Some(quit);
         }
-        if let Some(quit) = self.handle_global_view_key(key) {
+        if let Some(quit) = self.handle_global_view_key(key, home_cw_selected) {
             return Some(quit);
         }
 
@@ -207,7 +220,11 @@ impl App {
         self.playback_target().adjust_volume(self, delta);
     }
 
-    pub(super) fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_playback_key(
+        &mut self,
+        key: KeyEvent,
+        _home_cw_selected: bool,
+    ) -> Option<bool> {
         let snapshot = self.input_snapshot();
         if let Some(command) = super::action::idle_feed_command_for_key(
             super::input_resolver::KeyChord::from_key(key),

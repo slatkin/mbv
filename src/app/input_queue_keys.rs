@@ -11,7 +11,11 @@ use std::time::{Duration, Instant};
 const QUEUE_NAV_CURSOR_HOLD: Duration = Duration::from_millis(500);
 
 impl App {
-    pub(super) fn handle_key_queue_column_width(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_queue_column_width(
+        &mut self,
+        key: KeyEvent,
+        _home_cw_selected: bool,
+    ) -> Option<bool> {
         if self.handle_queue_column_width_key(key) {
             Some(false)
         } else {

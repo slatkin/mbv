@@ -75,15 +75,36 @@ impl App {
     }
 
     pub(super) fn handle_key(&mut self, key: KeyEvent) -> bool {
+        self.handle_key_with_home_context(key, false)
+    }
+
+    /// Model-boundary keyboard entry (task 5.3d, Home context-menu section
+    /// decoupling): the shell resolves the authoritative "is Continue Watching
+    /// selected?" fact from the mounted `HomeComponent` and passes it here so
+    /// the '.' path opens the context menu with the component-derived
+    /// predicate. Runs the identical `CONTEXT_STACK` precedence — '.' is still
+    /// claimed by `handle_global_view_key` at its established position — the
+    /// fact is merely threaded through. The fact is dead for every other key
+    /// and for the no-arg `handle_key` (test/non-Model) caller, which passes
+    /// `false`.
+    pub(super) fn handle_key_with_home_context(
+        &mut self,
+        key: KeyEvent,
+        home_cw_selected: bool,
+    ) -> bool {
         for entry in super::input_resolver::CONTEXT_STACK {
-            if let Some(quit) = (entry.handler)(self, key) {
+            if let Some(quit) = (entry.handler)(self, key, home_cw_selected) {
                 return quit;
             }
         }
         false
     }
 
-    pub(super) fn handle_key_global_overlay_open(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_global_overlay_open(
+        &mut self,
+        key: KeyEvent,
+        _home_cw_selected: bool,
+    ) -> Option<bool> {
         if key.code == KeyCode::F(2) {
             self.request_sidebar_toggle(SidebarId::Settings);
             return Some(false);
@@ -109,7 +130,11 @@ impl App {
         None
     }
 
-    pub(super) fn handle_key_ctrl_l(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_ctrl_l(
+        &mut self,
+        key: KeyEvent,
+        _home_cw_selected: bool,
+    ) -> Option<bool> {
         if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.force_clear = true;
             Some(false)
@@ -118,7 +143,11 @@ impl App {
         }
     }
 
-    pub(super) fn handle_key_f5_refresh(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_f5_refresh(
+        &mut self,
+        key: KeyEvent,
+        _home_cw_selected: bool,
+    ) -> Option<bool> {
         if key.code == KeyCode::F(5) {
             self.refresh_current_view();
             Some(false)
@@ -127,7 +156,11 @@ impl App {
         }
     }
 
-    pub(super) fn handle_key_visualizer(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_visualizer(
+        &mut self,
+        key: KeyEvent,
+        _home_cw_selected: bool,
+    ) -> Option<bool> {
         if key.code == KeyCode::Char('v') && key.modifiers.is_empty() {
             self.toggle_visualizer();
             Some(false)
@@ -136,13 +169,17 @@ impl App {
         }
     }
 
-    pub(super) fn handle_key_view_dispatch(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_view_dispatch(
+        &mut self,
+        key: KeyEvent,
+        home_cw_selected: bool,
+    ) -> Option<bool> {
         // Shared globals (q, Tab/BackTab, 1-9, `.`) precede every panel and
         // destination. Historically each browse branch reached these by
         // falling through to the bottom of `handle_queue_key`; hoisting them
         // ahead preserves the same precedence because no earlier library or
         // queue routing arm claims these keys.
-        if let Some(quit) = self.handle_global_view_key(key) {
+        if let Some(quit) = self.handle_global_view_key(key, home_cw_selected) {
             return Some(quit);
         }
         if key.modifiers.contains(KeyModifiers::ALT) {
@@ -151,7 +188,7 @@ impl App {
         }
         match self.effective_panel_focus() {
             PanelFocus::Queue => Some(self.handle_queue_key(key)),
-            PanelFocus::Library => self.handle_key_browse_dispatch(key),
+            PanelFocus::Library => self.handle_key_browse_dispatch(key, home_cw_selected),
         }
     }
 

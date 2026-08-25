@@ -35,6 +35,24 @@ impl Model {
         }
     }
 
+    /// The authoritative "is Continue Watching selected?" fact for the
+    /// context-menu builder, resolved at the Model boundary from the mounted
+    /// `HomeComponent` (task 5.3d, Home context-menu section decoupling).
+    /// Reading `HomeComponent::section() == 0` here replaces the former
+    /// numeric `App.home.section == 0` read in `App::build_context_menu_for`;
+    /// the value is passed into the App-owned builder and never copied into a
+    /// new App field or boolean mirror. With no mounted Home component the
+    /// fact defaults to `false` (the component is mounted for the whole
+    /// session, so this is only a defensive fallback).
+    pub(super) fn home_continue_watching_selected(&self) -> bool {
+        self.application
+            .get_component(&ComponentId::Home)
+            .and_then(|c| c.as_any().downcast_ref::<HomeComponent>())
+            .map(HomeComponent::section)
+            .map(|section| section == 0)
+            .unwrap_or(false)
+    }
+
     /// Route the Home click family (task 5.3d, Home mouse-click handoff) at
     /// the Model boundary. `HomeComponent` owns the hit geometry and has
     /// already moved its local cursor/section before emitting the region;
@@ -66,7 +84,8 @@ impl Model {
             }
             HomeHitRegion::ContextMenu(_target) => {
                 self.app.set_panel_focus(PanelFocus::Library);
-                self.app.open_context_menu_at(col, row);
+                self.app
+                    .open_context_menu_at(col, row, self.home_continue_watching_selected());
             }
             HomeHitRegion::Row(target) => {
                 if self.app.note_browse_double_click(col, row) {
@@ -468,7 +487,7 @@ mod tests {
         // needs no cursor copy.)
         model.app.home.continue_cursor = 0;
         model.handle_home_click(HomeHitRegion::ContextMenu(0), 70, 20);
-        let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) =
+        let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu)) =
             model.app.pending_overlay
         else {
             panic!("right-click must open a context menu");
@@ -483,6 +502,121 @@ mod tests {
                 .iter()
                 .any(|e| e.label == "Remove from Continue Watching"),
             "menu target must be the Continue Watching item, not the clicked folder"
+        );
+
+        // Task 5.3d, Home context-menu section decoupling: the authoritative
+        // "is Continue Watching selected?" fact comes from the mounted
+        // `HomeComponent` at the Model boundary (`home_continue_watching_selected`),
+        // not from numeric `App.home.section`, and it is load-bearing in the
+        // odd Queue-focus coupling — the queue context menu shows "Remove from
+        // Continue Watching" iff the Home component has Continue Watching
+        // selected. To prove the source, park the legacy `App.home.section` on
+        // CW while moving the *component* off CW: the menu must follow the
+        // component, not the numeric field.
+        model.sync_home();
+        {
+            let home = model
+                .application
+                .get_component_mut(&ComponentId::Home)
+                .expect("Home component mounted")
+                .as_any_mut()
+                .downcast_mut::<HomeComponent>()
+                .expect("Home component type");
+            assert!(
+                home.restore_section(&crate::app::types_playback::HomeLatestSource::Emby(
+                    "lib".into()
+                )),
+                "restore to the Folder section must succeed"
+            );
+        }
+        model.app.home.section = 0; // legacy field parked on CW
+        assert!(
+            !model.home_continue_watching_selected(),
+            "resolver must report the component's non-CW section, not App.home.section"
+        );
+
+        // Keyboard '.' path under Queue panel focus while Home is the active
+        // Tab selection: the shared `handle_global_view_key` front door
+        // (reached through the CONTEXT_STACK from the Model-boundary
+        // `handle_key_with_home_context`) opens the queue menu, and the odd
+        // coupling entry is present iff the mounted Home component has
+        // Continue Watching selected. With the component on a non-CW section
+        // the entry must be absent even though the legacy App.home.section
+        // is 0 — the menu follows the component, not the numeric field.
+        model.app.player_tab.set_queue_items(
+            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
+                make_item("Queued", "Movie"),
+            ))],
+            0,
+        );
+        model.app.panel_focus = PanelFocus::Queue;
+        model.app.pending_overlay = None;
+        assert!(
+            !model.app.handle_key_with_home_context(
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char('.'),
+                    crossterm::event::KeyModifiers::NONE,
+                ),
+                model.home_continue_watching_selected(),
+            ),
+            "'.' must not quit"
+        );
+        let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_non_cw)) =
+            model.app.pending_overlay
+        else {
+            panic!("keyboard '.' must open a context menu under Queue focus");
+        };
+        assert!(
+            !menu_non_cw
+                .entries
+                .iter()
+                .any(|e| e.label == "Remove from Continue Watching"),
+            "component on a non-CW section must drop the keyboard-menu CW entry despite App.home.section == 0"
+        );
+        assert!(
+            matches!(model.app.effective_panel_focus(), PanelFocus::Queue),
+            "keyboard '.' must not change the Queue panel focus"
+        );
+
+        // Put the component back on Continue Watching (empty latest clamps the
+        // component section back to section 0): the same keyboard '.' path
+        // shows the entry again.
+        {
+            let home = model
+                .application
+                .get_component_mut(&ComponentId::Home)
+                .expect("Home component mounted")
+                .as_any_mut()
+                .downcast_mut::<HomeComponent>()
+                .expect("Home component type");
+            home.set_content(vec![], vec![], false);
+        }
+        assert!(
+            model.home_continue_watching_selected(),
+            "resolver must report CW when the component is back on section 0"
+        );
+        model.app.pending_overlay = None;
+        assert!(
+            !model.app.handle_key_with_home_context(
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char('.'),
+                    crossterm::event::KeyModifiers::NONE,
+                ),
+                model.home_continue_watching_selected(),
+            ),
+            "'.' must not quit"
+        );
+        let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_cw)) =
+            model.app.pending_overlay
+        else {
+            panic!("keyboard '.' must open a context menu under Queue focus");
+        };
+        assert!(
+            menu_cw
+                .entries
+                .iter()
+                .any(|e| e.label == "Remove from Continue Watching"),
+            "component back on CW must show the keyboard-menu CW entry"
         );
     }
 

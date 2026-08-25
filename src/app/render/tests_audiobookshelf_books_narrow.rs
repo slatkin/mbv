@@ -38,10 +38,13 @@ fn narrow_layout_renders_hero_only_and_browser_together() {
 
     app.layout.main = layout;
     app.layout.main.browse_destination = Some(app.tab);
-    app.handle_key_view_dispatch(crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Left,
-        crossterm::event::KeyModifiers::NONE,
-    ));
+    app.handle_key_view_dispatch(
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Left,
+            crossterm::event::KeyModifiers::NONE,
+        ),
+        false,
+    );
     assert_eq!(
         app.audiobookshelf_book_browse[0].chapter_selection, None,
         "narrow inline mode must not focus chapters"
@@ -131,10 +134,13 @@ fn narrow_book_enter_uses_the_completed_60x20_layout_for_modal_activation() {
     app.layout.main = layout;
     app.layout.main.browse_destination = Some(app.tab);
     assert_eq!(
-        app.handle_key_view_dispatch(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Enter,
-            crossterm::event::KeyModifiers::NONE,
-        )),
+        app.handle_key_view_dispatch(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            false
+        ),
         Some(false)
     );
     let Some(crate::app::types_overlay::OverlayRequest::SelectionModal(modal)) =
@@ -167,10 +173,13 @@ fn cannot_fit_book_enter_uses_the_completed_60x4_layout_for_ordinary_activation(
     app.layout.main = layout;
     app.layout.main.browse_destination = Some(app.tab);
     assert_eq!(
-        app.handle_key_view_dispatch(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Enter,
-            crossterm::event::KeyModifiers::NONE,
-        )),
+        app.handle_key_view_dispatch(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            false
+        ),
         Some(false)
     );
     assert!(!matches!(
@@ -191,18 +200,24 @@ fn wide_book_enter_uses_the_completed_100x20_layout_for_chapter_workspace() {
     app.layout.main = layout;
     app.layout.main.browse_destination = Some(app.tab);
     assert_eq!(
-        app.handle_key_view_dispatch(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Left,
-            crossterm::event::KeyModifiers::NONE,
-        )),
+        app.handle_key_view_dispatch(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Left,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            false
+        ),
         Some(false)
     );
     assert_eq!(app.audiobookshelf_book_browse[0].chapter_selection, Some(0));
     assert_eq!(
-        app.handle_key_view_dispatch(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Enter,
-            crossterm::event::KeyModifiers::NONE,
-        )),
+        app.handle_key_view_dispatch(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            false
+        ),
         Some(false)
     );
     assert!(!matches!(

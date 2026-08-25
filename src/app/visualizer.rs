@@ -118,10 +118,13 @@ mod tests {
         app.visualizer_enabled = false;
         app.player.status.lock().unwrap().active = true;
 
-        let handled = app.handle_key_visualizer(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char('v'),
-            crossterm::event::KeyModifiers::NONE,
-        ));
+        let handled = app.handle_key_visualizer(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('v'),
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            false,
+        );
 
         assert_eq!(handled, Some(false));
         assert!(
@@ -143,10 +146,13 @@ mod tests {
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = false;
 
-        let handled = app.handle_key_visualizer(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char('v'),
-            crossterm::event::KeyModifiers::NONE,
-        ));
+        let handled = app.handle_key_visualizer(
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('v'),
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            false,
+        );
 
         assert_eq!(handled, Some(false));
         assert!(app.visualizer_enabled);

@@ -408,7 +408,7 @@ fn context_menu_remove_targets_displayed_remote_queue() {
     app.set_queue_scope(QueueScope::Remote);
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
 
-    app.open_context_menu();
+    app.open_context_menu(false);
 
     let menu = match app.pending_overlay.as_ref() {
         Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
@@ -448,7 +448,7 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
     app.set_queue_scope(QueueScope::Remote);
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
 
-    app.open_context_menu();
+    app.open_context_menu(false);
 
     let menu = match app.pending_overlay.as_ref() {
         Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,

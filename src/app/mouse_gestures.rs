@@ -185,7 +185,10 @@ impl App {
         row: u16,
     ) {
         self.handle_mouse_single_click_emby(lib_idx, target);
-        self.open_context_menu_at(col, row);
+        // Emby-library right-click is never a Home-tab menu, so the
+        // Continue-Watching-selected fact is a harmless `false` (the
+        // `self.tab.is_home()` guard short-circuits it).
+        self.open_context_menu_at(col, row, false);
     }
 
     pub(super) fn handle_mouse_right_click_queue(
@@ -193,9 +196,10 @@ impl App {
         slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
         col: u16,
         row: u16,
+        home_cw_selected: bool,
     ) {
         self.handle_mouse_single_click_queue(slot_id);
-        self.open_context_menu_at(col, row);
+        self.open_context_menu_at(col, row, home_cw_selected);
     }
 
     pub(super) fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
@@ -235,6 +239,8 @@ impl App {
         row: u16,
     ) {
         self.handle_mouse_single_click_tv(lib_idx, hit);
-        self.open_context_menu_at(col, row);
+        // TV-workspace right-click is never a Home-tab menu, so the
+        // Continue-Watching-selected fact is a harmless `false`.
+        self.open_context_menu_at(col, row, false);
     }
 }

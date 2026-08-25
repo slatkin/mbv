@@ -181,7 +181,11 @@ impl App {
         Some(false)
     }
 
-    pub(super) fn handle_key_confirm_skip_intro(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_confirm_skip_intro(
+        &mut self,
+        key: KeyEvent,
+        _home_cw_selected: bool,
+    ) -> Option<bool> {
         self.skip_intro_end_ticks?;
         if matches!(
             key.code,
@@ -201,7 +205,11 @@ impl App {
         Some(false)
     }
 
-    pub(super) fn handle_key_confirm_next_up(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_confirm_next_up(
+        &mut self,
+        key: KeyEvent,
+        _home_cw_selected: bool,
+    ) -> Option<bool> {
         self.next_up_item.as_ref()?;
         if matches!(
             key.code,
@@ -228,7 +236,11 @@ impl App {
         Some(false)
     }
 
-    pub(super) fn handle_key_clear_queue_prompt(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_clear_queue_prompt(
+        &mut self,
+        key: KeyEvent,
+        _home_cw_selected: bool,
+    ) -> Option<bool> {
         // Behavior change (phase 6, #135): gate on an open context menu. Before
         // this fix, `clear_queue_prompt_c` sat above `context_menu` in
         // CONTEXT_STACK with no guard, so pressing 'c' while a context menu was

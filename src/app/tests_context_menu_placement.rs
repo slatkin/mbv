@@ -85,7 +85,7 @@ fn keyboard_placement_follows_fresh_layout_after_resize() {
 #[test]
 fn pointer_placement_stays_click_anchored_not_following_selection() {
     let mut app = library_app();
-    app.open_context_menu_at(70, 20);
+    app.open_context_menu_at(70, 20, false);
 
     let mut model = Model::new(app);
     model.sync_modal_requests();
@@ -200,7 +200,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
 #[test]
 fn context_menu_entries_render_below_the_reserved_top_row() {
     let mut app = library_app();
-    app.open_context_menu();
+    app.open_context_menu(false);
 
     let mut model = Model::new(app);
     model.sync_modal_requests();

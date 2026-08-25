@@ -572,7 +572,7 @@ fn left_right_focus_toggle_leaves_both_panes_populated() {
         crossterm::event::KeyCode::Left,
         crossterm::event::KeyModifiers::NONE,
     );
-    assert_eq!(app.handle_key_view_dispatch(left), Some(false));
+    assert_eq!(app.handle_key_view_dispatch(left, false), Some(false));
     assert_eq!(app.audiobookshelf_book_browse[0].chapter_selection, Some(0));
 
     let mut layout = LayoutMain::default();
@@ -582,7 +582,7 @@ fn left_right_focus_toggle_leaves_both_panes_populated() {
         "focusing chapters must not hide the hero or the right-pane browser:\n{out}"
     );
 
-    assert_eq!(app.handle_key_view_dispatch(right), Some(false));
+    assert_eq!(app.handle_key_view_dispatch(right, false), Some(false));
     assert_eq!(app.audiobookshelf_book_browse[0].chapter_selection, None);
     let out = render_library_to_string_sized(&mut app, &mut layout, 100, 20);
     assert!(
