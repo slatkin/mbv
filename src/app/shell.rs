@@ -24,8 +24,8 @@ use super::components::msg::{
     AlbumCursorKind, BrowserHitRegion, HomeHitRegion, QueueHitRegion, TvHitRegion,
 };
 use super::components::{
-    ComponentId, LegacyTerminalEvent, LibraryComponent, Msg, OverlayId, PlaybackComponent,
-    ShellRequest, UiRootComponent, UserEvent,
+    ComponentId, LegacyTerminalEvent, Msg, OverlayId, PlaybackComponent, ShellRequest,
+    UiRootComponent, UserEvent,
 };
 use super::service_startup;
 use super::types_feeds_manage::FeedsManagePopup;
@@ -114,14 +114,6 @@ impl Model {
         // (task 3.4; see `shell_home.rs`/`components::home`'s module docs).
         model.mount_home();
         model.mount_feeds();
-        model
-            .application
-            .mount(
-                ComponentId::Library,
-                Box::new(LibraryComponent::new()),
-                vec![],
-            )
-            .expect("mount Library parent");
         // Playback is also the stable attribute carrier for precedence gates.
         model
             .application
@@ -854,7 +846,7 @@ impl Model {
             self.sync_tv_workspace();
             self.sync_music_workspace();
             self.sync_inline_search();
-            self.sync_library_parent();
+            self.sync_active_destination();
 
             self.app.expire_music_grouping_candidates();
             self.app.sync_volume_from_player();

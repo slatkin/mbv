@@ -21,7 +21,6 @@ pub mod help;
 pub mod home;
 pub mod inline_search;
 pub mod legacy_input;
-pub mod library;
 pub mod library_routes;
 pub mod msg;
 pub mod multiselect;
@@ -53,7 +52,6 @@ pub use self::help::HelpComponent;
 pub use self::home::HomeComponent;
 pub(in crate::app) use self::inline_search::{InlineSearchComponent, SearchPool};
 pub use self::legacy_input::LegacyInput;
-pub use self::library::LibraryComponent;
 pub use self::library_routes::LibraryRoutesComponent;
 pub use self::msg::{
     LegacyTerminalEvent, Msg, PersistRequest, PlaybackRequest, QueueMove, QueueRequest,
