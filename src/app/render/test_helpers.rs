@@ -308,7 +308,7 @@ pub fn render_home_shell(
     app.terminal_width = width;
     app.terminal_height = height;
     let mut model = crate::app::shell::Model::new(app);
-    model.sync_home();
+    model.push_home_content();
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {

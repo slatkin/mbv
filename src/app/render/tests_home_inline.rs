@@ -30,7 +30,8 @@ fn narrow_home_feed_renders_text_only_without_artwork() {
     app.panel_focus = PanelFocus::Library;
     app.mini_view_focus = PanelFocus::Library;
     // Select the Feeds pill through the real pending-source boundary (task
-    // 5.3d, numeric Home section deletion): `render_home_shell`'s `sync_home`
+    // 5.3d, numeric Home section deletion): `render_home_shell`'s
+    // `push_home_content`
     // restores the Feeds section once its pill exists.
     app.home.latest = vec![(
         "Feeds".into(),

@@ -172,8 +172,8 @@ fn mixed_home_app() -> App {
         ),
     ];
     // Select the Books pill (section 1) through the real pending-source
-    // boundary so `render_home_shell`'s `sync_home` restores it (task 5.3d,
-    // numeric Home section deletion).
+    // boundary so `render_home_shell`'s `push_home_content` restores it (task
+    // 5.3d, numeric Home section deletion).
     app.home_section_pending =
         Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
     app

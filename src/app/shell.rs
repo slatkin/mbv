@@ -194,6 +194,9 @@ impl Model {
                 .flash(format!("Couldn't load home: {e}"), ToastSeverity::Warning),
         }
         self.app.home_loading = false;
+        // Home content/loading were written by `fetch_home` here; re-project (task
+        // 5.3d, sync_home mirror deletion).
+        self.push_home_content();
         self.app.maybe_restore_queue_state();
 
         // Initialize idle feed if configured
@@ -231,6 +234,8 @@ impl Model {
                     Ok(completion) => {
                         had_events = true;
                         self.app.apply_emby_completion(completion);
+                        // The Emby bootstrap wrote Home content/loading; re-project (5.3d).
+                        self.push_home_content();
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
                         self.app.emby_startup_rx = Some(worker);
@@ -247,6 +252,8 @@ impl Model {
                     Ok(completion) => {
                         had_events = true;
                         self.app.apply_emby_setup_completion(completion);
+                        // The Emby setup drain re-bootstraps Home content; re-project (5.3d).
+                        self.push_home_content();
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
                         self.app.emby_setup_rx = Some(rx);
@@ -260,7 +267,11 @@ impl Model {
             had_events |= self.app.drain_audiobookshelf_events();
             if let Ok(ev) = self.app.player_rx.try_recv() {
                 had_events = true;
-                if self.app.handle_player_event(ev) {
+                let restart = self.app.handle_player_event(ev);
+                // Playback completion refetches Home; re-project (task 5.3d, sync_home
+                // mirror deletion).
+                self.push_home_content();
+                if restart {
                     continue 'outer;
                 }
             }
@@ -294,6 +305,10 @@ impl Model {
                     }
                     ev => self.handle_inline_search_lib_event(ev),
                 }
+                // ABS shelf fetches rebuild Home's `latest` pills here
+                // (`AudiobookshelfShelfFetched` → `rebuild_audiobookshelf_latest`);
+                // re-project after every lib event (idempotent) (task 5.3d).
+                self.push_home_content();
             }
 
             // Search results drain: the shell drains `search_rx` and writes
@@ -310,7 +325,12 @@ impl Model {
 
             had_events |= self.app.drain_shared_events();
 
-            had_events |= self.app.drain_feed_tab_results();
+            // Feed results rebuild Home's Feeds pill; re-project when the drain
+            // produced completions (task 5.3d, sync_home mirror deletion).
+            if self.app.drain_feed_tab_results() {
+                had_events = true;
+                self.push_home_content();
+            }
 
             had_events |= self.drain_feed_add_results();
 
@@ -355,6 +375,8 @@ impl Model {
             while let Ok(ev) = self.app.ws_rx.try_recv() {
                 had_events = true;
                 self.app.handle_ws_event(ev);
+                // `UserDataChanged` refetches Home inside the handler; re-project (5.3d).
+                self.push_home_content();
             }
 
             while let Ok(ev) = self.app.audiobookshelf_socket_rx.try_recv() {
@@ -468,6 +490,10 @@ impl Model {
                             ) {
                                 quit = true;
                             }
+                            // F5/context-menu/confirm keys and panel-focus keys write Home
+                            // content or focus inside App's handler; re-project after every
+                            // key at this seam (idempotent) (task 5.3d, sync_home deletion).
+                            self.push_home_content();
                         }
                         Msg::Legacy(LegacyTerminalEvent::Mouse(_mouse)) => {}
                         Msg::Legacy(LegacyTerminalEvent::Resize) => {
@@ -565,6 +591,8 @@ impl Model {
                         }
                         Msg::Shell(ShellRequest::ConfirmKey(key)) => {
                             self.handle_confirm_key(key);
+                            // Confirmations rewrite Home content/focus; re-project (5.3d).
+                            self.push_home_content();
                         }
                         Msg::Shell(ShellRequest::DaemonLostKey(key)) => {
                             if self.handle_daemon_lost_key(key) {
@@ -579,9 +607,13 @@ impl Model {
                         // forwarding (task 5.3c).
                         Msg::Shell(ShellRequest::ContextMenuKey(key)) => {
                             self.handle_context_menu_key(key);
+                            // Enter executes the action, which can refetch Home; re-project (5.3d).
+                            self.push_home_content();
                         }
                         Msg::Shell(ShellRequest::ContextMenuSelect(idx)) => {
                             self.handle_context_menu_select(idx);
+                            // A selected action can refetch Home; re-project (5.3d).
+                            self.push_home_content();
                         }
                         Msg::Shell(ShellRequest::ContextMenuDismiss) => {
                             self.app.pending_overlay =
@@ -646,6 +678,8 @@ impl Model {
                         }
                         Msg::Shell(ShellRequest::MultiselectCommit { .. }) => {
                             self.handle_multiselect_commit();
+                            // Hiding libraries/pills refetches Home inside the commit; re-project (5.3d).
+                            self.push_home_content();
                         }
                         Msg::Shell(request @ ShellRequest::LibraryRoutesEnter)
                         | Msg::Shell(request @ ShellRequest::LibraryRoutesEsc) => {
@@ -755,40 +789,45 @@ impl Model {
                                 self.app.handle_mouse_scroll_queue(delta);
                             }
                         }
-                        Msg::Shell(ShellRequest::QueueClick { region, col, row }) => match region {
-                            QueueHitRegion::ScopeLocal => {
-                                self.app.last_click_time = Instant::now();
-                                self.app.last_click_pos = (col, row);
-                                self.app
-                                    .handle_mouse_selector_click_queue(QueueScope::Local);
-                            }
-                            QueueHitRegion::ScopeRemote => {
-                                self.app.last_click_time = Instant::now();
-                                self.app.last_click_pos = (col, row);
-                                self.app
-                                    .handle_mouse_selector_click_queue(QueueScope::Remote);
-                            }
-                            QueueHitRegion::ContextMenu(slot_id) => {
-                                // The authoritative Continue-Watching-selected
-                                // fact is resolved here (Model boundary) and
-                                // passed into the App builder, so the odd
-                                // queue→Home coupling reflects the mounted
-                                // Home component's section (task 5.3d).
-                                self.app.handle_mouse_right_click_queue(
-                                    slot_id,
-                                    col,
-                                    row,
-                                    self.home_continue_watching_selected(),
-                                );
-                            }
-                            QueueHitRegion::Row(slot_id) => {
-                                if self.app.note_browse_double_click(col, row) {
-                                    self.app.handle_mouse_double_click_queue(slot_id);
-                                } else {
-                                    self.app.handle_mouse_single_click_queue(slot_id);
+                        Msg::Shell(ShellRequest::QueueClick { region, col, row }) => {
+                            match region {
+                                QueueHitRegion::ScopeLocal => {
+                                    self.app.last_click_time = Instant::now();
+                                    self.app.last_click_pos = (col, row);
+                                    self.app
+                                        .handle_mouse_selector_click_queue(QueueScope::Local);
+                                }
+                                QueueHitRegion::ScopeRemote => {
+                                    self.app.last_click_time = Instant::now();
+                                    self.app.last_click_pos = (col, row);
+                                    self.app
+                                        .handle_mouse_selector_click_queue(QueueScope::Remote);
+                                }
+                                QueueHitRegion::ContextMenu(slot_id) => {
+                                    // The authoritative Continue-Watching-selected
+                                    // fact is resolved here (Model boundary) and
+                                    // passed into the App builder, so the odd
+                                    // queue→Home coupling reflects the mounted
+                                    // Home component's section (task 5.3d).
+                                    self.app.handle_mouse_right_click_queue(
+                                        slot_id,
+                                        col,
+                                        row,
+                                        self.home_continue_watching_selected(),
+                                    );
+                                }
+                                QueueHitRegion::Row(slot_id) => {
+                                    if self.app.note_browse_double_click(col, row) {
+                                        self.app.handle_mouse_double_click_queue(slot_id);
+                                    } else {
+                                        self.app.handle_mouse_single_click_queue(slot_id);
+                                    }
                                 }
                             }
-                        },
+                            // Queue clicks move panel focus to the Queue panel;
+                            // re-project the Home focus flag (task 5.3d, sync_home deletion).
+                            self.push_home_content();
+                        }
                         // TV workspace mouse geometry lives in
                         // `TvWorkspaceComponent`, which resolves the pane +
                         // hit (two focusable panes); the shell decides *when*
@@ -868,10 +907,12 @@ impl Model {
             }
 
             // Apply App-owned effect handoffs to their mounted components.
+            // `sync_home` was deleted (task 5.3d, sync_home mirror deletion):
+            // Home content/focus is projected event-driven by
+            // `push_home_content` at the seams above.
             self.update_settings_content();
             self.sync_playback();
             self.sync_modal_requests();
-            self.sync_home();
             self.sync_feeds();
             self.sync_audiobookshelf_podcast();
             self.sync_audiobookshelf_book();

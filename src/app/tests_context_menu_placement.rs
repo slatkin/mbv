@@ -137,7 +137,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
 
     let mut model = Model::new(app);
     model.sync_modal_requests();
-    model.sync_home();
+    model.push_home_content();
     model.app.layout.main.home_area = Rect::new(0, 0, 80, 24);
 
     let backend = TestBackend::new(80, 24);

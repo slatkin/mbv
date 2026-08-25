@@ -1,12 +1,8 @@
 //! Home sync/render methods for the shell `Model` (design D2/D9, task 3.4).
 //!
-//! `HomeComponent` is mounted for the whole session (never unmounted, never
-//! made TuiRealm-`active`): keyboard/mouse input for Home stays on the
-//! legacy `App::handle_key`/`handle_mouse` path (see `components::home`'s
-//! module doc for why), so the component only needs to render. Every tick
-//! the shell mirrors Home content into the component, then paints the
-//! component's `view()` over the legacy frame. Cursor/section/scroll state
-//! stays in the component and is not pushed back in from `App`.
+//! `HomeComponent` mounts for the session (active destination on the Home
+//! tab); content/focus/nerd-fonts are pushed event-driven at their writers
+//! (`push_home_content`, task 5.3d); cursor/section/scroll stay local.
 
 use std::time::Instant;
 
@@ -28,8 +24,15 @@ impl Model {
         match request {
             ShellRequest::HomePlay(cursor) => self.app.home_play(cursor),
             ShellRequest::HomeEnqueue(cursor) => self.app.home_enqueue(cursor),
-            ShellRequest::HomeDelete(cursor) => self.app.home_delete(cursor),
-            ShellRequest::HomeToggleWatched => self.app.cw_toggle_watched(),
+            // Delete / watched-toggle refetch Home: re-project (5.3d).
+            ShellRequest::HomeDelete(cursor) => {
+                self.app.home_delete(cursor);
+                self.push_home_content();
+            }
+            ShellRequest::HomeToggleWatched => {
+                self.app.cw_toggle_watched();
+                self.push_home_content();
+            }
             ShellRequest::HomeSectionSelected(section) => {
                 self.select_home_section_from_component(section)
             }
@@ -115,14 +118,15 @@ impl Model {
                 self.app.set_panel_focus(PanelFocus::Library);
                 self.app
                     .open_context_menu_at(col, row, self.home_continue_watching_selected());
+                // Right/row clicks focus Library: re-project (5.3d).
+                self.push_home_content();
             }
             HomeHitRegion::Row(target) => {
+                self.app.set_panel_focus(PanelFocus::Library);
                 if self.app.note_browse_double_click(col, row) {
-                    self.app.set_panel_focus(PanelFocus::Library);
                     self.app.home_play(target);
-                } else {
-                    self.app.set_panel_focus(PanelFocus::Library);
                 }
+                self.push_home_content();
             }
         }
     }
@@ -163,20 +167,15 @@ impl Model {
             .expect("mount Home");
     }
 
-    /// Mirror `App.home`'s content and runtime render flags into the mounted
-    /// `HomeComponent`. Its cursor, section, and scroll are component-local
-    /// and never pushed back into App (the numeric section was deleted, task
-    /// 5.3d). As the content is mirrored, the one-time persisted-pill restore
-    /// that used to run in the legacy `App::render_home_list` is applied
-    /// (task 5.3d, Home legacy underpaint removal): `home_section_pending` is
-    /// restored via `HomeComponent::restore_section` only once a section with
-    /// the pending source identity exists (sections arrive asynchronously
-    /// across providers), kept pending until then, and cleared once applied.
-    /// `home_section_pending` retains the pending source while it is absent so an
-    /// unrelated `App::save_prefs` never overwrites it; after a successful
-    /// restore (or with no restore pending) the shell-owned semantic
-    /// preference is reconciled from the component's selected source.
-    pub(super) fn sync_home(&mut self) {
+    /// Event-scoped projection replacing the deleted per-frame `sync_home`
+    /// (task 5.3d): runs only at the writers of Home's projected inputs —
+    /// content/`home_loading` and panel-focus writers; deterministic in
+    /// `App` state, so duplicate pushes are idempotent. Applies the one-time
+    /// persisted-pill restore (`home_section_pending` via `restore_section`
+    /// once a matching section exists), then reconciles
+    /// `home_section_pref_semantic` post-clamp (`[`/`]`/pill selection
+    /// already reaches the shell as typed `HomeSectionSelected`).
+    pub(super) fn push_home_content(&mut self) {
         let continue_items: Vec<QueueItem> = self
             .app
             .home
@@ -264,7 +263,7 @@ mod tests {
 
     /// Task 5.3d, Home legacy underpaint removal + numeric section deletion:
     /// the one-time persisted-pill restore that used to run in the deleted
-    /// legacy `App::render_home_list` now runs on the shell's `sync_home`
+    /// legacy `App::render_home_list` now runs on the shell's `push_home_content`
     /// path. It restores the section via `HomeComponent::restore_section` only
     /// once a section with the pending source identity exists (sections
     /// arrive asynchronously), keeps the preference pending until then (an
@@ -272,7 +271,7 @@ mod tests {
     /// reconciles the shell-owned semantic preference from the component. No
     /// numeric section is mirrored back into App.
     #[test]
-    fn shell_sync_home_restores_persisted_home_section_and_clears_pending() {
+    fn shell_push_home_restores_persisted_home_section_and_clears_pending() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_app_stub());
         // Simulate real startup: both the semantic preference and the pending
@@ -285,7 +284,7 @@ mod tests {
         // No matching source yet: the preference stays pending, the semantic
         // identity is retained (not clobbered to Continue Watching), and the
         // component section stays at its default (Continue Watching).
-        model.sync_home();
+        model.push_home_content();
         {
             let home = model
                 .application
@@ -320,7 +319,7 @@ mod tests {
             vec![],
             0,
         )];
-        model.sync_home();
+        model.push_home_content();
         {
             let home = model
                 .application
@@ -353,7 +352,7 @@ mod tests {
             crate::app::tests::make_item("one", "Movie"),
             crate::app::tests::make_item("two", "Movie"),
         ];
-        model.sync_home();
+        model.push_home_content();
 
         let message = {
             let component = model
@@ -370,7 +369,7 @@ mod tests {
         };
         assert_eq!(message, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
 
-        model.sync_home();
+        model.push_home_content();
 
         let component = model
             .application
@@ -410,7 +409,7 @@ mod tests {
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
             0,
         )];
-        model.sync_home();
+        model.push_home_content();
 
         // HomeEnqueue: the requested CW row (id2) is queued, not row 0.
         model.handle_home_request(ShellRequest::HomeEnqueue(2));
@@ -488,7 +487,7 @@ mod tests {
                 0,
             ),
         ];
-        model.sync_home();
+        model.push_home_content();
 
         // Continue Watching (section 0) persists as the empty sentinel, never
         // as a `latest` pill's key.
@@ -522,7 +521,7 @@ mod tests {
             ))],
             0,
         )];
-        model.sync_home();
+        model.push_home_content();
         model.handle_home_request(ShellRequest::HomeSectionSelected(1));
 
         // An unrelated preference save persists the retained semantic source.
@@ -562,7 +561,7 @@ mod tests {
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
             0,
         )];
-        model.sync_home();
+        model.push_home_content();
 
         // Single click on CW row 0: focuses the Library panel, but does not
         // mutate App's independent Continue Watching column cursor or the
@@ -639,7 +638,7 @@ mod tests {
         // context menu shows "Remove from Continue Watching" iff the Home
         // component has Continue Watching selected. There is no App numeric
         // section to fall back on, so the menu follows the component.
-        model.sync_home();
+        model.push_home_content();
         {
             let home = model
                 .application
@@ -766,7 +765,7 @@ mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_app_stub());
         model.app.home.continue_items = make_items(3);
-        model.sync_home();
+        model.push_home_content();
 
         // Accepted scroll: both the component-local cursor and the Continue
         // Watching column's independent cursor advance by the delta. Pin the
