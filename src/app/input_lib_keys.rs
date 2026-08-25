@@ -255,43 +255,16 @@ impl App {
         }
     }
 
-    /// Handle a key for the focused home list (all groups: CW + library latest).
-    /// Returns true if the key was consumed (others fall through to focus nav).
+    /// Handle a key for the focused home list (all groups: CW + library
+    /// latest). Local navigation (Up/Down/PageUp/PageDown/Home/End/`[`/`]`)
+    /// is owned by `HomeComponent` (task 5.3d, Home local keyboard
+    /// navigation) and no longer reaches this handler; the arms kept here
+    /// are the typed effects (Enter/Ctrl+Enter/Ctrl+a/Ctrl+w/Delete) and
+    /// the context-menu key. Returns true if the key was consumed (others
+    /// fall through to focus nav).
     pub(super) fn handle_cw_key(&mut self, key: KeyEvent) -> bool {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         match key.code {
-            KeyCode::Up => {
-                self.home_move_up();
-                true
-            }
-            KeyCode::Down => {
-                self.home_move_down();
-                true
-            }
-            KeyCode::Char('[') if !ctrl => {
-                self.home_move_section(-1);
-                true
-            }
-            KeyCode::Char(']') if !ctrl => {
-                self.home_move_section(1);
-                true
-            }
-            KeyCode::PageUp => {
-                self.home_move_cursor(-(self.cw_page() as i64));
-                true
-            }
-            KeyCode::PageDown => {
-                self.home_move_cursor(self.cw_page() as i64);
-                true
-            }
-            KeyCode::Home => {
-                self.home_select_start();
-                true
-            }
-            KeyCode::End => {
-                self.home_select_end();
-                true
-            }
             KeyCode::Enter if ctrl => {
                 self.home_enqueue(self.home.home_cursor);
                 true
@@ -322,9 +295,5 @@ impl App {
             }
             _ => false,
         }
-    }
-
-    fn cw_page(&self) -> usize {
-        (self.layout.main.left_area.height as usize).max(1)
     }
 }

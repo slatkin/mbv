@@ -11,6 +11,7 @@ use tuirealm::event::{
 #[test]
 fn home_down_moves_the_component_cursor_without_app_state() {
     let mut home = HomeComponent::new();
+    home.set_focused(true);
     home.set_content(
         vec![QueueItem::Emby(Box::new(crate::app::tests::make_item(
             "one", "Movie",
@@ -41,6 +42,9 @@ fn home_down_moves_the_component_cursor_without_app_state() {
 
 fn two_section_home() -> HomeComponent {
     let mut home = HomeComponent::new();
+    // Home keyboard ownership requires the Library panel to be focused; the
+    // keyboard tests below exercise that focused state.
+    home.set_focused(true);
     home.set_content(
         vec![
             QueueItem::Emby(Box::new(crate::app::tests::make_item("cw1", "Movie"))),
@@ -63,6 +67,47 @@ fn key(code: Key) -> Event<crate::app::components::UserEvent> {
         code,
         modifiers: KeyModifiers::NONE,
     })
+}
+
+#[test]
+fn home_keys_fall_through_while_the_queue_panel_is_focused() {
+    // Unfocused (Queue panel focused): Home must not claim or mutate
+    // anything — every key falls through to the legacy dispatch, where the
+    // queue handler owns it. Local navigation and typed effects alike.
+    let mut home = two_section_home();
+    home.set_focused(false);
+
+    let msg = home.on(&key(Key::Down));
+    assert!(matches!(
+        msg,
+        Some(Msg::Legacy(LegacyTerminalEvent::Key(k)))
+            if k.code == crossterm::event::KeyCode::Down
+    ));
+    assert_eq!(
+        home.cursor(),
+        0,
+        "queue-focused Down must not move Home's cursor"
+    );
+
+    let msg = home.on(&key(Key::Char(']')));
+    assert!(matches!(
+        msg,
+        Some(Msg::Legacy(LegacyTerminalEvent::Key(k)))
+            if k.code == crossterm::event::KeyCode::Char(']')
+    ));
+    assert_eq!(
+        home.section(),
+        0,
+        "queue-focused ] must not move Home's pill"
+    );
+
+    let msg = home.on(&key(Key::Enter));
+    assert!(matches!(
+        msg,
+        Some(Msg::Legacy(LegacyTerminalEvent::Key(k)))
+            if k.code == crossterm::event::KeyCode::Enter
+    ));
+    assert_eq!(home.cursor(), 0, "queue-focused Enter must not act on Home");
 }
 
 #[test]

@@ -645,19 +645,3 @@ pub(crate) fn emby_unified_state(
         source: crate::config::QueueSource::Remote,
     }
 }
-
-pub(in crate::app) fn sections(n: usize) -> Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)> {
-    (0..n)
-        .map(|i| {
-            (
-                format!("Sec {i}"),
-                HomeLatestSource::Emby(format!("lib{i}")),
-                make_items(3)
-                    .into_iter()
-                    .map(|item| QueueItem::Emby(Box::new(item)))
-                    .collect(),
-                0,
-            )
-        })
-        .collect()
-}

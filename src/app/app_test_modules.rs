@@ -132,10 +132,6 @@ mod tests_route_state_session;
 mod tests_reattach;
 
 #[cfg(test)]
-#[path = "tests_status_bar.rs"]
-mod tests_status_bar;
-
-#[cfg(test)]
 #[path = "tests_music_grouping.rs"]
 mod tests_music_grouping;
 

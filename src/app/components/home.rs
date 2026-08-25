@@ -262,13 +262,20 @@ impl HomeComponent {
     /// in particular is already consumed by `handle_global_view_key` before
     /// `handle_cw_key` ever runs, so its own `.` arm there is unreachable —
     /// this component reproduces the reachable set, not the unreachable one.
-    /// Used both by `AppComponent::on` (kept for the mount trait bound) and
-    /// by the shell's manual dispatch, which never makes Home the active
-    /// TuiRealm component (see `Model::route_home_key`'s doc comment).
+    ///
+    /// The component claims Home's keys only while its Library panel is
+    /// focused (`self.focused`, mirrored from the shell's effective panel
+    /// focus every tick). With the Queue panel focused, every key returns
+    /// `None` and falls through to the legacy dispatch, so queue handling
+    /// (`handle_queue_key`) sees it instead of Home mutating local state
+    /// that has no focus authority.
     pub(in crate::app) fn handle_crossterm_key(
         &mut self,
         key: crossterm::event::KeyEvent,
     ) -> Option<Msg> {
+        if !self.focused {
+            return None;
+        }
         let ctrl = key
             .modifiers
             .contains(crossterm::event::KeyModifiers::CONTROL);

@@ -286,11 +286,14 @@ fn shelf_cache_drives_and_hides_audiobookshelf_pills_without_fetching() {
     );
 }
 
-/// Task 10.1: the flat Home cursor spans continue-items, Emby sections, and
-/// Audiobookshelf sections as one list; moving across the boundary lands on
-/// items from the other provider.
+/// Task 10.1: `home_current_item` resolves the flat cursor across
+/// continue-items, Emby pills, and Audiobookshelf pills as one list.
+/// Selecting a pill lands the flat cursor on its first item. Flat-list
+/// *movement* is component-owned (task 5.3d, Home local keyboard
+/// navigation), so intermediate positions are set directly to pin the
+/// section-selection landing + resolution, not the deleted App navigation.
 #[test]
-fn flat_cursor_navigation_spans_emby_and_audiobookshelf_sections() {
+fn flat_cursor_resolution_spans_emby_and_audiobookshelf_sections() {
     let mut app = make_app_stub();
 
     // One Continue Watching item, then an Emby pill (2 items), then an
@@ -325,13 +328,14 @@ fn flat_cursor_navigation_spans_emby_and_audiobookshelf_sections() {
         Some(QueueItem::Emby(item)) if item.display_name() == "CW item"
     ));
 
-    // Move into the Emby pill, then across its items.
+    // Selecting the Emby pill lands on its first item; its flat range sits
+    // right after Continue Watching.
     app.home_select_section(1);
     assert!(matches!(
         app.home_current_item(app.home.home_cursor),
         Some(QueueItem::Emby(item)) if item.display_name() == "Movie one"
     ));
-    app.home_move_cursor(1);
+    app.home.home_cursor = 2;
     assert!(matches!(
         app.home_current_item(app.home.home_cursor),
         Some(QueueItem::Emby(item)) if item.display_name() == "Movie two"
@@ -344,13 +348,7 @@ fn flat_cursor_navigation_spans_emby_and_audiobookshelf_sections() {
         app.home_current_item(app.home.home_cursor),
         Some(QueueItem::Audiobookshelf(item)) if item.title == "Episode 1"
     ));
-    app.home_move_cursor(1);
-    assert!(matches!(
-        app.home_current_item(app.home.home_cursor),
-        Some(QueueItem::Audiobookshelf(item)) if item.title == "Episode 2"
-    ));
-    // Clamped at the end of the pill.
-    app.home_move_cursor(1);
+    app.home.home_cursor = 4;
     assert!(matches!(
         app.home_current_item(app.home.home_cursor),
         Some(QueueItem::Audiobookshelf(item)) if item.title == "Episode 2"
