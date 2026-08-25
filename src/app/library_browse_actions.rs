@@ -260,7 +260,14 @@ impl App {
     }
 
     pub(super) fn refresh_after_stop(&mut self) {
-        let _ = self.fetch_home();
+        if let Ok(content) = self.fetch_home() {
+            // The fetch runs synchronously (order-sensitive side
+            // effects); the computed content travels to Model-owned
+            // `home_content` via lib_tx (task 5.3d).
+            let _ = self
+                .lib_tx
+                .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+        }
         if self.last_played_completed {
             if let Some(ref item_id) = self.last_played_item_id.clone() {
                 for lib_idx in 0..self.libs.len() {

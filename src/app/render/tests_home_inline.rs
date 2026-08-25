@@ -9,11 +9,17 @@ use mbv_core::playback_queue::{FeedEntry, QueueItem};
 
 fn home_emby_app() -> crate::app::App {
     let mut app = make_app_stub();
-    let movie_app = make_movie_app();
-    app.home.continue_items = vec![movie_app.libs[0].nav_stack[0].items[0].clone()];
     app.tab = TabSelection::Home;
     app.panel_focus = PanelFocus::Library;
     app
+}
+
+/// The Continue Watching item the tests seed into Model-owned `home_content`
+/// (task 5.3d): the focused Emby movie the legacy characterization used to
+/// seed via `app.home`.
+fn emby_cw_item() -> mbv_core::api::EmbyItem {
+    let movie_app = make_movie_app();
+    movie_app.libs[0].nav_stack[0].items[0].clone()
 }
 
 /// Task 5.3d, Home legacy underpaint removal: this renders through the
@@ -30,30 +36,34 @@ fn narrow_home_feed_renders_text_only_without_artwork() {
     app.panel_focus = PanelFocus::Library;
     app.mini_view_focus = PanelFocus::Library;
     // Select the Feeds pill through the real pending-source boundary (task
-    // 5.3d, numeric Home section deletion): `render_home_shell`'s
-    // `push_home_content`
-    // restores the Feeds section once its pill exists.
-    app.home.latest = vec![(
-        "Feeds".into(),
-        HomeLatestSource::Feeds,
-        vec![QueueItem::Feed(FeedEntry {
-            guid: "home-feed-entry".into(),
-            title: "Home Feed entry".into(),
-            enclosure_url: None,
-            link: None,
-            mime_type: None,
-            duration_ticks: Some(65 * TICKS_PER_SECOND as u64),
-            pub_date_secs: None,
-            feed_kind: Some(FeedKind::Audio),
-            feed_id: None,
-            position_ticks: 0,
-            played: false,
-        })],
-        0,
-    )];
+    // 5.3d, numeric Home section deletion): `render_home_shell_with`'s
+    // `push_home_content` restores the Feeds section once its pill exists.
+    // Home content is Model-owned (task 5.3d), so the pill data is seeded on
+    // `home_content.latest` right after `Model::new`.
     app.home_section_pending = Some(HomeLatestSource::Feeds);
 
-    let (model, terminal) = render_home_shell(app, 60, 20);
+    // Home content is Model-owned (task 5.3d): seed `home_content.latest`
+    // right after `Model::new`, before the push that restores the Feeds pill.
+    let (model, terminal) = render_home_shell_with(app, 60, 20, |m| {
+        m.home_content.latest = vec![(
+            "Feeds".into(),
+            HomeLatestSource::Feeds,
+            vec![QueueItem::Feed(FeedEntry {
+                guid: "home-feed-entry".into(),
+                title: "Home Feed entry".into(),
+                enclosure_url: None,
+                link: None,
+                mime_type: None,
+                duration_ticks: Some(65 * TICKS_PER_SECOND as u64),
+                pub_date_secs: None,
+                feed_kind: Some(FeedKind::Audio),
+                feed_id: None,
+                position_ticks: 0,
+                played: false,
+            })],
+            0,
+        )];
+    });
     let output = buffer_to_string(&terminal);
 
     assert!(output.contains("Home Feed entry"), "title: {output:?}");
@@ -85,7 +95,9 @@ fn narrow_home_inserts_selected_detail_into_the_section_flow() {
     // all; opt into the library side so this test exercises the narrow
     // inline-detail flow it was written for.
     app.mini_view_focus = PanelFocus::Library;
-    let (model, _terminal) = render_home_shell(app, 60, 40);
+    let (model, _terminal) = render_home_shell_with(app, 60, 40, |m| {
+        m.home_content.continue_items = vec![emby_cw_item()];
+    });
 
     let home = model
         .application
@@ -110,7 +122,9 @@ fn narrow_home_inserts_selected_detail_into_the_section_flow() {
 fn narrow_home_suppresses_detail_when_the_viewport_is_too_short() {
     let mut app = home_emby_app();
     app.mini_view_focus = PanelFocus::Library;
-    let (model, _terminal) = render_home_shell(app, 60, 4);
+    let (model, _terminal) = render_home_shell_with(app, 60, 4, |m| {
+        m.home_content.continue_items = vec![emby_cw_item()];
+    });
 
     let home = model
         .application

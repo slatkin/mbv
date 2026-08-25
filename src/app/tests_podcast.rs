@@ -103,7 +103,7 @@ fn audiobookshelf_tab_keys_cannot_enter_emby_action_paths() {
 
     for key in [slash, ctrl_w, ctrl_s, ctrl_a, ctrl_r, dot] {
         assert_eq!(
-            app.handle_key_view_dispatch(key, false),
+            app.handle_key_view_dispatch(key, false, None),
             Some(false),
             "Audiobookshelf tab must consume {key:?}"
         );
@@ -154,12 +154,12 @@ fn audiobookshelf_episode_space_and_enqueue_are_inert_without_owner() {
         crossterm::event::KeyCode::Char(' '),
         crossterm::event::KeyModifiers::NONE,
     );
-    assert_eq!(app.handle_key_view_dispatch(space, false), Some(false));
+    assert_eq!(app.handle_key_view_dispatch(space, false, None), Some(false));
     let ctrl_a = crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Char('a'),
         crossterm::event::KeyModifiers::CONTROL,
     );
-    assert_eq!(app.handle_key_view_dispatch(ctrl_a, false), Some(false));
+    assert_eq!(app.handle_key_view_dispatch(ctrl_a, false, None), Some(false));
 
     assert_eq!(
         app.audiobookshelf_browse[0].episode_selection,
@@ -184,7 +184,7 @@ fn audiobookshelf_tab_never_opens_an_emby_context_menu() {
     let mut app = audiobookshelf_app();
     add_emby_movie_library(&mut app);
 
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
     assert!(
         !matches!(
             app.pending_overlay,
@@ -196,7 +196,7 @@ fn audiobookshelf_tab_never_opens_an_emby_context_menu() {
     // Control: selecting the Emby library with the same state does produce a
     // menu, so the absence above is the destination guard, not an empty setup.
     app.tab = TabSelection::EmbyLibrary(0);
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
     assert!(matches!(
         app.pending_overlay,
         Some(super::types_overlay::OverlayRequest::ContextMenu(_))
@@ -210,7 +210,7 @@ fn feeds_destination_never_opens_an_emby_context_menu() {
     app.panel_focus = PanelFocus::Library;
     app.tab = TabSelection::Feeds;
 
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
     assert!(
         !matches!(
             app.pending_overlay,
@@ -222,7 +222,7 @@ fn feeds_destination_never_opens_an_emby_context_menu() {
     // Control: selecting the Emby library with the same state does produce a
     // menu, so the absence above is the destination guard, not an empty setup.
     app.tab = TabSelection::EmbyLibrary(0);
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
     assert!(matches!(
         app.pending_overlay,
         Some(super::types_overlay::OverlayRequest::ContextMenu(_))
@@ -239,7 +239,7 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
     app.player_tab
         .set_items(vec![make_item("Queue Movie", "Movie")], 0);
 
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
     let menu = match app.pending_overlay.as_ref() {
         Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
         _ => panic!("queue panel must open a menu"),
@@ -270,7 +270,7 @@ fn audiobookshelf_activation_enters_selection_then_remains_inert_without_owner()
     );
 
     assert_eq!(
-        app.handle_key_view_dispatch(enter, false),
+        app.handle_key_view_dispatch(enter, false, None),
         Some(false),
         "Enter must be consumed"
     );
@@ -278,7 +278,7 @@ fn audiobookshelf_activation_enters_selection_then_remains_inert_without_owner()
     assert_eq!(app.player_tab.total_queue_len(), 0);
 
     assert_eq!(
-        app.handle_key_view_dispatch(enter, false),
+        app.handle_key_view_dispatch(enter, false, None),
         Some(false),
         "second Enter stays inert"
     );
@@ -421,7 +421,7 @@ fn audiobookshelf_escape_returns_to_show_selection() {
         crossterm::event::KeyModifiers::NONE,
     );
     assert_eq!(
-        app.handle_key_view_dispatch(escape, false),
+        app.handle_key_view_dispatch(escape, false, None),
         Some(false),
         "Escape must be consumed"
     );

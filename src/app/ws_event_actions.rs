@@ -1,4 +1,4 @@
-use super::{notify_actions::ToastSeverity, App, PanelFocus};
+use super::{notify_actions::ToastSeverity, App, LibEvent, PanelFocus};
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerCommand;
 use mbv_core::ws::WsEvent;
@@ -146,7 +146,14 @@ impl App {
                 }
             }
             WsEvent::UserDataChanged => {
-                let _ = self.fetch_home();
+                // The fetch runs synchronously (order-sensitive side
+                // effects); the computed content travels to Model-owned
+                // `home_content` via lib_tx (task 5.3d).
+                if let Ok(content) = self.fetch_home() {
+                    let _ = self
+                        .lib_tx
+                        .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+                }
             }
         }
     }

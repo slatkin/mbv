@@ -14,8 +14,8 @@ use super::types_feed_tab::FeedTabState;
 use super::types_feeds_manage::FeedsManagePopup;
 use super::types_library_tab::LibraryTab;
 use super::types_playback::{
-    HomeLatestSource, HomePane, PendingQueueAction, PlaylistMutationState, QueueScope,
-    RemoteQueueProjection, SuspendedLocalSession, UndoEntry,
+    HomeLatestSource, PendingQueueAction, PlaylistMutationState, QueueScope, RemoteQueueProjection,
+    SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode, SettingsDestination};
@@ -101,7 +101,6 @@ pub struct App {
         mpsc::Receiver<mbv_core::audiobookshelf_socket::SocketEvent>,
     pub(super) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
     pub(super) audiobookshelf_socket_generation: Option<mbv_core::service_runtime::SetupGeneration>,
-    pub(super) home: HomePane,
     pub(super) libs: Vec<LibraryTab>,
     pub(super) player_tab: PlayerTab,
     pub(super) remote_player_tab: Option<PlayerTab>,
@@ -148,12 +147,6 @@ pub struct App {
     pub(super) layout: layout::AppLayout,
     pub(super) terminal_width: u16,
     pub(super) terminal_height: u16,
-
-    /// True from startup until the first `fetch_home` completes. While true,
-    /// the home view doesn't yet know how many remote sections exist, so the
-    /// renderer fills the reserved area with skeleton placeholders instead of
-    /// collapsing to just the sections that happen to be populated so far.
-    pub(super) home_loading: bool,
     pub(super) last_click_time: Instant,
     pub(super) last_click_pos: (u16, u16),
     pub(super) last_space_press: Option<Instant>,

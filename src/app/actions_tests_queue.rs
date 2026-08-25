@@ -81,7 +81,7 @@ fn context_menu_play_on_queue_tab_seeks_to_start_for_current_playing_audio_item(
     }
     let rx = app.player.spy_on_commands();
 
-    app.execute_context_action(Some(ContextAction::Play));
+    app.execute_context_action(Some(ContextAction::Play), None);
 
     assert!(matches!(
         rx.try_recv(),
@@ -142,7 +142,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     );
 
     let rx = app.player.spy_on_commands();
-    app.execute_context_action(Some(crate::app::ContextAction::Enqueue));
+    app.execute_context_action(Some(crate::app::ContextAction::Enqueue), None);
 
     assert_eq!(app.player_tab.emby_items().len(), 2);
     assert_eq!(app.player_tab.emby_items()[1].id, queued.id);

@@ -124,6 +124,7 @@ mod tests {
                 crossterm::event::KeyModifiers::NONE,
             ),
             false,
+            None,
         );
 
         assert_eq!(handled, Some(false));
@@ -152,6 +153,7 @@ mod tests {
                 crossterm::event::KeyModifiers::NONE,
             ),
             false,
+            None,
         );
 
         assert_eq!(handled, Some(false));

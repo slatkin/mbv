@@ -1,7 +1,7 @@
 use super::feed_parse::fetch_and_parse_entries;
 use super::notify_actions::ToastSeverity;
 use super::types_feed_tab::FeedTabRefreshResult;
-use super::App;
+use super::{App, LibEvent};
 use mbv_core::playback_queue::QueueItem;
 
 impl App {
@@ -92,9 +92,14 @@ impl App {
 
         if had_events {
             self.feed_tab.rebuild_all_entries();
-            // Reflect the freshly loaded entries in Home's "Feeds" pill
-            // without waiting for the next Home population trigger.
-            self.rebuild_feeds_latest();
+            // Reflect the freshly loaded entries in Home's "Feeds" pill: the
+            // App computes the section (honoring `hidden_latest`), then the
+            // shell merges it into Model-owned `latest` at the lib_rx drain
+            // (task 5.3d). The feed drain runs after that drain, so the pill
+            // lands on the next loop pass — a bounded one-iteration latency.
+            let _ = self.lib_tx.send(LibEvent::FeedsLatestRebuilt(
+                self.feeds_latest_section().into_iter().collect(),
+            ));
         }
         had_events
     }

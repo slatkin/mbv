@@ -118,7 +118,7 @@ pub(super) enum RemoteSlotState {
 /// Which destination a Home "Latest" pill belongs to: an Emby library (view)
 /// id, an Audiobookshelf podcast library id, or the single flattened Feeds
 /// pill. This is the merge key — each provider/library only ever touches its
-/// own entries when populating `HomePane.latest`.
+/// own entries when populating `HomeContent.latest`.
 /// `Audiobookshelf`/`Feeds` variants are constructed by Parts 2 and 3 of
 /// #543; matching on them here already keeps the merge keyed per provider.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -152,10 +152,33 @@ impl HomeLatestSource {
     }
 }
 
-pub(super) struct HomePane {
+/// Model-owned Home content (task 5.3d): the authoritative snapshot the
+/// shell pushes to `HomeComponent` at its writers. Re-homed from the deleted
+/// `App.home` (`HomePane`) + `App.home_loading`; `loading` mirrors the old
+/// `home_loading` flag (true from startup until the first fetch completes,
+/// then set false synchronously after every content computation). The
+/// Continue Watching column cursor (`continue_cursor`) is the preserved
+/// legacy quirk cursor — the component owns the flat render cursor, App
+/// effects act on this one.
+pub(super) struct HomeContent {
     pub(super) continue_items: Vec<EmbyItem>,
     pub(super) continue_cursor: usize,
     pub(super) latest: Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)>, // (title, source, items, cursor)
+    pub(super) loading: bool,
+}
+
+impl HomeContent {
+    /// Default Home state at shell construction: no items/pills, the Continue
+    /// Watching column cursor parked at 0, and `loading` true — the startup
+    /// skeleton, mirroring the deleted `App.home_loading`/`construct` state.
+    pub(super) fn new() -> Self {
+        Self {
+            continue_items: Vec::new(),
+            continue_cursor: 0,
+            latest: Vec::new(),
+            loading: true,
+        }
+    }
 }
 
 pub(super) struct SuspendedLocalSession {

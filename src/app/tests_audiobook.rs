@@ -67,7 +67,7 @@ fn audiobookshelf_book_tab_dispatches_to_book_kind_not_podcast() {
         crossterm::event::KeyModifiers::NONE,
     );
     assert_eq!(
-        app.handle_key_view_dispatch(left, false),
+        app.handle_key_view_dispatch(left, false, None),
         Some(false),
         "Left arrow must be consumed by the book handler"
     );

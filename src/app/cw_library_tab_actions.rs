@@ -1,4 +1,5 @@
 use super::{App, PanelFocus, TabSelection};
+use mbv_core::api::EmbyItem;
 
 impl App {
     /// Normalizes a selected Service library index that no longer exists.
@@ -92,61 +93,27 @@ impl App {
         self.apply_tab_position(new_pos);
     }
 
-    /// Move the cursor in the Continue Watching column, clamped to its bounds.
-    pub(super) fn cw_move_cursor(&mut self, delta: i64) {
-        let n = self.home.continue_items.len();
-        if n == 0 {
-            return;
-        }
-        let cur = self.home.continue_cursor.min(n - 1);
-        self.home.continue_cursor = super::ui_util::move_cursor(cur, delta, n);
-    }
-
     // The Continue Watching column shares state with the Home tab's
     // Continue Watching section, so these act on the column's own
     // `continue_cursor` item directly (task 5.3d, Home effect decoupling):
-    // each resolves the item under `continue_cursor` and passes it into the
-    // item-targeted effect helper, instead of temporarily forcing
-    // `home.section` to section 0 and re-reading it through the
-    // section-dependent `select_home`/`enqueue_selected(None)`/
-    // `toggle_watched_home` wrappers. `continue_cursor` stays the sole,
-    // unchanged authoritative target.
-    pub(super) fn cw_play(&mut self) {
-        let Some(item) = self
-            .home
-            .continue_items
-            .get(self.home.continue_cursor)
-            .cloned()
-        else {
-            return;
-        };
+    // the shell resolves the item under `continue_cursor` from
+    // Model-owned `home_content` and passes it into the item-targeted
+    // effect helper, instead of the App re-reading a (now deleted)
+    // `home.continue_items`/`continue_cursor`. `continue_cursor` stays the
+    // sole, unchanged authoritative target. (`App::cw_move_cursor` was
+    // re-homed as `Model::cw_move_cursor` in `shell_home_content.rs`.)
+    pub(super) fn cw_play(&mut self, item: EmbyItem) {
         if item.is_folder {
             return;
         }
         self.play_home_cw_item(item);
     }
 
-    pub(super) fn cw_enqueue(&mut self) {
-        let Some(item) = self
-            .home
-            .continue_items
-            .get(self.home.continue_cursor)
-            .cloned()
-        else {
-            return;
-        };
+    pub(super) fn cw_enqueue(&mut self, item: EmbyItem) {
         self.enqueue_home_item(item);
     }
 
-    pub(super) fn cw_toggle_watched(&mut self) {
-        let Some(item) = self
-            .home
-            .continue_items
-            .get(self.home.continue_cursor)
-            .cloned()
-        else {
-            return;
-        };
+    pub(super) fn cw_toggle_watched(&mut self, item: EmbyItem) {
         self.toggle_watched_home_item(item);
     }
 }

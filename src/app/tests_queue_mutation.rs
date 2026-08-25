@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::tests::*;
+use mbv_core::playback_queue::QueueItem;
 
 #[cfg(test)]
 #[path = "tests_queue_mutation_playlist_save.rs"]
@@ -25,15 +26,16 @@ fn tracking_stub() -> mbv_core::remote_reconciliation::ReconciliationTracker {
 /// Task 5.3d, Home typed-effect keyboard ownership: the Ctrl+A chord is
 /// component-owned and reaches this effect as `ShellRequest::HomeEnqueue`
 /// (see `home_component_tests` + `shell_home_effects`); the App boundary is
-/// `App::home_enqueue`, which enqueues the targeted cursor immediately.
+/// `App::home_enqueue_target`, which enqueues the shell-resolved CW item
+/// immediately. Home content is Model-owned, so the test supplies the item
+/// directly (the flat-cursor resolution is covered at the Model boundary).
 #[test]
 fn home_enqueue_from_home_view_applies_immediately() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.home.continue_items = make_items(1);
-    app.home.continue_cursor = 0;
+    let item = make_items(1).remove(0);
 
-    app.home_enqueue(0);
+    app.home_enqueue_target(QueueItem::Emby(Box::new(item)), true);
 
     assert_eq!(app.player_tab.emby_items().len(), 1);
     assert_eq!(app.player_tab.emby_items()[0].id, "id0");
@@ -46,10 +48,11 @@ fn home_enqueue_appends_to_direct_remote_queue() {
     let remote_items = make_items(3);
     let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(local_items, remote_items.clone());
     app.queue_scope = QueueScope::Remote;
-    app.home.continue_items = make_items(1);
-    app.home.continue_cursor = 0;
+    let item = make_items(1).remove(0);
 
-    app.home_enqueue(0);
+    // The shell resolves the CW item at the Model boundary (task 5.3d); the
+    // App effect receives it directly.
+    app.home_enqueue_target(QueueItem::Emby(Box::new(item)), true);
 
     assert_eq!(
         app.remote_player_tab
@@ -80,11 +83,10 @@ fn home_enqueue_appends_to_direct_remote_queue() {
 fn enqueue_stops_tracking_and_applies_immediately() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.home.continue_items = make_items(1);
-    app.home.continue_cursor = 0;
+    let item = make_items(1).remove(0);
     app.remote_tracker = Some(tracking_stub());
 
-    app.home_enqueue(0);
+    app.home_enqueue_target(QueueItem::Emby(Box::new(item)), true);
     assert!(!matches!(
         app.pending_overlay,
         Some(super::types_overlay::OverlayRequest::Confirm(_))
@@ -405,7 +407,7 @@ fn context_menu_remove_targets_displayed_remote_queue() {
     app.set_queue_scope(QueueScope::Remote);
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
 
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
 
     let menu = match app.pending_overlay.as_ref() {
         Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
@@ -421,7 +423,7 @@ fn context_menu_remove_targets_displayed_remote_queue() {
         .expect("remove from queue action");
     assert_eq!(action, 2);
 
-    app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)));
+    app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)), None);
 
     let item_ids = |items: &[EmbyItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
     assert_eq!(
@@ -445,7 +447,7 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
     app.set_queue_scope(QueueScope::Remote);
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
 
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
 
     let menu = match app.pending_overlay.as_ref() {
         Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
@@ -467,7 +469,7 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
         tab.queue.truncate_slots(2);
     }
 
-    app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)));
+    app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)), None);
 
     let item_ids = |items: &[EmbyItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
     assert_eq!(

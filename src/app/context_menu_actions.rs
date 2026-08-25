@@ -1,23 +1,33 @@
 use super::notify_actions::ToastSeverity;
 use super::types_context_menu::ContextMenu;
 use super::types_overlay::OverlayRequest;
-use super::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, PanelFocus};
+use super::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, LibEvent, PanelFocus};
 use mbv_core::api::EmbyItem;
 
 impl App {
-    pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
+    pub(super) fn execute_context_action(
+        &mut self,
+        action: Option<ContextAction>,
+        cw_item: Option<EmbyItem>,
+    ) {
         // The shell dismisses the mounted ContextMenu component; this only
         // dispatches the chosen action (task 5.3c).
         // The menu can only have opened on a matched Emby library, Home, or
         // the queue; `context_menu_lib_idx()` resolves the explicitly matched
         // Emby library (positive match, `None` on Home/queue) that every
-        // Emby-only callee below must receive.
+        // Emby-only callee below must receive. `cw_item` is the resolved
+        // Continue Watching column target, resolved by the shell at the Model
+        // boundary from Model-owned `home_content` (task 5.3d); it feeds the
+        // Home-tab arms and the queue-menu's "Remove from Continue Watching"
+        // coupling, and is ignored everywhere else.
         let lib_idx = self.context_menu_lib_idx();
         match action {
             Some(ContextAction::Play) => {
                 if matches!(self.effective_panel_focus(), PanelFocus::Library) && self.tab.is_home()
                 {
-                    self.cw_play();
+                    if let Some(item) = cw_item {
+                        self.cw_play(item);
+                    }
                 } else if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
                     // Was its own third copy of queue-cursor activation, with
                     // a subtly narrower `else` branch than the keyboard/mouse
@@ -49,7 +59,9 @@ impl App {
             Some(ContextAction::Enqueue) => {
                 if matches!(self.effective_panel_focus(), PanelFocus::Library) && self.tab.is_home()
                 {
-                    self.cw_enqueue();
+                    if let Some(item) = cw_item {
+                        self.cw_enqueue(item);
+                    }
                 } else {
                     self.enqueue_selected(lib_idx);
                 }
@@ -63,7 +75,11 @@ impl App {
             Some(ContextAction::MarkItemsUnplayed(ids)) => {
                 self.context_set_many_unplayed(&ids, lib_idx)
             }
-            Some(ContextAction::RemoveFromContinueWatching) => self.remove_from_continue_watching(),
+            Some(ContextAction::RemoveFromContinueWatching) => {
+                if let Some(item) = cw_item {
+                    self.remove_from_continue_watching(item);
+                }
+            }
             Some(ContextAction::RemoveFromQueue(pos)) => self.remove_from_queue(pos),
             Some(ContextAction::GoToLibrary(item_id, item_type)) => {
                 let libs: Vec<(usize, String, String)> = self
@@ -174,7 +190,18 @@ impl App {
                     }
                 }
                 if self.tab.is_home() {
-                    let _ = self.fetch_home();
+                    match self.fetch_home() {
+                        Ok(content) => {
+                            // Delivered to Model-owned `home_content` via the
+                            // lib_tx/ lib_rx drain (task 5.3d).
+                            let _ = self
+                                .lib_tx
+                                .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+                        }
+                        Err(e) => {
+                            self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error)
+                        }
+                    }
                 } else if let Some(lib_idx) = lib_idx {
                     self.refresh_lib(lib_idx);
                 }
@@ -186,15 +213,10 @@ impl App {
         }
     }
 
-    pub(super) fn remove_from_continue_watching(&mut self) {
-        let Some(item) = self
-            .home
-            .continue_items
-            .get(self.home.continue_cursor)
-            .cloned()
-        else {
-            return;
-        };
+    pub(super) fn remove_from_continue_watching(&mut self, item: EmbyItem) {
+        // The shell resolved the target Continue Watching item at the Model
+        // boundary from Model-owned `home_content` (task 5.3d) -- the App no
+        // longer holds `home.continue_items`/`continue_cursor` to re-read.
         let Some(client) = self.emby_client() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
             return;
@@ -204,7 +226,18 @@ impl App {
         drop(client);
         match result {
             Ok(()) => {
-                let _ = self.fetch_home();
+                match self.fetch_home() {
+                    Ok(content) => {
+                        // Delivered to Model-owned `home_content` via the
+                        // lib_tx/ lib_rx drain (task 5.3d).
+                        let _ = self
+                            .lib_tx
+                            .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+                    }
+                    Err(e) => {
+                        self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error)
+                    }
+                }
             }
             Err(e) => self.flash(
                 format!("Couldn't remove from continue watching: {e}"),
@@ -230,7 +263,18 @@ impl App {
         drop(client);
         match result {
             Ok(()) => {
-                let _ = self.fetch_home();
+                match self.fetch_home() {
+                    Ok(content) => {
+                        // Delivered to Model-owned `home_content` via the
+                        // lib_tx/ lib_rx drain (task 5.3d).
+                        let _ = self
+                            .lib_tx
+                            .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+                    }
+                    Err(e) => {
+                        self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error)
+                    }
+                }
             }
             Err(e) => self.flash(
                 format!("Couldn't update play status: {e}"),
@@ -337,8 +381,17 @@ impl App {
     /// queue-menu coupling): with the Queue panel focused while Home is the
     /// active Tab selection, "Remove from Continue Watching" appears exactly
     /// when the Home component has Continue Watching selected.
-    fn build_context_menu(&mut self, home_cw_selected: bool) -> Option<ContextMenu> {
-        self.build_context_menu_for(None, home_cw_selected)
+    ///
+    /// `cw_item` is the resolved Continue Watching column item (Model-owned
+    /// `home_content.continue_items[continue_cursor]`, resolved at the Model
+    /// boundary, task 5.3d) that the Home arm builds its entries from — the
+    /// App no longer holds the deleted `home.continue_items` to re-read.
+    fn build_context_menu(
+        &mut self,
+        home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
+    ) -> Option<ContextMenu> {
+        self.build_context_menu_for(None, home_cw_selected, cw_item)
     }
 
     /// `build_context_menu` with an explicitly resolved Emby-library item
@@ -350,6 +403,7 @@ impl App {
         &mut self,
         tracked_item: Option<EmbyItem>,
         home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
     ) -> Option<ContextMenu> {
         let mut entries: Vec<ContextMenuEntry> = vec![];
 
@@ -377,11 +431,7 @@ impl App {
         // Emby menu. `cw_focused` / `lib_idx` above drive the Emby-menu content
         // that follows; this match only resolves which target (if any) exists.
         let current_item = match (self.effective_panel_focus(), self.tab) {
-            (crate::app::PanelFocus::Library, crate::app::TabSelection::Home) => self
-                .home
-                .continue_items
-                .get(self.home.continue_cursor)
-                .cloned(),
+            (crate::app::PanelFocus::Library, crate::app::TabSelection::Home) => cw_item,
             (crate::app::PanelFocus::Library, crate::app::TabSelection::EmbyLibrary(lib_idx)) => {
                 tracked_item.or_else(|| self.current_lib_item(lib_idx))
             }
@@ -543,8 +593,8 @@ impl App {
     /// decoupling). It is load-bearing under Queue panel focus while Home is
     /// the active Tab selection; the `self.tab.is_home()` guard short-circuits
     /// it on all other paths.
-    pub(super) fn open_context_menu(&mut self, home_cw_selected: bool) {
-        if let Some(menu) = self.build_context_menu(home_cw_selected) {
+    pub(super) fn open_context_menu(&mut self, home_cw_selected: bool, cw_item: Option<EmbyItem>) {
+        if let Some(menu) = self.build_context_menu(home_cw_selected, cw_item) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
     }
@@ -552,9 +602,10 @@ impl App {
     /// Open the context menu targeted at an explicitly resolved item (a
     /// focused inline album track reached through the shell boundary). This
     /// is never a Home-tab menu, so `home_cw_selected` is a harmless `false`
-    /// (the `self.tab.is_home()` guard short-circuits it).
+    /// and `cw_item` a harmless `None` (the `self.tab.is_home()` guard
+    /// short-circuits both).
     pub(super) fn open_context_menu_for(&mut self, item: EmbyItem) {
-        if let Some(menu) = self.build_context_menu_for(Some(item), false) {
+        if let Some(menu) = self.build_context_menu_for(Some(item), false, None) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
     }
@@ -565,8 +616,18 @@ impl App {
     /// the Home/Queue right-click paths it is genuinely load-bearing for the
     /// Queue-focus coupling above; for non-Home right-clicks it is a harmless
     /// `false` (the `self.tab.is_home()` guard already short-circuits it).
-    pub(super) fn open_context_menu_at(&mut self, x: u16, y: u16, home_cw_selected: bool) {
-        let Some(mut menu) = self.build_context_menu(home_cw_selected) else {
+    /// `cw_item` is the resolved Continue Watching column item for the Home
+    /// arm (task 5.3d); the Queue-focus right-click path (which renders the
+    /// queue item, not the CW item) passes `None` — execution resolves it at
+    /// the Model boundary instead.
+    pub(super) fn open_context_menu_at(
+        &mut self,
+        x: u16,
+        y: u16,
+        home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
+    ) {
+        let Some(mut menu) = self.build_context_menu(home_cw_selected, cw_item) else {
             return;
         };
         menu.anchor = ContextMenuAnchor::Pointer { x, y };

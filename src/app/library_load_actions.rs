@@ -1,3 +1,4 @@
+use super::types_playback::HomeContent;
 use super::{
     notify_actions::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, HomeLatestSource,
     LibEvent, PanelFocus, PendingQueueAction, TabSelection,
@@ -81,8 +82,19 @@ impl App {
                 }
                 match self.tab {
                     TabSelection::Home => {
-                        if let Err(e) = self.fetch_home() {
-                            self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
+                        match self.fetch_home() {
+                            Ok(content) => {
+                                // The fetch runs synchronously (its App-side
+                                // side effects are order-sensitive); the
+                                // computed content travels to Model-owned
+                                // `home_content` via lib_tx (task 5.3d).
+                                let _ = self
+                                    .lib_tx
+                                    .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+                            }
+                            Err(e) => {
+                                self.flash(format!("Refresh error: {e}"), ToastSeverity::Error)
+                            }
                         }
                     }
                     TabSelection::EmbyLibrary(lib_idx) => self.refresh_lib(lib_idx),
@@ -308,11 +320,16 @@ impl App {
         }
     }
 
-    pub(super) fn fetch_home(&mut self) -> Result<(), String> {
-        // The Emby-derived portion (Continue Watching, library tabs, Emby
-        // `latest` pills) is built only when an Emby Service is configured
-        // and connected. Without one it is skipped -- not an error -- so Home
-        // still populates from whatever local Sources exist (#543 Part 1).
+    /// Compute the full Home content snapshot (task 5.3d): the Emby-derived
+    /// portion (Continue Watching, library tabs rebuild, Emby `latest` pills)
+    /// is built only when an Emby Service is configured and connected.
+    /// Without one it is skipped -- not an error -- so Home still populates
+    /// from whatever local Sources exist (#543 Part 1). Returns the
+    /// computed `HomeContent` instead of writing deleted `App.home`; the
+    /// shell assigns it to `Model.home_content` (directly for shell-side
+    /// callers, via `LibEvent::HomeContentRefreshed` for App-internal ones)
+    /// and preserves the Continue Watching column cursor at the assignment.
+    pub(super) fn fetch_home(&mut self) -> Result<HomeContent, String> {
         let mut emby_fetched = false;
         let (continue_items, all_views, user_views) = if let Some(client) = self.emby_client() {
             emby_fetched = true;
@@ -334,7 +351,6 @@ impl App {
             (Vec::new(), Vec::new(), Vec::new())
         };
 
-        self.home.continue_items = continue_items;
         // Library tabs are Emby-modeled state; only rebuild them from the
         // freshly fetched views when Emby was actually reachable, so a broken
         // or absent Emby does not clear existing library tabs.
@@ -349,7 +365,12 @@ impl App {
         // reinserted at their previous positions, leaving any entries from
         // other providers untouched. This is what lets `fetch_home()` run
         // unconditionally (even before Emby connects) without clearing other
-        // providers' Home data whenever Emby is the writer.
+        // providers' Home data whenever Emby is the writer. All three
+        // provider portions (Emby, Audiobookshelf shelf cache, Feeds tab)
+        // are rebuilt into the local `latest` here; the per-pill cursor
+        // tuples are the preserved-but-vestigial legacy cursor fields (the
+        // mounted `HomeComponent` owns the real flat cursors).
+        let mut latest: Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)> = Vec::new();
         let mut emby_sections: Vec<(String, HomeLatestSource, Vec<QueueItem>)> = Vec::new();
         if let Some(client) = self.emby_client() {
             let client = client.lock().unwrap();
@@ -374,17 +395,30 @@ impl App {
                 ));
             }
         }
-        merge_home_sections(&mut self.home.latest, emby_sections, |source| {
+        merge_home_sections(&mut latest, emby_sections, |source| {
             matches!(source, HomeLatestSource::Emby(_))
         });
         // The Audiobookshelf portion is rebuilt from the async shelf cache
         // (never a network fetch here), re-applying `hidden_latest`.
-        self.rebuild_audiobookshelf_latest();
+        merge_home_sections(
+            &mut latest,
+            self.audiobookshelf_latest_sections(),
+            |source| matches!(source, HomeLatestSource::Audiobookshelf(_)),
+        );
         // The Feeds portion is rebuilt from the Feeds tab's combined entries
         // (never a network fetch here), re-applying `hidden_latest`.
-        self.rebuild_feeds_latest();
+        if let Some(feed_section) = self.feeds_latest_section() {
+            merge_home_sections(&mut latest, vec![feed_section], |source| {
+                matches!(source, HomeLatestSource::Feeds)
+            });
+        }
 
-        Ok(())
+        Ok(HomeContent {
+            continue_items,
+            continue_cursor: 0,
+            latest,
+            loading: false,
+        })
     }
 
     /// The Audiobookshelf Latest-pill sections rebuildable from
@@ -417,24 +451,16 @@ impl App {
             .collect()
     }
 
-    /// Rebuilds the Audiobookshelf portion of `home.latest` from
-    /// `audiobookshelf_shelf_cache` without issuing a network fetch. Shared by
-    /// the shelf-fetch handler (Task 6.3) and `fetch_home()` (Task 7.1);
-    /// removing every `Audiobookshelf` section first means a library that was
-    /// hidden or stopped being cached also disappears on refresh.
-    pub(super) fn rebuild_audiobookshelf_latest(&mut self) {
-        let sections = self.audiobookshelf_latest_sections();
-        merge_home_sections(&mut self.home.latest, sections, |source| {
-            matches!(source, HomeLatestSource::Audiobookshelf(_))
-        });
-    }
-
     /// The single Feeds Latest-pill section, built from the Feeds tab's
     /// combined `all_entries` (newest-first "All" group). The pill exists
     /// only when feed subscriptions are configured (mirroring the
     /// Audiobookshelf pill, which exists only per library), and honors
-    /// `hidden_latest` via the literal `"feeds"` pseudo-name.
-    fn feeds_latest_section(&self) -> Option<(String, HomeLatestSource, Vec<QueueItem>)> {
+    /// `hidden_latest` via the literal `"feeds"` pseudo-name. Consumed by
+    /// `fetch_home()` and by the shell's feed-drain seam, which merges the
+    /// freshly computed section into Model-owned `latest` (task 5.3d).
+    pub(super) fn feeds_latest_section(
+        &self,
+    ) -> Option<(String, HomeLatestSource, Vec<QueueItem>)> {
         if !self.has_feeds_subscriptions() {
             return None;
         }
@@ -447,17 +473,6 @@ impl App {
         }
         let items = self.feed_latest_items();
         Some(("Feeds".into(), HomeLatestSource::Feeds, items))
-    }
-
-    /// Rebuilds the Feeds portion of `home.latest` from the Feeds tab's
-    /// combined entries without issuing a network fetch. Shared by
-    /// `fetch_home()` (Task 11.1); removing the existing `Feeds` section
-    /// first means the pill also disappears when hidden.
-    pub(super) fn rebuild_feeds_latest(&mut self) {
-        let sections = self.feeds_latest_section().into_iter().collect::<Vec<_>>();
-        merge_home_sections(&mut self.home.latest, sections, |source| {
-            matches!(source, HomeLatestSource::Feeds)
-        });
     }
 
     /// The `Newest Episodes` shelf's entries as queue-able items, or an empty
@@ -484,7 +499,7 @@ impl App {
     }
 }
 
-/// Position- and cursor-preserving splice for `HomePane.latest`: drops every
+/// Position- and cursor-preserving splice for `HomeContent.latest`: drops every
 /// section whose source matches `kind`, then reinserts `sections` at the
 /// previous positions, restoring each section's prior cursor clamped to its
 /// item count. Each Home writer (Emby in `fetch_home`, the Audiobookshelf

@@ -29,6 +29,7 @@ use super::components::{
 };
 use super::service_startup;
 use super::types_feeds_manage::FeedsManagePopup;
+use super::types_playback::HomeContent;
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
@@ -71,6 +72,10 @@ pub struct Model {
     /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
     /// from here each tick; the mpsc cannot live in the component.
     pub(super) feeds_manage: Option<FeedsManagePopup>,
+    /// Model-owned Home content (task 5.3d): the sole snapshot pushed to
+    /// `HomeComponent`; App-internal writers deliver computed snapshots via
+    /// lib_tx; `loading` mirrors the deleted `App.home_loading`.
+    pub(super) home_content: HomeContent,
 }
 
 impl Model {
@@ -94,6 +99,7 @@ impl Model {
             abs_book_id: None,
             music_track_focus_request: None,
             feeds_manage: None,
+            home_content: HomeContent::new(),
         };
         // UiRoot owns overlay z-order and delegates terminal translation to the
         // temporary bridge while converted surfaces still mirror App state.
@@ -152,7 +158,7 @@ impl Model {
                     service_startup::startup_status(self.app.emby_runtime.state).into()
                 });
         }
-        self.app.home_loading = true;
+        self.home_content.loading = true;
         terminal.draw(|f| self.app.render(f))?;
 
         // Only start the configured Remote Service after the first TUI frame
@@ -178,25 +184,8 @@ impl Model {
             client.lock().unwrap().register_capabilities();
         }
 
-        // Home populates from whatever Services are available at this moment;
-        // Emby's independent startup connection merges its portion in when it
-        // completes (apply_emby_bootstrap), so no Emby gate is needed here
-        // (#543 Part 1).
-        match self.app.fetch_home() {
-            Ok(()) => {
-                let has_live_flash = self.app.status_expires.is_some_and(|t| t > Instant::now());
-                if !has_live_flash {
-                    self.app.status.clear();
-                }
-            }
-            Err(e) => self
-                .app
-                .flash(format!("Couldn't load home: {e}"), ToastSeverity::Warning),
-        }
-        self.app.home_loading = false;
-        // Home content/loading were written by `fetch_home` here; re-project (task
-        // 5.3d, sync_home mirror deletion).
-        self.push_home_content();
+        // Home populates now; Emby's startup merges its portion later (#543).
+        self.fetch_home_at_startup();
         self.app.maybe_restore_queue_state();
 
         // Initialize idle feed if configured
@@ -233,9 +222,9 @@ impl Model {
                 match worker.rx.try_recv() {
                     Ok(completion) => {
                         had_events = true;
-                        self.app.apply_emby_completion(completion);
-                        // The Emby bootstrap wrote Home content/loading; re-project (5.3d).
-                        self.push_home_content();
+                        // Emby bootstrap wrote Home content; assign + re-project
+                        // (5.3d); stale/error return None.
+                        self.apply_emby_completion_drain(completion);
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
                         self.app.emby_startup_rx = Some(worker);
@@ -251,9 +240,9 @@ impl Model {
                 match rx.try_recv() {
                     Ok(completion) => {
                         had_events = true;
-                        self.app.apply_emby_setup_completion(completion);
-                        // The Emby setup drain re-bootstraps Home content; re-project (5.3d).
-                        self.push_home_content();
+                        // Emby setup drain re-bootstraps Home content; assign +
+                        // re-project (5.3d); stale/decline return None.
+                        self.apply_emby_setup_completion_drain(completion);
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
                         self.app.emby_setup_rx = Some(rx);
@@ -303,11 +292,21 @@ impl Model {
                         self.music_track_focus_request = Some(false);
                         self.push_inline_search_content();
                     }
+                    // App-internal Home writers deliver content/section deltas
+                    // to assign/merge into Model-owned `home_content` (5.3d).
+                    super::LibEvent::HomeContentRefreshed(content) => {
+                        self.assign_home_content(*content)
+                    }
+                    super::LibEvent::HomeContentCleared => self.clear_home_content(),
+                    super::LibEvent::AudiobookshelfLatestRebuilt(sections) => {
+                        self.merge_home_abs_sections(sections)
+                    }
+                    super::LibEvent::FeedsLatestRebuilt(sections) => {
+                        self.merge_home_feeds_sections(sections)
+                    }
                     ev => self.handle_inline_search_lib_event(ev),
                 }
-                // ABS shelf fetches rebuild Home's `latest` pills here
-                // (`AudiobookshelfShelfFetched` → `rebuild_audiobookshelf_latest`);
-                // re-project after every lib event (idempotent) (task 5.3d).
+                // Every lib event re-projects Home (idempotent; 5.3d).
                 self.push_home_content();
             }
 
@@ -325,8 +324,8 @@ impl Model {
 
             had_events |= self.app.drain_shared_events();
 
-            // Feed results rebuild Home's Feeds pill; re-project when the drain
-            // produced completions (task 5.3d, sync_home mirror deletion).
+            // Feed results rebuild Home's Feeds pill via `FeedsLatestRebuilt`,
+            // drained next loop pass; re-project for the other inputs (5.3d).
             if self.app.drain_feed_tab_results() {
                 had_events = true;
                 self.push_home_content();
@@ -487,6 +486,7 @@ impl Model {
                             } else if self.app.handle_key_with_home_context(
                                 key,
                                 self.home_continue_watching_selected(),
+                                self.home_cw_item(),
                             ) {
                                 quit = true;
                             }
@@ -882,9 +882,9 @@ impl Model {
                         }
                         Msg::Shell(ShellRequest::PlaybackPromptKey(key)) => {
                             if self.app.skip_intro_end_ticks.is_some() {
-                                self.app.handle_key_confirm_skip_intro(key, false);
+                                self.app.handle_key_confirm_skip_intro(key, false, None);
                             } else if self.app.next_up_item.is_some() {
-                                self.app.handle_key_confirm_next_up(key, false);
+                                self.app.handle_key_confirm_next_up(key, false, None);
                             }
                         }
                         Msg::Service(request) => {

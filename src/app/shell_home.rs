@@ -17,20 +17,33 @@ impl Model {
     /// their `App` handlers with the component-provided target index.
     /// `HomeComponent` owns the cursor; the effect must act on the requested
     /// target directly — never by copying it into a (now deleted) App flat
-    /// cursor and re-reading that field. `HomeToggleWatched` carries no index: it
-    /// targets the Continue Watching column's own cursor (`continue_cursor`),
-    /// matching the legacy `cw_toggle_watched` (preserved, not fixed).
+    /// cursor and re-reading that field. (Task 5.3d: the shell resolves the
+    /// flat target via `home_flat_target`/`home_cw_item` against Model-owned
+    /// `home_content`; the section-preference and CW-selected resolvers live
+    /// in `shell_home_content.rs`.)
     pub(super) fn handle_home_request(&mut self, request: ShellRequest) {
         match request {
-            ShellRequest::HomePlay(cursor) => self.app.home_play(cursor),
-            ShellRequest::HomeEnqueue(cursor) => self.app.home_enqueue(cursor),
+            ShellRequest::HomePlay(cursor) => {
+                if let Some((item, from_cw)) = self.home_flat_target(cursor) {
+                    self.app.home_play_target(item, from_cw);
+                }
+            }
+            ShellRequest::HomeEnqueue(cursor) => {
+                if let Some((item, from_cw)) = self.home_flat_target(cursor) {
+                    self.app.home_enqueue_target(item, from_cw);
+                }
+            }
             // Delete / watched-toggle refetch Home: re-project (5.3d).
             ShellRequest::HomeDelete(cursor) => {
-                self.app.home_delete(cursor);
+                if let Some(item) = self.home_content.continue_items.get(cursor).cloned() {
+                    self.app.remove_from_continue_watching(item);
+                }
                 self.push_home_content();
             }
             ShellRequest::HomeToggleWatched => {
-                self.app.cw_toggle_watched();
+                if let Some(item) = self.home_cw_item() {
+                    self.app.cw_toggle_watched(item);
+                }
                 self.push_home_content();
             }
             ShellRequest::HomeSectionSelected(section) => {
@@ -38,49 +51,6 @@ impl Model {
             }
             _ => {}
         }
-    }
-
-    /// Resolve a selected section's semantic source from the mounted
-    /// `HomeComponent` and persist it (task 5.3d, numeric Home section
-    /// deletion). The component has already moved its own numeric section by
-    /// the time a keyboard `[`/`]` / `HomeSectionSelected` or a pill click /
-    /// `HomeClick::Pill` reaches the shell; the shell never copies that
-    /// numeric index back into App — it maps the requested section to its
-    /// `HomeLatestSource` via the component and stores that in the shell-
-    /// owned semantic preference, then persists through the unchanged
-    /// `App::save_prefs`. Continue Watching (section 0) resolves to `None`
-    /// (the empty-string persistence sentinel). A missing component is a
-    /// defensive no-op (Home is mounted for the whole session).
-    fn select_home_section_from_component(&mut self, section: usize) {
-        let Some(source) = self
-            .application
-            .get_component(&ComponentId::Home)
-            .and_then(|c| c.as_any().downcast_ref::<HomeComponent>())
-            .map(|home| home.source_for_section(section))
-        else {
-            return;
-        };
-        self.app.home_section_pref_semantic = source;
-        // Persist the selection so the pill is restored on the next launch.
-        self.app.save_prefs();
-    }
-
-    /// The authoritative "is Continue Watching selected?" fact for the
-    /// context-menu builder, resolved at the Model boundary from the mounted
-    /// `HomeComponent` (task 5.3d, Home context-menu section decoupling).
-    /// Reading `HomeComponent::section() == 0` here replaces the deleted
-    /// numeric `App.home.section == 0` read; the
-    /// value is passed into the App-owned builder and never copied into a
-    /// new App field or boolean mirror. With no mounted Home component the
-    /// fact defaults to `false` (the component is mounted for the whole
-    /// session, so this is only a defensive fallback).
-    pub(super) fn home_continue_watching_selected(&self) -> bool {
-        self.application
-            .get_component(&ComponentId::Home)
-            .and_then(|c| c.as_any().downcast_ref::<HomeComponent>())
-            .map(HomeComponent::section)
-            .map(|section| section == 0)
-            .unwrap_or(false)
     }
 
     /// Route the Home click family (task 5.3d, Home mouse-click handoff) at
@@ -116,15 +86,21 @@ impl Model {
             }
             HomeHitRegion::ContextMenu(_target) => {
                 self.app.set_panel_focus(PanelFocus::Library);
-                self.app
-                    .open_context_menu_at(col, row, self.home_continue_watching_selected());
+                self.app.open_context_menu_at(
+                    col,
+                    row,
+                    self.home_continue_watching_selected(),
+                    self.home_cw_item(),
+                );
                 // Right/row clicks focus Library: re-project (5.3d).
                 self.push_home_content();
             }
             HomeHitRegion::Row(target) => {
                 self.app.set_panel_focus(PanelFocus::Library);
                 if self.app.note_browse_double_click(col, row) {
-                    self.app.home_play(target);
+                    if let Some((item, from_cw)) = self.home_flat_target(target) {
+                        self.app.home_play_target(item, from_cw);
+                    }
                 }
                 self.push_home_content();
             }
@@ -154,8 +130,8 @@ impl Model {
         }
         // Preserve the Continue Watching column quirk: the legacy wheel scroll
         // also moved the column's independent `continue_cursor`, which is not
-        // the Home component's flat cursor mirror.
-        self.app.cw_move_cursor(delta);
+        // the Home component's flat cursor mirror. Model-owned now (5.3d).
+        self.cw_move_cursor(delta);
     }
 
     /// Mount `HomeComponent` for the session. Called once from `Model::new`;
@@ -177,16 +153,14 @@ impl Model {
     /// already reaches the shell as typed `HomeSectionSelected`).
     pub(super) fn push_home_content(&mut self) {
         let continue_items: Vec<QueueItem> = self
-            .app
-            .home
+            .home_content
             .continue_items
             .iter()
             .cloned()
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
         let latest = self
-            .app
-            .home
+            .home_content
             .latest
             .iter()
             .map(|(title, source, items, _cursor)| (title.clone(), source.clone(), items.clone()))
@@ -199,7 +173,7 @@ impl Model {
         let pending = self.app.home_section_pending.clone();
         if let Some(comp) = self.application.get_component_mut(&ComponentId::Home) {
             if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
-                home.set_content(continue_items, latest, self.app.home_loading);
+                home.set_content(continue_items, latest, self.home_content.loading);
                 home.set_focused(focused);
                 home.set_use_nerd_fonts(use_nerd_fonts);
                 if let Some(pending_source) = &pending {
@@ -313,7 +287,7 @@ mod tests {
         // The "books" section arrives; the next sync restores it into the
         // component (section 1), clears the pending, and the reconcile
         // records the restored source in the semantic preference.
-        model.app.home.latest = vec![(
+        model.home_content.latest = vec![(
             "Books".into(),
             crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()),
             vec![],
@@ -348,7 +322,7 @@ mod tests {
     #[test]
     fn shell_sync_keeps_home_component_cursor_local() {
         let mut model = Model::new(make_app_stub());
-        model.app.home.continue_items = vec![
+        model.home_content.continue_items = vec![
             crate::app::tests::make_item("one", "Movie"),
             crate::app::tests::make_item("two", "Movie"),
         ];
@@ -400,10 +374,10 @@ mod tests {
         // target" signal. `continue_cursor` is parked on a different CW
         // column row so the effects must act on their explicit target, not
         // that parked state.
-        model.app.home.continue_items = make_items(3);
+        model.home_content.continue_items = make_items(3);
         let mut folder = make_item("folder", "CollectionFolder");
         folder.is_folder = true;
-        model.app.home.latest = vec![(
+        model.home_content.latest = vec![(
             "Folder".into(),
             crate::app::types_playback::HomeLatestSource::Emby("lib".into()),
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
@@ -442,7 +416,7 @@ mod tests {
         // the emby-gated effect still acts (flashes unavailable) rather than
         // skipping.
         model.app.status.clear();
-        model.app.home.continue_cursor = 1;
+        model.home_content.continue_cursor = 1;
         model.handle_home_request(ShellRequest::HomeToggleWatched);
         assert_eq!(
             model.app.status, "Emby is unavailable",
@@ -469,7 +443,7 @@ mod tests {
     fn shell_home_section_selection_persists_semantic_source() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_app_stub());
-        model.app.home.latest = vec![
+        model.home_content.latest = vec![
             (
                 "Movies".into(),
                 crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
@@ -513,7 +487,7 @@ mod tests {
     fn shell_home_unrelated_save_retains_selected_source() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_app_stub());
-        model.app.home.latest = vec![(
+        model.home_content.latest = vec![(
             "Movies".into(),
             crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
@@ -552,10 +526,10 @@ mod tests {
         // folder so a double-click on a CW row provably differs from the
         // non-CW folder target (play on the folder skips silently via the
         // folder guard).
-        model.app.home.continue_items = make_items(2);
+        model.home_content.continue_items = make_items(2);
         let mut folder = make_item("folder", "CollectionFolder");
         folder.is_folder = true;
-        model.app.home.latest = vec![(
+        model.home_content.latest = vec![(
             "Folder".into(),
             crate::app::types_playback::HomeLatestSource::Emby("lib".into()),
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
@@ -566,8 +540,8 @@ mod tests {
         // Single click on CW row 0: focuses the Library panel, but does not
         // mutate App's independent Continue Watching column cursor or the
         // per-latest pill cursor, and does not activate.
-        model.app.home.continue_cursor = 1;
-        model.app.home.latest[0].3 = 7;
+        model.home_content.continue_cursor = 1;
+        model.home_content.latest[0].3 = 7;
         model.app.status.clear();
         model.handle_home_click(HomeHitRegion::Row(0), 5, 5);
         assert_eq!(
@@ -576,11 +550,11 @@ mod tests {
             "single click must focus the Library panel"
         );
         assert_eq!(
-            model.app.home.continue_cursor, 1,
+            model.home_content.continue_cursor, 1,
             "single click must not mutate the Continue Watching column cursor"
         );
         assert_eq!(
-            model.app.home.latest[0].3, 7,
+            model.home_content.latest[0].3, 7,
             "single click must not mutate the per-latest pill cursor"
         );
         assert!(
@@ -612,7 +586,7 @@ mod tests {
         // `continue_cursor` item — a CW movie, not the folder. (The Home menu
         // target is continue_cursor, never the clicked row, so preserving it
         // needs no cursor copy.)
-        model.app.home.continue_cursor = 0;
+        model.home_content.continue_cursor = 0;
         model.handle_home_click(HomeHitRegion::ContextMenu(0), 70, 20);
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu)) =
             model.app.pending_overlay
@@ -681,6 +655,7 @@ mod tests {
                     crossterm::event::KeyModifiers::NONE,
                 ),
                 model.home_continue_watching_selected(),
+                model.home_cw_item(),
             ),
             "'.' must not quit"
         );
@@ -726,6 +701,7 @@ mod tests {
                     crossterm::event::KeyModifiers::NONE,
                 ),
                 model.home_continue_watching_selected(),
+                model.home_cw_item(),
             ),
             "'.' must not quit"
         );
@@ -764,7 +740,7 @@ mod tests {
     fn shell_home_wheel_moves_component_and_continue_cursor() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_app_stub());
-        model.app.home.continue_items = make_items(3);
+        model.home_content.continue_items = make_items(3);
         model.push_home_content();
 
         // Accepted scroll: both the component-local cursor and the Continue
@@ -774,7 +750,7 @@ mod tests {
         model.app.last_scroll_at = Instant::now() - Duration::from_secs(1);
         model.handle_home_scroll(1);
         assert_eq!(
-            model.app.home.continue_cursor, 1,
+            model.home_content.continue_cursor, 1,
             "accepted wheel must move the Continue Watching column cursor"
         );
         assert_eq!(
@@ -791,7 +767,7 @@ mod tests {
         model.app.last_scroll_at = Instant::now() + Duration::from_secs(1);
         model.handle_home_scroll(1);
         assert_eq!(
-            model.app.home.continue_cursor, 1,
+            model.home_content.continue_cursor, 1,
             "throttled wheel must not move the Continue Watching column cursor"
         );
         assert_eq!(

@@ -4,6 +4,7 @@ use super::{
     LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::api::EmbyItem;
 use std::time::{Duration, Instant};
 
 /// How long a queue navigation gesture (Up/Down/click) holds the cursor
@@ -15,6 +16,7 @@ impl App {
         &mut self,
         key: KeyEvent,
         _home_cw_selected: bool,
+        _cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         if self.handle_queue_column_width_key(key) {
             Some(false)

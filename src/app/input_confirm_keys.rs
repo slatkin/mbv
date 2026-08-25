@@ -4,6 +4,7 @@ use super::{
     SavePlaylistDialog, SavePlaylistStage, SidebarId, UndoEntry,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::RemoveSlotResult;
 use mbv_core::player::PlayerCommand;
 
@@ -185,6 +186,7 @@ impl App {
         &mut self,
         key: KeyEvent,
         _home_cw_selected: bool,
+        _cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         self.skip_intro_end_ticks?;
         if matches!(
@@ -209,6 +211,7 @@ impl App {
         &mut self,
         key: KeyEvent,
         _home_cw_selected: bool,
+        _cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         self.next_up_item.as_ref()?;
         if matches!(
@@ -240,6 +243,7 @@ impl App {
         &mut self,
         key: KeyEvent,
         _home_cw_selected: bool,
+        _cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         // Behavior change (phase 6, #135): gate on an open context menu. Before
         // this fix, `clear_queue_prompt_c` sat above `context_menu` in

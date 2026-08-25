@@ -1,5 +1,6 @@
 use super::{App, PanelFocus, PanelMode, TabSelection};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::api::EmbyItem;
 
 impl App {
     /// Alt-modified keys are destination-independent: Alt+Left/Right switch
@@ -40,6 +41,7 @@ impl App {
         &mut self,
         key: KeyEvent,
         home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         if self.normalize_stale_browse_destination() {
             return Some(false);
@@ -47,7 +49,7 @@ impl App {
         match self.tab {
             TabSelection::Home => self.handle_key_home(key),
             TabSelection::EmbyLibrary(index) => {
-                self.handle_key_emby_library(index, key, home_cw_selected)
+                self.handle_key_emby_library(index, key, home_cw_selected, cw_item)
             }
             TabSelection::AudiobookshelfLibrary(index) => {
                 let Some(kind) = self.audiobookshelf_kind_at(index) else {
@@ -86,6 +88,7 @@ impl App {
         lib_idx: usize,
         key: KeyEvent,
         home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         // Season switching: [ = previous season, ] = next season.
         if !key.modifiers.contains(KeyModifiers::CONTROL)
@@ -142,7 +145,7 @@ impl App {
 
         // Tab/BackTab are consumed by `handle_global_view_key` in
         // `handle_key_view_dispatch` before browse dispatch is reached.
-        if let Some(quit) = self.handle_lib_key(lib_idx, key, home_cw_selected) {
+        if let Some(quit) = self.handle_lib_key(lib_idx, key, home_cw_selected, cw_item) {
             return Some(quit);
         }
         // Every other key is consumed here, never falling through to

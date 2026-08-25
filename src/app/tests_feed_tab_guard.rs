@@ -482,7 +482,7 @@ fn feeds_tab_keys_cannot_enter_emby_action_paths() {
 
     for key in [slash, ctrl_w, ctrl_s, ctrl_a, ctrl_r, dot] {
         assert_eq!(
-            app.handle_key_view_dispatch(key, false),
+            app.handle_key_view_dispatch(key, false, None),
             Some(false),
             "Feeds tab must consume {key:?}"
         );

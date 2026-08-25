@@ -1,4 +1,4 @@
-use super::types_playback::{HomeLatestSource, HomePane, QueueScope};
+use super::types_playback::{HomeLatestSource, QueueScope};
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode};
 use super::types_tab_selection::TabSelection;
@@ -84,11 +84,6 @@ impl App {
             resize_response_rx,
             notif_action_tx: init.notif_action_tx,
             notif_action_rx: init.notif_action_rx,
-            home: HomePane {
-                continue_items: Vec::new(),
-                continue_cursor: 0,
-                latest: Vec::new(),
-            },
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
@@ -97,7 +92,6 @@ impl App {
             terminal_width: 80,
             terminal_height: 24,
 
-            home_loading: true,
             last_click_time: Instant::now(),
             last_space_press: None,
             last_esc_press: None,

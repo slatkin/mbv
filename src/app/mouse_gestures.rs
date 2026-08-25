@@ -186,9 +186,9 @@ impl App {
     ) {
         self.handle_mouse_single_click_emby(lib_idx, target);
         // Emby-library right-click is never a Home-tab menu, so the
-        // Continue-Watching-selected fact is a harmless `false` (the
-        // `self.tab.is_home()` guard short-circuits it).
-        self.open_context_menu_at(col, row, false);
+        // Continue-Watching-selected fact and the CW item are harmless
+        // `false`/`None` (the `self.tab.is_home()` guard short-circuits them).
+        self.open_context_menu_at(col, row, false, None);
     }
 
     pub(super) fn handle_mouse_right_click_queue(
@@ -199,7 +199,11 @@ impl App {
         home_cw_selected: bool,
     ) {
         self.handle_mouse_single_click_queue(slot_id);
-        self.open_context_menu_at(col, row, home_cw_selected);
+        // Queue right-click renders the queue item; the Continue Watching
+        // item (for the odd Remove-from-CW coupling entry) is resolved at
+        // the Model boundary at execution time, so `None` is correct here
+        // (task 5.3d).
+        self.open_context_menu_at(col, row, home_cw_selected, None);
     }
 
     pub(super) fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
@@ -240,7 +244,8 @@ impl App {
     ) {
         self.handle_mouse_single_click_tv(lib_idx, hit);
         // TV-workspace right-click is never a Home-tab menu, so the
-        // Continue-Watching-selected fact is a harmless `false`.
-        self.open_context_menu_at(col, row, false);
+        // Continue-Watching-selected fact and the CW item are harmless
+        // `false`/`None`.
+        self.open_context_menu_at(col, row, false, None);
     }
 }

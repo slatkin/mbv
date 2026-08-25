@@ -148,7 +148,7 @@ impl Model {
                     .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
                     .and_then(|menu| menu.action_at(menu.cursor()));
                 self.dismiss_context_menu();
-                self.app.execute_context_action(action);
+                self.app.execute_context_action(action, self.home_cw_item());
             }
             crossterm::event::KeyCode::Esc => self.dismiss_context_menu(),
             _ => {}
@@ -168,7 +168,7 @@ impl Model {
             .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
             .and_then(|menu| menu.action_at(idx));
         self.dismiss_context_menu();
-        self.app.execute_context_action(action);
+        self.app.execute_context_action(action, self.home_cw_item());
     }
 
     fn dismiss_context_menu(&mut self) {
@@ -331,7 +331,13 @@ impl Model {
         if let Err(e) = crate::config::save_config_settings(&cfg) {
             log::warn!(target: "config", "config save failed: {e}");
         }
-        let _ = self.app.fetch_home();
+        if let Ok(content) = self.app.fetch_home() {
+            // The commit runs the fetch synchronously (order-sensitive
+            // side effects); the computed content is assigned to
+            // Model-owned `home_content` directly — a shell-side caller
+            // (task 5.3d).
+            self.assign_home_content(content);
+        }
     }
 
     pub(in crate::app) fn open_multiselect(&mut self, kind: MultiSelectKind) {

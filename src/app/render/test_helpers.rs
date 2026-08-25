@@ -300,14 +300,31 @@ pub fn render_app_to_terminal(app: &mut App, width: u16, height: u16) -> Termina
 /// it returned). Returns the model, so tests can read the component's own
 /// painted geometry and App state, together with the terminal. This is the
 /// Home characterization path once the legacy underpaint is gone.
+///
+/// Home content is Model-owned (task 5.3d), so a test that needs seeded
+/// Continue Watching rows/pills uses `render_home_shell_with` and seeds
+/// `model.home_content` before the push.
 pub fn render_home_shell(
+    app: App,
+    width: u16,
+    height: u16,
+) -> (crate::app::shell::Model, Terminal<TestBackend>) {
+    render_home_shell_with(app, width, height, |_| {})
+}
+
+/// `render_home_shell` with a content-seeding callback: the test seeds
+/// Model-owned `home_content` (task 5.3d) right after `Model::new` and
+/// before `push_home_content` projects it into the mounted `HomeComponent`.
+pub fn render_home_shell_with(
     mut app: App,
     width: u16,
     height: u16,
+    seed: impl FnOnce(&mut crate::app::shell::Model),
 ) -> (crate::app::shell::Model, Terminal<TestBackend>) {
     app.terminal_width = width;
     app.terminal_height = height;
     let mut model = crate::app::shell::Model::new(app);
+    seed(&mut model);
     model.push_home_content();
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();

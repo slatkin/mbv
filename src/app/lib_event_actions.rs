@@ -401,7 +401,12 @@ impl App {
             if let Ok(shelves) = result {
                 let items = App::newest_episodes_items(shelves);
                 self.audiobookshelf_shelf_cache.insert(library_id, items);
-                self.rebuild_audiobookshelf_latest();
+                // The App owns the shelf cache; the cross-provider pill splice
+                // runs in the shell against Model-owned `latest` (task 5.3d).
+                // The lib_rx while-drain picks this up in the same drain pass.
+                let _ = self.lib_tx.send(LibEvent::AudiobookshelfLatestRebuilt(
+                    self.audiobookshelf_latest_sections(),
+                ));
             }
             return;
         }
@@ -647,6 +652,13 @@ impl App {
             LibEvent::QueueEnriched { items } => {
                 let _ = self.merge_refreshed_queue(QueueScope::Local, items);
             }
+            // Shell-intercepted Home content-delivery variants (task 5.3d):
+            // the lib_rx drain handles them at the Model boundary, so they
+            // are unreachable here; the arms keep the exhaustive match total.
+            LibEvent::HomeContentRefreshed(_)
+            | LibEvent::HomeContentCleared
+            | LibEvent::AudiobookshelfLatestRebuilt(_)
+            | LibEvent::FeedsLatestRebuilt(_) => {}
             LibEvent::Error(e) => {
                 self.flash(format!("Library error: {e}"), ToastSeverity::Error);
             }

@@ -200,11 +200,6 @@ pub(crate) fn make_app_stub() -> App {
         album_indexes: std::collections::HashMap::new(),
         player_tab: PlayerTab::default(),
         remote_player_tab: None,
-        home: HomePane {
-            continue_items: Vec::new(),
-            continue_cursor: 0,
-            latest: Vec::new(),
-        },
         libs: Vec::new(),
         status: String::new(),
         status_expires: None,
@@ -213,7 +208,6 @@ pub(crate) fn make_app_stub() -> App {
         terminal_width: 80,
         terminal_height: 24,
 
-        home_loading: false,
         last_click_time: std::time::Instant::now(),
         last_space_press: None,
         last_esc_press: None,
@@ -369,79 +363,104 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
     let mut app = make_app_stub();
     let client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
     let item = make_item("Ready item", "Audio");
-    app.apply_emby_completion(super::service_startup::Completion {
-        generation: app.emby_runtime.generation(),
-        result: Ok(super::service_startup::Startup {
-            client,
-            bootstrap: mbv_core::service_runtime::EmbyBootstrap {
-                continue_items: vec![item],
-                views: Vec::new(),
-                latest: Vec::new(),
+    // Home content is Model-owned now (task 5.3d): the completion returns the
+    // computed snapshot (prior pills empty in this bare stub), and the shell
+    // assigns it to `home_content`.
+    let content = app
+        .apply_emby_completion(
+            super::service_startup::Completion {
+                generation: app.emby_runtime.generation(),
+                result: Ok(super::service_startup::Startup {
+                    client,
+                    bootstrap: mbv_core::service_runtime::EmbyBootstrap {
+                        continue_items: vec![item],
+                        views: Vec::new(),
+                        latest: Vec::new(),
+                    },
+                    setup: mbv_core::config::EmbySetup::default(),
+                }),
             },
-            setup: mbv_core::config::EmbySetup::default(),
-        }),
-    });
+            &[],
+        )
+        .expect("Ok startup must bootstrap the Returned Home content");
     assert_eq!(
         app.emby_runtime.state,
         mbv_core::service_runtime::ServiceState::Ready
     );
     assert!(app.emby_runtime.client.is_some());
-    assert_eq!(app.home.continue_items.len(), 1);
-    assert!(!app.home_loading);
+    assert_eq!(content.continue_items.len(), 1);
+    assert!(!content.loading);
 }
 
 #[test]
 fn emby_completion_classifies_current_failures_without_client() {
     let mut app = make_app_stub();
-    app.apply_emby_completion(super::service_startup::Completion {
-        generation: app.emby_runtime.generation(),
-        result: Err(mbv_core::service_runtime::EmbyFailure {
-            class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
-            message: "HTTP 401 unauthorized".into(),
-        }),
-    });
+    let content = app.apply_emby_completion(
+        super::service_startup::Completion {
+            generation: app.emby_runtime.generation(),
+            result: Err(mbv_core::service_runtime::EmbyFailure {
+                class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
+                message: "HTTP 401 unauthorized".into(),
+            }),
+        },
+        &[],
+    );
     assert_eq!(
         app.emby_runtime.state,
         mbv_core::service_runtime::ServiceState::NeedsAuthentication
     );
     assert!(app.emby_runtime.client.is_none());
-    assert!(!app.home_loading);
+    assert!(
+        content.is_none(),
+        "failure completion must deliver no Home content snapshot"
+    );
 
     let mut app = make_app_stub();
-    app.apply_emby_completion(super::service_startup::Completion {
-        generation: app.emby_runtime.generation(),
-        result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
-            "connection refused",
-        )),
-    });
+    let content = app.apply_emby_completion(
+        super::service_startup::Completion {
+            generation: app.emby_runtime.generation(),
+            result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
+                "connection refused",
+            )),
+        },
+        &[],
+    );
     assert_eq!(
         app.emby_runtime.state,
         mbv_core::service_runtime::ServiceState::Unavailable
     );
     assert!(app.emby_runtime.client.is_none());
-    assert!(!app.home_loading);
+    assert!(content.is_none());
 }
 
 #[test]
 fn stale_emby_completion_does_not_change_runtime_or_home() {
     let mut app = make_app_stub();
-    app.home.continue_items = vec![make_item("current", "Audio")];
     app.emby_runtime.replace_setup();
     let stale_generation = mbv_core::service_runtime::SetupGeneration::default();
-    app.apply_emby_completion(super::service_startup::Completion {
-        generation: stale_generation,
-        result: Ok(super::service_startup::Startup {
-            client: mbv_core::api::EmbyClient::new(crate::config::Config::default()),
-            bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
-            setup: mbv_core::config::EmbySetup::default(),
-        }),
-    });
+    // Home content is Model-owned (task 5.3d): a stale completion returns no
+    // snapshot, so the shell leaves `home_content` untouched — the invariance
+    // that used to be asserted on `app.home.continue_items` here.
+    let content = app.apply_emby_completion(
+        super::service_startup::Completion {
+            generation: stale_generation,
+            result: Ok(super::service_startup::Startup {
+                client: mbv_core::api::EmbyClient::new(crate::config::Config::default()),
+                bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
+                setup: mbv_core::config::EmbySetup::default(),
+            }),
+        },
+        &[],
+    );
     assert_eq!(
         app.emby_runtime.state,
         mbv_core::service_runtime::ServiceState::Connecting
     );
     assert!(app.emby_runtime.client.is_none());
-    assert_eq!(app.home.continue_items[0].name, "current");
+    assert!(
+        content.is_none(),
+        "stale completion must not deliver a Home content snapshot"
+    );
 }
 
 pub(crate) fn make_built_app() -> App {

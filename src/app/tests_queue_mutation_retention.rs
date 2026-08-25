@@ -113,13 +113,11 @@ fn failed_folder_enqueue_leaves_tracking_active() {
     let mut app = make_app_stub();
     let mut folder = make_item("Folder", "CollectionFolder");
     folder.is_folder = true;
-    app.home.continue_items = vec![folder];
-    app.home.continue_cursor = 0;
     app.remote_tracker = Some(tracking_stub());
 
     // The stub client has no server URL configured, so the enqueue fetch
     // fails at the HTTP layer before anything can be appended.
-    app.enqueue_home_item(app.home.continue_items[0].clone());
+    app.enqueue_home_item(folder);
 
     assert!(app.remote_tracker.is_some());
     assert!(app.player_tab.emby_items().is_empty());

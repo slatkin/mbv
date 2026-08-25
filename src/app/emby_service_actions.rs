@@ -1,5 +1,5 @@
 use super::notify_actions::ToastSeverity;
-use super::App;
+use super::{App, LibEvent};
 use mbv_core::config::{QueueState, ServiceKind};
 use mbv_core::playback_queue::QueueItem;
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
@@ -70,9 +70,11 @@ impl App {
         self.skip_intro_end_ticks = None;
         self.last_played_item_id = None;
         self.last_played_completed = false;
-        self.home.continue_items.clear();
-        self.home.latest.clear();
-        self.home.continue_cursor = 0;
+        // Home content is Model-owned (task 5.3d): clearing it is delivered
+        // through lib_tx; the shell wipes `home_content` (items, cursor,
+        // latest — the `loading` flag is intentionally left alone, matching
+        // the legacy clear) and re-projects.
+        let _ = self.lib_tx.send(LibEvent::HomeContentCleared);
         self.libs.clear();
         self.sessions.clear();
         self.playlists.clear();
@@ -177,7 +179,16 @@ impl App {
         self.player
             .update_emby_credentials(replacement.server_url.clone(), token);
         self.emby_runtime.client = Some(client);
-        self.apply_emby_bootstrap(candidate.bootstrap);
+        // The App-internal confirm path cannot touch Model-owned
+        // `home_content`; deliver the freshly bootstrapped content through
+        // lib_tx (the `clear_emby_memory` above already queued
+        // `HomeContentCleared`, so the drain sees the wipe first, then this
+        // full snapshot). The merge input is empty because the clear just
+        // wiped the pills (task 5.3d).
+        let content = self.apply_emby_bootstrap(candidate.bootstrap, &[]);
+        let _ = self
+            .lib_tx
+            .send(LibEvent::HomeContentRefreshed(Box::new(content)));
         let mut config = self.config.lock().unwrap();
         config.emby_setup = Some(replacement.clone());
         config.server_url = replacement.server_url.clone();

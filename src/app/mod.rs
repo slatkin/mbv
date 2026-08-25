@@ -110,6 +110,7 @@ mod shell_browser;
 mod shell_feeds;
 mod shell_feeds_manage;
 mod shell_home;
+mod shell_home_content;
 mod shell_inline_search;
 mod shell_library;
 mod shell_modal_actions;
@@ -143,8 +144,6 @@ use self::types_feed::{
     FeedHomeVideoGroup, FeedHomeVideoState, IdleFeed, SavePlaylistDialog, SavePlaylistStage,
 };
 use self::types_library_tab::LibraryTab;
-#[cfg(test)]
-use self::types_playback::HomePane;
 use self::types_playback::{
     CastPlaybackTarget, HomeLatestSource, LocalPlaybackTarget, PendingQueueAction, PlaybackState,
     PlaybackTarget, QueueScope, QueueScopeResolution, RemotePlaybackTarget, RemoteReanchorPopup,

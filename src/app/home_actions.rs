@@ -7,42 +7,18 @@ use mbv_core::playback_queue::QueueItem;
 impl App {
     // ── Home flat list ───────────────────────────────────────────────────────
 
-    /// The QueueItem at the given flat `cursor` (the Home component's
-    /// target index), or None. The caller supplies the cursor — the effect
-    /// never reads an App-owned cursor, so the component's target is honored
-    /// even when App's remaining section-specific state differs (task 5.3d,
-    /// Home typed-effect prep + cursor deletion).
-    pub(super) fn home_current_item(&self, cursor: usize) -> Option<QueueItem> {
-        let mut pos = 0usize;
-        for item in &self.home.continue_items {
-            if pos == cursor {
-                return Some(QueueItem::Emby(Box::new(item.clone())));
-            }
-            pos += 1;
-        }
-        for (_, _, items, _) in &self.home.latest {
-            for item in items {
-                if pos == cursor {
-                    return Some(item.clone());
-                }
-                pos += 1;
-            }
-        }
-        None
-    }
-
-    /// Play the item at the component-provided flat `cursor`. Uses the
-    /// supplied target directly instead of any App-owned cursor, so the
-    /// request's own target is honored (task 5.3d, Home typed-effect prep + cursor deletion).
-    pub(super) fn home_play(&mut self, cursor: usize) {
-        let Some(item) = self.home_current_item(cursor) else {
-            return;
-        };
+    /// Play the Home flat-list item the shell resolved at the Model boundary
+    /// (task 5.3d, Home typed-effect prep + re-homing): the effect acts on
+    /// the supplied item directly, never on a re-read App cursor. `from_cw`
+    /// distinguishes Continue Watching rows (resumed through the
+    /// item-targeted tail) from `latest` pills (played directly, or
+    /// submitted through the shared non-Emby helper). The folder guard
+    /// mirrors `home_play`'s early return.
+    pub(super) fn home_play_target(&mut self, item: QueueItem, from_cw: bool) {
         if matches!(&item, QueueItem::Emby(inner) if inner.is_folder) {
             return;
         }
-        let cw_len = self.home.continue_items.len();
-        if cursor < cw_len {
+        if from_cw {
             // CW items resume through the item-targeted tail with the
             // already-resolved item (task 5.3d, Home effect decoupling)
             // instead of temporarily forcing `home.section` to 0 and
@@ -63,15 +39,11 @@ impl App {
         }
     }
 
-    /// Enqueue the item at the component-provided flat `cursor` (task 5.3d,
-    /// Home typed-effect prep). Uses the supplied target directly instead of
-    /// any App-owned cursor.
-    pub(super) fn home_enqueue(&mut self, cursor: usize) {
-        let Some(item) = self.home_current_item(cursor) else {
-            return;
-        };
-        let cw_len = self.home.continue_items.len();
-        if cursor < cw_len {
+    /// Enqueue the Home flat-list item the shell resolved at the Model
+    /// boundary (task 5.3d, Home typed-effect prep). Uses the supplied item
+    /// directly instead of any App-owned cursor.
+    pub(super) fn home_enqueue_target(&mut self, item: QueueItem, from_cw: bool) {
+        if from_cw {
             // CW items enqueue through the item-targeted helper with the
             // already-resolved item (task 5.3d, Home effect decoupling)
             // instead of temporarily forcing `home.section` to 0 and
@@ -94,8 +66,9 @@ impl App {
     /// so the Home and CW effects pass an already-resolved item directly
     /// instead of temporarily pointing `home.section` at section 0 and
     /// re-reading it. Folder guards stay with the callers
-    /// (`home_play`/`cw_play` pre-filter them, matching today's reachable
-    /// behavior); non-playable items are a silent no-op, as in `select_home`.
+    /// (`home_play_target`/`cw_play` pre-filter them, matching today's
+    /// reachable behavior); non-playable items are a silent no-op, as in
+    /// `select_home`.
     pub(super) fn play_home_cw_item(&mut self, item: EmbyItem) {
         if !is_playable(&item) {
             return;
@@ -118,21 +91,5 @@ impl App {
                 .unwrap_or(item)
         };
         self.play_item(fresh);
-    }
-
-    /// Remove the Continue Watching item at the component-provided flat
-    /// `cursor` from the resume row, guarding on the CW range exactly like the
-    /// legacy Delete arm. Non-CW cursors are ignored, and the
-    /// CW column cursor is saved/restored around the removal just like the
-    /// legacy arm (task 5.3d, Home typed-effect prep).
-    pub(super) fn home_delete(&mut self, cursor: usize) {
-        let cw_len = self.home.continue_items.len();
-        if cursor >= cw_len {
-            return;
-        }
-        let saved = self.home.continue_cursor;
-        self.home.continue_cursor = cursor;
-        self.remove_from_continue_watching();
-        self.home.continue_cursor = saved;
     }
 }

@@ -1,5 +1,5 @@
 use super::test_helpers::{
-    buffer_to_string, make_movie_app, make_music_group_app, render_home_shell,
+    buffer_to_string, make_movie_app, make_music_group_app, render_home_shell_with,
 };
 use super::*;
 use crate::app::components::{ComponentId, FeedsComponent, HomeComponent};
@@ -134,7 +134,25 @@ fn mixed_home_app() -> App {
     app.tab = TabSelection::Home;
     app.panel_focus = PanelFocus::Library;
     app.mini_view_focus = PanelFocus::Library;
-    app.home.latest = vec![
+    // Select the Books pill (section 1) through the real pending-source
+    // boundary so `render_home_shell_with`'s `push_home_content` restores it
+    // (task 5.3d, numeric Home section deletion). The pill data itself is
+    // Model-owned `home_content.latest` (task 5.3d), seeded by
+    // `mixed_home_latest()` at the render call.
+    app.home_section_pending =
+        Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
+    app
+}
+
+/// The mixed Books+Feeds pill data the Home-characterization seeds into
+/// Model-owned `home_content.latest` (task 5.3d).
+fn mixed_home_latest() -> Vec<(
+    String,
+    crate::app::types_playback::HomeLatestSource,
+    Vec<QueueItem>,
+    usize,
+)> {
+    vec![
         (
             "Books".into(),
             crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()),
@@ -170,13 +188,7 @@ fn mixed_home_app() -> App {
             })],
             0,
         ),
-    ];
-    // Select the Books pill (section 1) through the real pending-source
-    // boundary so `render_home_shell`'s `push_home_content` restores it (task
-    // 5.3d, numeric Home section deletion).
-    app.home_section_pending =
-        Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
-    app
+    ]
 }
 
 fn assert_one_pill_row_and_spacer(
@@ -391,8 +403,10 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
 
     // Home (task 5.3d, legacy underpaint removal) renders through the
     // mounted component; assert its pill bar from the component's own painted
-    // targets.
-    let (model, terminal) = render_home_shell(mixed_home_app(), 60, 30);
+    // targets. The pill data is Model-owned `home_content.latest` (5.3d).
+    let (model, terminal) = render_home_shell_with(mixed_home_app(), 60, 30, |m| {
+        m.home_content.latest = mixed_home_latest();
+    });
     assert_home_one_pill_row_and_spacer(&model, &terminal);
     assert!(
         !buffer_to_string(&terminal).is_empty(),
@@ -435,8 +449,10 @@ fn matrix_mini_presentations_do_not_admit_a_full_hero() {
     // Home (task 5.3d, legacy underpaint removal) is painted by the mounted
     // component, so its mini-view hero is asserted from the component's own
     // geometry: the reserved home area is empty and the component paints no
-    // hero.
-    let (model, _terminal) = render_home_shell(mixed_home_app(), 60, 8);
+    // hero. The pill data is Model-owned `home_content.latest` (5.3d).
+    let (model, _terminal) = render_home_shell_with(mixed_home_app(), 60, 8, |m| {
+        m.home_content.latest = mixed_home_latest();
+    });
     let home = model
         .application
         .get_component(&ComponentId::Home)

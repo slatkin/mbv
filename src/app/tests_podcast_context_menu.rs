@@ -61,7 +61,7 @@ fn podcast_folder_context_menu_uses_play_labels_and_item_state() {
     });
     app.tab = TabSelection::EmbyLibrary(0);
 
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
 
     let menu = match app.pending_overlay.as_ref() {
         Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
@@ -108,7 +108,7 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
     });
     app.tab = TabSelection::EmbyLibrary(0);
 
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
 
     let menu = match app.pending_overlay.as_ref() {
         Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
@@ -171,7 +171,7 @@ fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
     app.panel_focus = PanelFocus::Library;
     app.tab = TabSelection::EmbyLibrary(0);
 
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
 
     let menu = match app.pending_overlay.as_ref() {
         Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
@@ -272,7 +272,7 @@ fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
     app.panel_focus = PanelFocus::Library;
     app.tab = TabSelection::EmbyLibrary(0);
 
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
 
     let menu = match app.pending_overlay.as_ref() {
         Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,

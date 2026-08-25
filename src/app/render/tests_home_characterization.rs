@@ -1,5 +1,5 @@
 use super::test_helpers::{
-    buffer_to_string, make_movie_app, render_app_to_terminal, render_home_shell,
+    buffer_to_string, make_movie_app, render_app_to_terminal, render_home_shell_with,
 };
 use super::*;
 use crate::app::components::{ComponentId, HomeComponent};
@@ -8,18 +8,24 @@ use crate::app::{palette, PanelFocus, TabSelection};
 
 fn home_app() -> App {
     let mut app = make_app_stub();
-    let movie_app = make_movie_app();
-    app.home.continue_items = vec![movie_app.libs[0].nav_stack[0].items[0].clone()];
     app.tab = TabSelection::Home;
     app.mini_view_focus = PanelFocus::Library;
     app
+}
+
+/// The Continue Watching item the characterization seeds into Model-owned
+/// `home_content` (task 5.3d).
+fn emby_cw_item() -> mbv_core::api::EmbyItem {
+    let movie_app = make_movie_app();
+    movie_app.libs[0].nav_stack[0].items[0].clone()
 }
 
 /// Task 5.3d, Home legacy underpaint removal — regression: the legacy base
 /// frame (`App::render`) no longer paints any Home content before the
 /// mounted component view runs. It still reserves the full Home destination
 /// area (`home_area`) as the placement handoff, but paints no Home rows,
-/// pills, or hero there.
+/// pills, or hero there. Home content is Model-owned now (task 5.3d), so
+/// the legacy frame never even holds a copy to (not) paint.
 #[test]
 fn legacy_base_frame_does_not_paint_home_content_before_the_component() {
     let mut app = home_app();
@@ -57,7 +63,10 @@ fn home_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states
         if !focused {
             app.panel_focus = PanelFocus::Queue;
         }
-        let (_model, terminal) = render_home_shell(app, width, height);
+        let cw_item = emby_cw_item();
+        let (_model, terminal) = render_home_shell_with(app, width, height, |m| {
+            m.home_content.continue_items = vec![cw_item];
+        });
         let output = buffer_to_string(&terminal);
         assert!(
             output.contains("Focused Movie"),
@@ -74,7 +83,10 @@ fn home_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states
 /// selected pill is highlighted, and exactly one pill bar row is painted.
 #[test]
 fn home_pill_row_and_targets_are_characterized_end_to_end() {
-    let (model, terminal) = render_home_shell(home_app(), 60, 20);
+    let cw_item = emby_cw_item();
+    let (model, terminal) = render_home_shell_with(home_app(), 60, 20, |m| {
+        m.home_content.continue_items = vec![cw_item];
+    });
 
     let home = model
         .application

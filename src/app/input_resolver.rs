@@ -6,6 +6,7 @@
 //! context-priority stack that *selects* the context arrives in phase 2 (#131).
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::api::EmbyItem;
 
 /// A normalized key press: physical key code plus active modifiers, with the
 /// terminal-specific `kind`/`state` fields of `KeyEvent` dropped. This is the
@@ -111,7 +112,7 @@ impl App {
 /// the explicit precedence order this stack exists to make assertable. The
 /// `pub(super)` visibility on these handlers is required for the fn-pointer
 /// table below, not an invitation to call them from elsewhere in `app`.
-pub(super) type ContextHandler = fn(&mut App, KeyEvent, bool) -> Option<bool>;
+pub(super) type ContextHandler = fn(&mut App, KeyEvent, bool, Option<EmbyItem>) -> Option<bool>;
 
 #[derive(Clone, Copy)]
 pub(super) struct ContextEntry {

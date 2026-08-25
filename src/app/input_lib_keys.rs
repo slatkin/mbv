@@ -1,6 +1,7 @@
 use super::action::Command;
 use super::{App, ConfirmAction, ConfirmModal};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::api::EmbyItem;
 use std::time::{Duration, Instant};
 
 impl App {
@@ -8,6 +9,7 @@ impl App {
         &mut self,
         key: KeyEvent,
         _home_cw_selected: bool,
+        _cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         if key.code != KeyCode::Char('x') || !key.modifiers.is_empty() {
             return None;
@@ -23,10 +25,15 @@ impl App {
     /// keys used to be independently matched; genuinely per-view behavior (`/`
     /// search, `Ctrl+a` enqueue) stays local. See
     /// docs/adr/0002-centralized-input-handling.md, phase 3 (#132).
+    ///
+    /// `cw_item` is the resolved Continue Watching column item (Model-owner,
+    /// task 5.3d) the `.`-on-Home menu builds its entries from; other keys
+    /// and non-Home views ignore it.
     pub(super) fn handle_global_view_key(
         &mut self,
         key: KeyEvent,
         home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         match key.code {
             KeyCode::Char('q') if key.modifiers.is_empty() => Some(self.try_quit()),
@@ -46,7 +53,7 @@ impl App {
                 Some(false)
             }
             KeyCode::Char('.') => {
-                self.open_context_menu(home_cw_selected);
+                self.open_context_menu(home_cw_selected, cw_item);
                 Some(false)
             }
             _ => None,
@@ -88,11 +95,12 @@ impl App {
         lib_idx: usize,
         key: KeyEvent,
         home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         if let Some(quit) = self.handle_enqueue_selected_key(lib_idx, key) {
             return Some(quit);
         }
-        if let Some(quit) = self.handle_global_view_key(key, home_cw_selected) {
+        if let Some(quit) = self.handle_global_view_key(key, home_cw_selected, cw_item) {
             return Some(quit);
         }
 
@@ -215,6 +223,7 @@ impl App {
         &mut self,
         key: KeyEvent,
         _home_cw_selected: bool,
+        _cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         let snapshot = self.input_snapshot();
         if let Some(command) = super::action::idle_feed_command_for_key(

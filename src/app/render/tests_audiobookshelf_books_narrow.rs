@@ -44,6 +44,7 @@ fn narrow_layout_renders_hero_only_and_browser_together() {
             crossterm::event::KeyModifiers::NONE,
         ),
         false,
+        None,
     );
     assert_eq!(
         app.audiobookshelf_book_browse[0].chapter_selection, None,
@@ -139,7 +140,8 @@ fn narrow_book_enter_uses_the_completed_60x20_layout_for_modal_activation() {
                 crossterm::event::KeyCode::Enter,
                 crossterm::event::KeyModifiers::NONE,
             ),
-            false
+            false,
+            None
         ),
         Some(false)
     );
@@ -178,7 +180,8 @@ fn cannot_fit_book_enter_uses_the_completed_60x4_layout_for_ordinary_activation(
                 crossterm::event::KeyCode::Enter,
                 crossterm::event::KeyModifiers::NONE,
             ),
-            false
+            false,
+            None
         ),
         Some(false)
     );
@@ -205,7 +208,8 @@ fn wide_book_enter_uses_the_completed_100x20_layout_for_chapter_workspace() {
                 crossterm::event::KeyCode::Left,
                 crossterm::event::KeyModifiers::NONE,
             ),
-            false
+            false,
+            None
         ),
         Some(false)
     );
@@ -216,7 +220,8 @@ fn wide_book_enter_uses_the_completed_100x20_layout_for_chapter_workspace() {
                 crossterm::event::KeyCode::Enter,
                 crossterm::event::KeyModifiers::NONE,
             ),
-            false
+            false,
+            None
         ),
         Some(false)
     );

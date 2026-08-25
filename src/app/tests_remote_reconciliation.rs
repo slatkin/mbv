@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_item, make_session};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use mbv_core::playback_queue::QueueSlotId;
+use mbv_core::playback_queue::{QueueItem, QueueSlotId};
 use mbv_core::remote_reconciliation::{
     ReconciliationTracker, RemoteObservation, SubmittedOccurrence, TrackingState,
 };
@@ -126,7 +126,6 @@ fn stop_tracking_and_queue_edits_are_input_gated() {
     let mut app = attached_app();
     app.panel_focus = crate::app::PanelFocus::Queue;
     app.remote_tracker = Some(tracker(&["a", "b"]));
-    app.home.continue_items = vec![make_item("a", "Movie")];
 
     app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL));
     assert!(app.remote_tracker.is_none());
@@ -134,10 +133,11 @@ fn stop_tracking_and_queue_edits_are_input_gated() {
     // Enqueue is an ordinary queue edit from Home: it applies without
     // a tracking-specific confirmation and retires tracking. The Ctrl+A
     // chord is component-owned (task 5.3d); the App boundary is the
-    // `home_enqueue` effect it routes to.
+    // `home_enqueue_target` effect with the shell-resolved CW item (Home
+    // content is Model-owned).
     app.remote_tracker = Some(tracker(&["a", "b"]));
     app.panel_focus = crate::app::PanelFocus::Library;
-    app.home_enqueue(0);
+    app.home_enqueue_target(QueueItem::Emby(Box::new(make_item("a", "Movie"))), true);
     assert!(!matches!(
         app.pending_overlay,
         Some(super::types_overlay::OverlayRequest::Confirm(_))

@@ -121,7 +121,7 @@ fn context_menu_in_list_mode_offers_folder_scoped_actions_for_selected_album() {
     // selected ALBUM's id via the folder-scoped actions.
     let mut app = make_music_album_app();
 
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
 
     let menu = match app.pending_overlay.as_ref() {
         Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,

@@ -75,25 +75,28 @@ impl App {
     }
 
     pub(super) fn handle_key(&mut self, key: KeyEvent) -> bool {
-        self.handle_key_with_home_context(key, false)
+        self.handle_key_with_home_context(key, false, None)
     }
 
     /// Model-boundary keyboard entry (task 5.3d, Home context-menu section
     /// decoupling): the shell resolves the authoritative "is Continue Watching
-    /// selected?" fact from the mounted `HomeComponent` and passes it here so
-    /// the '.' path opens the context menu with the component-derived
-    /// predicate. Runs the identical `CONTEXT_STACK` precedence — '.' is still
-    /// claimed by `handle_global_view_key` at its established position — the
-    /// fact is merely threaded through. The fact is dead for every other key
-    /// and for the no-arg `handle_key` (test/non-Model) caller, which passes
-    /// `false`.
+    /// selected?" fact from the mounted `HomeComponent` and the Continue
+    /// Watching column item from Model-owned `home_content`, and passes both
+    /// here so the '.' path opens the context menu with the component-derived
+    /// predicate and the resolved CW target. Runs the identical
+    /// `CONTEXT_STACK` precedence — '.' is still claimed by
+    /// `handle_global_view_key` at its established position — the facts are
+    /// merely threaded through. Both are dead for every other key and for the
+    /// no-arg `handle_key` (test/non-Model) caller, which passes `false`/
+    /// `None`.
     pub(super) fn handle_key_with_home_context(
         &mut self,
         key: KeyEvent,
         home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
     ) -> bool {
         for entry in super::input_resolver::CONTEXT_STACK {
-            if let Some(quit) = (entry.handler)(self, key, home_cw_selected) {
+            if let Some(quit) = (entry.handler)(self, key, home_cw_selected, cw_item.clone()) {
                 return quit;
             }
         }
@@ -104,6 +107,7 @@ impl App {
         &mut self,
         key: KeyEvent,
         _home_cw_selected: bool,
+        _cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         if key.code == KeyCode::F(2) {
             self.request_sidebar_toggle(SidebarId::Settings);
@@ -134,6 +138,7 @@ impl App {
         &mut self,
         key: KeyEvent,
         _home_cw_selected: bool,
+        _cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.force_clear = true;
@@ -147,6 +152,7 @@ impl App {
         &mut self,
         key: KeyEvent,
         _home_cw_selected: bool,
+        _cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         if key.code == KeyCode::F(5) {
             self.refresh_current_view();
@@ -160,6 +166,7 @@ impl App {
         &mut self,
         key: KeyEvent,
         _home_cw_selected: bool,
+        _cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         if key.code == KeyCode::Char('v') && key.modifiers.is_empty() {
             self.toggle_visualizer();
@@ -173,13 +180,14 @@ impl App {
         &mut self,
         key: KeyEvent,
         home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
         // Shared globals (q, Tab/BackTab, 1-9, `.`) precede every panel and
         // destination. Historically each browse branch reached these by
         // falling through to the bottom of `handle_queue_key`; hoisting them
         // ahead preserves the same precedence because no earlier library or
         // queue routing arm claims these keys.
-        if let Some(quit) = self.handle_global_view_key(key, home_cw_selected) {
+        if let Some(quit) = self.handle_global_view_key(key, home_cw_selected, cw_item.clone()) {
             return Some(quit);
         }
         if key.modifiers.contains(KeyModifiers::ALT) {
@@ -188,7 +196,7 @@ impl App {
         }
         match self.effective_panel_focus() {
             PanelFocus::Queue => Some(self.handle_queue_key(key)),
-            PanelFocus::Library => self.handle_key_browse_dispatch(key, home_cw_selected),
+            PanelFocus::Library => self.handle_key_browse_dispatch(key, home_cw_selected, cw_item),
         }
     }
 

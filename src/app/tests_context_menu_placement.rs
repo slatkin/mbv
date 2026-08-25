@@ -85,7 +85,7 @@ fn keyboard_placement_follows_fresh_layout_after_resize() {
 #[test]
 fn pointer_placement_stays_click_anchored_not_following_selection() {
     let mut app = library_app();
-    app.open_context_menu_at(70, 20, false);
+    app.open_context_menu_at(70, 20, false, None);
 
     let mut model = Model::new(app);
     model.sync_modal_requests();
@@ -122,20 +122,23 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     use crate::app::types_context_menu::ContextMenu;
     let _guard = crate::config::TestStateDirGuard::new();
 
-    let mut app = make_app_stub();
-    app.tab = TabSelection::Home;
-    app.panel_focus = PanelFocus::Library;
-    app.home.continue_items = make_items(5);
-    app.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
+    let mut model = crate::app::shell::Model::new(make_app_stub());
+    model.app.tab = TabSelection::Home;
+    model.app.panel_focus = PanelFocus::Library;
+    model.home_content.continue_items = make_items(5);
+    model.app.handle_key_with_home_context(
+        KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE),
+        model.home_continue_watching_selected(),
+        model.home_cw_item(),
+    );
     assert!(
         matches!(
-            app.pending_overlay,
+            model.app.pending_overlay,
             Some(super::types_overlay::OverlayRequest::ContextMenu(_))
         ),
         "'.' should open the context menu"
     );
 
-    let mut model = Model::new(app);
     model.sync_modal_requests();
     model.push_home_content();
     model.app.layout.main.home_area = Rect::new(0, 0, 80, 24);
@@ -200,7 +203,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
 #[test]
 fn context_menu_entries_render_below_the_reserved_top_row() {
     let mut app = library_app();
-    app.open_context_menu(false);
+    app.open_context_menu(false, None);
 
     let mut model = Model::new(app);
     model.sync_modal_requests();

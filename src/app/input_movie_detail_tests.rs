@@ -289,19 +289,26 @@ fn render_normalizes_oversized_saved_width_and_persists_it() {
 #[test]
 fn period_key_opens_context_menu_from_all_three_view_handlers() {
     // Home (combined), library, and queue views all route '.' through
-    // the shared `handle_global_view_key`.
-    let mut home = make_app_stub();
-    home.home
+    // the shared `handle_global_view_key`. Home content is Model-owned
+    // (task 5.3d): the CW item is seeded on `home_content` and the '.',
+    // key is driven through the Model-boundary `handle_key_with_home_context`.
+    let mut model = crate::app::shell::Model::new(make_app_stub());
+    model
+        .home_content
         .continue_items
         .push(crate::app::tests::make_item("Continuing", "Movie"));
     assert!(!matches!(
-        home.pending_overlay,
+        model.app.pending_overlay,
         Some(crate::app::types_overlay::OverlayRequest::ContextMenu(_))
     ));
-    home.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
+    model.app.handle_key_with_home_context(
+        KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE),
+        model.home_continue_watching_selected(),
+        model.home_cw_item(),
+    );
     assert!(
         matches!(
-            home.pending_overlay,
+            model.app.pending_overlay,
             Some(crate::app::types_overlay::OverlayRequest::ContextMenu(_))
         ),
         "combined (home) view"

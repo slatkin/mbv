@@ -340,21 +340,17 @@ impl App {
         }
 
         // Gather items, cursor, stored scroll offset, and the *true* library total
-        // (not just how many pages have been fetched so far) from the appropriate
-        // source.
-        let (items, cursor, stored_scroll, total_count) = if self.tab.is_home() {
-            let items = self.home.continue_items.clone();
-            let cursor = self.home.continue_cursor.min(items.len().saturating_sub(1));
-            let total = items.len();
-            (items, cursor, 0usize, total)
-        } else {
-            let ctx = library_ctx
-                .as_ref()
-                .expect("library context for library tab");
-            // The context has already selected the active source and applied the
-            // recursive-album display projection used by the narrow browser.
-            (ctx.items.clone(), ctx.cursor, ctx.scroll, ctx.total_count)
-        };
+        // (not just how many pages have been fetched so far) from the library
+        // context. `render_list` is only reached under an EmbyLibrary tab
+        // (`render_library` handles Home by reserving `home_area` for the mounted
+        // Home component, task 5.3d), so the legacy Home branch is gone.
+        let ctx = library_ctx
+            .as_ref()
+            .expect("library context for library tab");
+        // The context has already selected the active source and applied the
+        // recursive-album display projection used by the narrow browser.
+        let (items, cursor, stored_scroll, total_count) =
+            (ctx.items.clone(), ctx.cursor, ctx.scroll, ctx.total_count);
 
         // Pre-warm nearby movies' poster images so they're already cached by
         // the time the cursor reaches them (#287) -- mirrors the prefetch
