@@ -351,6 +351,21 @@ contributing surface's group 2–4 conversion to have landed.
   - [ ] *Mirrors and framework* — delete the 29 `sync_*` (28 files), then
     `CONTEXT_STACK`, then `LegacyInput`, in that order. Mechanical, and shrinks
     as every unit above lands. Requires everything.
+    **In flight, waves landed from clean `7de7d409`** (see
+    `scoping-5.3d-mirrors.md`): the stale 29 count was re-counted to 20
+    candidates and classified by ownership — 7 interaction mirrors remain
+    (`sync_home`, `sync_emby_browser`, `sync_tv_workspace`,
+    `sync_music_workspace`, `sync_inline_search`, `sync_audiobookshelf_podcast`,
+    `sync_audiobookshelf_book`), while player/fetch-state projections are kept
+    (`sync_playback`, `sync_playback_prompt`, `sync_queue`, `sync_feeds`,
+    `sync_modal_requests`, settings/playlists content bridges). Landed so far:
+    `App::blocking_overlay_active` adapter + `sync_precedence_gates` +
+    no-op mirrors `sync_multiselect`/`sync_library_routes` (`4ce46d0a`);
+    overlay z-order mirror `sync_overlay_stack` + `UiRootComponent::sync_overlay_order`
+    (`4152a9e5`); feeds-management two-way mirror (`b9d1abef`); library-parent
+    routing mirror + `LibraryComponent` (`a46d635b`). `CONTEXT_STACK` and
+    `LegacyInput` are not yet touched; each remaining mirror requires its
+    5.3a-style ownership move before the framework layers can go.
   **Also delete `LibraryTab.album_track_focus` here** (deferred from 5.3a — see
   the three reasons recorded there). Its readers can only move once the action
   layer does: relocate `actions.rs`'s focused-track target resolution and

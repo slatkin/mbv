@@ -43,3 +43,39 @@ still emit `Msg::Legacy(...)` / `ShellRequest::*Key` / `NoOp`.
   `handle_key_*` endpoints
 - no surface mirror / temporary adapter (incl. `ShellRequest::*Key` fallbacks)
 - no remaining `impl App` interaction ownership
+
+## Landed so far (2026-08-xx, commits from clean 7de7d409)
+
+- **Wave 1** `4ce46d0a` — delete `App::blocking_overlay_active` (temporary
+  precedence adapter) + no-op mirrors `sync_multiselect`/`sync_library_routes`
+  + `sync_precedence_gates` (attr writes; `ATTR_*` constants + KEY_POLICY stay
+  for the 5.4 static proofs). Readers re-homed: dim/stay-alive flag computed
+  by the shell in the draw closure; `any_other_modal_open` removed (a mounted
+  blocking modal is always the active component and swallows input);
+  playlists dismiss gates use `pending_overlay.is_none()`.
+- **Wave 2** `4152a9e5` — overlay z-order mirror: `sync_overlay_stack` +
+  `UiRootComponent::sync_overlay_order`/`overlay_order()` deleted;
+  `render_overlay_stack` iterates canonical `OVERLAY_IDS` × mount state.
+- **Wave 3** `b9d1abef` (+fmt `893ba2bf`) — feeds-management popup two-way
+  mirror (`sync_feeds_manage`/`sync_feeds_manage_to_app`) deleted;
+  `FeedsManageComponent` owns the draft and gets targeted `set_stage`/
+  `set_feeds`/`set_pending_add` pushes; `Model::feeds_manage` shrinks to the
+  add-channel + pending marker. Tests rewritten at the component/shell boundary.
+- **Wave 4** `a46d635b` — library-parent routing mirror: `sync_library_parent`
+  replaced by direct `sync_active_destination` (idempotent `active()`);
+  `LibraryComponent` (inert after the mirror) deleted with its mount and the
+  mirror-pinning tests; new Model-boundary routing tests.
+
+**Not yet landed** (remain, in required order): the per-surface interaction
+mirrors whose `App` state still holds the cursor (`sync_home`,
+`sync_emby_browser`, `sync_tv_workspace`, `sync_music_workspace`,
+`sync_inline_search`, `sync_audiobookshelf_podcast`, `sync_audiobookshelf_book`)
+— each needs the full 5.3a-style ownership move (component keys + typed Msg +
+App-field deletion + legacy render branch); then `CONTEXT_STACK`/`handle_key_*`
+endpoints; then `LegacyInput`/`Msg::Legacy`/`LegacyTerminalEvent` + every
+component fallback. Classified **keep** (domain/player projections, per the
+instruction's own keep-list): `sync_playback`, `sync_playback_prompt`,
+`sync_queue`, `sync_feeds`, `sync_modal_requests`, and the settings/playlists
+content bridges.
+
+The nested *Mirrors and framework* row stays **unchecked** (unit incomplete).
