@@ -1,6 +1,6 @@
 use super::components::{BrowserComponent, BrowserKey, BrowserKind, ComponentId, ShellRequest};
 use super::shell::Model;
-use super::{PanelFocus, TabSelection};
+use super::{ConfirmAction, ConfirmModal, PanelFocus, TabSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -38,6 +38,25 @@ impl Model {
             // the component-resolved item, never a `BrowseLevel.cursor`
             // re-read.
             ShellRequest::BrowserShuffle { item } => self.app.shuffle_play_selected(lib_idx, item),
+            // Bare or Alt+`r` refreshes the active Emby library (task 5.3d,
+            // Emby browser refresh): the shell derives the active library
+            // index from its own tab state and runs `App::refresh_lib` on it,
+            // the same call the legacy `handle_lib_key` `Char('r')` arm made.
+            ShellRequest::BrowserRefresh => self.app.refresh_lib(lib_idx),
+            // Ctrl+`r` raises the Rescan Library confirmation (task 5.3d,
+            // Emby browser rescan): same title/message/hint and
+            // `ConfirmAction::RescanLibrary(lib_idx)` as the legacy
+            // `handle_lib_key` CONTROL arm, derived from the shell's own tab
+            // state (the library name comes from the active library).
+            ShellRequest::BrowserRescan => {
+                let name = self.app.libs[lib_idx].library.name.clone();
+                self.app.ask_confirm(ConfirmModal {
+                    title: " Rescan Library ".into(),
+                    message: format!("Rescan '{name}'?"),
+                    hint: "[y] Confirm    [Esc] Cancel".into(),
+                    on_confirm: ConfirmAction::RescanLibrary(lib_idx),
+                });
+            }
             _ => {}
         }
     }
@@ -276,6 +295,53 @@ mod tests {
             item.id, "movie-b",
             "shuffle must carry the component-selected movie, not the parked BrowseLevel.cursor folder"
         );
+
+        // Bare `r` refreshes the active Emby library (task 5.3d, Emby browser
+        // refresh): the component emits `BrowserRefresh`, and the shell derives
+        // the library index from its own tab state and runs `App::refresh_lib`,
+        // which lifts the current nav level's `loading` flag.
+        let Some(Msg::Shell(ShellRequest::BrowserRefresh)) =
+            drive_browser_key(&mut model, &id, Key::Char('r'), KeyModifiers::NONE)
+        else {
+            panic!("browser bare r must emit BrowserRefresh, got no typed request");
+        };
+        model.handle_browser_request(ShellRequest::BrowserRefresh);
+        assert!(
+            model.app.libs[0].nav_stack[0].loading,
+            "refresh must lift the active library nav level's loading flag"
+        );
+
+        // Legacy Alt+`r` preserves a bare-refresh, not a rescan: the CONTROL
+        // arm is guarded by the CONTROL modifier, Alt does not set it, and the
+        // bare `r` arm below it catches Alt+`r` — exactly the legacy
+        // `handle_lib_key` ordering.
+        let Some(Msg::Shell(ShellRequest::BrowserRefresh)) =
+            drive_browser_key(&mut model, &id, Key::Char('r'), KeyModifiers::ALT)
+        else {
+            panic!("browser Alt+r must still emit BrowserRefresh, got no typed request");
+        };
+
+        // Ctrl+`r` raises the Rescan Library confirmation (task 5.3d, Emby
+        // browser rescan): the component emits `BrowserRescan`, and the shell
+        // raises the same confirm modal (title/message/hint and
+        // `ConfirmAction::RescanLibrary(lib_idx)`) the legacy arm raised.
+        let Some(Msg::Shell(ShellRequest::BrowserRescan)) =
+            drive_browser_key(&mut model, &id, Key::Char('r'), KeyModifiers::CONTROL)
+        else {
+            panic!("browser Ctrl+r must emit BrowserRescan, got no typed request");
+        };
+        model.handle_browser_request(ShellRequest::BrowserRescan);
+        match model.app.pending_overlay.as_ref() {
+            Some(crate::app::types_overlay::OverlayRequest::Confirm(modal)) => {
+                assert_eq!(modal.title, " Rescan Library ");
+                assert!(matches!(
+                    modal.on_confirm,
+                    crate::app::ConfirmAction::RescanLibrary(0)
+                ));
+                assert_eq!(modal.message, "Rescan 'Movies'?");
+            }
+            _ => panic!("Ctrl+r must raise the Rescan Library confirmation"),
+        }
     }
 
     /// Drive one key into the mounted `BrowserComponent` and return its `Msg`

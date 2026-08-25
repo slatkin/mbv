@@ -164,6 +164,23 @@ impl BrowserComponent {
                 {
                     selected.map(|item| ShellRequest::BrowserShuffle { item })
                 }
+                // Ctrl+`r` rescans the focused library; bare or Alt+`r`
+                // refreshes it (task 5.3d, Emby browser refresh/rescan). The
+                // CONTROL arm comes first so it can never be shadowed by the
+                // bare arm below, and the bare arm also covers Alt+`r` (no
+                // CONTROL modifier), exactly matching the legacy `handle_lib_key`
+                // ordering — Alt+`r` refreshes, it does not rescan. Neither
+                // carries a selected item: the shell derives the active library
+                // index from its own tab state. Any other modified character is
+                // forwarded to the legacy bridge below.
+                crossterm::event::KeyCode::Char('r')
+                    if key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                {
+                    Some(ShellRequest::BrowserRescan)
+                }
+                crossterm::event::KeyCode::Char('r') => Some(ShellRequest::BrowserRefresh),
                 _ => None,
             };
             // The component owns the selection: the item is resolved at the

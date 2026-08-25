@@ -438,6 +438,23 @@ pub enum ShellRequest {
     BrowserShuffle {
         item: EmbyItem,
     },
+    /// Bare or Alt+`r` on the mounted generic/Movies/home-video
+    /// `BrowserComponent` (task 5.3d, Emby browser refresh): the component
+    /// reports that the focused browser wants a metadata refresh, and the
+    /// shell derives the active Emby library index from its own tab state and
+    /// runs `App::refresh_lib` on it — preserving the bare-`r` *and* legacy
+    /// Alt+`r` behavior (both reach the legacy arm without a CONTROL
+    /// modifier). No item is carried: the effect targets the whole active
+    /// library, not a selected row.
+    BrowserRefresh,
+    /// Ctrl+`r` on the mounted generic/Movies/home-video `BrowserComponent`
+    /// (task 5.3d, Emby browser rescan): the component reports that the
+    /// focused browser wants a metadata rescan, and the shell raises the same
+    /// Rescan Library confirmation the legacy `handle_lib_key` arm did
+    /// (identical title/message/hint and `ConfirmAction::RescanLibrary(lib_idx)`
+    /// derived from the shell's own tab state). No item is carried: the rescan
+    /// confirmation covers the whole active library.
+    BrowserRescan,
 }
 
 /// Region of the generic Emby browser a click resolved to, reported by
