@@ -548,14 +548,19 @@ impl App {
 
     fn render_audiobookshelf_library(
         &mut self,
-        f: &mut Frame,
+        _f: &mut Frame,
         area: Rect,
-        focused: bool,
+        _focused: bool,
         layout: &mut LayoutMain,
     ) {
         // The Book surface is painted by the mounted `AudiobookshelfBookComponent`
         // (task 5.3d.13, render ownership); the legacy App renderer was removed, so
-        // nothing is painted here for Book. Podcast still uses the legacy path.
+        // nothing is painted here for Book. The Podcast surface is painted by the
+        // mounted `AudiobookshelfPodcastComponent` (task 5.3d.10, Unit E, render
+        // ownership); the legacy App renderer was removed, so nothing is painted
+        // here for Podcast either — the area is reserved for the shell's
+        // `render_audiobookshelf_podcast_component` overlay, mirroring the Book
+        // sibling contract above.
         if let Some(index) = self.tab.audiobookshelf_index() {
             if matches!(
                 self.audiobookshelf_kind_at(index),
@@ -568,7 +573,9 @@ impl App {
                 return;
             }
         }
-        self.render_audiobookshelf_podcasts(f, area, focused, layout);
+        // Reserve the Podcast content area for the mounted component overlay;
+        // do not invoke the legacy underpaint renderer (task 5.3d.10, Unit E).
+        layout.audiobookshelf_podcast_area = area;
     }
 
     /// Returns the currently cursor-selected item at the album-folder-listing
