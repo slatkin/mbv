@@ -1,13 +1,73 @@
 use crate::app::render::arrangements::hero_left;
+use crate::app::render::components::detail_series_view::{
+    SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
+    SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS,
+};
 use crate::app::render::components::hero::{
-    inline_detail_flow, inline_display_row, inline_display_row_count, selected_detail_shell,
-    HeroContent, HeroLine, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
+    inline_detail_flow, inline_display_row, inline_display_row_count, inline_hero_text_width,
+    selected_detail_shell, wrap_overview_lines, HeroContent, HeroLine, HERO_BLOCK_EXTRA_ROWS,
+    HERO_TITLE_ROWS,
 };
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::render::{render_pill_bar, render_placeholder, PillBar};
 use crate::app::types_audiobookshelf_browse::{
     build_show_title_buckets, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
 };
+
+/// Podcast hero content row budget, shared by the legacy `App` narrow
+/// renderer and `AudiobookshelfPodcastComponent`'s narrow path so both admit
+/// the same inline-detail height. Mirrors the prior
+/// `App::audiobookshelf_hero_content_rows` behavior exactly: title row,
+/// optional author row, blank before a nonempty description, wrapped
+/// description (capped at four rows) using `wrap_overview_lines` +
+/// `inline_hero_text_width` with the image dimensions, episode
+/// divider/visible-or-estimated episode rows, trailing blank, and the
+/// image-height minimum when images are enabled.
+pub(in crate::app::render) fn podcast_hero_content_rows(
+    state: &AudiobookshelfBrowseState,
+    show_title: bool,
+    width: u16,
+    images_enabled: bool,
+) -> u16 {
+    let title_rows = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
+    let author_rows = state
+        .selected_show()
+        .and_then(|show| show.author.as_ref())
+        .is_some() as u16;
+    let mut rows = title_rows + author_rows;
+    if let Some(description) = state
+        .selected_show()
+        .and_then(|show| show.description.as_deref())
+        .filter(|description| !description.is_empty())
+    {
+        rows += 1;
+        let (image_width, image_height) = if images_enabled {
+            (SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS)
+        } else {
+            (0, 0)
+        };
+        let description_start = title_rows + author_rows + 1;
+        rows += wrap_overview_lines(description, |line| {
+            let row = description_start + line as u16;
+            inline_hero_text_width(width, image_width, image_height, row) as usize
+        })
+        .len()
+        .min(4) as u16;
+    }
+    if state.episode_selection.is_some() {
+        rows += 1 + SERIES_DETAIL_DIVIDER_ROWS as u16;
+        rows += state
+            .episodes
+            .as_ref()
+            .map(|_| state.visible_episodes().len())
+            .unwrap_or(SERIES_DETAIL_EPISODE_ROWS_ESTIMATE) as u16;
+    }
+    rows += SERIES_DETAIL_TRAILING_BLANK_ROWS as u16;
+    if images_enabled {
+        rows = rows.max(SERIES_IMAGE_ROWS + 1);
+    }
+    rows
+}
 use crate::app::{library_column_width, palette};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -28,12 +88,13 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     frame: &mut Frame,
     area: Rect,
     focused: bool,
+    images_enabled: bool,
     state: &mut AudiobookshelfBrowseState,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) {
     *geometry = AudiobookshelfPodcastGeometry::default();
     let Some((hero_panel, right_panel)) = hero_left::shared_hero_presentation(area) else {
-        render_narrow_podcast(frame, area, focused, state, geometry);
+        render_narrow_podcast(frame, area, focused, images_enabled, state, geometry);
         return;
     };
 
@@ -49,6 +110,7 @@ fn render_narrow_podcast(
     frame: &mut Frame,
     area: Rect,
     focused: bool,
+    images_enabled: bool,
     state: &mut AudiobookshelfBrowseState,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) {
@@ -79,8 +141,17 @@ fn render_narrow_podcast(
         },
     );
 
-    let hero_rows = HERO_TITLE_ROWS + HERO_BLOCK_EXTRA_ROWS;
     let list_area = parts.content_area;
+    let hero_content_width = list_area
+        .width
+        .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
+    let desired_rows = podcast_hero_content_rows(state, true, hero_content_width, images_enabled)
+        + HERO_BLOCK_EXTRA_ROWS;
+    let hero_rows = if desired_rows >= HERO_BLOCK_EXTRA_ROWS && desired_rows < list_area.height {
+        desired_rows
+    } else {
+        0
+    };
     render_show_rows(
         frame,
         list_area,
@@ -90,7 +161,7 @@ fn render_narrow_podcast(
         hero_rows,
         geometry,
     );
-    if hero_rows >= list_area.height {
+    if hero_rows == 0 {
         return;
     }
     let cursor_row =
@@ -285,4 +356,168 @@ fn render_show_rows(
         }
     }
     frame.render_widget(List::new(items), area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::podcast_hero_content_rows;
+    use crate::app::render::components::detail_series_view::{
+        SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
+        SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS,
+    };
+    use crate::app::render::components::hero::{
+        inline_hero_text_width, wrap_overview_lines, HERO_TITLE_ROWS,
+    };
+    use crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState;
+    use mbv_core::audiobookshelf::{
+        AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfShow,
+    };
+
+    fn make_state(show: AudiobookshelfShow) -> AudiobookshelfBrowseState {
+        let library = AudiobookshelfLibrary {
+            id: "lib".into(),
+            name: "Podcasts".into(),
+            media_type: "podcast".into(),
+        };
+        let mut state = AudiobookshelfBrowseState::new(library);
+        state.append_page(0, 20, 1, vec![show]);
+        state.select(0);
+        state
+    }
+
+    /// Independent oracle reproducing the pre-extraction
+    /// `App::audiobookshelf_hero_content_rows` body, so the shared helper is
+    /// proved equivalent to the legacy rule it replaces (author, long
+    /// description, episode, and image cases all shift the budget exactly as
+    /// before).
+    fn legacy_hero_content_rows(
+        state: &AudiobookshelfBrowseState,
+        show_title: bool,
+        width: u16,
+        images_enabled: bool,
+    ) -> u16 {
+        let title_rows = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
+        let author_rows = state
+            .selected_show()
+            .and_then(|show| show.author.as_ref())
+            .is_some() as u16;
+        let mut rows = title_rows + author_rows;
+        if let Some(description) = state
+            .selected_show()
+            .and_then(|show| show.description.as_deref())
+            .filter(|description| !description.is_empty())
+        {
+            rows += 1;
+            let (image_width, image_height) = if images_enabled {
+                (SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS)
+            } else {
+                (0, 0)
+            };
+            let description_start = title_rows + author_rows + 1;
+            rows += wrap_overview_lines(description, |line| {
+                let row = description_start + line as u16;
+                inline_hero_text_width(width, image_width, image_height, row) as usize
+            })
+            .len()
+            .min(4) as u16;
+        }
+        if state.episode_selection.is_some() {
+            rows += 1 + SERIES_DETAIL_DIVIDER_ROWS as u16;
+            rows += state
+                .episodes
+                .as_ref()
+                .map(|_| state.visible_episodes().len())
+                .unwrap_or(SERIES_DETAIL_EPISODE_ROWS_ESTIMATE) as u16;
+        }
+        rows += SERIES_DETAIL_TRAILING_BLANK_ROWS as u16;
+        if images_enabled {
+            rows = rows.max(SERIES_IMAGE_ROWS + 1);
+        }
+        rows
+    }
+
+    fn assert_matches_legacy(state: &AudiobookshelfBrowseState, width: u16, images_enabled: bool) {
+        let got = podcast_hero_content_rows(state, true, width, images_enabled);
+        let expected = legacy_hero_content_rows(state, true, width, images_enabled);
+        assert_eq!(got, expected, "shared helper must match legacy rule");
+    }
+
+    #[test]
+    fn narrow_podcast_budget_matches_legacy_for_author_only() {
+        let state = make_state(AudiobookshelfShow {
+            library_item_id: "s".into(),
+            title: "Show".into(),
+            author: Some("Author".into()),
+            description: None,
+            cover_path: None,
+        });
+        // title(1) + author(1) + trailing(1) = 3; no image minimum.
+        assert_eq!(podcast_hero_content_rows(&state, true, 40, false), 3);
+        assert_matches_legacy(&state, 40, false);
+    }
+
+    #[test]
+    fn narrow_podcast_budget_matches_legacy_for_long_description() {
+        let state = make_state(AudiobookshelfShow {
+            library_item_id: "s".into(),
+            title: "Show".into(),
+            author: Some("Author".into()),
+            description: Some("word ".repeat(80)),
+            cover_path: None,
+        });
+        assert_matches_legacy(&state, 40, false);
+    }
+
+    #[test]
+    fn narrow_podcast_budget_matches_legacy_for_episodes() {
+        let mut state = make_state(AudiobookshelfShow {
+            library_item_id: "s".into(),
+            title: "Show".into(),
+            author: None,
+            description: None,
+            cover_path: None,
+        });
+        state.episode_selection = Some(0);
+        state.episodes = Some(vec![
+            AudiobookshelfDownloadedEpisode {
+                library_item_id: "s".into(),
+                episode_id: "e1".into(),
+                title: "E1".into(),
+                published_at: None,
+                duration_seconds: None,
+            },
+            AudiobookshelfDownloadedEpisode {
+                library_item_id: "s".into(),
+                episode_id: "e2".into(),
+                title: "E2".into(),
+                published_at: None,
+                duration_seconds: None,
+            },
+            AudiobookshelfDownloadedEpisode {
+                library_item_id: "s".into(),
+                episode_id: "e3".into(),
+                title: "E3".into(),
+                published_at: None,
+                duration_seconds: None,
+            },
+        ]);
+        assert_matches_legacy(&state, 40, false);
+    }
+
+    #[test]
+    fn narrow_podcast_budget_matches_legacy_for_images_minimum() {
+        let state = make_state(AudiobookshelfShow {
+            library_item_id: "s".into(),
+            title: "Show".into(),
+            author: None,
+            description: None,
+            cover_path: None,
+        });
+        // Images enabled lifts even a title-only budget to SERIES_IMAGE_ROWS+1.
+        assert_eq!(
+            podcast_hero_content_rows(&state, true, 40, true),
+            SERIES_IMAGE_ROWS + 1
+        );
+        assert_matches_legacy(&state, 40, true);
+    }
 }

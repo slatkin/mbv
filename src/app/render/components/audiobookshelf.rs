@@ -171,8 +171,13 @@ impl App {
         let hero_content_width = list_area
             .width
             .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
-        let desired_rows = self.audiobookshelf_hero_content_rows(index, true, hero_content_width)
-            + HERO_BLOCK_EXTRA_ROWS;
+        let desired_rows =
+            crate::app::render::components::audiobookshelf_podcast::podcast_hero_content_rows(
+                &self.audiobookshelf_browse[index],
+                true,
+                hero_content_width,
+                self.images_enabled(),
+            ) + HERO_BLOCK_EXTRA_ROWS;
         let hero_rows = if desired_rows >= HERO_BLOCK_EXTRA_ROWS && desired_rows < list_area.height
         {
             desired_rows
@@ -253,52 +258,6 @@ impl App {
                 prefix: Some(" ⌘ "),
             },
         );
-    }
-
-    fn audiobookshelf_hero_content_rows(&self, index: usize, show_title: bool, width: u16) -> u16 {
-        let state = &self.audiobookshelf_browse[index];
-        let mut rows = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
-        rows += state
-            .selected_show()
-            .and_then(|show| show.author.as_ref())
-            .is_some() as u16;
-        if let Some(description) = state
-            .selected_show()
-            .and_then(|show| show.description.as_deref())
-            .filter(|description| !description.is_empty())
-        {
-            rows += 1;
-            let (image_width, image_height) = if self.images_enabled() {
-                (SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS)
-            } else {
-                (0, 0)
-            };
-            let description_start = HERO_TITLE_ROWS.saturating_mul(show_title as u16)
-                + state
-                    .selected_show()
-                    .and_then(|show| show.author.as_ref())
-                    .is_some() as u16
-                + 1;
-            rows += wrap_overview_lines(description, |line| {
-                let row = description_start + line as u16;
-                inline_hero_text_width(width, image_width, image_height, row) as usize
-            })
-            .len()
-            .min(4) as u16;
-        }
-        if state.episode_selection.is_some() {
-            rows += 1 + SERIES_DETAIL_DIVIDER_ROWS as u16;
-            rows += state
-                .episodes
-                .as_ref()
-                .map(|_| state.visible_episodes().len())
-                .unwrap_or(SERIES_DETAIL_EPISODE_ROWS_ESTIMATE) as u16;
-        }
-        rows += SERIES_DETAIL_TRAILING_BLANK_ROWS as u16;
-        if self.images_enabled() {
-            rows = rows.max(SERIES_IMAGE_ROWS + 1);
-        }
-        rows
     }
 
     fn render_audiobookshelf_hero(

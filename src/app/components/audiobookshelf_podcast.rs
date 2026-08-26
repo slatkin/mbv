@@ -28,6 +28,7 @@ pub struct AudiobookshelfPodcastComponent {
     state: AudiobookshelfBrowseState,
     initialized: bool,
     focused: bool,
+    images_enabled: bool,
     geometry: AudiobookshelfPodcastGeometry,
 }
 
@@ -43,6 +44,7 @@ impl AudiobookshelfPodcastComponent {
             ),
             initialized: false,
             focused: false,
+            images_enabled: false,
             geometry: AudiobookshelfPodcastGeometry::default(),
         }
     }
@@ -51,7 +53,7 @@ impl AudiobookshelfPodcastComponent {
         &mut self,
         snapshot: &AudiobookshelfBrowseState,
         focused: bool,
-        _images_enabled: bool,
+        images_enabled: bool,
     ) {
         let selected_id = self
             .initialized
@@ -80,6 +82,7 @@ impl AudiobookshelfPodcastComponent {
         }
         self.initialized = true;
         self.focused = focused;
+        self.images_enabled = images_enabled;
     }
 
     pub(in crate::app) fn cursor(&self) -> usize {
@@ -295,6 +298,7 @@ impl Component for AudiobookshelfPodcastComponent {
             frame,
             area,
             self.focused,
+            self.images_enabled,
             &mut self.state,
             &mut self.geometry,
         );
