@@ -111,6 +111,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::components::msg::PodcastShowMove;
     use crate::app::components::{Msg, ShellRequest};
     use crate::app::tests_podcast::audiobookshelf_app;
     use mbv_core::audiobookshelf::AudiobookshelfShow;
@@ -144,10 +145,15 @@ mod tests {
                 code: Key::Down,
                 modifiers: KeyModifiers::NONE,
             }));
-        let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastKey(key))) = message else {
-            panic!("podcast movement should be routed as a shell request");
+        let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(movement))) = message
+        else {
+            panic!("show movement should be routed as a typed show-move request");
         };
-        assert!(!model.handle_audiobookshelf_podcast_key(key));
+        assert_eq!(movement, PodcastShowMove::NextRow);
+        // The shell arm maps NextRow onto the legacy row-stride move and
+        // re-projects content (task 5.3d.5), preserving the App target.
+        model.app.move_audiobookshelf_show_rows(1);
+        model.push_audiobookshelf_podcast_content();
         assert_eq!(model.app.audiobookshelf_browse[0].cursor(), 1);
     }
 }

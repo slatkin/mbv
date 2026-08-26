@@ -14,7 +14,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{LegacyTerminalEvent, Msg, PodcastShowMove, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry};
 use crate::app::types_audiobookshelf_browse::{
@@ -97,27 +97,51 @@ impl AudiobookshelfPodcastComponent {
         match key.code {
             Key::Up | Key::Char('k') if self.state.episode_selection.is_none() => {
                 self.move_cursor(-1);
+                return Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(
+                    PodcastShowMove::PreviousRow,
+                )));
             }
             Key::Down | Key::Char('j') if self.state.episode_selection.is_none() => {
                 self.move_cursor(1);
+                return Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(
+                    PodcastShowMove::NextRow,
+                )));
             }
             Key::Left | Key::Char('h') if self.state.episode_selection.is_none() => {
                 self.move_cursor(-1);
+                return Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(
+                    PodcastShowMove::PreviousItem,
+                )));
             }
             Key::Right | Key::Char('l') if self.state.episode_selection.is_none() => {
                 self.move_cursor(1);
+                return Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(
+                    PodcastShowMove::NextItem,
+                )));
             }
             Key::PageUp if self.state.episode_selection.is_none() => {
                 self.move_cursor(-(self.page_size() as i64));
+                return Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(
+                    PodcastShowMove::PreviousPage,
+                )));
             }
             Key::PageDown if self.state.episode_selection.is_none() => {
                 self.move_cursor(self.page_size() as i64);
+                return Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(
+                    PodcastShowMove::NextPage,
+                )));
             }
             Key::Home if self.state.episode_selection.is_none() => {
                 self.state.select(0);
+                return Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(
+                    PodcastShowMove::First,
+                )));
             }
             Key::End if self.state.episode_selection.is_none() => {
                 self.state.select(self.state.shows.len().saturating_sub(1));
+                return Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(
+                    PodcastShowMove::Last,
+                )));
             }
             Key::Up | Key::Char('k') => self.move_episode(-1),
             Key::Down | Key::Char('j') => self.move_episode(1),

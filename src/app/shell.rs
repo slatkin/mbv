@@ -21,7 +21,7 @@ use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
 use super::components::msg::{
-    AlbumCursorKind, BrowserHitRegion, HomeHitRegion, QueueHitRegion, TvHitRegion,
+    AlbumCursorKind, BrowserHitRegion, HomeHitRegion, PodcastShowMove, QueueHitRegion, TvHitRegion,
 };
 use super::components::{
     ComponentId, LegacyTerminalEvent, Msg, OverlayId, PlaybackComponent, ShellRequest,
@@ -727,6 +727,43 @@ impl Model {
                             // Key-forcing the component's events into App may
                             // have moved the browse cursor/selection/focus;
                             // re-project (5.3d).
+                            self.push_audiobookshelf_podcast_content();
+                        }
+                        Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(movement)) => {
+                            // Typed podcast show-list movement (task 5.3d.5). The
+                            // component already mutated its local cursor; map onto
+                            // the legacy App show-move operations so the painted
+                            // cursor and the position-save/detail-fetch target
+                            // both stay unchanged (D17). Compute the page size
+                            // before the move call to avoid a borrow conflict.
+                            match movement {
+                                PodcastShowMove::PreviousRow => {
+                                    self.app.move_audiobookshelf_show_rows(-1);
+                                }
+                                PodcastShowMove::NextRow => {
+                                    self.app.move_audiobookshelf_show_rows(1);
+                                }
+                                PodcastShowMove::PreviousItem => {
+                                    self.app.move_audiobookshelf_show_cursor(-1);
+                                }
+                                PodcastShowMove::NextItem => {
+                                    self.app.move_audiobookshelf_show_cursor(1);
+                                }
+                                PodcastShowMove::PreviousPage => {
+                                    let page = self.app.lib_page_size() as i64;
+                                    self.app.move_audiobookshelf_show_rows(-page);
+                                }
+                                PodcastShowMove::NextPage => {
+                                    let page = self.app.lib_page_size() as i64;
+                                    self.app.move_audiobookshelf_show_rows(page);
+                                }
+                                PodcastShowMove::First => {
+                                    self.app.jump_audiobookshelf_show_cursor(false);
+                                }
+                                PodcastShowMove::Last => {
+                                    self.app.jump_audiobookshelf_show_cursor(true);
+                                }
+                            }
                             self.push_audiobookshelf_podcast_content();
                         }
                         Msg::Shell(ShellRequest::AudiobookshelfBookKey(key)) => {

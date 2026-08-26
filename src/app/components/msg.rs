@@ -138,6 +138,22 @@ pub enum AlbumCursorKind {
     Jump,
     Page,
 }
+
+/// Closed set of podcast show-list movement operations (task 5.3d.5). The
+/// component performs its local cursor arithmetic and emits the matching
+/// variant; the shell maps it onto the legacy App show-move operations
+/// preserving the current position-save/detail-fetch target (D17).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PodcastShowMove {
+    PreviousRow,
+    NextRow,
+    PreviousItem,
+    NextItem,
+    PreviousPage,
+    NextPage,
+    First,
+    Last,
+}
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
 /// Shell-level requests from Interactive Components: mount/dismiss overlays,
@@ -290,6 +306,12 @@ pub enum ShellRequest {
     /// Forward Audiobookshelf podcast effects to the legacy App handler while
     /// the browser's local state remains component-owned.
     AudiobookshelfPodcastKey(crossterm::event::KeyEvent),
+    /// Typed podcast show-list movement (task 5.3d.5). Emitted by the component
+    /// after its local cursor mutation for Up/k, Down/j, Left/h, Right/l,
+    /// PageUp/PageDown, Home/End while no episode selection is active; the
+    /// shell maps the variant onto the legacy App show-move operations and
+    /// re-projects podcast content.
+    AudiobookshelfPodcastShowMove(PodcastShowMove),
     /// Forward Audiobookshelf book effects to the legacy App handler while
     /// the browser's local state remains component-owned.
     AudiobookshelfBookKey(crossterm::event::KeyEvent),

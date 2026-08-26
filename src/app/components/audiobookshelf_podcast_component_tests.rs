@@ -1,4 +1,5 @@
 use super::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
+use super::msg::{Msg, PodcastShowMove, ShellRequest};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
@@ -15,7 +16,10 @@ fn abs_podcast_component_keeps_local_show_cursor_and_renders_without_app_state()
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(message.is_some());
+    let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(movement))) = message else {
+        panic!("show movement should be a typed show-move request");
+    };
+    assert_eq!(movement, PodcastShowMove::NextRow);
     assert_eq!(component.cursor(), 0);
 
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
