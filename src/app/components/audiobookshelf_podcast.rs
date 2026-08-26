@@ -19,7 +19,9 @@ use super::msg::{
     ShellRequest,
 };
 use super::user_event::UserEvent;
-use crate::app::render::{render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry};
+use crate::app::render::{
+    render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry, HomeImagePaint,
+};
 use crate::app::types_audiobookshelf_browse::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
 };
@@ -30,6 +32,7 @@ pub struct AudiobookshelfPodcastComponent {
     focused: bool,
     images_enabled: bool,
     geometry: AudiobookshelfPodcastGeometry,
+    image_paint: Option<HomeImagePaint>,
 }
 
 impl AudiobookshelfPodcastComponent {
@@ -46,6 +49,7 @@ impl AudiobookshelfPodcastComponent {
             focused: false,
             images_enabled: false,
             geometry: AudiobookshelfPodcastGeometry::default(),
+            image_paint: None,
         }
     }
 
@@ -87,6 +91,14 @@ impl AudiobookshelfPodcastComponent {
 
     pub(in crate::app) fn cursor(&self) -> usize {
         self.state.cursor()
+    }
+
+    /// The image-paint plan this component computed during its last `view`
+    /// (task 5.3d.10b): `Some` only when images are enabled, a selected show
+    /// hero was actually admitted/painted, and the hero reserved an image
+    /// rect. Replaced on every `view`, taken once by the shell after paint.
+    pub(in crate::app) fn take_image_paint(&mut self) -> Option<HomeImagePaint> {
+        self.image_paint.take()
     }
 
     fn move_cursor(&mut self, delta: i64) {
@@ -294,7 +306,7 @@ impl Default for AudiobookshelfPodcastComponent {
 
 impl Component for AudiobookshelfPodcastComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        render_audiobookshelf_podcast_content(
+        self.image_paint = render_audiobookshelf_podcast_content(
             frame,
             area,
             self.focused,

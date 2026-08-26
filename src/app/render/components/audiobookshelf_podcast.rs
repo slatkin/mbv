@@ -5,11 +5,11 @@ use crate::app::render::components::detail_series_view::{
 };
 use crate::app::render::components::hero::{
     inline_detail_flow, inline_display_row, inline_display_row_count, inline_hero_text_width,
-    selected_detail_shell, wrap_overview_lines, HeroContent, HeroLine, HERO_BLOCK_EXTRA_ROWS,
-    HERO_TITLE_ROWS,
+    selected_detail_shell, wrap_overview_lines, HeroContent, HeroImage, HeroLine,
+    HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
-use crate::app::render::{render_pill_bar, render_placeholder, PillBar};
+use crate::app::render::{render_pill_bar, render_placeholder, HomeImagePaint, PillBar};
 use crate::app::types_audiobookshelf_browse::{
     build_show_title_buckets, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
 };
@@ -91,19 +91,27 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     images_enabled: bool,
     state: &mut AudiobookshelfBrowseState,
     geometry: &mut AudiobookshelfPodcastGeometry,
-) {
+) -> Option<HomeImagePaint> {
     *geometry = AudiobookshelfPodcastGeometry::default();
     let Some((hero_panel, right_panel)) = hero_left::shared_hero_presentation(area) else {
-        render_narrow_podcast(frame, area, focused, images_enabled, state, geometry);
-        return;
+        return render_narrow_podcast(frame, area, focused, images_enabled, state, geometry);
     };
 
-    render_podcast_hero(frame, hero_panel, state, focused, true, geometry);
+    let image_paint = render_podcast_hero(
+        frame,
+        hero_panel,
+        state,
+        focused,
+        true,
+        images_enabled,
+        geometry,
+    );
     if state.shows.is_empty() {
         render_placeholder(frame, right_panel, "No podcast shows");
-        return;
+        return image_paint;
     }
     render_show_rows(frame, right_panel, focused, state, 1, 0, geometry);
+    image_paint
 }
 
 fn render_narrow_podcast(
@@ -113,14 +121,14 @@ fn render_narrow_podcast(
     images_enabled: bool,
     state: &mut AudiobookshelfBrowseState,
     geometry: &mut AudiobookshelfPodcastGeometry,
-) {
+) -> Option<HomeImagePaint> {
     if state.shows.is_empty() {
         render_placeholder(
             frame,
             area,
             state.error.as_deref().unwrap_or("No podcast shows"),
         );
-        return;
+        return None;
     }
     let parts = hero_left::pill_bar_areas(area);
     let buckets = build_show_title_buckets(&state.shows);
@@ -162,13 +170,13 @@ fn render_narrow_podcast(
         geometry,
     );
     if hero_rows == 0 {
-        return;
+        return None;
     }
     let cursor_row =
         state.cursor() / library_column_width::library_column_count(list_area.width).max(1);
     let Some(flow) = inline_detail_flow(cursor_row, hero_rows, list_area.height, state.scroll)
     else {
-        return;
+        return None;
     };
     state.scroll = flow.offset;
     let hero_area = Rect {
@@ -178,7 +186,15 @@ fn render_narrow_podcast(
         height: hero_rows,
     };
     selected_detail_shell(frame, hero_area, hero_rows, focused);
-    render_podcast_hero(frame, hero_area, state, focused, false, geometry);
+    render_podcast_hero(
+        frame,
+        hero_area,
+        state,
+        focused,
+        false,
+        images_enabled,
+        geometry,
+    )
 }
 
 fn render_podcast_hero(
@@ -187,11 +203,10 @@ fn render_podcast_hero(
     state: &AudiobookshelfBrowseState,
     focused: bool,
     show_title: bool,
+    images_enabled: bool,
     geometry: &mut AudiobookshelfPodcastGeometry,
-) {
-    let Some(show) = state.selected_show() else {
-        return;
-    };
+) -> Option<HomeImagePaint> {
+    let show = state.selected_show()?;
     let mut lines = Vec::new();
     if let Some(author) = &show.author {
         lines.push(HeroLine::Plain(author.clone()));
@@ -218,7 +233,10 @@ fn render_podcast_hero(
             show_playing: false,
             unconditional_spacer_after_meta: false,
             lines: &lines,
-            image: None,
+            image: images_enabled.then_some(HeroImage {
+                actual_w: SERIES_IMAGE_COLS,
+                height: SERIES_IMAGE_ROWS,
+            }),
         },
         focused,
     );
@@ -274,6 +292,11 @@ fn render_podcast_hero(
             geometry.episode_rows.push((row, index));
         }
     }
+    (images_enabled && result.img_rect.is_some()).then(|| HomeImagePaint::AudiobookshelfCover {
+        area: result.img_rect.unwrap(),
+        library_item_id: show.library_item_id.clone(),
+        show_placeholder: true,
+    })
 }
 
 fn render_show_rows(

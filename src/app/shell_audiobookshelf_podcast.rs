@@ -165,6 +165,15 @@ impl Model {
             return;
         }
         self.application.view(id, frame, area);
+        let image_paint = self
+            .application
+            .get_component_mut(id)
+            .and_then(|comp| {
+                comp.as_any_mut()
+                    .downcast_mut::<AudiobookshelfPodcastComponent>()
+            })
+            .and_then(AudiobookshelfPodcastComponent::take_image_paint);
+        self.app.paint_home_image(frame, image_paint);
     }
 }
 
@@ -175,8 +184,14 @@ mod tests {
         PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove,
     };
     use crate::app::components::{Msg, ShellRequest};
+    use crate::app::render::HomeImagePaint;
     use crate::app::tests_podcast::audiobookshelf_app;
-    use mbv_core::audiobookshelf::AudiobookshelfShow;
+    use crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState;
+    use mbv_core::audiobookshelf::{AudiobookshelfLibrary, AudiobookshelfShow};
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+    use ratatui::Terminal;
+    use tuirealm::component::Component;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
@@ -272,5 +287,66 @@ mod tests {
         model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::Enqueue);
         assert_eq!(model.app.audiobookshelf_browse[0].episode_selection, before);
         assert_eq!(model.app.player_tab.total_queue_len(), 1);
+    }
+
+    /// Synchronous image-plan lifecycle for the podcast component (task
+    /// 5.3d.10b): images disabled yields no plan, images enabled with a
+    /// selected show yields the correct `AudiobookshelfCover` id + nonzero
+    /// paint rect, and a subsequent disabled view clears the plan with no
+    /// stale paint. No network fetch or secret is scheduled.
+    #[test]
+    fn abs_podcast_component_image_plan_lifecycle() {
+        let mut component = AudiobookshelfPodcastComponent::new();
+        let show = AudiobookshelfShow {
+            library_item_id: "show-paint".into(),
+            title: "Show".into(),
+            author: None,
+            description: None,
+            cover_path: None,
+        };
+        let mut state = AudiobookshelfBrowseState::new(AudiobookshelfLibrary {
+            id: "lib".into(),
+            name: "Podcasts".into(),
+            media_type: "podcast".into(),
+        });
+        state.append_page(0, 20, 1, vec![show]);
+        state.select(0);
+
+        let backend = TestBackend::new(100, 40);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let area = Rect::new(0, 0, 100, 40);
+
+        // Images disabled: no plan, even with a selected show.
+        component.set_content(&state, true, false);
+        terminal.draw(|frame| component.view(frame, area)).unwrap();
+        assert!(component.take_image_paint().is_none());
+
+        // Images enabled with a selected show: plan carries the show id and a
+        // nonzero paint rect (mirrors the ABS Book component handoff).
+        component.set_content(&state, true, true);
+        terminal.draw(|frame| component.view(frame, area)).unwrap();
+        let plan = component.take_image_paint();
+        let Some(HomeImagePaint::AudiobookshelfCover {
+            area: paint_area,
+            library_item_id,
+            show_placeholder,
+        }) = plan
+        else {
+            panic!("expected AudiobookshelfCover plan when images enabled");
+        };
+        assert_eq!(library_item_id, "show-paint");
+        assert!(
+            paint_area.width > 0 && paint_area.height > 0,
+            "paint rect must be nonzero"
+        );
+        assert!(
+            show_placeholder,
+            "podcast hero uses the placeholder cover path"
+        );
+
+        // A subsequent disabled view must clear the plan (no stale paint).
+        component.set_content(&state, true, false);
+        terminal.draw(|frame| component.view(frame, area)).unwrap();
+        assert!(component.take_image_paint().is_none());
     }
 }
