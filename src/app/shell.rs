@@ -807,9 +807,15 @@ impl Model {
                             self.push_audiobookshelf_podcast_content();
                         }
                         Msg::Shell(ShellRequest::AudiobookshelfBookKey(key)) => {
+                            // Component-originated book key writer seam (5.3d):
+                            // the key rewrites the active ABS browse state in
+                            // App's handler; re-project (5.3d). Preserve quit
+                            // handling -- re-project regardless so the mounted
+                            // book browser tracks App state even on the quit key.
                             if self.handle_audiobookshelf_book_key(key) {
                                 quit = true;
                             }
+                            self.push_audiobookshelf_book_content();
                         }
                         // Browser (generic Emby) mouse geometry lives in
                         // `BrowserComponent`, which forwards the hit region; the

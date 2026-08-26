@@ -77,8 +77,19 @@ impl Model {
         let Some(id) = self.abs_book_id.as_ref() else {
             return;
         };
+        // Mirror `sync_audiobookshelf_book`'s active-tab guard: only project
+        // while this tab's browse kind is still Book, so a stale mounted book
+        // component never receives a non-Book snapshot before mount
+        // reconciliation (task 5.3d).
         let index = match self.app.tab {
-            TabSelection::AudiobookshelfLibrary(index) => index,
+            TabSelection::AudiobookshelfLibrary(index)
+                if matches!(
+                    self.app.audiobookshelf_kind_at(index),
+                    Some(AudiobookshelfBrowseKind::Book)
+                ) =>
+            {
+                index
+            }
             _ => return,
         };
         let Some(snapshot) = self.app.audiobookshelf_book_browse.get(index) else {
