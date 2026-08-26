@@ -55,6 +55,29 @@ impl Model {
         }))
     }
 
+    /// Resolves and downcasts the mounted Audiobookshelf podcast browser for
+    /// the given browse index, or `None` when it is not the active mounted
+    /// browser (task 5.3d.11 U0). The mount path keys the single mounted
+    /// browser on the active tab, so the component exists only when `index`
+    /// matches that tab.
+    pub(super) fn abs_podcast_component_mut(
+        &mut self,
+        index: usize,
+    ) -> Option<&mut AudiobookshelfPodcastComponent> {
+        let active_index = match self.app.tab {
+            TabSelection::AudiobookshelfLibrary(index) => index,
+            _ => return None,
+        };
+        if active_index != index {
+            return None;
+        }
+        let id = self.abs_podcast_id.as_ref()?;
+        self.application.get_component_mut(id).and_then(|comp| {
+            comp.as_any_mut()
+                .downcast_mut::<AudiobookshelfPodcastComponent>()
+        })
+    }
+
     /// Mounts / unmounts the Audiobookshelf podcast browser component to follow
     /// the active tab (task 5.3d). This is the mount lifecycle only: content is
     /// no longer mirrored into the component on every tick. The per-frame

@@ -93,6 +93,35 @@ impl AudiobookshelfPodcastComponent {
         self.state.cursor()
     }
 
+    /// Re-home accessors (task 5.3d.11 U0): owned/copy views of the shared
+    /// `AudiobookshelfBrowseState` members the App-level readers read. The
+    /// state struct is shared with `App.audiobookshelf_browse`, so these let
+    /// the shell read the component's authoritative selection without touching
+    /// the legacy App readers.
+    pub(in crate::app) fn selected_id(&self) -> Option<String> {
+        self.state.selected_id.clone()
+    }
+
+    pub(in crate::app) fn episode_selection(&self) -> Option<usize> {
+        self.state.episode_selection
+    }
+
+    pub(in crate::app) fn episode_filter(&self) -> AudiobookshelfEpisodeFilter {
+        self.state.episode_filter
+    }
+
+    /// Re-home mutators (task 5.3d.11 U0): write the shared browse state the
+    /// legacy handlers currently touch via `App.audiobookshelf_browse`.
+    /// `set_episode_filter` delegates to the state's existing reset semantics
+    /// (drops any in-progress episode selection to `0`).
+    pub(in crate::app) fn set_episode_filter(&mut self, filter: AudiobookshelfEpisodeFilter) {
+        self.state.set_episode_filter(filter);
+    }
+
+    pub(in crate::app) fn set_episode_selection(&mut self, selection: Option<usize>) {
+        self.state.episode_selection = selection;
+    }
+
     /// The image-paint plan this component computed during its last `view`
     /// (task 5.3d.10b): `Some` only when images are enabled, a selected show
     /// hero was actually admitted/painted, and the hero reserved an image
