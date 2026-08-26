@@ -262,12 +262,18 @@ impl Model {
                 }
             }
             had_events |= self.app.drain_audiobookshelf_events();
+            // ABS startup/refresh reset the browse state and reconcile
+            // per-episode progress; re-project the active podcast browser
+            // (task 5.3d, sync_audiobookshell_podcast Phase A).
+            self.push_audiobookshelf_podcast_content();
             if let Ok(ev) = self.app.player_rx.try_recv() {
                 had_events = true;
                 let restart = self.app.handle_player_event(ev);
                 // Playback completion refetches Home; re-project (task 5.3d, sync_home
                 // mirror deletion).
                 self.push_home_content();
+                // Player events can reconcile ABS podcast progress; re-project (5.3d).
+                self.push_audiobookshelf_podcast_content();
                 if restart {
                     continue 'outer;
                 }
@@ -314,8 +320,12 @@ impl Model {
                     }
                     ev => self.handle_inline_search_lib_event(ev),
                 }
-                // Every lib event re-projects Home (idempotent; 5.3d).
+                // Every lib event re-projects Home and the podcast browser
+                // (idempotent; 5.3d): lib events deliver ShowsFetched /
+                // DetailFetched async completions, RestoreLibraryPosition
+                // saved-position restore, and audio progress reconciles.
                 self.push_home_content();
+                self.push_audiobookshelf_podcast_content();
             }
 
             // Search results drain: the shell drains `search_rx` and writes
@@ -389,6 +399,9 @@ impl Model {
             while let Ok(ev) = self.app.audiobookshelf_socket_rx.try_recv() {
                 had_events = true;
                 self.app.handle_audiobookshelf_socket_event(ev);
+                // Socket events reconcile ABS podcast episode progress;
+                // re-project (5.3d).
+                self.push_audiobookshelf_podcast_content();
             }
 
             // Drain idle feed items
@@ -502,6 +515,10 @@ impl Model {
                             // content or focus inside App's handler; re-project after every
                             // key at this seam (idempotent) (task 5.3d, sync_home deletion).
                             self.push_home_content();
+                            // Podcast keys (cursor/selection/filter moves and
+                            // panel-focus keys) write the active ABS browse
+                            // state in App's handler; re-project (5.3d).
+                            self.push_audiobookshelf_podcast_content();
                         }
                         Msg::Legacy(LegacyTerminalEvent::Mouse(_mouse)) => {}
                         Msg::Legacy(LegacyTerminalEvent::Resize) => {
@@ -700,6 +717,10 @@ impl Model {
                             if self.handle_audiobookshelf_podcast_key(key) {
                                 quit = true;
                             }
+                            // Key-forcing the component's events into App may
+                            // have moved the browse cursor/selection/focus;
+                            // re-project (5.3d).
+                            self.push_audiobookshelf_podcast_content();
                         }
                         Msg::Shell(ShellRequest::AudiobookshelfBookKey(key)) => {
                             if self.handle_audiobookshelf_book_key(key) {
