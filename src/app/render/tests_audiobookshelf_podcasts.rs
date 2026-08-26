@@ -13,7 +13,6 @@ use ratatui::Terminal;
 /// `LayoutMain` (avoids borrowing `model.app` and `model.app.layout.main`
 /// simultaneously) before painting the mounted component. Returns the model
 /// (so a future unit can assert projected content/layout) and the terminal.
-#[allow(dead_code)]
 fn render_podcast_shell(
     app: crate::app::App,
     width: u16,
@@ -59,9 +58,9 @@ use mbv_core::audiobookshelf::AudiobookshelfShow;
 
 #[test]
 fn wide_podcasts_use_a_left_hero_and_right_show_workspace() {
-    let mut app = audiobookshelf_app();
-    let mut layout = LayoutMain::default();
-    let _ = render_library_to_string_sized(&mut app, &mut layout, 100, 30);
+    let app = audiobookshelf_app();
+    let (model, _terminal) = render_podcast_shell(app, 100, 30, true);
+    let layout = &model.app.layout.main;
 
     assert!(
         layout.hero_area.width < 100,
@@ -77,8 +76,8 @@ fn wide_podcasts_use_a_left_hero_and_right_show_workspace() {
 fn narrow_podcasts_replace_selected_show_row_with_detail() {
     let mut app = audiobookshelf_app();
     app.audiobookshelf_browse[0].shows[0].author = Some("Author A".into());
-    let mut layout = LayoutMain::default();
-    let terminal = render_library_to_terminal_focused(&mut app, &mut layout, true);
+    let (model, terminal) = render_podcast_shell(app, 60, 20, true);
+    let layout = &model.app.layout.main;
 
     assert!(
         layout.hero_area.height > 0,
@@ -122,9 +121,9 @@ fn narrow_podcasts_replace_selected_show_row_with_detail() {
 
 #[test]
 fn narrow_podcast_panel_shows_one_alphabetical_pill_row() {
-    let mut app = audiobookshelf_app();
-    let mut layout = LayoutMain::default();
-    let terminal = render_library_to_terminal_focused(&mut app, &mut layout, true);
+    let app = audiobookshelf_app();
+    let (model, terminal) = render_podcast_shell(app, 60, 20, true);
+    let layout = &model.app.layout.main;
     let buffer = terminal.backend().buffer();
 
     assert_surface_pills(
@@ -165,9 +164,9 @@ fn narrow_podcast_panel_shows_one_alphabetical_pill_row() {
 
 #[test]
 fn narrow_podcast_detail_is_suppressed_when_the_viewport_is_too_short() {
-    let mut app = audiobookshelf_app();
-    let mut layout = LayoutMain::default();
-    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 3);
+    let app = audiobookshelf_app();
+    let (model, _terminal) = render_podcast_shell(app, 60, 3, true);
+    let layout = &model.app.layout.main;
 
     assert_eq!(layout.hero_area.height, 0);
 }
@@ -178,9 +177,8 @@ fn narrow_podcast_hero_reserves_description_rows_at_actual_width() {
     app.audiobookshelf_browse[0].shows[0].description = Some(
         "A deliberately long description that wraps beyond the old fixed estimator width.".into(),
     );
-    let mut layout = LayoutMain::default();
-
-    render_library_to_string_sized(&mut app, &mut layout, 30, 20);
+    let (model, _terminal) = render_podcast_shell(app, 30, 20, true);
+    let layout = &model.app.layout.main;
 
     assert!(
         layout.hero_area.height >= 9,
@@ -201,8 +199,8 @@ fn narrow_podcast_replacement_owns_one_parent_target() {
         cover_path: None,
     }));
     state.select(2);
-    let mut layout = LayoutMain::default();
-    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 20);
+    let (model, _terminal) = render_podcast_shell(app, 60, 20, true);
+    let layout = &model.app.layout.main;
 
     let selected_row = layout
         .left_item_rows
@@ -225,9 +223,9 @@ fn narrow_podcast_replacement_owns_one_parent_target() {
 #[test]
 fn audiobook_podcast_buffer_characterization_covers_default_focused_narrow_and_selected_states() {
     for focused in [false, true] {
-        let mut app = audiobookshelf_app();
-        let mut layout = LayoutMain::default();
-        let terminal = render_library_to_terminal_focused(&mut app, &mut layout, focused);
+        let app = audiobookshelf_app();
+        let (model, terminal) = render_podcast_shell(app, 60, 20, focused);
+        let layout = &model.app.layout.main;
         let output = buffer_to_string(&terminal);
         assert!(
             output.contains("▁"),
@@ -235,9 +233,10 @@ fn audiobook_podcast_buffer_characterization_covers_default_focused_narrow_and_s
         );
     }
 
-    let mut wide_app = audiobookshelf_app();
-    let mut wide_layout = LayoutMain::default();
-    let wide_output = render_library_to_string_sized(&mut wide_app, &mut wide_layout, 100, 30);
+    let wide_app = audiobookshelf_app();
+    let (wide_model, wide_terminal) = render_podcast_shell(wide_app, 100, 30, true);
+    let _wide_layout = &wide_model.app.layout.main;
+    let wide_output = buffer_to_string(&wide_terminal);
     assert!(
         wide_output.contains("Show A"),
         "selected show missing in wide output"
@@ -245,9 +244,9 @@ fn audiobook_podcast_buffer_characterization_covers_default_focused_narrow_and_s
 
     {
         let (width, height) = (40, 20);
-        let mut app = audiobookshelf_app();
-        let mut layout = LayoutMain::default();
-        let output = render_library_to_string_sized(&mut app, &mut layout, width, height);
+        let app = audiobookshelf_app();
+        let (_model, terminal) = render_podcast_shell(app, width, height, true);
+        let output = buffer_to_string(&terminal);
         assert!(
             output.contains("▁"),
             "selected hero shell missing at {width}x{height}"
@@ -270,8 +269,8 @@ fn narrow_podcast_detail_shows_author_description_no_pills_or_table() {
     state.shows[0].author = Some("Author A".into());
     state.shows[0].description = Some("A description of the show.".into());
     state.episode_selection = Some(0);
-    let mut layout = LayoutMain::default();
-    let terminal = render_library_to_terminal_focused(&mut app, &mut layout, true);
+    let (model, terminal) = render_podcast_shell(app, 60, 20, true);
+    let layout = &model.app.layout.main;
     let output = buffer_to_string(&terminal);
 
     assert!(
@@ -322,8 +321,9 @@ fn wide_podcast_detail_preserves_episode_rows_and_played_filtering() {
             is_finished: true,
         },
     );
-    let mut layout = LayoutMain::default();
-    let out = render_library_to_string_sized(&mut app, &mut layout, 100, 30);
+    let (model, terminal) = render_podcast_shell(app, 100, 30, true);
+    let layout = &model.app.layout.main;
+    let out = buffer_to_string(&terminal);
 
     assert!(layout.hero_area.x < layout.left_area.x);
     assert!(!layout.audiobookshelf_episode_rows.is_empty());
