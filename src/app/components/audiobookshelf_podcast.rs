@@ -9,13 +9,14 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, MouseEvent};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
+use super::legacy_input::to_crossterm_mouse_event;
 use super::msg::{
-    LegacyTerminalEvent, Msg, PodcastEpisodeTransition, PodcastShowMove, ShellRequest,
+    LegacyTerminalEvent, Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove,
+    ShellRequest,
 };
 use super::user_event::UserEvent;
 use crate::app::render::{render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry};
@@ -185,11 +186,33 @@ impl AudiobookshelfPodcastComponent {
                     ),
                 ));
             }
-            _ => {}
+            // Space/Enter/Ctrl+A action intents (task 5.3d.7): the component
+            // only reports the matched intent; the shell resolves the
+            // episode-selection and wide/narrow conditions from App state at
+            // the Model boundary and runs the existing App effect (D17).
+            Key::Char(' ') => {
+                return Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+                        PodcastEpisodeIntent::FocusOrPlay,
+                    ),
+                ));
+            }
+            Key::Enter => {
+                return Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+                        PodcastEpisodeIntent::OpenOrPlay,
+                    ),
+                ));
+            }
+            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue),
+                ));
+            }
+            // Unmatched keyboard keys return no message: nothing is
+            // reconstructed or forwarded as a raw terminal key (task 5.3d.7).
+            _ => None,
         }
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastKey(
-            to_crossterm_key_event(key),
-        )))
     }
 
     fn page_size(&self) -> usize {

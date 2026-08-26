@@ -721,13 +721,13 @@ impl Model {
                         Msg::Shell(ShellRequest::FeedsManageKey(key)) => {
                             self.handle_feeds_manage_request(key);
                         }
-                        Msg::Shell(ShellRequest::AudiobookshelfPodcastKey(key)) => {
-                            if self.handle_audiobookshelf_podcast_key(key) {
-                                quit = true;
-                            }
-                            // Key-forcing the component's events into App may
-                            // have moved the browse cursor/selection/focus;
-                            // re-project (5.3d).
+                        Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(intent)) => {
+                            // Typed podcast episode action intent (task 5.3d.7).
+                            // The shell resolves the episode-selection and
+                            // wide/narrow conditions from App state/layout and
+                            // runs the existing App play/enter/modal/enqueue
+                            // effects (D17); re-project after the effect.
+                            self.handle_audiobookshelf_podcast_episode_intent(intent);
                             self.push_audiobookshelf_podcast_content();
                         }
                         Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(movement)) => {

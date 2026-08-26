@@ -168,6 +168,24 @@ pub enum PodcastEpisodeTransition {
     NextFilter,
     Exit,
 }
+
+/// Closed set of podcast episode action intents (task 5.3d.7). The component
+/// emits the intent matched from Space/Enter/Ctrl+A; the shell resolves the
+/// episode-selection and wide/narrow conditions from current App state/layout
+/// at the Model boundary and runs the existing App effect (D17).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PodcastEpisodeIntent {
+    /// Space: App enters episode selection when its episode selection is
+    /// `None`; otherwise App plays its selected episode.
+    FocusOrPlay,
+    /// Enter: when App selection is `None`, wide podcast enters inline episode
+    /// selection and narrow podcast opens the selection modal; otherwise App
+    /// plays its selected episode.
+    OpenOrPlay,
+    /// Ctrl+A: enqueue only when App episode selection is active; otherwise
+    /// no-op.
+    Enqueue,
+}
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
 /// Shell-level requests from Interactive Components: mount/dismiss overlays,
@@ -317,9 +335,6 @@ pub enum ShellRequest {
         col: u16,
         row: u16,
     },
-    /// Forward Audiobookshelf podcast effects to the legacy App handler while
-    /// the browser's local state remains component-owned.
-    AudiobookshelfPodcastKey(crossterm::event::KeyEvent),
     /// Typed podcast show-list movement (task 5.3d.5). Emitted by the component
     /// after its local cursor mutation for Up/k, Down/j, Left/h, Right/l,
     /// PageUp/PageDown, Home/End while no episode selection is active; the
@@ -332,6 +347,11 @@ pub enum ShellRequest {
     /// the shell maps the variant onto the legacy App episode operations and
     /// re-projects podcast content.
     AudiobookshelfPodcastEpisodeTransition(PodcastEpisodeTransition),
+    /// Typed podcast episode action intent (task 5.3d.7). Emitted by the
+    /// component for Space/Enter/Ctrl+A; the shell resolves the episode-
+    /// selection and wide/narrow conditions from current App state/layout and
+    /// runs the existing App play/enter/modal/enqueue effect (D17).
+    AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent),
     /// Forward Audiobookshelf book effects to the legacy App handler while
     /// the browser's local state remains component-owned.
     AudiobookshelfBookKey(crossterm::event::KeyEvent),

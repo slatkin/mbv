@@ -5,11 +5,45 @@ use super::{PanelFocus, TabSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
-    pub(super) fn handle_audiobookshelf_podcast_key(
+    pub(super) fn handle_audiobookshelf_podcast_episode_intent(
         &mut self,
-        key: crossterm::event::KeyEvent,
-    ) -> bool {
-        self.app.handle_key(key)
+        intent: super::components::msg::PodcastEpisodeIntent,
+    ) {
+        // Resolve every condition from current App state/layout at the Model
+        // boundary, never from component state (D17). The shell arm re-projects
+        // podcast content after this call, preserving the existing effect plus
+        // post-request push behavior.
+        let Some(index) = self.app.tab.audiobookshelf_index() else {
+            return;
+        };
+        let episode_selection = self
+            .app
+            .audiobookshelf_browse
+            .get(index)
+            .is_some_and(|state| state.episode_selection.is_some());
+        match intent {
+            super::components::msg::PodcastEpisodeIntent::FocusOrPlay => {
+                if episode_selection {
+                    self.app.play_selected_audiobookshelf_episode(index);
+                } else {
+                    self.app.enter_audiobookshelf_episode_selection();
+                }
+            }
+            super::components::msg::PodcastEpisodeIntent::OpenOrPlay => {
+                if episode_selection {
+                    self.app.play_selected_audiobookshelf_episode(index);
+                } else if self.app.layout.main.is_wide_podcast_active() {
+                    self.app.enter_audiobookshelf_episode_selection();
+                } else {
+                    self.app.open_podcast_selection_modal();
+                }
+            }
+            super::components::msg::PodcastEpisodeIntent::Enqueue => {
+                if episode_selection {
+                    self.app.enqueue_selected_audiobookshelf_episode(index);
+                }
+            }
+        }
     }
 
     fn abs_podcast_component_id(&self, index: usize) -> Option<ComponentId> {
@@ -111,7 +145,9 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::msg::{PodcastEpisodeTransition, PodcastShowMove};
+    use crate::app::components::msg::{
+        PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove,
+    };
     use crate::app::components::{Msg, ShellRequest};
     use crate::app::tests_podcast::audiobookshelf_app;
     use mbv_core::audiobookshelf::AudiobookshelfShow;
@@ -189,5 +225,26 @@ mod tests {
             model.app.audiobookshelf_browse[0].episode_selection,
             Some(0)
         );
+    }
+
+    #[test]
+    fn abs_podcast_shell_routes_action_intent_to_app() {
+        let mut model = Model::new(audiobookshelf_app());
+        // FocusOrPlay with no episode selection enters episode selection at the
+        // App boundary (task 5.3d.7).
+        model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::FocusOrPlay);
+        assert_eq!(
+            model.app.audiobookshelf_browse[0].episode_selection,
+            Some(0)
+        );
+
+        // With episode selection active, the enqueue intent reaches the App
+        // enqueue seam (the default fixture has one downloaded episode) while
+        // leaving the App episode selection untouched.
+        model.app.audiobookshelf_browse[0].episode_selection = Some(0);
+        let before = model.app.audiobookshelf_browse[0].episode_selection;
+        model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::Enqueue);
+        assert_eq!(model.app.audiobookshelf_browse[0].episode_selection, before);
+        assert_eq!(model.app.player_tab.total_queue_len(), 1);
     }
 }
