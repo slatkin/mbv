@@ -14,7 +14,9 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg, PodcastShowMove, ShellRequest};
+use super::msg::{
+    LegacyTerminalEvent, Msg, PodcastEpisodeTransition, PodcastShowMove, ShellRequest,
+};
 use super::user_event::UserEvent;
 use crate::app::render::{render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry};
 use crate::app::types_audiobookshelf_browse::{
@@ -143,12 +145,45 @@ impl AudiobookshelfPodcastComponent {
                     PodcastShowMove::Last,
                 )));
             }
-            Key::Up | Key::Char('k') => self.move_episode(-1),
-            Key::Down | Key::Char('j') => self.move_episode(1),
-            Key::Char('[') if self.state.episode_selection.is_some() => self.cycle_filter(-1),
-            Key::Char(']') if self.state.episode_selection.is_some() => self.cycle_filter(1),
+            Key::Up | Key::Char('k') => {
+                self.move_episode(-1);
+                return Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                        PodcastEpisodeTransition::PreviousEpisode,
+                    ),
+                ));
+            }
+            Key::Down | Key::Char('j') => {
+                self.move_episode(1);
+                return Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                        PodcastEpisodeTransition::NextEpisode,
+                    ),
+                ));
+            }
+            Key::Char('[') if self.state.episode_selection.is_some() => {
+                self.cycle_filter(-1);
+                return Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                        PodcastEpisodeTransition::PreviousFilter,
+                    ),
+                ));
+            }
+            Key::Char(']') if self.state.episode_selection.is_some() => {
+                self.cycle_filter(1);
+                return Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                        PodcastEpisodeTransition::NextFilter,
+                    ),
+                ));
+            }
             Key::Esc | Key::Backspace if self.state.episode_selection.is_some() => {
                 self.state.episode_selection = None;
+                return Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                        PodcastEpisodeTransition::Exit,
+                    ),
+                ));
             }
             _ => {}
         }

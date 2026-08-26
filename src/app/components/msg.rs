@@ -154,6 +154,20 @@ pub enum PodcastShowMove {
     First,
     Last,
 }
+
+/// Closed set of podcast episode-mode transitions (task 5.3d.6). The
+/// component performs its local episode/cursor/filter mutation and emits the
+/// matching variant while episode selection is active; the shell maps it onto
+/// the legacy App episode-move / filter-cycle / exit operations preserving the
+/// current App episode target (D17).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PodcastEpisodeTransition {
+    PreviousEpisode,
+    NextEpisode,
+    PreviousFilter,
+    NextFilter,
+    Exit,
+}
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
 /// Shell-level requests from Interactive Components: mount/dismiss overlays,
@@ -312,6 +326,12 @@ pub enum ShellRequest {
     /// shell maps the variant onto the legacy App show-move operations and
     /// re-projects podcast content.
     AudiobookshelfPodcastShowMove(PodcastShowMove),
+    /// Typed podcast episode-mode transition (task 5.3d.6). Emitted by the
+    /// component after its local episode-cursor/filter/exit mutation while
+    /// episode selection is active (Up/k, Down/j, `[`, `]`, Esc, Backspace);
+    /// the shell maps the variant onto the legacy App episode operations and
+    /// re-projects podcast content.
+    AudiobookshelfPodcastEpisodeTransition(PodcastEpisodeTransition),
     /// Forward Audiobookshelf book effects to the legacy App handler while
     /// the browser's local state remains component-owned.
     AudiobookshelfBookKey(crossterm::event::KeyEvent),

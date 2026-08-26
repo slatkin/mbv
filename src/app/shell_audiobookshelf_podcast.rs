@@ -111,7 +111,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::msg::PodcastShowMove;
+    use crate::app::components::msg::{PodcastEpisodeTransition, PodcastShowMove};
     use crate::app::components::{Msg, ShellRequest};
     use crate::app::tests_podcast::audiobookshelf_app;
     use mbv_core::audiobookshelf::AudiobookshelfShow;
@@ -155,5 +155,39 @@ mod tests {
         model.app.move_audiobookshelf_show_rows(1);
         model.push_audiobookshelf_podcast_content();
         assert_eq!(model.app.audiobookshelf_browse[0].cursor(), 1);
+    }
+
+    #[test]
+    fn abs_podcast_shell_routes_episode_transition_to_app() {
+        let mut model = Model::new(audiobookshelf_app());
+        model.app.audiobookshelf_browse[0].episode_selection = Some(0);
+        model.sync_audiobookshelf_podcast();
+        let id = model
+            .abs_podcast_id
+            .clone()
+            .expect("podcast component mounted");
+        let message = model
+            .application
+            .get_component_mut(&id)
+            .expect("podcast component")
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Down,
+                modifiers: KeyModifiers::NONE,
+            }));
+        let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeTransition(transition))) =
+            message
+        else {
+            panic!("episode movement should be routed as a typed episode transition");
+        };
+        assert_eq!(transition, PodcastEpisodeTransition::NextEpisode);
+        // The shell arm maps NextEpisode onto the legacy App episode-cursor
+        // move and re-projects content (task 5.3d.6), preserving the App
+        // episode target.
+        model.app.move_audiobookshelf_episode_cursor(1);
+        model.push_audiobookshelf_podcast_content();
+        assert_eq!(
+            model.app.audiobookshelf_browse[0].episode_selection,
+            Some(0)
+        );
     }
 }
