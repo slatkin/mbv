@@ -165,15 +165,53 @@ impl Model {
             return;
         }
         self.application.view(id, frame, area);
-        let image_paint = self
+        // Component owns painting; read back its painted geometry so the
+        // still-required legacy `LayoutMain` readers (interaction wide/narrow
+        // gating via `is_wide_podcast_active`, library column count, and
+        // overlay/menu anchors) stay correct once the legacy underpaint
+        // renderer is removed (task 5.3d.10d). Wide keeps a nonzero right
+        // area; narrow resets it to zero, including the wide-to-narrow
+        // redraw. The legacy `render_audiobookshelf_podcasts` still projects
+        // the same values this frame, so this mirror is idempotent until
+        // 5.3d.10e detaches it.
+        let projection = self
             .application
             .get_component_mut(id)
             .and_then(|comp| {
                 comp.as_any_mut()
                     .downcast_mut::<AudiobookshelfPodcastComponent>()
             })
-            .and_then(AudiobookshelfPodcastComponent::take_image_paint);
-        self.app.paint_home_image(frame, image_paint);
+            .map(|component| {
+                let image_paint = component.take_image_paint();
+                let geometry = component.geometry();
+                (
+                    image_paint,
+                    geometry.right_area,
+                    geometry.list_area,
+                    geometry.hero_area,
+                    geometry.inline_hero_area,
+                    geometry.selected_item_rect,
+                    geometry.selector_tabs.clone(),
+                )
+            });
+        if let Some((
+            image_paint,
+            right_area,
+            list_area,
+            hero_area,
+            inline_hero_area,
+            selected_item_rect,
+            selector_tabs,
+        )) = projection
+        {
+            self.app.paint_home_image(frame, image_paint);
+            self.app.layout.main.audiobookshelf_podcast_right_area = right_area;
+            self.app.layout.main.left_area = list_area;
+            self.app.layout.main.hero_area = hero_area;
+            self.app.layout.main.inline_hero_area = inline_hero_area;
+            self.app.layout.main.selected_item_rect = selected_item_rect;
+            self.app.layout.main.selector_tabs = selector_tabs;
+        }
     }
 }
 
@@ -348,5 +386,81 @@ mod tests {
         component.set_content(&state, true, false);
         terminal.draw(|frame| component.view(frame, area)).unwrap();
         assert!(component.take_image_paint().is_none());
+    }
+
+    /// Shell projection (task 5.3d.10d): the component owns painting and
+    /// computes its geometry during `view`; the shell mirrors the still-required
+    /// fields into `LayoutMain` so legacy readers stay correct. Wide keeps a
+    /// nonzero podcast right area; narrow resets it to zero, including the
+    /// wide-to-narrow redraw.
+    #[test]
+    fn abs_podcast_shell_projection_wide_narrow_right_area() {
+        let backend = TestBackend::new(200, 50);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let mut model = Model::new(audiobookshelf_app());
+        model.sync_audiobookshelf_podcast();
+        model.push_audiobookshelf_podcast_content();
+
+        // Wide presentation: area clears the two-column breakpoint and height.
+        let wide = Rect::new(0, 0, 200, 50);
+        model.app.layout.main.audiobookshelf_podcast_area = wide;
+        terminal
+            .draw(|frame| model.render_audiobookshelf_podcast_component(frame))
+            .unwrap();
+        assert!(
+            model
+                .app
+                .layout
+                .main
+                .audiobookshelf_podcast_right_area
+                .width
+                > 0
+                && model
+                    .app
+                    .layout
+                    .main
+                    .audiobookshelf_podcast_right_area
+                    .height
+                    > 0,
+            "wide podcast right area must stay nonzero"
+        );
+
+        // Narrow presentation: below the two-column width threshold.
+        let narrow = Rect::new(0, 0, 60, 50);
+        model.app.layout.main.audiobookshelf_podcast_area = narrow;
+        terminal
+            .draw(|frame| model.render_audiobookshelf_podcast_component(frame))
+            .unwrap();
+        assert_eq!(
+            model.app.layout.main.audiobookshelf_podcast_right_area,
+            Rect::default(),
+            "narrow podcast right area must reset to zero"
+        );
+
+        // Wide -> narrow redraw must also clear the right area.
+        model.app.layout.main.audiobookshelf_podcast_area = wide;
+        terminal
+            .draw(|frame| model.render_audiobookshelf_podcast_component(frame))
+            .unwrap();
+        assert!(
+            model
+                .app
+                .layout
+                .main
+                .audiobookshelf_podcast_right_area
+                .width
+                > 0,
+            "wide->narrow must re-establish a nonzero right area"
+        );
+        model.app.layout.main.audiobookshelf_podcast_area = narrow;
+        terminal
+            .draw(|frame| model.render_audiobookshelf_podcast_component(frame))
+            .unwrap();
+        assert_eq!(
+            model.app.layout.main.audiobookshelf_podcast_right_area,
+            Rect::default(),
+            "wide->narrow redraw must reset the right area to zero"
+        );
     }
 }
