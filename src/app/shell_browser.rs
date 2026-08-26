@@ -129,21 +129,30 @@ impl Model {
         }))
     }
 
-    pub(super) fn sync_emby_browser(&mut self) {
+    /// Reconcile the mounted Emby browser against the currently-active Emby
+    /// library tab (task 5.3d.15/M1 extraction from `sync_emby_browser`),
+    /// idempotently. If the active id matches the gate (`emby_browser_component_id`)
+    /// it does nothing. Mount lifecycle only; content projection and layout
+    /// adapters stay in `sync_emby_browser`.
+    pub(super) fn mount_emby_browser(&mut self) {
         let next_id = self.emby_browser_component_id();
-        if self.emby_browser_id != next_id {
-            if let Some(id) = self.emby_browser_id.take() {
-                let _ = self.application.umount(&id);
-            }
-            if let Some(id) = next_id.clone() {
-                self.application
-                    .mount(id.clone(), Box::new(BrowserComponent::new()), vec![])
-                    .expect("mount Emby browser");
-                self.application.active(&id).expect("activate Emby browser");
-                self.emby_browser_id = Some(id);
-            }
+        if self.emby_browser_id == next_id {
+            return;
         }
+        if let Some(id) = self.emby_browser_id.take() {
+            let _ = self.application.umount(&id);
+        }
+        if let Some(id) = next_id.clone() {
+            self.application
+                .mount(id.clone(), Box::new(BrowserComponent::new()), vec![])
+                .expect("mount Emby browser");
+            self.application.active(&id).expect("activate Emby browser");
+            self.emby_browser_id = Some(id);
+        }
+    }
 
+    pub(super) fn sync_emby_browser(&mut self) {
+        self.mount_emby_browser();
         let Some(id) = self.emby_browser_id.as_ref() else {
             return;
         };
