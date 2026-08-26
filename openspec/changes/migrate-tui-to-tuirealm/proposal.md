@@ -42,16 +42,20 @@ surface in `docs/architecture/interactive-surface-ledger.md`.
   save dialog, Help, context menu, selection/confirm/daemon-lost/re-anchor
   modals), and playback prompts.
 - **Remove** the legacy interaction framework: `CONTEXT_STACK` interaction
-  dispatch, `AppLayout` and duplicated mouse-coordinate paths, `impl App`
-  interaction handlers and render adapters for migrated surfaces, and all
-  temporary migration adapters/state mirrors.
+  dispatch, `AppLayout` as a global interaction/hit-routing authority, duplicated
+  mouse-coordinate paths, `impl App` interaction handlers and render adapters for
+  migrated surfaces, and all temporary migration adapters/state mirrors.
+  Render-only layout state may remain where painting still requires it.
 - Add compiler- and `ast-grep`-based enforcement (`rules/interactive-component-
   boundary/*.yml`, a new `architecture-boundaries.yml` CI job) that rejects a
   parallel legacy framework and `&mut App` in Interactive Component paths.
 - **Non-goals / preserved contracts:** no daemon, Local-daemon, `mbvd`, ctrl,
   shared-data, provider, playback, or canonical-queue behaviour change. ADR 0002
-  input precedence, responsive behaviour, images-disabled behaviour, and existing
-  render characterization remain regression contracts. Search's existing
+  keyboard precedence, responsive behaviour, images-disabled behaviour, and
+  existing render characterization remain regression contracts. Completing mouse
+  interaction for Music, blocking modals, and playback prompts is deferred beyond
+  the alpha migration; the removed global mouse router and duplicated coordinate
+  framework must not be reintroduced when that work resumes. Search's existing
   correctness bugs are out of scope and must not be silently changed. No parallel
   custom component/dispatcher/focus/effect/Flux framework is created.
 

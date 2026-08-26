@@ -148,9 +148,8 @@ impl BrowserComponent {
 
     /// Paints the wide Movies/home-video hero-on-left layout: a read-only
     /// shared Emby hero card on the left and the letter-pill/count/search
-    /// row plus the one-column list in the right rail. Mirrors
-    /// `App::render_wide_movies_with_ctx` (movies_wide.rs) so the legacy
-    /// renderer can be deleted in 5.3d.17b without changing the picture.
+    /// row plus the one-column list in the right rail. Mirrors the deleted
+    /// legacy wide renderer so the picture is unchanged.
     /// Returns the final list scroll (the component owns its cursor/scroll,
     /// so it records it instead of writing the App nav level).
     fn render_wide_movies(&mut self, f: &mut Frame, area: Rect, ctx: &LibraryListRenderCtx) -> usize {

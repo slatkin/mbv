@@ -337,9 +337,11 @@ subscription-based:
   `Not(IsMounted(overlay))` guards, so underlying regions receive no mouse event
   and cannot mutate; the active overlay handles it.
 
-`AppLayout` and the duplicated mouse-coordinate paths are removed once every mouse
-path reads component geometry; this supersedes the `ui-design-system` hit-target
-clause (see the modified spec).
+The global mouse router, completed-frame hit map, and duplicated mouse-coordinate
+paths are removed for alpha. Supported paths read component-owned geometry;
+Music, blocking-modal, and playback-prompt mouse interaction is deferred by D16.
+Render-only layout state may remain and is not mouse-routing authority. This
+supersedes the `ui-design-system` hit-target clause (see the modified spec).
 
 Accepted trade-off: `EventClause::Any` means each visible region sees *every* event
 (keyboard, tick, mouse), not just mouse. This is a **bounded, guarded broadcast** —
@@ -586,9 +588,11 @@ note naming this decision.
   ledger forbid a mixed endpoint; `LegacyInput` and its adapters must be deleted
   in the final checkpoint, verified by enforcement (no `impl App` interaction
   handlers remain).
-- **Geometry move touches every mouse path.** → Component-owned `hit_test`
-  lands per surface as that surface converts; `AppLayout` is removed only after
-  the last mouse path reads component geometry, so no half-migrated hit map ships.
+- **Deferred mouse paths are unavailable in alpha.** → Supported paths use
+  component-owned `hit_test`; the global router and hit map are deleted rather
+  than retained as a fallback. Later restoration must use painted component
+  geometry and may not recreate duplicated coordinate routing. Render-only layout
+  state can remain.
 - **MSRV bump.** → 1.88 is already met by current toolchains; declared once in
   `[workspace.package]` and asserted in CI.
 - **Scope.** 29 interactive rows is a large change even with checkpoints. →
@@ -619,9 +623,11 @@ order is an implementation detail, not a governance decision. High-level order
    prompts, Settings popups.
 4. High: Queue, Library parent, TV, Music, ABS books/podcasts, Playlists +
    save dialog, Settings + setup forms, root/overlay routing, inline album-track.
-5. Completion gate: remove `LegacyInput`, `CONTEXT_STACK`, `AppLayout`, adapters
-   and mirrors; flip all ledger rows to `migrated`; verify the full behaviour and
-   architecture gate.
+5. Completion gate: migrate each remaining surface through the teardown pipeline
+   in D17, remove `LegacyInput`, `CONTEXT_STACK`, the global mouse router/hit map,
+   interaction adapters, and per-frame interaction mirrors; render-only layout
+   state may remain. Flip all ledger rows to `migrated`; verify keyboard,
+   responsive/render, supported-mouse, and architecture gates.
 
 ## Implementation mapping tables
 
@@ -817,7 +823,97 @@ reintroduce a global hit map or a second clock.
 
 **Effect on 5.4.** 5.4's six precedence proofs were scheduled to run inside this
 deletion unit. The three that concern mouse — simultaneous Queue+Library mouse,
-blocking-overlay swallow of mouse, and "geometry cannot drift" — cannot be
-asserted against behaviour that is accepted-broken. They become structural
-checks only: the absence of the three `input_mouse*.rs` files and of any global
-hit map. The keyboard precedence proofs are unaffected.
+blocking-overlay swallow of mouse, and "geometry cannot drift" — apply only to
+the alpha-supported mouse paths. For deferred paths they become structural
+checks: the absence of the three `input_mouse*.rs` files and of any global hit
+map. The keyboard precedence proofs are unaffected.
+
+### D17 — Group 5 teardown is discovery-led and staged by dependency
+
+Groups 1–4 could be planned by visible surface because their outcome was a
+component behind a deliberate mirror. Group 5 cannot be planned as "delete every
+mirror" or as one task per screen: a `sync_*` commonly combines mount lifecycle,
+content projection, focus, layout derived by the legacy renderer, and a two-way
+interaction-state pin. Raw input may independently repeat the component's local
+transition before performing shell-owned effects. The real unit of work is one
+ownership dependency, not one `sync_*` function.
+
+Before a writer is assigned to a remaining surface, a read-only scout records a
+durable symbol-level handoff under `openspec/handoffs/` covering:
+
+1. every input to the mirror and every production writer of those inputs;
+2. component-local interaction state versus shell-owned content/cache/effect state;
+3. raw input forwarding and the exact existing effect entry points;
+4. legacy underpaint, cover/image work, and layout values produced only by that
+   renderer;
+5. unrelated readers that prevent immediate `App` field deletion; and
+6. the smallest compile-complete implementation units and their dependency order.
+
+Discovery and implementation are separate assignments. A normal writer receives
+one closed behaviour/ownership family touching roughly three to six production
+files. If implementation exposes a missing authority or exceeds that bound, it
+stops and returns the coupling instead of absorbing design discovery. Larger
+mechanical fan-out requires a named preparation unit first.
+
+A surface normally advances through these teardown stages, omitting a stage only
+when the scout proves it does not exist:
+
+1. separate mount reconciliation from per-frame content projection;
+2. replace projection with targeted pushes at validated writer choke points;
+3. replace raw input forwarding one coherent behaviour family at a time with
+   typed intents, keeping shell-owned effects at existing boundaries;
+4. remove interaction-state pins and obsolete `App` readers only after all
+   remaining consumers are re-homed;
+5. detach component geometry/content from legacy underpaint, then delete that
+   surface's legacy renderer; and
+6. remove the now-empty mirror/mount adapter and legacy handler endpoint.
+
+Direct pushes of validated shell-owned content/cache/effect presentation are not
+forbidden mirrors. The forbidden completion state is per-frame or two-way
+synchronisation of component-local interaction state. Mount reconciliation may
+remain temporarily after projection is removed, but must be renamed or deleted at
+the surface completion stage so `sync_*` no longer hides multiple authorities.
+
+The parity authority is current observable behaviour, including current effect
+targets. When the component and legacy path resolve the same key differently
+(for example a one-item component move versus a legacy multi-column row move),
+the discrepancy is a blocking discovery result, not permission to choose the
+cleaner interpretation. Characterize or otherwise prove the active production
+path first; improvements remain out of scope.
+
+Surface teardown precedes global framework deletion. Only after every remaining
+raw-key endpoint and interaction mirror has gone may the campaign re-inventory and
+delete `CONTEXT_STACK`, `LegacyInput`, and terminal reconstruction adapters.
+Repository-wide line-cap verification runs at the final 5.6 gate; bounded units
+run only their named compile, focused/full existing-test, lint, architecture, and
+format checks.
+
+### D18 — Emby `wide_movies` is a per-draw render adapter now, component-owned at underpaint removal
+
+The Emby generic/Movies/home-video browser needs to know whether it is in the
+wide Movies/home-videos hero-on-left presentation because `columns()` returns one
+in that case (matching legacy `App::current_library_columns`). The signal is
+`App::layout.main.is_wide_movies_active()`, which reads `movies_wide_right_area`
+populated by the legacy wide renderer inside the base frame draw. The component's
+own `LayoutMain` never publishes that rail, so the shell pushes it in
+(`set_wide_movies`).
+
+Two-stage resolution, forced by D17's stage ordering (detach underpaint at stage
+5, before deleting the legacy renderer):
+
+1. **Now (5.3d.15–16): temporary per-draw adapter.** `set_wide_movies` moves out
+   of the per-frame `sync_emby_browser` interaction mirror and into
+   `render_emby_browser_component` in the draw closure, after the legacy base
+   frame has set `movies_wide_right_area` this frame — the same render-only
+   adapter shape as `dim_backdrop_active`, which D16 permits to remain. This
+   also removes the current one-frame lag (the mirror ran before the base frame).
+2. **At 5.3d.17/R1: component-owned derivation.** When the legacy wide renderer
+   is deleted, `movies_wide_right_area` disappears and `is_wide_movies_active()`
+   becomes dead. The component then derives "wide" from its own library kind
+   (Movies/HomeVideos, already present in the `BrowserKey`) plus its geometry
+   width at the `shared_hero_presentation`/`wide_library_panes` breakpoint,
+   pushed at writers — no per-frame mirror survives.
+
+Do not compute the type × width derivation into the component before underpaint
+removal: replicating the breakpoint ahead of stage 5 risks parity drift against
+the still-active legacy renderer.

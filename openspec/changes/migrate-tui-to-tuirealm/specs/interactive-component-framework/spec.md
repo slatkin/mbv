@@ -135,14 +135,21 @@ SHALL be preserved and remain locked by the existing input characterization test
 - **THEN** the binding resolves with the same precedence it has today
 - **AND** the focused leaf does not shadow a higher-precedence global binding
 
-### Requirement: Component-owned hit geometry and overlay mouse blocking
+### Requirement: Supported mouse paths use component-owned hit geometry
 
-Mouse hit targets SHALL be computed by the component that painted the region,
-from the same geometry it used to paint, so painting and hit testing cannot
-drift. Two surfaces that are simultaneously visible SHALL both be able to receive
-mouse interaction. An active overlay SHALL prevent mouse mutation of the surface
-beneath it. The global `AppLayout` completed-frame hit map and duplicated
-mouse-coordinate paths SHALL be removed on completion.
+For mouse interactions supported by the alpha migration, hit targets SHALL be
+computed by the component that painted the region, from the same geometry it used
+to paint, so painting and hit testing cannot drift. Two supported surfaces that
+are simultaneously visible SHALL both be able to receive mouse interaction. An
+active blocking overlay SHALL prevent mouse mutation of supported surfaces beneath
+it. The global mouse router, its completed-frame hit map, and duplicated
+mouse-coordinate paths SHALL be removed on completion; render-only layout state MAY
+remain where painting still requires it.
+
+Mouse interaction for the Music workspace, blocking modals, and playback prompts
+is explicitly deferred beyond the alpha migration. Restoring those paths later
+SHALL use component-owned painted geometry and SHALL NOT reintroduce a global mouse
+router or duplicated coordinate framework.
 
 #### Scenario: Queue and Library both take mouse while visible
 
@@ -158,10 +165,18 @@ mouse-coordinate paths SHALL be removed on completion.
 
 #### Scenario: Hit geometry cannot drift from painting
 
-- **WHEN** a component's layout changes (for example variable-height playlist
-  rows)
+- **WHEN** a supported component mouse path's layout changes (for example
+  variable-height playlist rows)
 - **THEN** its hit targets change with its painting from the same computation
 - **AND** no second, separately maintained geometry calculation exists for it
+
+#### Scenario: Deferred mouse support does not block alpha completion
+
+- **WHEN** the alpha migration completes
+- **THEN** Music-workspace, blocking-modal, and playback-prompt mouse interaction
+  MAY remain unavailable
+- **AND** keyboard interaction for those surfaces remains supported
+- **AND** no global mouse router or duplicated coordinate path remains
 
 ### Requirement: Complete conversion with no mixed-framework endpoint
 
@@ -171,8 +186,9 @@ completed or mergeable endpoint. Completion requires that every row in
 `docs/architecture/interactive-surface-ledger.md` is `migrated`; every
 independently interactive surface is a TuiRealm `AppComponent`; component-local
 state, handlers, and render adapters are removed from `App` rather than mirrored;
-`CONTEXT_STACK` interaction dispatch, `AppLayout`, and duplicated mouse paths are
-removed; all temporary adapters and state mirrors are removed; and no parallel
+`CONTEXT_STACK` interaction dispatch, the global mouse router and hit map, and
+duplicated mouse paths are removed; render-only layout state MAY remain; all
+temporary interaction adapters and state mirrors are removed; and no parallel
 legacy interaction framework remains.
 
 #### Scenario: A converted surface does not regain App-owned state
@@ -197,8 +213,10 @@ legacy interaction framework remains.
 #### Scenario: Migration preserves existing contracts
 
 - **WHEN** any surface is converted
-- **THEN** existing input precedence, responsive behaviour, images-disabled
+- **THEN** existing keyboard precedence, responsive behaviour, images-disabled
   behaviour, and render characterization coverage remain satisfied
+- **AND** mouse parity is required only for the alpha-supported mouse paths named
+  by this capability
 
 ### Requirement: Interactive ownership is mechanically enforced
 

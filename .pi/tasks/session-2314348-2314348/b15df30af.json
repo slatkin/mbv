@@ -1,0 +1,18 @@
+{
+  "id": "b15df30af",
+  "name": "2c verify check+nextest",
+  "command": "cd /home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm && rtk cargo check -p mbv 2>&1 | rtk tail -5 && rtk cargo nextest run -p mbv 2>&1 | rtk tail -8",
+  "status": "completed",
+  "outputPath": ".pi/tasks/session-2314348-2314348/b15df30af.output",
+  "cwd": "/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm",
+  "startTime": 1787689631950,
+  "endTime": 1787689642655,
+  "exitCode": 0,
+  "signal": null,
+  "pid": 2323783,
+  "bytesWritten": 246,
+  "isAgent": false,
+  "notified": true,
+  "notifyOnCompletion": true,
+  "triggerOnCompletion": true
+}

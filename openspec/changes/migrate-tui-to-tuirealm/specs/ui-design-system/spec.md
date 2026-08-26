@@ -7,11 +7,13 @@ Screens SHALL provide semantic content and approved variants; arrangements SHALL
 shared geometry; components SHALL own their painting and styling. Screen modules
 SHALL NOT call Ratatui or construct layout rectangles.
 
-Hit-target ownership belongs to the interactive component that paints the region, as
-defined by the `interactive-component-framework` capability. Screens SHALL NOT compute
-or own hit geometry, and no screen-local or arrangement-local hit map is introduced.
-The former global completed-frame hit map (`AppLayout`) is removed by that capability;
-this capability no longer treats app-layout hit resolution as authoritative.
+For mouse paths supported by the alpha migration, hit-target ownership belongs to
+the interactive component that paints the region, as defined by the
+`interactive-component-framework` capability. Screens SHALL NOT compute or own hit
+geometry, and no screen-local or arrangement-local hit map is introduced. The former
+global completed-frame mouse hit map and router are removed by that capability;
+render-only layout state MAY remain, but this capability no longer treats it as hit
+resolution authority.
 
 Classification is by signature: a function taking app state and returning a typed
 content model is screen code; a function taking a typed content model, a `Rect`, and
@@ -24,12 +26,18 @@ breakpoints is an arrangement.
 - **AND** it does not copy the arrangement's geometry or painter
 
 #### Scenario: Existing hit-target resolution is preserved
-- **WHEN** a mouse event is resolved for a migrated surface
+- **WHEN** a mouse event is resolved for an alpha-supported surface
 - **THEN** the click resolves to the same target it does today, now computed by the
   interactive component that painted the region from the same geometry it painted
   with
-- **AND** it is no longer resolved by the global completed-frame `AppLayout` hit map
-  or by any screen-local or arrangement-local hit map
+- **AND** it is no longer resolved by a global completed-frame hit map or by any
+  screen-local or arrangement-local hit map
+
+#### Scenario: Deferred mouse support is restored later
+- **WHEN** mouse interaction is later restored for a deferred surface
+- **THEN** its interactive component computes targets from the geometry it painted
+- **AND** the implementation does not restore a global mouse router, global hit map,
+  or duplicated coordinate path
 
 #### Scenario: A surface is migrated
 - **WHEN** a surface listed in the change ledger is brought inside the boundary
