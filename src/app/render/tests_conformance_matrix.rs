@@ -507,3 +507,20 @@ fn matrix_mini_presentations_do_not_admit_a_full_hero() {
         "Home mini presentation should not admit a hero"
     );
 }
+
+/// P1 regression for 5.3d.13 Unit A: the legacy base frame must populate
+/// `layout.main.audiobookshelf_book_area` for the Book tab, or the shell's
+/// `render_audiobookshelf_book_component` early-returns on the zero Rect and
+/// the live Book surface stays blank (the component overlay reads that rect).
+/// Exercises the real base-frame path (`App::render_library` ->
+/// `render_audiobookshelf_library`), not a direct component render.
+#[test]
+fn render_library_sets_book_area_before_component_overlay() {
+    let mut app = make_audiobookshelf_book_app();
+    let (_, layout) = render_library(&mut app, 60, 20);
+    assert_eq!(
+        layout.audiobookshelf_book_area,
+        Rect::new(0, 0, 60, 20),
+        "base frame must populate audiobookshelf_book_area before the component overlay paints"
+    );
+}

@@ -561,6 +561,10 @@ impl App {
                 self.audiobookshelf_kind_at(index),
                 Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book)
             ) {
+                // Populate the area the shell reads to place the Book component
+                // overlay (`render_audiobookshelf_book_component`), mirroring the
+                // podcast sibling contract in `render_audiobookshelf_podcasts`.
+                layout.audiobookshelf_book_area = area;
                 return;
             }
         }

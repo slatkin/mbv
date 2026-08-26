@@ -148,12 +148,6 @@ pub(crate) struct LayoutMain {
     /// narrow inline callers of the shared browser renderer, since
     /// they share row-target indexing but differ in outer gating rect.
     pub wide_music_browser_area: Rect,
-    /// Bounding rect of the Audiobookshelf book tab's right pane (bucket
-    /// pills + book browser). Populated whenever the book tab renders, in
-    /// both the wide two-column layout and the narrow inline presentation
-    /// -- unlike `wide_music_right_area`, both book panes are always
-    /// visible (book-browsing spec).
-    pub audiobookshelf_book_right_area: Rect,
     /// Bounding rect of the Audiobookshelf podcast tab's right pane (show
     /// workspace). Populated only when the wide hero-on-left podcast layout
     /// is active, mirroring `tv_wide_right_area`/`wide_music_right_area` --
@@ -167,8 +161,8 @@ pub(crate) struct LayoutMain {
     /// frame computes the current library layout.
     pub audiobookshelf_book_area: Rect,
     /// Bounding rect of the Audiobookshelf book tab's wide-only right pane.
-    /// Unlike `audiobookshelf_book_right_area`, this stays empty for the
-    /// narrow inline presentation and is therefore safe for input gating.
+    /// Stays empty for the narrow inline presentation and is therefore safe
+    /// for input gating.
     pub audiobookshelf_book_wide_right_area: Rect,
     /// The destination (`self.tab`) the last completed render frame was drawn
     /// for. Set by `App::render` only on the layout that completes and is
