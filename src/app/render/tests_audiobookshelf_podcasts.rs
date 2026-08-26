@@ -224,8 +224,7 @@ fn narrow_podcast_replacement_owns_one_parent_target() {
 fn audiobook_podcast_buffer_characterization_covers_default_focused_narrow_and_selected_states() {
     for focused in [false, true] {
         let app = audiobookshelf_app();
-        let (model, terminal) = render_podcast_shell(app, 60, 20, focused);
-        let layout = &model.app.layout.main;
+        let (_, terminal) = render_podcast_shell(app, 60, 20, focused);
         let output = buffer_to_string(&terminal);
         assert!(
             output.contains("▁"),
@@ -234,8 +233,7 @@ fn audiobook_podcast_buffer_characterization_covers_default_focused_narrow_and_s
     }
 
     let wide_app = audiobookshelf_app();
-    let (wide_model, wide_terminal) = render_podcast_shell(wide_app, 100, 30, true);
-    let _wide_layout = &wide_model.app.layout.main;
+    let (_, wide_terminal) = render_podcast_shell(wide_app, 100, 30, true);
     let wide_output = buffer_to_string(&wide_terminal);
     assert!(
         wide_output.contains("Show A"),
