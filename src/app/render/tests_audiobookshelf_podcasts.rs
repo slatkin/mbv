@@ -1,5 +1,56 @@
 use super::test_helpers::*;
 use super::*;
+use crate::app::shell::Model;
+use crate::app::PanelFocus;
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
+
+/// Local podcast shell render harness (task 5.3d.10e, Unit A): size the
+/// terminal and set both panel-focus fields so `effective_panel_focus()`
+/// reports `focused` at any width (mini-widths read `mini_view_focus`, 80+
+/// read `panel_focus`), mount and content-project the podcast component,
+/// then — in one draw — render the legacy library into a separate local
+/// `LayoutMain` (avoids borrowing `model.app` and `model.app.layout.main`
+/// simultaneously) before painting the mounted component. Returns the model
+/// (so a future unit can assert projected content/layout) and the terminal.
+#[allow(dead_code)]
+fn render_podcast_shell(
+    app: crate::app::App,
+    width: u16,
+    height: u16,
+    focused: bool,
+) -> (Model, Terminal<TestBackend>) {
+    let mut app = app;
+    app.terminal_width = width;
+    app.terminal_height = height;
+    let focus = if focused {
+        PanelFocus::Library
+    } else {
+        PanelFocus::Queue
+    };
+    // The effective focus is width-dependent; setting both fields keeps it
+    // equal to `focused` at normal/wide and Mini sizes alike.
+    app.panel_focus = focus;
+    app.mini_view_focus = focus;
+
+    let mut model = Model::new(app);
+    model.sync_audiobookshelf_podcast();
+    model.push_audiobookshelf_podcast_content();
+
+    let backend = TestBackend::new(width, height);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|frame| {
+        let mut layout = LayoutMain::default();
+        model
+            .app
+            .render_library(frame, Rect::new(0, 0, width, height), focused, &mut layout);
+        model.app.layout.main = layout;
+        model.render_audiobookshelf_podcast_component(frame);
+    })
+    .unwrap();
+
+    (model, term)
+}
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::tests_podcast::audiobookshelf_app;
 use crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
