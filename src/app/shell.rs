@@ -269,7 +269,6 @@ impl Model {
             // (task 5.3d, sync_audiobookshell_podcast Phase A). Only project
             // when the drain actually reported an event.
             if drained_abs_events {
-                self.push_audiobookshelf_podcast_content();
                 self.push_audiobookshelf_book_content();
             }
             if let Ok(ev) = self.app.player_rx.try_recv() {
@@ -280,8 +279,6 @@ impl Model {
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
                 self.push_emby_browser_content();
-                // Player events can reconcile ABS podcast progress; re-project (5.3d).
-                self.push_audiobookshelf_podcast_content();
                 // Player events can reconcile ABS book progress; re-project (5.3d).
                 self.push_audiobookshelf_book_content();
                 if restart {
@@ -335,7 +332,6 @@ impl Model {
                 // DetailFetched async completions, RestoreLibraryPosition
                 // saved-position restore, and audio progress reconciles.
                 self.push_home_content();
-                self.push_audiobookshelf_podcast_content();
                 // Emby browser content may have changed (5.3d.15/M2).
                 self.push_emby_browser_content();
                 // ABS book async completions (BooksFetched / BookDetailFetched)
@@ -418,9 +414,6 @@ impl Model {
             while let Ok(ev) = self.app.audiobookshelf_socket_rx.try_recv() {
                 had_events = true;
                 self.app.handle_audiobookshelf_socket_event(ev);
-                // Socket events reconcile ABS podcast episode progress;
-                // re-project (5.3d).
-                self.push_audiobookshelf_podcast_content();
                 // Socket events reconcile ABS book progress; re-project (5.3d).
                 self.push_audiobookshelf_book_content();
             }
@@ -538,10 +531,6 @@ impl Model {
                             self.push_home_content();
                             // Emby browser content may have changed (5.3d.15/M2).
                             self.push_emby_browser_content();
-                            // Podcast keys (cursor/selection/filter moves and
-                            // panel-focus keys) write the active ABS browse
-                            // state in App's handler; re-project (5.3d).
-                            self.push_audiobookshelf_podcast_content();
                             // Book keys (cursor/selection/bucket moves and
                             // panel-focus keys) write the active ABS browse
                             // state in App's handler; re-project (5.3d).
@@ -733,9 +722,6 @@ impl Model {
                         | Msg::Shell(request @ ShellRequest::SelectionModalFilterSelected)
                         | Msg::Shell(request @ ShellRequest::SelectionModalActivate(_)) => {
                             self.handle_selection_modal_request(request);
-                            // Selection-modal changes to the ABS episode filter
-                            // must reach the mounted component (5.3d).
-                            self.push_audiobookshelf_podcast_content();
                         }
                         Msg::Shell(ShellRequest::MultiselectCommit { .. }) => {
                             self.handle_multiselect_commit();
@@ -758,7 +744,6 @@ impl Model {
                             // runs the existing App play/enter/modal/enqueue
                             // effects (D17); re-project after the effect.
                             self.handle_audiobookshelf_podcast_episode_intent(intent);
-                            self.push_audiobookshelf_podcast_content();
                         }
                         Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(movement)) => {
                             // Typed podcast show-list movement (task 5.3d.5). The
@@ -795,7 +780,6 @@ impl Model {
                                     self.app.jump_audiobookshelf_show_cursor(true);
                                 }
                             }
-                            self.push_audiobookshelf_podcast_content();
                         }
                         Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeTransition(
                             transition,
@@ -822,7 +806,6 @@ impl Model {
                                     self.app.leave_audiobookshelf_episode_selection();
                                 }
                             }
-                            self.push_audiobookshelf_podcast_content();
                         }
                         Msg::Shell(ShellRequest::AudiobookshelfBookKey(key)) => {
                             // Component-originated book key writer seam (5.3d):
