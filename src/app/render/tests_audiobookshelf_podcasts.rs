@@ -1,5 +1,6 @@
 use super::test_helpers::*;
 use super::*;
+use crate::app::components::AudiobookshelfPodcastComponent;
 use crate::app::shell::Model;
 use crate::app::PanelFocus;
 use ratatui::backend::TestBackend;
@@ -199,24 +200,59 @@ fn narrow_podcast_replacement_owns_one_parent_target() {
         cover_path: None,
     }));
     state.select(2);
-    let (model, _terminal) = render_podcast_shell(app, 60, 20, true);
+    let (mut model, _terminal) = render_podcast_shell(app, 60, 20, true);
     let layout = &model.app.layout.main;
 
-    let selected_row = layout
-        .left_item_rows
+    // Repoint from the legacy `LayoutMain.left_item_rows` to the mounted
+    // component's painted geometry (task 5.3d.10e, Unit C). The selected
+    // replacement no longer occupies a painted show-row: it owns exactly one
+    // parent target -- the inline hero -- so it is absent from `geometry().
+    // show_rows`, while the following show remains a painted source row below
+    // the replacement hero.
+    let component_id = model
+        .abs_podcast_id
+        .as_ref()
+        .expect("podcast component mounted");
+    let show_rows = model
+        .application
+        .get_component_mut(component_id)
+        .and_then(|comp| {
+            comp.as_any_mut()
+                .downcast_mut::<AudiobookshelfPodcastComponent>()
+        })
+        .map(|component| component.geometry().show_rows.clone())
+        .expect("podcast component mounted");
+
+    let selected = 2usize;
+    let following = 3usize;
+
+    // The selected replacement owns exactly one parent target (the inline
+    // hero), so it must not appear among the painted source rows.
+    assert!(
+        !show_rows.iter().any(|(_, index)| *index == selected),
+        "selected replacement owns the hero, not a painted show row"
+    );
+    // The following show remains correctly mapped as a painted source row
+    // below the replacement hero.
+    let following_entry = show_rows
         .iter()
-        .position(|row| row == &vec![2])
-        .expect("selected replacement row should be mapped");
-    assert_eq!(
-        layout.left_item_rows[selected_row + 1..]
-            .iter()
-            .find_map(|row| row.first()),
-        Some(&3)
+        .find(|(_, index)| *index == following)
+        .expect("following show must remain mapped as a source row");
+    assert!(
+        following_entry.0.y > layout.hero_area.y,
+        "following show must be mapped below the replacement hero: {:?} vs hero {:?}",
+        following_entry.0,
+        layout.hero_area
     );
     // The narrow panel reserves a one-row alphabetical bucket-pill row plus
     // a gap row above the show list (task 4.3), so the hero's absolute
     // screen row is offset from its list-relative `selected_row` index by
-    // that reservation.
+    // that reservation. Derive the list-relative selected row from the painted
+    // source rows above the hero.
+    let selected_row = show_rows
+        .iter()
+        .filter(|(rect, _)| rect.y < layout.hero_area.y)
+        .count();
     assert_eq!(layout.hero_area.y as usize, selected_row + 2);
 }
 
