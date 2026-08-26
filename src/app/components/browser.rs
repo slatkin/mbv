@@ -795,6 +795,10 @@ impl Component for BrowserComponent {
         self.scroll = if wide {
             self.render_wide_movies(frame, area, &context)
         } else {
+            // Reset image_paint to None in narrow layout to prevent stale
+            // hero images from being painted after a wide→narrow resize
+            // (reviewer P1 finding).
+            self.image_paint = None;
             render_generic_movies_home_video_rows_with_ctx(
                 frame,
                 area,
