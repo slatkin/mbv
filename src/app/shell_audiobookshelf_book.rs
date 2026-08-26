@@ -21,6 +21,14 @@ impl Model {
         }))
     }
 
+    /// Mounts / unmounts the Audiobookshelf book browser component to follow
+    /// the active tab (task 5.3d). This is the mount lifecycle only: content is
+    /// no longer mirrored into the component on every tick. The per-frame
+    /// `set_content` projection was replaced by the event-scoped
+    /// `push_audiobookshelf_book_content` at the writers of its projected
+    /// inputs (active-tab, async completion, progress, refresh/reset, and
+    /// saved-position restore). Content is pushed right after a fresh mount so
+    /// the newly mounted component paints the current browse snapshot.
     pub(super) fn sync_audiobookshelf_book(&mut self) {
         let next_id = match self.app.tab {
             TabSelection::AudiobookshelfLibrary(index)
@@ -49,8 +57,23 @@ impl Model {
                     .active(&id)
                     .expect("activate Audiobookshelf book browser");
                 self.abs_book_id = Some(id);
+                // Fresh mount: project the active tab's browse state so the
+                // component is initialized with the current books/selection
+                // before it is painted (the active-tab writer).
+                self.push_audiobookshelf_book_content();
             }
         }
+    }
+
+    /// Event-scoped projection replacing the per-frame content mirror (task
+    /// 5.3d, `sync_audiobookshelf_book` Phase A): runs only when the active tab
+    /// is the mounted book browser and mirrors the validated browse snapshot
+    /// plus panel focus into `AudiobookshelfBookComponent` via `set_content`
+    /// (preserving its selected-book/chapter/scroll/bucket semantics exactly).
+    /// Called at the writers of the projected inputs, so it is deterministic in
+    /// `App` state and duplicate pushes are idempotent. `sync_audiobookshelf_book`
+    /// keeps only mount lifecycle management.
+    pub(super) fn push_audiobookshelf_book_content(&mut self) {
         let Some(id) = self.abs_book_id.as_ref() else {
             return;
         };

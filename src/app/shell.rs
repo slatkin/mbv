@@ -270,6 +270,7 @@ impl Model {
             // when the drain actually reported an event.
             if drained_abs_events {
                 self.push_audiobookshelf_podcast_content();
+                self.push_audiobookshelf_book_content();
             }
             if let Ok(ev) = self.app.player_rx.try_recv() {
                 had_events = true;
@@ -279,6 +280,8 @@ impl Model {
                 self.push_home_content();
                 // Player events can reconcile ABS podcast progress; re-project (5.3d).
                 self.push_audiobookshelf_podcast_content();
+                // Player events can reconcile ABS book progress; re-project (5.3d).
+                self.push_audiobookshelf_book_content();
                 if restart {
                     continue 'outer;
                 }
@@ -331,6 +334,9 @@ impl Model {
                 // saved-position restore, and audio progress reconciles.
                 self.push_home_content();
                 self.push_audiobookshelf_podcast_content();
+                // ABS book async completions (BooksFetched / BookDetailFetched)
+                // and saved-position restore arrive via lib events; re-project (5.3d).
+                self.push_audiobookshelf_book_content();
             }
 
             // Search results drain: the shell drains `search_rx` and writes
@@ -407,6 +413,8 @@ impl Model {
                 // Socket events reconcile ABS podcast episode progress;
                 // re-project (5.3d).
                 self.push_audiobookshelf_podcast_content();
+                // Socket events reconcile ABS book progress; re-project (5.3d).
+                self.push_audiobookshelf_book_content();
             }
 
             // Drain idle feed items
@@ -524,6 +532,10 @@ impl Model {
                             // panel-focus keys) write the active ABS browse
                             // state in App's handler; re-project (5.3d).
                             self.push_audiobookshelf_podcast_content();
+                            // Book keys (cursor/selection/bucket moves and
+                            // panel-focus keys) write the active ABS browse
+                            // state in App's handler; re-project (5.3d).
+                            self.push_audiobookshelf_book_content();
                         }
                         Msg::Legacy(LegacyTerminalEvent::Mouse(_mouse)) => {}
                         Msg::Legacy(LegacyTerminalEvent::Resize) => {
