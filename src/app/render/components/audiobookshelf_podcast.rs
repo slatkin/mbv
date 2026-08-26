@@ -115,13 +115,19 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         return render_narrow_podcast(frame, area, focused, images_enabled, state, geometry);
     };
 
+    // Wide hero: title lives in the right show-list panel, so the hero
+    // body carries only author/description/image (matches legacy
+    // `render_audiobookshelf_hero` `show_title = false`). Persistent-
+    // mode episode pills + table are wide-only (narrow routes Enter to
+    // the selection modal instead).
     let image_paint = render_podcast_hero(
         frame,
         hero_panel,
         state,
         focused,
-        true,
+        false,
         images_enabled,
+        true,
         geometry,
     );
     // Wide layout: the list/browser occupies the right panel; the hero panel
@@ -221,13 +227,19 @@ fn render_narrow_podcast(
     geometry.hero_area = hero_area;
     geometry.inline_hero_area = hero_area;
     geometry.selected_item_rect = Some(hero_area);
+    // Narrow inline hero: title is painted (the selected show row is
+    // replaced, so the hero must carry its own title); persistent-
+    // mode episode pills + table are suppressed (Enter opens the
+    // selection modal instead). Matches legacy `show_title = true`,
+    // `persistent = false`.
     render_podcast_hero(
         frame,
         hero_area,
         state,
         focused,
-        false,
+        true,
         images_enabled,
+        false,
         geometry,
     )
 }
@@ -239,6 +251,7 @@ fn render_podcast_hero(
     focused: bool,
     show_title: bool,
     images_enabled: bool,
+    wide: bool,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
     let show = state.selected_show()?;
@@ -275,7 +288,10 @@ fn render_podcast_hero(
         },
         focused,
     );
-    if state.episode_selection.is_some() && result.next_row < area.bottom() {
+    // Episode filter pills + table are wide-only (`persistent` legacy
+    // gate); narrow routes Enter to the selection modal instead, so
+    // `episode_selection` is never set in narrow in practice.
+    if wide && state.episode_selection.is_some() && result.next_row < area.bottom() {
         let filter = state.episode_filter;
         let labels: Vec<String> = AudiobookshelfEpisodeFilter::ALL
             .iter()
