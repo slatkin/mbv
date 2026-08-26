@@ -425,6 +425,10 @@ mod tests {
                     > 0,
             "wide podcast right area must stay nonzero"
         );
+        assert!(
+            model.app.layout.main.left_area.width > 0 && model.app.layout.main.left_area.height > 0,
+            "wide list_area must project a nonzero left_area"
+        );
 
         // Narrow presentation: below the two-column width threshold.
         let narrow = Rect::new(0, 0, 60, 50);
@@ -436,6 +440,14 @@ mod tests {
             model.app.layout.main.audiobookshelf_podcast_right_area,
             Rect::default(),
             "narrow podcast right area must reset to zero"
+        );
+        assert!(
+            model.app.layout.main.left_area.width > 0 && model.app.layout.main.left_area.height > 0,
+            "narrow list_area must project a nonzero left_area"
+        );
+        assert!(
+            !model.app.layout.main.selector_tabs.is_empty(),
+            "narrow pill bar must project selector_tabs"
         );
 
         // Wide -> narrow redraw must also clear the right area.
