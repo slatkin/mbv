@@ -13,7 +13,7 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::to_crossterm_mouse_event;
+use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
 use super::msg::{
     LegacyTerminalEvent, Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove,
     ShellRequest,
@@ -209,9 +209,14 @@ impl AudiobookshelfPodcastComponent {
                     ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue),
                 ));
             }
-            // Unmatched keyboard keys return no message: nothing is
-            // reconstructed or forwarded as a raw terminal key (task 5.3d.7).
-            _ => None,
+            // TuiRealm sends an event only to the focused component and does
+            // not fall through when this returns None, so unmatched keys must
+            // forward through the shared framework bridge to keep global App
+            // shortcuts alive on this surface (task 5.3d.7 keeps the typed
+            // action intents above; it does not drop raw forwarding).
+            _ => Some(Msg::Legacy(LegacyTerminalEvent::Key(
+                to_crossterm_key_event(key),
+            ))),
         }
     }
 

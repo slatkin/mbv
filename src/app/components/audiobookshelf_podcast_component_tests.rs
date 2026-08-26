@@ -1,6 +1,7 @@
 use super::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
 use super::msg::{
-    Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove, ShellRequest,
+    LegacyTerminalEvent, Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove,
+    ShellRequest,
 };
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -122,14 +123,21 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
         ))
     ));
 
-    // An unrelated key no longer produces a raw request: unmatched keyboard
-    // keys return no message.
+    // An unrelated key forwards as a raw terminal event through the shared
+    // framework bridge: TuiRealm only delivers to the focused component and
+    // does not fall through on None, so global App shortcuts depend on this.
     let unrelated = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('z'),
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(
-        unrelated.is_none(),
-        "unmatched key must produce no message, got {unrelated:?}"
+    let Some(Msg::Legacy(LegacyTerminalEvent::Key(forwarded))) = unrelated else {
+        panic!("unmatched key must forward a raw terminal event, got {unrelated:?}");
+    };
+    assert_eq!(
+        forwarded,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('z'),
+            crossterm::event::KeyModifiers::NONE,
+        )
     );
 }
