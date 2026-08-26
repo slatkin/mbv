@@ -332,11 +332,6 @@ impl App {
                 self.current_protocol_suffix(),
             )
         });
-        if self.images_enabled() {
-            if let Some(server) = server_url {
-                self.fetch_audiobookshelf_cover(server, show.library_item_id.clone());
-            }
-        }
         let image_loading = image_key
             .as_ref()
             .is_some_and(|key| self.card_image_loading.contains(key));

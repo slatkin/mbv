@@ -3,6 +3,10 @@ use super::msg::{
     LegacyTerminalEvent, Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove,
     ShellRequest,
 };
+use crate::app::images::audiobookshelf_cover_cache_key;
+use crate::app::shell::Model;
+use crate::app::tests_podcast::audiobookshelf_app;
+use mbv_core::config::{AudiobookshelfSetup, ServiceKind};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
@@ -139,5 +143,42 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
             crossterm::event::KeyCode::Char('z'),
             crossterm::event::KeyModifiers::NONE,
         )
+    );
+}
+
+#[test]
+fn abs_podcast_cover_fetch_bridged_to_content_push_and_gated_by_images() {
+    // Image-disabled: a content push must not schedule any cover fetch.
+    let mut model = Model::new(audiobookshelf_app());
+    model.sync_audiobookshelf_podcast();
+    model.push_audiobookshelf_podcast_content();
+    assert!(
+        model.app.card_image_loading.is_empty(),
+        "image-disabled content push must not schedule a cover fetch"
+    );
+
+    // Image-enabled with a configured server and secret: the selected show's
+    // cover is scheduled through the bridge on the content push.
+    model.app.image_protocol_enabled = true;
+    model.app.config.lock().unwrap().audiobookshelf_setup =
+        Some(AudiobookshelfSetup::new("https://abs.example"));
+    mbv_core::config::save_service_secret(ServiceKind::Audiobookshelf, "test-secret").unwrap();
+    model.push_audiobookshelf_podcast_content();
+
+    let server = model
+        .app
+        .config
+        .lock()
+        .unwrap()
+        .audiobookshelf_setup
+        .as_ref()
+        .unwrap()
+        .server_url
+        .clone();
+    let expected_key =
+        audiobookshelf_cover_cache_key(&server, "show-a", model.app.current_protocol_suffix());
+    assert!(
+        model.app.card_image_loading.contains(&expected_key),
+        "image-enabled content push should schedule the selected show's cover fetch"
     );
 }

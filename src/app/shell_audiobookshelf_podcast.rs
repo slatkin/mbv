@@ -128,6 +128,32 @@ impl Model {
                 podcast.set_content(snapshot, focused, self.app.images_enabled());
             }
         }
+        // Cover-fetch bridge (task 5.3d.9): the selected show's cover was
+        // previously fetched as an unconditional side effect inside the legacy
+        // underpaint renderer. It now runs here, at the event-scoped content
+        // push that every writer seam already invokes, so the image-disabled
+        // gate is preserved and no fetch is scheduled when images are off.
+        if self.app.images_enabled() {
+            let server = self
+                .app
+                .config
+                .lock()
+                .unwrap()
+                .audiobookshelf_setup
+                .as_ref()
+                .map(|setup| setup.server_url.clone());
+            if let Some(server) = server {
+                if let Some(show) = self
+                    .app
+                    .audiobookshelf_browse
+                    .get(index)
+                    .and_then(|state| state.selected_show())
+                {
+                    self.app
+                        .fetch_audiobookshelf_cover(server, show.library_item_id.clone());
+                }
+            }
+        }
     }
 
     pub(super) fn render_audiobookshelf_podcast_component(&mut self, frame: &mut ratatui::Frame) {
