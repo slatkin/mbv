@@ -261,11 +261,15 @@ impl Model {
                     }
                 }
             }
-            had_events |= self.app.drain_audiobookshelf_events();
+            let drained_abs_events = self.app.drain_audiobookshelf_events();
+            had_events |= drained_abs_events;
             // ABS startup/refresh reset the browse state and reconcile
             // per-episode progress; re-project the active podcast browser
-            // (task 5.3d, sync_audiobookshell_podcast Phase A).
-            self.push_audiobookshelf_podcast_content();
+            // (task 5.3d, sync_audiobookshell_podcast Phase A). Only project
+            // when the drain actually reported an event.
+            if drained_abs_events {
+                self.push_audiobookshelf_podcast_content();
+            }
             if let Ok(ev) = self.app.player_rx.try_recv() {
                 had_events = true;
                 let restart = self.app.handle_player_event(ev);
@@ -700,6 +704,9 @@ impl Model {
                         | Msg::Shell(request @ ShellRequest::SelectionModalFilterSelected)
                         | Msg::Shell(request @ ShellRequest::SelectionModalActivate(_)) => {
                             self.handle_selection_modal_request(request);
+                            // Selection-modal changes to the ABS episode filter
+                            // must reach the mounted component (5.3d).
+                            self.push_audiobookshelf_podcast_content();
                         }
                         Msg::Shell(ShellRequest::MultiselectCommit { .. }) => {
                             self.handle_multiselect_commit();
