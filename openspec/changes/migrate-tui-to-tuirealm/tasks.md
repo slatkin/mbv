@@ -581,7 +581,7 @@ contributing surface's group 2–4 conversion to have landed.
     **Landed:** `bbe2fda4`; focused/full nextest, check, clippy, ast-grep
     touched-file baseline, and fmt touched-file baseline passed. Single hy3 review
     accepted with no blocking findings.
-  - [ ] 5.3d.10 Delete podcast legacy underpaint after its cover/layout work is
+  - [x] 5.3d.10 Delete podcast legacy underpaint after its cover/layout work is
     detached; keep narrow/default render characterization unchanged.
   - [ ] 5.3d.11 Re-home remaining podcast App-level interaction readers to the
     mounted component, delete obsolete App episode/filter handlers and the
