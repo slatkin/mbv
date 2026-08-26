@@ -101,6 +101,14 @@ impl AudiobookshelfPodcastComponent {
         self.image_paint.take()
     }
 
+    /// The geometry the component computed during its last `view`, exposed so
+    /// the shell can anchor overlays / read painted areas (task 5.3d.10c,
+    /// render ownership). Immutable: the component owns painting; callers do
+    /// not write back.
+    pub(in crate::app) fn geometry(&self) -> &AudiobookshelfPodcastGeometry {
+        &self.geometry
+    }
+
     fn move_cursor(&mut self, delta: i64) {
         let cursor = self.state.cursor();
         let count = self.state.shows.len();

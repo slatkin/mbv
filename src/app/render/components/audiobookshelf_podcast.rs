@@ -82,6 +82,24 @@ pub(in crate::app) struct AudiobookshelfPodcastGeometry {
     pub selector_tabs: Vec<(Rect, usize)>,
     pub show_rows: Vec<(Rect, usize)>,
     pub episode_rows: Vec<(Rect, usize)>,
+    /// Painted list/browser area: the wide right panel, or the narrow content
+    /// area below the pill bar. Mirrors the legacy
+    /// `LayoutMain.audiobookshelf_podcast_list_area` so the shell can anchor
+    /// overlays after render ownership moved to the component (task 5.3d.10c).
+    pub list_area: Rect,
+    /// Wide-only right panel rect; zero in the narrow layout. Mirrors the
+    /// legacy `LayoutMain.audiobookshelf_podcast_right_area`.
+    pub right_area: Rect,
+    /// Hero rect the component painted (wide hero panel, or narrow
+    /// inline-detail hero). Zero when no hero was painted.
+    pub hero_area: Rect,
+    /// Narrow-only inline hero rect; zero in the wide layout or when the
+    /// inline hero was rejected. Equals `hero_area` when set.
+    pub inline_hero_area: Rect,
+    /// Selected-item rect the component painted (only the narrow inline hero
+    /// shell today; `None` in the wide layout, which has no selected-item
+    /// shell). Mirrors the legacy `LayoutMain.selected_item_rect`.
+    pub selected_item_rect: Option<Rect>,
 }
 
 pub(in crate::app) fn render_audiobookshelf_podcast_content(
@@ -106,6 +124,12 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         images_enabled,
         geometry,
     );
+    // Wide layout: the list/browser occupies the right panel; the hero panel
+    // is the painted hero. No inline hero and no selected-item shell exist in
+    // this layout (the right panel paints an ordinary show grid).
+    geometry.list_area = right_panel;
+    geometry.right_area = right_panel;
+    geometry.hero_area = hero_panel;
     if state.shows.is_empty() {
         render_placeholder(frame, right_panel, "No podcast shows");
         return image_paint;
@@ -128,6 +152,9 @@ fn render_narrow_podcast(
             area,
             state.error.as_deref().unwrap_or("No podcast shows"),
         );
+        // Narrow with no shows: the whole area is the (empty) browser; no
+        // hero, right panel, or selected-item shell exists.
+        geometry.list_area = area;
         return None;
     }
     let parts = hero_left::pill_bar_areas(area);
@@ -150,6 +177,7 @@ fn render_narrow_podcast(
     );
 
     let list_area = parts.content_area;
+    geometry.list_area = list_area;
     let hero_content_width = list_area
         .width
         .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
@@ -186,6 +214,11 @@ fn render_narrow_podcast(
         height: hero_rows,
     };
     selected_detail_shell(frame, hero_area, hero_rows, focused);
+    // Narrow inline hero admitted: the painted hero is both the inline hero
+    // and the selected-item shell the shell anchors overlays to.
+    geometry.hero_area = hero_area;
+    geometry.inline_hero_area = hero_area;
+    geometry.selected_item_rect = Some(hero_area);
     render_podcast_hero(
         frame,
         hero_area,
