@@ -151,8 +151,15 @@ impl Model {
         }
     }
 
-    pub(super) fn sync_emby_browser(&mut self) {
-        self.mount_emby_browser();
+    /// Event-driven content projection for the mounted Emby browser (task
+    /// 5.3d.15/M2): the per-frame `sync_emby_browser` no longer rewrites
+    /// content every loop pass. This mirror applies the current library
+    /// `render_ctx`, cursor and panel-focus flag idempotently, and is called
+    /// at every writer seam that can change the active Emby library (the same
+    /// seams that re-project Home). `set_wide_movies` is NOT here — the wide
+    /// Movies rail stride is a per-draw layout fact pushed in
+    /// `render_emby_browser_component` (D18 step 1).
+    pub(super) fn push_emby_browser_content(&mut self) {
         let Some(id) = self.emby_browser_id.as_ref() else {
             return;
         };
@@ -164,16 +171,17 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {
                 browser.set_content(context, focused);
-                // Task 5.3d prep, wide-Movies exact parity: the shell
-                // projects whether the current App layout is the wide
-                // Movies/home-videos hero-on-left presentation. The
-                // component's own `LayoutMain` never publishes
-                // `movies_wide_right_area` (same reason the music workspace
-                // gets its page size pushed in via `set_page_rows`), so the
-                // 1-column right-rail stride has to ride this field.
-                browser.set_wide_movies(self.app.layout.main.is_wide_movies_active());
             }
         }
+    }
+
+    /// Legacy per-frame entry point (task 5.3d.15/M2): mount + content
+    /// projection only. Kept for test compatibility; the live event loop
+    /// still calls it once per loop pass, and the wide-Movies adapter now
+    /// rides the per-draw render path.
+    pub(super) fn sync_emby_browser(&mut self) {
+        self.mount_emby_browser();
+        self.push_emby_browser_content();
     }
 
     pub(super) fn render_emby_browser_component(&mut self, frame: &mut ratatui::Frame) {
@@ -183,6 +191,15 @@ impl Model {
         let area = self.app.layout.main.left_area;
         if area.width == 0 || area.height == 0 {
             return;
+        }
+        // D18 step 1: per-draw adapter — the legacy base frame (self.app.render(f))
+        // has already populated movies_wide_right_area this frame. The base
+        // frame and the mounted component share one paint, so the 1-column
+        // right-rail stride (the only reader of this field) is consistent here.
+        if let Some(comp) = self.application.get_component_mut(id) {
+            if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {
+                browser.set_wide_movies(self.app.layout.main.is_wide_movies_active());
+            }
         }
         self.application.view(id, frame, area);
     }

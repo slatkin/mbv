@@ -278,6 +278,8 @@ impl Model {
                 // Playback completion refetches Home; re-project (task 5.3d, sync_home
                 // mirror deletion).
                 self.push_home_content();
+                // Emby browser content may have changed (5.3d.15/M2).
+                self.push_emby_browser_content();
                 // Player events can reconcile ABS podcast progress; re-project (5.3d).
                 self.push_audiobookshelf_podcast_content();
                 // Player events can reconcile ABS book progress; re-project (5.3d).
@@ -334,6 +336,8 @@ impl Model {
                 // saved-position restore, and audio progress reconciles.
                 self.push_home_content();
                 self.push_audiobookshelf_podcast_content();
+                // Emby browser content may have changed (5.3d.15/M2).
+                self.push_emby_browser_content();
                 // ABS book async completions (BooksFetched / BookDetailFetched)
                 // and saved-position restore arrive via lib events; re-project (5.3d).
                 self.push_audiobookshelf_book_content();
@@ -358,6 +362,8 @@ impl Model {
             if self.app.drain_feed_tab_results() {
                 had_events = true;
                 self.push_home_content();
+                // Emby browser content may have changed (5.3d.15/M2).
+                self.push_emby_browser_content();
             }
 
             had_events |= self.drain_feed_add_results();
@@ -405,6 +411,8 @@ impl Model {
                 self.app.handle_ws_event(ev);
                 // `UserDataChanged` refetches Home inside the handler; re-project (5.3d).
                 self.push_home_content();
+                // Emby browser content may have changed (5.3d.15/M2).
+                self.push_emby_browser_content();
             }
 
             while let Ok(ev) = self.app.audiobookshelf_socket_rx.try_recv() {
@@ -528,6 +536,8 @@ impl Model {
                             // content or focus inside App's handler; re-project after every
                             // key at this seam (idempotent) (task 5.3d, sync_home deletion).
                             self.push_home_content();
+                            // Emby browser content may have changed (5.3d.15/M2).
+                            self.push_emby_browser_content();
                             // Podcast keys (cursor/selection/filter moves and
                             // panel-focus keys) write the active ABS browse
                             // state in App's handler; re-project (5.3d).
@@ -635,6 +645,8 @@ impl Model {
                             self.handle_confirm_key(key);
                             // Confirmations rewrite Home content/focus; re-project (5.3d).
                             self.push_home_content();
+                            // Emby browser content may have changed (5.3d.15/M2).
+                            self.push_emby_browser_content();
                         }
                         Msg::Shell(ShellRequest::DaemonLostKey(key)) => {
                             if self.handle_daemon_lost_key(key) {
@@ -651,11 +663,15 @@ impl Model {
                             self.handle_context_menu_key(key);
                             // Enter executes the action, which can refetch Home; re-project (5.3d).
                             self.push_home_content();
+                            // Emby browser content may have changed (5.3d.15/M2).
+                            self.push_emby_browser_content();
                         }
                         Msg::Shell(ShellRequest::ContextMenuSelect(idx)) => {
                             self.handle_context_menu_select(idx);
                             // A selected action can refetch Home; re-project (5.3d).
                             self.push_home_content();
+                            // Emby browser content may have changed (5.3d.15/M2).
+                            self.push_emby_browser_content();
                         }
                         Msg::Shell(ShellRequest::ContextMenuDismiss) => {
                             self.app.pending_overlay =
@@ -725,6 +741,8 @@ impl Model {
                             self.handle_multiselect_commit();
                             // Hiding libraries/pills refetches Home inside the commit; re-project (5.3d).
                             self.push_home_content();
+                            // Emby browser content may have changed (5.3d.15/M2).
+                            self.push_emby_browser_content();
                         }
                         Msg::Shell(request @ ShellRequest::LibraryRoutesEnter)
                         | Msg::Shell(request @ ShellRequest::LibraryRoutesEsc) => {
@@ -844,35 +862,45 @@ impl Model {
                             | ShellRequest::BrowserMoveRows { .. }
                             | ShellRequest::BrowserMoveColumn { .. }
                             | ShellRequest::BrowserJumpCursor { .. }),
-                        ) => self.handle_browser_request(request),
-                        Msg::Shell(ShellRequest::BrowserClick { region, col, row }) => match region
-                        {
-                            BrowserHitRegion::SelectorTab(target) => {
-                                self.app.last_click_time = Instant::now();
-                                self.app.last_click_pos = (col, row);
-                                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                    self.app.handle_mouse_selector_click_emby(lib_idx, target);
-                                }
-                            }
-                            BrowserHitRegion::ContextMenu(target) => {
-                                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                    self.app
-                                        .handle_mouse_right_click_emby(lib_idx, target, col, row);
-                                }
-                            }
-                            BrowserHitRegion::LeftRow(target)
-                            | BrowserHitRegion::InlineHero(target) => {
-                                if self.app.note_browse_double_click(col, row) {
+                        ) => {
+                            self.handle_browser_request(request);
+                            // Browser navigation/effects change library content; re-project (5.3d.15/M2).
+                            self.push_emby_browser_content();
+                        }
+                        Msg::Shell(ShellRequest::BrowserClick { region, col, row }) => {
+                            match region {
+                                BrowserHitRegion::SelectorTab(target) => {
+                                    self.app.last_click_time = Instant::now();
+                                    self.app.last_click_pos = (col, row);
                                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                        self.app.handle_mouse_double_click_emby(lib_idx, target);
-                                    }
-                                } else {
-                                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                        self.app.handle_mouse_single_click_emby(lib_idx, target);
+                                        self.app.handle_mouse_selector_click_emby(lib_idx, target);
                                     }
                                 }
+                                BrowserHitRegion::ContextMenu(target) => {
+                                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                        self.app.handle_mouse_right_click_emby(
+                                            lib_idx, target, col, row,
+                                        );
+                                    }
+                                }
+                                BrowserHitRegion::LeftRow(target)
+                                | BrowserHitRegion::InlineHero(target) => {
+                                    if self.app.note_browse_double_click(col, row) {
+                                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                            self.app
+                                                .handle_mouse_double_click_emby(lib_idx, target);
+                                        }
+                                    } else {
+                                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                            self.app
+                                                .handle_mouse_single_click_emby(lib_idx, target);
+                                        }
+                                    }
+                                }
                             }
-                        },
+                            // Selector-tab / item clicks mutate library state; re-project (5.3d.15/M2).
+                            self.push_emby_browser_content();
+                        }
                         // Home (cross-Service) mouse geometry lives in
                         // `HomeComponent`, which forwards the hit region; the
                         // shell decides *when* it counts via `App`'s 400ms
@@ -946,6 +974,8 @@ impl Model {
                             // Queue clicks move panel focus to the Queue panel;
                             // re-project the Home focus flag (task 5.3d, sync_home deletion).
                             self.push_home_content();
+                            // Emby browser content may have changed (5.3d.15/M2).
+                            self.push_emby_browser_content();
                         }
                         // TV workspace mouse geometry lives in
                         // `TvWorkspaceComponent`, which resolves the pane +
