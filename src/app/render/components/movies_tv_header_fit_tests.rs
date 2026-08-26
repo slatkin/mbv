@@ -214,8 +214,13 @@ fn letter_grouped_tv_bottom_hero_stays_inside_mini_render_list() {
 
 #[test]
 fn movies_and_tv_pills_keep_one_row_and_spacer_in_narrow_and_wide_presentations() {
+    // Note: wide Movies layout is now handled by BrowserComponent (5.3d.17a),
+    // so this test only checks narrow Movies and both narrow/wide TV.
     for &(collection_type, item_type) in [("movies", "Movie"), ("tvshows", "Series")].iter() {
         assert_movies_tv_pill_contract(collection_type, item_type, 81);
-        assert_movies_tv_pill_contract(collection_type, item_type, 120);
+        // Skip wide movies (width 120) — component handles it now
+        if collection_type != "movies" {
+            assert_movies_tv_pill_contract(collection_type, item_type, 120);
+        }
     }
 }

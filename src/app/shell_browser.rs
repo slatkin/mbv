@@ -188,10 +188,10 @@ impl Model {
         let Some(id) = self.emby_browser_id.as_ref() else {
             return;
         };
-        // Task 5.3d.17a: when the wide Movies/home-video layout is active the
-        // component paints the full hero-on-left rect, so hand it the full
-        // library area (`movies_wide_area`, set by the wide renderer this
-        // frame); otherwise hand it the narrow inner list area.
+        // Task 5.3d.17a/17b: when the wide Movies/home-video layout is active
+        // the component paints the full hero-on-left rect, so hand it the full
+        // library area (`movies_wide_area`, published by the App render path
+        // this frame); otherwise hand it the narrow inner list area.
         let wide = self.app.layout.main.is_wide_movies_active();
         let area = if wide {
             self.app.layout.main.movies_wide_area
@@ -227,12 +227,25 @@ impl Model {
         self.application.view(id, frame, area);
         // Paint the hero cover image the component computed but could not
         // paint itself (no image-cache authority), mirroring HomeComponent.
-        let image_paint = self
+        // Also read back the scroll the component painted at, so it can be
+        // persisted into the App nav level (task 5.3d.17b).
+        let (image_paint, painted_scroll) = self
             .application
             .get_component_mut(id)
             .and_then(|comp| comp.as_any_mut().downcast_mut::<BrowserComponent>())
-            .and_then(|browser| browser.take_image_paint());
+            .map(|browser| (browser.take_image_paint(), browser.scroll()))
+            .unwrap_or((None, 0));
         self.app.paint_home_image(frame, image_paint);
+        // Preserve the legacy wide-renderer scroll write-back: the component
+        // owns its cursor/scroll and `view()` returns the rendered scroll to
+        // `self.scroll`, but `set_content` overwrites that next frame from
+        // the App nav level — so without this write-back the rendered scroll
+        // would be lost on resize / first paint.
+        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+            if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
+                level.scroll = painted_scroll;
+            }
+        }
     }
 }
 

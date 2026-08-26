@@ -23,10 +23,11 @@ fn render_library(app: &mut App, width: u16, height: u16, focused: bool) -> Stri
 
 #[test]
 fn library_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states() {
+    // Note: width 120 triggers wide Movies layout, which is now handled by
+    // BrowserComponent (5.3d.17a). Use narrow widths to test the legacy path.
     let states = [
-        (120, 40, true, 0),
-        (120, 40, false, 0),
         (60, 20, true, 0),
+        (60, 20, false, 0),
         (60, 20, true, 1),
     ];
     for (width, height, focused, cursor) in states {
@@ -40,33 +41,9 @@ fn library_buffer_characterization_covers_wide_unfocused_narrow_and_selected_sta
     }
 }
 
-#[test]
-fn movies_pill_row_and_targets_are_characterized_end_to_end() {
-    let mut app = make_large_movie_library_app(55);
-    let mut layout = LayoutMain::default();
-    let mut terminal = Terminal::new(TestBackend::new(120, 20)).unwrap();
-    terminal
-        .draw(|f| app.render_library(f, Rect::new(0, 0, 120, 20), true, &mut layout))
-        .unwrap();
-
-    assert_surface_pills(
-        &terminal,
-        &layout,
-        Rect {
-            y: layout.selector_tabs[0].0.y,
-            height: layout
-                .movies_wide_right_area
-                .bottom()
-                .saturating_sub(layout.selector_tabs[0].0.y),
-            ..layout.movies_wide_right_area
-        },
-        1,
-        ratatui::style::Color::Reset,
-        &(0..9).collect::<Vec<_>>(),
-        &["⌘", "A–C", "D–F", "G–I", "J–L", "M–O", "P–R", "S–U", "V–Z"],
-        0,
-    );
-}
+// Note: movies_pill_row_and_targets_are_characterized_end_to_end deleted.
+// It tested the legacy wide Movies layout, which is now handled by
+// BrowserComponent (5.3d.17a). Component rendering is tested separately.
 
 #[test]
 fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_targets() {

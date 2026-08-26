@@ -40,7 +40,6 @@ pub(super) mod list_letter_groups;
 pub(super) mod list_plain;
 pub(super) mod list_rows;
 pub(super) mod modal_frame;
-pub(super) mod movies_wide;
 pub(super) mod multiselect;
 pub(super) mod music;
 pub(super) mod music_wide;

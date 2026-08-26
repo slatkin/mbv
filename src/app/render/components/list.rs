@@ -50,6 +50,18 @@ pub(in crate::app) fn render_generic_movies_home_video_rows_with_ctx(
 }
 
 impl App {
+    /// Whether `lib_idx` is the dedicated Movies library (a
+    /// `collection_type == "movies"` library that is not routed through the
+    /// feed/home-video group view). Only this library gets the wide
+    /// hero-on-left arrangement; home videos, podcasts, TV, and music keep
+    /// their own.
+    pub(in crate::app::render) fn is_wide_movies_library(&self, lib_idx: usize) -> bool {
+        self.libs.get(lib_idx).is_some_and(|lib| {
+            lib.library.collection_type == "movies"
+                && !self.is_feed_home_video_group_view(lib_idx)
+        })
+    }
+
     /// Renders the Continue/library list items into `area`.
     /// The title header is now drawn in the top-of-screen FOAM bar.
     pub(in crate::app::render) fn render_list(
@@ -96,28 +108,22 @@ impl App {
             }
         }
 
-        // Wide Movies: the dedicated Movies library renders hero-on-left
-        // (right-panel-arrangements spec) at or above the shared breakpoint:
-        // read-only shared selected-Emby hero card on the left, letter pills
-        // and one-column list in the right rail. Below the breakpoint the
-        // inline presentation below runs unchanged. Height floor mirrors
-        // the other hero-on-left screens.
+        // Wide Movies / home-video: the mounted `BrowserComponent` paints the
+        // full hero-on-left layout itself (task 5.3d.17a). The legacy
+        // renderer is gone (5.3d.17b); we only publish the hand-off areas
+        // here so input routing (`is_wide_movies_active`) and the shell's
+        // render seam can locate them. No rows are painted — the component
+        // owns the picture.
         if let Some(lib_idx) = self.tab.emby_library_index() {
             if (self.is_wide_movies_library(lib_idx) || self.is_home_video_view(lib_idx))
-                && crate::app::render::arrangements::hero_left::shared_hero_presentation(area)
-                    .is_some()
+                && hero_left::shared_hero_presentation(area).is_some()
             {
-                let ctx = self.library_list_render_ctx(lib_idx, false);
-                let selected_movie = self.selected_wide_movie(lib_idx, &ctx);
-                self.render_wide_movies_with_ctx(
-                    f,
-                    area,
-                    lib_idx,
-                    focused,
-                    &ctx,
-                    selected_movie.as_ref(),
-                    layout,
-                );
+                if let Some(panes) =
+                    library::wide_library_panes(area, hero_left::PANE_PAD_X, hero_left::PANE_PAD_Y)
+                {
+                    layout.movies_wide_area = area;
+                    layout.movies_wide_right_area = panes.right_area;
+                }
                 return;
             }
         }

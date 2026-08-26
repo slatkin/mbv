@@ -294,9 +294,11 @@ fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
 
 #[test]
 fn left_area_is_set_for_an_empty_library_list() {
+    // Note: width 82 triggers wide Movies layout, which is now handled by
+    // BrowserComponent (5.3d.17a). Use width 81 to test the narrow legacy path.
     let mut app = make_movie_list_app(vec![]);
     let mut layout = LayoutMain::default();
-    let _ = render_list_term(&mut app, &mut layout, 82, 40);
+    let _ = render_list_term(&mut app, &mut layout, 81, 40);
 
     assert!(
         layout.left_area.height > 0,

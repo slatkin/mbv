@@ -98,6 +98,17 @@ impl BrowserComponent {
         self.cursor
     }
 
+    /// The scroll offset the last `view()` painted the list at. The shell
+    /// reads this after `application.view()` and persists it back into the
+    /// App nav level (task 5.3d.17b): the legacy wide renderer wrote
+    /// `level.scroll = final_scroll`, and `set_content` overwrites the
+    /// component's own `self.scroll` next frame from the App nav level, so
+    /// without the write-back the rendered scroll would be lost on resize /
+    /// first paint.
+    pub(in crate::app) fn scroll(&self) -> usize {
+        self.scroll
+    }
+
     /// Shell projection (task 5.3d prep, D14 temporary adapter): record
     /// whether the current App layout is the wide Movies/home-videos
     /// hero-on-left presentation (`App::layout.main.is_wide_movies_active()`
