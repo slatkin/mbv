@@ -55,7 +55,15 @@ impl BrowserComponent {
 
     pub(in crate::app) fn set_content(&mut self, context: LibraryListRenderCtx, focused: bool) {
         self.context = context;
-        self.cursor = self.cursor.min(self.context.item_count().saturating_sub(1));
+        // Sync component cursor/scroll from App cursor. In the new architecture,
+        // `set_content` is always called after the App cursor has been updated
+        // (either by the component's own request or by an external change like
+        // tab switch or go_back), so we can always sync from the context.
+        self.cursor = self
+            .context
+            .cursor()
+            .min(self.context.item_count().saturating_sub(1));
+        self.scroll = self.context.scroll();
         self.focused = focused;
     }
 

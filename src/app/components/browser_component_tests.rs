@@ -242,7 +242,7 @@ fn browser_local_navigation_strides_one_column_for_wide_movies() {
 }
 
 #[test]
-fn browser_keeps_cursor_local_between_shell_syncs() {
+fn browser_syncs_cursor_from_context_on_set_content() {
     let mut browser = BrowserComponent::new();
     browser.set_content(
         LibraryListRenderCtx::from_items(
@@ -254,16 +254,32 @@ fn browser_keeps_cursor_local_between_shell_syncs() {
     );
 
     browser.handle_crossterm_key(KeyEvent::new(KeyCode::Down, CrosstermKeyModifiers::NONE));
+    // Component cursor moved to 1
+    assert_eq!(browser.cursor(), 1);
+
+    // set_content with App cursor at 1 (as it would be after the shell handles the request)
     browser.set_content(
         LibraryListRenderCtx::from_items(
             vec![make_item("one", "Movie"), make_item("two", "Movie")],
-            0,
+            1, // App cursor updated to match component
             0,
         ),
         true,
     );
-
+    // Component cursor syncs from context
     assert_eq!(browser.cursor(), 1);
+
+    // set_content with App cursor at 0 (external change like tab switch)
+    browser.set_content(
+        LibraryListRenderCtx::from_items(
+            vec![make_item("one", "Movie"), make_item("two", "Movie")],
+            0, // App cursor changed externally
+            0,
+        ),
+        true,
+    );
+    // Component cursor follows App cursor
+    assert_eq!(browser.cursor(), 0);
 }
 
 #[test]
