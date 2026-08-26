@@ -1,23 +1,3 @@
-{"ts":"2026-08-26T10:04:07.106Z","type":"leave","agent":"GoldIce"}
-{"ts":"2026-08-26T10:04:12.723Z","type":"leave","agent":"DarkGrove"}
-{"ts":"2026-08-26T10:11:52.423Z","type":"join","agent":"UltraViper"}
-{"ts":"2026-08-26T10:35:18.307Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/render/arrangements/hero_left.rs"}
-{"ts":"2026-08-26T10:35:24.405Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/render/arrangements/library.rs"}
-{"ts":"2026-08-26T10:35:30.630Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/render/arrangements/mod.rs"}
-{"ts":"2026-08-26T10:35:37.218Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/render/components/home_hero.rs"}
-{"ts":"2026-08-26T10:35:42.688Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/render/components/home_hero.rs"}
-{"ts":"2026-08-26T10:35:47.940Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/render/components/hero.rs"}
-{"ts":"2026-08-26T10:35:54.559Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/render/components/widgets.rs"}
-{"ts":"2026-08-26T10:36:02.823Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/render/mod.rs"}
-{"ts":"2026-08-26T10:36:10.606Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/render/components/list_rows.rs"}
-{"ts":"2026-08-26T10:36:17.288Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/layout.rs"}
-{"ts":"2026-08-26T10:36:22.770Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/render/components/movies_wide.rs"}
-{"ts":"2026-08-26T10:37:06.009Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/components/browser.rs"}
-{"ts":"2026-08-26T10:37:31.051Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/components/browser.rs"}
-{"ts":"2026-08-26T10:37:49.327Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/components/browser.rs"}
-{"ts":"2026-08-26T10:38:00.856Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/render/components/list_rows.rs"}
-{"ts":"2026-08-26T10:38:09.930Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/components/browser.rs"}
-{"ts":"2026-08-26T10:38:35.615Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/components/browser.rs"}
 {"ts":"2026-08-26T10:38:45.158Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/components/browser.rs"}
 {"ts":"2026-08-26T10:39:04.838Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/shell_browser.rs"}
 {"ts":"2026-08-26T10:39:30.856Z","type":"edit","agent":"UltraViper","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/components/browser_component_tests.rs"}
@@ -51,3 +31,23 @@
 {"ts":"2026-08-26T11:13:39.578Z","type":"join","agent":"SageHawk"}
 {"ts":"2026-08-26T11:15:49.191Z","type":"leave","agent":"SageHawk"}
 {"ts":"2026-08-26T11:16:17.725Z","type":"edit","agent":"VividYak","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/src/app/components/browser.rs"}
+{"ts":"2026-08-26T11:16:18.839Z","type":"commit","agent":"VividYak","preview":"5.3d.17b: fix stale doc comment referencing deleted movies_wide.rs Reviewer P2 finding: browser.rs:152 referenced App::render_wide_movies_with_ctx (movies_wide.rs) which no longer exists. Reworded to"}
+{"ts":"2026-08-26T11:21:18.947Z","type":"join","agent":"RedViper"}
+{"ts":"2026-08-26T11:21:28.277Z","type":"join","agent":"IronRaven"}
+{"ts":"2026-08-26T11:21:57.988Z","type":"edit","agent":"VividYak","target":"/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm/openspec/handoffs/orchestration-2026-08-26-vividyak.md"}
+{"ts":"2026-08-26T11:22:02.761Z","type":"commit","agent":"VividYak","preview":"handoff: VividYak session 2026-08-26 (5.3d.15-5.3d.17 complete, scouts done)"}
+{"ts":"2026-08-26T11:24:39.807Z","type":"leave","agent":"RedViper"}
+{"ts":"2026-08-26T11:24:42.578Z","type":"join","agent":"LoudCastle"}
+{"ts":"2026-08-26T11:25:00.410Z","type":"leave","agent":"LoudCastle"}
+{"ts":"2026-08-26T11:25:06.561Z","type":"plan.start","agent":"IronRaven","target":"(prompt)","preview":"max passes 1"}
+{"ts":"2026-08-26T11:25:06.562Z","type":"plan.pass.start","agent":"IronRaven","target":"(prompt)","preview":"pass 1/1"}
+{"ts":"2026-08-26T11:25:07.561Z","type":"join","agent":"HappyLion"}
+{"ts":"2026-08-26T11:27:12.000Z","type":"join","agent":"CalmFalcon"}
+{"ts":"2026-08-26T11:27:43.711Z","type":"leave","agent":"VividYak"}
+{"ts":"2026-08-26T11:27:57.420Z","type":"leave","agent":"CalmFalcon"}
+{"ts":"2026-08-26T11:30:24.021Z","type":"leave","agent":"IronRaven"}
+{"ts":"2026-08-26T11:30:24.023Z","type":"leave","agent":"HappyLion"}
+{"ts":"2026-08-26T11:30:36.574Z","type":"join","agent":"JadeArrow"}
+{"ts":"2026-08-26T11:30:57.025Z","type":"join","agent":"MintHawk"}
+{"ts":"2026-08-26T11:31:42.438Z","type":"leave","agent":"MintHawk"}
+{"ts":"2026-08-26T11:36:03.896Z","type":"leave","agent":"JadeArrow"}

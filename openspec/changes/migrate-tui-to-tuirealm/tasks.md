@@ -410,18 +410,184 @@ contributing surface's group 2–4 conversion to have landed.
     **Landed:** `d6f67656` plus global-key fallback correction `e7abcb13`;
     focused/full nextest, check, clippy, and fmt passed. Fresh Luna review found
     and then accepted the corrected TuiRealm fallback with no remaining issues.
-  - [ ] 5.3d.8 Complete the podcast downstream-reader/cover-fetch handoff: enumerate
+  - [x] 5.3d.8 Complete the podcast downstream-reader/cover-fetch handoff: enumerate
     persistence, queue-target, legacy-render, and image-fetch readers and split the
     result into explicit 3–6-file implementation rows here before assigning a
     writer; no production edit in this row.
-  - [ ] 5.3d.9 Move podcast cover fetching to the smallest shell/Model bridge named
+    - 5.3d.9 (row — cover-fetch bridge): Move the podcast cover fetch out of the
+      legacy underpaint into the smallest Model bridge and preserve the
+      image-disabled gate. No App field deleted in this row.
+      - Files (3): `src/app/render/components/audiobookshelf.rs` (delete
+        `self.fetch_audiobookshelf_cover(server, show.library_item_id.clone())`
+        at line 337 inside `render_audiobookshelf_hero`, plus its
+        `self.images_enabled()` gate at line 336);
+        `src/app/shell_audiobookshelf_podcast.rs` (add the fetch inside
+        `push_audiobookshelf_podcast_content` at line 111, reading the selected
+        show's `library_item_id` from `snapshot.selected_show()` and calling
+        `self.app.fetch_audiobookshelf_cover(server, id)` only when
+        `self.app.images_enabled()`; this single method is already invoked at
+        every writer seam in `shell.rs:272,284,338,423,544,738,761,798,825` and
+        on fresh mount, so no extra call sites are needed); `src/app/images.rs`
+        (`fetch_audiobookshelf_cover` at line 334 is reused unchanged).
+      - Image-disabled behavior to preserve: `App::images_enabled()`
+        (`src/app/images.rs:713`) must remain the sole gate; when false no fetch
+        occurs (mirrors the deleted line 336 guard). Also
+        `fetch_audiobookshelf_image` already no-ops when
+        `image_protocol_enabled` is false (`images.rs:360`).
+      - Obsolete App-field readers: none deleted here; the bridge reads
+        `app.audiobookshelf_browse[index].selected_show().library_item_id`
+        (App field still present after this row).
+      - Tests: verify `src/app/render/tests_audiobookshelf_podcasts.rs` still
+        passes; add/confirm an image-disabled characterization (no cover fetch
+        when `images_enabled()` is false) in
+        `src/app/components/audiobookshelf_podcast_component_tests.rs` if absent.
+        No test deleted.
+    - 5.3d.10 (row — delete legacy underpaint): Delete the podcast legacy
+      underpaint while keeping narrow/default render characterization unchanged.
+      - Files (4–5): `src/app/render/components/audiobookshelf.rs` (delete
+        `render_audiobookshelf_podcasts` at line 103, `render_audiobookshelf_hero`
+        at line 304, `render_audiobookshelf_show_rows` at line 637, and the
+        podcast-only narrow helpers; keep shared `hero.rs` helpers);
+        `src/app/render/components/widgets.rs` (delete the
+        `self.render_audiobookshelf_podcasts(...)` arm at line 565 inside
+        `render_audiobookshelf_library`); `src/app/layout.rs`
+        (`is_wide_podcast_active()` at line 209 reads
+        `audiobookshelf_podcast_right_area`);
+        `src/app/shell_audiobookshelf_podcast.rs`
+        (`render_audiobookshelf_podcast_component` at line 133 must set
+        `app.layout.main.audiobookshelf_podcast_area` and
+        `audiobookshelf_podcast_right_area` from `shared_hero_presentation(area)`
+        so `is_wide_podcast_active()` stays valid after the underpaint is gone).
+      - Critical relocation: the underpaint sets
+        `layout.audiobookshelf_podcast_area` (audiobookshelf.rs:110) and
+        `layout.audiobookshelf_podcast_right_area` (audiobookshelf.rs:123). These
+        MUST move to `render_audiobookshelf_podcast_component` (or the component
+        `view()`) BEFORE deletion, or `is_wide_podcast_active()` — read by
+        `handle_audiobookshelf_podcast_episode_intent` at
+        `shell_audiobookshelf_podcast.rs:35` to choose wide OpenOrPlay vs narrow
+        modal — will always report narrow (D17 regression).
+      - Obsolete App-field readers removed with the underpaint: the underpaint
+        reads `app.audiobookshelf_browse.get(index).cloned()` (line 112),
+        `state.shows`, `state.cursor()` (via show_rows), `state.selected_show()`
+        (hero), and `state.episode_selection` (episode rows) — all replaced by
+        the component's own `render_audiobookshelf_podcast_content` reads on its
+        local `AudiobookshelfBrowseState`.
+      - Tests: `src/app/render/tests_audiobookshelf_podcasts.rs` is the
+        narrow/default render characterization and MUST stay green; the helpers
+        `render_library_to_terminal_focused` / `render_library_to_string_sized`
+        (`src/app/render/test_helpers.rs:222,244`) currently call only
+        `app.render_library` (legacy base frame), so they must also draw the
+        podcast component overlay (or route through the shell) or the
+        characterization renders empty. `src/app/tests_podcast.rs:266` manually
+        sets `layout.main.audiobookshelf_podcast_right_area` and may need update
+        after the relocation.
+      - Required split after the first writer timed out and crossed the component
+        ownership boundary (its partial production diff was discarded):
+        - **5.3d.10a — hero row-budget parity (3 production files):** extract a
+          pure podcast hero-row helper shared by the legacy and component
+          renderers in `src/app/render/components/audiobookshelf_podcast.rs`;
+          make `src/app/render/components/audiobookshelf.rs` delegate to it; and
+          retain/pass `images_enabled` in
+          `src/app/components/audiobookshelf_podcast.rs`. Match the legacy
+          author/description wrapping, episode rows, and image-height minimum.
+          Keep image painting, geometry projection, shell, widgets, and legacy
+          underpaint unchanged. `Component::view` remains the sole painter.
+          **Landed:** `4d2f6de1`; focused/full nextest, check, clippy, ast-grep
+          touched-file baseline, and fmt touched-file baseline passed. Single hy3
+          review accepted with no blocking findings.
+        - **5.3d.10b — component image-paint handoff (3 production files):**
+          mirror the established ABS Book pattern only: component renderer
+          returns `HomeImagePaint::AudiobookshelfCover`, component stores/takes
+          it, and `src/app/shell_audiobookshelf_podcast.rs` calls
+          `App::paint_home_image` after `application.view`. No geometry or legacy
+          deletion in this slice.
+          **Landed:** `af2bf9c8`; focused/full nextest, check, clippy, ast-grep
+          touched-file baseline, and fmt touched-file baseline passed. Single hy3
+          review accepted with no blocking findings.
+        - **5.3d.10c — component-owned geometry parity (2 production files):**
+          add the needed wide/right/list/hero/selected-item projection fields to
+          `AudiobookshelfPodcastGeometry`, populate them inside component paint,
+          and expose them read-only from `AudiobookshelfPodcastComponent`. Do not
+          write `LayoutMain`, change shell/widgets, or delete legacy code. Add
+          focused wide/narrow component geometry characterization.
+          **Landed:** `ad403485` plus direct parent correction `2e9090e5`
+          (wide-empty hero geometry, stale doc, and extracted-import cleanup);
+          focused test/check and touched-file fmt passed. Single hy3 review found
+          the corrected P1; no second review per maintainer directive.
+        - **5.3d.10d — temporary shell layout projection (1 production file):**
+          after `application.view`, read component-owned geometry and project
+          only the still-required `LayoutMain` fields for legacy App readers;
+          prove wide right-area is nonzero wide and reset to zero narrow,
+          including wide→narrow. Do not change component painting, widgets
+          dispatch, or delete render code.
+        - **5.3d.10e — mechanical underpaint deletion (3 production files):**
+          delete `src/app/render/components/audiobookshelf.rs`, remove its module
+          declaration, and make `render_audiobookshelf_library` reserve
+          `audiobookshelf_podcast_area` then return. Repoint the existing podcast
+          render characterization to the mounted component/shell path. No new
+          presentation, geometry, or interaction behavior in this slice.
+    - 5.3d.11 (row — re-home App-level podcast readers to the component, delete
+      obsolete App handlers/adapters; the shared `AudiobookshelfBrowseState`
+      type stays intact): Scout correction 2026-08-26. The type members
+      `selected_id`/`episode_filter`/`episode_selection`/`scroll` are SHARED by
+      `App.audiobookshelf_browse` and `AudiobookshelfPodcastComponent.state`
+      (same struct), so the component — the re-home target — must keep
+      reading/writing them. The deletable artifact is the App-level readers/
+      handlers on `app.audiobookshelf_browse[i]`, not the type members (B1).
+      Also `push_audiobookshelf_podcast_content` is NOT empty — it is the sole
+      `set_content` + cover-fetch bridge (5.3d.9), so relocate it before deleting
+      (B2). Position persistence crosses the App/Model boundary (B3).
+      Ordered units (1–3 production files each; compile-green noted):
+      - **U0 prereq — component accessors (2 files):** `components/audiobookshelf_podcast.rs`,
+        `shell_audiobookshelf_podcast.rs`; add `selected_id()`/`episode_selection()`/
+        `episode_filter()` getters, `set_episode_filter()`/`set_episode_selection()`
+        mutators, and a `Model::abs_podcast_component_mut(index)` helper. Green alone.
+      - **U1 — relocate projection (B2) (2 files):** `shell_audiobookshelf_podcast.rs`
+        (merge `push_audiobookshelf_podcast_content` body + cover-fetch into the
+        post-mount path of `sync_audiobookshelf_podcast`), `shell.rs` (drop the 9
+        `push_audiobookshelf_podcast_content()` calls 272/284/338/423/544/738/761/
+        798/825). Green together.
+      - **U2 — delete episode handlers + dispatch (3 files, same commit):**
+        `audiobookshelf_browse_actions.rs` (delete `enter/leave_audiobookshelf_episode_selection`,
+        `move_audiobookshelf_episode_cursor`, `cycle_audiobookshelf_filter`),
+        `input_browse_dispatch.rs` (delete `handle_key_audiobookshelf_library` +
+        dispatch arm ~60), `shell.rs` (remove the 810–825 component-routing callers).
+        NOT green alone — shell caller removal must ship in the same commit.
+      - **U3 — re-home modal filter (≤2 files):** `audiobookshelf_podcast_modal_actions.rs`
+        (open:28 read + select:66 write against the component via U0 accessors).
+        NOT green alone — depends on U0.
+      - **U4 — re-home position persistence (B3, parent-scope first):**
+        `library_position_state.rs` (save:237/238/290/291, activate:290/291/296/298/300)
+        + a Model-side seam (`run_loop_drains.rs`/`cw_library_tab_actions.rs`/
+        `select_audiobookshelf_show`). App has no `application` handle; likely
+        exceeds 3 files — split by parent before delegation.
+      - **U5 — playback target from component (2 files):**
+        `audiobookshelf_browse_actions.rs` (`selected_audiobookshelf_queue_item`),
+        `shell_audiobookshelf_podcast.rs` (`handle_audiobookshelf_podcast_episode_intent:23`);
+        resolve play/enqueue target via U0 accessor + component method. Not green
+        alone — depends U0/U2/U4 ordering.
+      - **U6 — drop mount seam + dead type method (3 files):** `shell.rs` (drop
+        `sync_audiobookshelf_podcast()` at 1066), `shell_audiobookshelf_podcast.rs`
+        (delete `sync_audiobookshelf_podcast` if U1 didn't subsume it),
+        `types_audiobookshelf_browse.rs` (delete dead `enter_episode_selection()`
+        only). Green only after U0–U5.
+      - Test repaints (companion commits, not production): shell_audiobookshelf_podcast.rs:193
+        (cursor→component), :199-247 (episode_selection→component),
+        tests_podcast_playback.rs (12 sites: 22/44/60/82/104/132/185/242/315/401/465/556),
+        audiobookshelf_podcast_component_tests.rs:45, tests_audiobookshelf_podcasts.rs:221,263-264,
+        shell_selection_modal_tests.rs:618, tests_library_position_refresh.rs.
+  - [x] 5.3d.9 Move podcast cover fetching to the smallest shell/Model bridge named
     by 5.3d.8 and verify existing image-disabled behavior.
+    **Landed:** `bbe2fda4`; focused/full nextest, check, clippy, ast-grep
+    touched-file baseline, and fmt touched-file baseline passed. Single hy3 review
+    accepted with no blocking findings.
   - [ ] 5.3d.10 Delete podcast legacy underpaint after its cover/layout work is
     detached; keep narrow/default render characterization unchanged.
-  - [ ] 5.3d.11 Re-home remaining podcast interaction-field readers, delete obsolete
-    App cursor/filter/selection fields and handlers, then remove the empty podcast
-    mount/sync adapter; split this row before delegation if 5.3d.8 finds more than
-    six production files.
+  - [ ] 5.3d.11 Re-home remaining podcast App-level interaction readers to the
+    mounted component, delete obsolete App episode/filter handlers and the
+    empty mount/sync/push adapters, keeping the shared `AudiobookshelfBrowseState`
+    type intact (B1: fields shared with the component). Bounded U0–U6 rows above;
+    U4 (position persistence, B3) must be parent-scoped before delegation.
 
   - [x] 5.3d.12 Implement the two-file Audiobookshelf book Phase-A push helper from
     `openspec/handoffs/scout-abs-book-phase-a.md`: mount-only reconciliation plus
@@ -466,12 +632,75 @@ contributing surface's group 2–4 conversion to have landed.
   - [ ] 5.3d.18 Refine `openspec/handoffs/scout-tv-workspace.md` into an exact typed
     keyboard and writer-seam contract (the current report is an inventory, not an
     implementation prompt); add bounded implementation rows here, no production edit.
+    Bounded rows (Emby template commits `8929248`/`24e645b9`/`6fa217fb`):
+      - **5.3d.18a — typed keyboard (3 files):** `components/tv_workspace.rs`
+        `handle_key` (166-193) forwards every key raw via `Msg::Legacy`;
+        `components/msg.rs` has no typed TV keyboard request; `shell.rs` arms
+        (986-1010) mirror. Convert the series-list cursor keys (Up/k, Down/j,
+        Left/h, Right/l, PageUp/Down, Home/End, Enter, Esc/Backspace) to typed
+        requests carrying the resolved pane/episode/season cursor; keep episode
+        play/enqueue raw for 18f.
+      - **5.3d.18b — drop mirror-pin (≤3 files):** `components/tv_workspace.rs`
+        `set_content` last_mirrored_* pin + `shell_tv_workspace.rs`
+        `sync_tv_workspace` per-frame `set_content` (24-66); make the component
+        cursor authoritative and remove the dual-write with
+        `App::move_lib_cursor_rows` (B1).
+      - **5.3d.18c — writer pushes (≤3 files):** add `push_tv_workspace_content`
+        at the nav-stack/cache/panel-focus/letter/resize writers
+        (`shell_tv_workspace.rs`, `shell.rs`, `lib_cursor_actions.rs`,
+        `input_browse_dispatch.rs`); keep the `series_detail_cache` reader at
+        `shell_tv_workspace.rs:51` (B2).
+      - **5.3d.18d — geometry/underpaint (≤3 files):** `render/components/tv_wide.rs`
+        publishes the `tv_wide_*` rects the component hit-tests; delete the legacy
+        `render_list` wide-TV branch only after the component owns geometry (B4).
+      - **5.3d.18e — teardown (≤3 files):** remove the empty `sync_tv_workspace`
+        adapter + `CONTEXT_STACK` TV arms + obsolete mount/sync names.
+      - **5.3d.18f — episode play/enqueue gap:** new typed
+        `TvEpisodeActivate`/`TvEpisodeEnqueue` requests resolved from
+        `series_detail.episodes[season_id][episode_cursor]`; needs new App methods
+        (B3).
   - [ ] 5.3d.19 Complete the preliminary Music report with exact raw-key, projection
     writer, geometry, and underpaint contracts; replace
     `scout-music-workspace-preliminary.md` with bounded implementation rows before a
     Music writer starts.
+    Bounded rows:
+      - **5.3d.19a — mount/idempotent mirror (≤3 files):** `components/music_workspace.rs`
+        + `shell_music_workspace.rs`; idempotent mount + content mirror (album cursor
+        via `move/jump/page_grouped_album_cursor`, focused track via
+        `focused_music_track`) with no behavioral change.
+      - **5.3d.19b — geometry pre-pass (≤3 files, BLOCKER for 19c):**
+        `render/components/music_wide.rs` + `shell_music_workspace.rs`; compute
+        `wide_music_area`/`wide_music_right_area`/`left_area`/`hero_area`/
+        `wide_music_art_area` before the component `view` (today only the legacy
+        `render_list` wide-music branch sets them — chicken-and-egg, R1).
+      - **5.3d.19c — delete legacy underpaint (≤3 files):** `render/components/list.rs`
+        wide-music branch (66-95) after 19b; the component already repaints over it.
+      - **5.3d.19d — relocate album-track fetch (≤3 files):** `images.rs`
+        `fetch_album_tracks` is triggered only by the legacy branch (list.rs:74-80);
+        move the trigger to the component/writer path (R2).
+      - **5.3d.19e — framework teardown (≤3 files):** remove the empty
+        `sync_music_workspace` adapter + delete the differential legacy test.
+    Risks: R1 geometry chicken-and-egg (blocker); R2 fetch relocation; R3 Page
+    requires Library panel focus; R4 one-frame mouse warm-up; R5 h/l single-step
+    vs arrow row-stride intended.
   - [ ] 5.3d.20 Scout the remaining inline-library-Search mirror and raw endpoint,
     then add bounded teardown rows here before implementation.
+    Bounded teardown rows (surface already migrated; residual shell scaffolding):
+      - **5.3d.20a — drop mount-id field (≤3 files):** `shell.rs` `inline_search_id`
+        field + `shell_inline_search.rs` `inline_search_component_id` +
+        `shell_library.rs:41` mount-id precedence branch.
+      - **5.3d.20b — merge redundant re-pushes (≤2 files):** `shell_inline_search.rs`
+        duplicate `push_inline_search_content` at lines 184/218.
+      - **5.3d.20c — drop apply_inline_search_items (group 5, ≤2 files):**
+        `shell_inline_search.rs` `apply_inline_search_items` + parent_id guard.
+      - **5.3d.20d — drop recursive pool branch (group 5, ≤2 files):**
+        `shell_inline_search.rs` recursive `Albums` pool branch.
+      - **5.3d.20e — re-home `/` trigger (≤2 files):** `components/browser.rs:90-92`
+        `ShellRequest::OpenInlineSearch`.
+      - **5.3d.20f — mouse left_area quirk (≤2 files):** `components/inline_search.rs`
+        mouse `left_area` Default-layout mismatch.
+    Risks: `scroll` written inside `view()` (render side-effect) — preserve on
+    teardown; render seam list.rs:17 + list_rows.rs:290 `with_search`.
 
   - [ ] 5.3d.21 After every surface row above lands, re-inventory remaining
     `CONTEXT_STACK`, `Msg::Legacy`, `LegacyTerminalEvent`, `LegacyInput`, terminal

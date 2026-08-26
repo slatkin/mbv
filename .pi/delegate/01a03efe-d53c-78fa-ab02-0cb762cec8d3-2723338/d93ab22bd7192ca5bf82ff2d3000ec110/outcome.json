@@ -1,0 +1,1 @@
+{"error_code":"child_tool_call_limit","launch_nonce":"484c991b535a8f7b46a5f34ba8d8657b","observed_task_status":"failed","outcome":{"errorCode":"child_tool_call_limit","status":"failed"},"schema_version":"pi-background-tasks.delegate-outcome.v1","task_id":"d93ab22bd7192ca5bf82ff2d3000ec110"}
