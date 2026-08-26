@@ -70,6 +70,12 @@ impl AudiobookshelfBookComponent {
         self.image_paint.take()
     }
 
+    /// The geometry the component computed during its last `view`, exposed so
+    /// the shell can anchor the context menu (task 5.3d.13, render ownership).
+    pub(in crate::app) fn geometry(&self) -> &AudiobookshelfBookGeometry {
+        &self.geometry
+    }
+
     fn page_size(&self) -> usize {
         self.geometry.book_rows.len().max(1)
     }

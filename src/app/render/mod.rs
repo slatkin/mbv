@@ -39,8 +39,8 @@ pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
 // so the legacy wide renderer can be deleted in 5.3d.17b. Re-export the
 // shared helpers it needs at crate::app visibility.
 pub(in crate::app) use arrangements::hero_left::{
-    hero_on_left_list_panel_border, hero_on_left_right_pane, shared_hero_presentation,
-    PANE_PAD_X, PANE_PAD_Y,
+    hero_on_left_list_panel_border, hero_on_left_right_pane, shared_hero_presentation, PANE_PAD_X,
+    PANE_PAD_Y,
 };
 pub(in crate::app) use arrangements::library::wide_library_panes;
 pub(in crate::app) use arrangements::padded_rect;
@@ -49,7 +49,6 @@ pub(in crate::app) use components::home_hero::{
     prepare_wide_emby_hero_card, render_home_hero_content, HeroData, KeepWatchingHeroLayout,
 };
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
-pub(in crate::app) use components::widgets::{render_count_label, render_pill_bar, PillBar};
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };
@@ -73,6 +72,7 @@ pub(in crate::app) use components::settings_component::{
     render_settings_content, SettingsRenderGeometry, SettingsRenderModel,
 };
 pub(in crate::app) use components::tv_wide::{render_wide_tv_with_ctx, TvWideRenderCtx};
+pub(in crate::app) use components::widgets::{render_count_label, render_pill_bar, PillBar};
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the
 // Interactive Components in `crate::app::components` (task 3.2+); the
@@ -147,9 +147,6 @@ mod album_focus_tests;
 #[cfg(test)]
 #[path = "tests_album_listing.rs"]
 mod album_listing_tests;
-#[cfg(test)]
-#[path = "tests_audiobookshelf_books.rs"]
-mod audiobookshelf_book_tests;
 #[cfg(test)]
 #[path = "tests_confirm_modal.rs"]
 mod confirm_modal_tests;

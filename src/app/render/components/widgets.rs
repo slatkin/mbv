@@ -553,12 +553,14 @@ impl App {
         focused: bool,
         layout: &mut LayoutMain,
     ) {
+        // The Book surface is painted by the mounted `AudiobookshelfBookComponent`
+        // (task 5.3d.13, render ownership); the legacy App renderer was removed, so
+        // nothing is painted here for Book. Podcast still uses the legacy path.
         if let Some(index) = self.tab.audiobookshelf_index() {
             if matches!(
                 self.audiobookshelf_kind_at(index),
                 Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book)
             ) {
-                self.render_audiobookshelf_books(f, area, focused, layout);
                 return;
             }
         }

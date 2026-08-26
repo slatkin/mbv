@@ -4,10 +4,15 @@ use super::screens::album_plan::GroupedAlbumDisplayRow;
 use super::*;
 use crate::app::layout::{AppLayout, LayoutPlayback, LibraryRowTarget};
 use crate::app::tests::{make_app_stub, make_item};
+use crate::app::types_audiobookshelf_browse::{
+    build_surname_buckets, AudiobookshelfBookBrowseState,
+};
+use crate::app::{App, PanelFocus};
 use crate::app::{BrowseLevel, LibraryTab, QueueScope, RemoteSlotState, TabSelection};
 use crate::config::Config;
 use mbv_core::api::EmbyClient;
 use mbv_core::api::EmbyItem;
+use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfChapter, AudiobookshelfLibrary};
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 use ratatui::Terminal;
@@ -624,5 +629,88 @@ pub fn make_large_movie_library_app(library_total: usize) -> App {
         ..LibraryTab::new(library)
     });
 
+    app
+}
+
+/// Book surface app for conformance tests (moved here from the deleted
+/// `tests_audiobookshelf_books.rs` legacy-renderer suite, task 5.3d.13). Three
+/// books span three surname buckets (Adams -> A-C, Mason -> J-L, Zephyr ->
+/// V-Z), so the A-C bucket is selected by default and only "Alpha Tales" is in
+/// range.
+pub(super) fn make_audiobookshelf_book_app() -> App {
+    let mut app = make_app_stub();
+    let library = AudiobookshelfLibrary {
+        id: "abs-books".into(),
+        name: "ABS Books".into(),
+        media_type: "book".into(),
+    };
+    let mut state = AudiobookshelfBookBrowseState::new(library.clone());
+    state.append_page_books(
+        0,
+        3,
+        vec![
+            AudiobookshelfBook {
+                library_item_id: "book-a".into(),
+                title: "Alpha Tales".into(),
+                author_display: Some("Adams".into()),
+                author_sort_key: "Adams".into(),
+                cover_path: None,
+                duration_seconds: 0.0,
+                narrator: None,
+                published_year: None,
+                genres: Vec::new(),
+                description: None,
+                series_name: None,
+                chapters: Vec::new(),
+                audio_files: Vec::new(),
+            },
+            AudiobookshelfBook {
+                library_item_id: "book-m".into(),
+                title: "Middle Ground".into(),
+                author_display: Some("Mason".into()),
+                author_sort_key: "Mason".into(),
+                cover_path: None,
+                duration_seconds: 0.0,
+                narrator: None,
+                published_year: None,
+                genres: Vec::new(),
+                description: None,
+                series_name: None,
+                chapters: Vec::new(),
+                audio_files: Vec::new(),
+            },
+            AudiobookshelfBook {
+                library_item_id: "book-z".into(),
+                title: "Zenith Story".into(),
+                author_display: Some("Zephyr".into()),
+                author_sort_key: "Zephyr".into(),
+                cover_path: None,
+                duration_seconds: 0.0,
+                narrator: None,
+                published_year: None,
+                genres: Vec::new(),
+                description: None,
+                series_name: None,
+                chapters: Vec::new(),
+                audio_files: Vec::new(),
+            },
+        ],
+    );
+    state.detail_cache.insert(
+        "book-a".into(),
+        (
+            vec![AudiobookshelfChapter {
+                id: 0,
+                start: 0.0,
+                end: 60.0,
+                title: "Chapter One".into(),
+            }],
+            Vec::new(),
+        ),
+    );
+    app.audiobookshelf_libraries.push(library);
+    app.audiobookshelf_book_browse.push(state);
+    app.tab = TabSelection::AudiobookshelfLibrary(0);
+    app.panel_focus = PanelFocus::Library;
     app
 }

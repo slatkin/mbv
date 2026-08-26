@@ -1,3 +1,4 @@
+use super::super::components::audiobookshelf_book::AudiobookshelfBookComponent;
 use super::super::components::{
     ComponentId, ContextMenuComponent, FeedsManageComponent, HomeComponent, LibraryRoutesComponent,
     MultiselectComponent, OverlayId, PopupId, SelectionModalComponent, ShellRequest,
@@ -35,6 +36,30 @@ impl Model {
             .map(HomeComponent::menu_placement_geometry)
     }
 
+    /// Like `home_menu_geometry`, but for the mounted `AudiobookshelfBookComponent`
+    /// (task 5.3d.13, render ownership). Returns the book surface's painted
+    /// selected-item rect so the context menu anchors to what the component
+    /// actually painted rather than the legacy `AppLayout` copy.
+    fn book_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
+        let id = self.abs_book_id.clone()?;
+        if !matches!(self.app.effective_panel_focus(), PanelFocus::Library) {
+            return None;
+        }
+        self.application
+            .get_component(&id)
+            .and_then(|component| {
+                component
+                    .as_any()
+                    .downcast_ref::<AudiobookshelfBookComponent>()
+            })
+            .map(|component| {
+                (
+                    self.app.layout.main.left_area,
+                    component.geometry().selected_item_rect,
+                )
+            })
+    }
+
     /// Compute the context menu's painted rect from the current anchor/entries
     /// and the owning surface's geometry. Replaces the old `layout.context_menu_rect`
     /// global written during `App::render` (task 5.3c); the component now owns
@@ -55,7 +80,10 @@ impl Model {
                 let (panel, selected) = match focus {
                     PanelFocus::Library => match home {
                         Some((panel, selected)) => (panel, selected),
-                        None => (layout.main.left_area, layout.main.selected_item_rect),
+                        None => match self.book_menu_geometry() {
+                            Some((panel, selected)) => (panel, selected),
+                            None => (layout.main.left_area, layout.main.selected_item_rect),
+                        },
                     },
                     PanelFocus::Queue => {
                         (layout.main.queue_area, layout.main.queue_selected_item_rect)

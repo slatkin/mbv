@@ -23,6 +23,15 @@ pub(in crate::app) struct AudiobookshelfBookGeometry {
     pub selector_tabs: Vec<(Rect, usize)>,
     pub book_rows: Vec<(Rect, usize)>,
     pub chapter_rows: Vec<(Rect, usize)>,
+    /// Hero rect the component painted for the selected book (wide left pane,
+    /// or narrow inline-detail flow). Mirrors the legacy `LayoutMain.hero_area`
+    /// so conformance/context-menu readers keep working after render ownership
+    /// moved to the component (task 5.3d.13).
+    pub hero_area: Option<Rect>,
+    /// Selected-item rect the component painted (the hero when one is shown, or
+    /// the selected book row otherwise). Mirrors the legacy
+    /// `LayoutMain.selected_item_rect`.
+    pub selected_item_rect: Option<Rect>,
 }
 
 pub(in crate::app) fn render_audiobookshelf_book_content(
@@ -60,6 +69,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             height: hero_height,
             ..hero_content_area
         };
+        geometry.hero_area = Some(hero_area);
         frame.render_widget(
             Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
             Rect {
@@ -115,6 +125,10 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             geometry,
         )
         .or(image);
+        // In the wide layout the selected book's hero (left pane) is the
+        // selected item; record it so conformance/context-menu readers see the
+        // same `selected_item_rect` the legacy renderer published.
+        geometry.selected_item_rect = Some(hero_area);
         return image;
     }
 
@@ -204,6 +218,8 @@ fn render_book_browser(
                 };
                 selected_detail_shell(frame, hero_area, detail_rows, focused);
                 image = render_book_hero(frame, hero_area, state, focused, true, plan);
+                geometry.hero_area = Some(hero_area);
+                geometry.selected_item_rect = Some(hero_area);
                 let content_height = detail_rows.saturating_sub(HERO_BLOCK_EXTRA_ROWS);
                 render_book_rows(
                     frame,
@@ -246,6 +262,9 @@ fn render_book_browser(
                     row_area,
                 );
                 geometry.book_rows.push((row_area, book_idx));
+                if selected && geometry.selected_item_rect.is_none() {
+                    geometry.selected_item_rect = Some(row_area);
+                }
             }
         }
     }

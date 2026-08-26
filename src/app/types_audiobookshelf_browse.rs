@@ -334,7 +334,7 @@ pub(super) struct AudiobookshelfBookBrowseState {
     /// -- the same focus shape Music's inline track focus uses
     /// (component-owned `track_cursor`). No longer gates which
     /// pane renders -- both panes are always visible; see
-    /// `render_audiobookshelf_books`.
+    /// `render_audiobookshelf_book_content` (component-owned).
     pub chapter_selection: Option<usize>,
     pub scroll: usize,
     /// Fixed alphabetical author-surname ranges over `books`, recomputed

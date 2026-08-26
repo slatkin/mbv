@@ -1,10 +1,11 @@
 use super::test_helpers::{
-    buffer_to_string, make_movie_app, make_music_group_app, render_home_shell_with,
+    buffer_to_string, make_audiobookshelf_book_app, make_movie_app, make_music_group_app,
+    render_home_shell_with,
 };
 use super::*;
+use crate::app::components::audiobookshelf_book::AudiobookshelfBookComponent;
 use crate::app::components::{ComponentId, FeedsComponent, HomeComponent};
 use crate::app::layout::LayoutMain;
-use crate::app::render::audiobookshelf_book_tests::make_audiobookshelf_book_app;
 use crate::app::tests::make_item;
 use crate::app::{PanelFocus, SeriesDetail, TabSelection};
 use mbv_core::config::{FeedKind, FeedSubscription};
@@ -23,6 +24,32 @@ fn render_library(app: &mut App, width: u16, height: u16) -> (Terminal<TestBacke
             app.render_library(frame, Rect::new(0, 0, width, height), true, &mut layout);
         })
         .unwrap();
+    (terminal, layout)
+}
+
+/// Render the Book surface through its mounted `AudiobookshelfBookComponent`
+/// (task 5.3d.13, render ownership) instead of the legacy `render_library`, and
+/// surface the component's geometry as a `LayoutMain` so the shared conformance
+/// assertions still hold. The component paints the hero, rows, and pills; the
+/// legacy `AppLayout` fields are reconstructed from `AudiobookshelfBookGeometry`.
+fn render_book_component(
+    app: &App,
+    width: u16,
+    height: u16,
+) -> (Terminal<TestBackend>, LayoutMain) {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    let area = Rect::new(0, 0, width, height);
+    let mut component = AudiobookshelfBookComponent::new();
+    if let Some(state) = app.audiobookshelf_book_browse.get(0) {
+        component.set_content(state, true, app.images_enabled());
+    }
+    terminal.draw(|frame| component.view(frame, area)).unwrap();
+    let mut layout = LayoutMain::default();
+    layout.left_area = area;
+    let geometry = component.geometry();
+    layout.hero_area = geometry.hero_area.unwrap_or_default();
+    layout.selected_item_rect = geometry.selected_item_rect;
+    layout.selector_tabs = geometry.selector_tabs.clone();
     (terminal, layout)
 }
 
@@ -250,7 +277,11 @@ fn matrix_cannot_fit_preserves_an_ordinary_selected_row() {
     ];
 
     for (surface, mut app, title) in cases {
-        let (terminal, layout) = render_library(&mut app, 60, 4);
+        let (terminal, layout) = if surface == "Books" {
+            render_book_component(&app, 60, 4)
+        } else {
+            render_library(&mut app, 60, 4)
+        };
         let output = buffer_to_string(&terminal);
         assert_eq!(
             layout.hero_area,
@@ -299,7 +330,11 @@ fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
     ];
 
     for (surface, mut app, title) in cases {
-        let (terminal, layout) = render_library(&mut app, 70, 30);
+        let (terminal, layout) = if surface == "Books" {
+            render_book_component(&app, 70, 30)
+        } else {
+            render_library(&mut app, 70, 30)
+        };
         let output = buffer_to_string(&terminal);
         assert!(
             layout.hero_area.height > 0,
@@ -391,7 +426,11 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
     ];
 
     for (surface, mut app, width) in cases {
-        let (terminal, layout) = render_library(&mut app, width, 30);
+        let (terminal, layout) = if surface == "Books" {
+            render_book_component(&app, width, 30)
+        } else {
+            render_library(&mut app, width, 30)
+        };
         assert_one_pill_row_and_spacer(surface, &terminal, &layout);
         assert!(
             !buffer_to_string(&terminal).is_empty(),
