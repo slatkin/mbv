@@ -291,7 +291,6 @@ mod tests {
         // The shell arm maps NextRow onto the legacy row-stride move and
         // re-projects content (task 5.3d.5), preserving the App target.
         model.app.move_audiobookshelf_show_rows(1);
-        model.push_audiobookshelf_podcast_content();
         assert_eq!(model.app.audiobookshelf_browse[0].cursor(), 1);
     }
 
@@ -322,7 +321,6 @@ mod tests {
         // move and re-projects content (task 5.3d.6), preserving the App
         // episode target.
         model.app.move_audiobookshelf_episode_cursor(1);
-        model.push_audiobookshelf_podcast_content();
         assert_eq!(
             model.app.audiobookshelf_browse[0].episode_selection,
             Some(0)
@@ -423,7 +421,6 @@ mod tests {
 
         let mut model = Model::new(audiobookshelf_app());
         model.sync_audiobookshelf_podcast();
-        model.push_audiobookshelf_podcast_content();
 
         // Wide presentation: area clears the two-column breakpoint and height.
         let wide = Rect::new(0, 0, 200, 50);

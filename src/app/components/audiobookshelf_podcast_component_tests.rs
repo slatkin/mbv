@@ -151,22 +151,24 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
 
 #[test]
 fn abs_podcast_cover_fetch_bridged_to_content_push_and_gated_by_images() {
-    // Image-disabled: a content push must not schedule any cover fetch.
+    // Image-disabled: the fresh-mount content push must not schedule any cover
+    // fetch.
     let mut model = Model::new(audiobookshelf_app());
     model.sync_audiobookshelf_podcast();
-    model.push_audiobookshelf_podcast_content();
     assert!(
         model.app.card_image_loading.is_empty(),
         "image-disabled content push must not schedule a cover fetch"
     );
 
     // Image-enabled with a configured server and secret: the selected show's
-    // cover is scheduled through the bridge on the content push.
-    model.app.image_protocol_enabled = true;
-    model.app.config.lock().unwrap().audiobookshelf_setup =
+    // cover is scheduled through the bridge by the fresh-mount content push.
+    let mut app = audiobookshelf_app();
+    app.image_protocol_enabled = true;
+    app.config.lock().unwrap().audiobookshelf_setup =
         Some(AudiobookshelfSetup::new("https://abs.example"));
     mbv_core::config::save_service_secret(ServiceKind::Audiobookshelf, "test-secret").unwrap();
-    model.push_audiobookshelf_podcast_content();
+    let mut model = Model::new(app);
+    model.sync_audiobookshelf_podcast();
 
     let server = model
         .app

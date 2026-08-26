@@ -35,7 +35,6 @@ fn render_podcast_shell(
 
     let mut model = Model::new(app);
     model.sync_audiobookshelf_podcast();
-    model.push_audiobookshelf_podcast_content();
 
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
