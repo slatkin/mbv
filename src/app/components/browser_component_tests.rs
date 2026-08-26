@@ -43,10 +43,8 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
     ];
     for (key, from, expected) in cases {
         let mut browser = BrowserComponent::new();
-        browser.set_content(
-            LibraryListRenderCtx::from_items(make_items(40), from, 0),
-            true,
-        );
+        browser.set_content(LibraryListRenderCtx::from_items(make_items(40), 0, 0), true);
+        browser.set_cursor_for_test(from);
         let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
         terminal
             .draw(|frame| browser.view(frame, frame.area()))
@@ -65,13 +63,14 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
     }
 
     // Unfocused (Queue/playback own panel focus): the movement keys do not
-    // mutate the component cursor and the raw key is still forwarded
-    // unchanged, keeping those surfaces authoritative.
+    // mutate the component cursor and the raw key is consumed (no legacy
+    // forwarding), keeping those surfaces authoritative.
     let mut browser = BrowserComponent::new();
     browser.set_content(
-        LibraryListRenderCtx::from_items(make_items(40), 7, 0),
+        LibraryListRenderCtx::from_items(make_items(40), 0, 0),
         false,
     );
+    browser.set_cursor_for_test(7);
     let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
     terminal
         .draw(|frame| browser.view(frame, frame.area()))
@@ -97,8 +96,8 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
             "unfocused {key:?} must not move the cursor"
         );
         assert!(
-            matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))),
-            "unfocused {key:?} must still forward legacy"
+            matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::NoOp))),
+            "unfocused {key:?} must be consumed (no legacy fallthrough)"
         );
     }
 }
@@ -172,10 +171,8 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
     ];
     for (key, from, expected) in cases {
         let mut browser = BrowserComponent::new();
-        browser.set_content(
-            LibraryListRenderCtx::from_items(items.clone(), from, 0),
-            true,
-        );
+        browser.set_content(LibraryListRenderCtx::from_items(items.clone(), 0, 0), true);
+        browser.set_cursor_for_test(from);
         let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
         terminal
             .draw(|frame| browser.view(frame, frame.area()))
@@ -238,8 +235,8 @@ fn browser_local_navigation_strides_one_column_for_wide_movies() {
             "wide-Movies rail {key:?} must stay unbound locally"
         );
         assert!(
-            matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))),
-            "wide-Movies {key:?} must still forward Msg::Legacy"
+            matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::NoOp))),
+            "wide-Movies {key:?} must be consumed (no legacy fallthrough)"
         );
     }
 }

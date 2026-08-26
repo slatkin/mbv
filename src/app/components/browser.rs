@@ -28,9 +28,6 @@ pub struct BrowserComponent {
     cursor: usize,
     scroll: usize,
     focused: bool,
-    initialized: bool,
-    last_mirrored_cursor: usize,
-    last_mirrored_scroll: usize,
     layout: LayoutMain,
     /// Shell projection (task 5.3d prep, D14 temporary adapter): whether the
     /// current App layout rendered the dedicated Movies/home-videos
@@ -51,31 +48,14 @@ impl BrowserComponent {
             cursor: 0,
             scroll: 0,
             focused: false,
-            initialized: false,
-            last_mirrored_cursor: 0,
-            last_mirrored_scroll: 0,
             layout: LayoutMain::default(),
             wide_movies: false,
         }
     }
 
     pub(in crate::app) fn set_content(&mut self, context: LibraryListRenderCtx, focused: bool) {
-        if !self.initialized {
-            self.cursor = context.cursor();
-            self.scroll = context.scroll();
-            self.initialized = true;
-        } else {
-            if self.cursor == self.last_mirrored_cursor {
-                self.cursor = context.cursor();
-            }
-            if self.scroll == self.last_mirrored_scroll {
-                self.scroll = context.scroll();
-            }
-        }
         self.context = context;
         self.cursor = self.cursor.min(self.context.item_count().saturating_sub(1));
-        self.last_mirrored_cursor = self.context.cursor();
-        self.last_mirrored_scroll = self.context.scroll();
         self.focused = focused;
     }
 
@@ -292,7 +272,7 @@ impl BrowserComponent {
                 return Some(Msg::Shell(request));
             }
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(key)))
+        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
     }
 
     /// Resolve the item at the component's own local cursor over the mirrored
@@ -545,7 +525,7 @@ impl BrowserComponent {
             }
             _ => {}
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
+        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
     }
 
     /// Resolve the list item under `(col, row)` from the component's own
@@ -588,6 +568,14 @@ impl BrowserComponent {
     #[cfg(test)]
     pub(crate) fn test_layout(&self) -> &LayoutMain {
         &self.layout
+    }
+
+    /// Test-only cursor seed (task 5.3d.16): `set_content` no longer mirrors
+    /// the shell cursor, so tests position the authoritative local cursor
+    /// directly before exercising navigation.
+    #[cfg(test)]
+    pub(crate) fn set_cursor_for_test(&mut self, cursor: usize) {
+        self.cursor = cursor;
     }
 }
 

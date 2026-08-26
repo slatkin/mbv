@@ -519,15 +519,15 @@ mod tests {
         );
 
         // Ctrl/Alt brackets are NOT letter-pill cycling: the legacy guard
-        // excluded CONTROL and ALT, so those combinations continue through
-        // `Msg::Legacy` unchanged.
+        // excluded CONTROL and ALT, so those combinations are unbound and
+        // consumed by the component (emitted as `Msg::Legacy` `NoOp`).
         assert!(matches!(
             drive_browser_key(&mut model, &id, Key::Char('['), KeyModifiers::CONTROL),
-            Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+            Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
         ));
         assert!(matches!(
             drive_browser_key(&mut model, &id, Key::Char(']'), KeyModifiers::ALT),
-            Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+            Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
         ));
     }
 
@@ -633,8 +633,9 @@ mod tests {
     /// two-column painted list strides the App cursor by the column count
     /// per row (Down +2), Home/End jump to the first/last item, and
     /// Left/Right move within the row; a one-column list keeps Left/Right/
-    /// h/l unbound (raw key still forwarded as `Msg::Legacy`, App cursor
-    /// unchanged) while the row keys keep their typed stride of one.
+    /// h/l unbound (raw key consumed by the component as `Msg::Legacy`
+    /// `NoOp`, App cursor unchanged) while the row keys keep their typed
+    /// stride of one.
     #[test]
     fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
         let _guard = crate::config::TestStateDirGuard::new();
@@ -712,9 +713,9 @@ mod tests {
 
         // One-column list (queue panel restored at a width whose library
         // pane stays below the 82-column threshold): Left/Right/h/l stay
-        // unbound locally and still forward `Msg::Legacy` — no movement
-        // request, App cursor unchanged — while the row keys keep their
-        // typed stride of one item.
+        // unbound locally — consumed by the component (emitted as
+        // `Msg::Legacy` `NoOp`), no movement request, App cursor unchanged —
+        // while the row keys keep their typed stride of one item.
         model.app.panel_mode = PanelMode::Both;
         render_browser_model(&mut model, 100, 40);
         model.sync_emby_browser();
@@ -722,9 +723,9 @@ mod tests {
             assert!(
                 matches!(
                     drive_browser_key(&mut model, &id, key, KeyModifiers::NONE),
-                    Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+                    Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
                 ),
-                "one-column focused {key:?} must fall through to Msg::Legacy"
+                "one-column focused {key:?} must be consumed (no legacy fallthrough)"
             );
         }
         let comp_cursor = model
