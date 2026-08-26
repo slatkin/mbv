@@ -83,9 +83,9 @@ pub(in crate::app) struct AudiobookshelfPodcastGeometry {
     pub show_rows: Vec<(Rect, usize)>,
     pub episode_rows: Vec<(Rect, usize)>,
     /// Painted list/browser area: the wide right panel, or the narrow content
-    /// area below the pill bar. Mirrors the legacy
-    /// `LayoutMain.audiobookshelf_podcast_list_area` so the shell can anchor
-    /// overlays after render ownership moved to the component (task 5.3d.10c).
+    /// area below the pill bar. Mirrors the legacy `LayoutMain.left_area` so
+    /// the shell can anchor overlays after render ownership moved to the
+    /// component (task 5.3d.10c).
     pub list_area: Rect,
     /// Wide-only right panel rect; zero in the narrow layout. Mirrors the
     /// legacy `LayoutMain.audiobookshelf_podcast_right_area`.
@@ -129,10 +129,12 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     // this layout (the right panel paints an ordinary show grid).
     geometry.list_area = right_panel;
     geometry.right_area = right_panel;
-    geometry.hero_area = hero_panel;
     if state.shows.is_empty() {
         render_placeholder(frame, right_panel, "No podcast shows");
         return image_paint;
+    }
+    if state.selected_show().is_some() {
+        geometry.hero_area = hero_panel;
     }
     render_show_rows(frame, right_panel, focused, state, 1, 0, geometry);
     image_paint

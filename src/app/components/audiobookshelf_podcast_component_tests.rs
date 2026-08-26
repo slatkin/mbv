@@ -293,17 +293,37 @@ fn abs_podcast_component_geometry_is_wide_coherent_and_narrow_resets_wide() {
     });
     let mut empty_component = AudiobookshelfPodcastComponent::new();
     empty_component.set_content(&empty, true, false);
-    let mut empty_terminal = Terminal::new(TestBackend::new(60, 40)).unwrap();
+    let mut empty_terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+
+    empty_terminal
+        .draw(|frame| empty_component.view(frame, wide))
+        .unwrap();
+    let empty_wide_geometry = empty_component.geometry();
+    assert!(
+        empty_wide_geometry.right_area.width > 0,
+        "no-show wide layout still paints its right placeholder panel"
+    );
+    assert_eq!(
+        empty_wide_geometry.list_area,
+        empty_wide_geometry.right_area
+    );
+    assert_eq!(
+        empty_wide_geometry.hero_area,
+        Rect::default(),
+        "no-show wide layout must not report an unpainted hero"
+    );
+    assert!(empty_wide_geometry.selected_item_rect.is_none());
+
     empty_terminal
         .draw(|frame| empty_component.view(frame, narrow))
         .unwrap();
-    let empty_geometry = empty_component.geometry();
+    let empty_narrow_geometry = empty_component.geometry();
     assert_eq!(
-        empty_geometry.list_area, narrow,
+        empty_narrow_geometry.list_area, narrow,
         "no-show narrow list_area is the whole area"
     );
-    assert_eq!(empty_geometry.right_area, Rect::default());
-    assert_eq!(empty_geometry.hero_area, Rect::default());
-    assert_eq!(empty_geometry.inline_hero_area, Rect::default());
-    assert!(empty_geometry.selected_item_rect.is_none());
+    assert_eq!(empty_narrow_geometry.right_area, Rect::default());
+    assert_eq!(empty_narrow_geometry.hero_area, Rect::default());
+    assert_eq!(empty_narrow_geometry.inline_hero_area, Rect::default());
+    assert!(empty_narrow_geometry.selected_item_rect.is_none());
 }

@@ -5,7 +5,6 @@ use crate::app::library_column_width::{
 };
 use crate::app::render::arrangements::hero_left;
 use crate::app::render::components::detail_series_view::{
-    SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
     SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS,
     SERIES_IMAGE_ROWS,
 };
