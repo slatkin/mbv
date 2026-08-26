@@ -8,7 +8,7 @@ pub(in crate::app::render) mod music;
 /// Inset a `Rect` by symmetric horizontal/vertical padding: `pad_x` on each
 /// side, `pad_y` top and bottom. Shared by every arrangement that pads a
 /// panel into a content area.
-pub(in crate::app::render) fn padded_rect(area: Rect, pad_x: u16, pad_y: u16) -> Rect {
+pub(in crate::app) fn padded_rect(area: Rect, pad_x: u16, pad_y: u16) -> Rect {
     Rect {
         x: area.x.saturating_add(pad_x),
         y: area.y.saturating_add(pad_y),

@@ -188,20 +188,51 @@ impl Model {
         let Some(id) = self.emby_browser_id.as_ref() else {
             return;
         };
-        let area = self.app.layout.main.left_area;
+        // Task 5.3d.17a: when the wide Movies/home-video layout is active the
+        // component paints the full hero-on-left rect, so hand it the full
+        // library area (`movies_wide_area`, set by the wide renderer this
+        // frame); otherwise hand it the narrow inner list area.
+        let wide = self.app.layout.main.is_wide_movies_active();
+        let area = if wide {
+            self.app.layout.main.movies_wide_area
+        } else {
+            self.app.layout.main.left_area
+        };
         if area.width == 0 || area.height == 0 {
             return;
         }
-        // D18 step 1: per-draw adapter — the legacy base frame (self.app.render(f))
-        // has already populated movies_wide_right_area this frame. The base
-        // frame and the mounted component share one paint, so the 1-column
-        // right-rail stride (the only reader of this field) is consistent here.
+        // Per-draw adapter (D18 step 1): the legacy base frame (self.app.render(f))
+        // has already populated movies_wide_right_area / movies_wide_area this
+        // frame. The base frame and the mounted component share one paint, so
+        // the 1-column right-rail stride (the only reader of this field) is
+        // consistent here. `home_video`/`letter_pills` tell the component which
+        // pill row to render in the wide right rail.
+        let (home_video, letter_pills) = if wide {
+            match self.app.tab.emby_library_index() {
+                Some(lib_idx) => (
+                    self.app.is_home_video_view(lib_idx),
+                    self.app.should_show_letter_pills(lib_idx),
+                ),
+                None => (false, false),
+            }
+        } else {
+            (false, false)
+        };
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {
-                browser.set_wide_movies(self.app.layout.main.is_wide_movies_active());
+                browser.set_wide_movies(wide, home_video, letter_pills);
+                browser.set_use_nerd_fonts(self.app.use_nerd_fonts);
             }
         }
         self.application.view(id, frame, area);
+        // Paint the hero cover image the component computed but could not
+        // paint itself (no image-cache authority), mirroring HomeComponent.
+        let image_paint = self
+            .application
+            .get_component_mut(id)
+            .and_then(|comp| comp.as_any_mut().downcast_mut::<BrowserComponent>())
+            .and_then(|browser| browser.take_image_paint());
+        self.app.paint_home_image(frame, image_paint);
     }
 }
 

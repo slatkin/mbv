@@ -130,6 +130,11 @@ pub(crate) struct LayoutMain {
     /// Bounding rect of the wide Movies right rail (pills + list).
     /// Populated only when the wide Movies hero-on-left layout is active.
     pub movies_wide_right_area: Rect,
+    /// Full area passed to the wide Movies/home-video renderer (task
+    /// 5.3d.17a): the mounted `BrowserComponent` repaints the wide layout
+    /// over this same rect, so the shell hands it the full library area
+    /// (not just the narrow inner list) when the wide layout is active.
+    pub movies_wide_area: Rect,
     pub tv_wide_right_area: Rect,
     pub tv_wide_list_area: Rect,
     pub tv_wide_episode_rows: Vec<(Rect, usize)>,

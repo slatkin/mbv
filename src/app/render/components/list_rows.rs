@@ -253,12 +253,12 @@ pub(in crate::app) struct LibraryListRenderCtx {
     pub(in crate::app::render) items: Vec<mbv_core::api::EmbyItem>,
     pub(in crate::app::render) cursor: usize,
     pub(in crate::app::render) scroll: usize,
-    pub(in crate::app::render) total_count: usize,
-    pub(in crate::app::render) library_total: Option<usize>,
-    pub(in crate::app::render) letter_filter: Option<super::super::LetterFilter>,
-    pub(in crate::app::render) loading: bool,
-    pub(in crate::app::render) search_query: Option<String>,
-    pub(in crate::app::render) search_loading: bool,
+    pub(in crate::app) total_count: usize,
+    pub(in crate::app) library_total: Option<usize>,
+    pub(in crate::app) letter_filter: Option<super::super::LetterFilter>,
+    pub(in crate::app) loading: bool,
+    pub(in crate::app) search_query: Option<String>,
+    pub(in crate::app) search_loading: bool,
 }
 
 impl LibraryListRenderCtx {
@@ -327,7 +327,7 @@ impl LibraryListRenderCtx {
         }
     }
 
-    pub(in crate::app::render) fn is_search_active(&self) -> bool {
+    pub(in crate::app) fn is_search_active(&self) -> bool {
         self.search_query.is_some()
     }
 

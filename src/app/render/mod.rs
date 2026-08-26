@@ -34,6 +34,22 @@ pub(in crate::app) use components::library_routes::{
 };
 pub(in crate::app) use components::list::render_generic_movies_home_video_rows_with_ctx;
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
+// Task 5.3d.17a: BrowserComponent paints the wide Movies/home-video
+// hero-on-left layout itself (mirroring HomeComponent's image-deferral),
+// so the legacy wide renderer can be deleted in 5.3d.17b. Re-export the
+// shared helpers it needs at crate::app visibility.
+pub(in crate::app) use arrangements::hero_left::{
+    hero_on_left_list_panel_border, hero_on_left_right_pane, shared_hero_presentation,
+    PANE_PAD_X, PANE_PAD_Y,
+};
+pub(in crate::app) use arrangements::library::wide_library_panes;
+pub(in crate::app) use arrangements::padded_rect;
+pub(in crate::app) use components::hero::render_search_box;
+pub(in crate::app) use components::home_hero::{
+    prepare_wide_emby_hero_card, render_home_hero_content, HeroData, KeepWatchingHeroLayout,
+};
+// `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
+pub(in crate::app) use components::widgets::{render_count_label, render_pill_bar, PillBar};
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };
@@ -79,9 +95,9 @@ use components::chrome::LIST_PLAY_ICON;
 pub use components::indicators;
 use components::list_rows::{selection_marker, MarkerEdge};
 use components::widgets::{
-    content_width, render_count_label, render_pill_bar, render_placeholder, render_right_scrollbar,
+    content_width, render_placeholder, render_right_scrollbar,
     render_right_scrollbar_with_viewport, render_selected_block_background,
-    render_selected_block_borders, PillBar, SelectedBlockBorderStyle, MUSIC_ALBUM_IMAGE_TYPES,
+    render_selected_block_borders, SelectedBlockBorderStyle, MUSIC_ALBUM_IMAGE_TYPES,
     RENDER_FILTER,
 };
 pub(super) use screens::album_plan::sorted_group_album_order;

@@ -6,6 +6,8 @@
 //! until their owning tasks convert them.
 
 use ratatui::layout::{Position, Rect};
+use ratatui::style::Style;
+use ratatui::widgets::Block;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
@@ -20,7 +22,14 @@ use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{
     library_cell_width, library_column_count, LIBRARY_COLUMN_GAP,
 };
-use crate::app::render::{render_generic_movies_home_video_rows_with_ctx, LibraryListRenderCtx};
+use crate::app::palette;
+use crate::app::render::{
+    hero_on_left_list_panel_border, hero_on_left_right_pane, HomeImagePaint, LetterFilter,
+    padded_rect, prepare_wide_emby_hero_card, render_count_label, render_generic_movies_home_video_rows_with_ctx,
+    render_home_hero_content, render_pill_bar, render_search_box, shared_hero_presentation,
+    wide_library_panes, HeroData, LibraryListRenderCtx, PANE_PAD_X, PANE_PAD_Y,
+    PillBar,
+};
 use crate::app::ui_util::move_cursor;
 
 pub struct BrowserComponent {
@@ -39,6 +48,20 @@ pub struct BrowserComponent {
     /// column for both the wide Movies library and the wide home-videos
     /// presentation (both populate `movies_wide_right_area`).
     wide_movies: bool,
+    /// Whether the wide layout's pill row is a home-video count label (vs. a
+    /// letter-range pill row). Fed by the shell each draw (task 5.3d.17a).
+    wide_movies_home_video: bool,
+    /// Whether the wide layout shows the letter-range pill row. Fed by the
+    /// shell each draw (task 5.3d.17a).
+    wide_movies_letter_pills: bool,
+    /// Runtime terminal-capability flag (config-derived), set by the shell so
+    /// the component can paint the hero text like every other surface.
+    use_nerd_fonts: bool,
+    /// The hero cover image `view()` computed but could not paint itself (no
+    /// `App`/image-cache authority); the shell takes it right after
+    /// `application.view()` and paints it via `App::paint_home_image`
+    /// (mirrors `HomeComponent`, task 5.3d.17a).
+    image_paint: Option<HomeImagePaint>,
 }
 
 impl BrowserComponent {
@@ -50,6 +73,10 @@ impl BrowserComponent {
             focused: false,
             layout: LayoutMain::default(),
             wide_movies: false,
+            wide_movies_home_video: false,
+            wide_movies_letter_pills: false,
+            use_nerd_fonts: false,
+            image_paint: None,
         }
     }
 
@@ -80,9 +107,168 @@ impl BrowserComponent {
     /// component cannot read this from its own `LayoutMain`: the render seam
     /// is given only the list rect and never publishes the rail geometry —
     /// the same reason `MusicWorkspaceComponent` has its page size pushed in
-    /// (`set_page_rows`).
-    pub(in crate::app) fn set_wide_movies(&mut self, wide: bool) {
+    /// (`set_page_rows`). `home_video`/`letter_pills` tell the component which
+    /// pill row to paint in the wide right rail (task 5.3d.17a).
+    pub(in crate::app) fn set_wide_movies(
+        &mut self,
+        wide: bool,
+        home_video: bool,
+        letter_pills: bool,
+    ) {
         self.wide_movies = wide;
+        self.wide_movies_home_video = home_video;
+        self.wide_movies_letter_pills = letter_pills;
+    }
+
+    /// Runtime terminal-capability flag (task 5.3d.17a): mirrors
+    /// `HomeComponent::set_use_nerd_fonts` so the component can paint the
+    /// wide hero text.
+    pub(in crate::app) fn set_use_nerd_fonts(&mut self, use_nerd_fonts: bool) {
+        self.use_nerd_fonts = use_nerd_fonts;
+    }
+
+    /// Takes the hero cover image (if any) `view()` computed but could not
+    /// paint itself. The shell calls this right after `application.view()`
+    /// returns and paints it via `App::paint_home_image` (mirrors
+    /// `HomeComponent::take_image_paint`, task 5.3d.17a).
+    pub(in crate::app) fn take_image_paint(&mut self) -> Option<HomeImagePaint> {
+        self.image_paint.take()
+    }
+
+    /// Paints the wide Movies/home-video hero-on-left layout: a read-only
+    /// shared Emby hero card on the left and the letter-pill/count/search
+    /// row plus the one-column list in the right rail. Mirrors
+    /// `App::render_wide_movies_with_ctx` (movies_wide.rs) so the legacy
+    /// renderer can be deleted in 5.3d.17b without changing the picture.
+    /// Returns the final list scroll (the component owns its cursor/scroll,
+    /// so it records it instead of writing the App nav level).
+    fn render_wide_movies(&mut self, f: &mut Frame, area: Rect, ctx: &LibraryListRenderCtx) -> usize {
+        let left_content_area = Rect {
+            height: area.height.saturating_sub(1),
+            ..area
+        };
+        let Some(panes) = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y) else {
+            // Breakpoint no longer fits: fall back to the plain list rows.
+            return render_generic_movies_home_video_rows_with_ctx(
+                f,
+                area,
+                ctx,
+                self.focused,
+                &mut self.layout,
+            );
+        };
+        let mut left_panel = panes.left_panel;
+        let right_panel = panes.right_panel;
+        left_panel.height = left_content_area.height;
+
+        // Library-side separator row below the left pane, matching Music and
+        // Home's wide layout.
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+            Rect {
+                x: left_panel.x,
+                y: left_panel.bottom(),
+                width: left_panel.width,
+                height: 1,
+            },
+        );
+
+        let left_area = panes.left_area;
+        let right_area = panes.right_area;
+        self.layout.movies_wide_right_area = right_area;
+
+        // Left pane: read-only shared hero card (not an interactive hero —
+        // `layout.hero_area` stays unset so the left pane is outside mouse
+        // geometry, mirroring the legacy wide renderer).
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
+            left_panel,
+        );
+        let hero_content = padded_rect(left_area, PANE_PAD_X, 0);
+        let hero_data = ctx.selected_item().and_then(|item| {
+            prepare_wide_emby_hero_card(item, hero_content).map(
+                |(meta_layout, meta_area, img_area)| {
+                    HeroData::Emby(
+                        Box::new(item.clone()),
+                        meta_area,
+                        meta_area,
+                        img_area,
+                        meta_layout,
+                    )
+                },
+            )
+        });
+
+        // Right rail: pill row + one-column list.
+        let right_pane = hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
+        let pills_area = right_pane.pills_area;
+        let list_panel = right_pane.list_panel;
+
+        if ctx.is_search_active() {
+            render_search_box(
+                f,
+                pills_area,
+                ctx.search_query.as_deref().unwrap_or_default(),
+                ctx.search_loading,
+            );
+        } else if self.wide_movies_home_video {
+            render_count_label(f, pills_area, ctx.total_count);
+        } else if self.wide_movies_letter_pills {
+            self.render_letter_pills_row(f, pills_area, ctx);
+        }
+
+        if list_panel.height > 0 {
+            let list_bg = palette::resolve_surface_focus(self.focused);
+            f.render_widget(
+                Block::default().style(Style::default().bg(list_bg)),
+                list_panel,
+            );
+        }
+        let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
+
+        let final_scroll = render_generic_movies_home_video_rows_with_ctx(
+            f,
+            list_area,
+            ctx,
+            self.focused,
+            &mut self.layout,
+        );
+
+        // Paint the shared hero text last (after the list); defer the cover
+        // image paint to the shell, which owns the image-cache authority.
+        if let Some(hero_data) = &hero_data {
+            self.image_paint =
+                render_home_hero_content(f, hero_data, true, self.focused, self.use_nerd_fonts);
+        } else {
+            self.image_paint = None;
+        }
+
+        hero_on_left_list_panel_border(f, list_panel, self.focused);
+        final_scroll
+    }
+
+    /// Renders the letter-range pill row (task 5.3d.17a): a direct copy of
+    /// `App::render_letter_pills_row` (screens/pills.rs) using the component's
+    /// own `letter_filter`, so the wide right rail's pills no longer depend on
+    /// the legacy renderer.
+    fn render_letter_pills_row(&mut self, f: &mut Frame, row_area: Rect, ctx: &LibraryListRenderCtx) {
+        if row_area.width == 0 {
+            self.layout.selector_tabs = Vec::new();
+            return;
+        }
+        let selected_pos = ctx.letter_filter.as_ref().map(|flt| flt.index).unwrap_or(0);
+        let labels = LetterFilter::labels();
+        let ids: Vec<usize> = (0..labels.len()).collect();
+        self.layout.selector_tabs = render_pill_bar(
+            f,
+            row_area,
+            PillBar {
+                labels: &labels,
+                ids: &ids,
+                selected_pos,
+                prefix: Some(" ⌘ "),
+            },
+        );
     }
 
     pub(in crate::app) fn handle_crossterm_key(
@@ -600,13 +786,23 @@ impl Component for BrowserComponent {
             .context
             .clone()
             .with_cursor_scroll(self.cursor, self.scroll);
-        self.scroll = render_generic_movies_home_video_rows_with_ctx(
-            frame,
-            area,
-            &context,
-            self.focused,
-            &mut self.layout,
-        );
+        // Task 5.3d.17a: when the wide Movies/home-video hero-on-left layout
+        // is active (shell projection `wide_movies` AND the area is wide
+        // enough for the shared split), paint the full hero + pills + list
+        // layout itself instead of just the inner list rows; otherwise keep
+        // the narrow list-row behavior.
+        let wide = self.wide_movies && shared_hero_presentation(area).is_some();
+        self.scroll = if wide {
+            self.render_wide_movies(frame, area, &context)
+        } else {
+            render_generic_movies_home_video_rows_with_ctx(
+                frame,
+                area,
+                &context,
+                self.focused,
+                &mut self.layout,
+            )
+        };
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

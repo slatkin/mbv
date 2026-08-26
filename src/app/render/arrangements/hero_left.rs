@@ -28,13 +28,13 @@ const HERO_ON_LEFT_PILLS_GAP_ROWS: u16 = 1;
 /// (hero content, list panel, recessed boxes). One definition; surfaces that
 /// previously carried their own `PANE_PAD_X`/`PANE_PAD_Y` (or `HOME_HERO_PAD_*`)
 /// copy now import these.
-pub(in crate::app::render) const PANE_PAD_X: u16 = 2;
-pub(in crate::app::render) const PANE_PAD_Y: u16 = 1;
+pub(in crate::app) const PANE_PAD_X: u16 = 2;
+pub(in crate::app) const PANE_PAD_Y: u16 = 1;
 
 /// Resolves the only shared responsive decision for hero-bearing browsers and
 /// returns the pane geometry when the wide presentation fits. Callers provide
 /// content; they do not own a breakpoint or a height threshold.
-pub(in crate::app::render) fn shared_hero_presentation(content_area: Rect) -> Option<(Rect, Rect)> {
+pub(in crate::app) fn shared_hero_presentation(content_area: Rect) -> Option<(Rect, Rect)> {
     (content_area.width >= crate::app::TWO_COLUMN_THRESHOLD
         && content_area.height.saturating_sub(1) >= HERO_ON_LEFT_MIN_AREA_HEIGHT)
         .then(|| hero_on_left_panes(content_area))
@@ -117,7 +117,7 @@ pub(in crate::app::render) fn hero_on_left_panes(content_area: Rect) -> (Rect, R
 /// x/width. `bottom_pad` is the caller's own trailing padding reserve
 /// (grouped Music's `PANE_PAD_Y`), kept as a parameter rather than a second
 /// constant here so the two files do not each own a copy of the same value.
-pub(in crate::app::render) struct HeroOnLeftRightPane {
+pub(in crate::app) struct HeroOnLeftRightPane {
     pub pills_area: Rect,
     pub spacer_area: Rect,
     pub list_panel: Rect,
@@ -151,7 +151,7 @@ pub(in crate::app::render) fn pill_bar_areas(area: Rect) -> PillBarAreas {
     }
 }
 
-pub(in crate::app::render) fn hero_on_left_right_pane(
+pub(in crate::app) fn hero_on_left_right_pane(
     right_panel: Rect,
     right_area: Rect,
     bottom_pad: u16,
@@ -176,7 +176,7 @@ pub(in crate::app::render) fn hero_on_left_right_pane(
 /// (`offset = 0`, fully visible, padding rows `[1, height - 2]`); this is
 /// hero-on-left's thin shell entry point, the same role `hero_block_shell`
 /// plays for inline presentation.
-pub(in crate::app::render) fn hero_on_left_list_panel_border(
+pub(in crate::app) fn hero_on_left_list_panel_border(
     f: &mut Frame,
     list_panel: Rect,
     focused: bool,

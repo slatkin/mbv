@@ -2,14 +2,14 @@ use super::{hero_left, padded_rect};
 use ratatui::layout::Rect;
 
 /// The shared padded panes used by wide library presentations.
-pub(in crate::app::render) struct WideLibraryPanes {
+pub(in crate::app) struct WideLibraryPanes {
     pub left_panel: Rect,
     pub right_panel: Rect,
     pub left_area: Rect,
     pub right_area: Rect,
 }
 
-pub(in crate::app::render) fn wide_library_panes(
+pub(in crate::app) fn wide_library_panes(
     area: Rect,
     pad_x: u16,
     pad_y: u16,

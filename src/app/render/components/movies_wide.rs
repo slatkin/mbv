@@ -84,6 +84,7 @@ impl App {
         let left_area = panes.left_area;
         let right_area = panes.right_area;
         layout.movies_wide_right_area = right_area;
+        layout.movies_wide_area = area;
 
         // ── Left pane: read-only shared hero card ────────────────────────
         // The card is not published as `layout.hero_area`, so it is never an

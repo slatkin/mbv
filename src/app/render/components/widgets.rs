@@ -267,7 +267,7 @@ fn selector_pill_style(selected: bool) -> Style {
 /// the label styling and the one-row consumption identical to other tabs
 /// that once shared it (movies/tv show library lists no longer show this
 /// row; see `render_list`).
-pub(in crate::app::render) fn render_count_label(f: &mut Frame, area: Rect, count: usize) -> Rect {
+pub(in crate::app) fn render_count_label(f: &mut Frame, area: Rect, count: usize) -> Rect {
     if area.width == 0 || area.height == 0 {
         return area;
     }
@@ -304,7 +304,7 @@ pub(in crate::app::render) fn content_width(width: u16, needs_scrollbar: bool) -
 /// targets, mark which position is `selected_pos`, and may pass an
 /// optional leading `prefix` inset (rendered without the pill shell; it
 /// does not alter the pill visual).
-pub(in crate::app::render) struct PillBar<'a> {
+pub(in crate::app) struct PillBar<'a> {
     pub labels: &'a [String],
     pub ids: &'a [usize],
     pub selected_pos: usize,
@@ -317,7 +317,7 @@ pub(in crate::app::render) struct PillBar<'a> {
 /// on-screen pill hitboxes as `(rect, id)` pairs for `layout.selector_tabs`.
 /// This is the sole renderer for interactive pill selectors; callers do not
 /// select appearance variants.
-pub(in crate::app::render) fn render_pill_bar(
+pub(in crate::app) fn render_pill_bar(
     f: &mut Frame,
     area: Rect,
     bar: PillBar,

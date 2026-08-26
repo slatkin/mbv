@@ -24,7 +24,7 @@ pub(in crate::app::render) const WIDE_OVERVIEW_PAD: usize = 2;
 /// Emby Keep Watching hero and the generic Audiobookshelf hero -- both are
 /// beside-image, inline items and use the same wrap-around-the-image
 /// shape.
-pub(in crate::app::render) struct KeepWatchingHeroLayout {
+pub(in crate::app) struct KeepWatchingHeroLayout {
     title_lines: Vec<String>,
     show_name: String,
     /// Overview text lines with a per-line flag: `true` once the line has
@@ -54,7 +54,7 @@ pub(in crate::app::render) struct HeroMetaBlock {
 /// full content width for both narrow and wide wrapping (no wrap-around
 /// split — the image sits above text, not beside it), matching Home's wide
 /// hero-on-left presentation.
-pub(in crate::app::render) fn prepare_wide_emby_hero_card(
+pub(in crate::app) fn prepare_wide_emby_hero_card(
     item: &mbv_core::api::EmbyItem,
     content_area: Rect,
 ) -> Option<(KeepWatchingHeroLayout, Rect, Rect)> {
@@ -86,7 +86,7 @@ pub(in crate::app::render) fn prepare_wide_emby_hero_card(
     Some((meta_layout, meta_area, img_area))
 }
 
-pub(in crate::app::render) enum HeroData {
+pub(in crate::app) enum HeroData {
     Emby(
         Box<mbv_core::api::EmbyItem>,
         Rect,
@@ -390,7 +390,7 @@ fn render_hero_layout_meta_content(
 /// `App`, returning the cover image (if any) still needing paint. Shared by
 /// the legacy `App::render_home_hero_data` wrapper and `HomeComponent`'s
 /// render path so the two can't drift (task 3.4's confirmed extraction).
-pub(in crate::app::render) fn render_home_hero_content(
+pub(in crate::app) fn render_home_hero_content(
     f: &mut Frame,
     hero_data: &HeroData,
     two_column: bool,
