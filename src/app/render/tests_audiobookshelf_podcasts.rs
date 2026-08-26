@@ -77,7 +77,7 @@ fn wide_podcasts_use_a_left_hero_and_right_show_workspace() {
 fn narrow_podcasts_replace_selected_show_row_with_detail() {
     let mut app = audiobookshelf_app();
     app.audiobookshelf_browse[0].shows[0].author = Some("Author A".into());
-    let (model, terminal) = render_podcast_shell(app, 60, 20, true);
+    let (mut model, terminal) = render_podcast_shell(app, 60, 20, true);
     let layout = &model.app.layout.main;
 
     assert!(
@@ -117,7 +117,25 @@ fn narrow_podcasts_replace_selected_show_row_with_detail() {
         Some(palette::PROGRESS_TRACK)
     );
     assert!(!layout.is_wide_podcast_active());
-    assert!(layout.audiobookshelf_episode_rows.is_empty());
+
+    // Repoint from the legacy `LayoutMain.audiobookshelf_episode_rows` to the
+    // mounted component's painted geometry (task 5.3d.10, Unit D). Narrow
+    // podcast details paint no episode rows, so the component owns an empty
+    // `episode_rows`.
+    let component_id = model
+        .abs_podcast_id
+        .as_ref()
+        .expect("podcast component mounted");
+    let episode_rows = model
+        .application
+        .get_component_mut(component_id)
+        .and_then(|comp| {
+            comp.as_any_mut()
+                .downcast_mut::<AudiobookshelfPodcastComponent>()
+        })
+        .map(|component| component.geometry().episode_rows.clone())
+        .expect("podcast component mounted");
+    assert!(episode_rows.is_empty());
 }
 
 #[test]
@@ -355,11 +373,29 @@ fn wide_podcast_detail_preserves_episode_rows_and_played_filtering() {
             is_finished: true,
         },
     );
-    let (model, terminal) = render_podcast_shell(app, 100, 30, true);
+    let (mut model, terminal) = render_podcast_shell(app, 100, 30, true);
     let layout = &model.app.layout.main;
     let out = buffer_to_string(&terminal);
 
     assert!(layout.hero_area.x < layout.left_area.x);
-    assert!(!layout.audiobookshelf_episode_rows.is_empty());
+
+    // Repoint from the legacy `LayoutMain.audiobookshelf_episode_rows` to the
+    // mounted component's painted geometry (task 5.3d.10, Unit D). Wide podcast
+    // detail preserves the painted episode rows through component-owned
+    // geometry; the played filter governs which episodes the component paints.
+    let component_id = model
+        .abs_podcast_id
+        .as_ref()
+        .expect("podcast component mounted");
+    let episode_rows = model
+        .application
+        .get_component_mut(component_id)
+        .and_then(|comp| {
+            comp.as_any_mut()
+                .downcast_mut::<AudiobookshelfPodcastComponent>()
+        })
+        .map(|component| component.geometry().episode_rows.clone())
+        .expect("podcast component mounted");
+    assert!(!episode_rows.is_empty());
     assert!(out.contains("Episode A"));
 }
