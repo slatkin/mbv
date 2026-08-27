@@ -319,7 +319,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
     required open/activation/LibEvent transitions; no source change made.
   - [x] **5.3d.20c — drop `apply_inline_search_items` (≤2 files):**
     `shell_inline_search.rs` + `parent_id` guard.
-  - [ ] **5.3d.20d — drop recursive pool branch (≤2 files):** `shell_inline_search.rs`
+  - [x] **5.3d.20d — drop recursive pool branch (≤2 files):** `shell_inline_search.rs`
     recursive `Albums` pool branch.
   - [ ] **5.3d.20e — re-host `/` trigger (≤2 files):** `components/browser.rs:90-92`
     `ShellRequest::OpenInlineSearch`.

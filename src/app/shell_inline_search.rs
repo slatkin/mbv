@@ -94,27 +94,13 @@ impl Model {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
-        let recursive = self.app.recursive_album_search_enabled(index);
-        let library_id = self.app.libs[index].library.id.clone();
-        let loading = if recursive {
-            matches!(
-                self.app.album_indexes.get(&library_id),
-                Some(AlbumIndexState::Loading { .. })
-            )
-        } else {
-            // Flat path: loading exactly while the whole-library fetch
-            // backing `all_items` is outstanding (see
-            // `inline_search_needs_full_load`). Intermediate pushes --
-            // resize, browse completion, activation -- keep the spinner up;
-            // the completion push (all_items now present) clears it.
-            self.inline_search_needs_full_load(index)
-        };
-        let pool = if recursive {
-            match self.app.album_indexes.get(&library_id) {
-                Some(AlbumIndexState::Ready(entries)) => SearchPool::Albums(entries.clone()),
-                _ => SearchPool::Albums(Vec::new()),
-            }
-        } else {
+        // Flat path: this push only projects the flat `Items` pool. Loading
+        // is exactly while the whole-library fetch backing `all_items` is
+        // outstanding (see `inline_search_needs_full_load`). Intermediate
+        // pushes -- resize, browse completion, activation -- keep the spinner
+        // up; the completion push (all_items now present) clears it.
+        let loading = self.inline_search_needs_full_load(index);
+        let pool = {
             let items = self.app.libs[index]
                 .nav_stack
                 .last()
@@ -134,10 +120,9 @@ impl Model {
             {
                 search_component.set_content(pool, loading, focused);
                 // Drive loading from the projection on every push: the
-                // completion push (flat `all_items` landed, or recursive
-                // index Ready) is what clears it (`set_content` only ever
-                // turns it on, so an intermediate push never wedges or
-                // clears early).
+                // completion push (flat `all_items` landed) is what clears
+                // it (`set_content` only ever turns it on, so an intermediate
+                // push never wedges or clears early).
                 search_component.set_loading(loading);
             }
         }
