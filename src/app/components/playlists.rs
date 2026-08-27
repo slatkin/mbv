@@ -2,11 +2,10 @@ use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, MouseEvent};
+use tuirealm::event::{Event, Key, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::to_crossterm_mouse_event;
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_playlists_content, PlaylistsRenderGeometry};
@@ -186,9 +185,7 @@ impl PlaylistsComponent {
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let mouse = to_crossterm_mouse_event(mouse);
         let position: Position = (mouse.column, mouse.row).into();
-        use crossterm::event::{MouseButton, MouseEventKind};
         match mouse.kind {
             MouseEventKind::ScrollDown => {
                 if self.open.is_some() {

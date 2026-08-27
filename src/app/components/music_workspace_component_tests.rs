@@ -1,6 +1,6 @@
 use super::music_workspace::MusicWorkspaceComponent;
 use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
-use crate::app::components::{LegacyTerminalEvent, Msg};
+use crate::app::components::Msg;
 use crate::app::render::{LibraryListRenderCtx, MusicWideRenderCtx};
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
@@ -120,10 +120,7 @@ fn music_workspace_enter_ignored_when_inline_track_focus_disabled() {
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(component.track_cursor(), None);
-    assert!(matches!(
-        message,
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
-    ));
+    assert_eq!(message, None);
 }
 
 #[test]
@@ -167,10 +164,7 @@ fn music_workspace_horizontal_move_is_ignored_at_one_column() {
             code: key,
             modifiers: KeyModifiers::NONE,
         }));
-        assert!(matches!(
-            message,
-            Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
-        ));
+        assert_eq!(message, None);
         assert_eq!(component.album_cursor(), 1);
     }
 }
@@ -194,9 +188,7 @@ fn music_workspace_page_moves_saturate_at_both_ends() {
 #[test]
 fn music_workspace_track_keys_are_consumed_locally_and_do_not_move_album_cursor() {
     // With a track focused (wide), Down moves the track cursor only: the
-    // component consumes the key locally (a draw-only NoOp -- never a legacy
-    // forward, which would move the album cursor underneath), and no album
-    // intent is emitted.
+    // component consumes the key locally without emitting an album intent.
     let mut component = MusicWorkspaceComponent::new();
     let albums: Vec<_> = (0..4)
         .map(|index| make_item(&format!("Album {index}"), "MusicAlbum"))
@@ -231,10 +223,7 @@ fn music_workspace_track_keys_are_consumed_locally_and_do_not_move_album_cursor(
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(matches!(
-        message,
-        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
-    ));
+    assert_eq!(message, None);
     assert_eq!(component.track_cursor(), Some(1));
     assert_eq!(component.album_cursor(), 1);
 }
@@ -273,10 +262,7 @@ fn music_workspace_track_esc_exits_locally_without_forwarding() {
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(component.track_cursor(), None);
-    assert!(matches!(
-        message,
-        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
-    ));
+    assert_eq!(message, None);
 }
 
 #[test]

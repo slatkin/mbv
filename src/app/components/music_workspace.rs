@@ -1,18 +1,17 @@
 //! Interactive Component for grouped Music's wide workspace.
 //!
 //! The shell mirrors album data and cached tracks. Album/track cursor state is
-//! local here; legacy keys still forward to App during stage 1.
+//! local here; cross-authority effects use typed shell requests.
 
 use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyModifiers, MouseEvent};
+use tuirealm::event::{Event, Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{AlbumCursorKind, LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
 use crate::app::render::{render_wide_music_group_with_ctx, MusicImagePaint, MusicWideRenderCtx};
@@ -227,19 +226,19 @@ impl MusicWorkspaceComponent {
                 return Some(Msg::Shell(ShellRequest::MusicTrackActivate));
             }
             // Enter on an album row (Library panel): enter inline track
-            // focus when wide with cached tracks; otherwise fall through to
-            // legacy activation (narrow opens the selection modal).
+            // focus when wide with cached tracks; otherwise consume the key
+            // (narrow activation is not component-owned here).
             Key::Enter if self.track_cursor.is_none() => {
                 if self.can_enter_track_focus() {
                     self.track_cursor = Some(0);
-                    return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+                    return None;
                 }
             }
-            // Exit inline track focus locally; the key must not reach legacy
-            // (its Esc/Stop semantics belong to the unprefixed panel).
+            // Exit inline track focus locally; the key must not reach the
+            // unprefixed panel's Esc/Stop semantics.
             Key::Esc | Key::Backspace if self.track_cursor.is_some() => {
                 self.track_cursor = None;
-                return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+                return None;
             }
             // Track moves are local to the component while a track is
             // focused and the Library panel owns the keys; with the Queue
@@ -248,17 +247,16 @@ impl MusicWorkspaceComponent {
                 if self.track_cursor.is_some() && self.library_panel_active() =>
             {
                 self.move_track(-1);
-                return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+                return None;
             }
             Key::Down | Key::Char('j')
                 if self.track_cursor.is_some() && self.library_panel_active() =>
             {
                 self.move_track(1);
-                return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+                return None;
             }
             // Enqueue / context menu target the focused track while one is
-            // focused (Library panel); otherwise keep their legacy meaning
-            // (queue view handling / album target).
+            // focused (Library panel); otherwise leave the key unhandled.
             Key::Char('a')
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && self.track_cursor.is_some()
@@ -351,17 +349,11 @@ impl MusicWorkspaceComponent {
             }
             _ => {}
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(
-            to_crossterm_key_event(key),
-        )))
+        None
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let mouse = to_crossterm_mouse_event(mouse);
-        if matches!(
-            mouse.kind,
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
             let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
             if let Some(track) = self.layout.wide_music_track_at(position) {
                 self.track_cursor = Some(track);
@@ -377,7 +369,7 @@ impl MusicWorkspaceComponent {
                 }
             }
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
+        None
     }
 
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<MusicImagePaint> {

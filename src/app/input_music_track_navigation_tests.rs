@@ -2,7 +2,7 @@
 
 use super::music_track_test_support::*;
 use super::*;
-use crate::app::components::msg::{LegacyTerminalEvent, ShellRequest};
+use crate::app::components::msg::ShellRequest;
 use crate::app::components::music_workspace::MusicWorkspaceComponent;
 use crate::app::components::{ComponentId, Msg};
 use crate::app::render::{LibraryListRenderCtx, MusicWideRenderCtx};
@@ -128,18 +128,14 @@ fn up_down_in_track_mode_move_only_track_focus_and_clamp() {
 #[test]
 fn track_mode_down_does_not_move_track_focus_when_queue_panel_has_focus() {
     // With the Queue panel focused (`context.focused == false`), track-mode
-    // Up/Down fall through to legacy queue handling instead of moving the
-    // focused track -- the component must not intercept them.
+    // Up/Down are unhandled instead of moving the focused track.
     let mut component = component_with_tracks_ctx(false);
     component.set_inline_track_focus_enabled(true);
     let msg = component.on(&Event::Keyboard(TuiKeyEvent {
         code: TuiKey::Down,
         modifiers: TuiKeyModifiers::NONE,
     }));
-    assert!(matches!(
-        msg,
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
-    ));
+    assert_eq!(msg, None);
     assert_eq!(component.track_cursor(), None);
 }
 
@@ -224,14 +220,13 @@ fn escape_in_track_mode_clears_focus_without_go_back() {
     }));
     assert_eq!(component.track_cursor(), Some(0));
 
-    // Esc exits track mode locally; the message is a draw-only NoOp, never a
-    // legacy Esc (which would reach `go_back`).
+    // Esc exits track mode locally without emitting a message.
     let msg = component.on(&Event::Keyboard(TuiKeyEvent {
         code: TuiKey::Esc,
         modifiers: TuiKeyModifiers::NONE,
     }));
     assert_eq!(component.track_cursor(), None);
-    assert!(matches!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp))));
+    assert_eq!(msg, None);
 }
 
 #[test]

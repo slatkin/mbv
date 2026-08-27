@@ -1,22 +1,21 @@
 //! Interactive Component for one Audiobookshelf podcast library.
 //!
 //! The shell mirrors validated browse content into this stable browser
-//! instance. Show, episode, filter, and scroll state stays local here; the
-//! legacy App handler remains the shell-owned effect path during group 5's
-//! teardown.
+//! instance. Show, episode, filter, and scroll state stays local here; typed
+//! shell requests remain the shell-owned effect path.
 
 use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
 use super::msg::{
-    LegacyTerminalEvent, Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove,
-    ShellRequest,
+    Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove, ShellRequest,
 };
 use super::user_event::UserEvent;
 use crate::app::render::{
@@ -261,14 +260,9 @@ impl AudiobookshelfPodcastComponent {
                     ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue),
                 ));
             }
-            // TuiRealm sends an event only to the focused component and does
-            // not fall through when this returns None, so unmatched keys must
-            // forward through the shared framework bridge to keep global App
-            // shortcuts alive on this surface (task 5.3d.7 keeps the typed
-            // action intents above; it does not drop raw forwarding).
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::Key(
-                to_crossterm_key_event(key),
-            ))),
+            // Unmatched keys are consumed by this converted surface; UiRoot's
+            // permanent terminal observer supplies the redraw signal.
+            _ => None,
         }
     }
 
@@ -301,11 +295,7 @@ impl AudiobookshelfPodcastComponent {
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let mouse = to_crossterm_mouse_event(mouse);
-        if matches!(
-            mouse.kind,
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
             let pos: ratatui::layout::Position = (mouse.column, mouse.row).into();
             if let Some((_, index)) = self
                 .geometry
@@ -331,7 +321,7 @@ impl AudiobookshelfPodcastComponent {
                 }
             }
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
+        None
     }
 }
 

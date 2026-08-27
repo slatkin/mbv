@@ -1,7 +1,6 @@
 use super::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
 use super::msg::{
-    LegacyTerminalEvent, Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove,
-    ShellRequest,
+    Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove, ShellRequest,
 };
 use crate::app::images::audiobookshelf_cover_cache_key;
 use crate::app::shell::Model;
@@ -130,23 +129,13 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
         ))
     ));
 
-    // An unrelated key forwards as a raw terminal event through the shared
-    // framework bridge: TuiRealm only delivers to the focused component and
-    // does not fall through on None, so global App shortcuts depend on this.
+    // Unmatched keys are consumed by the converted surface; UiRoot's
+    // permanent observer supplies the redraw signal without a Legacy message.
     let unrelated = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('z'),
         modifiers: KeyModifiers::NONE,
     }));
-    let Some(Msg::Legacy(LegacyTerminalEvent::Key(forwarded))) = unrelated else {
-        panic!("unmatched key must forward a raw terminal event, got {unrelated:?}");
-    };
-    assert_eq!(
-        forwarded,
-        crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char('z'),
-            crossterm::event::KeyModifiers::NONE,
-        )
-    );
+    assert_eq!(unrelated, None);
 }
 
 #[test]

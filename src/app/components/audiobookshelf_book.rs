@@ -2,14 +2,13 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{
-    AudiobookshelfBookIntent, AudiobookshelfBookMove, LegacyTerminalEvent, Msg, ShellRequest,
-};
+use super::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{
     render_audiobookshelf_book_content, AudiobookshelfBookGeometry, HomeImagePaint,
@@ -143,9 +142,7 @@ impl AudiobookshelfBookComponent {
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if !self.focused {
-            return Some(Msg::Legacy(LegacyTerminalEvent::Key(
-                to_crossterm_key_event(key),
-            )));
+            return None;
         }
 
         let chapters_focused = self.chapters_visible && self.state.chapter_selection.is_some();
@@ -247,9 +244,7 @@ impl AudiobookshelfBookComponent {
                     AudiobookshelfBookIntent::Enqueue,
                 )))
             }
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::Key(
-                to_crossterm_key_event(key),
-            ))),
+            _ => None,
         }
     }
 
@@ -276,12 +271,8 @@ impl AudiobookshelfBookComponent {
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let mouse = to_crossterm_mouse_event(mouse);
         let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
-        if matches!(
-            mouse.kind,
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
             if let Some((_, index)) = self
                 .geometry
                 .book_rows
@@ -312,7 +303,7 @@ impl AudiobookshelfBookComponent {
                 }
             }
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
+        None
     }
 }
 

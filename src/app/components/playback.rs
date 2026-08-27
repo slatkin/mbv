@@ -6,11 +6,10 @@ use ratatui::text::Span;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, Props, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::to_crossterm_mouse_event;
 use super::msg::{Msg, PlaybackRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutPlayback;
@@ -139,28 +138,23 @@ impl PlaybackComponent {
     }
 
     fn mouse(&self, event: &tuirealm::event::MouseEvent) -> Option<Msg> {
-        let mouse = to_crossterm_mouse_event(event);
-        let point = (mouse.column, mouse.row).into();
-        match mouse.kind {
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-                if self.play_pause_area.contains(point) =>
-            {
+        let point = (event.column, event.row).into();
+        match event.kind {
+            MouseEventKind::Down(MouseButton::Left) if self.play_pause_area.contains(point) => {
                 Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
             }
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+            MouseEventKind::Down(MouseButton::Left)
                 if self.stop_area.contains(point) && self.projection.stop_available =>
             {
                 Some(Msg::Playback(PlaybackRequest::Stop))
             }
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+            MouseEventKind::Down(MouseButton::Left)
                 if self.next_area.contains(point) && self.projection.next_available =>
             {
                 Some(Msg::Playback(PlaybackRequest::Next))
             }
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-                if self.seekbar_area.contains(point) =>
-            {
-                Some(Msg::Playback(PlaybackRequest::SeekTo(mouse.column)))
+            MouseEventKind::Down(MouseButton::Left) if self.seekbar_area.contains(point) => {
+                Some(Msg::Playback(PlaybackRequest::SeekTo(event.column)))
             }
             _ => None,
         }

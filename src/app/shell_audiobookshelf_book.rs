@@ -315,9 +315,8 @@ mod tests {
             Some("book-3")
         );
 
-        // Unmatched component keys remain generic legacy events so global
-        // shortcuts keep their existing App side effects. The ABS Book view
-        // dispatch now consumes the unmatched key without a book fallback.
+        // Unmatched component keys are consumed by the converted surface;
+        // they do not enter the legacy book fallback.
         let bucket = model.app.audiobookshelf_book_browse[0].selected_bucket;
         let shift_left = crossterm::event::KeyEvent::new(
             crossterm::event::KeyCode::Char('['),
@@ -331,7 +330,7 @@ mod tests {
                 code: Key::Char('['),
                 modifiers: KeyModifiers::SHIFT,
             }));
-        assert!(matches!(bridged, Some(Msg::Legacy(_))));
+        assert_eq!(bridged, None);
         assert_eq!(
             model.app.handle_key_view_dispatch(shift_left, false, None),
             Some(false)

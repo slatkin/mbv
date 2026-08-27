@@ -2,18 +2,17 @@
 //!
 //! The shell mirrors the App-derived browser/detail snapshot. The component
 //! keeps the active pane and the season/episode cursor used to paint the two
-//! child targets; legacy keys still forward to App during stage 1.
+//! child targets; cross-authority effects use typed shell requests.
 
 use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, MouseEvent};
+use tuirealm::event::{Event, Key, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest, TvHit, TvHitRegion};
+use super::msg::{Msg, ShellRequest, TvHit, TvHitRegion};
 use super::user_event::UserEvent;
 #[cfg(test)]
 use crate::app::layout::LayoutMain;
@@ -230,9 +229,7 @@ impl TvWorkspaceComponent {
 
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
         if !self.context.focused {
-            return Some(Msg::Legacy(LegacyTerminalEvent::Key(
-                to_crossterm_key_event(key),
-            )));
+            return None;
         }
         let request = match key.code {
             Key::Left | Key::Char('h') => {
@@ -332,14 +329,7 @@ impl TvWorkspaceComponent {
             }
             _ => None,
         };
-        request.map_or_else(
-            || {
-                Some(Msg::Legacy(LegacyTerminalEvent::Key(
-                    to_crossterm_key_event(key),
-                )))
-            },
-            |request| Some(Msg::Shell(request)),
-        )
+        request.map_or_else(|| None, |request| Some(Msg::Shell(request)))
     }
 
     /// The component owns *where* a TV event lands: it hit-tests its painted
@@ -351,10 +341,9 @@ impl TvWorkspaceComponent {
     /// throttle) via App's shared fields — the component holds no timing
     /// state.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let mouse = to_crossterm_mouse_event(mouse);
         let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
         match mouse.kind {
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+            MouseEventKind::Down(MouseButton::Left) => {
                 if let Some(hit) = self.resolve_hit(position) {
                     // A click in the unfocused pane moves local focus there;
                     // a click in the already-focused pane keeps it (the hit
@@ -384,13 +373,12 @@ impl TvWorkspaceComponent {
                     }));
                 }
             }
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
+            MouseEventKind::Down(MouseButton::Right) => {
                 if let Some(hit) = self.resolve_hit(position) {
                     // Right-click carries the same resolved pane + hit so
                     // the shell applies the pane-appropriate single-click
                     // effect before opening the menu; it never moves the
-                    // component's pane or cursors (mirroring the legacy
-                    // right-click arm, which only ever opened the menu).
+                    // component's pane or cursors.
                     return Some(Msg::Shell(ShellRequest::TvClick {
                         region: TvHitRegion::ContextMenu(hit),
                         col: mouse.column,
@@ -398,17 +386,15 @@ impl TvWorkspaceComponent {
                     }));
                 }
             }
-            crossterm::event::MouseEventKind::ScrollUp
-            | crossterm::event::MouseEventKind::ScrollDown
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
                 if self.layout.left_area.contains(position) =>
             {
                 // Wheel scroll over the series list (`left_area` is the
                 // right-pane list area this renderer publishes — the exact
                 // region the legacy scroll arm hit-tested). The Episodes
-                // pane has no legacy wheel behaviour, so those scrolls stay
-                // legacy-forwarded (where they no-op).
-                let delta: i64 = if matches!(mouse.kind, crossterm::event::MouseEventKind::ScrollUp)
-                {
+                // pane has no wheel behaviour, so those scrolls remain
+                // unhandled.
+                let delta: i64 = if matches!(mouse.kind, MouseEventKind::ScrollUp) {
                     -1
                 } else {
                     1
@@ -418,12 +404,12 @@ impl TvWorkspaceComponent {
             }
             _ => {}
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
+        None
     }
 
     /// Resolve a workspace position to the pane + hit it lands in, from the
     /// component's own painted geometry. `None` = outside every TV rect
-    /// (the clicks that stay `Msg::Legacy`).
+    /// (the clicks that remain unhandled).
     fn resolve_hit(&self, position: ratatui::layout::Position) -> Option<TvHit> {
         if let Some((_, index)) = self
             .layout

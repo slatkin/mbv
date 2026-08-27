@@ -1,4 +1,4 @@
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest, TvHit, TvHitRegion};
+use super::msg::{Msg, ShellRequest, TvHit, TvHitRegion};
 use super::tv_workspace::TvWorkspaceComponent;
 use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_item;
@@ -89,10 +89,7 @@ fn tv_keyboard_falls_through_to_legacy_when_queue_is_focused() {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(matches!(
-        message,
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
-    ));
+    assert_eq!(message, None);
     assert_eq!(component.cursor(), 0);
 }
 
@@ -114,10 +111,7 @@ fn tv_episode_brackets_with_modifiers_fall_through_to_legacy() {
         (Key::Char(']'), KeyModifiers::ALT),
     ] {
         let message = component.on(&Event::Keyboard(KeyEvent { code, modifiers }));
-        assert!(matches!(
-            message,
-            Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
-        ));
+        assert_eq!(message, None);
     }
 }
 
