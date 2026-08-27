@@ -397,11 +397,18 @@ definition of done.
       no bounded entry or handler met the zero-reference gate without changing
       keyboard precedence or widening into 5.3d.22-B/23. No production symbols
       were deleted.
-  - [ ] **5.3d.22-B — confirm/visualizer precedence family:** After 5.3d.22-A,
+  - [x] **5.3d.22-B — confirm/visualizer precedence family:** After 5.3d.22-A,
     delete the bounded confirm/visualizer precedence family, allowlisted to
     `src/app/input_confirm_keys.rs`, `src/app/input.rs`, and
     `src/app/input_resolver.rs`. Run serially after 5.3d.22-A because the two
     families share input files.
+    - **Verified no-op at `572ffe5b`:** none of the bounded entries or handlers
+      met the zero-reference gate. `confirm_skip_intro` and `confirm_next_up`
+      remain direct shell playback-prompt callers as well as live stack entries;
+      `clear_queue_prompt_c` remains a live stack entry and is covered by the
+      end-to-end input tests; and `visualizer` remains a live stack entry with
+      direct visualizer tests. Removing any candidate would change keyboard
+      precedence or playback/shell behavior. No source symbols were deleted.
   - [ ] **5.3d.23-A — global bridge teardown:** After all per-surface forwarding
     adapters and the 5.3d.22 precedence families are complete, remove the
     global bridge pieces allowlisted to `src/app/root.rs`,
