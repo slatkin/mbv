@@ -38,12 +38,8 @@ impl Model {
 
     fn emby_library_child_id(&self, index: usize) -> Option<ComponentId> {
         let library = self.app.libs.get(index)?;
-        if self.inline_search_id.is_some() {
-            return Some(ComponentId::InlineSearch(BrowserKey {
-                service: ServiceKind::Emby,
-                library_id: library.library.id.clone(),
-                kind: BrowserKind::from_collection_type(&library.library.collection_type),
-            }));
+        if let Some(id) = self.inline_search_component_id(index) {
+            return Some(id);
         }
         if self.app.is_podcast_library(index) || self.app.is_feed_home_video_group_view(index) {
             return None;

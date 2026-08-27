@@ -5,15 +5,15 @@ use mbv_core::config::ServiceKind;
 use ratatui::layout::Rect;
 
 impl Model {
-    fn inline_search_component_id(&self, index: usize) -> Option<ComponentId> {
+    pub(super) fn inline_search_component_id(&self, index: usize) -> Option<ComponentId> {
         let library = self.app.libs.get(index)?;
         let expected = ComponentId::InlineSearch(BrowserKey {
             service: ServiceKind::Emby,
             library_id: library.library.id.clone(),
             kind: BrowserKind::from_collection_type(&library.library.collection_type),
         });
-        // `Some` exactly when the mounted search belongs to this library.
-        (self.inline_search_id.as_ref() == Some(&expected)).then_some(expected)
+        // `Some` exactly when the search for this library is mounted.
+        self.application.mounted(&expected).then_some(expected)
     }
 
     fn inline_search_area(&self) -> Rect {
@@ -39,22 +39,13 @@ impl Model {
     /// keyboard and mouse (D16), panel-focus, panel-mode and tab transitions
     /// are unreachable while it is open except at those boundaries.
     ///
-    /// Also releases the stale mount when the active tab no longer belongs to
-    /// the library the search opened from — the deleted mirror's per-frame
-    /// key-mismatch unmount, now driven by the async `NavigateTo`/load flows
-    /// that can move the tab while the component is mounted.
     pub(super) fn push_inline_search_content(&mut self) {
-        let Some(id) = self.inline_search_id.as_ref().cloned() else {
-            return;
-        };
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
-            self.dismiss_inline_search();
             return;
         };
-        if self.inline_search_component_id(index).is_none() {
-            self.dismiss_inline_search();
+        let Some(id) = self.inline_search_component_id(index) else {
             return;
-        }
+        };
         let recursive = self.app.recursive_album_search_enabled(index);
         let library_id = self.app.libs[index].library.id.clone();
         let loading = recursive
@@ -97,7 +88,7 @@ impl Model {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
-        if self.inline_search_id.is_some() {
+        if self.inline_search_component_id(index).is_some() {
             return;
         }
         let Some(id) = self.app.libs.get(index).map(|library| {
@@ -115,7 +106,6 @@ impl Model {
         self.application
             .active(&id)
             .expect("activate inline library Search");
-        self.inline_search_id = Some(id);
         let recursive = self.app.recursive_album_search_enabled(index);
         let mut needs_full_load = false;
         if recursive {
@@ -144,7 +134,10 @@ impl Model {
     }
 
     pub(super) fn dismiss_inline_search(&mut self) {
-        if let Some(id) = self.inline_search_id.take() {
+        let TabSelection::EmbyLibrary(index) = self.app.tab else {
+            return;
+        };
+        if let Some(id) = self.inline_search_component_id(index) {
             let _ = self.application.umount(&id);
         }
     }
@@ -153,12 +146,12 @@ impl Model {
         let TabSelection::EmbyLibrary(lib_idx) = self.app.tab else {
             return;
         };
-        let Some(component_id) = self.inline_search_id.as_ref() else {
+        let Some(component_id) = self.inline_search_component_id(lib_idx) else {
             return;
         };
         let selected = self
             .application
-            .get_component(component_id)
+            .get_component(&component_id)
             .and_then(|component| component.as_any().downcast_ref::<InlineSearchComponent>())
             .and_then(InlineSearchComponent::selected_item);
         if self.app.recursive_album_search_enabled(lib_idx) {
@@ -185,10 +178,13 @@ impl Model {
     }
 
     fn set_inline_search_loading(&mut self, loading: bool) {
-        let Some(id) = self.inline_search_id.as_ref() else {
+        let Some(id) = self.inline_search_component_id(match self.app.tab {
+            TabSelection::EmbyLibrary(index) => index,
+            _ => return,
+        }) else {
             return;
         };
-        if let Some(component) = self.application.get_component_mut(id) {
+        if let Some(component) = self.application.get_component_mut(&id) {
             if let Some(search) = component
                 .as_any_mut()
                 .downcast_mut::<InlineSearchComponent>()
@@ -200,11 +196,9 @@ impl Model {
 
     /// Drain tail for the inline search (called from the shell's `lib_rx`
     /// loop): completions that can change the mounted search's projected pool
-    /// — flat `nav_stack` items/`all_items`, recursive `album_indexes`, or the
-    /// tab itself via `NavigateTo` — re-push it after the App handles the
-    /// event. The deleted per-frame mirror's projection, driven at async
-    /// event boundaries. `NavigateTo` may move the tab, which the push
-    /// releases as a stale mount.
+    /// — flat `nav_stack` items/`all_items`, or recursive `album_indexes` —
+    /// re-push it after the App handles the event. The deleted per-frame
+    /// mirror's projection is driven at async event boundaries.
     pub(super) fn handle_inline_search_lib_event(&mut self, ev: super::LibEvent) {
         let pushes_inline_search = matches!(
             ev,
@@ -239,10 +233,10 @@ impl Model {
         {
             return;
         }
-        let Some(id) = self.inline_search_id.as_ref() else {
+        let Some(id) = self.inline_search_component_id(lib_idx) else {
             return;
         };
-        if let Some(component) = self.application.get_component_mut(id) {
+        if let Some(component) = self.application.get_component_mut(&id) {
             if let Some(search) = component
                 .as_any_mut()
                 .downcast_mut::<InlineSearchComponent>()
@@ -254,14 +248,17 @@ impl Model {
     }
 
     pub(super) fn render_inline_search_component(&mut self, frame: &mut ratatui::Frame) {
-        let Some(id) = self.inline_search_id.as_ref() else {
+        let Some(id) = self.inline_search_component_id(match self.app.tab {
+            TabSelection::EmbyLibrary(index) => index,
+            _ => return,
+        }) else {
             return;
         };
         let area = self.inline_search_area();
         if area.width == 0 || area.height == 0 {
             return;
         }
-        self.application.view(id, frame, area);
+        self.application.view(&id, frame, area);
     }
 }
 
@@ -277,9 +274,9 @@ mod tests {
         let mut model = Model::new(make_movie_app());
         model.open_inline_search();
         let id = model
-            .inline_search_id
-            .clone()
+            .inline_search_component_id(0)
             .expect("inline Search component mounted");
+        assert!(model.application.mounted(&id));
         let message = model
             .application
             .get_component_mut(&id)

@@ -56,7 +56,6 @@ pub struct Model {
     pub(super) emby_browser_id: Option<ComponentId>,
     pub(super) tv_workspace_id: Option<ComponentId>,
     pub(super) music_workspace_id: Option<ComponentId>,
-    pub(super) inline_search_id: Option<ComponentId>,
     pub(super) abs_podcast_id: Option<ComponentId>,
     pub(super) abs_book_id: Option<ComponentId>,
     /// One-shot shell→component request for the mounted Music workspace's
@@ -100,7 +99,6 @@ impl Model {
             emby_browser_id: None,
             tv_workspace_id: None,
             music_workspace_id: None,
-            inline_search_id: None,
             abs_podcast_id: None,
             abs_book_id: None,
             music_track_focus_request: None,

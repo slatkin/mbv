@@ -239,7 +239,7 @@ tests repainted as part of the production rows.
   mirror (album cursor via `move/jump/page_grouped_album_cursor`, focused track via
   `focused_music_track`); no behavioural change. ≤3 files. Campaign predecessor:
   `5.3d.18a`.
-- [ ] **5.3d.20a — Inline library-Search drop mount-id field.** `shell.rs`
+- [x] **5.3d.20a — Inline library-Search drop mount-id field.** `shell.rs`
   `inline_search_id` field + `shell_inline_search.rs`
   `inline_search_component_id` + `shell_library.rs:41` mount-id precedence branch.
   ≤3 files. Campaign predecessor: `5.3d.19a`.

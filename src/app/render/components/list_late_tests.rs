@@ -150,5 +150,8 @@ fn inline_search_mounts_at_the_component_boundary() {
     let mut model =
         crate::app::shell::Model::new(crate::app::render::test_helpers::make_music_group_app());
     model.open_inline_search();
-    assert!(model.inline_search_id.is_some());
+    let id = model
+        .inline_search_component_id(0)
+        .expect("inline Search component mounted");
+    assert!(model.application.mounted(&id));
 }

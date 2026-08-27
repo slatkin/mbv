@@ -626,8 +626,11 @@ fn opening_search_with_an_active_letter_pill_always_needs_a_full_library_fetch()
 
     let mut model = crate::app::shell::Model::new(app);
     model.open_inline_search();
+    let id = model
+        .inline_search_component_id(0)
+        .expect("inline Search component mounted");
     assert!(
-        model.inline_search_id.is_some(),
+        model.application.mounted(&id),
         "inline Search must mount at the component boundary"
     );
 }
