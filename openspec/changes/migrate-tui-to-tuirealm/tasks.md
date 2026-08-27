@@ -312,8 +312,9 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
   - **5.3d.20a — drop mount-id field** is promoted to an open active leaf (see §3):
     `shell.rs` `inline_search_id` + `shell_inline_search.rs`
     `inline_search_component_id` + `shell_library.rs:41` branch.
-  - [ ] **5.3d.20b — merge redundant re-pushes (≤2 files):** `shell_inline_search.rs`
-    duplicate `push_inline_search_content` at lines 184/218.
+  - [x] **5.3d.20b — re-verify claimed redundant re-pushes (NO-OP at `ee28c78c`):**
+    `shell_inline_search.rs` projections at lines 153, 206, and 241 are distinct
+    required open/activation/LibEvent transitions; no source change made.
   - [ ] **5.3d.20c — drop `apply_inline_search_items` (≤2 files):**
     `shell_inline_search.rs` + `parent_id` guard.
   - [ ] **5.3d.20d — drop recursive pool branch (≤2 files):** `shell_inline_search.rs`
