@@ -170,6 +170,11 @@ impl MusicWorkspaceComponent {
         self.track_cursor
     }
 
+    #[cfg(test)]
+    pub(in crate::app) fn album_tracks_loading(&self) -> bool {
+        self.context.album_tracks_loading
+    }
+
     /// Whether inline track focus can be entered right now: wide mode
     /// (`inline_track_focus_enabled`) with the selected album's tracks
     /// cached. Narrow mode keeps `track_cursor` `None` by construction.

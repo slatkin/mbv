@@ -92,16 +92,17 @@ impl Model {
         {
             return;
         }
-        let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index);
-        let columns = self.app.current_library_columns(index);
-        let wide = self.app.layout.main.is_wide_music_active();
-        if let Some(album) = context.selected_album.as_ref() {
+        let selected_album = self.app.selected_album_item(index);
+        if let Some(album) = selected_album.as_ref() {
             if !self.app.album_tracks_cache.contains_key(&album.id)
                 && !self.app.album_tracks_loading.contains(&album.id)
             {
                 self.app.fetch_album_tracks(album.id.clone());
             }
         }
+        let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index);
+        let columns = self.app.current_library_columns(index);
+        let wide = self.app.layout.main.is_wide_music_active();
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(music) = comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>() {
                 music.set_content(context);
@@ -183,7 +184,6 @@ mod tests {
         let mut model = Model::new(make_music_group_app());
         model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
         model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
-        model.sync_music_workspace();
 
         let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
         client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
@@ -194,10 +194,20 @@ mod tests {
         model.app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(
             std::sync::Arc::new(std::sync::Mutex::new(client)),
         );
-
-        model.push_music_workspace_content();
+        model.sync_music_workspace();
 
         assert!(model.app.album_tracks_loading.contains("album-1"));
+        let component = model
+            .application
+            .get_component(&model.music_workspace_id.clone().unwrap())
+            .unwrap()
+            .as_any()
+            .downcast_ref::<MusicWorkspaceComponent>()
+            .unwrap();
+        assert!(
+            component.album_tracks_loading(),
+            "first mounted content push must project album track loading"
+        );
     }
 
     #[test]
