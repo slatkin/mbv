@@ -110,6 +110,17 @@ impl TvWorkspaceComponent {
             .map(|item| item.id.clone())
     }
 
+    /// Return the component-owned selection needed to activate an episode.
+    /// The shell uses these cursors to resolve the episode from App's cache;
+    /// it never re-reads the library cursor for this action.
+    pub(in crate::app) fn episode_activation_selection(&self) -> Option<(String, usize, usize)> {
+        Some((
+            self.context.selected_series.as_ref()?.id.clone(),
+            self.season_cursor,
+            self.episode_cursor?,
+        ))
+    }
+
     fn move_episode(&mut self, delta: i64) {
         let count = self
             .context
@@ -237,7 +248,7 @@ impl TvWorkspaceComponent {
                 self.pane = Pane::Episodes;
                 Some(ShellRequest::TvActivate)
             }
-            Key::Enter => None,
+            Key::Enter => Some(ShellRequest::TvEpisodeActivate),
             Key::Esc | Key::Backspace => {
                 if self.episode_cursor.is_some() {
                     self.episode_cursor = None;

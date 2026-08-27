@@ -435,6 +435,9 @@ pub enum ShellRequest {
     },
     /// Enter on a series row starts the component's episode-selection pane.
     TvActivate,
+    /// Enter on the focused TV episode pane plays the component-selected
+    /// episode through the existing playback path.
+    TvEpisodeActivate,
     /// Esc/Backspace leaves TV selection/back-navigates the App browse stack.
     TvBack,
     /// Series-root `[`/`]` cycle the App-owned letter pill.

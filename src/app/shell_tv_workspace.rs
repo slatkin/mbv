@@ -10,6 +10,15 @@ impl Model {
             return;
         };
         match request {
+            ShellRequest::TvEpisodeActivate => {
+                let Some((series_id, season_cursor, episode_cursor)) =
+                    self.tv_episode_activation_selection()
+                else {
+                    return;
+                };
+                self.app
+                    .play_tv_episode(&series_id, season_cursor, episode_cursor);
+            }
             // The component owns the cursor; mirror its selected item only at
             // this writer seam so App effects resolve the same target.
             ShellRequest::TvMoveRows { .. }
@@ -37,6 +46,14 @@ impl Model {
             ShellRequest::TvEpisodeMove { .. } | ShellRequest::TvSeasonMove { .. } => {}
             _ => {}
         }
+    }
+
+    fn tv_episode_activation_selection(&self) -> Option<(String, usize, usize)> {
+        let id = self.tv_workspace_id.as_ref()?;
+        self.application
+            .get_component(id)
+            .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
+            .and_then(TvWorkspaceComponent::episode_activation_selection)
     }
 
     pub fn mirror_tv_workspace_cursor(&mut self, lib_idx: usize) {
@@ -206,5 +223,78 @@ mod tests {
             .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
             .and_then(TvWorkspaceComponent::selected_item_id);
         assert_eq!(selected_id, Some("movie-second".into()));
+    }
+
+    #[test]
+    fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
+        let mut model = mounted_tv_model();
+        let mut season_one = crate::app::tests::make_item("Season 1", "Season");
+        season_one.id = "season-1".into();
+        let mut season_two = crate::app::tests::make_item("Season 2", "Season");
+        season_two.id = "season-2".into();
+        let mut episode = crate::app::tests::make_item("Episode 2", "Episode");
+        episode.id = "episode-2".into();
+        episode.series_id = "movie-focused".into();
+        let mut episodes = std::collections::HashMap::new();
+        episodes.insert("season-2".into(), vec![episode]);
+        model.app.series_detail_cache.insert(
+            "movie-focused".into(),
+            crate::app::SeriesDetail {
+                seasons: vec![season_one, season_two],
+                episodes,
+            },
+        );
+        model.push_tv_workspace_content();
+        let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+
+        let enter_series = model
+            .application
+            .get_component_mut(&id)
+            .expect("TV workspace component mounted")
+            .as_any_mut()
+            .downcast_mut::<TvWorkspaceComponent>()
+            .expect("TV workspace component type")
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Enter,
+                modifiers: KeyModifiers::NONE,
+            }));
+        let Some(Msg::Shell(enter_series)) = enter_series else {
+            panic!("series Enter must produce a typed request");
+        };
+        model.handle_tv_request(enter_series);
+
+        let season = model
+            .application
+            .get_component_mut(&id)
+            .expect("TV workspace component mounted")
+            .as_any_mut()
+            .downcast_mut::<TvWorkspaceComponent>()
+            .expect("TV workspace component type")
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Char(']'),
+                modifiers: KeyModifiers::NONE,
+            }));
+        assert!(matches!(
+            season,
+            Some(Msg::Shell(ShellRequest::TvSeasonMove { delta: 1 }))
+        ));
+        // Make the App library cursor stale after the component has selected
+        // the series; episode activation must not consult that cursor.
+        model.app.libs[0].nav_stack[0].cursor = 1;
+
+        let episode_request = model
+            .application
+            .get_component(&id)
+            .expect("TV workspace component mounted")
+            .as_any()
+            .downcast_ref::<TvWorkspaceComponent>()
+            .expect("TV workspace component type")
+            .episode_activation_selection();
+        assert_eq!(episode_request, Some(("movie-focused".into(), 1, 0)));
+        model.handle_tv_request(ShellRequest::TvEpisodeActivate);
+        assert!(model.app.play_tv_episode("movie-focused", 1, 0));
+        assert!(!model.app.play_tv_episode("movie-focused", 0, 0));
+        assert!(!model.app.play_tv_episode("movie-focused", 1, 1));
+        assert!(!model.app.play_tv_episode("missing-series", 1, 0));
     }
 }

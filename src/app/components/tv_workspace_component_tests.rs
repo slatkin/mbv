@@ -208,11 +208,9 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
         Some(Msg::Shell(ShellRequest::TvBack))
     ));
 
-    // Episode activation is reserved for the later 18f slice and remains on
-    // the legacy bridge rather than acquiring a speculative typed effect.
     component.on(&key(Key::Enter));
     assert!(matches!(
         component.on(&key(Key::Enter)),
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+        Some(Msg::Shell(ShellRequest::TvEpisodeActivate))
     ));
 }

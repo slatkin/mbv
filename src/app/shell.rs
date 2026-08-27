@@ -981,6 +981,7 @@ impl Model {
                             | ShellRequest::TvMoveColumn { .. }
                             | ShellRequest::TvJumpCursor { .. }
                             | ShellRequest::TvActivate
+                            | ShellRequest::TvEpisodeActivate
                             | ShellRequest::TvBack
                             | ShellRequest::TvCycleLetterPill { .. }
                             | ShellRequest::TvEpisodeMove { .. }

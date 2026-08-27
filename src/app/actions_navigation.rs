@@ -34,6 +34,27 @@ impl App {
         }
     }
 
+    /// Play the episode selected by the wide TV component. The component's
+    /// series and season/episode cursors are authoritative; resolve the
+    /// season id and episode from the matching detail cache entry rather than
+    /// consulting the potentially stale library cursor.
+    pub(super) fn play_tv_episode(
+        &mut self,
+        series_id: &str,
+        season_cursor: usize,
+        episode_cursor: usize,
+    ) -> bool {
+        let episode = self.series_detail_cache.get(series_id).and_then(|detail| {
+            let season_id = detail.seasons.get(season_cursor)?.id.as_str();
+            detail.episodes.get(season_id)?.get(episode_cursor).cloned()
+        });
+        let Some(episode) = episode else {
+            return false;
+        };
+        self.play_item(episode);
+        true
+    }
+
     pub(super) fn select_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             let lib = &mut self.libs[lib_idx];
