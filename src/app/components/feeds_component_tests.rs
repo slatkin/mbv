@@ -1,5 +1,5 @@
 use super::feeds::FeedsComponent;
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::types_feed_tab::WatchedFilter;
 use mbv_core::config::{FeedKind, FeedSubscription};
@@ -79,7 +79,7 @@ fn down_moves_the_component_cursor_without_app_state() {
     }));
 
     assert_eq!(component.cursor(), 1);
-    assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+    assert_eq!(msg, None);
 }
 
 #[test]
