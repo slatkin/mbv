@@ -294,7 +294,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
     `wide_music_area`/`wide_music_right_area`/`left`/`hero`/
     `wide_music_art_area` before the component `view` (today only the legacy
     `render_list` wide-music branch sets them — chicken-and-egg, R1).
-  - [ ] **5.3d.19c — delete legacy underpaint (≤3 files):** `render/components/list.rs`
+  - [x] **5.3d.19c — delete legacy underpaint (≤3 files):** `render/components/list.rs`
     wide-music branch after 19b sets geometry. **Order:** 19d (fetch relocation)
     lands before 19c, because the fetch trigger currently lives in that branch.
   - [x] **5.3d.19d — relocate album-track fetch (≤3 files):** `images.rs`

@@ -79,27 +79,6 @@ impl App {
             self.ensure_lib_loaded_for(lib_idx);
         }
 
-        // Wide grouped Music uses a Music-specific horizontal split at or
-        // above the shared 82-column breakpoint. The narrow path
-        // (below breakpoint) continues unchanged through the existing hero-
-        // above-list renderer.
-        if let Some(lib_idx) = self.tab.emby_library_index() {
-            if self.is_music_group_view(lib_idx)
-                && self.is_viewing_album_folders(lib_idx)
-                && crate::app::render::arrangements::hero_left::shared_hero_presentation(area)
-                    .is_some()
-            {
-                let ctx = self.wide_music_render_ctx(lib_idx);
-                let output =
-                    super::music_wide::render_wide_music_group_with_ctx(f, area, &ctx, layout);
-                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                    level.scroll = output.final_scroll;
-                }
-                self.paint_music_image(f, output.image_paint);
-                return;
-            }
-        }
-
         // Wide Movies / home-video: the mounted `BrowserComponent` paints the
         // full hero-on-left layout itself (task 5.3d.17a). The legacy
         // renderer is gone (5.3d.17b); we only publish the hand-off areas
