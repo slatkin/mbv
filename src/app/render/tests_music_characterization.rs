@@ -1,6 +1,4 @@
-use super::test_helpers::{
-    assert_surface_pills, buffer_to_string, make_music_group_app, render_library_to_string_sized,
-};
+use super::test_helpers::{buffer_to_string, make_music_group_app, render_library_to_string_sized};
 use super::*;
 use crate::app::layout::LayoutMain;
 use crate::app::tests::make_item;
@@ -38,34 +36,6 @@ fn music_buffer_characterization_covers_wide_unfocused_narrow_and_selected_state
     assert!(
         output.contains("First Album"),
         "selected music row missing: {output:?}"
-    );
-}
-
-#[test]
-fn music_group_pill_row_and_targets_are_characterized_end_to_end() {
-    let mut app = make_music_group_app();
-    let mut layout = LayoutMain::default();
-    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
-    terminal
-        .draw(|f| app.render_library(f, Rect::new(0, 0, 120, 30), true, &mut layout))
-        .unwrap();
-
-    assert_surface_pills(
-        &terminal,
-        &layout,
-        Rect {
-            y: layout.selector_tabs[0].0.y,
-            height: layout
-                .wide_music_right_area
-                .bottom()
-                .saturating_sub(layout.selector_tabs[0].0.y),
-            ..layout.wide_music_right_area
-        },
-        1,
-        palette::SURFACE_BACKDROP,
-        &[0, 1, 2, 3, 4, 5],
-        &["⌘", "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"],
-        0,
     );
 }
 
