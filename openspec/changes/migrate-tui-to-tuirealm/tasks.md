@@ -446,7 +446,7 @@ definition of done.
       adapter/`Msg::Legacy` gate, preserve hit geometry and shell effects, and
       run focused home/browser/inline-search tests plus module checks for the
       others.
-    - [ ] **5.3d.23-B5 — residual NoOp-only components:** Serial child;
+    - [x] **5.3d.23-B5 — residual NoOp-only components:** Serial child;
       allowlisted to `selection_modal.rs`, `sessions.rs`, and `multiselect.rs`.
       Pass the zero `Msg::Legacy` gate; this is the last component family before
       5.3d.23-A. Run the corresponding component tests.
