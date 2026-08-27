@@ -605,8 +605,10 @@ The deliverable is the complete migration; there is no acceptable in-between sta
 The phases below are an internal implementation sequence, **not** partial
 deliverables, mergeable milestones, or declared-done resting points. A mixed
 TuiRealm/legacy framework is never an endpoint: the change is finished only when the
-completion gate passes and all legacy machinery (`LegacyInput`, `CONTEXT_STACK`,
-`AppLayout`, adapters, mirrors) is deleted. The whole conversion lives on one
+completion gate passes and all legacy interaction machinery (`LegacyInput`,
+`CONTEXT_STACK`, adapters, mirrors) is deleted, and `AppLayout` has lost its global
+interaction/hit-routing authority and interaction-only layout data — render-only,
+load-bearing layout state may remain (D16). The whole conversion lives on one
 long-running branch and is released only when complete.
 
 Phasing earns its keep purely as build technique: the Model-drawn legacy path plus

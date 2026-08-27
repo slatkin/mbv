@@ -1,14 +1,61 @@
-## How to read this task list
+# TuiRealm Migration — linear execution ledger
 
-**Read this section before starting any task.** Three consecutive apply
+This file is the single authoritative execution ledger for the
+`migrate-tui-to-tuirealm` change. It is a **docs-only reorganization** of the
+prior task list into a linear ledger. It preserves every existing task ID
+exactly, adds stable IDs only to previously unnamed/un-parsed units (approved:
+`5.3c.1–.7` aliases, `5.3d.P1/P2`, `5.3d.M0`, `5.3d.M1/M1a–M1g`, and the parsed
+`5.3d.11-U0…U6` leaves), and never renumbers an existing ID. The original
+89-checkbox manifest semantics are preserved (all 77 originally-checked rows
+remain checked; all 12 originally-unchecked rows remain unchecked); new checked
+leaf aliases represent accepted completed `U0–U5` and previously-completed
+unnamed units, and are reported as **additions distinct from** the original
+89-checkbox count, not as a claim that the rewritten total "remains 89".
+
+Sections:
+
+1. Current campaign state
+2. Execution contract
+3. Active and scheduled execution
+4. Remaining surface teardown
+5. Global framework/campaign gates
+6. Completed execution ledger
+7. Historical decisions/completion evidence
+
+---
+
+## 1. Current campaign state
+
+- **Accepted baseline HEAD:** `96a11eee62ad40371de083786bcc252f1ae05cd3` (the
+  `5.3d.11-U5` landing commit). Doc changes land directly atop it in one atomic
+  docs-only commit.
+- **Next task (first open executable implementation checkbox):** `5.3d.11-U6`.
+- **Accepted campaign order:** `U6 → 5.3d.18a → 5.3d.19a → 5.3d.20a`. This is an
+  accepted *campaign predecessor* order, not an invented technical dependency;
+  no technical dependency between TV, Music, and Inline surfaces is asserted beyond
+  what the rows below record.
+- **Open aggregate gates:** `5.3d.11` stays open until `U6`; `5.3d` stays open
+  through all remaining surface teardown and `5.3d.21–24`; `5.5` and `5.6` stay
+  open.
+- **Checkbox accounting (this rewrite):** original 89 (77 checked / 12 unchecked)
+  preserved exactly; additions *beyond* that count are the parsed open leaves
+  `5.3d.18a–f`, `5.3d.19a–e`, `5.3d.20a–f`, the parsed `5.3d.11-U0…U6` leaves, and
+  stable IDs on previously-completed unnamed units. The rewritten total therefore
+  is not "89".
+
+---
+
+## 2. Execution contract
+
+**Read this section before starting any task.** Three consecutive solution
 sessions stalled without writing code because the previous version of this
 preamble demanded a per-task bar (`delete, don't mirror`) that neither
-`design.md` nor the capability spec actually requires. It has been corrected.
+`design.md` nor the capabilities spec actually requires. It has been corrected.
 
 A surface conversion in groups 2–4 is **not** an ownership transfer. It is a
-render/local-state extraction behind a shell-owned mirror. `App` keeps its
-fields and its legacy input handlers until group 5. See design D14 for the
-bridge contract and the reasoning.
+render/local-state extraction behind a shell-owned mirror. `App` keeps its fields and
+its legacy input handlers until group 5. See design D14 for the bridge contract and
+the reasoning.
 
 ### Standard bundle (groups 2–4)
 
@@ -16,34 +63,32 @@ Each surface-conversion task below bundles the following unless noted:
 
 1. Create the component under `src/app/components/`.
 2. The component owns its **rendering** and its **own local interaction
-   state** (cursor/scroll/query/mode — whatever it needs to paint and to
-   answer its own keys), reproducing the surface's current cursors, pills,
-   panes, hero behaviour, focus targets, and keys exactly as the source
-   defines them today (design §Governing Principle — there is no target
-   design to invent).
-3. The shell mirrors `App` into the component every tick via a
-   `sync_<surface>()` method in `shell_overlays.rs` / `shell_<surface>.rs`,
-   following the existing `get_component_mut` + downcast pattern (design
-   D14). Async results arrive through an `apply_drain`-style push, as
-   `SearchSidebarComponent` already does.
-4. **Do NOT delete `App` state or `App` input handlers.** Leaving the legacy
-   field and its `handle_key_*` in place, still forwarding, is the *correct*
-   outcome for these tasks — not a shortcut. Deletion is group 5's job and is
-   scheduled there per cluster. A task that tries to delete `App.<field>`
-   will pull in every unrelated authority that reads it and will not land.
+   state** (cursor/scroll/query/mode — whatever it needs to paint and to answer its
+   own keys), reproducing the surface's current cursors, pills, panes, hero
+   behaviour, focus targets, and keys exactly as the source defines them today
+   (design §Governing Principle — there is no target design to invent).
+3. The shell mirrors `App` into the component every tick via a `sync_<surface>()`
+   method in `shell_overlays.rs` / `shell_<surface>.rs`, following the existing
+   `get_component_mut` + downcast pattern (design D14). Async results arrive
+   through an `apply_drain`-style push, as `SearchSidebarComponent` already does.
+4. **Do NOT delete `App` state or `App` input handlers.** Leaving the legacy field
+   and its `handle_key_*` in place, still forwarding, is the *correct* outcome for
+   these tasks — not a shortcut. Deletion is group 5's job and is scheduled there
+   per cluster. A task that tries to delete `App.<field>` will pull in every
+   unrelated authority that reads it and will not land.
 5. Emit a typed `Msg` for work crossing the component's authority boundary
-   (Service calls, Player effects, nav_stack mutation, persistence). The
-   component never owns an `mpsc`, a Service client, or a `PlayerProxy`.
-6. Tests: local update/output tests, an `App`-free `TestBackend` render test,
-   and one shell-routing test.
+   (Service calls, Player effects, nav_stack mutation, persistence). The component
+   never owns an `mpsc`, a Service client, or a `PlayerProxy`.
+6. Tests: local update/output tests, an `App`-free `TestBackend` render test, and
+   one shell-routing test.
 7. Flip the surface's `docs/architecture/interactive-surface-ledger.md` row to
    **`component`** (not `migrated` — see 1.10) with its verification record.
 8. Verify with the named narrow `rtk cargo nextest` selector plus a clean
    `rtk ast-grep scan`.
 
 Every checkpoint commit must be behaviour-preserving. None except group 5 is a
-completion; a mixed framework is never a mergeable endpoint (spec:
-"Complete conversion with no mixed-framework endpoint").
+completion; a mixed framework is never a mergeable endpoint (spec: "Complete
+conversion with no mixed-framework endpoint").
 
 ### Deferred by construction
 
@@ -52,752 +97,569 @@ answered in one place, at 5.2, when the precedence table moves as a unit:
 
 - `key_policy.rs`'s per-key gates that cannot be a static `SubClause`
   (`playback`, `lib_search`, `album_track_mode`).
-- How a per-instance `SubClause` guard is built at mount time for surfaces
-  with one component per tab (`InlineSearch(BrowserKey)`, `Browser(BrowserKey)`).
+- How a per-instance `SubClause` guard is built at mount time for surfaces with
+  one component per tab (`InlineSearch(BrowserKey)`, `Browser(BrowserKey)`).
 
-Under the mirror-first bar these surfaces keep forwarding to legacy input, so
-no subscription guard is needed for them until 5.2. Do not attempt to design
-one earlier.
+Under the mirror-first bar these surfaces keep forwarding to legacy input, so no
+subscription guard is needed for them until 5.2. Do not attempt to design one
+earlier.
 
-## 1. Foundation (runs the app on TuiRealm without behaviour change)
+### Remaining teardown verification policy (decided 2026-08-25)
 
-- [x] 1.1 Add `tuirealm = "4.1"` (default features already include `crossterm` and `derive`); verify `rtk cargo check -p mbv` succeeds and `Cargo.lock` resolves tuirealm 4.1 on the existing ratatui 0.30/crossterm 0.29.
-- [x] 1.2 Declare `rust-version = "1.88"` in `[workspace.package]` **and** add `rust-version.workspace = true` to each member (`mbv`, `mbv-core`, `mbvd`) — a bare `[workspace.package]` entry is not inherited automatically; verify `rtk cargo check --workspace` passes and CI uses a ≥1.88 toolchain.
-- [x] 1.3 Add `src/app/components/` with the `ComponentId`, `Msg`, and `UserEvent` enums from design D3–D5 (surface variants may start empty); verify `rtk cargo check -p mbv`.
-- [x] 1.4 Introduce the shell `Model` holding `App` and the TuiRealm `Application<ComponentId, Msg, UserEvent>`; verify it builds and the binary still launches.
-- [x] 1.5 Convert `App::run` to drive `application.tick(PollStrategy::Once(..))` and mark the frame dirty when `tick` reports a processed event (reuse the existing `had_events` → `wants_terminal_render` path). The Model keeps `App` and draws the current legacy UI and runs existing handlers **directly**; a temporary message-only `LegacyInput` component (owns no `App`) only translates terminal events into a typed legacy message the Model consumes. Verify the app boots, the first frame still precedes Remote Service startup (ADR 0018), and existing input/render characterization tests pass unchanged.
-- [x] 1.6 Map each run-loop receiver (`src/app/mod.rs:412-517`: startup, player, library, Search, session, cast, shared-data, feed, image, websocket, ABS socket) to either a shell-owned adapter (default) or a TuiRealm `Port`, each injecting a `UserEvent` token; the owned model is validated in the shell by the existing generation/revision/session/image-key guards and then written into the target via `get_component_mut`+downcast. Prefer shell-owned adapters for receivers that are replaced at runtime (player, websocket, ABS socket, setup), since `restart_listener` is the only runtime port mechanism and it replaces the whole listener. Verify async-completion behaviour and stale-completion discards are unchanged by characterization.
-- [x] 1.7 Add the `key_policy` ordered precedence table mirroring the current `CONTEXT_STACK` order and wire global/parent bindings as TuiRealm subscriptions with mutually-exclusive `SubClause` guards derived from it; verify against the existing ADR 0002 input-precedence tests.
-- [x] 1.8 Route mouse via `EventClause::Any` subscriptions on visible top-level regions, each filtering `Event::Mouse(column,row)` against its own painted geometry and guarded `Not(IsMounted(overlay))` under blocking overlays (no shell hit-router — `Application` has no per-component event delivery); during CP1 `LegacyInput` forwards the mouse event and the Model runs the existing legacy mouse path. Verify mouse behaviour is unchanged by characterization.
-- [x] 1.9 Add enforcement scaffolding: `rules/interactive-component-boundary/*.yml` (reject `impl App`, `App` as type, Service-client/`PlayerProxy` deps, `mpsc` ownership) each with one accepted + one rejected fixture, register the dir in `sgconfig.yml`, and add `.github/workflows/architecture-boundaries.yml` job `interactive-component-boundary` pinning `ast-grep` 0.44.1; verify `rtk ast-grep scan` passes and fixtures demonstrate accept/reject.
-- [x] 1.10 **Doc-only, do first — reconcile the ledger vocabulary.** The ledger currently has one `migrated` state, but the spec ties `migrated` to "old fields and handlers are deleted, not synchronised with a mirror" — and all seven surfaces flipped so far still mirror (`shell_overlays.rs`) and still forward keys to their `handle_key_*`. Add the intermediate state `component` to `docs/architecture/interactive-surface-ledger.md`'s legend ("component landed and painting; shell still mirrors `App` state and/or legacy input still forwards; `App` teardown pending group 5"), demote the seven already-flipped rows (Help, Confirm, Daemon-lost, Remote-reanchor, Context menu, Global Search sidebar, Sessions) from `migrated` to `component`, and add the term to `CONTEXT.md` per AGENTS.md's new-domain-term rule. Verify: no row reads `migrated` until its group-5 teardown task lands, and 5.5's "no `legacy` or `component` row remains" gate is meaningful.
+For the framework-removal and discovery-led units only. The compiler is the
+primary gate; delete a field and every stale reader becomes a build error. The
+per-unit gate is therefore `rtk cargo check -p mbv`, `rtk cargo clippy
+--workspace --all-targets`, `rtk cargo nextest run -p mbv` (existing coverage
+only), `rtk ast-grep scan`, and `rtk cargo fmt --all -- --check`, with the
+maintainer's manual pass as acceptance. `rtk make check-code-file-lines` is
+deferred to the final gate so bounded units do not churn unrelated over-limit
+files. Do **not** write behaviour-preservation tests. Differential tests — two
+paths agree, no expected values encoded — are permitted only while both paths
+coexist, and are deleted together with the second path. Mouse units must never
+assert against a hand-set `layout.main.*` rect; render into a `TestBackend` at a
+known size and hit-test the geometry render produced. Regression tests for
+defects introduced *by* the migration are the one exception and are kept.
 
-## 2. Low-risk leaf surfaces
+### D17 — discovery-led teardown, durable scout handoffs
 
-- [x] 2.1 Convert Help sidebar (local scroll, destination-derived content); verify `rtk cargo nextest run -p mbv help` + `rtk ast-grep scan`.
-- [x] 2.2 Convert Confirm modal (shared yes/no); verify `rtk cargo nextest run -p mbv confirm_modal` + scan.
-- [x] 2.3 Convert Daemon-lost modal (process-lifecycle effects stay shell-owned); verify `rtk cargo nextest run -p mbv daemon_lost` + scan.
-- [x] 2.4 Convert Remote-reanchor popup (reconciliation stays shell-owned); verify `rtk cargo nextest run -p mbv remote_reanchor` + scan.
-- [x] 2.5 Convert Context menu (exclusive top-priority overlay with anchor geometry); verify `rtk cargo nextest run -p mbv context_menu` + scan.
+Before a writer is assigned to a remaining surface, a read-only scout records a
+durable symbol-level handoff under `openspec/handoffs/` covering: (1) every input
+to the mirror and every production writer of those inputs; (2) component-local
+interaction state vs shell-owned content/cache/effect state; (3) raw input
+forwarding and exact existing effect entry points; (4) legacy underpaint,
+cover/image work, and layout values produced only by that renderer; (5) unrelated
+readers preventing immediate `App` field deletion; (6) the smallest
+compile-complete implementation units and their dependency order. Discovery and
+implementation are separate assignments. A normal writer receives one closed
+behaviour/ownership family touching roughly three to six production files; if
+implementation exposes a missing authority or exceeds that bound, it stops and
+returns the coupling instead of absorbing design discovery. Larger mechanical
+fan-out requires a named preparation unit first.
 
-## 3. Medium-risk surfaces
+A surface normally advances through these teardown stages, omitting a stage only
+when the scout proves it does not exist: (1) separate mount reconciliation from
+per-frame content projection; (2) replace projection with targeted pushes at
+validated writer choke points; (3) replace raw input forwarding one coherent
+behaviour family at a time with typed intents, keeping shell-owned effects at
+existing boundaries — **the authority/writer transition (typed intent) lands
+before the raw removal in the same surface**; (4) remove interaction-state pins
+and obsolete `App` readers only after all remaining consumers are re-homed; (5)
+detach component geometry/content from legacy underpaint, then delete that
+surface's legacy renderer; (6) remove the now-empty mirror/mount adapter and
+legacy handler endpoint.
 
-All group-3 tasks below are independent of each other and schedulable in any
-order, **except** 3.3 and 3.5, which are gated on the shared render seam 3.11.
+Direct pushes of validated shell-owned content/cache/effect presentation are not
+forbidden mirrors. The forbidden completion state is per-frame or two-way
+synchronisation of component-local interaction state. Mount reconciliation may
+remain temporarily after projection is removed, but must be renamed or deleted at
+the surface completion stage so `sync_*` no longer hides multiple authorities.
 
-- [x] 3.1 Extract the Search render seam: expose `render_panel_shell*`, `render_sidebar_scrollbar`, `panel_row_text_width`, `render_panel_row` as typed render-component functions (output-preserving, no `impl App`); verify existing Search buffer characterization is unchanged.
-- [x] 3.2 Convert the global Search sidebar as an ordinary row (component-owned 300 ms debounce driven by `UserEvent::Clock`; preserve the `global-search-sidebar` behaviour contract; do NOT fix its known bugs); verify `rtk cargo nextest run -p mbv search_sidebar` + scan.
-- [x] 3.3 Convert inline library Search (`LibSearch`, child of one Emby browser, distinct from global Search). **Gated on 3.11.** Component owns the query string, its own results cursor/scroll, and the two candidate-pool shapes the shell pushes into it (plain fuzzy-matched items vs. recursive `AlbumSearchEntry`); the shell keeps `spawn_search_items_load`, `App.album_indexes`, and `activate_recursive_album` and pushes validated results in `apply_drain`-style. `LibraryTab.search` stays on `App` and every `search.is_some()` branch in `lib_cursor_actions.rs`/`actions_navigation.rs`/`input_mouse.rs`/`lib_event_actions.rs` stays as-is — they are deleted at 5.3a, not here. Verify `rtk cargo nextest run -p mbv inline_library_search` + scan.
-- [x] 3.4 Convert Home (cross-Service rows and hero presentation). **Partly landed already:** `src/app/shell_home.rs` mounts `HomeComponent` and mirrors `App.home` per tick, and the component renders. Remaining work is the component-owned local cursor/section/scroll (today mirrored in from the legacy path via `sync_cursor_section_scroll`), the test bundle, and the ledger row (still reads `legacy`). Home's `key_policy` precedence-gate question is deferred to 5.2 — Home keeps legacy input. Verify `rtk cargo nextest run -p mbv home` + scan.
-- [x] 3.5 Convert the Emby generic/Movies/home-video browser. **Gated on 3.11.** Converts only the generic/Movies/home-video-owned painting and local cursor; music-group, series-selection, and album-track branches stay behind their 3.11 seam functions and stay `impl App` until 4.2/4.3/4.4 claim them. Verify `rtk cargo nextest run -p mbv emby_browser` + scan.
-- [x] 3.6 Convert Feeds (grouping, selector, list, inline hero). Component owns the feed list/selector cursor, grouping presentation, and inline hero painting; the shell keeps the refresh `mpsc`, `feed_tab_actions.rs`, `library_load_actions.rs`'s Home-Feeds section build, and `feeds_manage_actions.rs`'s reset, and mirrors `App.feed_tab` in via `sync_feeds()`. `input_feed_tab_keys.rs`/`input_mouse*.rs` keep routing; existing `App.feed_tab` tests keep passing unmodified. Teardown of all of the above is 5.3b. Verify `rtk cargo nextest run -p mbv feeds` + scan.
-- [x] 3.7 Convert Sessions sidebar (merged Emby/Cast targets, fixed-stride geometry); verify `rtk cargo nextest run -p mbv sessions` + scan.
-- [x] 3.8 Convert Selection modal (filters, source-specific behaviour, explicit row/selector targets); verify `rtk cargo nextest run -p mbv selection_modal` + scan.
-- [x] 3.9 Convert Playback prompts (skip-intro/next-up; Player effects stay shell-owned); verify `rtk cargo nextest run -p mbv playback_prompt` + scan.
-- [x] 3.10 Convert Settings nested popups — Multiselect, Library-routes, Feed-management — as `Popup` children; verify `rtk cargo nextest run -p mbv settings_popup` + scan.
-- [x] 3.11 **Shared wide-list render seam — gates 3.3, 3.5, 4.2, 4.3, 4.4.** Behaviour-preserving extraction only; converts no surface and mounts no component. Mirrors what 3.1 did for Search, at the scale the browser needs. Parameterize the item-source / cursor / scroll / column / hero-sizing decisions currently made by `impl App` reading `lib.search` and `lib.nav_stack` directly into a typed context (the `ListRenderCtx` seam already present one layer down in `list_letter_groups.rs` is the target shape), across: `render/components/list.rs` (`render_list`, `render_wide_library_rows`), `render/components/tv_wide.rs` (`render_wide_tv`), `render/components/movies_wide.rs` (`render_wide_movies`, `selected_wide_movie`), `render/components/music_wide.rs` (`render_wide_music_group`, `render_wide_left_tracks`), and `render/components/detail.rs` (`selected_movie_item`, `selected_series_item`). Split each per-concern branch (generic/movies/home-video, music-group, album-track-focus, series-selection) into its own named function so 4.2/4.3/4.4 do not re-touch these files. ~1,500 lines of dense, image- and geometry-sensitive code — this is the largest single diff in the change; splitting it into sequential per-file commits is expected and encouraged. Verify: existing render characterization passes **unmodified** (no test may be edited), plus `rtk cargo nextest run -p mbv` and scan. See `scoping-3.3-3.5.md` for the full trace behind this task.
+Surface teardown precedes global framework deletion. Only after every remaining
+raw-key endpoint and interaction mirror has gone may the campaign re-inventory
+and delete `CONTEXT_STACK`, `LegacyInput`, and terminal reconstruction adapters.
+Repository-wide line-cap verification runs at the final 5.6 gate; bounded units
+run only named, focused/full existing-test, lint, architecture, and format checks.
 
-## 4. High-risk surfaces
+---
 
-- [x] 4.1 Convert Queue (cursor/scroll/scope move to the component; canonical queue stays in the Player owner, referenced by opaque `QueueSlotId`); verify `rtk cargo nextest run -p mbv queue` + scan.
-- [x] 4.2 Convert the TV workspace (two focusable panes, season/episode child targets). **Gated on 3.11**, independent of 3.5. Verify `rtk cargo nextest run -p mbv tv_workspace` + scan.
-- [x] 4.3 Convert the grouped Music workspace (album/track focus coupling, track targets). **Gated on 3.11**, independent of 3.5. Verify `rtk cargo nextest run -p mbv music_workspace` + scan.
-- [x] 4.4 Convert inline album-track interaction (child state machine of the Music workspace). **Gated on 3.11**; prefer scheduling after 4.3 so both read the same seam functions, but under the mirror-first bar it may mount independently and paint over — it is not hard-blocked on 4.3. Verify `rtk cargo nextest run -p mbv album_track` + scan.
-- [x] 4.5 Convert the Audiobookshelf podcast browser (show/episode workspace, selector targets); verify `rtk cargo nextest run -p mbv abs_podcast` + scan.
-- [x] 4.6 Convert the Audiobookshelf book browser (browser/chapter workspace, replacement geometry); verify `rtk cargo nextest run -p mbv abs_book` + scan.
-- [x] 4.7 Convert Playlists sidebar with component-owned variable-row `hit_test`; verify `rtk cargo nextest run -p mbv playlists` + scan. (Removal of the duplicated mouse-path geometry in `input_mouse_panels.rs` is 5.3c, not here.)
-- [x] 4.8 Convert the Save-playlist dialog (child of the Playlists workflow); verify `rtk cargo nextest run -p mbv save_playlist` + scan.
-- [x] 4.9 Convert the Settings sidebar and setup forms (Service effects stay shell-owned via `Msg::Service`); verify `rtk cargo nextest run -p mbv settings` + scan.
-- [x] 4.10 Convert Playback chrome and global controls (Player authority stays outside; reduced playback-status projection only); verify `rtk cargo nextest run -p mbv playback_chrome` + scan.
+## 3. Active and scheduled execution
 
-## 5. Teardown, root routing, and completion gate
+Executable open rows, in accepted campaign order. Each uses literal checkbox
+syntax and states its scope, dependency/campaign predecessor as applicable, and
+verification.
 
-This is where `App` state and legacy input are **deleted**, not mirrored — the
-requirement groups 2–4 deliberately defer. Teardown is scheduled by *authority
-cluster*, not by surface, because that is how the entanglement actually
-clusters: a single surface's field is read by several unrelated authorities
-(the finding that stalled task 3.6), but a cluster's fields are read only
-within the cluster plus the shell. Each teardown task requires every
-contributing surface's group 2–4 conversion to have landed.
+### 5.3d.11 — audiobookshelf podcast interaction re-home (open until U6)
 
-- [x] 5.1 Convert the Library parent (active destination, Panel focus/mode, child routing); verify `rtk cargo nextest run -p mbv library_parent` + scan.
-- [x] 5.2 Convert Root UI + overlay-stack routing using TuiRealm's native LIFO focus stack (open = `active`, dismiss = `umount` → auto-`blur`/restore; no shell-owned focus stack), keeping only overlay z-order in the owning component. **Resolve here, as one unit, the precedence questions deferred from groups 2–4** (see "Deferred by construction"): the non-static per-key gates (`playback`, `lib_search`, `album_track_mode`) and how a per-instance `SubClause` is built at mount time for the one-component-per-tab surfaces. Verify `rtk cargo nextest run -p mbv root_ui` + scan.
-- [x] 5.3-pre **Prerequisite — give `LibraryTab` a constructor.** No behavior
-  change. `LibraryTab` has no constructor, so every one of the 94
-  `LibraryTab { .. }` literal sites (~30 of them test modules) is a
-  compile-forced edit when *any* field is deleted. That cost is constant per
-  field, is paid again by each 5.3 teardown, and is the real reason task 3.6
-  read as "Feeds is not an independent surface": an agent spends its context
-  on ~90 identical one-line deletions before its actual change compiles. Add
-  `LibraryTab::new(library: EmbyItem)` returning every other field at its
-  empty value (`EmbyItem` has no `Default` derive, so the one non-defaultable
-  field is the parameter), then rewrite each literal as
-  `LibraryTab { <only the fields that site sets>, ..LibraryTab::new(item) }`.
-  Delete no field, change no assertion. Verify `rtk cargo nextest run -p mbv`
-  passes with an unchanged test count, plus `rtk cargo clippy --workspace
-  --all-targets` and `rtk make check-code-file-lines`.
-- [x] 5.3a **Teardown — Library/browse cluster.** Requires 3.3, 3.5, 3.11, 4.2, 4.3, 4.4, 5.1. Delete `LibraryTab`'s component-owned fields (`search`, `series_selection`/`series_season_cursor`) and the `impl App` handlers that read them: `input_browse_dispatch.rs`'s `handle_key_emby_library` branches, `input_lib_keys.rs`, `lib_cursor_actions.rs`'s eight `search.is_some()` branches, `actions_navigation.rs`'s `select`/`go_back` search arms, `lib_event_actions.rs`'s `lib.search` handlers, and the `library_search_actions.rs` query-editing path. Extract `select(lib_idx)` → resolve item → `select_item(lib_idx, item)` so plain-list Enter and the component's activation `Msg` share one body. Rewrite the `App`-based browse/search tests around the component and shell boundary. Verify `rtk cargo nextest run -p mbv` + scan + `rtk make check-code-file-lines`.
-  Landed in three passes. Search (`008be6c5`..`9ac69d81`): `LibraryTab.search`,
-  `LibSearch`, and `key_policy` entry 13 are gone, and `select_item` is
-  extracted. Prerequisite `5.3-pre` (`5d9e77ec`) added `LibraryTab::new`.
-  Series (`9e4bd7c`, `153c9b9`, `758d0a84`): `series_selection` and
-  `series_season_cursor` are gone; `TvWorkspaceComponent` owns the season and
-  episode cursors and resets them on a series-identity change via
-  `last_series_id`. Scoping: `scoping-5.3a.md`.
+- [ ] **5.3d.11** **Teardown — ABS podcast re-home.** Re-home remaining podcast
+  App-level interaction readers to the mounted component; delete obsolete App
+  episode/filter handlers and the empty mount/sync/push adapters, keeping the
+  shared `AudiobookshelfBrowseState` type. Scout corrections (2026-08-26):
+  type members `selected_id`/`episode_filter`/`episode_selection`/`scroll` are
+  SHARED by `App.audiobookshelf_browse` and the component's state (B1); the
+  deletable artifact is the App-level handlers, not the type members.
+  `push_audiobookshelf_podcast_content` is NOT empty — it is the sole `set_content`
+  + cover-fetch bridge (5.3d.9), so relocate it before deleting (B2). Position
+  persistence crosses the App/Model boundary (B3). Child leaves:
+  - [x] **U0** — component accessors (`selected_id()`/`episode_selection()`/
+    `episode_filter()` getters, `set_episode_filter()`/`set_episode_selection()`
+    mutators, `Model::abs_podcast_component_mut(index)`). 2 files
+    (`components/audiobookshelf_podcast.rs`, `shell_audiobookshelf_podcast.rs`).
+    Commits: `420ddcc9`.
+  - [x] **U1** — relocate the `push_audiobookshelf_podcast_content` projection +
+    cover-fetch (B2) into the post-mount path of `sync_audiobookshelf_podcast`;
+    `shell.rs` drops the 9 `push_audiobookshelf_podcast_content()` calls
+    (272/284/338/423/544/738/761/798/825). 2 files. Commits: `73850fda` +
+    `3507183f`.
+  - [x] **U2** — delete episode handlers + dispatch in the same commit:
+    `audiobookshelf_browse_actions.rs` (delete
+    `enter/leave_audiobookshelf_episode_selection`,
+    `move_audiobookshelf_episode_cursor`, `cycle_audiobookshelf_filter`);
+    `input_browse_dispatch.rs` (delete `handle_key_audiobookshelf_library` +
+    dispatch arm); `shell.rs` (remove the ~810–825 component-routing callers). 3
+    files. Commits: `bb54ad92` + `3c6d7ce8` + `0227d748`.
+  - [x] **U3** — re-home modal filter (`audiobookshelf_podcast_modal_actions.rs`
+    open/select uses the U0 accessors). ≤2 files. Depends on U0. Commits:
+    `bbec2657` + `b3cf5d04`.
+  - [x] **U4** — re-home position persistence (B3, parent-scope first):
+    `library_position_state.rs` (save:237/238/290/291, activate:290/291/296/298/300)
+    + a Model-side seam (`run_loop_drains.rs`/`cw_library_tab_actions.rs`/
+    `select_audiobookshelf_show`). App has no `application` handle; likely exceeds
+    3 files — split by parent before delegation. Commit: `877e28a6`.
+  - [x] **U5** — playback target from the component (`selected_audiobookshelf_queue_item`
+    + `handle_audiobookshelf_podcast_episode_intent`), resolved via U0 accessor +
+    component method. 2 files; depends on U0/U2/U4 ordering. Commit:
+    `96a11eee` (baseline).
+  - [ ] **U6** — drop mount seam + dead type method: `shell.rs` (drop
+    `sync_audiobookshelf_podcast()`), `shell_audiobookshelf_podcast.rs` (delete
+    `sync_audiobookshelf_podcast`, then a type method), `types_audiobookshelf_browse.rs`
+    (delete the dead `enter_episode_selection()` only). 3 files; green only after
+    U0–U5. **First open executable checkbox.**
 
-  **`album_track_focus` was moved out of this cluster to 5.3d.** It is not a
-  component-owned field under the current boundary, for three independent
-  reasons found while scoping the album pass:
+Depends: 5.3a, 5.3b, 5.3c, 4.1, 4.10 (via the `5.3d` aggregate). Verification:
+the `5.3d` policy gates; test sets `shell_audiobookshelf_podcast.rs` (re)
+tests repainted as part of the production rows.
 
-  1. *The field outlives its component.* `MusicWorkspaceComponent` mounts only
-     when `is_wide_music_active()` (`shell_music_workspace.rs:16`), but
-     `album_track_focus` is read by the narrow grouped-album renderer
-     (`render/components/album.rs:472,508`) and written with no wide gate by
-     `LibEvent::RecursiveAlbumActivated` (`lib_event_actions.rs:496`). Driving
-     the field from `MusicWorkspaceComponent::track_cursor()` would zero it on
-     every tick the component is unmounted.
-  2. *Two of its three non-render readers sit in `impl App`, where the
-     component is unreachable.* `actions.rs:164` resolves play/enqueue/context
-     targets to the focused **track** rather than the album, and
-     `input_resolver.rs:70` (`track_select_active`) makes Esc exit track mode
-     instead of stopping playback. Both are Service/Player authority on the
-     wrong side of the boundary; relocating them is `AppLayout` and
-     legacy-input removal, i.e. 5.3d's work. Only the third reader,
-     `shell_gates.rs:25` (`ATTR_ALBUM_TRACK_FOCUSED`), is already in `Model`.
-  3. *Four of its mutation sites are inside the render tree.*
-     `render/screens/album_cursor.rs` clears the field at lines 98, 147 and 206
-     and gates on it at 166. See 5.3d below.
+### Campaign schedule — TV / Music / Inline
 
-  This is the same finding that stalled task 3.6, and it is recorded here for
-  the same reason: the cluster boundary in the preamble to section 5 assumes a
-  field is read only within its cluster plus the shell. `album_track_focus`
-  violates that, so it teardown-orders with the framework removal, not with
-  the browse surfaces.
-  A proposed follow-on task — relocating `render/screens/album_cursor.rs` out of
-  the render tree into `src/app/album_cursor_actions.rs` — was **attempted and
-  withdrawn**, and the reason belongs with 5.3d's album work. The move does not
-  compile: `album_plan`'s types, fields, `row_target()`, and
-  `build_grouped_album_display_plan` are all `pub(in crate::app::render)`, so a
-  module outside `render` cannot name them, and a `render/mod.rs` re-export (the
-  D9 idiom) exposes only the type names, not the fields the cursor code reads.
-  Widening ~8 visibility markers would have been required.
+- [ ] **5.3d.18a — TV workspace typed keyboard.** Convert the series-list cursor
+  keys (Up/k, Down/j, Left/h, Right/l, PageUp/Down, Home/End, Enter, Esc/Backspace)
+  to typed requests carrying the resolved pane/episode/season cursor; keep episode
+  play/enqueue raw for 18f. 3 files; Emby template commits `8929248`/`24e645b9`/`6fa217fb`.
+  Campaign predecessor: `U6`.
+- [ ] **5.3d.19a — Music mount/idempotent mirror.** Idempotent mount + content
+  mirror (album cursor via `move/jump/page_grouped_album_cursor`, focused track via
+  `focused_music_track`); no behavioural change. ≤3 files. Campaign predecessor:
+  `5.3d.18a`.
+- [ ] **5.3d.20a — Inline library-Search drop mount-id field.** `shell.rs`
+  `inline_search_id` field + `shell_inline_search.rs`
+  `inline_search_component_id` + `shell_library.rs:41` mount-id precedence branch.
+  ≤3 files. Campaign predecessor: `5.3d.19a`.
 
-  That wall is correct, not incidental. `music_group_navigation`
-  (`album_cursor.rs:35-65`) *builds a display plan* to derive its navigation
-  targets — grouped-album cursor movement is defined over rendered rows, which
-  is what makes it column-aware. So this is render-dependent navigation, not
-  interaction logic that strayed into the render tree, and the right destination
-  is inward rather than outward: `MusicWorkspaceComponent`, which is already the
-  owner of render-derived cursor geometry for this surface (compare
-  `BrowserComponent`'s `layout`/`left_row_map` hit-testing). It cannot move
-  there for the same reason `album_track_focus` cannot — the component is
-  wide-only and these three `pub(in crate::app)` functions serve narrow too — so
-  it is folded into 5.3d below rather than scheduled separately.
-- [x] 5.3b **Teardown — Feeds cluster.** Requires 3.6, 3.4, 3.10, 5.1. Delete `FeedTabState`'s interaction fields and move its readers to the component/shell boundary: `feed_tab_actions.rs` (cursor/playback/enqueue → typed `Msg` + shell handlers), `library_load_actions.rs`'s Home-Feeds section build (→ shell-owned projection, not direct `feed_tab.all_entries` access), `feeds_manage_actions.rs`'s post-subscription reset, and the Feeds branches in `input_feed_tab_keys.rs`/`input_mouse.rs`/`input_mouse_dispatch.rs`. The refresh `mpsc` and its result validation stay shell-owned. Rewrite the `App.feed_tab` tests around the component and shell boundary. Verify `rtk cargo nextest run -p mbv feeds` + scan.
-  `App.feed_tab` itself survives at `app_struct.rs:399` holding shell-owned
-  fetch state (subscriptions, entries, refresh bookkeeping) — that is not
-  component-owned interaction state and 5.6's gate does not require its removal.
-  Loose ends verified: filtered playback selection, unchanged-snapshot cursor preservation, component group count, and exhaustive Feeds mouse routing.
-- [x] 5.3c **Teardown — overlay/modal cluster.** Requires 2.1–2.5, 3.2, 3.7, 3.8, 3.9, 4.7, 4.8, 4.9, 5.2. Delete the `App` open-flags, overlay state, and the `handle_key_*` handlers the converted overlays still forward to, plus the duplicated variable-row geometry in `input_mouse_panels.rs`. Verify `rtk cargo nextest run -p mbv` + scan.
-  Dispatched as named units, not as sub-numbered tasks. A unit is sized by the
-  **files it forces open**, not by reference count. *Modals* measured 48 files /
-  958 changed lines and consumed one agent's whole context — it compiled and
-  passed 1,216 tests but had nothing left to verify or commit with. Treat
-  **~45 files as the ceiling and ~25 as the target.**
-  - [x] *Overlay prep* — `shell_overlays.rs` split by family, `App::ask_confirm`
-    added. Behaviour-neutral; no field or clear site deleted (`75702a87`).
-  - [x] *Modals* — `confirm_modal`, `daemon_lost_modal`, `remote_reanchor_popup`,
-    `save_playlist_dialog`, replaced by `pending_overlay: Option<OverlayRequest>`
-    (an App→shell raise/dismiss handoff) and the shell-set
-    `blocking_overlay_active` adapter that subsumes the five `impl App` presence
-    reads. Both legacy modal handlers and all four fields are deleted; reset
-    triggers enqueue component dismissals. 48 files — the sizing reference above.
-  - [x] *Sidebar state prep* — the four open-flags are an undocumented
-    mutually-exclusive state machine: **39 production write sites** spread over
-    `input.rs`, `input_playlist_keys.rs`, `input_settings_keys.rs`,
-    `input_confirm_keys.rs`, `input_mouse_dispatch.rs`, `input_mouse_panels.rs`,
-    `shell.rs`, `shell_settings.rs`, `session_switch.rs`,
-    `library_load_actions.rs`, `run_loop_events_session.rs`,
-    `services_settings.rs` — most of them closing a sibling to keep the
-    exclusion invariant that nothing enforces. Collapse them into one
-    `open_sidebar: Option<SidebarId>` with `open`/`close`/`toggle` transitions,
-    behaviour-preserving, no field deleted. This is why *Sidebars* is not the
-    mechanical unit its file count suggests, and it is the same prep move as
-    `5.3-pre` and *Overlay prep*.
-  - [x] *Sidebars* — delete `open_sidebar` and the sidebar `handle_key_*` in
-    `input_settings_keys.rs`, `input_playlist_keys.rs`, and
-    `services_settings.rs`. Sidebar transitions now mount/unmount the TuiRealm
-    components through the shell, with component-owned Settings and Playlists
-    mouse geometry. Verified with `rtk cargo check -p mbv`,
-    `rtk cargo nextest run -p mbv` (1,154 passed), and
-    `rtk cargo fmt --all -- --check`; the repository-wide `rtk ast-grep scan`
-    remains blocked by pre-existing render-screen boundary diagnostics outside
-    this unit.
-  - [x] *Selection modal* — `selection_modal` + `input_selection_modal_keys.rs`.
-    44 files (29 / 15), 362 refs, but only **four** write sites, all choked
-    through `selection_modal_actions.rs`; the fan-out is presence-reads and
-    render, which `blocking_overlay_active` already covers. At the ceiling —
-    own unit.
-  - [x] *Context menu* — `context_menu` + `input_context_menu.rs`.
-    39 files (25 / 14), 199 refs, **nine** write sites — worse per-file fan-out
-    than Selection modal despite the smaller count. Own unit. (The duplicated
-    variable-row geometry in `input_mouse_panels.rs` was folded into *Sidebars*,
-    which deleted that file.) Verified with `rtk cargo check -p mbv`,
-    `rtk cargo nextest run -p mbv` (1,154 passed), `rtk cargo clippy
-    --workspace --all-targets`, `rtk cargo fmt --all -- --check`, and
-    `rtk make check-code-file-lines`.
-  - [x] *Settings popups* — `multiselect_popup`, `library_routes_popup`,
-    `feeds_manage_popup` + `input_feeds_manage_keys.rs`. 21 files (15 / 6),
-    132 refs. One unit; the three share a parent and a dismissal path.
-- [ ] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, the global mouse router/hit map and duplicated mouse-coordinate paths, every interaction-state `sync_<surface>()` mirror, and all remaining temporary interaction adapters. Render-only layout state may remain under D16.
-  Dispatched as named units, sized on the same files-forced-open basis as 5.3c:
+---
 
-  **Verification policy for the remaining units (decided 2026-08-25).** The
-  compiler is the primary gate: `layout.main.*` alone is 158 production refs
-  across 34 files, and deleting a field turns every stale reader into a build
-  error — coverage no test suite here approaches. The per-unit gate is
-  therefore `rtk cargo check -p mbv`, `rtk cargo clippy --workspace
-  --all-targets`, `rtk cargo nextest run -p mbv` (existing coverage only),
-  `rtk ast-grep scan`, and `rtk cargo fmt --all -- --check`, with the
-  maintainer's manual pass as acceptance. `rtk make check-code-file-lines` is
-  deferred to the final 5.6/PR gate so bounded units do not churn unrelated
-  over-limit files. Do **not** write
-  behaviour-preservation tests. This migration moves behaviour that has already
-  drifted, so a test asserting current output pins the drift and will be
-  "fixed" back the next time the underlying bug is addressed. Differential
-  tests — two paths agree, no expected values encoded — are permitted only
-  while both paths coexist, and are deleted together with the second path.
-  Mouse units must never assert against a hand-set `layout.main.*` rect: a
-  fabricated coordinate tests arithmetic against itself and can pass while the
-  real app hits the wrong row. If a mouse test is written at all, it renders
-  into a `TestBackend` at a known size and hit-tests the geometry that render
-  produced. Regression tests for defects introduced *by* the migration are the
-  one exception and are kept.
-  - [x] *Album cursor prep* — settle the narrow-mode question (mount
-    `MusicWorkspaceComponent` in narrow, or prove the narrow path cannot reach a
-    `Some`), then move `render/screens/album_cursor.rs`'s three
-    `pub(in crate::app)` entry points into `MusicWorkspaceComponent`.
-    Behaviour-neutral, compiles standalone, deletes no field. Splitting this out
-    is what keeps the next unit inside one context — the role `5.3-pre` and
-    *Overlay prep* played. The component is now the single owner of grouped-Music
-    album cursor targeting: it always emits `MusicAlbumCursor` for Up/k/Down/j/h/
-    l/Home/End/PageUp/PageDown whenever it is focused and no track is focused,
-    fall-through target included, so the two legacy order sources
-    (`rendered_album_target` / `rendered_album_jump_target` and the
-    `move_lib_cursor_inner` / `jump_lib_cursor` grouped-Music branches, plus the
-    `input_lib_keys` `page_grouped_album_cursor` attempts) are deleted. Verified
-    with `rtk cargo nextest run -p mbv music_workspace`, `rtk cargo nextest run -p
-    mbv album_track`, `rtk cargo nextest run -p mbv
-    up_down_at_group_boundary_moves_between_groups_skipping_headers`, `rtk cargo
-    nextest run -p mbv` (full suite), `rtk cargo check -p mbv`, `rtk cargo clippy
-    --workspace --all-targets`, `rtk cargo fmt --all -- --check`, and `rtk make
-    check-code-file-lines`.
-  - [x] *Album track focus* — delete `LibraryTab.album_track_focus` and re-home
-    its four `= None` resets. 30 files (21 / 9), 113 refs. Independent of 5.3c;
-    may run in parallel with it.
-    **Landed (`6b2977d4`).** `MusicWorkspaceComponent::track_cursor` is the
-    sole owner of inline track focus. The field, its initializer,
-    `clear_music_focus`, the `ATTR_ALBUM_TRACK_FOCUSED` projection/gate, the
-    `AlbumTrackMove`/`AlbumTrackDismiss`/`AlbumTrackEnter` commands, the
-    `album_track_mode` `CONTEXT_STACK`/`KEY_POLICY` entries, and the legacy
-    track-mutation arms in `input_browse_dispatch.rs`/`input_lib_keys.rs` are
-    deleted; `grep` proves no `album_track_focus`, `ATTR_ALBUM_TRACK_FOCUSED`,
-    `AlbumTrackMove`, or `AlbumTrackDismiss` remains. Focused-track target
-    resolution moved to the shell (`Model::focused_music_track`) via typed
-    `ShellRequest::{MusicTrackActivate, MusicTrackEnqueue, MusicTrackContextMenu}`;
-    Enter/Ctrl+P activate, Ctrl+A enqueues, `.` opens the track menu.
-    Narrow stays explicitly unfocused: the component is mounted there but
-    `set_inline_track_focus_enabled(false)` keeps `track_cursor` `None`,
-    narrow activation keeps its selection-modal path, and the narrow render
-    reads are explicit `0`/`false`. The narrow render branches and the
-    `RecursiveAlbumActivated`/`RestoreLibraryPosition` writers are deleted;
-    wide enters focus, narrow stays `None`, via a one-shot
-    `music_track_focus_request` consumed at `sync_music_workspace`. Album
-    identity changes (`last_album_id`) and wide→narrow resizes clear the
-    cursor. Verified: `rtk cargo nextest run -p mbv music_workspace album_track`
-    (25 passed), full `rtk cargo nextest run -p mbv` (1138 passed), `rtk cargo
-    check -p mbv`, `rtk cargo clippy --workspace --all-targets` (no new
-    warnings in touched files), `rtk cargo fmt --all -- --check` clean, and
-    `rtk ast-grep scan` (69 pre-existing render/screens-boundary errors
-    unchanged, none in touched files; the tasks-specific rules pass). Source
-    numstats show edits, no renames/copies.
-  - [x] *Mouse gesture prep* — extract the three remaining `match self.tab`
-    dispatch points in `App::handle_mouse` (`input_mouse_dispatch.rs`: selector-tab
-    click, double-click activate, right-click menu) into one named method per
-    gesture per surface, mirroring the already-extracted
-    `handle_mouse_scroll_browse`. Behaviour-neutral, deletes no field. This is
-    what makes the twelve *Mouse geometry* agents independent — today they would
-    all edit the same four nested matches.
-  - [x] *Mouse geometry and global router — alpha scope disposition.* Re-counted 2026-08-25: 215
-    `layout.main.*` refs across 41 files (158 production across 34 files, 57
-    test across 7), and **nine** components still forward mouse to legacy, none
-    of which has a `hit_test` today: `browser`, `confirm`, `daemon_lost`,
-    `home`, `music_workspace`, `playback_prompt`, `queue`, `remote_reanchor`,
-    `tv_workspace`. (`legacy_input.rs` matches the same grep but is the bridge,
-    not a surface; the earlier "12 components" predates three landed units.)
-    Seven units, six to eleven runs depending on bundling. Requires 5.3c and
-    *Mouse gesture prep*:
-    - [x] `browser` `hit_test` — real row/hit geometry, one unit.
-    - [x] `home` `hit_test` — real row/hit geometry, one unit.
-    - [x] `queue` `hit_test` — real row/hit geometry, one unit.
-    - [x] `tv_workspace` `hit_test` — two focusable panes, one unit.
-     - [x] `music_workspace` `hit_test` — explicitly deferred beyond alpha by D16.
-     - [x] Blocking modals and prompt (`confirm`, `daemon_lost`,
-       `remote_reanchor`, `playback_prompt`) — explicitly deferred beyond alpha
-       by D16.
-     - [x] Framework deletion — delete the three legacy `input_mouse*.rs`
-       entry points and their global coordinate routing. D16 supersedes the
-       remaining `music_workspace` and modal/prompt mouse work; load-bearing
-       `AppLayout` geometry remains. Existing mouse tests that hand-set
-       `layout.main.*` are deleted with the paths they exercised, not ported.
-  **Mirrors and framework — discovery-led task graph (D17).** The stale
-  "delete 29 syncs" instruction is retired. Player/fetch-state projections remain
-  shell-owned; only per-frame/two-way interaction mirrors are teardown targets.
-  Scout notes are durable under `openspec/handoffs/`. No implementation row below
-  may be delegated together with discovery, and any row that proves larger than
-  roughly 3–6 production files must first be split here.
+## 4. Remaining surface teardown
 
-  - [x] 5.3d.1 Recount and classify remaining `sync_*` methods; record retained
-    shell-owned projections versus seven interaction mirrors in
-    `scoping-5.3d-mirrors.md`, and verify the list against production callers.
-  - [x] 5.3d.2 Re-home Home content and section-preference ownership, replace its
-    per-frame content mirror with writer pushes, and record the qualified
-    `component` ledger state (`b3fbf5b0` through `b21653dc`).
-  - [x] 5.3d.3 Replace Audiobookshelf podcast per-frame content projection with
-    event-scoped writer pushes while retaining mount lifecycle; correction included
-    selection-modal and conditional-drain seams (`b414a1ec`, `2c6bcce5`).
-  - [x] 5.3d.4 Resolve the podcast show-movement parity discrepancy documented in
-    `openspec/handoffs/scout-abs-podcast-b1-first-slice.md` (component one-item
-    movement versus possible legacy multi-column row movement). Record the proven
-    production behavior and exact typed payload; no production edit.
-    **Resolved 2026-08-26:** the component's restored `selected_id` makes the
-    painted cursor follow its local one-item/page movement, while the legacy App
-    path still saves position and fetches detail for its own row-stride target at
-    two columns. Both are current behavior. An absolute-cursor payload would change
-    the effect target and is rejected under D17. The exact typed contract is
-    `ShellRequest::AudiobookshelfPodcastShowMove(PodcastShowMove)`, where the
-    closed payload variants preserve the legacy operation: `PreviousRow`,
-    `NextRow`, `PreviousItem`, `NextItem`, `PreviousPage`, `NextPage`, `First`,
-    and `Last`. See the appended parity resolution in the scout note.
-  - [x] 5.3d.5 Convert only podcast show-list movement to
-    `AudiobookshelfPodcastShowMove(PodcastShowMove)` (maximum three production
-    files). The component keeps its existing local cursor arithmetic, but the
-    shell maps `PreviousRow`/`NextRow` to
-    `move_audiobookshelf_show_rows(±1)`, item moves to
-    `move_audiobookshelf_show_cursor(±1)`, pages to
-    `move_audiobookshelf_show_rows(±lib_page_size())`, and boundaries to
-    `jump_audiobookshelf_show_cursor(false/true)`, then pushes podcast content.
-    Thus the painted cursor and the current position-save/detail-fetch targets
-    both remain unchanged. Adapt only the existing component/shell tests and
-    verify focused `abs_podcast` nextest plus the per-unit gates.
-    **Landed:** `4eeee915`; focused/full nextest, check, clippy, ast-grep
-    baseline, and fmt passed. Fresh Luna review accepted with no findings.
-  - [x] 5.3d.6 Convert only podcast episode movement/filter/exit to
-    `AudiobookshelfPodcastEpisodeTransition(PodcastEpisodeTransition)` without
-    replaying raw keys. The component keeps its existing local transition, while
-    the shell maps `PreviousEpisode`/`NextEpisode` to
-    `move_audiobookshelf_episode_cursor(±1)`, filter transitions to
-    `cycle_audiobookshelf_filter(±1)`, and `Exit` to
-    `leave_audiobookshelf_episode_selection()`, then pushes podcast content. This
-    preserves the current component clamp and legacy App filter-wrap results under
-    D17. Keep enter/play/enqueue/modal effects on the raw endpoint for 5.3d.7;
-    adapt only existing component/shell tests and verify focused podcast tests.
-    **Landed:** `0d8a4ef0`; focused/full nextest, check, clippy, ast-grep
-    baseline, and fmt passed. Fresh Luna review accepted with no findings.
-  - [x] 5.3d.7 Convert podcast enter/play/enqueue/modal requests to typed effect
-    intents using existing shell/App effect boundaries; delete
-    `ShellRequest::AudiobookshelfPodcastKey` only when no caller remains.
-    **Landed:** `d6f67656` plus global-key fallback correction `e7abcb13`;
-    focused/full nextest, check, clippy, and fmt passed. Fresh Luna review found
-    and then accepted the corrected TuiRealm fallback with no remaining issues.
-  - [x] 5.3d.8 Complete the podcast downstream-reader/cover-fetch handoff: enumerate
-    persistence, queue-target, legacy-render, and image-fetch readers and split the
-    result into explicit 3–6-file implementation rows here before assigning a
-    writer; no production edit in this row.
-    - 5.3d.9 (row — cover-fetch bridge): Move the podcast cover fetch out of the
-      legacy underpaint into the smallest Model bridge and preserve the
-      image-disabled gate. No App field deleted in this row.
-      - Files (3): `src/app/render/components/audiobookshelf.rs` (delete
-        `self.fetch_audiobookshelf_cover(server, show.library_item_id.clone())`
-        at line 337 inside `render_audiobookshelf_hero`, plus its
-        `self.images_enabled()` gate at line 336);
-        `src/app/shell_audiobookshelf_podcast.rs` (add the fetch inside
-        `push_audiobookshelf_podcast_content` at line 111, reading the selected
-        show's `library_item_id` from `snapshot.selected_show()` and calling
-        `self.app.fetch_audiobookshelf_cover(server, id)` only when
-        `self.app.images_enabled()`; this single method is already invoked at
-        every writer seam in `shell.rs:272,284,338,423,544,738,761,798,825` and
-        on fresh mount, so no extra call sites are needed); `src/app/images.rs`
-        (`fetch_audiobookshelf_cover` at line 334 is reused unchanged).
-      - Image-disabled behavior to preserve: `App::images_enabled()`
-        (`src/app/images.rs:713`) must remain the sole gate; when false no fetch
-        occurs (mirrors the deleted line 336 guard). Also
-        `fetch_audiobookshelf_image` already no-ops when
-        `image_protocol_enabled` is false (`images.rs:360`).
-      - Obsolete App-field readers: none deleted here; the bridge reads
-        `app.audiobookshelf_browse[index].selected_show().library_item_id`
-        (App field still present after this row).
-      - Tests: verify `src/app/render/tests_audiobookshelf_podcasts.rs` still
-        passes; add/confirm an image-disabled characterization (no cover fetch
-        when `images_enabled()` is false) in
-        `src/app/components/audiobookshelf_podcast_component_tests.rs` if absent.
-        No test deleted.
-    - 5.3d.10 (row — delete legacy underpaint): Delete the podcast legacy
-      underpaint while keeping narrow/default render characterization unchanged.
-      - Files (4–5): `src/app/render/components/audiobookshelf.rs` (delete
-        `render_audiobookshelf_podcasts` at line 103, `render_audiobookshelf_hero`
-        at line 304, `render_audiobookshelf_show_rows` at line 637, and the
-        podcast-only narrow helpers; keep shared `hero.rs` helpers);
-        `src/app/render/components/widgets.rs` (delete the
-        `self.render_audiobookshelf_podcasts(...)` arm at line 565 inside
-        `render_audiobookshelf_library`); `src/app/layout.rs`
-        (`is_wide_podcast_active()` at line 209 reads
-        `audiobookshelf_podcast_right_area`);
-        `src/app/shell_audiobookshelf_podcast.rs`
-        (`render_audiobookshelf_podcast_component` at line 133 must set
-        `app.layout.main.audiobookshelf_podcast_area` and
-        `audiobookshelf_podcast_right_area` from `shared_hero_presentation(area)`
-        so `is_wide_podcast_active()` stays valid after the underpaint is gone).
-      - Critical relocation: the underpaint sets
-        `layout.audiobookshelf_podcast_area` (audiobookshelf.rs:110) and
-        `layout.audiobookshelf_podcast_right_area` (audiobookshelf.rs:123). These
-        MUST move to `render_audiobookshelf_podcast_component` (or the component
-        `view()`) BEFORE deletion, or `is_wide_podcast_active()` — read by
-        `handle_audiobookshelf_podcast_episode_intent` at
-        `shell_audiobookshelf_podcast.rs:35` to choose wide OpenOrPlay vs narrow
-        modal — will always report narrow (D17 regression).
-      - Obsolete App-field readers removed with the underpaint: the underpaint
-        reads `app.audiobookshelf_browse.get(index).cloned()` (line 112),
-        `state.shows`, `state.cursor()` (via show_rows), `state.selected_show()`
-        (hero), and `state.episode_selection` (episode rows) — all replaced by
-        the component's own `render_audiobookshelf_podcast_content` reads on its
-        local `AudiobookshelfBrowseState`.
-      - Tests: `src/app/render/tests_audiobookshelf_podcasts.rs` is the
-        narrow/default render characterization and MUST stay green; the helpers
-        `render_library_to_terminal_focused` / `render_library_to_string_sized`
-        (`src/app/render/test_helpers.rs:222,244`) currently call only
-        `app.render_library` (legacy base frame), so they must also draw the
-        podcast component overlay (or route through the shell) or the
-        characterization renders empty. `src/app/tests_podcast.rs:266` manually
-        sets `layout.main.audiobookshelf_podcast_right_area` and may need update
-        after the relocation.
-      - Required split after the first writer timed out and crossed the component
-        ownership boundary (its partial production diff was discarded):
-        - **5.3d.10a — hero row-budget parity (3 production files):** extract a
-          pure podcast hero-row helper shared by the legacy and component
-          renderers in `src/app/render/components/audiobookshelf_podcast.rs`;
-          make `src/app/render/components/audiobookshelf.rs` delegate to it; and
-          retain/pass `images_enabled` in
-          `src/app/components/audiobookshelf_podcast.rs`. Match the legacy
-          author/description wrapping, episode rows, and image-height minimum.
-          Keep image painting, geometry projection, shell, widgets, and legacy
-          underpaint unchanged. `Component::view` remains the sole painter.
-          **Landed:** `4d2f6de1`; focused/full nextest, check, clippy, ast-grep
-          touched-file baseline, and fmt touched-file baseline passed. Single hy3
-          review accepted with no blocking findings.
-        - **5.3d.10b — component image-paint handoff (3 production files):**
-          mirror the established ABS Book pattern only: component renderer
-          returns `HomeImagePaint::AudiobookshelfCover`, component stores/takes
-          it, and `src/app/shell_audiobookshelf_podcast.rs` calls
-          `App::paint_home_image` after `application.view`. No geometry or legacy
-          deletion in this slice.
-          **Landed:** `af2bf9c8`; focused/full nextest, check, clippy, ast-grep
-          touched-file baseline, and fmt touched-file baseline passed. Single hy3
-          review accepted with no blocking findings.
-        - **5.3d.10c — component-owned geometry parity (2 production files):**
-          add the needed wide/right/list/hero/selected-item projection fields to
-          `AudiobookshelfPodcastGeometry`, populate them inside component paint,
-          and expose them read-only from `AudiobookshelfPodcastComponent`. Do not
-          write `LayoutMain`, change shell/widgets, or delete legacy code. Add
-          focused wide/narrow component geometry characterization.
-          **Landed:** `ad403485` plus direct parent correction `2e9090e5`
-          (wide-empty hero geometry, stale doc, and extracted-import cleanup);
-          focused test/check and touched-file fmt passed. Single hy3 review found
-          the corrected P1; no second review per maintainer directive.
-        - **5.3d.10d — temporary shell layout projection (1 production file):**
-          after `application.view`, read component-owned geometry and project
-          only the still-required `LayoutMain` fields for legacy App readers;
-          prove wide right-area is nonzero wide and reset to zero narrow,
-          including wide→narrow. Do not change component painting, widgets
-          dispatch, or delete render code.
-        - **5.3d.10e — mechanical underpaint deletion (3 production files):**
-          delete `src/app/render/components/audiobookshelf.rs`, remove its module
-          declaration, and make `render_audiobookshelf_library` reserve
-          `audiobookshelf_podcast_area` then return. Repoint the existing podcast
-          render characterization to the mounted component/shell path. No new
-          presentation, geometry, or interaction behavior in this slice.
-    - 5.3d.11 (row — re-home App-level podcast readers to the component, delete
-      obsolete App handlers/adapters; the shared `AudiobookshelfBrowseState`
-      type stays intact): Scout correction 2026-08-26. The type members
-      `selected_id`/`episode_filter`/`episode_selection`/`scroll` are SHARED by
-      `App.audiobookshelf_browse` and `AudiobookshelfPodcastComponent.state`
-      (same struct), so the component — the re-home target — must keep
-      reading/writing them. The deletable artifact is the App-level readers/
-      handlers on `app.audiobookshelf_browse[i]`, not the type members (B1).
-      Also `push_audiobookshelf_podcast_content` is NOT empty — it is the sole
-      `set_content` + cover-fetch bridge (5.3d.9), so relocate it before deleting
-      (B2). Position persistence crosses the App/Model boundary (B3).
-      Ordered units (1–3 production files each; compile-green noted):
-      - **U0 prereq — component accessors (2 files):** `components/audiobookshelf_podcast.rs`,
-        `shell_audiobookshelf_podcast.rs`; add `selected_id()`/`episode_selection()`/
-        `episode_filter()` getters, `set_episode_filter()`/`set_episode_selection()`
-        mutators, and a `Model::abs_podcast_component_mut(index)` helper. Green alone.
-      - **U1 — relocate projection (B2) (2 files):** `shell_audiobookshelf_podcast.rs`
-        (merge `push_audiobookshelf_podcast_content` body + cover-fetch into the
-        post-mount path of `sync_audiobookshelf_podcast`), `shell.rs` (drop the 9
-        `push_audiobookshelf_podcast_content()` calls 272/284/338/423/544/738/761/
-        798/825). Green together.
-      - **U2 — delete episode handlers + dispatch (3 files, same commit):**
-        `audiobookshelf_browse_actions.rs` (delete `enter/leave_audiobookshelf_episode_selection`,
-        `move_audiobookshelf_episode_cursor`, `cycle_audiobookshelf_filter`),
-        `input_browse_dispatch.rs` (delete `handle_key_audiobookshelf_library` +
-        dispatch arm ~60), `shell.rs` (remove the 810–825 component-routing callers).
-        NOT green alone — shell caller removal must ship in the same commit.
-      - **U3 — re-home modal filter (≤2 files):** `audiobookshelf_podcast_modal_actions.rs`
-        (open:28 read + select:66 write against the component via U0 accessors).
-        NOT green alone — depends on U0.
-      - **U4 — re-home position persistence (B3, parent-scope first):**
-        `library_position_state.rs` (save:237/238/290/291, activate:290/291/296/298/300)
-        + a Model-side seam (`run_loop_drains.rs`/`cw_library_tab_actions.rs`/
-        `select_audiobookshelf_show`). App has no `application` handle; likely
-        exceeds 3 files — split by parent before delegation.
-      - **U5 — playback target from component (2 files):**
-        `audiobookshelf_browse_actions.rs` (`selected_audiobookshelf_queue_item`),
-        `shell_audiobookshelf_podcast.rs` (`handle_audiobookshelf_podcast_episode_intent:23`);
-        resolve play/enqueue target via U0 accessor + component method. Not green
-        alone — depends U0/U2/U4 ordering.
-      - **U6 — drop mount seam + dead type method (3 files):** `shell.rs` (drop
-        `sync_audiobookshelf_podcast()` at 1066), `shell_audiobookshelf_podcast.rs`
-        (delete `sync_audiobookshelf_podcast` if U1 didn't subsume it),
-        `types_audiobookshelf_browse.rs` (delete dead `enter_episode_selection()`
-        only). Green only after U0–U5.
-      - Test repaints (companion commits, not production): shell_audiobookshelf_podcast.rs:193
-        (cursor→component), :199-247 (episode_selection→component),
-        tests_podcast_playback.rs (12 sites: 22/44/60/82/104/132/185/242/315/401/465/556),
-        audiobookshelf_podcast_component_tests.rs:45, tests_audiobookshelf_podcasts.rs:221,263-264,
-        shell_selection_modal_tests.rs:618, tests_library_position_refresh.rs.
-  - [x] 5.3d.9 Move podcast cover fetching to the smallest shell/Model bridge named
-    by 5.3d.8 and verify existing image-disabled behavior.
-    **Landed:** `bbe2fda4`; focused/full nextest, check, clippy, ast-grep
-    touched-file baseline, and fmt touched-file baseline passed. Single hy3 review
-    accepted with no blocking findings.
-  - [x] 5.3d.10 Delete podcast legacy underpaint after its cover/layout work is
-    detached; keep narrow/default render characterization unchanged.
-  - [ ] 5.3d.11 Re-home remaining podcast App-level interaction readers to the
-    mounted component, delete obsolete App episode/filter handlers and the
-    empty mount/sync/push adapters, keeping the shared `AudiobookshelfBrowseState`
-    type intact (B1: fields shared with the component). Bounded U0–U6 rows above;
-    U4 (position persistence, B3) must be parent-scoped before delegation.
+The remaining open surface-scoped rows. Each `5.3d.18/.19/.20` aggregate stays
+open until its child leaves land; each row lists its scopes in the exact original
+wording. Dependency vs campaign predecessor is distinguished: the "BD" (hard
+dependency) tags are technical; the remainder are accepted campaign predecessors.
 
-  - [x] 5.3d.12 Implement the two-file Audiobookshelf book Phase-A push helper from
-    `openspec/handoffs/scout-abs-book-phase-a.md`: mount-only reconciliation plus
-    writer-seam pushes, with App writers/component/renderer unchanged; verify
-    focused `abs_book` nextest and per-unit gates.
-    **Landed:** `4f5df745` plus key-seam/Book-kind guard correction
-    `354fc5c0`; focused/full nextest, check, clippy, ast-grep baseline, and fmt
-    passed. Fresh Luna review accepted the corrected cumulative unit.
-  - [ ] 5.3d.13 Scout the ABS book typed-input, interaction-reader, legacy-render,
-    image, and layout teardown at symbol level; add the resulting bounded rows here
-    before any Phase-B book writer starts.
+### 5.3d.18 — TV workspace teardown (open)
 
-  - [x] 5.3d.14 Resolve Emby browser `wide_movies` ownership from
-    `openspec/handoffs/scout-emby-browser.md`: choose and document the component or
-    temporary per-draw derivation without retaining a per-frame interaction mirror.
-    **Decision (D18):** adopt the temporary per-draw adapter now, defer the
-    component-local derivation to 5.3d.17. Move `set_wide_movies` out of the
-    per-frame `sync_emby_browser` mirror into `render_emby_browser_component`
-    (draw closure, after the legacy base frame sets `movies_wide_right_area`),
-    mirroring the `dim_backdrop_active` render-only adapter; keep
-    `is_wide_movies_active()` as the source while the legacy wide renderer still
-    underpaints. At 5.3d.17/R1, when the legacy wide renderer is deleted and
-    `movies_wide_right_area` disappears, relocate the derivation into the
-    component from library kind (Movies/HomeVideos) + its own geometry width at
-    the `shared_hero_presentation`/`wide_library_panes` breakpoint.
-  - [x] 5.3d.15 Split Emby browser mount reconciliation from content projection and
-    replace content/focus pushes at proven nav/fetch/filter/resize writers; verify
-    focused `emby_browser` tests.
-    **M1 landed:** `8929248` — pure extraction of idempotent
-    `mount_emby_browser()`; `sync_emby_browser` delegates to it and keeps
-    `set_content`+`set_wide_movies` per-frame. **M2 landed:**
-    `push_emby_browser_content()` projects content idempotently at every
-    `push_home_content` writer seam plus `handle_browser_request` and
-    `BrowserClick`; `set_wide_movies` moved to a D18 per-draw adapter in
-    `render_emby_browser_component`; `sync_emby_browser` now delegates to
-    mount + push only.
-  - [x] 5.3d.16 Claim remaining Emby browser raw-key fallthrough, remove cursor/scroll
-    mirror-pinning, and make the component authoritative; keep effect requests typed.
-  - [x] 5.3d.17 Remove Emby generic/Movies/home-video legacy underpaint after the
-    wide-layout dependency is detached, then remove its empty sync/mount adapter.
+- [ ] **5.3d.18** Refine the TV workspace contract into an exact typed
+  keyboard and writer-seam contract; bounded rows below, no production edit in this
+  aggregate.
+  - **5.3d.18a — typed keyboard (3 files)** has been promoted to an open active
+    leaf (see §3, campaign schedule). Convert the series-list cursor keys to typed
+    requests; keep episode play/enqueue raw for 18f.
+  - [ ] **5.3d.18b — drop mirror-pin (≤3 files):** `components/tv_workspace.rs`
+    `last_mirrored_*` pin + `shell_tv_workspace.rs` per-frame `set_content`; make
+    the component cursor authoritative and remove the dual-write with
+    `App::move_lib_cursor_rows` (B1).
+  - [ ] **5.3d.18c — writer pushes (≤3 files):** add `push_tv_workspace_content`
+    at the nav-track/panel-focus/letter/resize writers (`shell_tv_workspace.rs`,
+    `shell.rs`, `lib_cursor_actions.rs`, `input_browse_dispatch.rs`); keep the
+    `series_detail_cache` reader at `shell_tv_workspace.rs:51` (B2).
+  - [ ] **5.3d.18d — geometry/underpaint (≤3 files):** `render/components/tv_wide.rs`
+    publishes the `tv_wide_*` rects the component hit-tests; delete the legacy
+    `render_list` wide-TV branch only after the component owns geometry (B4).
+  - [ ] **5.3d.18e — teardown (≤3 files):** remove the empty `sync_tv_workspace`
+    adapter + `CONTEXT_STACK` TV arms + obsolete mount/sync names.
+  - [ ] **5.3d.18f — episode play/enqueue gap:** new typed
+    `TvEpisodeActivate`/`TvEpisodeEnqueue` requests resolved from
+    `series_detail.episodes[season_id][episode_cursor]`; needs new App methods (B3).
+  - Safe dependency order (honest): TV authority/writer transition (18c) lands
+    before the raw removal (18e); no technical dependency on Music/Inline.
 
-  - [ ] 5.3d.18 Refine `openspec/handoffs/scout-tv-workspace.md` into an exact typed
-    keyboard and writer-seam contract (the current report is an inventory, not an
-    implementation prompt); add bounded implementation rows here, no production edit.
-    Bounded rows (Emby template commits `8929248`/`24e645b9`/`6fa217fb`):
-      - **5.3d.18a — typed keyboard (3 files):** `components/tv_workspace.rs`
-        `handle_key` (166-193) forwards every key raw via `Msg::Legacy`;
-        `components/msg.rs` has no typed TV keyboard request; `shell.rs` arms
-        (986-1010) mirror. Convert the series-list cursor keys (Up/k, Down/j,
-        Left/h, Right/l, PageUp/Down, Home/End, Enter, Esc/Backspace) to typed
-        requests carrying the resolved pane/episode/season cursor; keep episode
-        play/enqueue raw for 18f.
-      - **5.3d.18b — drop mirror-pin (≤3 files):** `components/tv_workspace.rs`
-        `set_content` last_mirrored_* pin + `shell_tv_workspace.rs`
-        `sync_tv_workspace` per-frame `set_content` (24-66); make the component
-        cursor authoritative and remove the dual-write with
-        `App::move_lib_cursor_rows` (B1).
-      - **5.3d.18c — writer pushes (≤3 files):** add `push_tv_workspace_content`
-        at the nav-stack/cache/panel-focus/letter/resize writers
-        (`shell_tv_workspace.rs`, `shell.rs`, `lib_cursor_actions.rs`,
-        `input_browse_dispatch.rs`); keep the `series_detail_cache` reader at
-        `shell_tv_workspace.rs:51` (B2).
-      - **5.3d.18d — geometry/underpaint (≤3 files):** `render/components/tv_wide.rs`
-        publishes the `tv_wide_*` rects the component hit-tests; delete the legacy
-        `render_list` wide-TV branch only after the component owns geometry (B4).
-      - **5.3d.18e — teardown (≤3 files):** remove the empty `sync_tv_workspace`
-        adapter + `CONTEXT_STACK` TV arms + obsolete mount/sync names.
-      - **5.3d.18f — episode play/enqueue gap:** new typed
-        `TvEpisodeActivate`/`TvEpisodeEnqueue` requests resolved from
-        `series_detail.episodes[season_id][episode_cursor]`; needs new App methods
-        (B3).
-  - [ ] 5.3d.19 Complete the preliminary Music report with exact raw-key, projection
-    writer, geometry, and underpaint contracts; replace
-    `scout-music-workspace-preliminary.md` with bounded implementation rows before a
-    Music writer starts.
-    Bounded rows:
-      - **5.3d.19a — mount/idempotent mirror (≤3 files):** `components/music_workspace.rs`
-        + `shell_music_workspace.rs`; idempotent mount + content mirror (album cursor
-        via `move/jump/page_grouped_album_cursor`, focused track via
-        `focused_music_track`) with no behavioral change.
-      - **5.3d.19b — geometry pre-pass (≤3 files, BLOCKER for 19c):**
-        `render/components/music_wide.rs` + `shell_music_workspace.rs`; compute
-        `wide_music_area`/`wide_music_right_area`/`left_area`/`hero_area`/
-        `wide_music_art_area` before the component `view` (today only the legacy
-        `render_list` wide-music branch sets them — chicken-and-egg, R1).
-      - **5.3d.19c — delete legacy underpaint (≤3 files):** `render/components/list.rs`
-        wide-music branch (66-95) after 19b; the component already repaints over it.
-      - **5.3d.19d — relocate album-track fetch (≤3 files):** `images.rs`
-        `fetch_album_tracks` is triggered only by the legacy branch (list.rs:74-80);
-        move the trigger to the component/writer path (R2).
-      - **5.3d.19e — framework teardown (≤3 files):** remove the empty
-        `sync_music_workspace` adapter + delete the differential legacy test.
-    Risks: R1 geometry chicken-and-egg (blocker); R2 fetch relocation; R3 Page
-    requires Library panel focus; R4 one-frame mouse warm-up; R5 h/l single-step
-    vs arrow row-stride intended.
-  - [ ] 5.3d.20 Scout the remaining inline-library-Search mirror and raw endpoint,
-    then add bounded teardown rows here before implementation.
-    Bounded teardown rows (surface already migrated; residual shell scaffolding):
-      - **5.3d.20a — drop mount-id field (≤3 files):** `shell.rs` `inline_search_id`
-        field + `shell_inline_search.rs` `inline_search_component_id` +
-        `shell_library.rs:41` mount-id precedence branch.
-      - **5.3d.20b — merge redundant re-pushes (≤2 files):** `shell_inline_search.rs`
-        duplicate `push_inline_search_content` at lines 184/218.
-      - **5.3d.20c — drop apply_inline_search_items (group 5, ≤2 files):**
-        `shell_inline_search.rs` `apply_inline_search_items` + parent_id guard.
-      - **5.3d.20d — drop recursive pool branch (group 5, ≤2 files):**
-        `shell_inline_search.rs` recursive `Albums` pool branch.
-      - **5.3d.20e — re-home `/` trigger (≤2 files):** `components/browser.rs:90-92`
-        `ShellRequest::OpenInlineSearch`.
-      - **5.3d.20f — mouse left_area quirk (≤2 files):** `components/inline_search.rs`
-        mouse `left_area` Default-layout mismatch.
-    Risks: `scroll` written inside `view()` (render side-effect) — preserve on
-    teardown; render seam list.rs:17 + list_rows.rs:290 `with_search`.
+### 5.3d.19 — Music workspace teardown (open)
 
-  - [ ] 5.3d.21 After every surface row above lands, re-inventory remaining
-    `CONTEXT_STACK`, `Msg::Legacy`, `LegacyTerminalEvent`, `LegacyInput`, terminal
-    reconstruction, and `sync_*` interaction endpoints; classify retained
-    shell-owned content projections and add exact deletion rows before editing.
-  - [ ] 5.3d.22 Delete now-unreferenced per-surface `CONTEXT_STACK` handlers in
-    bounded families, preserving the static keyboard-precedence proofs from 5.4.
-  - [ ] 5.3d.23 Delete `LegacyInput`, `Msg::Legacy`, `LegacyTerminalEvent`, terminal
-    reconstruction adapters, and obsolete mount/sync names after the inventory is
-    empty; verify no raw legacy terminal endpoint remains.
-  - [ ] 5.3d.24 Verify no component-local interaction state is mirrored through
-    `App`, no legacy renderer paints beneath a migrated surface, and no global mouse
-    router/hit map remains. Run the per-unit gates; defer the line-cap gate to 5.6.
+- [ ] **5.3d.19** Complete the Music contract with exact raw-key, projection,
+  geometry, and underpaint rows; bounded rows (Music).
+  - **5.3d.19a — mount/idempotent mirror** is promoted to an open active leaf (see
+    §3): `components/music_workspace.rs` + `shell_music_workspace.rs`; idempotent
+    mount + content mirror.
+  - [ ] **5.3d.19b — geometry pre-pass (≤3 files, BLOCKER for 19c):**
+    `render/components/music_wide.rs` + `shell_music_workspace.rs`; compute
+    `wide_music_area`/`wide_music_right_area`/`left`/`hero`/
+    `wide_music_art_area` before the component `view` (today only the legacy
+    `render_list` wide-music branch sets them — chicken-and-egg, R1).
+  - [ ] **5.3d.19c — delete legacy underpaint (≤3 files):** `render/components/list.rs`
+    wide-music branch after 19b sets geometry. **Order:** 19d (fetch relocation)
+    lands before 19c, because the fetch trigger currently lives in that branch.
+  - [ ] **5.3d.19d — relocate album-track fetch (≤3 files):** `images.rs`
+    `fetch_album_tracks` is triggered only by the legacy branch (list.rs); move the
+    trigger to the component/writer path (R2).
+  - [ ] **5.3d.19e — framework teardown (≤3 files):** remove the empty
+    `sync_music_workspace` adapter + delete the differential legacy test.
+  - Risks (preserved): R1 geometry chicken-and-egg (blocker); R2 fetch
+    relocation; R3 Page requires Library panel focus; R4 one-frame mouse warm-up;
+    R5 h/l single-step vs arrow row-strides.
 
-- [x] 5.4 Confirm every alpha-supported mouse path reads component-owned geometry and no global mouse router/hit map remains; verify keyboard precedence, deterministic focus restoration, supported-path mouse behavior, and D16's structural deferral contract.
-  **Runs inside the *Mouse geometry* lane's final Framework-deletion unit, not
-  as a separate lane** — it asserts exactly what that unit delivers. Under D16,
-  proofs for deferred mouse paths become structural checks (see design D16): the
-  **absence of the three `input_mouse*.rs` entry points and of any global mouse
-  hit map**, not the absence of load-bearing `AppLayout` geometry. `rtk
-  ast-grep scan` is the supporting gate. None of the six may be written as a
-  hand-set-coordinate mouse test. Decide the
-  table-vs-runtime question below **before** that unit starts, not after.
-  `KEY_POLICY` and `KeyPolicyGate::sub_clause()` are referenced nowhere outside
-  `key_policy.rs`'s own ordering test — the file still carries
-  `#![allow(dead_code)]`. 5.2 turned the gate descriptions into real
-  `SubClause` values, but stack still runs through legacy CONTEXT_STACK
-  dispatch, so the clauses do not execute until legacy input is removed at
-  5.3c/5.3d. 5.4's six precedence proofs must either activate them first or
-  assert against the table rather than runtime behaviour.
-  Read decision **D15** in `design.md` before choosing: it scopes adopting
-  `Component::perform(Cmd)` as the table's execution path (`Cmd` in, `Msg`
-  out), and requires an explicit note here if 5.4 declines it.
-   - [x] *Orphan cleanup* (folded into this unit) — `ccc75e30` deleted the dead
-   `GroupedAlbumGroup.start`/`.end` and `GroupedAlbumCatalog.groups` fields and
-   their builders.
+### 5.3d.20 — inline-library-Search residual scaffolding (open)
 
-  **Completed — static-table proof path; D15 declined (explicit).** Per the
-  task instruction, 5.4 takes D15's *static-table proof path*: it does **not**
-  adopt `Component::perform(Cmd)`/`SubClause` as the table's execution path,
-  because that adoption is not incrementally valid while `LegacyInput` and
-  `CONTEXT_STACK` still route keys (and would broaden this unit into the later
-  Mirrors/framework teardown). `key_policy.rs` keeps `#![allow(dead_code)]` with
-  a module note naming this decision. The six proofs are established as
-  follows:
+- [ ] **5.3d.20** Scout the remaining inline-library-Search mirror and raw endpoint,
+  then bounded rows (surface already migrated; residual shell scaffolding).
+  - **5.3d.20a — drop mount-id field** is promoted to an open active leaf (see §3):
+    `shell.rs` `inline_search_id` + `shell_inline_search.rs`
+    `inline_search_component_id` + `shell_library.rs:41` branch.
+  - [ ] **5.3d.20b — merge redundant re-pushes (≤2 files):** `shell_inline_search.rs`
+    duplicate `push_inline_search_content` at lines 184/218.
+  - [ ] **5.3d.20c — drop `apply_inline_search_items` (≤2 files):**
+    `shell_inline_search.rs` + `parent_id` guard.
+  - [ ] **5.3d.20d — drop recursive pool branch (≤2 files):** `shell_inline_search.rs`
+    recursive `Albums` pool branch.
+  - [ ] **5.3d.20e — re-host `/` trigger (≤2 files):** `components/browser.rs:90-92`
+    `ShellRequest::OpenInlineSearch`.
+  - [ ] **5.3d.20f — mouse `left_area` quirk (≤2 files):** `components/inline_search.rs`
+    Default-layout mismatch.
+- Risks (preserved): `scroll` written inside `view()` (render side-effect) —
+  preserve on teardown; render seam `list.rs` + `list_rows.rs` `with_search`.
 
-  - **(1) blocking-overlay swallow** — `src/app/key_policy.rs` test
-    `blocking_contexts_swallow_before_lower_and_global_entries`: every
-    `blocking` entry precedes every `Sub` (parent/global) entry in first-match
-    order, and `global_overlay_open`'s gate is
-    `NotHasAttrValue(Playback, ATTR_BLOCKING_OVERLAY_ACTIVE, Flag(true))` — the
-    swallow mechanism that kills the key with the overlay.
-  - **(2) parent/global precedence + owners** — `src/app/key_policy.rs` test
-    `parent_and_global_bindings_retain_precedence_and_owners`: each parent/global
-    binding keeps its documented `Table B` owner (`matches!(owner,
-    KeyPolicyOwner::Sub(c) if c == owner)`), and the unconditional (`Always`)
-    global bindings (`ctrl_l_force_clear`, `f5_refresh`) rank below every parent
-    binding — the parent-over-global precedence order.
-  - **(3) table ordered consistently with CONTEXT_STACK** — `src/app/key_policy.rs`
-    test `key_policy_order_matches_context_stack` (reused, not duplicated) pins
-    the table order against `CONTEXT_STACK`. This backs the ordering invariant
-    for proofs (1) and (2); it is the third surviving keyboard contract.
-  - **(4) simultaneous Queue+Library mouse** — D16 structural: the three
-    `input_mouse*.rs` entry points are **absent** (`ls src/app/input_mouse*.rs`
-    fails), and no global mouse hit router/map remains (`rg` for
-    `hit_map|hit_router|dispatch_mouse|route_mouse` finds none; `shell.rs`
-    consumes `Msg::Legacy(_mouse)` as a no-op). Components self-filter by their
-    own painted geometry, so Queue and the active Library destination both see
-    the broadcast and each claim only its own region.
-  - **(5) overlay blocks underlying mutation** — D16 structural: the legacy
-    `input_mouse*.rs` routing is gone (no coordinate dispatch to underlying
-    regions), the global hit map is gone, and the table's
-    `global_overlay_open` gate (`NotHasAttrValue(...,
-    ATTR_BLOCKING_OVERLAY_ACTIVE, ...)`) encodes the block; `shell_gates.rs`
-    sets `ATTR_BLOCKING_OVERLAY_ACTIVE` on `Playback` while a blocking overlay is
-    mounted. No underlying region is reached while a blocking overlay is up.
-  - **(6) geometry cannot drift** — D16 structural: mouse hit geometry is
-    interpreted by the component that painted it. Multiple components own a
-    `handle_mouse` that hit-tests their own `view()`-painted `Rect`/rows
-    (`home.rs`, `tv_workspace`, `browser`, `queue`, `playlists`, `settings`, …)
-    and emit `Msg::Shell`/legacy; `AppLayout` survives only for load-bearing
-    rendering/non-routing effect data (D16), not as a hit map.
+### 5.3d.13 — ABS Book Phase-B report gate (open, report-only)
 
-  **Deterministic focus restoration** (the sixth named proof in the 5.4 list,
-  *deterministic focus restoration*) is covered by the existing
-  `src/app/shell_root.rs` test `root_ui_uses_native_lifo_focus_restoration`,
-  which fully exercises active Help, a stacked Confirm modal, restoration to
-  Help, then to `UiRoot` via TuiRealm's native LIFO focus stack — reused, not
-  duplicated.
+- [ ] **5.3d.13** Scout the ABS book typed-input, interaction-reader, legacy-render,
+  image, and layout teardown at symbol level; add the resulting bounded rows here
+  before any Phase-B book writer starts. **Open report-only gate** before any ABS
+  Book Phase-B writer; no Phase-B production tasks are invented below it. (The
+  Phase-A push helper at 5.3d.12 is checked.)
 
-  Verification: `rtk cargo nextest run -p mbv key_policy
-  root_ui_uses_native_lifo_focus_restoration` → 4 passed; full `rtk cargo
-  nextest run -p mbv` → 1133 passed; `rtk cargo check -p mbv`, `rtk cargo
-  clippy --workspace --all-targets`, `rtk cargo fmt --all -- --check` clean
-  (pre-existing screen-boundary warnings only). `rtk ast-grep scan` reports 69
-  pre-existing `render/screens` boundary errors unrelated to this unit (none in
-  `key_policy.rs`); the task-specific architecture rules (D15 static-table
-  path, D16 structural mouse proofs) pass. 5.3d kept unchecked.
-- [ ] 5.5 Flip all `docs/architecture/interactive-surface-ledger.md` rows to `migrated` with verification records; verify no `legacy` **and no `component`** row remains (see 1.10).
-- [ ] 5.6 Final gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`, and `rtk make check-code-file-lines` all pass; confirm no parallel legacy interaction framework remains and the shell Model holds only shell/runtime authority plus the TuiRealm `Application`.
+---
+
+## 5. Global framework/campaign gates
+
+These remain **open** until the whole change completes. The mixed framework is
+never a mergeable endpoint; the final end-of-change requirements below are the
+definition of done.
+
+### 5.3d aggregate + final rows (open)
+
+- [ ] **5.3d** Teardown — framework removal. Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10.
+  Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, the global mouse
+  router/hit map and duplicated mouse-coordinate paths, every interaction-state
+  `sync_<surface>()` mirror, and all remaining temporary interaction adapters.
+  Render-only layout state may remain under D16. **Stays open through every
+  remaining row below and `5.3d.21–24`.**
+
+### Final gates
+
+- [ ] **5.3d.21** After every surface row above lands, re-inventory remaining
+  `CONTEXT_STACK`, `Msg::Legacy`, `LegacyTerminalEvent`, `LegacyInput` terminals,
+  and `sync_*` interaction endpoints; classify retained shell-owned content
+  projections and add exact deletion rows before editing.
+- [ ] **5.3d.22** Delete now-unreferenced per-surface `CONTEXT_STACK` handlers in
+  bounded families (the static keyboard-precedence proofs from 5.4).
+- [ ] **5.3d.23** Delete `LegacyInput`, `Msg::Legacy`, `LegacyTerminalEvent`,
+  terminal reconstruction adapters, and obsolete mount/sync names after the
+  inventory is empty (no raw legacy terminal endpoint remains).
+- [ ] **5.3d.24** Verify no component-local interaction state is mirrored through
+  `App`, no legacy renderer paints beneath a migrated component surface, and no
+  global mouse router/hit map remains.
+- [ ] **5.5** Flip all `docs/architecture/interactive-surface-ledger.md` rows to
+  `migrated` with verification records; verify no `legacy` **and** no `component`
+  row remains (see 1.10).
+- [ ] **5.6 Final gate:** `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
+  `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan` pass; plus the
+  **final-only** `rtk make check-code-file-lines`; confirm no parallel legacy
+  interaction framework remains and the shell Model holds only shell/runtime
+  authority plus the TuiRealm `Application`.
+
+Final commands preserved in full. The line-cap gate (`rtk make check-code-file-lines`)
+runs only here.
+
+---
+
+## 6. Completed execution ledger
+
+All originally-checked rows, preserved. This is the "past" of the campaign — do
+not re-execute. Original 77 checked rows are listed below; the new checked leaf
+aliases (`U0`–`U5`, and stable IDs on previously-completed unnamed units) are
+additions shown as checked without implying a "remain 89" total.
+
+### Foundation (group 1)
+
+- [x] **1.1** Add `tuirealm = "4.1"` (default features already include
+  `crossterm` and `derive`); verify `rtk cargo check -p mbv` succeeds and
+  `Cargo.lock` resolves tuirealm 4.1 on the existing ratatui 0.30/crossterm 0.29.
+- [x] **1.2** Declare `rust-version = "1.88"` in `[workspace.package]` **and** add
+  `rust-version.workspace = true` to each member (`mbv`, `mbv-core`, `mbvd`);
+  verify `rtk cargo check --workspace` passes and CI uses a ≥1.88 toolchain.
+- [x] **1.3** Add `src/app/components/` with the `ComponentId`, `Msg`, and
+  `UserEvent` enums from D3–D5 (surface variants may start empty); verify
+  `rtk check -p mbv`.
+- [x] **1.4** Introduce the shell `Model` holding `App` and the TuiRealm
+  `Application<ComponentId, Msg, UserEvent>`; verify it builds.
+- [x] **1.5** Convert `App::run` to drive `application.tick(PollStrategy::Once(..))`
+  and mark the frame dirty when `tick` reports a processed event (reuse the
+  existing `had_events` → `wants_terminal_render` path). † Note — "the binary still
+  launches", "temporary message-only `LegacyInput`", verify the first frame still
+  precedes Remote Service startup (ADR 0018); test unchanged.
+- [x] **1.6** Map each run-loop receiver (startup, player, library, Search, session,
+  cast, shared-data, feed, image, websocket, ABS socket) to a shell-owned adapter
+  (default) or a TuiRealm `Port`, each injecting a `UserEvent` token; validated by
+  the existing generation/revision/session/image-key guards then written via
+  `get_component_mut`+downcast; prefer shell-owned adapters for runtime-replaced
+  listeners (player, websocket, ABS socket) since `restart_listener` replaces the
+  whole listener. Verify async-completion behaviour and stale-completion discards
+  unchanged.
+- [x] **1.7** Add the `key_policy` ordered precedence table mirroring the current
+  `CONTEXT_STACK` order and wire global/parent bindings as TuiRealm subscriptions
+  with mutually-exclusive `SubClause` guards derived; verify against ADR 0002
+  input-precedence tests.
+- [x] **1.8** Route mouse via `EventClause::Any` subscriptions on visible top-level
+  regions, filtering `Event::Mouse(column,row)` against its own painted geometry
+  guided `Not(IsMounted(overlay))` under blocking overlays (no shell hit-router —
+  `Application` has no per-component event delivery); CP1 `LegacyInput` route. Verify
+  unchanged mouse behaviour.
+- [x] **1.9** Add enforcement scaffolding: `rules/interactive-component-boundary/*.yml`
+  (reject `impl App`, `App` as type, Service-client/`PlayerProxy` deps, `mpsc`
+  ownership) each with one accepted + one rejected fixture, register the dir in
+  `sgconfig.yml`, add `.github/workflows/architecture-boundaries.yml` job
+  `interactive-component-boundary` pinning ast-grep 0.44.1; verify scan passes and
+  fixtures demonstrate accept/reject.
+- [x] **1.10 (doc-only, do first)** — reconcile the ledger vocabulary: add the
+  intermediate state `component` to `docs/architecture/interactive-surface-ledger.md`
+  legend; demote the seven already-flipped rows (Help, Confirm, Daemon-lost,
+  Remote-reanchor, Context menu, Global Search sidebar, Sessions) from `migrated`
+  to `component`; add the term to `CONTEXT.md` per the AGENTS.md new-domain-term
+  rule behind 5.5's gate.
+
+### Group 2 — low-risk leaf surfaces
+
+- [x] **2.1** Convert Help sidebar (local scroll, destination-derived content);
+  verify `rtk cargo nextest run -p mbv help` + `rtk ast-grep scan`.
+- [x] **2.2** Convert Confirm modal (shared yes/no).
+- [x] **2.3** Convert Daemon-lost modal (process-lifecycle effects stay shell-owned).
+- [x] **2.4** Convert Remote-reanchor popup (reconciliation stays shell-owned).
+- [x] **2.5** Convert Context menu (exclusive top-priority overlay with anchor
+  geometry).
+
+### Group 3 — medium-risk surfaces
+
+- [x] **3.1** Extract the Search render seam (`render_panel_shell*`,
+  `render_sidebar_scrollbar`, `panel_row_text_width`, `render_panel_row`),
+  output-preserving, no `impl App`.
+- [x] **3.2** Convert the global Search sidebar (component-owned 300 ms debounce
+  via `UserEvent::Clock`, preserve the `global-search-sidebar` contract, do **NOT**
+  fix its known bugs).
+- [x] **3.3** Convert inline library Search (`LibSearch`, child of one Emby
+  browser, distinct from global Search). Component owns query string + results
+  cursor/scroll + the two candidate-pool shapes; shell keeps
+  `spawn_search_items_load`, `App.album_indexes`, `activate_recursive_album`;
+  `LibraryTab.search` stays on `App` until 5.3a.
+- [x] **3.4** Convert Home (cross-Service rows + hero presentation). partly landed:
+  `src/app/shell_home.rs` mounts it and mirrors `App.home` per tick; remaining work
+  component-owned local cursor/scroll, test bundle, ledger row. `key_policy`
+  precedence deferred to 5.2.
+- [x] **3.5** Convert the Emby generic/Movies/home-video browser (gated on 3.11);
+  music-group/series/album branches stay behind the 3.11 seam until 4.2/4.3/4.4.
+- [x] **3.6** Convert Feeds (grouping/selector/list/inline hero); shell keeps the
+  refresh `mpsc`, `feed_tab_actions.rs`, Home-Feeds section build, `feeds_manage`
+  reset, `sync_feeds()`. Teardown of all above is 5.3b.
+- [x] **3.7** Convert the Sessions sidebar (merged Emby/Cast targets, fixed-stride
+  geometry); verify `rtk cargo nextest run -p mbv sessions` + scan.
+- [x] **3.8** Convert Selection modal (filters, source-specific behaviour).
+- [x] **3.9** Convert Playback prompts (skip-intro/next-up; Player effects stay
+  shell-owned).
+- [x] **3.10** Convert Settings nested popups (Multiselect, Library-routes,
+  Feed-management) as `Popup` children.
+- [x] **3.11** **Shared render seam — gates 3.3/3.5/4.2/4.3/4.4.** Behaviour-
+  preserving extraction; parameterizes item-source/cursor/scroll/column/hero-sizing
+  decisions currently made by `impl App` reading `lib.search` and `lib.nav_stack`
+  directly into a typed context (`ListRenderCtx`), across `list.rs` (`render_list`,
+  `render_wide_library_rows`), `tv_wide.rs` (`render_wide_tv`), `movies_wide.rs`
+  (`render_wide_movies`, `selected_movie`), `music_wide.rs` (`render_music_group`,
+  `render_left_tracks`), `detail.rs` (`selected_movie_item`, `selected_series_item`).
+  ~1,500 lines — largest single diff; sequential per-file commits encouraged.
+
+### Group 4 — high-risk surfaces
+
+- [x] **4.1** Convert Queue (cursor/scroll/scope to the component; canonical queue
+  stays in the Player owner, referenced by opaque `QueueSlotId`).
+- [x] **4.2** Convert the TV workspace (two focusable panes, season/episode child
+  targets). Gated on 3.11, independent of 3.5.
+- [x] **4.3** Convert the grouped Music workspace (album/track focus coupling).
+- [x] **4.4** Convert inline album-track interaction (child state machine of Music).
+- [x] **4.5** Convert the Audiobookshelf podcast browser (show/episode workspace).
+- [x] **4.6** Convert the Audiobookshelf book browser (browser/chapter workspace).
+- [x] **4.7** Convert Playlists sidebar (variable-row `hit_test`). The duplicated
+  mouse-path geometry in `input_mouse_panels.rs` is 5.3c.
+- [x] **4.8** Convert the Save-playlist dialog (child of the Playlists workflow).
+- [x] **4.9** Convert the Settings sidebar and setup forms (Service effects stay
+  typed `Msg::Service`).
+- [x] **4.10** Convert Playback chrome and global controls (Playback authority
+  stays outside; reduced-panel projection).
+
+### Group 5 — teardown core (completed; the `5.3d` aggregate stays open)
+
+- [x] **5.1** Convert the Library parent (active destination, Panel focus/mode,
+  child routing); verify `library_parent` + scan.
+- [x] **5.2** Convert Root UI + overlay-stack routing using TuiRealm's native LIFO
+  focus stack (yes). Resolve here the precedence questions deferred from groups
+  2–4 (the per-key gates) with the 5.2 `SubClause`/mount-time one-component-per-tab
+  answer; verify `root_ui` + scan.
+- [x] **5.3-pre** — LibraryTab constructor (`LibraryTab::new(library)`), rewrite
+  each literal to `..LibraryTab::new(item)`, delete no field. Verify unchanged test
+  count + clippy full.
+- [x] **5.3a** — Teardown Library/browse cluster. Requires 3.3/3.5/3.11/4.2/4.3/4.4/
+  5.1. Delete `LibraryTab`'s component-owned fields (`search`,
+  `series_selection`/`series_season_cursor`) + the handlers: `input_browse_dispatch.rs`,
+  `input_lib_keys.rs`, the eight `search.is_some()` branches in
+  `lib_cursor_actions.rs`, `select`/`go_back` arms in `actions_navigation.rs`,
+  `lib_event_actions.rs` `lib.search` handlers, `library_search_actions.rs`; extract
+  `select(lib_idx)` → `select_item(lib_idx, item)`. Rewrite the tests. **Landed**
+  in three passes (search `008be6c5`..`9ac69d81`, series `9e4bd7c`/`153c9b9`/
+  `758d0a84`; `5.3-pre` `5d9e77ec`).
+- [x] **5.3b** — Teardown Feeds cluster. Requires 3.6/3.4/3.10/5.1. Delete
+  `FeedTabState` interaction fields; move readers to the shell boundary
+  (`feed_tab_actions.rs`, Home-Feeds section build, `feeds_manage` reset, Feeds
+  key/mouse branches). `App.feed_tab` itself survives (shell-owned fetch state;
+  not component-owned; 5.6 does not require removal).
+- [x] **5.3c** — Teardown overlay/modal cluster. Requires 2.1–2.5/3.2/3.7/3.8/3.9/
+  4.7/4.8/4.9/5.2. Delete the `App` open-flags, overlay state, and forwarded
+  handlers + duplicated `input_mouse_panels.rs` geometry. Dispatched as named
+  units, sized by files forced open (~45 ceiling / ~25 target). **Completed units
+  (5.3c.1–.7):**
+  - [x] **5.3c.1** Overlay prep — `shell_overlays.rs` split by family,
+    `App::ask_confirm`.
+  - [x] **5.3c.2** Modals — `confirm_modal`, `daemon_lost_modal`,
+    `remote_reanchor_popup`, `save_playlist_dialog` replaced by
+    `pending_overlay: Option<OverlayRequest>` + `blocking_overlay_active`. 48 files.
+  - [x] **5.3c.3** Sidebar state prep — the four open-flags collapsed to
+    `open_sidebar: Option<SidebarId>`.
+  - [x] **5.3c.4** Sidebars — delete `open_sidebar` + sidebar `handle_key_*`.
+  - [x] **5.3c.5** Selection modal.
+  - [x] **5.3c.6** Context menu.
+  - [x] **5.3c.7** Settings popups.
+
+### 5.3d completed units
+
+- [x] **5.3d.P1** Album cursor prep — settle the narrow-mode question (or prove
+  unreachable), move `render/screens/album_cursor.rs` three entry points into
+  `MusicWorkspaceComponent`. Behaviour-neutral, deletes no field.
+- [x] **5.3d.P2** Album track focus — delete `LibraryTab.album_track_focus`, re-home
+  its four `= None` resets; `MusicWorkspaceComponent::track_cursor` is the sole
+  owner (narrow stays explicitly unfocused). `#app`-free. Landing reported `6b2977d4`.
+- [x] **5.3d.M0** Mouse gesture prep — extract the remaining three
+  `match self.tab` dispatch points into one named method per surface (mirroring
+  `handle_mouse_scroll_browse`).
+- [x] **5.3d.M1** Mouse geometry and router — alpha scope disposition; for the
+  deferrals the D16 series; for the landed units the mouse-path ownership:
+  - [x] **5.3d.M1a** `browser` `hit_test` — real row/hit geometry.
+  - [x] **5.3d.M1b** `home` `hit_test`.
+  - [x] **5.3d.M1c** `queue` `hit_test`.
+  - [x] **5.3d.M1d** `tv_workspace` `hit_test` — two focusable panes.
+  - [x] **5.3d.M1e** `music_workspace` `hit_test` — explicitly deferred beyond
+    alpha by D16.
+  - [x] **5.3d.M1f** Blocking modals/prompt (`confirm`, `daemon_lost`,
+    `remote_reanchor`, `playback_prompt`) — explicitly deferred beyond alpha by D16.
+  - [x] **5.3d.M1g** Framework deletion — delete the three legacy
+    `input_mouse*.rs` entry points and their global coordinate routing.
+- [x] **5.3d.1** Recount and classify remaining `sync_*` methods; record retained
+  shell-owned projections vs seven interaction mirrors in `scoping-5.3d-mirrors.md`.
+- [x] **5.3d.2** Re-home Home content and section-preference ownership, replace the
+  per-frame content mirror with writer pushes. `b3fbf5b0`–`b21653dc`.
+- [x] **5.3d.3** Replace ABS podcast per-frame content projection with event-scoped
+  writer pushes. `b414a1ec`, `2c6bcce5`.
+- [x] **5.3d.4** Resolve the podcast show-movement parity discrepancy; the
+  component's restored `selected_id` (local one-item/page vs legacy multi-column
+  row). Exact typed contract: `ShellRequest::AudiobookshelfPodcastShowMove`.
+- [x] **5.3d.5** Convert only podcast show-list movement to
+  `AudiobookshelfPodcastShowMove`. `4eeee915`.
+- [x] **5.3d.6** Convert podcast episode movement/filter/exit to
+  `AudiobookshelfPodcastEpisodeTransition`. `0d8a4ef0`.
+- [x] **5.3d.7** Convert podcast enter/play/enqueue/modal to typed intents. `d6f67656` +
+  `e7abcb13`.
+- [x] **5.3d.8** Complete the podcast downstream-reader/cover-fetch handoff:
+  enumerate persistence/queue/legacy-render/image-fetch readers. No production edit.
+- [x] **5.3d.9** Move podcast cover fetch to the smallest shell/Model bridge;
+  preserve the image-disabled gate. `bbe2fda4`.
+- [x] **5.3d.10** Delete podcast legacy underpaint after its cover/layout handlers
+  are detached; keep narrow/default render characterization. (Cover-fetch bridge
+  landed in 5.3d.9; legacy underpaint removal, plus the row's `10d`/`10e` slices,
+  commits `4d2f6de1`, `af2bf9c8`, `ad403485`+`2e9090e5`.)
+- [x] **5.3d.12** Implement the two-file Audiobookshelf book Phase-A push helper
+  (mount-only reconciliation + writer-seam pushes; App writers/component/renderer
+  unchanged). `4f5df745` + key-seam/kind-guard correction `354fc5c0`.
+- [x] **5.3d.14** Resolve Emby `wide_movies` ownership (**D18**): adopt the
+  temporary per-draw adapter now (move `set_wide_movies` into the draw closure,
+  mirroring `dim_backdrop_active`); component-local derivation deferred to
+  5.3d.17/R1.
+- [x] **5.3d.15** Split Emby mount reconciliation from content projection, replace
+  content/focus pushes at proven writers. `8929248` (mount) + `push`/M2; Emby template.
+- [x] **5.3d.16** Claim remaining Emby raw-key fallthrough, remove cursor/scroll
+  mirror-pin, make the component authoritative.
+- [x] **5.3d.17** Remove Emby generic/Movies/home-video legacy underpaint after the
+  wide dependency is detached; remove the empty sync/mount adapter.
+- [x] **5.4** Confirm every alpha-supported mouse path reads component-owned
+  geometry; verify keyboard precedence, deterministic focus restoration, and D16's
+  structural checks (the absence of the three `input_mouse*.rs` entry points and of
+  any global mouse hit map). **Completed static-table proof path; D15 declined
+  (explicit).** Six proofs + deterministic focus restoration recorded in section 7
+  below (`key_policy.rs` keeps `#![allow(dead_code)]`).
+  - [x] **Orphan cleanup** (folded into this unit) — `ccc75e30` deleted the dead
+    `GroupedAlbumGroup.start`/`.end` and `GroupedAlbumCatalog.groups` fields and
+    their builders.
+
+---
+
+## 7. Historical decisions/completion evidence
+
+Keep the completed evidence readable but out of the active path.
+
+### 5.4 proof narrative (D15 declined explicitly)
+
+`KEY_POLICY` and `KeyPolicyGate::sub_clause()` are referenced nowhere outside
+`key_policy.rs`'s own ordering test; the file carries `#![allow(dead_code)]`. 5.3a
+analyzed and table runs through legacy CONTEXT_STACK dispatch, so the clauses do
+not execute until legacy input is removed at 5.3c/5.3d. 5.4 **declined** D15's
+`Component::perform(Cmd)` adoption because that is not incrementally valid while
+`LegacyInput` and `CONTEXT_STACK` still route keys. Proofs established:
+
+1. blocking-overlay swallow — `blocking_contexts_swallow_before_*` test: every
+   `blocking` entry precedes every `Sub` entry; `global_overlay_open` gate is
+   `NotHasAttrValue(Playback, ATTR_BLOCKING_OVERLAY_ACTIVE)`.
+2. parent/global precedence + owners — `parent_and_global_bindings...` test.
+3. table consistent with CONTEXT_STACK — `key_policy_order_matches_context_stack`
+   test.
+4. simultaneous Queue+Library mouse — D16 structural: `input_mouse*.rs` absent and
+   no global mouse map/router remains; components self-filter.
+5. global overlay blocks underlying mutation — D16 structural; the
+   `global_overlay_open` gate + `ATTR_BLOCKING_OVERLAY_ACTIVE`.
+6. geometry cannot drift — D16 structural: each component hit-tests its own
+   view()-painted `Rect`/rows (`home.rs`, `tv_workspace`, `browser`, `queue`,
+   `playlists`, `settings`, …); `AppLayout` survives only load-bearing.
+
+Deterministic focus restoration: `root_ui_uses_native_lifo_focus_restoration`
+(covers Help, stacked Confirm, restoration)).
+
+### 5.3c / 5.3d sizing and deferral record
+
+- Modals were 48 files / 958 changed lines (ceiling ~45 files / target ~25).
+- `music_workspace` and blocking-modal/prompt mouse **deferred beyond alpha by
+  D16**; framework deletion supersedes the remaining mouse work.
+- `App.feed_tab` survives holding shell-owned fetch state (not component-owned).
+
+### D16 restatement (accept for this ledger)
+
+Global interaction/hit-routing authority and interaction-only layout data are
+removed; render-only, load-bearing `AppLayout` state may remain. `AppLayout`
+survives only for load-bearing rendering, not as an interaction hit-map.
+
+### Scout-handoff notice
+
+The five scout handoff files referenced by earlier rows
+(`scout-abs-podcast-b1-first-slice.md`, `scout-music-workspace-preliminary.md`,
+`scout-abs-book-phase-a.md`, `scout-emby-browser.md`, `scout-tv-workspace.md`) do
+not exist under `openspec/handoffs/`. Their inline contracts/evidence have
+been retained in the rows above (5.3d.4, 5.3d.18–20, 5.3d.12, 5.3d.14–17) so no
+task loses its contract; no replacement handoff files are created.
+
+### D14–D18 remain
+
+- **D14** two-stage mirror→delete.
+- **D15** `Cmd in, Msg out`, static-proof path (declined at 5.4).
+- **D16** accepted-broken; framework deleted rather than ported.
+- **D17** discovery-led staged teardown; ~3–6 production-file writer units.
+- **D18** Emby `wide_movies` per-draw adapter; component-owned V0 at underpaint.
+
+No Phase-B production tasks are invented below 5.3d.13.
