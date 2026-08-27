@@ -3,8 +3,9 @@
 //! Owns the popup's display content (targets, cursor) set by the shell via
 //! downcast before each render. The shell owns reconciliation; the component
 //! forwards keys as `Msg::Shell(ShellRequest::RemoteReanchorKey(key))` so the
-//! shell can run the reconciliation effect. Mouse
-//! events are forwarded to the legacy `App::handle_mouse` path.
+//! shell can run the reconciliation effect. Mouse and other events are
+//! swallowed by the blocking popup; UiRoot's permanent observer supplies the
+//! redraw signal (design D12).
 
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};

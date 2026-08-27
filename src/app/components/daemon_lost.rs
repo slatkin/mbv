@@ -2,12 +2,11 @@
 //!
 //! Owns the modal's display content (last_playing_title, daemon_log_path,
 //! restart_error) set by the shell via downcast before each render. The shell
-//! owns restart/quit dispatch in the shell; the
-//! component forwards every key as
+//! owns restart/quit dispatch in the shell; the component forwards every key as
 //! `Msg::Shell(ShellRequest::DaemonLostKey(key))` so the shell can run the
-//! existing handler unchanged. Mouse events are forwarded to the legacy
-//! `App::handle_mouse` path (same as Confirm — the legacy daemon-lost modal
-//! does not block mouse).
+//! existing handler unchanged. Mouse and other events are swallowed by the
+//! blocking modal; UiRoot's permanent observer supplies the redraw signal
+//! (design D12).
 
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
