@@ -5,8 +5,8 @@
 //! key-to-action dispatch in the shell; the component
 //! forwards every key as `Msg::Shell(ShellRequest::ConfirmKey(key))` so the
 //! shell can run the existing handler unchanged. The component owns rendering
-//! and the blocking-modal swallow semantics (returns `Some(NoOp)` for
-//! non-key/non-mouse events — the redraw signal, design D12).
+//! and blocking-modal event semantics; non-key events return `None` because the
+//! permanent UiRoot observer owns the redraw signal (design D12).
 
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
@@ -15,8 +15,8 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::legacy_input::to_crossterm_key_event;
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_confirm_modal_content;
 use crate::app::types_confirm::{ConfirmAction, ConfirmModal};
@@ -113,17 +113,9 @@ impl AppComponent<Msg, UserEvent> for ConfirmComponent {
                 let crossterm_key = to_crossterm_key_event(key);
                 Some(Msg::Shell(ShellRequest::ConfirmKey(crossterm_key)))
             }
-            // Mouse events: forward to the legacy `App::handle_mouse` path
-            // (design D12/D13). The legacy confirm modal does not block
-            // mouse — clicks on tabs, panels, and playback controls still
-            // work while a confirm modal is open. The component is the active
-            // component, so without forwarding the mouse would be swallowed.
-            Event::Mouse(mouse) => {
-                let crossterm_mouse = to_crossterm_mouse_event(mouse);
-                Some(Msg::Legacy(LegacyTerminalEvent::Mouse(crossterm_mouse)))
-            }
-            // Non-key/non-mouse events: no-op redraw signal (design D12).
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            // Mouse and other events are swallowed by the blocking modal.
+            // UiRoot's permanent observer supplies the redraw signal.
+            _ => None,
         }
     }
 }
@@ -173,32 +165,19 @@ mod tests {
     }
 
     #[test]
-    fn non_keyboard_event_returns_noop() {
+    fn non_keyboard_events_return_none() {
         let mut comp = ConfirmComponent::new();
-        let msg = comp.on(&Event::<UserEvent>::None);
-        assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
-    }
-
-    #[test]
-    fn tick_event_returns_noop() {
-        let mut comp = ConfirmComponent::new();
-        let msg = comp.on(&Event::<UserEvent>::Tick);
-        assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
-    }
-
-    #[test]
-    fn mouse_event_forwards_to_legacy_handler() {
-        let mut comp = ConfirmComponent::new();
-        let msg = comp.on(&Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: 10,
-            row: 5,
-            modifiers: KeyModifiers::NONE,
-        }));
-        assert!(matches!(
-            msg,
-            Some(Msg::Legacy(LegacyTerminalEvent::Mouse(_)))
-        ));
+        assert_eq!(comp.on(&Event::<UserEvent>::None), None);
+        assert_eq!(comp.on(&Event::<UserEvent>::Tick), None);
+        assert_eq!(
+            comp.on(&Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 10,
+                row: 5,
+                modifiers: KeyModifiers::NONE,
+            })),
+            None
+        );
     }
 
     #[test]

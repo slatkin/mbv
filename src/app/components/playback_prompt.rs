@@ -11,8 +11,8 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::legacy_input::to_crossterm_key_event;
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 
 pub struct PlaybackPromptComponent {
@@ -79,10 +79,36 @@ impl AppComponent<Msg, UserEvent> for PlaybackPromptComponent {
             Event::Keyboard(key) => Some(Msg::Shell(ShellRequest::PlaybackPromptKey(
                 to_crossterm_key_event(key),
             ))),
-            Event::Mouse(mouse) => Some(Msg::Legacy(LegacyTerminalEvent::Mouse(
-                to_crossterm_mouse_event(mouse),
-            ))),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            // Mouse and other events do not carry prompt actions. UiRoot's
+            // permanent observer supplies the redraw signal.
+            _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tuirealm::event::{Key, KeyModifiers};
+
+    #[test]
+    fn key_forwards_to_shell() {
+        let mut comp = PlaybackPromptComponent::new();
+        let msg = comp.on(&Event::Keyboard(tuirealm::event::KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert!(matches!(
+            msg,
+            Some(Msg::Shell(ShellRequest::PlaybackPromptKey(key)))
+                if key.code == crossterm::event::KeyCode::Enter
+        ));
+    }
+
+    #[test]
+    fn non_action_events_return_none() {
+        let mut comp = PlaybackPromptComponent::new();
+        assert_eq!(comp.on(&Event::<UserEvent>::None), None);
+        assert_eq!(comp.on(&Event::<UserEvent>::Tick), None);
     }
 }

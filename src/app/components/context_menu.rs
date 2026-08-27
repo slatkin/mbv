@@ -13,12 +13,11 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, KeyEvent as TuiKeyEvent, MouseEvent};
+use tuirealm::event::{Event, KeyEvent as TuiKeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::to_crossterm_mouse_event;
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_context_menu_content;
 use crate::app::types_context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};
@@ -111,8 +110,6 @@ impl ContextMenuComponent {
         if self.entries.is_empty() || self.menu_rect == Rect::default() {
             return None;
         }
-        let mouse = to_crossterm_mouse_event(mouse);
-        use crossterm::event::{MouseButton, MouseEventKind};
         use ratatui::layout::Position;
         let pos = Position::new(mouse.column, mouse.row);
         let inside = self.menu_rect.contains(pos);
@@ -139,13 +136,13 @@ impl ContextMenuComponent {
                         if entry.action.is_some() && idx != self.cursor {
                             self.cursor = idx;
                             // Force a redraw so the highlight follows the pointer.
-                            return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+                            return None;
                         }
                     }
                 }
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }
@@ -194,8 +191,9 @@ impl AppComponent<Msg, UserEvent> for ContextMenuComponent {
             }
             // The component owns its mouse hit-test (task 5.3c).
             Event::Mouse(mouse) => self.handle_mouse(mouse),
-            // Non-key/non-mouse events: no-op redraw signal (design D12).
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            // Non-key/non-mouse events are handled by UiRoot's permanent
+            // observer, which supplies the redraw signal (design D12).
+            _ => None,
         }
     }
 }
@@ -234,10 +232,9 @@ mod tests {
     }
 
     #[test]
-    fn non_keyboard_event_returns_noop() {
+    fn non_keyboard_event_returns_none() {
         let mut comp = ContextMenuComponent::new();
-        let msg = comp.on(&Event::<UserEvent>::None);
-        assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+        assert_eq!(comp.on(&Event::<UserEvent>::None), None);
     }
 
     #[test]

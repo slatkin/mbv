@@ -12,8 +12,8 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::legacy_input::to_crossterm_key_event;
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_remote_reanchor_popup_content;
 
@@ -95,11 +95,9 @@ impl AppComponent<Msg, UserEvent> for RemoteReanchorComponent {
                 let crossterm_key = to_crossterm_key_event(key);
                 Some(Msg::Shell(ShellRequest::RemoteReanchorKey(crossterm_key)))
             }
-            Event::Mouse(mouse) => {
-                let crossterm_mouse = to_crossterm_mouse_event(mouse);
-                Some(Msg::Legacy(LegacyTerminalEvent::Mouse(crossterm_mouse)))
-            }
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            // Mouse and other events are swallowed by the popup.
+            // UiRoot's permanent observer supplies the redraw signal.
+            _ => None,
         }
     }
 }
@@ -138,25 +136,18 @@ mod tests {
     }
 
     #[test]
-    fn non_keyboard_event_returns_noop() {
+    fn non_keyboard_events_return_none() {
         let mut comp = RemoteReanchorComponent::new();
-        let msg = comp.on(&Event::<UserEvent>::None);
-        assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
-    }
-
-    #[test]
-    fn mouse_event_forwards_to_legacy_handler() {
-        let mut comp = RemoteReanchorComponent::new();
-        let msg = comp.on(&Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: 10,
-            row: 5,
-            modifiers: KeyModifiers::NONE,
-        }));
-        assert!(matches!(
-            msg,
-            Some(Msg::Legacy(LegacyTerminalEvent::Mouse(_)))
-        ));
+        assert_eq!(comp.on(&Event::<UserEvent>::None), None);
+        assert_eq!(
+            comp.on(&Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 10,
+                row: 5,
+                modifiers: KeyModifiers::NONE,
+            })),
+            None
+        );
     }
 
     #[test]
