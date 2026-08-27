@@ -248,18 +248,46 @@ fn browser_alt_navigation_forwards_to_global_dispatch() {
     let mut browser = BrowserComponent::new();
     browser.set_content(LibraryListRenderCtx::from_items(make_items(2), 0, 0), true);
 
+    for (code, expected) in [
+        (Key::Left, KeyCode::Left),
+        (Key::Right, KeyCode::Right),
+        (Key::Up, KeyCode::Up),
+        (Key::Down, KeyCode::Down),
+    ] {
+        let message = browser.on(&Event::Keyboard(TuiKeyEvent {
+            code,
+            modifiers: KeyModifiers::ALT,
+        }));
+
+        assert!(matches!(
+            message,
+            Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+                if key.code == expected
+                    && key.modifiers == CrosstermKeyModifiers::ALT
+        ));
+    }
+    assert_eq!(
+        browser.cursor(),
+        0,
+        "Alt navigation must not move the local cursor"
+    );
+}
+
+#[test]
+fn browser_alt_refresh_stays_component_owned() {
+    let mut browser = BrowserComponent::new();
+    browser.set_content(LibraryListRenderCtx::from_items(make_items(1), 0, 0), true);
+
     let message = browser.on(&Event::Keyboard(TuiKeyEvent {
-        code: Key::Up,
+        code: Key::Char('r'),
         modifiers: KeyModifiers::ALT,
     }));
 
-    assert_eq!(browser.cursor(), 0, "Alt+Up must not move the local cursor");
-    assert!(matches!(
+    assert_eq!(
         message,
-        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
-            if key.code == KeyCode::Up
-                && key.modifiers == CrosstermKeyModifiers::ALT
-    ));
+        Some(Msg::Shell(ShellRequest::BrowserRefresh)),
+        "Alt+r must remain the browser's local refresh effect"
+    );
 }
 
 #[test]

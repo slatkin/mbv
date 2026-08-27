@@ -137,6 +137,16 @@ fn enter_emits_typed_play_at_the_flat_cursor() {
 }
 
 #[test]
+fn home_alt_enter_stays_component_owned() {
+    let mut home = two_section_home();
+    let msg = home.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::ALT,
+    }));
+    assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomePlay(0))));
+}
+
+#[test]
 fn ctrl_enter_and_ctrl_a_enqueue_at_the_flat_cursor() {
     // Task 5.3d, Home typed-effect keyboard ownership: both the Ctrl+Enter
     // and Ctrl+A chords enqueue the component's flat cursor target via the

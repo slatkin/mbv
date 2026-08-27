@@ -21,7 +21,9 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
@@ -331,7 +333,15 @@ impl HomeComponent {
         &mut self,
         key: crossterm::event::KeyEvent,
     ) -> Option<Msg> {
-        if key.modifiers.contains(crossterm::event::KeyModifiers::ALT) {
+        if key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
+            && matches!(
+                key.code,
+                crossterm::event::KeyCode::Left
+                    | crossterm::event::KeyCode::Right
+                    | crossterm::event::KeyCode::Up
+                    | crossterm::event::KeyCode::Down
+            )
+        {
             return Some(Msg::Shell(ShellRequest::GlobalViewKey(key)));
         }
         if !self.focused {
@@ -393,7 +403,9 @@ impl HomeComponent {
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if key.modifiers.contains(KeyModifiers::ALT) {
+        if key.modifiers.contains(KeyModifiers::ALT)
+            && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
+        {
             return Some(Msg::Shell(ShellRequest::GlobalViewKey(
                 to_crossterm_key_event(key),
             )));
