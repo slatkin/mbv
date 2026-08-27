@@ -285,6 +285,23 @@ mod tests {
     #[test]
     fn abs_podcast_shell_routes_episode_transition_to_app() {
         let mut model = Model::new(audiobookshelf_app());
+        // Two episodes so a Down move has a real second target.
+        model.app.audiobookshelf_browse[0].episodes = Some(vec![
+            mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-a".into(),
+                title: "Episode A".into(),
+                published_at: None,
+                duration_seconds: None,
+            },
+            mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-b".into(),
+                title: "Episode B".into(),
+                published_at: None,
+                duration_seconds: None,
+            },
+        ]);
         model.app.audiobookshelf_browse[0].episode_selection = Some(0);
         model.sync_audiobookshelf_podcast();
         let id = model
@@ -305,14 +322,15 @@ mod tests {
             panic!("episode movement should be routed as a typed episode transition");
         };
         assert_eq!(transition, PodcastEpisodeTransition::NextEpisode);
-        // The shell arm maps NextEpisode onto the legacy App episode-cursor
-        // move and re-projects content (task 5.3d.6), preserving the App
-        // episode target.
-        model.app.move_audiobookshelf_episode_cursor(1);
-        assert_eq!(
-            model.app.audiobookshelf_browse[0].episode_selection,
-            Some(0)
-        );
+        // The mounted component owns episode selection; NextEpisode already
+        // moved its own selection into the second row. Assert from the
+        // component accessor, not the App mirror, since the legacy App move
+        // handler is removed (5.3d.11 U2) and only the shell re-projection
+        // keeps the two in sync (D17).
+        let component = model
+            .abs_podcast_component_mut(0)
+            .expect("podcast component mounted");
+        assert_eq!(component.episode_selection(), Some(1));
     }
 
     #[test]
@@ -334,6 +352,92 @@ mod tests {
         model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::Enqueue);
         assert_eq!(model.app.audiobookshelf_browse[0].episode_selection, before);
         assert_eq!(model.app.player_tab.total_queue_len(), 1);
+    }
+
+    /// The load-bearing space/ctrl-a contract (task 5.3d.7), with an Emby
+    /// library present for leash-checking, space/ctrl-a on the mounted podcast
+    /// component report the typed action intents with episode selection active,
+    /// and the shell's FocusOrPlay (space) play is inert on an unsupported
+    /// owner while ctrl-a Enqueue still edits the Composed queue. The action
+    /// resolves episode-selection and owner eligibility at the Model boundary,
+    /// so the episode selection stays Some(0) throughout. Mirrors the
+    /// component/shell route, not direct field assignment.
+    #[test]
+    fn abs_podcast_shell_space_and_ctrla_are_inert_without_owner() {
+        let mut model = Model::new(audiobookshelf_app());
+        crate::app::tests_podcast::add_emby_movie_library(&mut model.app);
+        model.app.audiobookshelf_browse[0].episode_selection = Some(0);
+        let nav_len = model.app.libs[0].nav_stack.len();
+        model.sync_audiobookshelf_podcast();
+        let id = model
+            .abs_podcast_id
+            .clone()
+            .expect("podcast component mounted");
+
+        // Space -> FocusOrPlay: reported with selection, resolved inert at the
+        // App boundary without an eligible owner.
+        let space = model
+            .application
+            .get_component_mut(&id)
+            .expect("podcast component")
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Char(' '),
+                modifiers: KeyModifiers::NONE,
+            }));
+        let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(intent))) = space
+        else {
+            panic!("space should report a typed action intent");
+        };
+        assert_eq!(intent, PodcastEpisodeIntent::FocusOrPlay);
+        // Resolve the reported intent at the Model boundary; the play attempt
+        // is inert on an unsupported owner, surfacing the owner-unavailable
+        // status without enqueuing.
+        model.handle_audiobookshelf_podcast_episode_intent(intent);
+        assert_eq!(
+            model.app.audiobookshelf_browse[0].episode_selection,
+            Some(0)
+        );
+        assert_eq!(
+            model.app.player_tab.total_queue_len(),
+            0,
+            "inert space must not enqueue"
+        );
+        assert!(
+            model
+                .app
+                .status
+                .contains("Audiobookshelf playback owner is unavailable"),
+            "inert FocusOrPlay must surface the owner-unavailable status"
+        );
+
+        // Ctrl+A = Enqueue intent, resolved by the shell App effect.
+        let ctrl_a = model
+            .application
+            .get_component_mut(&id)
+            .expect("podcast component")
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Char('a'),
+                modifiers: KeyModifiers::CONTROL,
+            }));
+        let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(intent))) = ctrl_a
+        else {
+            panic!("ctrl-a should report as a typed action intent");
+        };
+        assert_eq!(intent, PodcastEpisodeIntent::Enqueue);
+        // Resolve the reported intent at the Model boundary so the Composed
+        // queue is edited; the component only reports, it does not enqueue.
+        model.handle_audiobookshelf_podcast_episode_intent(intent);
+        assert_eq!(
+            model.app.audiobookshelf_browse[0].episode_selection,
+            Some(0),
+            "enqueue intent must preserve the selected episode"
+        );
+        assert_eq!(model.app.player_tab.total_queue_len(), 1);
+        assert_eq!(
+            model.app.libs[0].nav_stack.len(),
+            nav_len,
+            "inert activation must not navigate the Emby library"
+        );
     }
 
     /// Synchronous image-plan lifecycle for the podcast component (task

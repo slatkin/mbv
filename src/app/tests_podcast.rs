@@ -141,42 +141,6 @@ fn audiobookshelf_tab_keys_cannot_enter_emby_action_paths() {
     assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(_)));
 }
 
-/// Unsupported-owner play remains inert while enqueue still edits the
-/// Composed queue without involving the owner.
-#[test]
-fn audiobookshelf_episode_space_and_enqueue_are_inert_without_owner() {
-    let mut app = audiobookshelf_app();
-    add_emby_movie_library(&mut app);
-    app.enter_audiobookshelf_episode_selection();
-    let nav_len = app.libs[0].nav_stack.len();
-
-    let space = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char(' '),
-        crossterm::event::KeyModifiers::NONE,
-    );
-    assert_eq!(app.handle_key_view_dispatch(space, false, None), Some(false));
-    let ctrl_a = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('a'),
-        crossterm::event::KeyModifiers::CONTROL,
-    );
-    assert_eq!(app.handle_key_view_dispatch(ctrl_a, false, None), Some(false));
-
-    assert_eq!(
-        app.audiobookshelf_browse[0].episode_selection,
-        Some(0),
-        "selected episode must be preserved"
-    );
-    assert_eq!(app.player_tab.total_queue_len(), 1);
-    assert_eq!(
-        app.libs[0].nav_stack.len(),
-        nav_len,
-        "inert activation must not navigate the Emby library"
-    );
-    assert!(app
-        .status
-        .contains("Audiobookshelf playback owner is unavailable"));
-}
-
 /// The Audiobookshelf destination never opens an Emby context menu, even when
 /// a populated Emby library would produce one if selected.
 #[test]
@@ -292,7 +256,7 @@ fn audiobookshelf_activation_enters_selection_then_remains_inert_without_owner()
 fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
     let mut app = audiobookshelf_app();
     add_emby_movie_library(&mut app);
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
     let before_selection = app.audiobookshelf_browse[0].episode_selection;
     let before_queue = app.player_tab.total_queue_len();
     let before_nav = app.libs[0].nav_stack.len();

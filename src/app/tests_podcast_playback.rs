@@ -19,7 +19,7 @@ fn enable_audiobookshelf_owner(app: &App) {
 #[test]
 fn audiobookshelf_play_selects_canonical_slot_and_submits_to_eligible_owner() {
     let mut app = super::tests_podcast::audiobookshelf_app();
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
     enable_audiobookshelf_owner(&app);
     app.player.status.lock().unwrap().active = true;
     let commands = app.player.spy_on_commands();
@@ -41,7 +41,7 @@ fn audiobookshelf_play_selects_canonical_slot_and_submits_to_eligible_owner() {
 #[test]
 fn audiobookshelf_enqueue_mutates_composed_queue_without_starting() {
     let mut app = super::tests_podcast::audiobookshelf_app();
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
     let commands = app.player.spy_on_commands();
 
     app.enqueue_selected_audiobookshelf_episode(0);
@@ -57,7 +57,7 @@ fn audiobookshelf_enqueue_mutates_composed_queue_without_starting() {
 #[test]
 fn audiobookshelf_enqueue_mutates_eligible_bound_queue_without_starting() {
     let mut app = super::tests_podcast::audiobookshelf_app();
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
     enable_audiobookshelf_owner(&app);
     app.player.status.lock().unwrap().active = true;
     let commands = app.player.spy_on_commands();
@@ -79,7 +79,7 @@ fn audiobookshelf_enqueue_mutates_eligible_bound_queue_without_starting() {
 #[test]
 fn audiobookshelf_ordinary_actions_reject_unsupported_owner_without_side_effects() {
     let mut app = super::tests_podcast::audiobookshelf_app();
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
     let (remote, _events) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
     app.player = mbv_core::player::PlayerProxy::remote(remote, false);
 
@@ -101,7 +101,7 @@ fn audiobookshelf_unavailable_episode_row_has_no_queue_or_playback_side_effects(
             duration_seconds: None,
         },
     ]);
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
 
     app.play_selected_audiobookshelf_episode(0);
     app.enqueue_selected_audiobookshelf_episode(0);
@@ -129,7 +129,7 @@ fn audiobookshelf_progress_ack_updates_matching_queue_slots_and_browse_state() {
             duration_seconds: Some(120.0),
         },
     ]);
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
     enable_audiobookshelf_owner(&app);
     app.play_selected_audiobookshelf_episode(0);
     app.enqueue_selected_audiobookshelf_episode(0);
@@ -182,7 +182,7 @@ fn audiobookshelf_progress_ack_updates_matching_queue_slots_and_browse_state() {
 #[test]
 fn audiobookshelf_progress_ack_updates_local_queue_when_remote_queue_is_target() {
     let mut app = super::tests_podcast::audiobookshelf_app();
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
     app.enqueue_selected_audiobookshelf_episode(0);
 
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
@@ -239,7 +239,7 @@ fn audiobookshelf_progress_ack_updates_local_queue_when_remote_queue_is_target()
 fn stale_audiobookshelf_progress_ack_is_ignored_after_generation_advance() {
     let mut app = super::tests_podcast::audiobookshelf_app();
     enable_audiobookshelf_owner(&app);
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
     app.enqueue_selected_audiobookshelf_episode(0);
     let before_queue = app
         .player_tab
@@ -312,7 +312,7 @@ fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
             duration_seconds: Some(120.0),
         },
     ]);
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
     enable_audiobookshelf_owner(&app);
     app.play_selected_audiobookshelf_episode(0);
     app.audiobookshelf_browse[0].episode_selection = Some(1);
@@ -398,7 +398,7 @@ fn make_socket_merge_ready_app() -> App {
 fn socket_progress_updates_matching_inactive_queued_episode() {
     let mut app = make_socket_merge_ready_app();
     // Enqueue the known episode as an inactive slot.
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
     app.enqueue_selected_audiobookshelf_episode(0);
 
     // Activate a different slot so episode-a is inactive.
@@ -462,7 +462,7 @@ fn socket_progress_updates_matching_inactive_queued_episode() {
 #[test]
 fn socket_progress_skips_active_slot() {
     let mut app = make_socket_merge_ready_app();
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
     app.enqueue_selected_audiobookshelf_episode(0);
     let slot_id = app.player_tab.queue.slots()[0].slot_id;
     let _ = app.player_tab.queue.set_active_slot(slot_id); // episode-a is active
@@ -553,7 +553,7 @@ fn socket_progress_skips_superseded_generation() {
 #[test]
 fn audiobookshelf_progress_via_daemon_route_no_match_updates_browse_only() {
     let mut app = super::tests_podcast::audiobookshelf_app();
-    app.enter_audiobookshelf_episode_selection();
+    app.audiobookshelf_browse[0].enter_episode_selection();
     enable_audiobookshelf_owner(&app);
     // Queue is intentionally empty — episode-b has no slot.
 
