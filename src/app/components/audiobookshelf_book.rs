@@ -98,6 +98,16 @@ impl AudiobookshelfBookComponent {
         self.state.chapter_selection
     }
 
+    #[cfg(test)]
+    pub(crate) fn selected_book_id(&self) -> Option<&str> {
+        self.state.selected_id.as_deref()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn selected_bucket(&self) -> usize {
+        self.state.selected_bucket
+    }
+
     fn page_size(&self) -> usize {
         self.page_size
     }
@@ -129,6 +139,12 @@ impl AudiobookshelfBookComponent {
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if !self.focused {
+            return Some(Msg::Legacy(LegacyTerminalEvent::Key(
+                to_crossterm_key_event(key),
+            )));
+        }
+
         let chapters_focused = self.chapters_visible && self.state.chapter_selection.is_some();
         match key.code {
             Key::Char('[') if key.modifiers.is_empty() => {

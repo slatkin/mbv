@@ -100,6 +100,50 @@ fn abs_book_component_keeps_local_cursor_and_renders_without_app_state() {
     assert!(output.contains("Book One"), "output: {output:?}");
 }
 
+#[test]
+fn abs_book_component_forwards_keys_when_unfocused_without_mutating_state() {
+    let mut state = book_state(4, true);
+    state.chapter_selection = Some(0);
+    let mut component = AudiobookshelfBookComponent::new();
+    component.set_content(&state, false, false);
+
+    for (code, modifiers) in [
+        (Key::Down, KeyModifiers::NONE),
+        (Key::PageDown, KeyModifiers::NONE),
+        (Key::Enter, KeyModifiers::NONE),
+        (Key::Char('a'), KeyModifiers::CONTROL),
+    ] {
+        let message = component.on(&Event::Keyboard(KeyEvent { code, modifiers }));
+        assert!(matches!(
+            message,
+            Some(Msg::Legacy(LegacyTerminalEvent::Key(forwarded)))
+                if forwarded.code == to_crossterm_key_code(code)
+                    && forwarded.modifiers == to_crossterm_key_modifiers(modifiers)
+        ));
+        assert_eq!(component.selected_book_id(), Some("book-0"));
+        assert_eq!(component.selected_bucket(), 0);
+        assert_eq!(component.chapter_selection(), Some(0));
+    }
+}
+
+fn to_crossterm_key_code(code: Key) -> crossterm::event::KeyCode {
+    match code {
+        Key::Down => crossterm::event::KeyCode::Down,
+        Key::PageDown => crossterm::event::KeyCode::PageDown,
+        Key::Enter => crossterm::event::KeyCode::Enter,
+        Key::Char(character) => crossterm::event::KeyCode::Char(character),
+        _ => unreachable!("test only covers representative forwarded keys"),
+    }
+}
+
+fn to_crossterm_key_modifiers(modifiers: KeyModifiers) -> crossterm::event::KeyModifiers {
+    if modifiers.contains(KeyModifiers::CONTROL) {
+        crossterm::event::KeyModifiers::CONTROL
+    } else {
+        crossterm::event::KeyModifiers::NONE
+    }
+}
+
 fn book_state(count: usize, with_chapters: bool) -> AudiobookshelfBookBrowseState {
     let library = AudiobookshelfLibrary {
         id: "books".into(),
