@@ -413,10 +413,45 @@ definition of done.
     adapters and the 5.3d.22 precedence families are complete, remove the
     global bridge pieces allowlisted to `src/app/root.rs`,
     `src/app/legacy_input.rs`, `src/app/msg.rs`, and `src/app/shell.rs`.
-  - [ ] **5.3d.23-B — terminal conversion-adapter consumer fanout:** Report-only
+  - [x] **5.3d.23-B — terminal conversion-adapter consumer fanout:** Report-only
     inventory of the terminal conversion-adapter fanout (>6 production files);
-    do not delete consumers in this row. This is part of the 5.3d.23 bridge
-    phase and precedes 5.3d.24 verification.
+    do not delete consumers in this row. Live production conversion/Legacy
+    consumers span >6 files: global `LegacyInput`/root/shell plus Home, Browser,
+    TV workspace, Music workspace, ABS podcast/book, `daemon_lost`,
+    `remote_reanchor`, confirm, queue, playback prompt/playback, playlists,
+    feeds/feeds_manage, settings, inline search, context menu, selection modal,
+    sessions, multiselect, search sidebar, library routes, save playlist, and
+    help. No consumer is safely dead; the global bridge must remain until all
+    families reach zero-reference gates. ABS Book R1/R2/R3 leaves are complete,
+    but its component still has legitimate Legacy fallback/mouse endpoints for
+    this phase.
+    - [ ] **5.3d.23-B1 — typed request/key surfaces:** Serial child; allowlisted
+      to `src/app/components/queue.rs`, `save_playlist.rs`, `settings.rs`,
+      `feeds_manage.rs`, and `feeds.rs`. Convert local/typed authority before
+      the zero-reference gate for both crossterm adapters and `Msg::Legacy`;
+      run focused queue/settings/feeds tests.
+    - [ ] **5.3d.23-B2 — transient overlays:** Serial child; allowlisted to
+      `confirm.rs`, `daemon_lost.rs`, `remote_reanchor.rs`,
+      `playback_prompt.rs`, and `context_menu.rs`. Pass the zero adapter/
+      `Msg::Legacy` gate, preserve shell modal effects, and add/run focused
+      tests (playback_prompt coverage may need adding).
+    - [ ] **5.3d.23-B3 — media/workspace surfaces:** Serial child; allowlisted
+      to `music_workspace.rs`, `tv_workspace.rs`, `audiobookshelf_podcast.rs`,
+      `audiobookshelf_book.rs`, `playback.rs`, and `playlists.rs`. Pass the zero
+      adapter/`Msg::Legacy` gate, preserve media effects, and run focused
+      surface tests, noting playback/playlists test gaps.
+    - [ ] **5.3d.23-B4 — navigation/search/content surfaces:** Serial child;
+      allowlisted to `home.rs`, `browser.rs`, `inline_search.rs`,
+      `search_sidebar.rs`, `library_routes.rs`, and `help.rs`. Pass the zero
+      adapter/`Msg::Legacy` gate, preserve hit geometry and shell effects, and
+      run focused home/browser/inline-search tests plus module checks for the
+      others.
+    - [ ] **5.3d.23-B5 — residual NoOp-only components:** Serial child;
+      allowlisted to `selection_modal.rs`, `sessions.rs`, and `multiselect.rs`.
+      Pass the zero `Msg::Legacy` gate; this is the last component family before
+      5.3d.23-A. Run the corresponding component tests.
+    - B1-B5 are serial because the global bridge remains until every
+      zero-reference gate passes.
   - [ ] **5.3d.24-A — mouse/framework residual:** Report-only verification of
     `mouse_gestures`, layout, and render-derived hitmaps at the D16 boundary;
     accepted-broken mouse framework residuals are not deletion work here.
