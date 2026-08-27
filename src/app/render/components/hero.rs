@@ -654,12 +654,7 @@ pub(in crate::app::render) fn render_home_hero_meta_block(
 /// resumes the pill bar row it replaces: same `PILL_ROW_BG` background and
 /// leading `⌘` glyph as `render_pill_bar`'s prefix, so swapping between pills
 /// and search doesn't shift the row's look, just its content.
-pub(in crate::app) fn render_search_box(
-    f: &mut Frame,
-    area: Rect,
-    query: &str,
-    loading: bool,
-) {
+pub(in crate::app) fn render_search_box(f: &mut Frame, area: Rect, query: &str, loading: bool) {
     use ratatui::widgets::Block;
 
     if area.width == 0 || area.height == 0 {

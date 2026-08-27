@@ -25,11 +25,7 @@ fn render_library(app: &mut App, width: u16, height: u16, focused: bool) -> Stri
 fn library_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states() {
     // Note: width 120 triggers wide Movies layout, which is now handled by
     // BrowserComponent (5.3d.17a). Use narrow widths to test the legacy path.
-    let states = [
-        (60, 20, true, 0),
-        (60, 20, false, 0),
-        (60, 20, true, 1),
-    ];
+    let states = [(60, 20, true, 0), (60, 20, false, 0), (60, 20, true, 1)];
     for (width, height, focused, cursor) in states {
         let mut app = make_movie_app();
         app.libs[0].nav_stack[0].cursor = cursor;

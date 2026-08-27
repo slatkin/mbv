@@ -24,11 +24,11 @@ use crate::app::library_column_width::{
 };
 use crate::app::palette;
 use crate::app::render::{
-    hero_on_left_list_panel_border, hero_on_left_right_pane, HomeImagePaint, LetterFilter,
-    padded_rect, prepare_wide_emby_hero_card, render_count_label, render_generic_movies_home_video_rows_with_ctx,
-    render_home_hero_content, render_pill_bar, render_search_box, shared_hero_presentation,
-    wide_library_panes, HeroData, LibraryListRenderCtx, PANE_PAD_X, PANE_PAD_Y,
-    PillBar,
+    hero_on_left_list_panel_border, hero_on_left_right_pane, padded_rect,
+    prepare_wide_emby_hero_card, render_count_label,
+    render_generic_movies_home_video_rows_with_ctx, render_home_hero_content, render_pill_bar,
+    render_search_box, shared_hero_presentation, wide_library_panes, HeroData, HomeImagePaint,
+    LetterFilter, LibraryListRenderCtx, PillBar, PANE_PAD_X, PANE_PAD_Y,
 };
 use crate::app::ui_util::move_cursor;
 
@@ -152,7 +152,12 @@ impl BrowserComponent {
     /// legacy wide renderer so the picture is unchanged.
     /// Returns the final list scroll (the component owns its cursor/scroll,
     /// so it records it instead of writing the App nav level).
-    fn render_wide_movies(&mut self, f: &mut Frame, area: Rect, ctx: &LibraryListRenderCtx) -> usize {
+    fn render_wide_movies(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        ctx: &LibraryListRenderCtx,
+    ) -> usize {
         let left_content_area = Rect {
             height: area.height.saturating_sub(1),
             ..area
@@ -261,7 +266,12 @@ impl BrowserComponent {
     /// `App::render_letter_pills_row` (screens/pills.rs) using the component's
     /// own `letter_filter`, so the wide right rail's pills no longer depend on
     /// the legacy renderer.
-    fn render_letter_pills_row(&mut self, f: &mut Frame, row_area: Rect, ctx: &LibraryListRenderCtx) {
+    fn render_letter_pills_row(
+        &mut self,
+        f: &mut Frame,
+        row_area: Rect,
+        ctx: &LibraryListRenderCtx,
+    ) {
         if row_area.width == 0 {
             self.layout.selector_tabs = Vec::new();
             return;

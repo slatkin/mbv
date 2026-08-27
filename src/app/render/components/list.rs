@@ -57,8 +57,7 @@ impl App {
     /// their own.
     pub(in crate::app::render) fn is_wide_movies_library(&self, lib_idx: usize) -> bool {
         self.libs.get(lib_idx).is_some_and(|lib| {
-            lib.library.collection_type == "movies"
-                && !self.is_feed_home_video_group_view(lib_idx)
+            lib.library.collection_type == "movies" && !self.is_feed_home_video_group_view(lib_idx)
         })
     }
 
