@@ -25,15 +25,22 @@ impl Model {
             super::components::msg::PodcastEpisodeIntent::FocusOrPlay => {
                 if episode_selection {
                     self.app.play_selected_audiobookshelf_episode(index);
-                } else {
-                    self.app.enter_audiobookshelf_episode_selection();
+                } else if let Some(component) = self.abs_podcast_component_mut(index) {
+                    // Entering episode selection is re-homed onto the mounted
+                    // component (task 5.3d.11 U2); the post-request projection
+                    // preserves this selection through `set_content`.
+                    component.set_episode_selection(Some(0));
                 }
             }
             super::components::msg::PodcastEpisodeIntent::OpenOrPlay => {
                 if episode_selection {
                     self.app.play_selected_audiobookshelf_episode(index);
                 } else if self.app.layout.main.is_wide_podcast_active() {
-                    self.app.enter_audiobookshelf_episode_selection();
+                    if let Some(component) = self.abs_podcast_component_mut(index) {
+                        // Re-homed onto the mounted component (task 5.3d.11 U2),
+                        // same as FocusOrPlay.
+                        component.set_episode_selection(Some(0));
+                    }
                 } else {
                     self.app.open_podcast_selection_modal();
                 }
@@ -336,11 +343,16 @@ mod tests {
     #[test]
     fn abs_podcast_shell_routes_action_intent_to_app() {
         let mut model = Model::new(audiobookshelf_app());
-        // FocusOrPlay with no episode selection enters episode selection at the
-        // App boundary (task 5.3d.7).
+        // FocusOrPlay with no episode selection enters episode selection on the
+        // mounted component (task 5.3d.11 U2), so mount it first and read the
+        // selection back through the U0 accessor.
+        model.sync_audiobookshelf_podcast();
         model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::FocusOrPlay);
         assert_eq!(
-            model.app.audiobookshelf_browse[0].episode_selection,
+            model
+                .abs_podcast_component_mut(0)
+                .expect("podcast component mounted")
+                .episode_selection(),
             Some(0)
         );
 
