@@ -1,5 +1,4 @@
 use super::notify_actions::ToastSeverity;
-use super::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use super::types_audiobookshelf_browse::BookRow;
 use super::App;
 use mbv_core::api::TICKS_PER_SECOND;
@@ -202,58 +201,6 @@ impl App {
             return;
         }
         self.select_audiobookshelf_show(if end { state.shows.len() - 1 } else { 0 });
-    }
-
-    pub(super) fn enter_audiobookshelf_episode_selection(&mut self) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
-            state.enter_episode_selection();
-        }
-    }
-
-    pub(super) fn leave_audiobookshelf_episode_selection(&mut self) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
-            state.episode_selection = None;
-        }
-    }
-
-    pub(super) fn move_audiobookshelf_episode_cursor(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
-            return;
-        };
-        let Some(cursor) = state.episode_selection else {
-            return;
-        };
-        let count = state.visible_episodes().len();
-        if count > 0 {
-            state.episode_selection = Some(super::ui_util::move_cursor(cursor, delta, count));
-        }
-    }
-
-    pub(super) fn cycle_audiobookshelf_filter(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
-            return;
-        };
-        if state.episode_selection.is_none() {
-            return;
-        }
-        let current = AudiobookshelfEpisodeFilter::ALL
-            .iter()
-            .position(|filter| *filter == state.episode_filter)
-            .unwrap_or(0);
-        let next = (current as i64 + delta).rem_euclid(3) as usize;
-        state.set_episode_filter(AudiobookshelfEpisodeFilter::ALL[next]);
     }
 
     /// Resolve the selected downloaded episode at the Audiobookshelf playback

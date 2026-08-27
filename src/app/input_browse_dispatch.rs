@@ -56,8 +56,11 @@ impl App {
                     return Some(false);
                 };
                 match kind {
+                    // Podcast keyboard navigation is owned by the mounted
+                    // podcast component; the App swallows keys here so none
+                    // fall through to queue-item handling.
                     super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
-                        self.handle_key_audiobookshelf_library(index, key)
+                        Some(false)
                     }
                     super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
                         self.handle_key_audiobookshelf_book_library(index, key)
@@ -168,76 +171,8 @@ impl App {
         true
     }
 
-    /// The Audiobookshelf library keyboard handler for the exhaustively
-    /// matched `AudiobookshelfLibrary(index)`. Preserves show navigation,
-    /// paging, first/last, episode filter cycling, episode selection entry /
-    /// exit, and the inert episode-mode Enter/Space. Every key is consumed:
-    /// Emby-only actions and queue-item handling are unreachable from here.
-    fn handle_key_audiobookshelf_library(&mut self, index: usize, key: KeyEvent) -> Option<bool> {
-        let episode_selection = self
-            .audiobookshelf_browse
-            .get(index)
-            .is_some_and(|state| state.episode_selection.is_some());
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') if episode_selection => {
-                self.move_audiobookshelf_episode_cursor(-1)
-            }
-            KeyCode::Down | KeyCode::Char('j') if episode_selection => {
-                self.move_audiobookshelf_episode_cursor(1)
-            }
-            KeyCode::Up | KeyCode::Char('k') => self.move_audiobookshelf_show_rows(-1),
-            KeyCode::Down | KeyCode::Char('j') => self.move_audiobookshelf_show_rows(1),
-            KeyCode::Left | KeyCode::Char('h') if !episode_selection => {
-                self.move_audiobookshelf_show_cursor(-1)
-            }
-            KeyCode::Right | KeyCode::Char('l') if !episode_selection => {
-                self.move_audiobookshelf_show_cursor(1)
-            }
-            KeyCode::PageUp if !episode_selection => {
-                self.move_audiobookshelf_show_rows(-(self.lib_page_size() as i64))
-            }
-            KeyCode::PageDown if !episode_selection => {
-                self.move_audiobookshelf_show_rows(self.lib_page_size() as i64)
-            }
-            KeyCode::Home if !episode_selection => self.jump_audiobookshelf_show_cursor(false),
-            KeyCode::End if !episode_selection => self.jump_audiobookshelf_show_cursor(true),
-            KeyCode::Char('[') if episode_selection => self.cycle_audiobookshelf_filter(-1),
-            KeyCode::Char(']') if episode_selection => self.cycle_audiobookshelf_filter(1),
-            KeyCode::Esc | KeyCode::Backspace if episode_selection => {
-                self.leave_audiobookshelf_episode_selection()
-            }
-            KeyCode::Char(' ') if !episode_selection => {
-                self.enter_audiobookshelf_episode_selection()
-            }
-            // Enter on a selected show (instead of the always-focus-episodes
-            // behavior above): wide keeps the existing in-hero episode focus
-            // (`episode_selection`); narrow has no inline episode block to
-            // focus (see `render_audiobookshelf_hero`'s `persistent` gate),
-            // so it opens the selection modal instead (design.md decisions
-            // 4 and 6).
-            KeyCode::Enter if !episode_selection => {
-                if self.layout.main.is_wide_podcast_active() {
-                    self.enter_audiobookshelf_episode_selection();
-                } else {
-                    self.open_podcast_selection_modal();
-                }
-            }
-            KeyCode::Enter | KeyCode::Char(' ') => {
-                self.play_selected_audiobookshelf_episode(index);
-            }
-            KeyCode::Char('a')
-                if episode_selection && key.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
-                self.enqueue_selected_audiobookshelf_episode(index);
-            }
-            _ => {}
-        }
-        Some(false)
-    }
-
     /// The Audiobookshelf book-library keyboard handler for the exhaustively
     /// matched `AudiobookshelfLibrary(index)` when its resolved kind is
-    /// `Book`. Wide navigates either the hero's chapter list or the right-pane
     /// book browser and toggles pane focus with left/right arrow. Narrow
     /// navigates the browser and opens the chapter modal from the parent.
     /// It cycles the

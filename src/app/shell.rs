@@ -21,8 +21,7 @@ use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
 use super::components::msg::{
-    AlbumCursorKind, BrowserHitRegion, HomeHitRegion, PodcastEpisodeTransition, PodcastShowMove,
-    QueueHitRegion, TvHitRegion,
+    AlbumCursorKind, BrowserHitRegion, HomeHitRegion, PodcastShowMove, QueueHitRegion, TvHitRegion,
 };
 use super::components::{
     ComponentId, LegacyTerminalEvent, Msg, OverlayId, PlaybackComponent, ShellRequest,
@@ -778,32 +777,6 @@ impl Model {
                                 }
                                 PodcastShowMove::Last => {
                                     self.app.jump_audiobookshelf_show_cursor(true);
-                                }
-                            }
-                        }
-                        Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeTransition(
-                            transition,
-                        )) => {
-                            // Typed podcast episode-mode transition (task
-                            // 5.3d.6). The component already mutated its local
-                            // episode selection/filter; map onto the legacy App
-                            // episode operations so the App episode cursor
-                            // mirrors it unchanged (D17).
-                            match transition {
-                                PodcastEpisodeTransition::PreviousEpisode => {
-                                    self.app.move_audiobookshelf_episode_cursor(-1);
-                                }
-                                PodcastEpisodeTransition::NextEpisode => {
-                                    self.app.move_audiobookshelf_episode_cursor(1);
-                                }
-                                PodcastEpisodeTransition::PreviousFilter => {
-                                    self.app.cycle_audiobookshelf_filter(-1);
-                                }
-                                PodcastEpisodeTransition::NextFilter => {
-                                    self.app.cycle_audiobookshelf_filter(1);
-                                }
-                                PodcastEpisodeTransition::Exit => {
-                                    self.app.leave_audiobookshelf_episode_selection();
                                 }
                             }
                         }
