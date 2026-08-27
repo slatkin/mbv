@@ -368,6 +368,9 @@ fn render_book_rows(
     focused: bool,
     geometry: &mut AudiobookshelfBookGeometry,
 ) {
+    if area.height == 0 {
+        return;
+    }
     let Some(id) = state.selected_id.as_deref() else {
         return;
     };

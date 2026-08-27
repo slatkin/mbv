@@ -183,6 +183,15 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
+        let page_size = self.app.lib_page_size();
+        if let Some(comp) = self.application.get_component_mut(id) {
+            if let Some(book) = comp
+                .as_any_mut()
+                .downcast_mut::<AudiobookshelfBookComponent>()
+            {
+                book.set_page_size(page_size);
+            }
+        }
         self.application.view(id, frame, area);
         let image_paint = self
             .application
@@ -204,6 +213,9 @@ mod tests {
     use crate::app::tests::make_app_stub;
     use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
     use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfLibrary};
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+    use ratatui::Terminal;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
@@ -235,6 +247,15 @@ mod tests {
         second.library_item_id = "book-2".into();
         second.title = "Book 2".into();
         state.books.push(second);
+        let mut third = state.books[0].clone();
+        third.library_item_id = "book-3".into();
+        third.title = "Book 3".into();
+        state.books.push(third);
+        let mut zed = state.books[0].clone();
+        zed.library_item_id = "book-z".into();
+        zed.title = "Book Z".into();
+        zed.author_sort_key = "Zed".into();
+        state.books.push(zed);
         state.buckets =
             crate::app::types_audiobookshelf_browse::build_surname_buckets(&state.books);
         app.audiobookshelf_libraries.push(library);
@@ -266,6 +287,64 @@ mod tests {
                 .selected_id
                 .as_deref(),
             Some("book-2")
+        );
+
+        // Page size is handed from App's layout contract, rather than inferred
+        // from the inline replacement's painted book rows. With a three-row
+        // library area, both the component and App must move by two books.
+        model.app.layout.main.left_area = Rect::new(0, 0, 10, 3);
+        model.app.layout.main.audiobookshelf_book_area = Rect::new(0, 0, 60, 20);
+        let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+        terminal
+            .draw(|frame| model.render_audiobookshelf_book_component(frame))
+            .unwrap();
+        let page = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::PageDown,
+                modifiers: KeyModifiers::NONE,
+            }));
+        assert!(matches!(
+            page,
+            Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                AudiobookshelfBookMove::NextBookPage
+            )))
+        ));
+        model.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::NextBookPage,
+        ));
+        assert_eq!(
+            model.app.audiobookshelf_book_browse[0]
+                .selected_id
+                .as_deref(),
+            Some("book-3")
+        );
+
+        // The converted component emits modified brackets through the raw
+        // bridge; the ABS Book legacy fallback must still require NONE.
+        let bucket = model.app.audiobookshelf_book_browse[0].selected_bucket;
+        let shift_left = crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('['),
+            crossterm::event::KeyModifiers::SHIFT,
+        );
+        let bridged = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Char('['),
+                modifiers: KeyModifiers::SHIFT,
+            }));
+        assert!(matches!(bridged, Some(Msg::Legacy(_))));
+        assert_eq!(
+            model.app.handle_key_view_dispatch(shift_left, false, None),
+            Some(false)
+        );
+        assert_eq!(
+            model.app.audiobookshelf_book_browse[0].selected_bucket, bucket,
+            "Shift+[ must not enter the ABS Book bucket fallback"
         );
     }
 }

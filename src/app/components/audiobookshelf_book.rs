@@ -21,6 +21,13 @@ pub struct AudiobookshelfBookComponent {
     focused: bool,
     images_enabled: bool,
     geometry: AudiobookshelfBookGeometry,
+    /// Shell-provided page stride matching `App::lib_page_size`; the painted
+    /// book rows are not a reliable source when an inline hero replaces rows.
+    page_size: usize,
+    /// Whether the last rendered presentation actually exposes chapter focus.
+    /// Narrow layouts may retain chapter state across a projection, so input
+    /// must follow the rendered wide/chapter geometry rather than that state.
+    chapters_visible: bool,
     image_paint: Option<HomeImagePaint>,
 }
 
@@ -37,6 +44,8 @@ impl AudiobookshelfBookComponent {
             focused: false,
             images_enabled: false,
             geometry: AudiobookshelfBookGeometry::default(),
+            page_size: 1,
+            chapters_visible: false,
             image_paint: None,
         }
     }
@@ -72,6 +81,13 @@ impl AudiobookshelfBookComponent {
         self.image_paint.take()
     }
 
+    /// Shell projection of the existing App page-size contract. The component
+    /// cannot derive this from `book_rows`: inline replacement heroes can make
+    /// that painted-row list empty or partial.
+    pub(in crate::app) fn set_page_size(&mut self, page_size: usize) {
+        self.page_size = page_size.max(1);
+    }
+
     /// The geometry the component computed during its last `view`, exposed so
     /// the shell can anchor the context menu (task 5.3d.13, render ownership).
     pub(in crate::app) fn geometry(&self) -> &AudiobookshelfBookGeometry {
@@ -79,7 +95,7 @@ impl AudiobookshelfBookComponent {
     }
 
     fn page_size(&self) -> usize {
-        self.geometry.book_rows.len().max(1)
+        self.page_size
     }
 
     fn move_book(&mut self, delta: i64) {
@@ -109,7 +125,7 @@ impl AudiobookshelfBookComponent {
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        let chapters_focused = self.state.chapter_selection.is_some();
+        let chapters_focused = self.chapters_visible && self.state.chapter_selection.is_some();
         match key.code {
             Key::Char('[') if key.modifiers.is_empty() => {
                 self.cycle_bucket(-1);
@@ -251,13 +267,15 @@ impl AudiobookshelfBookComponent {
             {
                 self.state.select(*index);
             }
-            if let Some((_, index)) = self
-                .geometry
-                .chapter_rows
-                .iter()
-                .find(|(rect, _)| rect.contains(position))
-            {
-                self.state.chapter_selection = Some(*index);
+            if self.chapters_visible {
+                if let Some((_, index)) = self
+                    .geometry
+                    .chapter_rows
+                    .iter()
+                    .find(|(rect, _)| rect.contains(position))
+                {
+                    self.state.chapter_selection = Some(*index);
+                }
             }
             if let Some((_, bucket)) = self
                 .geometry
@@ -283,6 +301,14 @@ impl Default for AudiobookshelfBookComponent {
 
 impl Component for AudiobookshelfBookComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
+        // Chapter focus belongs only to the rendered wide hero-on-left
+        // presentation. Clear it before painting a narrow frame so a
+        // wide→narrow resize cannot leave keyboard input targeting a hidden
+        // chapter pane.
+        self.chapters_visible = crate::app::render::shared_hero_presentation(area).is_some();
+        if !self.chapters_visible {
+            self.state.chapter_selection = None;
+        }
         self.image_paint = render_audiobookshelf_book_content(
             frame,
             area,
@@ -291,6 +317,13 @@ impl Component for AudiobookshelfBookComponent {
             self.images_enabled,
             &mut self.geometry,
         );
+        // A wide frame can still have no painted chapter rows (for example
+        // while detail is loading or when the selected book has no chapters).
+        // Do not advertise focus for geometry that was not rendered.
+        if self.geometry.chapter_rows.is_empty() {
+            self.chapters_visible = false;
+            self.state.chapter_selection = None;
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

@@ -191,10 +191,9 @@ impl App {
                 .is_some_and(|state| state.chapter_selection.is_some());
         // Bucket-pill cycling (a direct precedent: `switch_music_group`'s
         // `[`/`]` group cycling), available regardless of which pane is
-        // focused.
-        if !key.modifiers.contains(KeyModifiers::CONTROL)
-            && !key.modifiers.contains(KeyModifiers::ALT)
-        {
+        // focused. Only the unmodified keys enter this legacy fallback;
+        // modified brackets remain outside the ABS Book movement contract.
+        if key.modifiers.is_empty() {
             if let Some(delta) = match key.code {
                 KeyCode::Char('[') => Some(-1),
                 KeyCode::Char(']') => Some(1),
