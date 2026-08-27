@@ -96,7 +96,7 @@ impl Model {
     }
 
     /// Unmount the Help overlay; TuiRealm's LIFO focus stack auto-restores
-    /// focus to `LegacyInput`.
+    /// focus to the prior component.
     pub(in crate::app) fn umount_help(&mut self) {
         let _ = self
             .application

@@ -5,8 +5,8 @@
 //! `Application<ComponentId, Msg, UserEvent>`. `Model::run` is the moved body
 //! of the former `App::run`: the event-poll section is replaced by
 //! `application.tick(PollStrategy::Once(..))`, whose messages are folded back
-//! into the existing `App` input handlers via the temporary `LegacyInput`
-//! bridge. Every other part of the loop (receiver drains, periodic work,
+//! into the existing `App` input handlers via typed shell requests. Every
+//! other part of the loop (receiver drains, periodic work,
 //! render cadence via `wants_terminal_render`, teardown) is byte-for-byte the
 //! legacy behaviour, only with `self.x` rewritten to `self.app.x`.
 //!
@@ -24,7 +24,7 @@ use super::components::msg::{
     AlbumCursorKind, BrowserHitRegion, HomeHitRegion, PodcastShowMove, QueueHitRegion, TvHitRegion,
 };
 use super::components::{
-    ComponentId, LegacyTerminalEvent, Msg, OverlayId, PlaybackComponent, ShellRequest,
+    ComponentId, Msg, OverlayId, PlaybackComponent, ShellRequest, TerminalObserverEvent,
     UiRootComponent, UserEvent,
 };
 use super::service_startup;
@@ -42,12 +42,12 @@ use super::{App, IdleFeed, QueueScope, ToastSeverity};
 /// is governed separately by the `PollStrategy::Once` timeout below, so this
 /// only affects how promptly a buffered event reaches the channel — not the
 /// render cadence.
-const LEGACY_INPUT_LISTENER_INTERVAL: Duration = Duration::from_millis(8);
+const TERMINAL_LISTENER_INTERVAL: Duration = Duration::from_millis(8);
 /// Upper bound on events the listener drains from crossterm in one worker
 /// cycle. Generous so a burst (e.g. a mouse drag) is flushed into the channel
 /// in one cycle; the main thread still processes at most one per tick via
 /// `PollStrategy::Once`, matching the legacy one-event-per-iteration loop.
-const LEGACY_INPUT_LISTENER_MAX_POLL: usize = 60;
+const TERMINAL_LISTENER_MAX_POLL: usize = 60;
 
 /// Shell model holding the legacy `App` and the TuiRealm `Application`.
 pub struct Model {
@@ -82,11 +82,40 @@ pub struct Model {
 
 fn route_terminal_observer_message(msg: Msg, focused: Option<&ComponentId>) -> Option<Msg> {
     match msg {
-        Msg::TerminalEvent(event) if focused == Some(&ComponentId::UiRoot) => {
-            Some(Msg::Legacy(event))
+        Msg::TerminalEvent(TerminalObserverEvent::Key(_))
+            if focused != Some(&ComponentId::UiRoot) =>
+        {
+            None
         }
-        Msg::TerminalEvent(_) => None,
         msg => Some(msg),
+    }
+}
+
+fn apply_terminal_observer(
+    model: &mut Model,
+    event: TerminalObserverEvent,
+    focused: Option<&ComponentId>,
+    music_resize: &mut bool,
+    tv_resize: &mut bool,
+    quit: &mut bool,
+) {
+    match event {
+        TerminalObserverEvent::Key(key) if focused == Some(&ComponentId::UiRoot) => {
+            *quit |= model.handle_legacy_key(key);
+        }
+        TerminalObserverEvent::Resize => {
+            model.app.force_clear = true;
+            model.app.card_image_states.clear();
+            model.app.card_image_loading.clear();
+            model.push_inline_search_content();
+            *music_resize = true;
+            *tv_resize = true;
+        }
+        TerminalObserverEvent::FocusGained => model.app.note_focus_gained(),
+        TerminalObserverEvent::FocusLost => model.app.note_focus_lost(),
+        TerminalObserverEvent::Key(_)
+        | TerminalObserverEvent::Mouse
+        | TerminalObserverEvent::NoOp => {}
     }
 }
 
@@ -129,13 +158,10 @@ impl Model {
     }
 
     /// Construct the model, starting the TuiRealm crossterm listener and
-    /// mounting the temporary `LegacyInput` bridge as the sole active
-    /// component (checkpoint 1).
+    /// mounting the permanent root observer.
     pub fn new(app: App) -> Self {
-        let listener_cfg = EventListenerCfg::default().crossterm_input_listener(
-            LEGACY_INPUT_LISTENER_INTERVAL,
-            LEGACY_INPUT_LISTENER_MAX_POLL,
-        );
+        let listener_cfg = EventListenerCfg::default()
+            .crossterm_input_listener(TERMINAL_LISTENER_INTERVAL, TERMINAL_LISTENER_MAX_POLL);
         let application = Application::init(listener_cfg);
         let home_section = App::load_prefs()["home_section"]
             .as_str()
@@ -154,8 +180,7 @@ impl Model {
             home_section_pref_semantic: home_section.clone(),
             home_section_pending: home_section,
         };
-        // UiRoot owns overlay z-order and permanently observes terminal events;
-        // its temporary bridge remains the fallback when UiRoot has focus.
+        // UiRoot owns overlay z-order and permanently observes terminal events.
         model
             .application
             .mount(
@@ -169,7 +194,7 @@ impl Model {
             .active(&ComponentId::UiRoot)
             .expect("activate UiRoot");
         // Home is mounted for the whole session but never made active: its
-        // input stays on the legacy path, only its render is component-owned
+        // input stays on the shell path, only its render is component-owned
         // (task 3.4; see `shell_home.rs`/`components::home`'s module docs).
         model.mount_home();
         model.mount_feeds();
@@ -572,45 +597,21 @@ impl Model {
                         continue;
                     };
                     match msg {
-                        Msg::Legacy(LegacyTerminalEvent::Key(key)) => {
-                            if self.handle_legacy_key(key) {
-                                quit = true;
-                            }
-                        }
+                        Msg::TerminalEvent(event) => apply_terminal_observer(
+                            self,
+                            event,
+                            focused.as_ref(),
+                            &mut music_resize,
+                            &mut tv_resize,
+                            &mut quit,
+                        ),
                         // Media surfaces forward unmatched keys through this
-                        // typed adapter so App retains its global shortcuts
-                        // without reintroducing a Legacy message.
+                        // typed adapter so App retains its global shortcuts.
                         Msg::Shell(ShellRequest::GlobalViewKey(key)) => {
                             if self.handle_legacy_key(key) {
                                 quit = true;
                             }
                         }
-                        Msg::Legacy(LegacyTerminalEvent::Mouse(_mouse)) => {}
-                        Msg::Legacy(LegacyTerminalEvent::Resize) => {
-                            self.app.force_clear = true;
-                            self.app.card_image_states.clear();
-                            self.app.card_image_loading.clear();
-                            // Resize is the only reachable focus/layout change
-                            // while the search is mounted (it swallows keys).
-                            self.push_inline_search_content();
-                            // Workspace geometry is rebuilt by App::render below;
-                            // defer these pushes until that current-frame layout
-                            // is installed instead of reading the prior frame.
-                            music_resize = true;
-                            tv_resize = true;
-                        }
-                        Msg::Legacy(LegacyTerminalEvent::FocusGained) => {
-                            self.app.note_focus_gained();
-                        }
-                        Msg::Legacy(LegacyTerminalEvent::FocusLost) => {
-                            self.app.note_focus_lost();
-                        }
-                        // Non-Press keys (collapsed to `Event::None` by the
-                        // adapter) and `Paste` (ignored by the legacy
-                        // `_ => {}` arm): no-op, but `had_events` is already
-                        // set, preserving the legacy "poll-ready ⇒ dirty"
-                        // behaviour (design D12).
-                        Msg::Legacy(LegacyTerminalEvent::NoOp) => {}
                         Msg::Shell(ShellRequest::MusicAlbumCursor { target, kind }) => {
                             if let Some(lib_idx) = self.app.tab.emby_library_index() {
                                 match kind {
@@ -1213,6 +1214,7 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::components::{OverlayId, TvWorkspaceComponent};
+    use crate::app::images::CachedImage;
     use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
     use crate::app::tests::make_app_stub;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -1226,11 +1228,11 @@ mod tests {
         let mut model = Model::new(make_app_stub());
         let key = KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE);
         let routed = route_terminal_observer_message(
-            Msg::TerminalEvent(LegacyTerminalEvent::Key(key)),
+            Msg::TerminalEvent(TerminalObserverEvent::Key(key)),
             Some(&ComponentId::UiRoot),
         );
-        let Some(Msg::Legacy(LegacyTerminalEvent::Key(key))) = routed else {
-            panic!("UiRoot terminal key was not converted to the legacy path");
+        let Some(Msg::TerminalEvent(TerminalObserverEvent::Key(key))) = routed else {
+            panic!("UiRoot terminal key was not retained for the shell handler");
         };
 
         assert!(!model.handle_legacy_key(key));
@@ -1240,18 +1242,75 @@ mod tests {
     }
 
     #[test]
-    fn converted_surface_skips_observer_without_dropping_local_message() {
+    fn converted_surface_skips_observer_key_but_retains_redraw_signal() {
         let focused = ComponentId::Playback;
         let key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
         assert!(route_terminal_observer_message(
-            Msg::TerminalEvent(LegacyTerminalEvent::Key(key)),
+            Msg::TerminalEvent(TerminalObserverEvent::Key(key)),
             Some(&focused),
         )
         .is_none());
         assert!(matches!(
-            route_terminal_observer_message(Msg::Legacy(LegacyTerminalEvent::NoOp), Some(&focused),),
-            Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+            route_terminal_observer_message(
+                Msg::TerminalEvent(TerminalObserverEvent::NoOp),
+                Some(&focused),
+            ),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
         ));
+    }
+
+    #[test]
+    fn terminal_resize_observer_preserves_layout_side_effects() {
+        let mut model = Model::new(make_app_stub());
+        model.app.force_clear = false;
+        model
+            .app
+            .card_image_states
+            .insert("stale".into(), CachedImage::empty());
+        model.app.card_image_loading.insert("stale".into());
+        let mut music_resize = false;
+        let mut tv_resize = false;
+        let mut quit = false;
+        apply_terminal_observer(
+            &mut model,
+            TerminalObserverEvent::Resize,
+            Some(&ComponentId::Playback),
+            &mut music_resize,
+            &mut tv_resize,
+            &mut quit,
+        );
+        assert!(model.app.force_clear);
+        assert!(model.app.card_image_states.is_empty());
+        assert!(model.app.card_image_loading.is_empty());
+        assert!(music_resize && tv_resize);
+        assert!(!quit);
+    }
+
+    #[test]
+    fn terminal_focus_observer_preserves_refocus_side_effects() {
+        let mut model = Model::new(make_app_stub());
+        let mut music_resize = false;
+        let mut tv_resize = false;
+        let mut quit = false;
+        apply_terminal_observer(
+            &mut model,
+            TerminalObserverEvent::FocusGained,
+            Some(&ComponentId::Playback),
+            &mut music_resize,
+            &mut tv_resize,
+            &mut quit,
+        );
+        assert!(model.app.refocus_at.is_some());
+        apply_terminal_observer(
+            &mut model,
+            TerminalObserverEvent::FocusLost,
+            Some(&ComponentId::Playback),
+            &mut music_resize,
+            &mut tv_resize,
+            &mut quit,
+        );
+        assert!(model.app.refocus_at.is_none());
+        assert!(!quit);
     }
 
     #[test]

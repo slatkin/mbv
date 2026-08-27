@@ -7,8 +7,7 @@
 //! keyboard and mouse input in `on()`, renders via the existing render
 //! substrate in `view()`, and emits `Msg::Shell(...)` for cross-boundary work
 //! (quit, switch panels, dismiss). Local state changes (scroll) return
-//! `Msg::Legacy(NoOp)` — the mixed-phase redraw signal (design D12): a
-//! non-empty `tick` result marks the frame dirty via `had_events`.
+//! `None`; the permanent root observer remains the redraw signal (design D12).
 
 use ratatui::layout::Rect;
 use ratatui::Frame;

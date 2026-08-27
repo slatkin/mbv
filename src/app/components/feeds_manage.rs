@@ -8,8 +8,8 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::to_crossterm_key_event;
 use super::msg::{Msg, ShellRequest};
+use super::typed_key::to_crossterm_key_event;
 use super::user_event::UserEvent;
 use crate::app::render::{render_feeds_manage_content, FeedsManageRenderModel};
 use crate::app::types_feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};

@@ -472,7 +472,7 @@ mod tests {
             _ => panic!("Ctrl+r must raise the Rescan Library confirmation"),
         }
 
-        // Esc/Backspace move back-navigation off `Msg::Legacy` (task 5.3d,
+        // Esc/Backspace use the typed browser-back request (task 5.3d,
         // Emby browser back): with the browser focused, both keys emit a
         // typed `BrowserBack` — not a raw legacy key — and the shell routes
         // it to `App::go_back`, which pops the child level and restores the
@@ -677,8 +677,8 @@ mod tests {
     /// two-column painted list strides the App cursor by the column count
     /// per row (Down +2), Home/End jump to the first/last item, and
     /// Left/Right move within the row; a one-column list keeps Left/Right/
-    /// h/l unbound (raw key consumed by the component as `Msg::Legacy`
-    /// `NoOp`, App cursor unchanged) while the row keys keep their typed
+    /// h/l unbound (raw key consumed by the component without movement,
+    /// App cursor unchanged) while the row keys keep their typed
     /// stride of one.
     #[test]
     fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {

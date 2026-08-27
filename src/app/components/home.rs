@@ -27,8 +27,8 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::to_crossterm_key_event;
 use super::msg::{HomeHitRegion, Msg, ShellRequest};
+use super::typed_key::to_crossterm_key_event;
 use super::user_event::UserEvent;
 use crate::app::render::HomeImagePaint;
 use crate::app::types_playback::HomeLatestSource;

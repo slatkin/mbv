@@ -7,7 +7,9 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 use tuirealm::subscription::{EventClause, Sub, SubClause};
 
-use super::{ComponentId, LegacyInput, Msg, UserEvent};
+use super::msg::TerminalObserverEvent;
+use super::typed_key::to_crossterm_key_event;
+use super::{ComponentId, Msg, UserEvent};
 
 const OVERLAY_IDS: &[ComponentId] = &[
     ComponentId::Overlay(super::OverlayId::Settings),
@@ -28,15 +30,11 @@ const OVERLAY_IDS: &[ComponentId] = &[
 
 /// Root routing owns overlay z-order from a fixed canonical mount order;
 /// TuiRealm owns focus and its LIFO stack.
-pub(in crate::app) struct UiRootComponent {
-    legacy_input: LegacyInput,
-}
+pub(in crate::app) struct UiRootComponent;
 
 impl UiRootComponent {
     pub(in crate::app) fn new() -> Self {
-        Self {
-            legacy_input: LegacyInput,
-        }
+        Self
     }
 
     /// Subscribe the root to every terminal event so the shell can distinguish
@@ -71,17 +69,24 @@ impl Component for UiRootComponent {
 
 impl AppComponent<Msg, UserEvent> for UiRootComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        self.legacy_input.on(event).map(|msg| match msg {
-            Msg::Legacy(event) => Msg::TerminalEvent(event),
-            _ => msg,
-        })
+        let observed = match event {
+            Event::Keyboard(key) => TerminalObserverEvent::Key(to_crossterm_key_event(key)),
+            Event::Mouse(_) => TerminalObserverEvent::Mouse,
+            Event::WindowResize(_, _) => TerminalObserverEvent::Resize,
+            Event::FocusGained => TerminalObserverEvent::FocusGained,
+            Event::FocusLost => TerminalObserverEvent::FocusLost,
+            Event::None | Event::Paste(_) | Event::Tick | Event::User(_) => {
+                TerminalObserverEvent::NoOp
+            }
+        };
+        Some(Msg::TerminalEvent(observed))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::{FeedsComponent, LegacyTerminalEvent};
+    use crate::app::components::FeedsComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
@@ -96,7 +101,7 @@ mod tests {
         let mut root = UiRootComponent::new();
         assert!(matches!(
             root.on(&event),
-            Some(Msg::TerminalEvent(LegacyTerminalEvent::Key(_)))
+            Some(Msg::TerminalEvent(TerminalObserverEvent::Key(_)))
         ));
     }
 }

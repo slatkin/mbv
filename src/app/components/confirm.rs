@@ -15,8 +15,8 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::to_crossterm_key_event;
 use super::msg::{Msg, ShellRequest};
+use super::typed_key::to_crossterm_key_event;
 use super::user_event::UserEvent;
 use crate::app::render::render_confirm_modal_content;
 use crate::app::types_confirm::{ConfirmAction, ConfirmModal};

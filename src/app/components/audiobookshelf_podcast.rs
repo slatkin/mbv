@@ -14,10 +14,10 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::to_crossterm_key_event;
 use super::msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove, ShellRequest,
 };
+use super::typed_key::to_crossterm_key_event;
 use super::user_event::UserEvent;
 use crate::app::render::{
     render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry, HomeImagePaint,

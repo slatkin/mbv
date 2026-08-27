@@ -143,7 +143,7 @@ impl SettingsComponent {
     fn service_key(&self, key: &KeyEvent) -> Option<Msg> {
         Some(Msg::Service(ServiceRequest::SettingsKey {
             cursor: self.services_cursor,
-            key: super::legacy_input::to_crossterm_key_event(key),
+            key: super::typed_key::to_crossterm_key_event(key),
         }))
     }
 
@@ -253,7 +253,7 @@ impl SettingsComponent {
                 Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
                     Some(Msg::Persist(PersistRequest::SettingsKey {
                         cursor: self.cursor,
-                        key: super::legacy_input::to_crossterm_key_event(key),
+                        key: super::typed_key::to_crossterm_key_event(key),
                     }))
                 }
                 _ => None,
@@ -263,7 +263,7 @@ impl SettingsComponent {
             Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
                 Some(Msg::Persist(PersistRequest::SettingsKey {
                     cursor: self.cursor,
-                    key: super::legacy_input::to_crossterm_key_event(key),
+                    key: super::typed_key::to_crossterm_key_event(key),
                 }))
             }
             Key::Up => {
@@ -285,7 +285,7 @@ impl SettingsComponent {
             Key::Left | Key::Right | Key::Char(' ') | Key::Enter => {
                 Some(Msg::Persist(PersistRequest::SettingsKey {
                     cursor: self.cursor,
-                    key: super::legacy_input::to_crossterm_key_event(key),
+                    key: super::typed_key::to_crossterm_key_event(key),
                 }))
             }
             _ => None,
@@ -320,7 +320,7 @@ impl SettingsComponent {
                     self.cursor = cursor;
                     return Some(Msg::Persist(PersistRequest::SettingsKey {
                         cursor,
-                        key: super::legacy_input::to_crossterm_key_event(&KeyEvent {
+                        key: super::typed_key::to_crossterm_key_event(&KeyEvent {
                             code: Key::Enter,
                             modifiers: KeyModifiers::NONE,
                         }),

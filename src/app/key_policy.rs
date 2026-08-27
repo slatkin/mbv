@@ -10,9 +10,8 @@
 //! **Static-table proof path (decision D15, task 5.4).** The six
 //! precedence/mouse proofs are asserted *directly against this table* plus the
 //! structural mouse checks recorded in task 5.4 — `Component::perform(Cmd)` is
-//! **not** adopted as the table's execution path, because that adoption is not
-//! incrementally valid while `LegacyInput` and `CONTEXT_STACK` still route keys
-//! (and it would broaden this unit into the later Mirrors/framework teardown).
+//! **not** adopted as the table's execution path, because that adoption would
+//! broaden this unit into the later framework teardown.
 //! `#![allow(dead_code)]` therefore stays in place, naming this decision.
 
 #![allow(dead_code)]
@@ -213,9 +212,8 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
 //   subscriptions carry `Not(IsMounted(overlay))` guards, so underlying
 //   regions receive no mouse event and cannot mutate.
 //
-// * During CP1, `LegacyInput` forwards mouse events and the `Model` runs the
-//   existing legacy `App::handle_mouse` path unchanged. This pattern is wired
-//   per-surface as each converts.
+// * During the migration, converted surfaces own mouse hit-testing and the
+//   shell runs any remaining App effects. This pattern is wired per-surface.
 //
 // * Note: `EventClause::Mouse` in TuiRealm 4.1 only range-checks
 //   `column`/`row` and ignores `kind`/`modifiers`, so `EventClause::Any` is

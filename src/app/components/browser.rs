@@ -15,8 +15,8 @@ use tuirealm::event::{Event, Key, KeyModifiers, MouseButton, MouseEvent, MouseEv
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::to_crossterm_key_event;
 use super::msg::{BrowserHitRegion, Msg, ShellRequest};
+use super::typed_key::to_crossterm_key_event;
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{
@@ -456,7 +456,7 @@ impl BrowserComponent {
                 }
                 crossterm::event::KeyCode::Char('r') => Some(ShellRequest::BrowserRefresh),
                 // Esc or Backspace go back through the browse history (task
-                // 5.3d, Emby browser back): moves off `Msg::Legacy` for the
+                // 5.3d, Emby browser back): uses a typed request for the
                 // focused browser. No modifier guard — the legacy
                 // `handle_lib_key` `Esc | Backspace` arm matched any
                 // modifiers, so this preserves that modifier-insensitive

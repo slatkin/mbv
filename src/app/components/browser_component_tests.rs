@@ -15,7 +15,7 @@ use tuirealm::event::{
 /// 5.3d): while focused, the component moves its own cursor exactly the way
 /// the legacy `App::move_lib_cursor_rows`/`jump_lib_cursor` bindings move
 /// the App cursor, and returns the typed request in place of the raw
-/// `Msg::Legacy` key so the shell drives the App cursor through the same
+/// typed key request so the shell drives the App cursor through the same
 /// App methods (never in addition — no double movement). A 40-item flat
 /// list rendered 100 columns wide packs two items per row and pages
 /// `(height - 1) * cols = 9 * 2 = 18` items — every case below lands on

@@ -186,7 +186,7 @@ impl AppComponent<Msg, UserEvent> for ContextMenuComponent {
         match ev {
             // Forward every key to the shell's existing context-menu handler.
             Event::Keyboard(key) => {
-                let crossterm_key = super::legacy_input::to_crossterm_key_event(key);
+                let crossterm_key = super::typed_key::to_crossterm_key_event(key);
                 Some(Msg::Shell(ShellRequest::ContextMenuKey(crossterm_key)))
             }
             // The component owns its mouse hit-test (task 5.3c).

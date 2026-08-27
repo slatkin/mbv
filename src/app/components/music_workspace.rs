@@ -11,8 +11,8 @@ use tuirealm::event::{Event, Key, KeyModifiers, MouseButton, MouseEvent, MouseEv
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::to_crossterm_key_event;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
+use super::typed_key::to_crossterm_key_event;
 use super::user_event::UserEvent;
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
 use crate::app::render::{render_wide_music_group_with_ctx, MusicImagePaint, MusicWideRenderCtx};

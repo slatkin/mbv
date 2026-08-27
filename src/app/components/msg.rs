@@ -5,7 +5,7 @@
 //! `None`). Request payloads are placeholder scaffolds filled in as each
 //! surface converts (see per-type TODOs).
 
-use crossterm::event::{KeyEvent, MouseEvent};
+use crossterm::event::KeyEvent;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueSlotId;
 
@@ -20,37 +20,21 @@ pub enum Msg {
     Service(ServiceRequest),
     Persist(PersistRequest),
     Shell(ShellRequest),
-    /// Temporary adapter carrying a translated terminal event out of the
-    /// `LegacyInput` bridge so the shell `Model` can re-run the existing
-    /// `App` input handlers (design D11/D13). This is NOT a domain message:
-    /// it exists only for the mixed-framework strangler phase and is removed
-    /// at the completion gate.
-    // TODO(migrate-tui-to-tuirealm): delete this variant at task 5.3 when
-    // `LegacyInput` is removed and the last surface leaves the legacy path.
-    Legacy(LegacyTerminalEvent),
     /// Terminal event observed by the permanent `UiRoot` subscription. The
-    /// shell uses this as a redraw signal; it only falls back to the legacy
-    /// handler when `UiRoot` itself owns focus.
-    TerminalEvent(LegacyTerminalEvent),
+    /// shell uses this as a redraw signal and handles focus/layout side
+    /// effects; a key is forwarded to the legacy App handler only while
+    /// `UiRoot` owns focus.
+    TerminalEvent(TerminalObserverEvent),
 }
 
-/// Terminal-event payload for the temporary `Msg::Legacy` bridge and the
-/// typed `Msg::TerminalEvent` emitted by the permanent UiRoot observer (D13).
-///
-/// `LegacyInput` reconstructs crossterm events from TuiRealm's `Event` and
-/// carries them here so the `Model` can call the existing `App::handle_key` /
-/// `App::handle_mouse` / focus / resize handlers unchanged. `Key`/`Mouse`
-/// carry crossterm types (which impl `PartialEq`/`Clone`); `Resize` drops the
-/// dimensions because the legacy resize handler ignores them (it only
-/// force-clears and flushes image caches); `NoOp` covers events the legacy
-/// loop no-ops (non-`Press` key kinds — which TuiRealm's crossterm adapter
-/// collapses to `Event::None` — and `Paste`, which the legacy `_ => {}` arm
-/// already ignored).
-// TODO(migrate-tui-to-tuirealm): delete at task 5.3 with `Msg::Legacy`.
+/// Self-contained payload emitted by the permanent UiRoot terminal observer.
+/// Mouse and otherwise unhandled events are represented without carrying a
+/// framework-specific event payload because they only participate in redraw
+/// accounting at the shell boundary.
 #[derive(Debug, Clone, PartialEq)]
-pub enum LegacyTerminalEvent {
+pub enum TerminalObserverEvent {
     Key(KeyEvent),
-    Mouse(MouseEvent),
+    Mouse,
     Resize,
     FocusGained,
     FocusLost,
@@ -597,7 +581,7 @@ pub enum ShellRequest {
     BrowserRescan,
     /// Esc or Backspace on the focused generic/Movies/home-video
     /// `BrowserComponent` (task 5.3d, Emby browser back): back-navigation
-    /// moves off `Msg::Legacy`. The component emits `BrowserBack` for
+    /// moves off raw terminal forwarding. The component emits `BrowserBack` for
     /// `KeyCode::Esc`/`KeyCode::Backspace` with any modifier (matching the
     /// legacy `handle_lib_key` arm, which guarded neither), and the shell
     /// derives the active Emby library index from its own tab state and runs
