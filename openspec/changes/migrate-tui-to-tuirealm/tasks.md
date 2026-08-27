@@ -317,7 +317,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
   - [x] **5.3d.20b — re-verify claimed redundant re-pushes (NO-OP at `ee28c78c`):**
     `shell_inline_search.rs` projections at lines 153, 206, and 241 are distinct
     required open/activation/LibEvent transitions; no source change made.
-  - [ ] **5.3d.20c — drop `apply_inline_search_items` (≤2 files):**
+  - [x] **5.3d.20c — drop `apply_inline_search_items` (≤2 files):**
     `shell_inline_search.rs` + `parent_id` guard.
   - [ ] **5.3d.20d — drop recursive pool branch (≤2 files):** `shell_inline_search.rs`
     recursive `Albums` pool branch.
