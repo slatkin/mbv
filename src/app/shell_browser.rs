@@ -252,7 +252,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::{BrowserComponent, LegacyTerminalEvent, Msg};
+    use crate::app::components::{BrowserComponent, Msg};
     use crate::app::render::make_movie_app;
     use crate::app::tests::{make_app_stub, make_item, make_items};
     use crate::app::{App, BrowseLevel, ContextAction, LibraryTab, PanelMode, TabSelection};
@@ -564,14 +564,14 @@ mod tests {
 
         // Ctrl/Alt brackets are NOT letter-pill cycling: the legacy guard
         // excluded CONTROL and ALT, so those combinations are unbound and
-        // consumed by the component (emitted as `Msg::Legacy` `NoOp`).
+        // forwarded through the typed global bridge.
         assert!(matches!(
             drive_browser_key(&mut model, &id, Key::Char('['), KeyModifiers::CONTROL),
-            Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+            Some(Msg::Shell(ShellRequest::GlobalViewKey(_)))
         ));
         assert!(matches!(
             drive_browser_key(&mut model, &id, Key::Char(']'), KeyModifiers::ALT),
-            Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+            Some(Msg::Shell(ShellRequest::GlobalViewKey(_)))
         ));
     }
 
@@ -757,9 +757,9 @@ mod tests {
 
         // One-column list (queue panel restored at a width whose library
         // pane stays below the 82-column threshold): Left/Right/h/l stay
-        // unbound locally — consumed by the component (emitted as
-        // `Msg::Legacy` `NoOp`), no movement request, App cursor unchanged —
-        // while the row keys keep their typed stride of one item.
+        // unbound locally — forwarded through the typed global bridge with no
+        // movement request, App cursor unchanged — while the row keys keep
+        // their typed stride of one item.
         model.app.panel_mode = PanelMode::Both;
         render_browser_model(&mut model, 100, 40);
         model.sync_emby_browser();
@@ -767,9 +767,9 @@ mod tests {
             assert!(
                 matches!(
                     drive_browser_key(&mut model, &id, key, KeyModifiers::NONE),
-                    Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                    Some(Msg::Shell(ShellRequest::GlobalViewKey(_)))
                 ),
-                "one-column focused {key:?} must be consumed (no legacy fallthrough)"
+                "one-column focused {key:?} must use the typed global bridge"
             );
         }
         let comp_cursor = model

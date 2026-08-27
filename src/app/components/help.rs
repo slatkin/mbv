@@ -18,7 +18,7 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseButton, MouseEvent, MouseEventK
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{help_destination, render_help_panel, HelpDestination};
 use crate::app::{PanelFocus, TabSelection};
@@ -59,8 +59,8 @@ impl HelpComponent {
     }
 
     /// Handle a keyboard event. Returns `Msg::Shell(...)` for cross-boundary
-    /// work, `Msg::Legacy(NoOp)` for local state changes (scroll) and swallowed
-    /// keys (the redraw signal, design D12).
+    /// work and `None` for local state changes or swallowed keys; the root
+    /// terminal observer supplies the redraw signal (design D12).
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         // Help swallows every key (matching legacy `handle_key_help`'s
         // unconditional `Some(false)` return for unbound keys).
@@ -72,26 +72,26 @@ impl HelpComponent {
             Key::Function(4) => Some(Msg::Shell(ShellRequest::OpenPlaylists)),
             Key::Up => {
                 self.scroll = self.scroll.saturating_sub(1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Down => {
                 self.scroll = self.scroll.saturating_add(1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::PageUp => {
                 self.scroll = self.scroll.saturating_sub(10);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::PageDown => {
                 self.scroll = self.scroll.saturating_add(10);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Home => {
                 self.scroll = 0;
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
-            // Unbound key: swallow (return NoOp for redraw signal).
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            // Unbound key: swallow.
+            _ => None,
         }
     }
 
@@ -109,18 +109,18 @@ impl HelpComponent {
                     Some(Msg::Shell(ShellRequest::DismissHelp))
                 } else {
                     // Click inside: swallow.
-                    Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                    None
                 }
             }
             MouseEventKind::ScrollDown => {
                 self.scroll = self.scroll.saturating_add(3);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             MouseEventKind::ScrollUp => {
                 self.scroll = self.scroll.saturating_sub(3);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }
@@ -158,8 +158,7 @@ impl AppComponent<Msg, UserEvent> for HelpComponent {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
-            // Non-key/non-mouse events: no-op redraw signal.
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }
@@ -264,10 +263,10 @@ mod tests {
     }
 
     #[test]
-    fn unbound_key_is_swallowed_with_noop() {
+    fn unbound_key_is_swallowed() {
         let mut comp = HelpComponent::new();
         let msg = comp.handle_key(&make_key(Key::Char('x'), KeyModifiers::NONE));
-        assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+        assert_eq!(msg, None);
     }
 
     #[test]
@@ -275,7 +274,7 @@ mod tests {
         let mut comp = HelpComponent::new();
         let msg = comp.handle_key(&make_key(Key::Char('q'), KeyModifiers::CONTROL));
         // Ctrl+Q is not the plain-q quit binding; it's swallowed.
-        assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+        assert_eq!(msg, None);
     }
 
     #[test]
@@ -327,7 +326,7 @@ mod tests {
             row: 10,
             modifiers: KeyModifiers::NONE,
         });
-        assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+        assert_eq!(msg, None);
     }
 
     #[test]

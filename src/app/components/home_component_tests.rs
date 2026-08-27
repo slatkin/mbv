@@ -1,5 +1,5 @@
 use super::home::HomeComponent;
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest};
 use mbv_core::playback_queue::QueueItem;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -37,7 +37,7 @@ fn home_down_moves_the_component_cursor_without_app_state() {
         "Home movement stays within the selected section"
     );
     assert_eq!(home.section(), 0);
-    assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+    assert_eq!(msg, None);
 }
 
 fn two_section_home() -> HomeComponent {
@@ -72,15 +72,15 @@ fn key(code: Key) -> Event<crate::app::components::UserEvent> {
 #[test]
 fn home_keys_fall_through_while_the_queue_panel_is_focused() {
     // Unfocused (Queue panel focused): Home must not claim or mutate
-    // anything — every key falls through to the legacy dispatch, where the
-    // queue handler owns it. Local navigation and typed effects alike.
+    // anything — every key is forwarded through the typed global bridge,
+    // where the queue handler owns it. Local navigation and typed effects alike.
     let mut home = two_section_home();
     home.set_focused(false);
 
     let msg = home.on(&key(Key::Down));
     assert!(matches!(
         msg,
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(k)))
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(k)))
             if k.code == crossterm::event::KeyCode::Down
     ));
     assert_eq!(
@@ -92,7 +92,7 @@ fn home_keys_fall_through_while_the_queue_panel_is_focused() {
     let msg = home.on(&key(Key::Char(']')));
     assert!(matches!(
         msg,
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(k)))
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(k)))
             if k.code == crossterm::event::KeyCode::Char(']')
     ));
     assert_eq!(
@@ -104,7 +104,7 @@ fn home_keys_fall_through_while_the_queue_panel_is_focused() {
     let msg = home.on(&key(Key::Enter));
     assert!(matches!(
         msg,
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(k)))
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(k)))
             if k.code == crossterm::event::KeyCode::Enter
     ));
     assert_eq!(home.cursor(), 0, "queue-focused Enter must not act on Home");
@@ -210,12 +210,12 @@ fn source_for_section_maps_numeric_to_semantic_source() {
 }
 
 #[test]
-fn unmatched_key_bounces_to_the_legacy_dispatch() {
+fn unmatched_key_uses_typed_global_dispatch() {
     let mut home = two_section_home();
     let msg = home.on(&key(Key::Char('v')));
     assert!(matches!(
         msg,
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(k))) if k.code == crossterm::event::KeyCode::Char('v')
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(k))) if k.code == crossterm::event::KeyCode::Char('v')
     ));
 }
 

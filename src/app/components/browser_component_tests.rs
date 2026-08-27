@@ -1,5 +1,5 @@
 use super::browser::BrowserComponent;
-use crate::app::components::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::{make_item, make_items};
@@ -96,8 +96,8 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
             "unfocused {key:?} must not move the cursor"
         );
         assert!(
-            matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::NoOp))),
-            "unfocused {key:?} must be consumed (no legacy fallthrough)"
+            matches!(message, Some(Msg::Shell(ShellRequest::GlobalViewKey(_)))),
+            "unfocused {key:?} must be forwarded through the typed global bridge"
         );
     }
 }
@@ -193,7 +193,7 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
 /// the right rail even when that rail is wide enough to pack two columns).
 /// Down from 0 lands at 1, not 2, and returns the typed rows request;
 /// Left/Right/h/l stay unbound locally (one-column list) while the raw key
-/// still forwards as `Msg::Legacy`.
+/// forwards through the typed `GlobalViewKey` bridge.
 #[test]
 fn browser_local_navigation_strides_one_column_for_wide_movies() {
     let mut browser = BrowserComponent::new();
@@ -235,8 +235,8 @@ fn browser_local_navigation_strides_one_column_for_wide_movies() {
             "wide-Movies rail {key:?} must stay unbound locally"
         );
         assert!(
-            matches!(message, Some(Msg::Legacy(LegacyTerminalEvent::NoOp))),
-            "wide-Movies {key:?} must be consumed (no legacy fallthrough)"
+            matches!(message, Some(Msg::Shell(ShellRequest::GlobalViewKey(_)))),
+            "wide-Movies {key:?} must use the typed global bridge"
         );
     }
 }

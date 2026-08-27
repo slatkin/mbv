@@ -269,7 +269,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::{InlineSearchComponent, LegacyTerminalEvent, Msg};
+    use crate::app::components::{InlineSearchComponent, Msg};
     use crate::app::render::make_movie_app;
     use crate::app::tests::make_item;
     use crate::app::{LibEvent, LibraryTab};
@@ -291,10 +291,7 @@ mod tests {
                 code: Key::Down,
                 modifiers: KeyModifiers::NONE,
             }));
-        assert!(matches!(
-            message,
-            Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
-        ));
+        assert_eq!(message, None);
         assert!(model
             .application
             .get_component(&id)

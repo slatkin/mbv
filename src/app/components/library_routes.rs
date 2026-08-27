@@ -8,7 +8,7 @@ use tuirealm::event::{Event, Key, KeyEvent};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_library_routes_content, LibraryRoutesRenderModel};
 use crate::app::types_context_menu::{LibraryRoutePopup, LibraryRouteStage};
@@ -63,18 +63,18 @@ impl LibraryRoutesComponent {
         match key.code {
             Key::Up => {
                 self.cursor = self.cursor.saturating_sub(1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Down => {
                 let len = stage_len(self.stage.as_ref());
                 if len > 0 {
                     self.cursor = (self.cursor + 1).min(len - 1);
                 }
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Enter => Some(Msg::Shell(ShellRequest::LibraryRoutesEnter)),
             Key::Esc => Some(Msg::Shell(ShellRequest::LibraryRoutesEsc)),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }
@@ -140,7 +140,7 @@ impl AppComponent<Msg, UserEvent> for LibraryRoutesComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }

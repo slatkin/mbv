@@ -16,7 +16,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::to_crossterm_mouse_event;
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_generic_movies_home_video_rows_with_ctx, LibraryListRenderCtx};
 use crate::app::ui_util::move_cursor;
@@ -131,7 +131,7 @@ impl InlineSearchComponent {
             .modifiers
             .intersects(KeyModifiers::ALT | KeyModifiers::CONTROL)
         {
-            return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+            return None;
         }
         match key.code {
             Key::Up => self.move_cursor(-1),
@@ -165,7 +165,7 @@ impl InlineSearchComponent {
             }
             _ => {}
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+        None
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
@@ -180,7 +180,7 @@ impl InlineSearchComponent {
                 self.cursor = move_cursor(row, 0, self.pool.filtered_items(&self.query).len());
             }
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+        None
     }
 }
 

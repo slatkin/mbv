@@ -27,7 +27,7 @@ use tuirealm::event::{Event, Key, KeyModifiers};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{LegacyTerminalEvent, Msg, ServiceRequest, ShellRequest};
+use super::msg::{Msg, ServiceRequest, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::search_sidebar::SearchSidebar;
 use crate::app::ui_util::move_cursor;
@@ -72,45 +72,45 @@ impl SearchSidebarComponent {
         self.sidebar.apply_drain(query, result);
     }
 
-    /// Handle a keyboard event. Local state changes (query, cursor, scroll,
-    /// type_filter) return `Msg::Legacy(NoOp)` (the redraw signal, design
-    /// D12). Cross-boundary requests return the appropriate `Msg`.
+    /// Handle a keyboard event. Local state changes return `None`; the root
+    /// terminal observer supplies the redraw signal (design D12).
+    /// Cross-boundary requests return the appropriate `Msg`.
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
         // Ctrl/Alt: swallow (matching legacy `handle_key_search_sidebar`'s
         // modifier guard).
         if key.modifiers.contains(KeyModifiers::ALT)
             || key.modifiers.contains(KeyModifiers::CONTROL)
         {
-            return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+            return None;
         }
         match key.code {
             Key::Esc => Some(Msg::Shell(ShellRequest::DismissSearch)),
             Key::Enter => self.handle_activate(),
             Key::Up => {
                 self.move_cursor(-1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Down => {
                 self.move_cursor(1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Tab => {
                 self.cycle_type_filter(1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::BackTab => {
                 self.cycle_type_filter(-1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Backspace => self.handle_backspace(),
             Key::Char(c) => {
                 self.sidebar.query.push(c);
                 self.sidebar.on_query_changed();
                 self.dispatch_query();
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             // Unbound key: swallow (matching legacy `Some(false)` return).
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 
@@ -120,7 +120,7 @@ impl SearchSidebarComponent {
     fn handle_activate(&mut self) -> Option<Msg> {
         let results = self.sidebar.filtered_results();
         if results.is_empty() {
-            return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+            return None;
         }
         let idx = self.sidebar.cursor.min(results.len() - 1);
         let item = &results[idx];
@@ -138,7 +138,7 @@ impl SearchSidebarComponent {
         self.sidebar.query.pop();
         self.sidebar.on_query_changed();
         self.dispatch_query();
-        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+        None
     }
 
     /// Move the cursor by `delta`, clamping and adjusting scroll (matching
@@ -230,11 +230,9 @@ impl AppComponent<Msg, UserEvent> for SearchSidebarComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
-            Event::User(UserEvent::Clock(now)) => self
-                .handle_clock(*now)
-                .or(Some(Msg::Legacy(LegacyTerminalEvent::NoOp))),
-            // Non-key/non-clock events: no-op redraw signal (design D12).
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            Event::User(UserEvent::Clock(now)) => self.handle_clock(*now),
+            // Non-key/non-clock events do not affect this component.
+            _ => None,
         }
     }
 }
@@ -260,14 +258,14 @@ mod tests {
     fn ctrl_key_is_swallowed() {
         let mut comp = SearchSidebarComponent::new();
         let msg = comp.handle_key(&make_key(Key::Char('a'), KeyModifiers::CONTROL));
-        assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+        assert_eq!(msg, None);
     }
 
     #[test]
     fn alt_key_is_swallowed() {
         let mut comp = SearchSidebarComponent::new();
         let msg = comp.handle_key(&make_key(Key::Char('a'), KeyModifiers::ALT));
-        assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+        assert_eq!(msg, None);
     }
 
     #[test]
@@ -305,7 +303,7 @@ mod tests {
     fn enter_on_empty_results_is_noop() {
         let mut comp = SearchSidebarComponent::new();
         let msg = comp.handle_key(&make_key(Key::Enter, KeyModifiers::NONE));
-        assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+        assert_eq!(msg, None);
     }
 
     #[test]
@@ -381,7 +379,7 @@ mod tests {
     fn unbound_key_is_swallowed() {
         let mut comp = SearchSidebarComponent::new();
         let msg = comp.handle_key(&make_key(Key::Function(1), KeyModifiers::NONE));
-        assert_eq!(msg, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+        assert_eq!(msg, None);
     }
 
     #[test]

@@ -26,7 +26,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{HomeHitRegion, LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{HomeHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::HomeImagePaint;
 use crate::app::types_playback::HomeLatestSource;
@@ -311,29 +311,28 @@ impl HomeComponent {
 
     /// Handle a keyboard event using crossterm types directly. The local
     /// navigation set and the typed effect-key family (Enter, Ctrl+Enter,
-    /// Ctrl+A, Ctrl+W, Delete) are Home's to claim. `None` means the key
-    /// isn't Home's to handle: the caller falls through to the legacy
-    /// top-level dispatch (`App::handle_key`'s `CONTEXT_STACK`) unchanged,
-    /// exactly as if Home had never converted (design D11/D13). Global keys
-    /// the `CONTEXT_STACK` already claims ahead of Home (`q`, Tab/BackTab,
-    /// 1-9, `.`) are deliberately *not* matched here for that reason: `.`
-    /// is consumed by `handle_global_view_key` before the browse dispatch (and
-    /// the deleted `handle_cw_key`) ever run, so the global context-menu
-    /// routing stays at its original precedence — this component reproduces
-    /// the reachable set, not the unreachable one.
+    /// Ctrl+A, Ctrl+W, Delete) are Home's to claim. `None` is reserved for
+    /// Home-owned local state changes that need only the root observer's
+    /// redraw; unmatched live keys are forwarded through the typed
+    /// `GlobalViewKey` request below. Global keys the `CONTEXT_STACK` already
+    /// claims ahead of Home (`q`, Tab/BackTab, 1-9, `.`) are deliberately *not*
+    /// matched here for that reason: `.` is consumed by
+    /// `handle_global_view_key` before the browse dispatch (and the deleted
+    /// `handle_cw_key`) ever run, so the global context-menu routing stays at
+    /// its original precedence — this component reproduces the reachable set,
+    /// not the unreachable one.
     ///
-    /// The component claims Home's keys only while its Library panel is
+    /// The component claims Home's local keys only while its Library panel is
     /// focused (`self.focused`, mirrored from the shell's effective panel
-    /// focus every tick). With the Queue panel focused, every key returns
-    /// `None` and falls through to the legacy dispatch, so queue handling
-    /// (`handle_queue_key`) sees it instead of Home mutating local state
-    /// that has no focus authority.
+    /// focus every tick). With the Queue panel focused, every key is forwarded
+    /// through `GlobalViewKey` so queue handling (`handle_queue_key`) retains
+    /// authority instead of Home mutating local state.
     pub(in crate::app) fn handle_crossterm_key(
         &mut self,
         key: crossterm::event::KeyEvent,
     ) -> Option<Msg> {
         if !self.focused {
-            return None;
+            return Some(Msg::Shell(ShellRequest::GlobalViewKey(key)));
         }
         let ctrl = key
             .modifiers
@@ -341,35 +340,35 @@ impl HomeComponent {
         match key.code {
             crossterm::event::KeyCode::Up => {
                 self.move_local_cursor(-1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             crossterm::event::KeyCode::Down => {
                 self.move_local_cursor(1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             crossterm::event::KeyCode::Char('[') if !ctrl => {
                 let changed = self.move_section(-1);
-                Some(self.section_msg(changed))
+                self.section_msg(changed)
             }
             crossterm::event::KeyCode::Char(']') if !ctrl => {
                 let changed = self.move_section(1);
-                Some(self.section_msg(changed))
+                self.section_msg(changed)
             }
             crossterm::event::KeyCode::PageUp => {
                 self.move_local_cursor(-(self.page_size() as i64));
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             crossterm::event::KeyCode::PageDown => {
                 self.move_local_cursor(self.page_size() as i64);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             crossterm::event::KeyCode::Home => {
                 self.select_start();
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             crossterm::event::KeyCode::End => {
                 self.select_end();
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             crossterm::event::KeyCode::Enter if ctrl => {
                 Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor)))
@@ -386,22 +385,16 @@ impl HomeComponent {
             crossterm::event::KeyCode::Delete => {
                 Some(Msg::Shell(ShellRequest::HomeDelete(self.cursor)))
             }
-            _ => None,
+            _ => Some(Msg::Shell(ShellRequest::GlobalViewKey(key))),
         }
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        let crossterm_key = to_crossterm_key_event(key);
-        self.handle_crossterm_key(crossterm_key)
-            .or(Some(Msg::Legacy(LegacyTerminalEvent::Key(crossterm_key))))
+        self.handle_crossterm_key(to_crossterm_key_event(key))
     }
 
-    fn section_msg(&self, changed: bool) -> Msg {
-        if changed {
-            Msg::Shell(ShellRequest::HomeSectionSelected(self.section))
-        } else {
-            Msg::Legacy(LegacyTerminalEvent::NoOp)
-        }
+    fn section_msg(&self, changed: bool) -> Option<Msg> {
+        changed.then_some(Msg::Shell(ShellRequest::HomeSectionSelected(self.section)))
     }
 
     fn page_size(&self) -> usize {
@@ -508,9 +501,6 @@ impl HomeComponent {
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         let crossterm_mouse = to_crossterm_mouse_event(mouse);
         self.handle_crossterm_mouse(crossterm_mouse)
-            .or(Some(Msg::Legacy(LegacyTerminalEvent::Mouse(
-                crossterm_mouse,
-            ))))
     }
 
     #[cfg(test)]
@@ -567,7 +557,7 @@ impl AppComponent<Msg, UserEvent> for HomeComponent {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }

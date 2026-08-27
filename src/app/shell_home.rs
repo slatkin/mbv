@@ -232,7 +232,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::msg::{LegacyTerminalEvent, Msg};
+    use crate::app::components::msg::Msg;
     use crate::app::tests::{make_app_stub, make_item, make_items};
     use std::time::Duration;
     use tuirealm::component::AppComponent;
@@ -344,7 +344,7 @@ mod tests {
                 modifiers: KeyModifiers::NONE,
             }))
         };
-        assert_eq!(message, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+        assert_eq!(message, None);
 
         model.push_home_content();
 

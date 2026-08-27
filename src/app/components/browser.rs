@@ -16,7 +16,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{BrowserHitRegion, LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{BrowserHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{
@@ -310,8 +310,8 @@ impl BrowserComponent {
         // legacy `handle_lib_key` movement arms call — never in addition to
         // the raw key (no double movement). Focused-gated exactly like the
         // legacy Library-panel gate: while unfocused (Queue/playback own
-        // panel focus) the component does not touch its cursor and the raw
-        // key passes through unchanged, keeping those surfaces
+        // panel focus) the component does not touch its cursor and the key
+        // passes through the typed global bridge, keeping those surfaces
         // authoritative.
         if self.focused {
             match key.code {
@@ -350,7 +350,7 @@ impl BrowserComponent {
                 // (legacy `handle_lib_key` does not claim them in 1-col
                 // either — they fall through to other CONTEXT_STACK
                 // handlers), so they emit no movement request and the raw
-                // key is still forwarded to the legacy bridge below.
+                // key is still forwarded through the typed global bridge below.
                 crossterm::event::KeyCode::Left | crossterm::event::KeyCode::Char('h')
                     if self.columns() > 1 =>
                 {
@@ -375,8 +375,8 @@ impl BrowserComponent {
         // legacy Library-panel gate exactly (`effective_panel_focus() ==
         // Library` → these keys reach `handle_lib_key`); when no item is
         // selected (empty nav level) or while unfocused, the key is forwarded
-        // to the legacy bridge so legacy resolution (e.g. Enter on the
-        // library root) is preserved unchanged. A typed request is returned
+        // through the typed global bridge so legacy resolution (e.g. Enter on
+        // the library root) is preserved unchanged. A typed request is returned
         // in place of the raw legacy key, never in addition to it — no
         // double execution.
         if self.focused {
@@ -486,7 +486,7 @@ impl BrowserComponent {
                 return Some(Msg::Shell(request));
             }
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
     }
 
     /// Resolve the item at the component's own local cursor over the mirrored
@@ -654,7 +654,8 @@ impl BrowserComponent {
     }
 
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
-        self.handle_crossterm_key(to_crossterm_key_event(key))
+        let crossterm_key = to_crossterm_key_event(key);
+        self.handle_crossterm_key(crossterm_key)
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
@@ -739,7 +740,7 @@ impl BrowserComponent {
             }
             _ => {}
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+        None
     }
 
     /// Resolve the list item under `(col, row)` from the component's own
