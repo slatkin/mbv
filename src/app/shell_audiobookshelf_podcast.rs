@@ -16,15 +16,18 @@ impl Model {
         let Some(index) = self.app.tab.audiobookshelf_index() else {
             return;
         };
-        let episode_selection = self
-            .app
-            .audiobookshelf_browse
-            .get(index)
-            .is_some_and(|state| state.episode_selection.is_some());
+        // The episode target is the mounted component's authoritative selection
+        // (task 5.3d.11 U5), read through the U0 accessor. The App mirror is
+        // neither read nor written here: a later FocusOrPlay/Space resolves the
+        // explicit target instead of re-entering selection.
+        let episode = self
+            .abs_podcast_component_mut(index)
+            .and_then(|component| component.episode_selection());
         match intent {
             super::components::msg::PodcastEpisodeIntent::FocusOrPlay => {
-                if episode_selection {
-                    self.app.play_selected_audiobookshelf_episode(index);
+                if let Some(episode_index) = episode {
+                    self.app
+                        .play_selected_audiobookshelf_episode(index, episode_index);
                 } else if let Some(component) = self.abs_podcast_component_mut(index) {
                     // Entering episode selection is re-homed onto the mounted
                     // component (task 5.3d.11 U2); the post-request projection
@@ -33,8 +36,9 @@ impl Model {
                 }
             }
             super::components::msg::PodcastEpisodeIntent::OpenOrPlay => {
-                if episode_selection {
-                    self.app.play_selected_audiobookshelf_episode(index);
+                if let Some(episode_index) = episode {
+                    self.app
+                        .play_selected_audiobookshelf_episode(index, episode_index);
                 } else if self.app.layout.main.is_wide_podcast_active() {
                     if let Some(component) = self.abs_podcast_component_mut(index) {
                         // Re-homed onto the mounted component (task 5.3d.11 U2),
@@ -46,8 +50,9 @@ impl Model {
                 }
             }
             super::components::msg::PodcastEpisodeIntent::Enqueue => {
-                if episode_selection {
-                    self.app.enqueue_selected_audiobookshelf_episode(index);
+                if let Some(episode_index) = episode {
+                    self.app
+                        .enqueue_selected_audiobookshelf_episode(index, episode_index);
                 }
             }
         }
@@ -364,6 +369,86 @@ mod tests {
         model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::Enqueue);
         assert_eq!(model.app.audiobookshelf_browse[0].episode_selection, before);
         assert_eq!(model.app.player_tab.total_queue_len(), 1);
+    }
+
+    /// U5 regression: playback target resolution reads the mounted component's
+    /// authoritative episode selection through the U0 accessor, never the App
+    /// `episode_selection` mirror. When the component selection is present but
+    /// the App mirror is stale (None), FocusOrPlay must still resolve the
+    /// component-selected episode into a real play attempt rather than
+    /// re-entering episode selection. Without an eligible owner the play is
+    /// inert, surfacing the owner-unavailable status as the observable.
+    #[test]
+    fn abs_podcast_focus_play_uses_component_selection_not_stale_app_mirror() {
+        let mut model = Model::new(audiobookshelf_app());
+        crate::app::tests_podcast::add_emby_movie_library(&mut model.app);
+        // Project a selection into the mounted component, then stale the mirror
+        // to None so only the component owns the resolved target.
+        model.app.audiobookshelf_browse[0].episode_selection = Some(0);
+        model.sync_audiobookshelf_podcast();
+        model.app.audiobookshelf_browse[0].episode_selection = None;
+        let id = model
+            .abs_podcast_id
+            .clone()
+            .expect("podcast component mounted");
+        model
+            .application
+            .get_component_mut(&id)
+            .expect("podcast component");
+
+        // A real FocusOrPlay through the Model handler must not re-enter
+        // selection: the component's owned selection resolves the play target,
+        // which is inert here only because the owner is unavailable.
+        model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::FocusOrPlay);
+        assert!(
+            model
+                .app
+                .status
+                .contains("Audiobookshelf playback owner is unavailable"),
+            "component-resolved FocusOrPlay must attempt playback, not re-enter selection"
+        );
+        assert_eq!(
+            model
+                .abs_podcast_component_mut(0)
+                .expect("podcast component mounted")
+                .episode_selection(),
+            Some(0),
+            "component selection must remain the resolved episode target"
+        );
+        assert_eq!(
+            model.app.player_tab.total_queue_len(),
+            0,
+            "inert play attempt must not enqueue"
+        );
+        assert_eq!(
+            model.app.audiobookshelf_browse[0].episode_selection, None,
+            "the stale App mirror must not be written or read for the target"
+        );
+    }
+
+    /// U5 regression: Enqueue resolves the component-owned episode index the
+    /// same way, editing the Composed queue even when the App mirror is stale.
+    #[test]
+    fn abs_podcast_enqueue_uses_component_selection_over_stale_app_mirror() {
+        let mut model = Model::new(audiobookshelf_app());
+        model.app.audiobookshelf_browse[0].episode_selection = Some(0);
+        model.sync_audiobookshelf_podcast();
+        model.app.audiobookshelf_browse[0].episode_selection = None;
+
+        model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::Enqueue);
+        assert_eq!(
+            model.app.player_tab.total_queue_len(),
+            1,
+            "Enqueue must resolve the component-owned episode target"
+        );
+        assert_eq!(
+            model.app.audiobookshelf_browse[0].episode_selection, None,
+            "Enqueue must not read or write the stale App mirror"
+        );
+        let component = model
+            .abs_podcast_component_mut(0)
+            .expect("podcast component mounted");
+        assert_eq!(component.episode_selection(), Some(0));
     }
 
     /// The load-bearing space/ctrl-a contract (task 5.3d.7), with an Emby

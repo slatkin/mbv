@@ -205,27 +205,45 @@ impl App {
     /// Resolve the selected downloaded episode at the Audiobookshelf playback
     /// boundary. Queue submission remains the responsibility of the later
     /// action stage; browse state never sees credentials or playback state.
+    /// Kept as a 1-arg read-only activation seam (reads the App mirror) for
+    /// the pre-U5 App-level tests; the shell play/enqueue path threads an
+    /// explicit component-resolved episode index directly (task 5.3d.11 U5).
     pub(super) fn activate_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
     ) -> Option<QueueItem> {
-        self.selected_audiobookshelf_queue_item(audiobookshelf_library_index)
+        let state = self
+            .audiobookshelf_browse
+            .get(audiobookshelf_library_index)?;
+        let episode_index = state.episode_selection?;
+        self.selected_audiobookshelf_queue_item(audiobookshelf_library_index, episode_index)
     }
 
-    /// Resolve the selected downloaded episode for enqueue without mutating
-    /// any queue or opening a playback lifecycle.
+    /// Resolve the selected episode for enqueue without mutating any queue or
+    /// opening a playback lifecycle. Kept as a 1-arg read-only activation seam
+    /// for the pre-U5 App-selection (see `activate_audiobookshelf_episode`).
     pub(super) fn enqueue_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
     ) -> Option<QueueItem> {
-        self.selected_audiobookshelf_queue_item(audiobookshelf_library_index)
+        let state = self
+            .audiobookshelf_browse
+            .get(audiobookshelf_library_index)?;
+        let episode_index = state.episode_selection?;
+        self.selected_audiobookshelf_queue_item(audiobookshelf_library_index, episode_index)
     }
 
-    /// Ordinary play for a downloaded episode. Browse supplies only the
-    /// provider-native snapshot; canonical queue ownership and the eligible
-    /// Player boundary remain here with the other ordinary actions.
-    pub(super) fn play_selected_audiobookshelf_episode(&mut self, index: usize) {
-        let Some(item) = self.activate_audiobookshelf_episode(index) else {
+    /// Ordinary play for the downloaded episode at `episode_index`. The shell
+    /// resolves the target from the mounted component's selection (task
+    /// 5.3d.11 U5); the App only supplies the provider-native snapshot, while
+    /// canonical queue ownership and the eligible Player boundary remain here
+    /// with the other ordinary actions.
+    pub(super) fn play_selected_audiobookshelf_episode(
+        &mut self,
+        index: usize,
+        episode_index: usize,
+    ) {
+        let Some(item) = self.selected_audiobookshelf_queue_item(index, episode_index) else {
             return;
         };
         if !self.player.can_admit_audiobookshelf() {
@@ -238,11 +256,16 @@ impl App {
         self.submit_queue_item(item, true);
     }
 
-    /// Ordinary enqueue for a downloaded episode. A cold local queue is the
-    /// Composed stage and is intentionally allowed without owner admission;
-    /// an active or remote playback target is Bound and must be eligible.
-    pub(super) fn enqueue_selected_audiobookshelf_episode(&mut self, index: usize) {
-        let Some(item) = self.enqueue_audiobookshelf_episode(index) else {
+    /// Ordinary enqueue for the downloaded episode at `episode_index`. A cold
+    /// local queue is the Composed stage and is intentionally allowed without
+    /// owner admission; an active or remote playback target is Bound and must
+    /// be eligible.
+    pub(super) fn enqueue_selected_audiobookshelf_episode(
+        &mut self,
+        index: usize,
+        episode_index: usize,
+    ) {
+        let Some(item) = self.selected_audiobookshelf_queue_item(index, episode_index) else {
             return;
         };
         let scope = self.visible_queue_scope();
@@ -261,11 +284,11 @@ impl App {
     fn selected_audiobookshelf_queue_item(
         &self,
         audiobookshelf_library_index: usize,
+        episode_index: usize,
     ) -> Option<QueueItem> {
         let state = self
             .audiobookshelf_browse
             .get(audiobookshelf_library_index)?;
-        let episode_index = state.episode_selection?;
         let episode = state.visible_episodes().get(episode_index)?.to_owned();
         if episode.library_item_id.trim().is_empty() || episode.episode_id.trim().is_empty() {
             return None;
