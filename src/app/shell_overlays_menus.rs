@@ -242,9 +242,7 @@ impl Model {
                         .select_series_selection_modal_season(series_id, selected),
                     super::super::types_selection_modal::SelectionModalSource::Podcast {
                         library_item_id,
-                    } => self
-                        .app
-                        .select_podcast_selection_modal_filter(library_item_id, selected),
+                    } => self.select_podcast_selection_modal_filter(library_item_id, selected),
                     _ => {}
                 }
             }

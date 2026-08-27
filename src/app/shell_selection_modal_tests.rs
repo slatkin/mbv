@@ -614,9 +614,11 @@ mod selection_modal_tests {
 
     #[test]
     fn audiobookshelf_progress_refreshes_matching_podcast_modal() {
-        let mut app = super::super::tests_podcast::audiobookshelf_app();
-        app.open_podcast_selection_modal();
-        let mut model = Model::new(app);
+        let mut model = Model::new(super::super::tests_podcast::audiobookshelf_app());
+        // Mount/project the podcast component so the modal action reads/writes
+        // the episode filter through it (task 5.3d.11 U3).
+        model.sync_audiobookshelf_podcast();
+        model.open_podcast_selection_modal();
         model.sync_modal_requests();
         let update = mbv_core::player::AudiobookshelfProgressUpdate {
             generation: model.app.audiobookshelf_runtime.generation(),

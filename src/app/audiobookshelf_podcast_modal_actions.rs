@@ -1,36 +1,47 @@
+use super::shell::Model;
 use super::types_audiobookshelf_browse::{AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter};
 use super::types_selection_modal::{
     SelectionModalFilter, SelectionModalItem, SelectionModalListState, SelectionModalRow,
     SelectionModalSource,
 };
-use super::App;
 use crate::app::ui_util::fmt_duration_approx;
 
-impl App {
+impl Model {
     pub(super) fn open_podcast_selection_modal(&mut self) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
+        let Some(index) = self.app.tab.audiobookshelf_index() else {
             return;
         };
-        let Some(state) = self.audiobookshelf_browse.get(index) else {
-            return;
+        let (title, library_item_id, list_state, app_episode_filter) = {
+            let Some(state) = self.app.audiobookshelf_browse.get(index) else {
+                return;
+            };
+            let Some(show) = state.selected_show() else {
+                return;
+            };
+            (
+                show.title.clone(),
+                show.library_item_id.clone(),
+                podcast_modal_state(state),
+                state.episode_filter,
+            )
         };
-        let Some(show) = state.selected_show() else {
-            return;
-        };
-        let title = show.title.clone();
-        let list_state = podcast_modal_state(state);
+        // Read the episode filter through the mounted component (task 5.3d.11
+        // U3), falling back to the App browse-state mirror when the component
+        // is not the active mounted browser.
+        let episode_filter = self
+            .abs_podcast_component_mut(index)
+            .map(|component| component.episode_filter())
+            .unwrap_or(app_episode_filter);
         let labels = AudiobookshelfEpisodeFilter::ALL
             .iter()
             .map(|filter| filter.label().to_string())
             .collect();
         let selected = AudiobookshelfEpisodeFilter::ALL
             .iter()
-            .position(|filter| *filter == state.episode_filter)
+            .position(|filter| *filter == episode_filter)
             .unwrap_or(0);
-        self.open_selection_modal(
-            SelectionModalSource::Podcast {
-                library_item_id: show.library_item_id.clone(),
-            },
+        self.app.open_selection_modal(
+            SelectionModalSource::Podcast { library_item_id },
             title,
             list_state,
             Some(SelectionModalFilter { labels, selected }),
@@ -49,21 +60,24 @@ impl App {
         let Some(filter) = AudiobookshelfEpisodeFilter::ALL.get(selected).copied() else {
             return;
         };
+        let Some(index) = self.app.audiobookshelf_browse.iter().position(|state| {
+            state
+                .shows
+                .iter()
+                .any(|show| show.library_item_id == library_item_id)
+        }) else {
+            return;
+        };
+        if let Some(component) = self.abs_podcast_component_mut(index) {
+            component.set_episode_filter(filter);
+        }
+        // D14 stage-1 mirror: keep the App browse-state filter in sync so
+        // downstream rows rebuild from the mirror faithfully.
+        self.app.audiobookshelf_browse[index].episode_filter = filter;
         let (rows, loading) = {
-            let Some((_, state)) =
-                self.audiobookshelf_browse
-                    .iter_mut()
-                    .enumerate()
-                    .find(|(_, state)| {
-                        state
-                            .shows
-                            .iter()
-                            .any(|show| show.library_item_id == library_item_id)
-                    })
-            else {
+            let Some(state) = self.app.audiobookshelf_browse.get(index) else {
                 return;
             };
-            state.episode_filter = filter;
             let loading = state.detail_loading || state.episodes.is_none();
             (
                 podcast_episode_modal_rows(state, state.episodes.as_deref().unwrap_or_default()),
@@ -76,7 +90,7 @@ impl App {
         } else {
             SelectionModalListState::ready(rows)
         };
-        self.refresh_selection_modal(
+        self.app.refresh_selection_modal(
             SelectionModalSource::Podcast { library_item_id },
             state,
             None,

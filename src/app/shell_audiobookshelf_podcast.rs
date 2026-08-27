@@ -42,7 +42,7 @@ impl Model {
                         component.set_episode_selection(Some(0));
                     }
                 } else {
-                    self.app.open_podcast_selection_modal();
+                    self.open_podcast_selection_modal();
                 }
             }
             super::components::msg::PodcastEpisodeIntent::Enqueue => {
