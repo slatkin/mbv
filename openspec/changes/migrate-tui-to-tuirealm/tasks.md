@@ -323,7 +323,8 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
     recursive `Albums` pool branch.
   - [x] **5.3d.20e — re-host `/` trigger (≤2 files):** `components/browser.rs:90-92`
     `ShellRequest::OpenInlineSearch`.
-  - [ ] **5.3d.20f — mouse `left_area` quirk (≤2 files):** `components/inline_search.rs`
+  - [x] **5.3d.20f — mouse `left_area` quirk (≤2 files):** `components/inline_search.rs`
+    Verified no-op; residual pre-first-view click before the first view() may see zero left_area.
     Default-layout mismatch.
 - Risks (preserved): `scroll` written inside `view()` (render side-effect) —
   preserve on teardown; render seam `list.rs` + `list_rows.rs` `with_search`.
