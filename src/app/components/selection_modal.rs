@@ -13,7 +13,7 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseButton, MouseEvent, MouseEventK
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_selection_modal_content, SelectionModalRenderModel};
 use crate::app::types_selection_modal::{
@@ -151,17 +151,17 @@ impl SelectionModalComponent {
         match key.code {
             Key::Up => {
                 self.move_cursor(-1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Down => {
                 self.move_cursor(1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Enter => Some(Msg::Shell(ShellRequest::SelectionModalActivate(
                 self.selected_id().map(str::to_owned),
             ))),
             Key::Esc | Key::Backspace => Some(Msg::Shell(ShellRequest::DismissSelectionModal)),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 
@@ -169,7 +169,7 @@ impl SelectionModalComponent {
         {
             let filter = self.modal.as_mut()?.filter.as_mut()?;
             if filter.labels.is_empty() {
-                return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+                return None;
             }
             filter.selected =
                 ((filter.selected as i64 + delta).rem_euclid(filter.labels.len() as i64)) as usize;
@@ -203,7 +203,7 @@ impl SelectionModalComponent {
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         if !matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-            return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+            return None;
         }
         let pos = (mouse.column, mouse.row).into();
         if !self
@@ -233,7 +233,7 @@ impl SelectionModalComponent {
                 self.selected_id().map(str::to_owned),
             )));
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+        None
     }
 }
 
@@ -290,7 +290,7 @@ impl AppComponent<Msg, UserEvent> for SelectionModalComponent {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }

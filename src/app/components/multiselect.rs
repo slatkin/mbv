@@ -8,7 +8,7 @@ use tuirealm::event::{Event, Key, KeyEvent};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{LegacyTerminalEvent, Msg};
+use super::msg::Msg;
 use super::user_event::UserEvent;
 use crate::app::render::{render_multiselect_content, MultiSelectRenderModel};
 use crate::app::types_context_menu::{MultiSelectKind, MultiSelectPopup};
@@ -58,24 +58,24 @@ impl MultiselectComponent {
         match key.code {
             Key::Up => {
                 self.cursor = self.cursor.saturating_sub(1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Down => {
                 if !self.items.is_empty() {
                     self.cursor = (self.cursor + 1).min(self.items.len() - 1);
                 }
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Char(' ') => {
                 if let Some(item) = self.items.get_mut(self.cursor) {
                     item.2 = !item.2;
                 }
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Esc | Key::Enter => self.commit_snapshot().map(|(kind, items)| {
                 Msg::Shell(super::msg::ShellRequest::MultiselectCommit { kind, items })
             }),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }
@@ -121,7 +121,7 @@ impl AppComponent<Msg, UserEvent> for MultiselectComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }
@@ -155,8 +155,8 @@ mod tests {
     fn settings_popup_multiselect_keeps_local_cursor_and_choice() {
         let mut component = MultiselectComponent::new();
         component.set_content(&popup());
-        component.on(&key(Key::Down));
-        component.on(&key(Key::Char(' ')));
+        assert_eq!(component.on(&key(Key::Down)), None);
+        assert_eq!(component.on(&key(Key::Char(' '))), None);
 
         assert_eq!(component.cursor, 1);
         assert!(!component.items[1].2);

@@ -12,7 +12,7 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseButton, MouseEvent, MouseEventK
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::panel_targets::PanelTarget;
 
@@ -85,18 +85,18 @@ impl SessionsComponent {
             Key::Function(4) => Some(Msg::Shell(ShellRequest::OpenPlaylists)),
             Key::Up => {
                 self.cursor = self.cursor.saturating_sub(1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Down => {
                 if !self.targets.is_empty() {
                     self.cursor = (self.cursor + 1).min(self.targets.len() - 1);
                 }
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Char('r') => Some(Msg::Shell(ShellRequest::RefreshSessions)),
             Key::Enter => Some(Msg::Shell(ShellRequest::SelectSession(self.cursor))),
             Key::Char('d') if self.can_disconnect => Some(Msg::Shell(ShellRequest::DetachSessions)),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 
@@ -106,11 +106,11 @@ impl SessionsComponent {
                 if !self.targets.is_empty() {
                     self.cursor = (self.cursor + 1).min(self.targets.len() - 1);
                 }
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             MouseEventKind::ScrollUp => {
                 self.cursor = self.cursor.saturating_sub(1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             MouseEventKind::Down(MouseButton::Left) => {
                 let pos = (mouse.column, mouse.row).into();
@@ -128,9 +128,9 @@ impl SessionsComponent {
                     }
                     self.cursor = *index;
                 }
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }
@@ -192,7 +192,7 @@ impl AppComponent<Msg, UserEvent> for SessionsComponent {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }
@@ -215,7 +215,7 @@ mod tests {
         component.cursor = 1;
         let message = component.handle_key(&key(Key::Up));
         assert_eq!(component.cursor, 0);
-        assert_eq!(message, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+        assert_eq!(message, None);
     }
 
     #[test]
