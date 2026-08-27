@@ -163,7 +163,6 @@ impl App {
             state.select(cursor.min(state.shows.len() - 1));
             state.selected_id.clone()
         };
-        self.save_audiobookshelf_position(index);
         if let Some(id) = selected_id {
             self.start_audiobookshelf_detail(id);
         }

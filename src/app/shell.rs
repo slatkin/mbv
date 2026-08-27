@@ -779,6 +779,12 @@ impl Model {
                                     self.app.jump_audiobookshelf_show_cursor(true);
                                 }
                             }
+                            // The component owns the painted cursor; persist the
+                            // active tab's slot once after any movement lands so
+                            // the saved position tracks the moved cursor (B3).
+                            if let Some(index) = self.app.tab.audiobookshelf_index() {
+                                self.app.save_audiobookshelf_position(index);
+                            }
                         }
                         Msg::Shell(ShellRequest::AudiobookshelfBookKey(key)) => {
                             // Component-originated book key writer seam (5.3d):
