@@ -155,6 +155,53 @@ fn book_state(count: usize, with_chapters: bool) -> AudiobookshelfBookBrowseStat
 }
 
 #[test]
+fn abs_book_component_does_not_focus_hidden_chapters_on_narrow_left() {
+    let state = book_state(1, true);
+    let mut component = AudiobookshelfBookComponent::new();
+    component.set_content(&state, true, false);
+
+    for rendered in [false, true] {
+        if rendered {
+            let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+            terminal
+                .draw(|frame| component.view(frame, frame.area()))
+                .unwrap();
+        }
+        let focus = component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Left,
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert!(matches!(
+            focus,
+            Some(Msg::Legacy(LegacyTerminalEvent::Key(key)))
+                if key.code == crossterm::event::KeyCode::Left
+        ));
+        assert!(component.chapter_selection().is_none());
+    }
+
+    let movement = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        movement,
+        Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::NextBookRow
+        )))
+    ));
+    let activate = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        activate,
+        Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+            AudiobookshelfBookIntent::Activate
+        )))
+    ));
+}
+
+#[test]
 fn abs_book_component_gates_chapter_focus_after_wide_to_narrow_resize() {
     let state = book_state(1, true);
     assert_eq!(state.visible_rows("book-0").len(), 1);

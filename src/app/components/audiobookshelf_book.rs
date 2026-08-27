@@ -94,6 +94,10 @@ impl AudiobookshelfBookComponent {
         &self.geometry
     }
 
+    pub(in crate::app) fn chapter_selection(&self) -> Option<usize> {
+        self.state.chapter_selection
+    }
+
     fn page_size(&self) -> usize {
         self.page_size
     }
@@ -157,7 +161,7 @@ impl AudiobookshelfBookComponent {
                     AudiobookshelfBookMove::FocusBrowser,
                 )))
             }
-            Key::Left if !chapters_focused => {
+            Key::Left if self.chapters_visible && !chapters_focused => {
                 self.state.chapter_selection = Some(0);
                 Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
                     AudiobookshelfBookMove::FocusChapters,
