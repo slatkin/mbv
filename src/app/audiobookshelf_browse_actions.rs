@@ -338,7 +338,6 @@ impl App {
             state.detail_cache.clear();
             state.detail_loading_ids.clear();
             state.chapter_selection = None;
-            state.scroll = 0;
             state.loading_pages.clear();
             state.loading_pages.insert(0);
             (

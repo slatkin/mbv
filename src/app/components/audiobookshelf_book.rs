@@ -18,6 +18,7 @@ use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
 
 pub struct AudiobookshelfBookComponent {
     state: AudiobookshelfBookBrowseState,
+    browser_offset: usize,
     focused: bool,
     images_enabled: bool,
     geometry: AudiobookshelfBookGeometry,
@@ -41,6 +42,7 @@ impl AudiobookshelfBookComponent {
                     media_type: "book".into(),
                 },
             ),
+            browser_offset: 0,
             focused: false,
             images_enabled: false,
             geometry: AudiobookshelfBookGeometry::default(),
@@ -58,9 +60,10 @@ impl AudiobookshelfBookComponent {
     ) {
         let selected_id = self.state.selected_id.clone();
         let chapter_selection = self.state.chapter_selection;
-        let scroll = self.state.scroll;
+        let browser_offset = self.browser_offset;
         let selected_bucket = self.state.selected_bucket;
         self.state = snapshot.clone();
+        self.browser_offset = 0;
         if selected_id.as_ref().is_some_and(|id| {
             self.state
                 .books
@@ -69,7 +72,7 @@ impl AudiobookshelfBookComponent {
         }) {
             self.state.selected_id = selected_id;
             self.state.chapter_selection = chapter_selection;
-            self.state.scroll = scroll;
+            self.browser_offset = browser_offset;
             self.state.selected_bucket =
                 selected_bucket.min(self.state.buckets.len().saturating_sub(1));
         }
@@ -336,6 +339,7 @@ impl Component for AudiobookshelfBookComponent {
             &mut self.state,
             self.images_enabled,
             &mut self.geometry,
+            &mut self.browser_offset,
         );
         // A wide frame can still have no painted chapter rows (for example
         // while detail is loading or when the selected book has no chapters).

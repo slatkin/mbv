@@ -350,7 +350,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
     U6.
   - [x] **5.3d.13-R2 — ABS Book legacy reader teardown:** After R1's zero-ref gate,
     delete `handle_key_audiobookshelf_book_library` and its shell bridge.
-  - [ ] **5.3d.13-R3 — ABS Book App-state cleanup:** After R2, remove the remaining
+  - [x] **5.3d.13-R3 — ABS Book App-state cleanup:** After R2, remove the remaining
     obsolete App reader/state pieces.
 
 ---

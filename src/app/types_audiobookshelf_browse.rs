@@ -332,7 +332,6 @@ pub(super) struct AudiobookshelfBookBrowseState {
     /// pane renders -- both panes are always visible; see
     /// `render_audiobookshelf_book_content` (component-owned).
     pub chapter_selection: Option<usize>,
-    pub scroll: usize,
     /// Fixed alphabetical author-surname ranges over `books`, recomputed
     /// whenever `books` changes (see `append_page_books`).
     pub buckets: Vec<SurnameBucket>,
@@ -356,7 +355,6 @@ impl AudiobookshelfBookBrowseState {
             detail_loading: false,
             progress: HashMap::new(),
             chapter_selection: None,
-            scroll: 0,
             buckets: Vec::new(),
             selected_bucket: 0,
         }

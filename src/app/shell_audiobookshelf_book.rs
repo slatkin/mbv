@@ -130,7 +130,7 @@ impl Model {
     /// 5.3d, `sync_audiobookshelf_book` Phase A): runs only when the active tab
     /// is the mounted book browser and mirrors the validated browse snapshot
     /// plus panel focus into `AudiobookshelfBookComponent` via `set_content`
-    /// (preserving its selected-book/chapter/scroll/bucket semantics exactly).
+    /// (preserving its selected-book/chapter/bucket semantics exactly).
     /// Called at the writers of the projected inputs, so it is deterministic in
     /// `App` state and duplicate pushes are idempotent. `sync_audiobookshelf_book`
     /// keeps only mount lifecycle management.

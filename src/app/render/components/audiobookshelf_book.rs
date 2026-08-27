@@ -41,6 +41,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
     state: &mut AudiobookshelfBookBrowseState,
     images_enabled: bool,
     geometry: &mut AudiobookshelfBookGeometry,
+    browser_offset: &mut usize,
 ) -> Option<super::home_hero::HomeImagePaint> {
     *geometry = AudiobookshelfBookGeometry::default();
     if state.books.is_empty() {
@@ -120,6 +121,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             frame,
             browser,
             state,
+            browser_offset,
             focused && state.chapter_selection.is_none(),
             &plan,
             geometry,
@@ -142,7 +144,15 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             .saturating_sub(SELECTED_BLOCK_SIDE_PADDING * 2),
         images_enabled,
     );
-    render_book_browser(frame, parts.content_area, state, focused, &plan, geometry)
+    render_book_browser(
+        frame,
+        parts.content_area,
+        state,
+        browser_offset,
+        focused,
+        &plan,
+        geometry,
+    )
 }
 
 fn render_book_pills(
@@ -175,6 +185,7 @@ fn render_book_browser(
     frame: &mut Frame,
     area: Rect,
     state: &mut AudiobookshelfBookBrowseState,
+    browser_offset: &mut usize,
     focused: bool,
     plan: &BookHeroPlan,
     geometry: &mut AudiobookshelfBookGeometry,
@@ -191,17 +202,17 @@ fn render_book_browser(
     let count = bucket.end - bucket.start;
     let cursor_pos = cursor.saturating_sub(bucket.start).min(count - 1);
     let detail_rows = plan.content_rows + HERO_BLOCK_EXTRA_ROWS;
-    let flow = inline_detail_flow(cursor_pos, detail_rows, area.height, state.scroll);
-    let (detail_rows, scroll) = match flow {
+    let flow = inline_detail_flow(cursor_pos, detail_rows, area.height, *browser_offset);
+    let (detail_rows, offset) = match flow {
         Some(flow) => (detail_rows, flow.offset),
         None => (
             0,
-            state.scroll.min(count.saturating_sub(area.height as usize)),
+            (*browser_offset).min(count.saturating_sub(area.height as usize)),
         ),
     };
-    state.scroll = scroll;
+    *browser_offset = offset;
     let total_display = inline_display_row_count(count, cursor_pos, detail_rows);
-    let display_rows = (scroll..total_display).take(area.height as usize);
+    let display_rows = (offset..total_display).take(area.height as usize);
     let mut image = None;
     for (screen_row, display_row) in display_rows.enumerate() {
         let Some(source) = inline_display_row(count, cursor_pos, detail_rows, display_row) else {
