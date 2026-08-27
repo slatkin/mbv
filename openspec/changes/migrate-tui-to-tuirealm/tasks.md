@@ -452,7 +452,7 @@ definition of done.
       5.3d.23-A. Run the corresponding component tests.
     - B1-B5 are serial because the global bridge remains until every
       zero-reference gate passes.
-  - [ ] **5.3d.24-A — mouse/framework residual:** Report-only verification of
+  - [x] **5.3d.24-A — mouse/framework residual:** Report-only verification of
     `mouse_gestures`, layout, and render-derived hitmaps at the D16 boundary;
     accepted-broken mouse framework residuals are not deletion work here.
 - [ ] **5.3d.22** Delete now-unreferenced per-surface `CONTEXT_STACK` handlers in
@@ -460,13 +460,13 @@ definition of done.
 - [x] **5.3d.23** Delete `LegacyInput`, `Msg::Legacy`, `LegacyTerminalEvent`,
   terminal reconstruction adapters, and obsolete mount/sync names after the
   inventory is empty (no raw legacy terminal endpoint remains).
-- [ ] **5.3d.24** Verify no component-local interaction state is mirrored through
+- [x] **5.3d.24** Verify no component-local interaction state is mirrored through
   `App`, no legacy renderer paints beneath a migrated component surface, and no
   global mouse router/hit map remains.
-- [ ] **5.5** Flip all `docs/architecture/interactive-surface-ledger.md` rows to
+- [x] **5.5** Flip all `docs/architecture/interactive-surface-ledger.md` rows to
   `migrated` with verification records; verify no `legacy` **and** no `component`
   row remains (see 1.10).
-- [ ] **5.6 Final gate:** `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
+- [x] **5.6 Final gate:** `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
   `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan` pass; plus the
   **final-only** `rtk make check-code-file-lines`; confirm no parallel legacy
   interaction framework remains and the shell Model holds only shell/runtime
