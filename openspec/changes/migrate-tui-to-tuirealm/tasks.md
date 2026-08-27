@@ -29,12 +29,12 @@ Sections:
 - **Accepted baseline HEAD:** `96a11eee62ad40371de083786bcc252f1ae05cd3` (the
   `5.3d.11-U5` landing commit). Doc changes land directly atop it in one atomic
   docs-only commit.
-- **Next task (first open executable implementation checkbox):** `5.3d.11-U6`.
+- **Next task (first open executable implementation checkbox):** `5.3d.18d`.
 - **Accepted campaign order:** `U6 → 5.3d.18a → 5.3d.19a → 5.3d.20a`. This is an
   accepted *campaign predecessor* order, not an invented technical dependency;
   no technical dependency between TV, Music, and Inline surfaces is asserted beyond
   what the rows below record.
-- **Open aggregate gates:** `5.3d.11` stays open until `U6`; `5.3d` stays open
+- **Open aggregate gates:** `5.3d.11` remains open as a pending aggregate (its `U0–U6` leaves have landed); `5.3d` stays open
   through all remaining surface teardown and `5.3d.21–24`; `5.5` and `5.6` stay
   open.
 - **Checkbox accounting (this rewrite):** original 89 (77 checked / 12 unchecked)
@@ -168,7 +168,7 @@ Executable open rows, in accepted campaign order. Each uses literal checkbox
 syntax and states its scope, dependency/campaign predecessor as applicable, and
 verification.
 
-### 5.3d.11 — audiobookshelf podcast interaction re-home (open until U6)
+### 5.3d.11 — audiobookshelf podcast interaction re-home (open aggregate)
 
 - [ ] **5.3d.11** **Teardown — ABS podcast re-home.** Re-home remaining podcast
   App-level interaction readers to the mounted component; delete obsolete App
@@ -222,7 +222,7 @@ verification.
     retained sync; inline the `BrowserKey` construction at the call site,
     matching Book's shape). 3 files (`shell.rs`,
     `shell_audiobookshelf_podcast.rs`, `types_audiobookshelf_browse.rs`);
-    green only after U0–U5. **First open executable checkbox.**
+    green only after U0–U5. Commits: 5ca1b099.
 
 Depends: 5.3a, 5.3b, 5.3c, 4.1, 4.10 (via the `5.3d` aggregate). Verification:
 the `5.3d` policy gates; test sets `shell_audiobookshelf_podcast.rs` (re)
