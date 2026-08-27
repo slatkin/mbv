@@ -10,11 +10,12 @@ impl Model {
             return;
         };
         match request {
-            ShellRequest::TvMoveRows { rows } => self.app.move_lib_cursor_rows(lib_idx, rows),
-            // Wide TV is rendered as a one-column list. Left/right only
-            // changes the component's local pane and has no App cursor effect.
-            ShellRequest::TvMoveColumn { .. } => {}
-            ShellRequest::TvJumpCursor { to_end } => self.app.jump_lib_cursor(lib_idx, to_end),
+            // TV cursor and pane movement are component-local. Keep these
+            // requests typed at the shell boundary, but do not write the App
+            // mirror; the component is authoritative for its own interaction state.
+            ShellRequest::TvMoveRows { .. }
+            | ShellRequest::TvMoveColumn { .. }
+            | ShellRequest::TvJumpCursor { .. } => {}
             ShellRequest::TvActivate => {
                 self.app.activate_selected_series(lib_idx);
             }
@@ -103,26 +104,59 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::ShellRequest;
-    use crate::app::render::make_movie_app;
+    use crate::app::components::{Msg, ShellRequest, TvWorkspaceComponent};
+    use crate::app::render::{make_movie_app, LibraryListRenderCtx, TvWideRenderCtx};
+    use crate::app::tests::make_item;
+    use tuirealm::component::AppComponent;
+    use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
-    fn typed_tv_requests_route_series_effects_through_app() {
+    fn typed_tv_requests_keep_component_cursor_authoritative() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_movie_app());
+        let mut component = TvWorkspaceComponent::new();
+        component.set_content(TvWideRenderCtx::new(
+            LibraryListRenderCtx::from_items(
+                vec![
+                    make_item("Series A", "Series"),
+                    make_item("Series B", "Series"),
+                ],
+                0,
+                0,
+            ),
+            None,
+            None,
+            0,
+            None,
+            true,
+            false,
+        ));
 
-        model.handle_tv_request(ShellRequest::TvMoveRows { rows: 1 });
-        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
-
-        model.handle_tv_request(ShellRequest::TvJumpCursor { to_end: false });
+        let down = component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert_eq!(component.cursor(), 1);
+        let Some(Msg::Shell(request)) = down else {
+            panic!("TV Down must produce a typed shell request");
+        };
+        assert!(matches!(request, ShellRequest::TvMoveRows { rows: 1 }));
+        model.handle_tv_request(request);
         assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
-        model.handle_tv_request(ShellRequest::TvMoveColumn { delta: 1 });
-        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
 
-        // Episode/season requests are intentionally local to the component;
-        // routing them through the shell must not move the series cursor.
-        model.handle_tv_request(ShellRequest::TvEpisodeMove { delta: 1 });
-        model.handle_tv_request(ShellRequest::TvSeasonMove { delta: 1 });
+        let end = component.on(&Event::Keyboard(KeyEvent {
+            code: Key::End,
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert_eq!(component.cursor(), 1);
+        let Some(Msg::Shell(request)) = end else {
+            panic!("TV End must produce a typed shell request");
+        };
+        assert!(matches!(
+            request,
+            ShellRequest::TvJumpCursor { to_end: true }
+        ));
+        model.handle_tv_request(request);
         assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
     }
 }

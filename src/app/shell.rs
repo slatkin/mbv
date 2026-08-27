@@ -971,9 +971,9 @@ impl Model {
                             self.push_emby_browser_content();
                         }
                         // TV keyboard requests are resolved by the mounted
-                        // workspace component; the shell applies only the
-                        // App-side series-list effects. Episode/season
-                        // movement remains component-local until 18f.
+                        // workspace component. Cursor and pane movement remain
+                        // component-local; the shell handles only cross-boundary
+                        // effects such as activation, back, and letter pills.
                         Msg::Shell(
                             request @ (ShellRequest::TvMoveRows { .. }
                             | ShellRequest::TvMoveColumn { .. }

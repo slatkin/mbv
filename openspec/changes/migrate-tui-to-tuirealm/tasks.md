@@ -261,10 +261,12 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
   - **5.3d.18a — typed keyboard (3 files)** has been promoted to an open active
     leaf (see §3, campaign schedule). Convert the series-list cursor keys to typed
     requests; keep episode play/enqueue raw for 18f.
-  - [ ] **5.3d.18b — drop mirror-pin (≤3 files):** `components/tv_workspace.rs`
-    `last_mirrored_*` pin + `shell_tv_workspace.rs` per-frame `set_content`; make
-    the component cursor authoritative and remove the dual-write with
-    `App::move_lib_cursor_rows` (B1).
+  - [x] **5.3d.18b — drop mirror-pin (≤3 files):** remove the
+    `components/tv_workspace.rs` `last_mirrored_*` pins and its per-frame App
+    cursor/selection writes. Retain `shell_tv_workspace.rs`'s `sync_tv_workspace`
+    and temporary `set_content` refresh for non-cursor content (season/episode/
+    pane/context) until 18c; make the component cursor authoritative and remove
+    the TV `TvMoveRows`/`TvJumpCursor` App-side dual writes (B1).
   - [ ] **5.3d.18c — writer pushes (≤3 files):** add `push_tv_workspace_content`
     at the nav-track/panel-focus/letter/resize writers (`shell_tv_workspace.rs`,
     `shell.rs`, `lib_cursor_actions.rs`, `input_browse_dispatch.rs`); keep the

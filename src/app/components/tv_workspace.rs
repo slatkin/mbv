@@ -34,10 +34,6 @@ pub struct TvWorkspaceComponent {
     episode_cursor: Option<usize>,
     pane: Pane,
     initialized: bool,
-    last_mirrored_cursor: usize,
-    last_mirrored_scroll: usize,
-    last_mirrored_season: usize,
-    last_mirrored_episode: Option<usize>,
     last_series_id: Option<String>,
     layout: crate::app::layout::LayoutMain,
 }
@@ -61,10 +57,6 @@ impl TvWorkspaceComponent {
             episode_cursor: None,
             pane: Pane::Series,
             initialized: false,
-            last_mirrored_cursor: 0,
-            last_mirrored_scroll: 0,
-            last_mirrored_season: 0,
-            last_mirrored_episode: None,
             last_series_id: None,
             layout: Default::default(),
         }
@@ -92,24 +84,6 @@ impl TvWorkspaceComponent {
                 };
             }
             self.initialized = true;
-        } else {
-            if self.cursor == self.last_mirrored_cursor {
-                self.cursor = context.list.cursor();
-            }
-            if self.scroll == self.last_mirrored_scroll {
-                self.scroll = context.list.scroll();
-            }
-            if !series_changed && self.season_cursor == self.last_mirrored_season {
-                self.season_cursor = context.season_cursor;
-            }
-            if !series_changed && self.episode_cursor == self.last_mirrored_episode {
-                self.episode_cursor = context.episode_cursor;
-                self.pane = if context.episode_cursor.is_some() {
-                    Pane::Episodes
-                } else {
-                    Pane::Series
-                };
-            }
         }
         self.context = context;
         self.cursor = self
@@ -121,10 +95,6 @@ impl TvWorkspaceComponent {
             .as_ref()
             .map_or(0, |detail| detail.seasons.len());
         self.season_cursor = self.season_cursor.min(season_count.saturating_sub(1));
-        self.last_mirrored_cursor = self.context.list.cursor();
-        self.last_mirrored_scroll = self.context.list.scroll();
-        self.last_mirrored_season = self.context.season_cursor;
-        self.last_mirrored_episode = self.context.episode_cursor;
     }
 
     pub(in crate::app) fn cursor(&self) -> usize {
