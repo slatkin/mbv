@@ -440,7 +440,7 @@ definition of done.
       `audiobookshelf_book.rs`, `playback.rs`, and `playlists.rs`. Pass the zero
       adapter/`Msg::Legacy` gate, preserve media effects, and run focused
       surface tests, noting playback/playlists test gaps.
-    - [ ] **5.3d.23-B4 — navigation/search/content surfaces:** Serial child;
+    - [x] **5.3d.23-B4 — navigation/search/content surfaces:** Serial child;
       allowlisted to `home.rs`, `browser.rs`, `inline_search.rs`,
       `search_sidebar.rs`, `library_routes.rs`, and `help.rs`. Pass the zero
       adapter/`Msg::Legacy` gate, preserve hit geometry and shell effects, and
