@@ -40,6 +40,17 @@ bypass filtering. `rtk grep` format flags (`-c/-l/-L/-o/-Z`) run raw.
 - Test: `rtk cargo nextest run -p <package>` (prefer nextest over `cargo test`)
 - Lint: `rtk cargo clippy --workspace --all-targets`
 - File-size check: `rtk make check-code-file-lines`
+- Format: `rtk cargo fmt` (accept its output; see below)
+
+## Formatting
+
+`cargo fmt` uses stock rustfmt defaults (edition 2021, `max_width=100`); there is
+no `rustfmt.toml`. Run it as part of every change and **accept its output**. It
+reflows the whole import list and any long signature your edit touches, so lines
+adjacent to your diff will change even when you did not edit them — those are
+your unformatted additions being normalized, not unrelated churn. Never `git
+checkout` a fmt diff; it is correct by definition. Use `cargo fmt --check` to
+verify a change is fmt-clean without writing.
 
 ## TUI ownership
 
@@ -55,7 +66,10 @@ bypass filtering. `rtk grep` format flags (`-c/-l/-L/-o/-Z`) run raw.
   tracked separately in `docs/architecture/interactive-surface-ledger.md`. A
   legacy interactive surface is not licence to violate the render boundary.
 - Workflow, the reuse/override decision table, and the completion checklist:
-  `.opencode/skills/mbv-frontend/SKILL.md`.
+  `.opencode/skills/mbv-frontend/SKILL.md` (canonical: `openspec/specs/ui-design-system/spec.md`
+  and the archived `enforce-mbv-ui-design-system` change
+  `openspec/changes/archive/2026-08-23-enforce-mbv-ui-design-system/`); see
+  `CONTEXT.md` Presentation for term definitions.
 
 ## Constraints
 
