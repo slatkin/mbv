@@ -388,10 +388,15 @@ definition of done.
   - **Execution order:** Remove per-surface raw forwarding adapters first;
     then complete the 5.3d.22 precedence cleanup; then the 5.3d.23 bridge
     teardown; finally perform 5.3d.24 verification.
-  - [ ] **5.3d.22-A — precedence stack family:** After per-surface raw
+  - [x] **5.3d.22-A — precedence stack family:** After per-surface raw
     forwarding removal, delete the bounded precedence-stack family, allowlisted
     to `src/app/input_resolver.rs`, `src/app/input.rs`,
     `src/app/input_queue_keys.rs`, and `src/app/input_lib_keys.rs`.
+    - **Verified no-op at `fae36907`:** every candidate remains reachable from
+      the live `CONTEXT_STACK`/legacy bridge or has a direct shell/test caller;
+      no bounded entry or handler met the zero-reference gate without changing
+      keyboard precedence or widening into 5.3d.22-B/23. No production symbols
+      were deleted.
   - [ ] **5.3d.22-B — confirm/visualizer precedence family:** After 5.3d.22-A,
     delete the bounded confirm/visualizer precedence family, allowlisted to
     `src/app/input_confirm_keys.rs`, `src/app/input.rs`, and
