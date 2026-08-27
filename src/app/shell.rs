@@ -957,6 +957,20 @@ impl Model {
                             // Emby browser content may have changed (5.3d.15/M2).
                             self.push_emby_browser_content();
                         }
+                        // TV keyboard requests are resolved by the mounted
+                        // workspace component; the shell applies only the
+                        // App-side series-list effects. Episode/season
+                        // movement remains component-local until 18f.
+                        Msg::Shell(
+                            request @ (ShellRequest::TvMoveRows { .. }
+                            | ShellRequest::TvMoveColumn { .. }
+                            | ShellRequest::TvJumpCursor { .. }
+                            | ShellRequest::TvActivate
+                            | ShellRequest::TvBack
+                            | ShellRequest::TvCycleLetterPill { .. }
+                            | ShellRequest::TvEpisodeMove { .. }
+                            | ShellRequest::TvSeasonMove { .. }),
+                        ) => self.handle_tv_request(request),
                         // TV workspace mouse geometry lives in
                         // `TvWorkspaceComponent`, which resolves the pane +
                         // hit (two focusable panes); the shell decides *when*

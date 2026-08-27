@@ -164,33 +164,100 @@ impl TvWorkspaceComponent {
     }
 
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
-        match key.code {
-            Key::Left | Key::Char('h') => self.pane = Pane::Series,
-            Key::Right | Key::Char('l') => self.pane = Pane::Episodes,
+        let request = match key.code {
+            Key::Left | Key::Char('h') => {
+                self.pane = Pane::Series;
+                Some(ShellRequest::TvMoveColumn { delta: -1 })
+            }
+            Key::Right | Key::Char('l') => {
+                self.pane = Pane::Episodes;
+                Some(ShellRequest::TvMoveColumn { delta: 1 })
+            }
             Key::Enter if self.pane == Pane::Series => {
                 self.episode_cursor = Some(0);
                 self.pane = Pane::Episodes;
+                Some(ShellRequest::TvActivate)
             }
-            Key::Esc | Key::Backspace if self.episode_cursor.is_some() => {
-                self.episode_cursor = None;
-                self.pane = Pane::Series;
+            Key::Enter => None,
+            Key::Esc | Key::Backspace => {
+                if self.episode_cursor.is_some() {
+                    self.episode_cursor = None;
+                    self.pane = Pane::Series;
+                }
+                Some(ShellRequest::TvBack)
             }
-            Key::Up | Key::Char('k') if self.pane == Pane::Episodes => self.move_episode(-1),
-            Key::Down | Key::Char('j') if self.pane == Pane::Episodes => self.move_episode(1),
-            Key::Char('[') if self.pane == Pane::Episodes => self.move_season(-1),
-            Key::Char(']') if self.pane == Pane::Episodes => self.move_season(1),
+            Key::Up | Key::Char('k') if self.pane == Pane::Episodes => {
+                self.move_episode(-1);
+                Some(ShellRequest::TvEpisodeMove { delta: -1 })
+            }
+            Key::Down | Key::Char('j') if self.pane == Pane::Episodes => {
+                self.move_episode(1);
+                Some(ShellRequest::TvEpisodeMove { delta: 1 })
+            }
+            Key::Char('[') if self.pane == Pane::Episodes => {
+                self.move_season(-1);
+                Some(ShellRequest::TvSeasonMove { delta: -1 })
+            }
+            Key::Char(']') if self.pane == Pane::Episodes => {
+                self.move_season(1);
+                Some(ShellRequest::TvSeasonMove { delta: 1 })
+            }
             Key::Up | Key::Char('k') => {
-                self.cursor = move_cursor(self.cursor, -1, self.context.list.item_count())
+                self.cursor = move_cursor(self.cursor, -1, self.context.list.item_count());
+                Some(ShellRequest::TvMoveRows { rows: -1 })
             }
             Key::Down | Key::Char('j') => {
-                self.cursor = move_cursor(self.cursor, 1, self.context.list.item_count())
+                self.cursor = move_cursor(self.cursor, 1, self.context.list.item_count());
+                Some(ShellRequest::TvMoveRows { rows: 1 })
             }
-            Key::Char('[') | Key::Char(']') => {}
-            _ => {}
-        }
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(
-            to_crossterm_key_event(key),
-        )))
+            Key::PageUp => {
+                let rows = -(self
+                    .layout
+                    .tv_wide_list_area
+                    .height
+                    .saturating_sub(1)
+                    .max(1) as i64);
+                self.cursor = move_cursor(self.cursor, rows, self.context.list.item_count());
+                Some(ShellRequest::TvMoveRows { rows })
+            }
+            Key::PageDown => {
+                let rows = self
+                    .layout
+                    .tv_wide_list_area
+                    .height
+                    .saturating_sub(1)
+                    .max(1) as i64;
+                self.cursor = move_cursor(self.cursor, rows, self.context.list.item_count());
+                Some(ShellRequest::TvMoveRows { rows })
+            }
+            Key::Home => {
+                self.cursor = 0;
+                Some(ShellRequest::TvJumpCursor { to_end: false })
+            }
+            Key::End => {
+                self.cursor = self.context.list.item_count().saturating_sub(1);
+                Some(ShellRequest::TvJumpCursor { to_end: true })
+            }
+            Key::Char(c @ ('[' | ']'))
+                if !key
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) =>
+            {
+                Some(ShellRequest::TvCycleLetterPill {
+                    delta: if c == '[' { -1 } else { 1 },
+                })
+            }
+            _ => None,
+        };
+        request.map_or_else(
+            || {
+                Some(Msg::Legacy(LegacyTerminalEvent::Key(
+                    to_crossterm_key_event(key),
+                )))
+            },
+            |request| Some(Msg::Shell(request)),
+        )
     }
 
     /// The component owns *where* a TV event lands: it hit-tests its painted
@@ -382,10 +449,14 @@ mod tests {
             true,
             false,
         ));
-        component.on(&Event::Keyboard(KeyEvent {
+        let message = component.on(&Event::Keyboard(KeyEvent {
             code: Key::Down,
             modifiers: KeyModifiers::NONE,
         }));
+        assert!(matches!(
+            message,
+            Some(Msg::Shell(ShellRequest::TvEpisodeMove { delta: 1 }))
+        ));
         component.set_content(TvWideRenderCtx::new(
             LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
             None,

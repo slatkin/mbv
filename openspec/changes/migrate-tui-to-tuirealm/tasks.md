@@ -230,7 +230,7 @@ tests repainted as part of the production rows.
 
 ### Campaign schedule — TV / Music / Inline
 
-- [ ] **5.3d.18a — TV workspace typed keyboard.** Convert the series-list cursor
+- [x] **5.3d.18a — TV workspace typed keyboard.** Convert the series-list cursor
   keys (Up/k, Down/j, Left/h, Right/l, PageUp/Down, Home/End, Enter, Esc/Backspace)
   to typed requests carrying the resolved pane/episode/season cursor; keep episode
   play/enqueue raw for 18f. 3 files; Emby template commits `8929248`/`24e645b9`/`6fa217fb`.

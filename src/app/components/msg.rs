@@ -417,6 +417,40 @@ pub enum ShellRequest {
         col: u16,
         row: u16,
     },
+    /// Series-list row movement from the TV workspace. The component applies
+    /// the same local cursor delta before handing the App-side mirror update
+    /// to the shell; episodes use `TvEpisodeMove` instead.
+    TvMoveRows {
+        rows: i64,
+    },
+    /// Left/right TV pane navigation. Wide TV is a one-column App list, so
+    /// the shell intentionally treats this as a no-op after the component
+    /// changes its local pane.
+    TvMoveColumn {
+        delta: i64,
+    },
+    /// Home/End movement in the TV series list.
+    TvJumpCursor {
+        to_end: bool,
+    },
+    /// Enter on a series row starts the component's episode-selection pane.
+    TvActivate,
+    /// Esc/Backspace leaves TV selection/back-navigates the App browse stack.
+    TvBack,
+    /// Series-root `[`/`]` cycle the App-owned letter pill.
+    TvCycleLetterPill {
+        delta: i64,
+    },
+    /// Episode cursor movement is local to the TV component; the shell keeps
+    /// the typed request as an explicit no-op until the episode effect row.
+    TvEpisodeMove {
+        delta: i64,
+    },
+    /// Season cycling is local to the TV component; episode effects are a
+    /// later typed-key slice.
+    TvSeasonMove {
+        delta: i64,
+    },
     /// Browse-surface scroll over the browser list, hit-tested locally by
     /// `BrowserComponent` against its own `LayoutMain` (task 5.3d, browser
     /// hit_test). The shell runs `App`'s 30ms wheel throttle against
