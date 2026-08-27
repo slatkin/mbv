@@ -267,7 +267,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
     and temporary `set_content` refresh for non-cursor content (season/episode/
     pane/context) until 18c; make the component cursor authoritative and remove
     the TV `TvMoveRows`/`TvJumpCursor` App-side dual writes (B1).
-  - [ ] **5.3d.18c — writer pushes (≤3 files):** add `push_tv_workspace_content`
+  - [x] **5.3d.18c — writer pushes (≤3 files):** add `push_tv_workspace_content`
     at the nav-track/panel-focus/letter/resize writers (`shell_tv_workspace.rs`,
     `shell.rs`, `lib_cursor_actions.rs`, `input_browse_dispatch.rs`); keep the
     `series_detail_cache` reader at `shell_tv_workspace.rs:51` (B2).

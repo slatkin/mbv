@@ -10,21 +10,52 @@ impl Model {
             return;
         };
         match request {
-            // TV cursor and pane movement are component-local. Keep these
-            // requests typed at the shell boundary, but do not write the App
-            // mirror; the component is authoritative for its own interaction state.
+            // The component owns the cursor; mirror its selected item only at
+            // this writer seam so App effects resolve the same target.
             ShellRequest::TvMoveRows { .. }
             | ShellRequest::TvMoveColumn { .. }
-            | ShellRequest::TvJumpCursor { .. } => {}
-            ShellRequest::TvActivate => {
-                self.app.activate_selected_series(lib_idx);
+            | ShellRequest::TvJumpCursor { .. }
+            | ShellRequest::TvActivate
+            | ShellRequest::TvBack
+            | ShellRequest::TvCycleLetterPill { .. } => {
+                self.mirror_tv_workspace_cursor(lib_idx);
+                match request {
+                    ShellRequest::TvActivate => {
+                        self.app.activate_selected_series(lib_idx);
+                    }
+                    ShellRequest::TvBack => self.app.go_back(lib_idx),
+                    ShellRequest::TvCycleLetterPill { delta } => {
+                        self.app.cycle_letter_pill(lib_idx, delta)
+                    }
+                    _ => {}
+                }
+                self.push_tv_workspace_content();
+                self.mirror_tv_workspace_cursor(lib_idx);
             }
-            ShellRequest::TvBack => self.app.go_back(lib_idx),
-            ShellRequest::TvCycleLetterPill { delta } => self.app.cycle_letter_pill(lib_idx, delta),
             // Episode and season cursors are component-local until the later
             // episode action slice; retain typed routing without touching App.
             ShellRequest::TvEpisodeMove { .. } | ShellRequest::TvSeasonMove { .. } => {}
             _ => {}
+        }
+    }
+
+    pub fn mirror_tv_workspace_cursor(&mut self, lib_idx: usize) {
+        let Some(id) = self.tv_workspace_id.as_ref() else {
+            return;
+        };
+        let Some(item_id) = self
+            .application
+            .get_component(id)
+            .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
+            .and_then(TvWorkspaceComponent::selected_item_id)
+            .map(str::to_owned)
+        else {
+            return;
+        };
+        if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
+            if let Some(cursor) = level.items.iter().position(|item| item.id == item_id) {
+                level.cursor = cursor;
+            }
         }
     }
 
@@ -50,21 +81,31 @@ impl Model {
             if let Some(id) = self.tv_workspace_id.take() {
                 let _ = self.application.umount(&id);
             }
-            if let Some(id) = next_id.clone() {
+            if let Some(id) = next_id {
                 self.application
                     .mount(id.clone(), Box::new(TvWorkspaceComponent::new()), vec![])
                     .expect("mount TV workspace");
                 self.application.active(&id).expect("activate TV workspace");
                 self.tv_workspace_id = Some(id);
+                self.push_tv_workspace_content();
             }
         }
+    }
 
+    pub(super) fn push_tv_workspace_content(&mut self) {
         let Some(id) = self.tv_workspace_id.as_ref() else {
             return;
         };
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
+        let Some(library) = self.app.libs.get(index) else {
+            return;
+        };
+        if library.library.collection_type != "tvshows" || !self.app.layout.main.is_wide_tv_active()
+        {
+            return;
+        }
         let list = self.app.library_list_render_ctx(index, false);
         let selected_series = list
             .selected_item()

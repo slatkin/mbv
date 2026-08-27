@@ -101,6 +101,13 @@ impl TvWorkspaceComponent {
         self.cursor
     }
 
+    pub(in crate::app) fn selected_item_id(&self) -> Option<&str> {
+        self.context
+            .list
+            .selected_item()
+            .map(|item| item.id.as_str())
+    }
+
     fn move_episode(&mut self, delta: i64) {
         let count = self
             .context
@@ -351,7 +358,10 @@ impl TvWorkspaceComponent {
                             self.pane = Pane::Episodes;
                             self.episode_cursor = Some(index);
                         }
-                        TvHit::SeriesRow(_) => self.pane = Pane::Series,
+                        TvHit::SeriesRow(index) => {
+                            self.pane = Pane::Series;
+                            self.cursor = index;
+                        }
                         TvHit::EpisodesPane => {}
                     }
                     return Some(Msg::Shell(ShellRequest::TvClick {
@@ -390,6 +400,7 @@ impl TvWorkspaceComponent {
                 } else {
                     1
                 };
+                self.move_rows(delta);
                 return Some(Msg::Shell(ShellRequest::TvScroll { delta }));
             }
             _ => {}

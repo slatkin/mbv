@@ -221,6 +221,7 @@ impl Model {
         'outer: loop {
             let mut had_events = false;
             let mut music_resize = false;
+            let mut tv_resize = false;
             if QUIT_REQUESTED.load(Ordering::Relaxed) {
                 break;
             }
@@ -342,6 +343,7 @@ impl Model {
                 // and saved-position restore arrive via lib events; re-project (5.3d).
                 self.push_audiobookshelf_book_content();
                 self.push_music_workspace_content();
+                self.push_tv_workspace_content();
             }
 
             // Search results drain: the shell drains `search_rx` and writes
@@ -559,10 +561,11 @@ impl Model {
                             // Resize is the only reachable focus/layout change
                             // while the search is mounted (it swallows keys).
                             self.push_inline_search_content();
-                            // Music geometry is rebuilt by App::render below;
-                            // defer this push until that current-frame layout
+                            // Workspace geometry is rebuilt by App::render below;
+                            // defer these pushes until that current-frame layout
                             // is installed instead of reading the prior frame.
                             music_resize = true;
+                            tv_resize = true;
                         }
                         Msg::Legacy(LegacyTerminalEvent::FocusGained) => {
                             self.app.note_focus_gained();
@@ -994,6 +997,10 @@ impl Model {
                             if self.app.note_browse_scroll() {
                                 self.app.handle_mouse_scroll_browse(delta);
                             }
+                            self.push_tv_workspace_content();
+                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                self.mirror_tv_workspace_cursor(lib_idx);
+                            }
                         }
                         Msg::Shell(ShellRequest::TvClick { region, col, row }) => {
                             if let Some(lib_idx) = self.app.tab.emby_library_index() {
@@ -1011,6 +1018,7 @@ impl Model {
                                     }
                                 }
                             }
+                            self.push_tv_workspace_content();
                         }
                         Msg::Shell(
                             request @ (ShellRequest::PlaylistsBack
@@ -1126,6 +1134,9 @@ impl Model {
                     self.app.render(f);
                     if music_resize {
                         self.push_music_workspace_content();
+                    }
+                    if tv_resize {
+                        self.push_tv_workspace_content();
                     }
                     self.render_playback_component(f);
                     self.render_home_component(f);
