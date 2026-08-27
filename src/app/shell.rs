@@ -519,15 +519,11 @@ impl Model {
                     // UiRoot's subscription sees the same event as the active
                     // component. Converted surfaces already handled it; only
                     // the root fallback should run the legacy event handler.
-                    let msg = match msg {
-                        Msg::TerminalEvent(_)
-                            if self.application.focus() != Some(&ComponentId::UiRoot) =>
-                        {
-                            continue
-                        }
-                        Msg::TerminalEvent(event) => Msg::Legacy(event),
-                        msg => msg,
-                    };
+                    if matches!(msg, Msg::TerminalEvent(_))
+                        && self.application.focus() != Some(&ComponentId::UiRoot)
+                    {
+                        continue;
+                    }
                     match msg {
                         Msg::Legacy(LegacyTerminalEvent::Key(key)) => {
                             // F1 opens the Help overlay unless a blocking
@@ -564,8 +560,10 @@ impl Model {
                             self.push_audiobookshelf_book_content();
                             self.push_music_workspace_content();
                         }
-                        Msg::Legacy(LegacyTerminalEvent::Mouse(_mouse)) => {}
-                        Msg::Legacy(LegacyTerminalEvent::Resize) => {
+                        Msg::Legacy(LegacyTerminalEvent::Mouse(_mouse))
+                        | Msg::TerminalEvent(LegacyTerminalEvent::Mouse(_mouse)) => {}
+                        Msg::Legacy(LegacyTerminalEvent::Resize)
+                        | Msg::TerminalEvent(LegacyTerminalEvent::Resize) => {
                             self.app.force_clear = true;
                             self.app.card_image_states.clear();
                             self.app.card_image_loading.clear();
@@ -578,10 +576,12 @@ impl Model {
                             music_resize = true;
                             tv_resize = true;
                         }
-                        Msg::Legacy(LegacyTerminalEvent::FocusGained) => {
+                        Msg::Legacy(LegacyTerminalEvent::FocusGained)
+                        | Msg::TerminalEvent(LegacyTerminalEvent::FocusGained) => {
                             self.app.note_focus_gained();
                         }
-                        Msg::Legacy(LegacyTerminalEvent::FocusLost) => {
+                        Msg::Legacy(LegacyTerminalEvent::FocusLost)
+                        | Msg::TerminalEvent(LegacyTerminalEvent::FocusLost) => {
                             self.app.note_focus_lost();
                         }
                         // Non-Press keys (collapsed to `Event::None` by the
@@ -589,7 +589,8 @@ impl Model {
                         // `_ => {}` arm): no-op, but `had_events` is already
                         // set, preserving the legacy "poll-ready ⇒ dirty"
                         // behaviour (design D12).
-                        Msg::Legacy(LegacyTerminalEvent::NoOp) => {}
+                        Msg::Legacy(LegacyTerminalEvent::NoOp)
+                        | Msg::TerminalEvent(LegacyTerminalEvent::NoOp) => {}
                         Msg::Shell(ShellRequest::MusicAlbumCursor { target, kind }) => {
                             if let Some(lib_idx) = self.app.tab.emby_library_index() {
                                 match kind {
