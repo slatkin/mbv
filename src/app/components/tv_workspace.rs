@@ -163,7 +163,87 @@ impl TvWorkspaceComponent {
         }
     }
 
+    /// Move through the rows painted by the last frame. Grouped TV lists
+    /// publish their sorted order and row map just like BrowserComponent;
+    /// using raw item indices here would make the local cursor disagree with
+    /// the App's letter-group navigation.
+    fn move_rows(&mut self, rows: i64) {
+        if !self.layout.left_sorted_indices.is_empty() {
+            if let Some(delta) = self.letter_vertical_delta(rows) {
+                self.move_cursor_delta(delta);
+                return;
+            }
+        }
+        self.move_cursor_delta(rows);
+    }
+
+    fn move_cursor_delta(&mut self, delta: i64) {
+        if !self.layout.left_sorted_indices.is_empty() {
+            let sorted = &self.layout.left_sorted_indices;
+            let position = sorted
+                .iter()
+                .position(|&index| index == self.cursor)
+                .unwrap_or(0);
+            self.cursor = sorted[move_cursor(position, delta, sorted.len())];
+        } else if self.context.list.item_count() > 0 {
+            self.cursor = move_cursor(self.cursor, delta, self.context.list.item_count());
+        }
+    }
+
+    fn letter_vertical_delta(&self, rows: i64) -> Option<i64> {
+        let item_rows: Vec<&Vec<usize>> = self
+            .layout
+            .left_item_rows
+            .iter()
+            .filter(|row| !row.is_empty())
+            .collect();
+        if item_rows.is_empty() || self.layout.left_sorted_indices.is_empty() {
+            return None;
+        }
+        let (current_row, current_col) =
+            item_rows.iter().enumerate().find_map(|(row, items)| {
+                items
+                    .iter()
+                    .position(|&index| index == self.cursor)
+                    .map(|col| (row, col))
+            })?;
+        let target_row = if rows < 0 {
+            current_row.saturating_sub(rows.unsigned_abs() as usize)
+        } else {
+            current_row
+                .saturating_add(rows as usize)
+                .min(item_rows.len().saturating_sub(1))
+        };
+        let target = item_rows[target_row]
+            .get(current_col)
+            .copied()
+            .or_else(|| item_rows[target_row].last().copied())?;
+        let sorted = &self.layout.left_sorted_indices;
+        let current_position = sorted.iter().position(|&index| index == self.cursor)?;
+        let target_position = sorted.iter().position(|&index| index == target)?;
+        Some(target_position as i64 - current_position as i64)
+    }
+
+    fn jump_cursor(&mut self, to_end: bool) {
+        if let Some(sorted) = (!self.layout.left_sorted_indices.is_empty())
+            .then_some(&self.layout.left_sorted_indices)
+        {
+            self.cursor = sorted[if to_end { sorted.len() - 1 } else { 0 }];
+        } else if self.context.list.item_count() > 0 {
+            self.cursor = if to_end {
+                self.context.list.item_count() - 1
+            } else {
+                0
+            };
+        }
+    }
+
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
+        if !self.context.focused {
+            return Some(Msg::Legacy(LegacyTerminalEvent::Key(
+                to_crossterm_key_event(key),
+            )));
+        }
         let request = match key.code {
             Key::Left | Key::Char('h') => {
                 self.pane = Pane::Series;
@@ -194,20 +274,32 @@ impl TvWorkspaceComponent {
                 self.move_episode(1);
                 Some(ShellRequest::TvEpisodeMove { delta: 1 })
             }
-            Key::Char('[') if self.pane == Pane::Episodes => {
+            Key::Char('[')
+                if self.pane == Pane::Episodes
+                    && !key
+                        .modifiers
+                        .contains(tuirealm::event::KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) =>
+            {
                 self.move_season(-1);
                 Some(ShellRequest::TvSeasonMove { delta: -1 })
             }
-            Key::Char(']') if self.pane == Pane::Episodes => {
+            Key::Char(']')
+                if self.pane == Pane::Episodes
+                    && !key
+                        .modifiers
+                        .contains(tuirealm::event::KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) =>
+            {
                 self.move_season(1);
                 Some(ShellRequest::TvSeasonMove { delta: 1 })
             }
             Key::Up | Key::Char('k') => {
-                self.cursor = move_cursor(self.cursor, -1, self.context.list.item_count());
+                self.move_rows(-1);
                 Some(ShellRequest::TvMoveRows { rows: -1 })
             }
             Key::Down | Key::Char('j') => {
-                self.cursor = move_cursor(self.cursor, 1, self.context.list.item_count());
+                self.move_rows(1);
                 Some(ShellRequest::TvMoveRows { rows: 1 })
             }
             Key::PageUp => {
@@ -217,7 +309,7 @@ impl TvWorkspaceComponent {
                     .height
                     .saturating_sub(1)
                     .max(1) as i64);
-                self.cursor = move_cursor(self.cursor, rows, self.context.list.item_count());
+                self.move_rows(rows);
                 Some(ShellRequest::TvMoveRows { rows })
             }
             Key::PageDown => {
@@ -227,15 +319,15 @@ impl TvWorkspaceComponent {
                     .height
                     .saturating_sub(1)
                     .max(1) as i64;
-                self.cursor = move_cursor(self.cursor, rows, self.context.list.item_count());
+                self.move_rows(rows);
                 Some(ShellRequest::TvMoveRows { rows })
             }
             Key::Home => {
-                self.cursor = 0;
+                self.jump_cursor(false);
                 Some(ShellRequest::TvJumpCursor { to_end: false })
             }
             Key::End => {
-                self.cursor = self.context.list.item_count().saturating_sub(1);
+                self.jump_cursor(true);
                 Some(ShellRequest::TvJumpCursor { to_end: true })
             }
             Key::Char(c @ ('[' | ']'))
