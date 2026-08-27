@@ -80,7 +80,54 @@ pub struct Model {
     pub(super) home_section_pending: Option<HomeLatestSource>,
 }
 
+fn route_terminal_observer_message(msg: Msg, focused: Option<&ComponentId>) -> Option<Msg> {
+    match msg {
+        Msg::TerminalEvent(event) if focused == Some(&ComponentId::UiRoot) => {
+            Some(Msg::Legacy(event))
+        }
+        Msg::TerminalEvent(_) => None,
+        msg => Some(msg),
+    }
+}
+
 impl Model {
+    /// Handle a key that remains on the legacy App path.
+    fn handle_legacy_key(&mut self, key: crossterm::event::KeyEvent) -> bool {
+        // F1 opens the Help overlay unless a blocking overlay is active (those
+        // swallow it). Once Help is mounted it is the active component, so
+        // F1 arrives as Msg::Shell(DismissHelp) instead.
+        let quit = if key.code == crossterm::event::KeyCode::F(1)
+            && !self
+                .application
+                .mounted(&ComponentId::Overlay(OverlayId::Help))
+            && !self.is_blocking_overlay_open()
+        {
+            self.mount_help();
+            false
+        } else {
+            self.app.handle_key_with_home_context(
+                key,
+                self.home_continue_watching_selected(),
+                self.home_cw_item(),
+            )
+        };
+        // F5/context-menu/confirm keys and panel-focus keys write Home
+        // content or focus inside App's handler; re-project after every key
+        // at this seam (idempotent) (task 5.3d, sync_home deletion).
+        self.push_home_content();
+        // Emby browser content may have changed (5.3d.15/M2).
+        self.push_emby_browser_content();
+        // Podcast keys (cursor/selection/filter moves and panel-focus keys)
+        // write the active ABS browse state in App's handler; re-project
+        // (5.3d.11 U6).
+        self.push_audiobookshelf_podcast_content();
+        // Book keys (cursor/selection/bucket moves and panel-focus keys) write
+        // the active ABS browse state in App's handler; re-project (task 5.3d).
+        self.push_audiobookshelf_book_content();
+        self.push_music_workspace_content();
+        quit
+    }
+
     /// Construct the model, starting the TuiRealm crossterm listener and
     /// mounting the temporary `LegacyInput` bridge as the sole active
     /// component (checkpoint 1).
@@ -515,55 +562,23 @@ impl Model {
                 // `handle_key`-returns-true loop break without a labelled
                 // break inside the fold.
                 let mut quit = false;
+                // Snapshot focus before handling any messages. A legacy key can
+                // mount or dismiss an overlay, changing focus before UiRoot's
+                // observer message is folded; routing by the live focus then
+                // double-delivers that same terminal event.
+                let focused = self.application.focus().cloned();
                 for msg in messages {
-                    // UiRoot's subscription sees the same event as the active
-                    // component. Converted surfaces already handled it; only
-                    // the root fallback should run the legacy event handler.
-                    if matches!(msg, Msg::TerminalEvent(_))
-                        && self.application.focus() != Some(&ComponentId::UiRoot)
-                    {
+                    let Some(msg) = route_terminal_observer_message(msg, focused.as_ref()) else {
                         continue;
-                    }
+                    };
                     match msg {
                         Msg::Legacy(LegacyTerminalEvent::Key(key)) => {
-                            // F1 opens the Help overlay unless a blocking
-                            // overlay is active (those swallow it). Once
-                            // Help is mounted it is the active component, so
-                            // F1 arrives as `Msg::Shell(DismissHelp)` instead.
-                            if key.code == crossterm::event::KeyCode::F(1)
-                                && !self
-                                    .application
-                                    .mounted(&ComponentId::Overlay(OverlayId::Help))
-                                && !self.is_blocking_overlay_open()
-                            {
-                                self.mount_help();
-                            } else if self.app.handle_key_with_home_context(
-                                key,
-                                self.home_continue_watching_selected(),
-                                self.home_cw_item(),
-                            ) {
+                            if self.handle_legacy_key(key) {
                                 quit = true;
                             }
-                            // F5/context-menu/confirm keys and panel-focus keys write Home
-                            // content or focus inside App's handler; re-project after every
-                            // key at this seam (idempotent) (task 5.3d, sync_home deletion).
-                            self.push_home_content();
-                            // Emby browser content may have changed (5.3d.15/M2).
-                            self.push_emby_browser_content();
-                            // Podcast keys (cursor/selection/filter moves and
-                            // panel-focus keys) write the active ABS browse
-                            // state in App's handler; re-project (5.3d.11 U6).
-                            self.push_audiobookshelf_podcast_content();
-                            // Book keys (cursor/selection/bucket moves and
-                            // panel-focus keys) write the active ABS browse
-                            // state in App's handler; re-project (5.3d).
-                            self.push_audiobookshelf_book_content();
-                            self.push_music_workspace_content();
                         }
-                        Msg::Legacy(LegacyTerminalEvent::Mouse(_mouse))
-                        | Msg::TerminalEvent(LegacyTerminalEvent::Mouse(_mouse)) => {}
-                        Msg::Legacy(LegacyTerminalEvent::Resize)
-                        | Msg::TerminalEvent(LegacyTerminalEvent::Resize) => {
+                        Msg::Legacy(LegacyTerminalEvent::Mouse(_mouse)) => {}
+                        Msg::Legacy(LegacyTerminalEvent::Resize) => {
                             self.app.force_clear = true;
                             self.app.card_image_states.clear();
                             self.app.card_image_loading.clear();
@@ -576,12 +591,10 @@ impl Model {
                             music_resize = true;
                             tv_resize = true;
                         }
-                        Msg::Legacy(LegacyTerminalEvent::FocusGained)
-                        | Msg::TerminalEvent(LegacyTerminalEvent::FocusGained) => {
+                        Msg::Legacy(LegacyTerminalEvent::FocusGained) => {
                             self.app.note_focus_gained();
                         }
-                        Msg::Legacy(LegacyTerminalEvent::FocusLost)
-                        | Msg::TerminalEvent(LegacyTerminalEvent::FocusLost) => {
+                        Msg::Legacy(LegacyTerminalEvent::FocusLost) => {
                             self.app.note_focus_lost();
                         }
                         // Non-Press keys (collapsed to `Event::None` by the
@@ -589,8 +602,7 @@ impl Model {
                         // `_ => {}` arm): no-op, but `had_events` is already
                         // set, preserving the legacy "poll-ready ⇒ dirty"
                         // behaviour (design D12).
-                        Msg::Legacy(LegacyTerminalEvent::NoOp)
-                        | Msg::TerminalEvent(LegacyTerminalEvent::NoOp) => {}
+                        Msg::Legacy(LegacyTerminalEvent::NoOp) => {}
                         Msg::Shell(ShellRequest::MusicAlbumCursor { target, kind }) => {
                             if let Some(lib_idx) = self.app.tab.emby_library_index() {
                                 match kind {
@@ -1186,5 +1198,46 @@ impl Model {
             println!("{msg}");
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::components::OverlayId;
+    use crate::app::tests::make_app_stub;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn ui_root_terminal_key_reaches_legacy_help_handler() {
+        let mut model = Model::new(make_app_stub());
+        let key = KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE);
+        let routed = route_terminal_observer_message(
+            Msg::TerminalEvent(LegacyTerminalEvent::Key(key)),
+            Some(&ComponentId::UiRoot),
+        );
+        let Some(Msg::Legacy(LegacyTerminalEvent::Key(key))) = routed else {
+            panic!("UiRoot terminal key was not converted to the legacy path");
+        };
+
+        assert!(!model.handle_legacy_key(key));
+        assert!(model
+            .application
+            .mounted(&ComponentId::Overlay(OverlayId::Help)));
+    }
+
+    #[test]
+    fn converted_surface_skips_observer_without_dropping_local_message() {
+        let focused = ComponentId::Playback;
+        let key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+        assert!(route_terminal_observer_message(
+            Msg::TerminalEvent(LegacyTerminalEvent::Key(key)),
+            Some(&focused),
+        )
+        .is_none());
+        assert!(matches!(
+            route_terminal_observer_message(Msg::Legacy(LegacyTerminalEvent::NoOp), Some(&focused),),
+            Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+        ));
     }
 }
