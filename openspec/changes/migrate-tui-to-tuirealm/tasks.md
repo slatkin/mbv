@@ -457,7 +457,7 @@ definition of done.
     accepted-broken mouse framework residuals are not deletion work here.
 - [ ] **5.3d.22** Delete now-unreferenced per-surface `CONTEXT_STACK` handlers in
   bounded families (the static keyboard-precedence proofs from 5.4).
-- [ ] **5.3d.23** Delete `LegacyInput`, `Msg::Legacy`, `LegacyTerminalEvent`,
+- [x] **5.3d.23** Delete `LegacyInput`, `Msg::Legacy`, `LegacyTerminalEvent`,
   terminal reconstruction adapters, and obsolete mount/sync names after the
   inventory is empty (no raw legacy terminal endpoint remains).
 - [ ] **5.3d.24** Verify no component-local interaction state is mirrored through
