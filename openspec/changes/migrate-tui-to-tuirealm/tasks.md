@@ -430,12 +430,12 @@ definition of done.
       `feeds_manage.rs`, and `feeds.rs`. Convert local/typed authority before
       the zero-reference gate for both crossterm adapters and `Msg::Legacy`;
       run focused queue/settings/feeds tests.
-    - [ ] **5.3d.23-B2 — transient overlays:** Serial child; allowlisted to
+    - [x] **5.3d.23-B2 — transient overlays:** Serial child; allowlisted to
       `confirm.rs`, `daemon_lost.rs`, `remote_reanchor.rs`,
       `playback_prompt.rs`, and `context_menu.rs`. Pass the zero adapter/
       `Msg::Legacy` gate, preserve shell modal effects, and add/run focused
       tests (playback_prompt coverage may need adding).
-    - [ ] **5.3d.23-B3 — media/workspace surfaces:** Serial child; allowlisted
+    - [x] **5.3d.23-B3 — media/workspace surfaces:** Serial child; allowlisted
       to `music_workspace.rs`, `tv_workspace.rs`, `audiobookshelf_podcast.rs`,
       `audiobookshelf_book.rs`, `playback.rs`, and `playlists.rs`. Pass the zero
       adapter/`Msg::Legacy` gate, preserve media effects, and run focused
