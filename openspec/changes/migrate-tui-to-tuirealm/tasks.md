@@ -301,8 +301,11 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
     `fetch_album_tracks` has a legacy wide-Music trigger in `list.rs` that is being
     moved to the component/writer path (R2); narrow grouped-album-plan and
     selection-modal callers remain unchanged.
-  - [ ] **5.3d.19e — framework teardown (≤3 files):** remove the empty
+  - [x] **5.3d.19e — framework teardown (≤3 files):** remove the empty
     `sync_music_workspace` adapter + delete the differential legacy test.
+    Re-scope: the adapter was verified live/non-empty and retained as mount-only
+    lifecycle ownership; the differential test was removed, with full lifecycle
+    teardown deferred to the aggregate teardown.
   - Risks (preserved): R1 geometry chicken-and-egg (blocker); R2 fetch
     relocation; R3 Page requires Library panel focus; R4 one-frame mouse warm-up;
     R5 h/l single-step vs arrow row-strides.
