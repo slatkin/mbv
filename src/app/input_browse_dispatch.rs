@@ -31,7 +31,7 @@ impl App {
 
     /// The library-panel keyboard front door: resolve the selected left-panel
     /// destination exhaustively (Home, one Emby library, one Audiobookshelf
-    /// library, or Feeds) and call exactly one Service-specific handler.
+    /// library, or Feeds) and dispatch to its handler or consume the key.
     ///
     /// A stale Service library index normalizes to Home first and stops the
     /// dispatch without any destination-specific handling. Unsupported keys
@@ -56,14 +56,14 @@ impl App {
                     return Some(false);
                 };
                 match kind {
-                    // Podcast keyboard navigation is owned by the mounted
-                    // podcast component; the App swallows keys here so none
-                    // fall through to queue-item handling.
-                    super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
+                    // Audiobookshelf keyboard navigation is owned by the
+                    // mounted component; the App swallows keys here so none
+                    // fall through to queue-item handling. Typed component
+                    // requests handle the supported book actions before this
+                    // generic legacy path is reached.
+                    super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast
+                    | super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
                         Some(false)
-                    }
-                    super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
-                        self.handle_key_audiobookshelf_book_library(index, key)
                     }
                 }
             }
@@ -169,85 +169,5 @@ impl App {
             self.open_series_selection_modal(&item);
         }
         true
-    }
-
-    /// The Audiobookshelf book-library keyboard handler for the exhaustively
-    /// matched `AudiobookshelfLibrary(index)` when its resolved kind is
-    /// book browser and toggles pane focus with left/right arrow. Narrow
-    /// navigates the browser and opens the chapter modal from the parent.
-    /// It cycles the
-    /// alphabetical-bucket pill with `[`/`]`, and plays or enqueues the
-    /// selected book. Every key is consumed: podcast/Emby actions and
-    /// queue-item handling are unreachable from here.
-    fn handle_key_audiobookshelf_book_library(
-        &mut self,
-        index: usize,
-        key: KeyEvent,
-    ) -> Option<bool> {
-        let chapters_focused = self.layout.main.is_wide_book_active()
-            && self
-                .audiobookshelf_book_browse
-                .get(index)
-                .is_some_and(|state| state.chapter_selection.is_some());
-        // Bucket-pill cycling (a direct precedent: `switch_music_group`'s
-        // `[`/`]` group cycling), available regardless of which pane is
-        // focused. Only the unmodified keys enter this legacy fallback;
-        // modified brackets remain outside the ABS Book movement contract.
-        if key.modifiers.is_empty() {
-            if let Some(delta) = match key.code {
-                KeyCode::Char('[') => Some(-1),
-                KeyCode::Char(']') => Some(1),
-                _ => None,
-            } {
-                self.cycle_audiobookshelf_book_bucket(delta);
-                return Some(false);
-            }
-        }
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') if chapters_focused => {
-                self.move_audiobookshelf_book_row(-1)
-            }
-            KeyCode::Down | KeyCode::Char('j') if chapters_focused => {
-                self.move_audiobookshelf_book_row(1)
-            }
-            KeyCode::Enter | KeyCode::Char(' ') if chapters_focused => {
-                self.activate_audiobookshelf_book_row();
-            }
-            // Right arrow moves focus from the hero's chapter list to the
-            // right-pane browser; Left is a no-op there (already leftmost).
-            KeyCode::Right if chapters_focused => self.focus_audiobookshelf_book_browser(),
-            KeyCode::Up | KeyCode::Char('k') => self.move_audiobookshelf_book_cursor(-1),
-            KeyCode::Down | KeyCode::Char('j') => self.move_audiobookshelf_book_cursor(1),
-            KeyCode::PageUp if !chapters_focused => {
-                self.move_audiobookshelf_book_cursor(-(self.lib_page_size() as i64))
-            }
-            KeyCode::PageDown if !chapters_focused => {
-                self.move_audiobookshelf_book_cursor(self.lib_page_size() as i64)
-            }
-            KeyCode::Home if !chapters_focused => self.jump_audiobookshelf_book_cursor(false),
-            KeyCode::End if !chapters_focused => self.jump_audiobookshelf_book_cursor(true),
-            // Left arrow moves focus from the browser to the hero's chapter
-            // list; Right is a no-op there (already rightmost).
-            KeyCode::Left if !chapters_focused && self.layout.main.is_wide_book_active() => {
-                self.focus_audiobookshelf_book_chapters()
-            }
-            // Space plays the selected book (book-playback spec: ordinary
-            // play). Narrow Enter opens the chapter modal when the hero fits;
-            // otherwise it keeps ordinary book activation. Wide Enter keeps
-            // the existing book activation behavior.
-            KeyCode::Enter if !chapters_focused && !self.layout.main.is_wide_book_active() => {
-                self.activate_audiobookshelf_book_parent();
-            }
-            KeyCode::Char(' ') | KeyCode::Enter if !chapters_focused => {
-                self.play_selected_audiobookshelf_book(index);
-            }
-            KeyCode::Char('a')
-                if !chapters_focused && key.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
-                self.enqueue_selected_audiobookshelf_book(index);
-            }
-            _ => {}
-        }
-        Some(false)
     }
 }

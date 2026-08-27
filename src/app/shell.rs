@@ -829,15 +829,6 @@ impl Model {
                                 ShellRequest::AudiobookshelfBookIntent(intent),
                             );
                         }
-                        Msg::Shell(ShellRequest::AudiobookshelfBookKey(key)) => {
-                            // Retained raw bridge for R2: converted component
-                            // keys use typed requests, but legacy handling stays
-                            // available until the reader teardown lands.
-                            if self.handle_audiobookshelf_book_key(key) {
-                                quit = true;
-                            }
-                            self.push_audiobookshelf_book_content();
-                        }
                         // Browser (generic Emby) mouse geometry lives in
                         // `BrowserComponent`, which forwards the hit region; the
                         // shell decides *when* it counts via `App`'s 400ms

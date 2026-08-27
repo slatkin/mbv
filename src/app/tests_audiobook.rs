@@ -69,12 +69,12 @@ fn audiobookshelf_book_tab_dispatches_to_book_kind_not_podcast() {
     assert_eq!(
         app.handle_key_view_dispatch(left, false, None),
         Some(false),
-        "Left arrow must be consumed by the book handler"
+        "unmatched App-level ABS Book keys remain consumed"
     );
     assert_eq!(
         app.audiobookshelf_book_browse[0].chapter_selection,
-        Some(0),
-        "Left arrow on a selected book must focus the hero's chapter list"
+        None,
+        "the removed App reader must not mutate book focus state"
     );
     assert!(
         app.audiobookshelf_browse.is_empty(),

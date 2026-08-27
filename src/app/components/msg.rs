@@ -389,9 +389,6 @@ pub enum ShellRequest {
     /// Typed Audiobookshelf book action (task 5.3d.13-R1). The shell resolves
     /// narrow/wide activation from current App state as the legacy reader did.
     AudiobookshelfBookIntent(AudiobookshelfBookIntent),
-    /// Forward an unmatched key to the legacy App handler until R2 removes the
-    /// obsolete reader and bridge. Converted book keys use typed requests.
-    AudiobookshelfBookKey(crossterm::event::KeyEvent),
     /// Close the nested playlist view without dismissing the sidebar.
     PlaylistsBack,
     /// Load the selected playlist's items.

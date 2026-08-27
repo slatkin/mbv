@@ -348,7 +348,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
   - [x] **5.3d.13-R1 — typed ABS Book input:** Convert raw
     `AudiobookshelfBookKey` handling to typed component requests, mirroring podcast
     U6.
-  - [ ] **5.3d.13-R2 — ABS Book legacy reader teardown:** After R1's zero-ref gate,
+  - [x] **5.3d.13-R2 — ABS Book legacy reader teardown:** After R1's zero-ref gate,
     delete `handle_key_audiobookshelf_book_library` and its shell bridge.
   - [ ] **5.3d.13-R3 — ABS Book App-state cleanup:** After R2, remove the remaining
     obsolete App reader/state pieces.

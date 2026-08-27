@@ -6,13 +6,6 @@ use super::{PanelFocus, TabSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
-    pub(super) fn handle_audiobookshelf_book_key(
-        &mut self,
-        key: crossterm::event::KeyEvent,
-    ) -> bool {
-        self.app.handle_key(key)
-    }
-
     /// Applies a typed book request to the existing App operations. The
     /// component has already updated its local cursor/focus, so the App call
     /// preserves the legacy persistence, detail-fetch, and playback effects;
@@ -322,8 +315,9 @@ mod tests {
             Some("book-3")
         );
 
-        // The converted component emits modified brackets through the raw
-        // bridge; the ABS Book legacy fallback must still require NONE.
+        // Unmatched component keys remain generic legacy events so global
+        // shortcuts keep their existing App side effects. The ABS Book view
+        // dispatch now consumes the unmatched key without a book fallback.
         let bucket = model.app.audiobookshelf_book_browse[0].selected_bucket;
         let shift_left = crossterm::event::KeyEvent::new(
             crossterm::event::KeyCode::Char('['),
