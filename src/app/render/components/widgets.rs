@@ -540,6 +540,18 @@ impl App {
                 if is_feed_group {
                     self.render_feed_home_video_group_view(f, area, lib_idx, focused, layout);
                 } else {
+                    // Music's mounted workspace needs the same-frame geometry
+                    // before its view replaces this legacy frame.
+                    if self.is_music_group_view(lib_idx)
+                        && self.is_viewing_album_folders(lib_idx)
+                        && crate::app::render::arrangements::hero_left::shared_hero_presentation(
+                            area,
+                        )
+                        .is_some()
+                    {
+                        let ctx = self.wide_music_render_ctx(lib_idx);
+                        ctx.publish_geometry(area, layout);
+                    }
                     self.render_list(f, area, focused, layout);
                 }
             }

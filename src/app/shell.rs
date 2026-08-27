@@ -220,6 +220,7 @@ impl Model {
 
         'outer: loop {
             let mut had_events = false;
+            let mut music_resize = false;
             if QUIT_REQUESTED.load(Ordering::Relaxed) {
                 break;
             }
@@ -558,7 +559,10 @@ impl Model {
                             // Resize is the only reachable focus/layout change
                             // while the search is mounted (it swallows keys).
                             self.push_inline_search_content();
-                            self.push_music_workspace_content();
+                            // Music geometry is rebuilt by App::render below;
+                            // defer this push until that current-frame layout
+                            // is installed instead of reading the prior frame.
+                            music_resize = true;
                         }
                         Msg::Legacy(LegacyTerminalEvent::FocusGained) => {
                             self.app.note_focus_gained();
@@ -1120,6 +1124,9 @@ impl Model {
                     // `blocking_overlay_active` adapter, task 5.3d).
                     self.app.dim_backdrop_active = self.blocking_overlay_active();
                     self.app.render(f);
+                    if music_resize {
+                        self.push_music_workspace_content();
+                    }
                     self.render_playback_component(f);
                     self.render_home_component(f);
                     self.render_feeds_component(f);

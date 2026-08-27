@@ -123,6 +123,10 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
+        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+            let context = self.app.wide_music_render_ctx(lib_idx);
+            context.publish_geometry(area, &mut self.app.layout.main);
+        }
         self.application.view(id, frame, area);
         let image_paint = self
             .application
@@ -139,6 +143,8 @@ mod tests {
     use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
     use crate::app::components::Msg;
     use crate::app::render::make_music_group_app;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
@@ -315,6 +321,50 @@ mod tests {
             .expect("narrow Music workspace mounted");
         assert!(model.application.mounted(&id));
         assert_eq!(model.app.layout.main.wide_music_area, wide_area);
+    }
+
+    #[test]
+    fn music_resize_push_uses_current_frame_geometry() {
+        let mut model = Model::new(make_music_group_app());
+        let mut track = crate::app::tests::make_item("Track 1", "Audio");
+        track.id = "track-1".into();
+        model
+            .app
+            .album_tracks_cache
+            .insert("album-1".into(), vec![track]);
+        model.sync_music_workspace();
+
+        let mut wide_terminal = Terminal::new(TestBackend::new(160, 30)).unwrap();
+        wide_terminal.draw(|frame| model.app.render(frame)).unwrap();
+        model.push_music_workspace_content();
+        let id = model.music_workspace_id.clone().unwrap();
+        {
+            let wide = model
+                .application
+                .get_component_mut(&id)
+                .unwrap()
+                .as_any_mut()
+                .downcast_mut::<MusicWorkspaceComponent>()
+                .unwrap();
+            wide.enter_track_focus();
+            assert!(model.app.layout.main.is_wide_music_active());
+            assert_eq!(wide.track_cursor(), Some(0));
+        }
+
+        let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+        narrow_terminal
+            .draw(|frame| model.app.render(frame))
+            .unwrap();
+        model.push_music_workspace_content();
+        let narrow = model
+            .application
+            .get_component(&id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<MusicWorkspaceComponent>()
+            .unwrap();
+        assert!(!model.app.layout.main.is_wide_music_active());
+        assert_eq!(narrow.track_cursor(), None);
     }
 
     #[test]

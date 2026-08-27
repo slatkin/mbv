@@ -287,7 +287,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
   - **5.3d.19a — mount/idempotent mirror** is promoted to an open active leaf (see
     §3): `components/music_workspace.rs` + `shell_music_workspace.rs`; idempotent
     mount + content mirror.
-  - [ ] **5.3d.19b — geometry pre-pass (≤3 files, BLOCKER for 19c):**
+  - [x] **5.3d.19b — geometry pre-pass (≤3 files, BLOCKER for 19c):**
     `render/components/music_wide.rs` + `shell_music_workspace.rs`; compute
     `wide_music_area`/`wide_music_right_area`/`left`/`hero`/
     `wide_music_art_area` before the component `view` (today only the legacy

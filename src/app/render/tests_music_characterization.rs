@@ -104,6 +104,19 @@ fn narrow_grouped_music_hero_shows_only_title_meta_no_track_table_or_action_hint
 }
 
 #[test]
+fn wide_grouped_music_publishes_same_frame_layout_geometry() {
+    let mut app = make_music_group_app();
+    let mut layout = LayoutMain::default();
+    let _ = render_library_to_string_sized(&mut app, &mut layout, 120, 30);
+
+    assert_eq!(layout.wide_music_area, Rect::new(0, 0, 120, 30));
+    assert!(layout.is_wide_music_active());
+    assert!(layout.left_area.width > 0);
+    assert!(layout.hero_area.width > 0);
+    assert!(layout.wide_music_right_area.width > 0);
+}
+
+#[test]
 fn narrow_grouped_music_publishes_no_wide_track_targets() {
     let mut app = make_music_group_app();
     let mut layout = LayoutMain::default();
