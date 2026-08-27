@@ -455,8 +455,14 @@ definition of done.
   - [x] **5.3d.24-A — mouse/framework residual:** Report-only verification of
     `mouse_gestures`, layout, and render-derived hitmaps at the D16 boundary;
     accepted-broken mouse framework residuals are not deletion work here.
-- [ ] **5.3d.22** Delete now-unreferenced per-surface `CONTEXT_STACK` handlers in
+- [x] **5.3d.22** Delete now-unreferenced per-surface `CONTEXT_STACK` handlers in
   bounded families (the static keyboard-precedence proofs from 5.4).
+  - **Reverified no-op at 2026-08-27 after 23-A:** every `CONTEXT_STACK` handler
+    remains reachable through `App::handle_key_with_home_context` → the global key
+    precedence engine (input.rs:97 loop, `key_policy.rs` mirror), which is still the
+    front door that `GlobalViewKey`-forwarding converted surfaces delegate their
+    unmatched keys through. No handler meets the zero-reference gate without
+    changing keyboard precedence. No production symbols deleted.
 - [x] **5.3d.23** Delete `LegacyInput`, `Msg::Legacy`, `LegacyTerminalEvent`,
   terminal reconstruction adapters, and obsolete mount/sync names after the
   inventory is empty (no raw legacy terminal endpoint remains).
