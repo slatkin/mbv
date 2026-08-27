@@ -409,7 +409,7 @@ definition of done.
       end-to-end input tests; and `visualizer` remains a live stack entry with
       direct visualizer tests. Removing any candidate would change keyboard
       precedence or playback/shell behavior. No source symbols were deleted.
-  - [ ] **5.3d.23-A — global bridge teardown:** After all per-surface forwarding
+  - [x] **5.3d.23-A — global bridge teardown:** After all per-surface forwarding
     adapters and the 5.3d.22 precedence families are complete, remove the
     global bridge pieces allowlisted to `src/app/root.rs`,
     `src/app/legacy_input.rs`, `src/app/msg.rs`, and `src/app/shell.rs`.
