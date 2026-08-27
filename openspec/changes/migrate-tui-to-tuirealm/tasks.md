@@ -372,10 +372,42 @@ definition of done.
 
 ### Final gates
 
-- [ ] **5.3d.21** After every surface row above lands, re-inventory remaining
+- [x] **5.3d.21** After every surface row above lands, re-inventory remaining
   `CONTEXT_STACK`, `Msg::Legacy`, `LegacyTerminalEvent`, `LegacyInput` terminals,
   and `sync_*` interaction endpoints; classify retained shell-owned content
   projections and add exact deletion rows before editing.
+  - **Inventory outcome:** The live `CONTEXT_STACK` has 11 global precedence
+    entries: `global_overlay_open`, `queue_column_width`, `panel_mode_cycle_x`,
+    `confirm_skip_intro`, `confirm_next_up`, `clear_queue_prompt_c`, `visualizer`,
+    `playback`, `ctrl_l_force_clear`, `f5_refresh`, and `view_dispatch`.
+    `playback` and shell/runtime precedence remain retained. `UiRoot`,
+    `LegacyInput`, `Msg::Legacy`, `LegacyTerminalEvent`, and terminal
+    reconstruction remain live until per-surface raw forwarding is gone.
+    `sync_*` content/mount projections and render-derived hitmaps remain
+    retained. The mouse framework is D16 report-only/accepted-broken.
+  - **Execution order:** Remove per-surface raw forwarding adapters first;
+    then complete the 5.3d.22 precedence cleanup; then the 5.3d.23 bridge
+    teardown; finally perform 5.3d.24 verification.
+  - [ ] **5.3d.22-A — precedence stack family:** After per-surface raw
+    forwarding removal, delete the bounded precedence-stack family, allowlisted
+    to `src/app/input_resolver.rs`, `src/app/input.rs`,
+    `src/app/input_queue_keys.rs`, and `src/app/input_lib_keys.rs`.
+  - [ ] **5.3d.22-B — confirm/visualizer precedence family:** After 5.3d.22-A,
+    delete the bounded confirm/visualizer precedence family, allowlisted to
+    `src/app/input_confirm_keys.rs`, `src/app/input.rs`, and
+    `src/app/input_resolver.rs`. Run serially after 5.3d.22-A because the two
+    families share input files.
+  - [ ] **5.3d.23-A — global bridge teardown:** After all per-surface forwarding
+    adapters and the 5.3d.22 precedence families are complete, remove the
+    global bridge pieces allowlisted to `src/app/root.rs`,
+    `src/app/legacy_input.rs`, `src/app/msg.rs`, and `src/app/shell.rs`.
+  - [ ] **5.3d.23-B — terminal conversion-adapter consumer fanout:** Report-only
+    inventory of the terminal conversion-adapter fanout (>6 production files);
+    do not delete consumers in this row. This is part of the 5.3d.23 bridge
+    phase and precedes 5.3d.24 verification.
+  - [ ] **5.3d.24-A — mouse/framework residual:** Report-only verification of
+    `mouse_gestures`, layout, and render-derived hitmaps at the D16 boundary;
+    accepted-broken mouse framework residuals are not deletion work here.
 - [ ] **5.3d.22** Delete now-unreferenced per-surface `CONTEXT_STACK` handlers in
   bounded families (the static keyboard-precedence proofs from 5.4).
 - [ ] **5.3d.23** Delete `LegacyInput`, `Msg::Legacy`, `LegacyTerminalEvent`,
