@@ -453,7 +453,21 @@ impl App {
                 parent_id,
                 items,
             } => {
-                let _ = (lib_idx, parent_id, items);
+                // The flat inline-search fetch re-homes the write the deleted
+                // direct flat-result projector used to do against the
+                // component: the completion lands in the nav level's
+                // `all_items` cache (the same guarded write as
+                // `AllItemsPrefetched`) and the shell's event-scoped
+                // projection (5.3d.20c) pushes it into the component. A
+                // completion racing a navigation -- `parent_id` no longer the
+                // last level's -- is stale and must not write.
+                if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    if let Some(last) = lib.nav_stack.last_mut() {
+                        if last.parent_id == parent_id {
+                            last.all_items = Some(items);
+                        }
+                    }
+                }
             }
             LibEvent::AlbumIndexBuilt { library_id, result } => {
                 let rebuild_pending = matches!(

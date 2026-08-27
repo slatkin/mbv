@@ -96,6 +96,21 @@ impl InlineSearchComponent {
         self.loading = loading;
     }
 
+    #[cfg(test)]
+    pub(in crate::app) fn test_loading(&self) -> bool {
+        self.loading
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_pool_item_ids(&self) -> Vec<String> {
+        match &self.pool {
+            SearchPool::Items(items) => items.iter().map(|item| item.id.clone()).collect(),
+            SearchPool::Albums(entries) => {
+                entries.iter().map(|entry| entry.album.id.clone()).collect()
+            }
+        }
+    }
+
     pub(in crate::app) fn selected_item(&self) -> Option<mbv_core::api::EmbyItem> {
         self.pool
             .filtered_items(&self.query)

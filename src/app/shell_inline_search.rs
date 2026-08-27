@@ -59,13 +59,28 @@ impl Model {
     /// Event-scoped projection replacing the deleted per-frame
     /// `sync_inline_search`. Runs only where the search's inputs actually
     /// change: `open_inline_search`, `activate_inline_search_item`, the
-    /// `apply_inline_search_items` flat-result push (kept verbatim below),
-    /// async library completions in the shell's `lib_rx` drain, and terminal
-    /// resize. The projection is deterministic in `App` state, so pushing the
-    /// same value again is idempotent; because the mounted search swallows
-    /// keyboard and mouse (D16), panel-focus, panel-mode and tab transitions
-    /// are unreachable while it is open except at those boundaries.
+    /// `SearchItemsLoaded` whole-library fetch completion (re-homed from the
+    /// deleted direct flat-result projector), async library completions in
+    /// the shell's `lib_rx` drain, and terminal resize. The projection is
+    /// deterministic in `App` state, so pushing the same value again is
+    /// idempotent; because the mounted search swallows keyboard and mouse
+    /// (D16), panel-focus, panel-mode and tab transitions are unreachable
+    /// while it is open except at those boundaries.
     ///
+    /// Whether the flat (non-recursive) inline search needs its
+    /// whole-library fetch: `all_items` -- the full unfiltered pool backing
+    /// fuzzy search -- is missing from the current nav level, and the level
+    /// is not already fully materialized in `items`. The identical predicate
+    /// arms the load at `open_inline_search` and drives the component's
+    /// loading flag on every push: pending until the `SearchItemsLoaded`
+    /// completion writes `all_items`, then cleared (5.3d.20c).
+    fn inline_search_needs_full_load(&self, index: usize) -> bool {
+        self.app.libs[index].nav_stack.last().is_some_and(|level| {
+            level.all_items.is_none()
+                && (level.letter_filter.is_some() || level.items.len() < level.total_count)
+        })
+    }
+
     pub(super) fn push_inline_search_content(&mut self) {
         let expected = match self.app.tab {
             TabSelection::EmbyLibrary(index) => self.inline_search_expected_id(index),
@@ -81,11 +96,19 @@ impl Model {
         };
         let recursive = self.app.recursive_album_search_enabled(index);
         let library_id = self.app.libs[index].library.id.clone();
-        let loading = recursive
-            && matches!(
+        let loading = if recursive {
+            matches!(
                 self.app.album_indexes.get(&library_id),
                 Some(AlbumIndexState::Loading { .. })
-            );
+            )
+        } else {
+            // Flat path: loading exactly while the whole-library fetch
+            // backing `all_items` is outstanding (see
+            // `inline_search_needs_full_load`). Intermediate pushes --
+            // resize, browse completion, activation -- keep the spinner up;
+            // the completion push (all_items now present) clears it.
+            self.inline_search_needs_full_load(index)
+        };
         let pool = if recursive {
             match self.app.album_indexes.get(&library_id) {
                 Some(AlbumIndexState::Ready(entries)) => SearchPool::Albums(entries.clone()),
@@ -110,9 +133,12 @@ impl Model {
                 comp.as_any_mut().downcast_mut::<InlineSearchComponent>()
             {
                 search_component.set_content(pool, loading, focused);
-                if recursive {
-                    search_component.set_loading(loading);
-                }
+                // Drive loading from the projection on every push: the
+                // completion push (flat `all_items` landed, or recursive
+                // index Ready) is what clears it (`set_content` only ever
+                // turns it on, so an intermediate push never wedges or
+                // clears early).
+                search_component.set_loading(loading);
             }
         }
     }
@@ -140,10 +166,7 @@ impl Model {
         if recursive {
             self.app.start_album_index(index, false);
         } else {
-            needs_full_load = self.app.libs[index].nav_stack.last().is_some_and(|level| {
-                level.all_items.is_none()
-                    && (level.letter_filter.is_some() || level.items.len() < level.total_count)
-            });
+            needs_full_load = self.inline_search_needs_full_load(index);
             if needs_full_load {
                 self.app.spawn_search_items_load(index);
             }
@@ -235,44 +258,11 @@ impl Model {
                 | super::LibEvent::AllItemsPrefetched { .. }
                 | super::LibEvent::AlbumIndexBuilt { .. }
                 | super::LibEvent::NavigateTo { .. }
+                | super::LibEvent::SearchItemsLoaded { .. }
         );
         self.app.handle_lib_event(ev);
         if pushes_inline_search {
             self.push_inline_search_content();
-        }
-    }
-
-    pub(super) fn apply_inline_search_items(
-        &mut self,
-        lib_idx: usize,
-        parent_id: String,
-        items: Vec<mbv_core::api::EmbyItem>,
-    ) {
-        let TabSelection::EmbyLibrary(current_idx) = self.app.tab else {
-            return;
-        };
-        if current_idx != lib_idx
-            || self
-                .app
-                .libs
-                .get(lib_idx)
-                .and_then(|lib| lib.nav_stack.last())
-                .map(|level| level.parent_id.as_str())
-                != Some(parent_id.as_str())
-        {
-            return;
-        }
-        let Some(id) = self.inline_search_component_id(lib_idx) else {
-            return;
-        };
-        if let Some(component) = self.application.get_component_mut(&id) {
-            if let Some(search) = component
-                .as_any_mut()
-                .downcast_mut::<InlineSearchComponent>()
-            {
-                search.set_content(SearchPool::Items(items), false, true);
-                search.set_loading(false);
-            }
         }
     }
 
@@ -296,6 +286,7 @@ mod tests {
     use super::*;
     use crate::app::components::{InlineSearchComponent, LegacyTerminalEvent, Msg};
     use crate::app::render::make_movie_app;
+    use crate::app::tests::make_item;
     use crate::app::{LibEvent, LibraryTab};
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -354,5 +345,83 @@ mod tests {
             .inline_search_component_id(0)
             .expect("current inline Search component mounted");
         assert!(model.application.mounted(&current_id));
+    }
+
+    fn search_component<'a>(model: &'a Model, id: &ComponentId) -> &'a InlineSearchComponent {
+        model
+            .application
+            .get_component(id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<InlineSearchComponent>()
+            .unwrap()
+    }
+
+    #[test]
+    fn inline_search_items_loaded_rehomes_all_items_and_clears_loading() {
+        // Flat search that needs a whole-library fetch: the stub level is
+        // fully loaded (2/2), so under-cut its `total_count` to arm the
+        // `SearchItemsLoaded` load at open.
+        let mut app = make_movie_app();
+        app.libs[0]
+            .nav_stack
+            .last_mut()
+            .expect("stub browse level")
+            .total_count = 10;
+        let mut model = Model::new(app);
+        model.open_inline_search();
+        let id = model
+            .inline_search_component_id(0)
+            .expect("inline Search component mounted");
+        assert!(
+            search_component(&model, &id).test_loading(),
+            "load armed at open"
+        );
+
+        // Stale completion (nav level moved on): `all_items` untouched and
+        // the spinner stays up -- a stale write or early clear would wedge
+        // or corrupt the pool.
+        model.handle_inline_search_lib_event(LibEvent::SearchItemsLoaded {
+            lib_idx: 0,
+            parent_id: "stale-parent".into(),
+            items: vec![make_item("Stale", "Movie")],
+        });
+        assert!(
+            model.app.libs[0]
+                .nav_stack
+                .last()
+                .expect("browse level")
+                .all_items
+                .is_none(),
+            "stale completion must not write all_items"
+        );
+        assert!(
+            search_component(&model, &id).test_loading(),
+            "stale completion keeps loading"
+        );
+
+        // Correct completion: full items land in `all_items`, the component
+        // projects them, and loading clears (no wedge).
+        let fresh = vec![make_item("Alpha", "Movie"), make_item("Beta", "Movie")];
+        model.handle_inline_search_lib_event(LibEvent::SearchItemsLoaded {
+            lib_idx: 0,
+            parent_id: "lib-movies".into(),
+            items: fresh.clone(),
+        });
+        let level = model.app.libs[0].nav_stack.last().expect("browse level");
+        assert_eq!(
+            level.all_items.as_deref(),
+            Some(fresh.as_slice()),
+            "correct completion writes all_items"
+        );
+        assert!(
+            !search_component(&model, &id).test_loading(),
+            "correct completion must clear loading"
+        );
+        assert_eq!(
+            search_component(&model, &id).test_pool_item_ids(),
+            fresh.iter().map(|item| item.id.clone()).collect::<Vec<_>>(),
+            "full items projected into the component"
+        );
     }
 }

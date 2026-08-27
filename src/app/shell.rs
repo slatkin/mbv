@@ -295,11 +295,6 @@ impl Model {
             while let Ok(ev) = self.app.lib_rx.try_recv() {
                 had_events = true;
                 match ev {
-                    super::LibEvent::SearchItemsLoaded {
-                        lib_idx,
-                        parent_id,
-                        items,
-                    } => self.apply_inline_search_items(lib_idx, parent_id, items),
                     // Recursive album activation used to write `Some(0)` on
                     // the deleted inline track-focus field directly; the
                     // component owns the cursor now, so the shell delivers
