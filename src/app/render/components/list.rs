@@ -90,13 +90,6 @@ impl App {
                 && crate::app::render::arrangements::hero_left::shared_hero_presentation(area)
                     .is_some()
             {
-                if let Some(album) = self.selected_album_item(lib_idx) {
-                    if !self.album_tracks_cache.contains_key(&album.id)
-                        && !self.album_tracks_loading.contains(&album.id)
-                    {
-                        self.fetch_album_tracks(album.id);
-                    }
-                }
                 let ctx = self.wide_music_render_ctx(lib_idx);
                 let output =
                     super::music_wide::render_wide_music_group_with_ctx(f, area, &ctx, layout);

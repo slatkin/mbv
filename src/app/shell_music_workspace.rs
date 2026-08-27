@@ -95,6 +95,13 @@ impl Model {
         let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index);
         let columns = self.app.current_library_columns(index);
         let wide = self.app.layout.main.is_wide_music_active();
+        if let Some(album) = context.selected_album.as_ref() {
+            if !self.app.album_tracks_cache.contains_key(&album.id)
+                && !self.app.album_tracks_loading.contains(&album.id)
+            {
+                self.app.fetch_album_tracks(album.id.clone());
+            }
+        }
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(music) = comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>() {
                 music.set_content(context);
@@ -169,6 +176,28 @@ mod tests {
             message,
             Some(Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
         ));
+    }
+
+    #[test]
+    fn push_music_workspace_fetches_selected_album_tracks() {
+        let mut model = Model::new(make_music_group_app());
+        model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+        model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+        model.sync_music_workspace();
+
+        let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
+        client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
+            server_url: "http://127.0.0.1:1".into(),
+            user_id: "user-id".into(),
+            token: "token".into(),
+        });
+        model.app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(
+            std::sync::Arc::new(std::sync::Mutex::new(client)),
+        );
+
+        model.push_music_workspace_content();
+
+        assert!(model.app.album_tracks_loading.contains("album-1"));
     }
 
     #[test]

@@ -295,9 +295,10 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
   - [ ] **5.3d.19c — delete legacy underpaint (≤3 files):** `render/components/list.rs`
     wide-music branch after 19b sets geometry. **Order:** 19d (fetch relocation)
     lands before 19c, because the fetch trigger currently lives in that branch.
-  - [ ] **5.3d.19d — relocate album-track fetch (≤3 files):** `images.rs`
-    `fetch_album_tracks` is triggered only by the legacy branch (list.rs); move the
-    trigger to the component/writer path (R2).
+  - [x] **5.3d.19d — relocate album-track fetch (≤3 files):** `images.rs`
+    `fetch_album_tracks` has a legacy wide-Music trigger in `list.rs` that is being
+    moved to the component/writer path (R2); narrow grouped-album-plan and
+    selection-modal callers remain unchanged.
   - [ ] **5.3d.19e — framework teardown (≤3 files):** remove the empty
     `sync_music_workspace` adapter + delete the differential legacy test.
   - Risks (preserved): R1 geometry chicken-and-egg (blocker); R2 fetch
