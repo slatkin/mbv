@@ -322,6 +322,10 @@ impl Model {
                     super::LibEvent::HomeContentRefreshed(content) => {
                         self.assign_home_content(*content)
                     }
+                    super::LibEvent::SeriesDetailFetched { .. } => {
+                        self.app.handle_lib_event(ev);
+                        self.push_tv_workspace_content();
+                    }
                     super::LibEvent::HomeContentCleared => self.clear_home_content(),
                     super::LibEvent::AudiobookshelfLatestRebuilt(sections) => {
                         self.merge_home_abs_sections(sections)
@@ -1019,6 +1023,9 @@ impl Model {
                                 }
                             }
                             self.push_tv_workspace_content();
+                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                self.mirror_tv_workspace_cursor(lib_idx);
+                            }
                         }
                         Msg::Shell(
                             request @ (ShellRequest::PlaylistsBack

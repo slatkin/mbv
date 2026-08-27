@@ -101,11 +101,13 @@ impl TvWorkspaceComponent {
         self.cursor
     }
 
-    pub(in crate::app) fn selected_item_id(&self) -> Option<&str> {
+    pub(in crate::app) fn selected_item_id(&self) -> Option<String> {
         self.context
             .list
+            .clone()
+            .with_cursor_scroll(self.cursor, self.scroll)
             .selected_item()
-            .map(|item| item.id.as_str())
+            .map(|item| item.id.clone())
     }
 
     fn move_episode(&mut self, delta: i64) {

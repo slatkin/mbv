@@ -48,7 +48,6 @@ impl Model {
             .get_component(id)
             .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
             .and_then(TvWorkspaceComponent::selected_item_id)
-            .map(str::to_owned)
         else {
             return;
         };
@@ -147,57 +146,65 @@ mod tests {
     use super::*;
     use crate::app::components::{Msg, ShellRequest, TvWorkspaceComponent};
     use crate::app::render::{make_movie_app, LibraryListRenderCtx, TvWideRenderCtx};
-    use crate::app::tests::make_item;
+    use ratatui::layout::Rect;
     use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
+    fn mounted_tv_model() -> Model {
+        let mut app = make_movie_app();
+        app.libs[0].library.collection_type = "tvshows".into();
+        for item in &mut app.libs[0].nav_stack[0].items {
+            item.item_type = "Series".into();
+        }
+        app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
+        let mut model = Model::new(app);
+        model.sync_tv_workspace();
+        model
+    }
+
+    #[test]
+    fn push_tv_workspace_content_projects_selected_series_on_mount() {
+        let model = mounted_tv_model();
+        let id = model
+            .tv_workspace_id
+            .as_ref()
+            .expect("TV workspace mounted");
+        let component = model
+            .application
+            .get_component(id)
+            .expect("TV workspace component mounted")
+            .as_any()
+            .downcast_ref::<TvWorkspaceComponent>()
+            .expect("TV workspace component type");
+        assert_eq!(component.selected_item_id(), Some("movie-focused".into()));
+    }
+
     #[test]
     fn typed_tv_requests_keep_component_cursor_authoritative() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let mut model = Model::new(make_movie_app());
-        let mut component = TvWorkspaceComponent::new();
-        component.set_content(TvWideRenderCtx::new(
-            LibraryListRenderCtx::from_items(
-                vec![
-                    make_item("Series A", "Series"),
-                    make_item("Series B", "Series"),
-                ],
-                0,
-                0,
-            ),
-            None,
-            None,
-            0,
-            None,
-            true,
-            false,
-        ));
-
-        let down = component.on(&Event::Keyboard(KeyEvent {
-            code: Key::Down,
-            modifiers: KeyModifiers::NONE,
-        }));
-        assert_eq!(component.cursor(), 1);
-        let Some(Msg::Shell(request)) = down else {
+        let mut model = mounted_tv_model();
+        let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+        let request = model
+            .application
+            .get_component_mut(&id)
+            .expect("TV workspace component mounted")
+            .as_any_mut()
+            .downcast_mut::<TvWorkspaceComponent>()
+            .expect("TV workspace component type")
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Down,
+                modifiers: KeyModifiers::NONE,
+            }));
+        let Some(Msg::Shell(request)) = request else {
             panic!("TV Down must produce a typed shell request");
         };
         assert!(matches!(request, ShellRequest::TvMoveRows { rows: 1 }));
         model.handle_tv_request(request);
-        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
-
-        let end = component.on(&Event::Keyboard(KeyEvent {
-            code: Key::End,
-            modifiers: KeyModifiers::NONE,
-        }));
-        assert_eq!(component.cursor(), 1);
-        let Some(Msg::Shell(request)) = end else {
-            panic!("TV End must produce a typed shell request");
-        };
-        assert!(matches!(
-            request,
-            ShellRequest::TvJumpCursor { to_end: true }
-        ));
-        model.handle_tv_request(request);
-        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
+        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
+        let selected_id = model
+            .application
+            .get_component(&id)
+            .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
+            .and_then(TvWorkspaceComponent::selected_item_id);
+        assert_eq!(selected_id, Some("movie-second".into()));
     }
 }
