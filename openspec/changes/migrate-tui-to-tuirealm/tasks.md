@@ -274,8 +274,9 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
   - [x] **5.3d.18d — geometry/underpaint (≤3 files):** `render/components/tv_wide.rs`
     publishes the `tv_wide_*` rects the component hit-tests; delete the legacy
     `render_list` wide-TV branch only after the component owns geometry (B4).
-  - [ ] **5.3d.18e — teardown (≤3 files):** remove the empty `sync_tv_workspace`
+  - [x] **5.3d.18e — teardown (≤3 files):** remove the empty `sync_tv_workspace`
     adapter + `CONTEXT_STACK` TV arms + obsolete mount/sync names.
+    Verified no-op/re-scope: sync_tv_workspace remains the live mount-only lifecycle owner; no CONTEXT_STACK TV arms or obsolete mount/sync names exist at this HEAD; full TV lifecycle teardown is deferred to aggregate 5.3d.21–5.3d.24.
   - [ ] **5.3d.18f — episode play/enqueue gap:** new typed
     `TvEpisodeActivate`/`TvEpisodeEnqueue` requests resolved from
     `series_detail.episodes[season_id][episode_cursor]`; needs new App methods (B3).
