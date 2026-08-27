@@ -78,7 +78,6 @@ impl MusicWideRenderCtx {
     /// Music workspace before the component view runs.
     pub(in crate::app) fn publish_geometry(&self, area: Rect, layout: &mut LayoutMain) {
         layout.wide_music_area = area;
-        layout.wide_music_track_hitmap.clear();
         layout.wide_music_art_area = Rect::default();
 
         let Some(panes) = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y) else {
@@ -203,6 +202,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     layout: &mut LayoutMain,
 ) -> MusicWideRenderOutput {
     ctx.publish_geometry(area, layout);
+    layout.wide_music_track_hitmap.clear();
     let mut output = MusicWideRenderOutput::default();
 
     let Some(panes) = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y) else {

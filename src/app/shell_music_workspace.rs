@@ -350,6 +350,15 @@ mod tests {
             assert!(model.app.layout.main.is_wide_music_active());
             assert_eq!(wide.track_cursor(), Some(0));
         }
+        let hitmap_before = model.app.layout.main.wide_music_track_hitmap.len();
+        assert!(hitmap_before > 0);
+        wide_terminal
+            .draw(|frame| model.render_music_workspace_component(frame))
+            .unwrap();
+        assert_eq!(
+            model.app.layout.main.wide_music_track_hitmap.len(),
+            hitmap_before
+        );
 
         let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
         narrow_terminal
