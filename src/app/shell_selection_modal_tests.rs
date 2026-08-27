@@ -1,10 +1,12 @@
 #[cfg(test)]
 mod selection_modal_tests {
-    use super::super::components::{ComponentId, OverlayId, SelectionModalComponent};
+    use super::super::components::{
+        ComponentId, Msg, OverlayId, SelectionModalComponent, ShellRequest,
+    };
     use super::super::shell::Model;
     use super::super::tests::make_app_stub;
     use super::super::types_audiobookshelf_browse::{
-        AudiobookshelfBookBrowseState, AudiobookshelfBrowseState,
+        AudiobookshelfBookBrowseState, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
     };
     use super::super::types_overlay::OverlayRequest;
     use super::super::types_selection_modal::{
@@ -14,9 +16,12 @@ mod selection_modal_tests {
     use mbv_core::api::EmbyItem;
     use mbv_core::audiobookshelf::{
         AudiobookshelfBook, AudiobookshelfChapter, AudiobookshelfDownloadedEpisode,
-        AudiobookshelfError, AudiobookshelfFailureClass, AudiobookshelfLibrary, AudiobookshelfShow,
+        AudiobookshelfError, AudiobookshelfFailureClass, AudiobookshelfLibrary,
+        AudiobookshelfProgress, AudiobookshelfShow,
     };
     use std::collections::HashMap;
+    use tuirealm::component::AppComponent;
+    use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     fn item(id: &str, name: &str, item_type: &str) -> EmbyItem {
         let mut item = super::super::tests::make_item(name, item_type);
@@ -634,5 +639,84 @@ mod selection_modal_tests {
         model.sync_modal_requests();
 
         assert_eq!(selection_modal(&model).selected_id(), Some("episode-a"));
+    }
+
+    #[test]
+    fn audiobookshelf_podcast_filter_selection_updates_component_and_mirror() {
+        let mut model = Model::new(super::super::tests_podcast::audiobookshelf_app());
+        // Two episodes; only `episode-a` is finished, so Played filters to a
+        // known one-row subset.
+        let browse = &mut model.app.audiobookshelf_browse[0];
+        browse.episodes = Some(vec![
+            AudiobookshelfDownloadedEpisode {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-a".into(),
+                title: "Episode A".into(),
+                published_at: None,
+                duration_seconds: None,
+            },
+            AudiobookshelfDownloadedEpisode {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-b".into(),
+                title: "Episode B".into(),
+                published_at: None,
+                duration_seconds: None,
+            },
+        ]);
+        browse.progress.insert(
+            ("show-a".into(), "episode-a".into()),
+            AudiobookshelfProgress {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-a".into(),
+                current_time_seconds: 60.0,
+                is_finished: true,
+            },
+        );
+        browse.detail_loading = false;
+
+        // Mount/project the podcast browser and open/sync the modal so the
+        // real `SelectionModalFilterSelected` dispatch path runs against a
+        // mounted component (task 5.3d.11 U3).
+        model.sync_audiobookshelf_podcast();
+        model.open_podcast_selection_modal();
+        model.sync_modal_requests();
+
+        // `]` moves the filter pill onto Played and emits the typed request.
+        let message = {
+            let id = ComponentId::Overlay(OverlayId::SelectionModal);
+            let component = model
+                .application
+                .get_component_mut(&id)
+                .expect("Selection modal mounted")
+                .as_any_mut()
+                .downcast_mut::<SelectionModalComponent>()
+                .expect("Selection modal type");
+            component.on(&Event::Keyboard(KeyEvent {
+                code: Key::Char(']'),
+                modifiers: KeyModifiers::NONE,
+            }))
+        };
+        let Some(Msg::Shell(ShellRequest::SelectionModalFilterSelected)) = message else {
+            panic!("filter selection must emit SelectionModalFilterSelected");
+        };
+        model.handle_selection_modal_request(ShellRequest::SelectionModalFilterSelected);
+        model.sync_modal_requests();
+
+        // D14 stage-1 App mirror stays in sync with the chosen filter.
+        assert_eq!(
+            model.app.audiobookshelf_browse[0].episode_filter,
+            AudiobookshelfEpisodeFilter::Played
+        );
+        // The component's filter pill reflects the chosen filter (Played = 1).
+        assert_eq!(selection_modal(&model).filter_selected(), Some(1));
+        // Rebuilt modal rows reflect the filtered episode subset.
+        let ids: Vec<&str> = selection_modal(&model)
+            .list_state()
+            .expect("modal list state")
+            .rows()
+            .iter()
+            .filter_map(|row| row.item_id())
+            .collect();
+        assert_eq!(ids, vec!["episode-a"]);
     }
 }
