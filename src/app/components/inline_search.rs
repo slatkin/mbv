@@ -11,11 +11,10 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyModifiers, MouseEvent};
+use tuirealm::event::{Event, Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::to_crossterm_mouse_event;
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_generic_movies_home_video_rows_with_ctx, LibraryListRenderCtx};
@@ -169,11 +168,7 @@ impl InlineSearchComponent {
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let mouse = to_crossterm_mouse_event(mouse);
-        if matches!(
-            mouse.kind,
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
             let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
             if self.layout.left_area.contains(position) {
                 let row = position.y.saturating_sub(self.layout.left_area.y) as usize;
@@ -237,7 +232,7 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use tuirealm::component::Component;
-    use tuirealm::event::{Event, KeyEvent, KeyModifiers};
+    use tuirealm::event::{Event, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
     #[test]
     fn inline_library_search_query_and_cursor_survive_shell_mirrors() {
@@ -277,6 +272,32 @@ mod tests {
             .content()
             .iter()
             .any(|cell| cell.symbol() == "O"));
+    }
+
+    #[test]
+    fn inline_library_search_mouse_uses_tuirealm_event_directly() {
+        let mut component = InlineSearchComponent::new();
+        component.query = "on".into();
+        component.set_content(
+            SearchPool::Items(vec![make_item("One", "Movie"), make_item("Only", "Movie")]),
+            false,
+            true,
+        );
+        component.cursor = 1;
+        let mut terminal = Terminal::new(TestBackend::new(40, 5)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+
+        let area = component.layout.left_area;
+        component.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: area.x,
+            row: area.y,
+            modifiers: KeyModifiers::NONE,
+        }));
+
+        assert_eq!(component.cursor, 0);
     }
 
     #[test]

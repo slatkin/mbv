@@ -111,6 +111,24 @@ fn home_keys_fall_through_while_the_queue_panel_is_focused() {
 }
 
 #[test]
+fn home_alt_navigation_forwards_to_global_dispatch() {
+    let mut home = two_section_home();
+
+    let message = home.on(&Event::Keyboard(KeyEvent {
+        code: Key::Up,
+        modifiers: KeyModifiers::ALT,
+    }));
+
+    assert_eq!(home.cursor(), 0, "Alt+Up must not move the local cursor");
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+            if key.code == crossterm::event::KeyCode::Up
+                && key.modifiers == crossterm::event::KeyModifiers::ALT
+    ));
+}
+
+#[test]
 fn enter_emits_typed_play_at_the_flat_cursor() {
     let mut home = two_section_home();
     home.on(&key(Key::Down));

@@ -11,11 +11,11 @@ use ratatui::widgets::Block;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, MouseEvent};
+use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
+use super::legacy_input::to_crossterm_key_event;
 use super::msg::{BrowserHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
@@ -295,6 +295,9 @@ impl BrowserComponent {
         &mut self,
         key: crossterm::event::KeyEvent,
     ) -> Option<Msg> {
+        if key.modifiers.contains(crossterm::event::KeyModifiers::ALT) {
+            return Some(Msg::Shell(ShellRequest::GlobalViewKey(key)));
+        }
         match key.code {
             crossterm::event::KeyCode::Char('/') if key.modifiers.is_empty() => {
                 return Some(Msg::Shell(super::msg::ShellRequest::OpenInlineSearch));
@@ -654,12 +657,16 @@ impl BrowserComponent {
     }
 
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
+        if key.modifiers.contains(KeyModifiers::ALT) {
+            return Some(Msg::Shell(ShellRequest::GlobalViewKey(
+                to_crossterm_key_event(key),
+            )));
+        }
         let crossterm_key = to_crossterm_key_event(key);
         self.handle_crossterm_key(crossterm_key)
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let mouse = to_crossterm_mouse_event(mouse);
         let col = mouse.column;
         let row = mouse.row;
         let position: Position = (col, row).into();
@@ -672,10 +679,8 @@ impl BrowserComponent {
         // keeps handling the surrounding chrome (tabs, playback pills, queue,
         // the un-migrated tv/music surfaces).
         match mouse.kind {
-            crossterm::event::MouseEventKind::ScrollDown
-            | crossterm::event::MouseEventKind::ScrollUp => {
-                let delta: i64 = if matches!(mouse.kind, crossterm::event::MouseEventKind::ScrollUp)
-                {
+            MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
+                let delta: i64 = if matches!(mouse.kind, MouseEventKind::ScrollUp) {
                     -1
                 } else {
                     1
@@ -684,7 +689,7 @@ impl BrowserComponent {
                     return Some(Msg::Shell(ShellRequest::BrowserScroll { delta }));
                 }
             }
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+            MouseEventKind::Down(MouseButton::Left) => {
                 // Selector-tab pills sit inside the left area; claim them
                 // before the row-select hit-test.
                 for (rect, target) in self.layout.selector_tabs.iter() {
@@ -718,7 +723,7 @@ impl BrowserComponent {
                     return Some(Msg::Shell(ShellRequest::BrowserClick { region, col, row }));
                 }
             }
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
+            MouseEventKind::Down(MouseButton::Right) => {
                 if self.layout.left_area.contains(position)
                     || self.layout.inline_hero_area.contains(position)
                 {

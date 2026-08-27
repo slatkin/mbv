@@ -7,7 +7,9 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers as CrosstermKeyModifiers}
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{
+    Event, Key, KeyEvent as TuiKeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 /// Local keyboard navigation routes through typed `ShellRequest`s (task
 /// 5.3d): while focused, the component moves its own cursor exactly the way
@@ -239,6 +241,25 @@ fn browser_local_navigation_strides_one_column_for_wide_movies() {
             "wide-Movies {key:?} must use the typed global bridge"
         );
     }
+}
+
+#[test]
+fn browser_alt_navigation_forwards_to_global_dispatch() {
+    let mut browser = BrowserComponent::new();
+    browser.set_content(LibraryListRenderCtx::from_items(make_items(2), 0, 0), true);
+
+    let message = browser.on(&Event::Keyboard(TuiKeyEvent {
+        code: Key::Up,
+        modifiers: KeyModifiers::ALT,
+    }));
+
+    assert_eq!(browser.cursor(), 0, "Alt+Up must not move the local cursor");
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+            if key.code == KeyCode::Up
+                && key.modifiers == CrosstermKeyModifiers::ALT
+    ));
 }
 
 #[test]

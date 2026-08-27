@@ -11,7 +11,7 @@
 //! safe TuiRealm subscription wiring `key_policy.rs` documents as deferred
 //! to per-surface conversion, not yet built). Content is mirrored from the
 //! shell, while cursor/section/scroll state remains local to this component.
-//! `handle_crossterm_key`/`handle_crossterm_mouse` and the typed
+//! `handle_crossterm_key`/`handle_mouse` and the typed
 //! `ShellRequest::Home*` messages below are the live input path: as the
 //! Library parent's active child on the Home tab, the component receives
 //! terminal events and claims Home's own gestures (task 5.3d, home hit_test;
@@ -21,11 +21,11 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, KeyEvent, MouseEvent};
+use tuirealm::event::{Event, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
+use super::legacy_input::to_crossterm_key_event;
 use super::msg::{HomeHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::HomeImagePaint;
@@ -331,6 +331,9 @@ impl HomeComponent {
         &mut self,
         key: crossterm::event::KeyEvent,
     ) -> Option<Msg> {
+        if key.modifiers.contains(crossterm::event::KeyModifiers::ALT) {
+            return Some(Msg::Shell(ShellRequest::GlobalViewKey(key)));
+        }
         if !self.focused {
             return Some(Msg::Shell(ShellRequest::GlobalViewKey(key)));
         }
@@ -390,6 +393,11 @@ impl HomeComponent {
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if key.modifiers.contains(KeyModifiers::ALT) {
+            return Some(Msg::Shell(ShellRequest::GlobalViewKey(
+                to_crossterm_key_event(key),
+            )));
+        }
         self.handle_crossterm_key(to_crossterm_key_event(key))
     }
 
@@ -404,11 +412,10 @@ impl HomeComponent {
             .max(1)
     }
 
-    /// Handle a mouse event using crossterm types directly. `None` means
-    /// the event isn't Home's to handle (outside Home's own painted
-    /// geometry — tab bar, queue panel, playback controls, the hero in
-    /// two-column layout, ...); the caller falls through to the legacy
-    /// mouse dispatch unchanged.
+    /// Handle a TuiRealm mouse event. `None` means the event isn't Home's to
+    /// handle (outside Home's own painted geometry — tab bar, queue panel,
+    /// playback controls, the hero in two-column layout, ...); the caller
+    /// falls through to the legacy mouse dispatch unchanged.
     ///
     /// The component owns *where* a Home click lands: it hit-tests against
     /// its own painted geometry (`list_area`, `hitmap`, `pill_targets`,
@@ -420,16 +427,11 @@ impl HomeComponent {
     /// Continue Watching column's cursor (`Model::handle_home_scroll` →
     /// `App::cw_move_cursor`), which this migration preserves rather than
     /// fixes (task 5.3d, Home wheel-scroll ownership).
-    pub(in crate::app) fn handle_crossterm_mouse(
-        &mut self,
-        mouse: crossterm::event::MouseEvent,
-    ) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         let pos: ratatui::layout::Position = (mouse.column, mouse.row).into();
         match mouse.kind {
-            crossterm::event::MouseEventKind::ScrollDown
-            | crossterm::event::MouseEventKind::ScrollUp => {
-                let delta: i64 = if matches!(mouse.kind, crossterm::event::MouseEventKind::ScrollUp)
-                {
+            MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
+                let delta: i64 = if matches!(mouse.kind, MouseEventKind::ScrollUp) {
                     -1
                 } else {
                     1
@@ -438,7 +440,7 @@ impl HomeComponent {
                     return Some(Msg::Shell(ShellRequest::HomeScroll { delta }));
                 }
             }
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+            MouseEventKind::Down(MouseButton::Left) => {
                 // Section pills sit above the list area; claim them before
                 // the row hit-test. `select_section` keeps the component's
                 // own render state (section/cursor) authoritative; the shell
@@ -472,7 +474,7 @@ impl HomeComponent {
                     }));
                 }
             }
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
+            MouseEventKind::Down(MouseButton::Right) => {
                 if self.list_area.contains(pos) {
                     // Resolve the row under the click before opening the menu;
                     // a blank/gap click leaves the cursor unchanged (no hitmap
@@ -496,11 +498,6 @@ impl HomeComponent {
             _ => {}
         }
         None
-    }
-
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let crossterm_mouse = to_crossterm_mouse_event(mouse);
-        self.handle_crossterm_mouse(crossterm_mouse)
     }
 
     #[cfg(test)]
