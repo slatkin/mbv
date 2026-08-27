@@ -120,7 +120,11 @@ fn music_workspace_enter_ignored_when_inline_track_focus_disabled() {
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(component.track_cursor(), None);
-    assert_eq!(message, None);
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+            if key.code == crossterm::event::KeyCode::Enter
+    ));
 }
 
 #[test]
@@ -159,12 +163,16 @@ fn music_workspace_horizontal_move_is_ignored_at_one_column() {
     component.set_content(grouped_context(1, vec![0, 1, 2, 3], true, None));
     component.set_album_columns(1);
 
-    for key in [Key::Char('h'), Key::Char('l')] {
+    for (key, expected) in [(Key::Char('h'), 'h'), (Key::Char('l'), 'l')] {
         let message = component.on(&Event::Keyboard(KeyEvent {
             code: key,
             modifiers: KeyModifiers::NONE,
         }));
-        assert_eq!(message, None);
+        assert!(matches!(
+            message,
+            Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+                if key.code == crossterm::event::KeyCode::Char(expected)
+        ));
         assert_eq!(component.album_cursor(), 1);
     }
 }

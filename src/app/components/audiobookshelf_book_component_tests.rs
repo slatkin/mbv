@@ -78,7 +78,11 @@ fn abs_book_component_keeps_local_cursor_and_renders_without_app_state() {
         code: Key::Char('z'),
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(unrelated, None);
+    assert!(matches!(
+        unrelated,
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+            if key.code == crossterm::event::KeyCode::Char('z')
+    ));
 
     let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
     terminal
@@ -108,7 +112,10 @@ fn abs_book_component_forwards_keys_when_unfocused_without_mutating_state() {
         (Key::Char('a'), KeyModifiers::CONTROL),
     ] {
         let message = component.on(&Event::Keyboard(KeyEvent { code, modifiers }));
-        assert_eq!(message, None);
+        assert!(matches!(
+            message,
+            Some(Msg::Shell(ShellRequest::GlobalViewKey(_)))
+        ));
         assert_eq!(component.selected_book_id(), Some("book-0"));
         assert_eq!(component.selected_bucket(), 0);
         assert_eq!(component.chapter_selection(), Some(0));
@@ -186,7 +193,11 @@ fn abs_book_component_does_not_focus_hidden_chapters_on_narrow_left() {
             code: Key::Left,
             modifiers: KeyModifiers::NONE,
         }));
-        assert_eq!(focus, None);
+        assert!(matches!(
+            focus,
+            Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+                if key.code == crossterm::event::KeyCode::Left
+        ));
         assert!(component.chapter_selection().is_none());
     }
 
@@ -317,12 +328,17 @@ fn abs_book_component_page_stride_is_independent_of_inline_painted_rows() {
 }
 
 #[test]
-fn abs_book_component_unmatched_shift_bracket_is_consumed() {
+fn abs_book_component_unmatched_shift_bracket_forwards_global_key() {
     let mut component = AudiobookshelfBookComponent::new();
     component.set_content(&book_state(2, false), true, false);
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('['),
         modifiers: KeyModifiers::SHIFT,
     }));
-    assert_eq!(message, None);
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+            if key.code == crossterm::event::KeyCode::Char('[')
+                && key.modifiers == crossterm::event::KeyModifiers::SHIFT
+    ));
 }

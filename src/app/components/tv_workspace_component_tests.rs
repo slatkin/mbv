@@ -66,7 +66,7 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
 }
 
 #[test]
-fn tv_keyboard_falls_through_to_legacy_when_queue_is_focused() {
+fn tv_keyboard_forwards_global_key_when_queue_is_focused() {
     let mut component = TvWorkspaceComponent::new();
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(
@@ -89,12 +89,16 @@ fn tv_keyboard_falls_through_to_legacy_when_queue_is_focused() {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(message, None);
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+            if key.code == crossterm::event::KeyCode::Down
+    ));
     assert_eq!(component.cursor(), 0);
 }
 
 #[test]
-fn tv_episode_brackets_with_modifiers_fall_through_to_legacy() {
+fn tv_episode_brackets_with_modifiers_forward_global_key() {
     let mut component = TvWorkspaceComponent::new();
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
@@ -106,12 +110,16 @@ fn tv_episode_brackets_with_modifiers_fall_through_to_legacy() {
         false,
     ));
 
-    for (code, modifiers) in [
-        (Key::Char('['), KeyModifiers::CONTROL),
-        (Key::Char(']'), KeyModifiers::ALT),
+    for (code, modifiers, expected) in [
+        (Key::Char('['), KeyModifiers::CONTROL, '['),
+        (Key::Char(']'), KeyModifiers::ALT, ']'),
     ] {
         let message = component.on(&Event::Keyboard(KeyEvent { code, modifiers }));
-        assert_eq!(message, None);
+        assert!(matches!(
+            message,
+            Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+                if key.code == crossterm::event::KeyCode::Char(expected)
+        ));
     }
 }
 

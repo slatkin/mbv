@@ -135,7 +135,11 @@ fn track_mode_down_does_not_move_track_focus_when_queue_panel_has_focus() {
         code: TuiKey::Down,
         modifiers: TuiKeyModifiers::NONE,
     }));
-    assert_eq!(msg, None);
+    assert!(matches!(
+        msg,
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+            if key.code == crossterm::event::KeyCode::Down
+    ));
     assert_eq!(component.track_cursor(), None);
 }
 

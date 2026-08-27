@@ -14,6 +14,7 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::legacy_input::to_crossterm_key_event;
 use super::msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove, ShellRequest,
 };
@@ -260,9 +261,9 @@ impl AudiobookshelfPodcastComponent {
                     ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue),
                 ));
             }
-            // Unmatched keys are consumed by this converted surface; UiRoot's
-            // permanent terminal observer supplies the redraw signal.
-            _ => None,
+            _ => Some(Msg::Shell(ShellRequest::GlobalViewKey(
+                to_crossterm_key_event(key),
+            ))),
         }
     }
 

@@ -577,6 +577,14 @@ impl Model {
                                 quit = true;
                             }
                         }
+                        // Media surfaces forward unmatched keys through this
+                        // typed adapter so App retains its global shortcuts
+                        // without reintroducing a Legacy message.
+                        Msg::Shell(ShellRequest::GlobalViewKey(key)) => {
+                            if self.handle_legacy_key(key) {
+                                quit = true;
+                            }
+                        }
                         Msg::Legacy(LegacyTerminalEvent::Mouse(_mouse)) => {}
                         Msg::Legacy(LegacyTerminalEvent::Resize) => {
                             self.app.force_clear = true;
@@ -1204,9 +1212,14 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::OverlayId;
+    use crate::app::components::{OverlayId, TvWorkspaceComponent};
+    use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
     use crate::app::tests::make_app_stub;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use tuirealm::component::AppComponent;
+    use tuirealm::event::{
+        Event, Key as TuiKey, KeyEvent as TuiKeyEvent, KeyModifiers as TuiKeyModifiers,
+    };
 
     #[test]
     fn ui_root_terminal_key_reaches_legacy_help_handler() {
@@ -1239,5 +1252,33 @@ mod tests {
             route_terminal_observer_message(Msg::Legacy(LegacyTerminalEvent::NoOp), Some(&focused),),
             Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
         ));
+    }
+
+    #[test]
+    fn global_view_key_from_media_surface_reaches_app_handler() {
+        let mut surface = TvWorkspaceComponent::new();
+        surface.set_content(TvWideRenderCtx::new(
+            LibraryListRenderCtx::from_items(Vec::new(), 0, 0),
+            None,
+            None,
+            0,
+            None,
+            true,
+            false,
+        ));
+        let Some(Msg::Shell(ShellRequest::GlobalViewKey(key))) =
+            surface.on(&Event::Keyboard(TuiKeyEvent {
+                code: TuiKey::Function(1),
+                modifiers: TuiKeyModifiers::NONE,
+            }))
+        else {
+            panic!("unmatched media-surface key did not use the global adapter");
+        };
+
+        let mut model = Model::new(make_app_stub());
+        assert!(!model.handle_legacy_key(key));
+        assert!(model
+            .application
+            .mounted(&ComponentId::Overlay(OverlayId::Help)));
     }
 }

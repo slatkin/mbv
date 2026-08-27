@@ -11,6 +11,7 @@ use tuirealm::event::{Event, Key, KeyModifiers, MouseButton, MouseEvent, MouseEv
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::legacy_input::to_crossterm_key_event;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
@@ -226,13 +227,17 @@ impl MusicWorkspaceComponent {
                 return Some(Msg::Shell(ShellRequest::MusicTrackActivate));
             }
             // Enter on an album row (Library panel): enter inline track
-            // focus when wide with cached tracks; otherwise consume the key
-            // (narrow activation is not component-owned here).
+            // focus when wide with cached tracks; otherwise forward the key
+            // to App's global handler (narrow activation is not component-owned
+            // here).
             Key::Enter if self.track_cursor.is_none() => {
                 if self.can_enter_track_focus() {
                     self.track_cursor = Some(0);
                     return None;
                 }
+                return Some(Msg::Shell(ShellRequest::GlobalViewKey(
+                    to_crossterm_key_event(key),
+                )));
             }
             // Exit inline track focus locally; the key must not reach the
             // unprefixed panel's Esc/Stop semantics.
@@ -347,9 +352,12 @@ impl MusicWorkspaceComponent {
                     kind: AlbumCursorKind::Page,
                 }));
             }
-            _ => {}
+            _ => {
+                return Some(Msg::Shell(ShellRequest::GlobalViewKey(
+                    to_crossterm_key_event(key),
+                )));
+            }
         }
-        None
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {

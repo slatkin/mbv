@@ -315,8 +315,8 @@ mod tests {
             Some("book-3")
         );
 
-        // Unmatched component keys are consumed by the converted surface;
-        // they do not enter the legacy book fallback.
+        // Unmatched component keys remain on the typed global-view adapter,
+        // preserving App's global-key behavior without a Legacy message.
         let bucket = model.app.audiobookshelf_book_browse[0].selected_bucket;
         let shift_left = crossterm::event::KeyEvent::new(
             crossterm::event::KeyCode::Char('['),
@@ -330,7 +330,10 @@ mod tests {
                 code: Key::Char('['),
                 modifiers: KeyModifiers::SHIFT,
             }));
-        assert_eq!(bridged, None);
+        assert!(matches!(
+            bridged,
+            Some(Msg::Shell(ShellRequest::GlobalViewKey(key))) if key == shift_left
+        ));
         assert_eq!(
             model.app.handle_key_view_dispatch(shift_left, false, None),
             Some(false)

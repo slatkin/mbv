@@ -129,13 +129,15 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
         ))
     ));
 
-    // Unmatched keys are consumed by the converted surface; UiRoot's
-    // permanent observer supplies the redraw signal without a Legacy message.
     let unrelated = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('z'),
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(unrelated, None);
+    assert!(matches!(
+        unrelated,
+        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+            if key.code == crossterm::event::KeyCode::Char('z')
+    ));
 }
 
 #[test]

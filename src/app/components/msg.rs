@@ -245,6 +245,8 @@ pub enum ShellRequest {
     /// raises the menu through `App` (target resolution lives at the
     /// shell/component boundary).
     MusicTrackContextMenu,
+    /// Forward an unmatched media-surface key to App's global view handler.
+    GlobalViewKey(KeyEvent),
     /// Quit the application.
     Quit,
     /// Dismiss the Help overlay (Esc/F1 while help is open).

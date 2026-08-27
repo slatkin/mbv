@@ -12,6 +12,7 @@ use tuirealm::event::{Event, Key, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::legacy_input::to_crossterm_key_event;
 use super::msg::{Msg, ShellRequest, TvHit, TvHitRegion};
 use super::user_event::UserEvent;
 #[cfg(test)]
@@ -229,7 +230,9 @@ impl TvWorkspaceComponent {
 
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
         if !self.context.focused {
-            return None;
+            return Some(Msg::Shell(ShellRequest::GlobalViewKey(
+                to_crossterm_key_event(key),
+            )));
         }
         let request = match key.code {
             Key::Left | Key::Char('h') => {
@@ -327,9 +330,9 @@ impl TvWorkspaceComponent {
                     delta: if c == '[' { -1 } else { 1 },
                 })
             }
-            _ => None,
+            _ => Some(ShellRequest::GlobalViewKey(to_crossterm_key_event(key))),
         };
-        request.map_or_else(|| None, |request| Some(Msg::Shell(request)))
+        request.map(Msg::Shell)
     }
 
     /// The component owns *where* a TV event lands: it hit-tests its painted
