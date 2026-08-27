@@ -1,7 +1,8 @@
 use super::*;
 // Characterization coverage stays beside the moved TV component.
+use crate::app::components::TvWorkspaceComponent;
 use crate::app::layout::LayoutMain;
-use crate::app::render::test_helpers::render_library_to_string_sized;
+use crate::app::render::test_helpers::buffer_to_string;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, SeriesDetail, TabSelection};
 use ratatui::backend::TestBackend;
@@ -10,6 +11,28 @@ use ratatui::style::Style;
 use ratatui::widgets::Block;
 use ratatui::Terminal;
 use std::collections::HashMap;
+use tuirealm::component::Component;
+
+/// Paints the wide TV workspace exactly as the live shell does: draw the
+/// legacy `App` base frame (which now only publishes the `tv_wide_*`
+/// hand-off geometry, task 5.3d.18d) then render the mounted
+/// `TvWorkspaceComponent` over the same area so it owns the picture.
+/// Returns the buffer and the component so tests can read both the App
+/// pre-pass layout (`AppLayout`) and the component-owned geometry
+/// (`tv_wide_episode_rows`/`tv_wide_season_tabs`).
+fn render_tv_workspace(app: &mut App, layout: &mut LayoutMain) -> (String, TvWorkspaceComponent) {
+    let backend = TestBackend::new(100, 30);
+    let mut term = Terminal::new(backend).unwrap();
+    let area = Rect::new(0, 0, 100, 30);
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(app.wide_tv_render_ctx(0, true));
+    term.draw(|f| {
+        app.render_library(f, area, true, layout);
+        component.view(f, area);
+    })
+    .unwrap();
+    (buffer_to_string(&term), component)
+}
 
 fn tv_app() -> App {
     let mut app = make_app_stub();
@@ -65,11 +88,11 @@ fn tv_app() -> App {
 fn wide_tv_persists_series_workspace_and_separate_targets() {
     let mut app = tv_app();
     let mut layout = crate::app::layout::LayoutMain::default();
-    let output = render_library_to_string_sized(&mut app, &mut layout, 100, 30);
+    let (output, component) = render_tv_workspace(&mut app, &mut layout);
 
     assert!(layout.is_wide_tv_active());
-    assert!(!layout.tv_wide_episode_rows.is_empty());
-    assert!(!layout.tv_wide_season_tabs.is_empty());
+    assert!(!component.test_layout().tv_wide_episode_rows.is_empty());
+    assert!(!component.test_layout().tv_wide_season_tabs.is_empty());
     assert_eq!(app.current_library_columns(0), 1);
     assert!(output.contains("The Series"));
     assert!(output.contains("Pilot"));
@@ -88,7 +111,7 @@ fn wide_series_render_keeps_loading_treatment_during_season_fan_out() {
     app.series_season_loading
         .insert(("series".into(), "season-1".into()));
 
-    let output = render_library_to_string_sized(&mut app, &mut LayoutMain::default(), 100, 30);
+    let (output, _component) = render_tv_workspace(&mut app, &mut LayoutMain::default());
 
     assert!(output.contains("Loading"), "{output}");
 }
@@ -103,13 +126,13 @@ fn wide_series_with_no_seasons_keeps_the_child_region_blank() {
         .clear();
     let mut layout = LayoutMain::default();
 
-    let output = render_library_to_string_sized(&mut app, &mut layout, 100, 30);
+    let (output, component) = render_tv_workspace(&mut app, &mut layout);
 
     assert!(output.contains("The Series"), "{output}");
     assert!(!output.contains("No items available"), "{output}");
     assert!(!output.contains("Empty"), "{output}");
-    assert!(layout.tv_wide_season_tabs.is_empty());
-    assert!(layout.tv_wide_episode_rows.is_empty());
+    assert!(component.test_layout().tv_wide_season_tabs.is_empty());
+    assert!(component.test_layout().tv_wide_episode_rows.is_empty());
 }
 
 #[test]
@@ -140,13 +163,17 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
     let backend = TestBackend::new(100, 30);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut layout = crate::app::layout::LayoutMain::default();
+    let area = Rect::new(0, 0, 100, 30);
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(app.wide_tv_render_ctx(0, true));
     terminal
         .draw(|f| {
             f.render_widget(
                 Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
-                Rect::new(0, 0, 100, 30),
+                area,
             );
-            app.render_library(f, Rect::new(0, 0, 100, 30), true, &mut layout);
+            app.render_library(f, area, true, &mut layout);
+            component.view(f, area);
         })
         .unwrap();
 

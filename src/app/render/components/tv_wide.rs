@@ -59,6 +59,26 @@ impl TvWideRenderCtx {
         self.episode_cursor = episode_cursor;
         self
     }
+
+    /// Publish the `tv_wide_*` layout geometry the mounted
+    /// `TvWorkspaceComponent` hit-tests (task 5.3d.18d). The legacy
+    /// `render_list` wide-TV underpaint is gone; the App frame now only
+    /// publishes the hand-off rects before `render_list` runs so input
+    /// routing (`is_wide_tv_active`) and the shell's render seam stay
+    /// correct while the component owns the picture.
+    pub(in crate::app) fn publish_geometry(&self, area: Rect, layout: &mut LayoutMain) {
+        layout.tv_wide_area = area;
+        let Some(panes) = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y)
+        else {
+            return;
+        };
+        layout.tv_wide_left_area = panes.left_area;
+        layout.tv_wide_right_area = panes.right_area;
+        layout.left_area = Rect::default();
+        let right_pane =
+            hero_left::hero_on_left_right_pane(panes.right_panel, panes.right_area, PANE_PAD_Y);
+        layout.tv_wide_list_area = padded_rect(right_pane.list_panel, PANE_PAD_X, PANE_PAD_Y);
+    }
 }
 
 impl App {

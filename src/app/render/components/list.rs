@@ -99,16 +99,16 @@ impl App {
             }
         }
 
+        // Wide TV / podcast: the mounted `TvWorkspaceComponent` paints the
+        // workspace itself (task 5.3d.18d). The legacy underpaint branch and
+        // its `level.scroll` write-back are gone; `render_library` publishes
+        // the `tv_wide_*` hand-off rects before this call, so nothing else
+        // is needed here — just avoid painting narrow rows the component owns.
         if let Some(lib_idx) = self.tab.emby_library_index() {
             if (self.is_wide_tv_library(lib_idx) || self.is_podcast_library(lib_idx))
                 && crate::app::render::arrangements::hero_left::shared_hero_presentation(area)
                     .is_some()
             {
-                let ctx = self.wide_tv_render_ctx(lib_idx, focused);
-                let final_scroll = super::tv_wide::render_wide_tv_with_ctx(f, area, &ctx, layout);
-                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                    level.scroll = final_scroll;
-                }
                 return;
             }
         }

@@ -2,6 +2,7 @@ use super::test_helpers::*;
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, TabSelection};
+use tuirealm::component::Component;
 
 #[test]
 fn home_video_library_is_never_album_folders_and_renders_via_original_list_path() {
@@ -172,26 +173,30 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
 
     let mut layout = LayoutMain::default();
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 20)).unwrap();
+    // Wide TV is component-owned (task 5.3d.18d): the App frame only
+    // publishes the `tv_wide_*` hand-off geometry, and the mounted
+    // `TvWorkspaceComponent` paints the surface pills over it, exactly as
+    // the live shell does.
+    let mut component = crate::app::components::TvWorkspaceComponent::new();
+    component.set_content(app.wide_tv_render_ctx(0, true));
+    let wide_area = ratatui::layout::Rect::new(0, 0, 120, 20);
     terminal
         .draw(|f| {
-            app.render_library(
-                f,
-                ratatui::layout::Rect::new(0, 0, 120, 20),
-                true,
-                &mut layout,
-            )
+            app.render_library(f, wide_area, true, &mut layout);
+            component.view(f, wide_area);
         })
         .unwrap();
+    let component_layout = component.test_layout();
     assert_surface_pills(
         &terminal,
-        &layout,
+        component_layout,
         ratatui::layout::Rect {
-            y: layout.selector_tabs[0].0.y,
-            height: layout
+            y: component_layout.selector_tabs[0].0.y,
+            height: component_layout
                 .tv_wide_right_area
                 .bottom()
-                .saturating_sub(layout.selector_tabs[0].0.y),
-            ..layout.tv_wide_right_area
+                .saturating_sub(component_layout.selector_tabs[0].0.y),
+            ..component_layout.tv_wide_right_area
         },
         1,
         ratatui::style::Color::Reset,

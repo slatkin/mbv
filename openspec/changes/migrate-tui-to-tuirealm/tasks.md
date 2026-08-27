@@ -29,7 +29,7 @@ Sections:
 - **Accepted baseline HEAD:** `96a11eee62ad40371de083786bcc252f1ae05cd3` (the
   `5.3d.11-U5` landing commit). Doc changes land directly atop it in one atomic
   docs-only commit.
-- **Next task (first open executable implementation checkbox):** `5.3d.18d`.
+- **Next task (first open executable implementation checkbox):** `5.3d.18e`.
 - **Accepted campaign order:** `U6 → 5.3d.18a → 5.3d.19a → 5.3d.20a`. This is an
   accepted *campaign predecessor* order, not an invented technical dependency;
   no technical dependency between TV, Music, and Inline surfaces is asserted beyond
@@ -271,7 +271,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
     at the nav-track/panel-focus/letter/resize writers (`shell_tv_workspace.rs`,
     `shell.rs`, `lib_cursor_actions.rs`, `input_browse_dispatch.rs`); keep the
     `series_detail_cache` reader at `shell_tv_workspace.rs:51` (B2).
-  - [ ] **5.3d.18d — geometry/underpaint (≤3 files):** `render/components/tv_wide.rs`
+  - [x] **5.3d.18d — geometry/underpaint (≤3 files):** `render/components/tv_wide.rs`
     publishes the `tv_wide_*` rects the component hit-tests; delete the legacy
     `render_list` wide-TV branch only after the component owns geometry (B4).
   - [ ] **5.3d.18e — teardown (≤3 files):** remove the empty `sync_tv_workspace`
