@@ -209,11 +209,20 @@ verification.
     + `handle_audiobookshelf_podcast_episode_intent`), resolved via U0 accessor +
     component method. 2 files; depends on U0/U2/U4 ordering. Commit:
     `96a11eee` (baseline).
-  - [ ] **U6** — drop mount seam + dead type method: `shell.rs` (drop
-    `sync_audiobookshelf_podcast()`), `shell_audiobookshelf_podcast.rs` (delete
-    `sync_audiobookshelf_podcast`, then a type method), `types_audiobookshelf_browse.rs`
-    (delete the dead `enter_episode_selection()` only). 3 files; green only after
-    U0–U5. **First open executable checkbox.**
+  - [x] **U6** — Book-style split, not deletion: retain
+    `sync_audiobookshelf_podcast` as a mount-only lifecycle owner (tab/kind
+    guard + mount/unmount/active + `abs_podcast_id` write); extract the
+    per-sync projection to a new `push_audiobookshelf_podcast_content` called
+    at the writer sites (fresh mount, ABS drain, lib_rx drain,
+    audiobookshelf_socket_rx drain, key/effect seams, PodcastShowMove /
+    PodcastEpisodeIntent arms, modal filter select path); relocate the
+    cover-fetch bridge (B2) into the push fn keeping the image-disabled gate;
+    delete the dead `AudiobookshelfBrowseState::enter_episode_selection`
+    method and the `abs_podcast_component_id` helper (sole caller is the
+    retained sync; inline the `BrowserKey` construction at the call site,
+    matching Book's shape). 3 files (`shell.rs`,
+    `shell_audiobookshelf_podcast.rs`, `types_audiobookshelf_browse.rs`);
+    green only after U0–U5. **First open executable checkbox.**
 
 Depends: 5.3a, 5.3b, 5.3c, 4.1, 4.10 (via the `5.3d` aggregate). Verification:
 the `5.3d` policy gates; test sets `shell_audiobookshelf_podcast.rs` (re)

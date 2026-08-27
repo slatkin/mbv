@@ -58,15 +58,6 @@ impl Model {
         }
     }
 
-    fn abs_podcast_component_id(&self, index: usize) -> Option<ComponentId> {
-        let library = self.app.audiobookshelf_libraries.get(index)?;
-        Some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Audiobookshelf,
-            library_id: library.id.clone(),
-            kind: BrowserKind::AudiobookshelfPodcast,
-        }))
-    }
-
     /// Resolves and downcasts the mounted Audiobookshelf podcast browser for
     /// the given browse index, or `None` when it is not the active mounted
     /// browser (task 5.3d.11 U0). The mount path keys the single mounted
@@ -91,12 +82,13 @@ impl Model {
     }
 
     /// Mounts / unmounts the Audiobookshelf podcast browser component to follow
-    /// the active tab (task 5.3d), then projects current content into it so the
-    /// mounted component paints the active browse snapshot on every sync (task
-    /// 5.3d.11 U1). Mount/unmount keeps the existing lifecycle: inactive or
-    /// non-podcast tabs leave the component unmounted and the projection is a
-    /// no-op. Sync subsumes the old event-scoped explicit content push
-    /// (deleted), so shell writers no longer push explicitly.
+    /// the active tab (task 5.3d). This is the mount lifecycle only: content is
+    /// no longer mirrored into the component on every tick. The per-frame
+    /// `set_content` projection was replaced by the event-scoped
+    /// `push_audiobookshelf_podcast_content` at the writers of its projected
+    /// inputs (active-tab, async completion, progress, refresh/reset, and
+    /// saved-position restore). Content is pushed right after a fresh mount so
+    /// the newly mounted component paints the current browse snapshot.
     pub(super) fn sync_audiobookshelf_podcast(&mut self) {
         let next_id = match self.app.tab {
             TabSelection::AudiobookshelfLibrary(index)
@@ -105,7 +97,14 @@ impl Model {
                     Some(AudiobookshelfBrowseKind::Podcast)
                 ) =>
             {
-                self.abs_podcast_component_id(index)
+                let library = self.app.audiobookshelf_libraries.get(index);
+                library.map(|library| {
+                    ComponentId::Browser(BrowserKey {
+                        service: ServiceKind::Audiobookshelf,
+                        library_id: library.id.clone(),
+                        kind: BrowserKind::AudiobookshelfPodcast,
+                    })
+                })
             }
             _ => None,
         };
@@ -125,18 +124,40 @@ impl Model {
                     .active(&id)
                     .expect("activate Audiobookshelf podcast browser");
                 self.abs_podcast_id = Some(id);
+                // Fresh mount: project the active tab's browse state so the
+                // component is initialized with the current shows/selection
+                // before it is painted (the active-tab writer).
+                self.push_audiobookshelf_podcast_content();
             }
         }
-        // Post-mount projection (task 5.3d.11 U1): the complete former
-        // explicit content-push body, run every sync (not only fresh mount) so
-        // a mounted podcast component tracks current content.
-        // When no podcast browser is mounted (inactive/non-podcast tab) this is
-        // a no-op, preserving the existing unmount behavior.
+    }
+
+    /// Event-scoped projection replacing the per-frame content mirror (task
+    /// 5.3d.11 U6): runs only when the active tab is the mounted podcast
+    /// browser and mirrors the validated browse snapshot plus panel focus into
+    /// `AudiobookshelfPodcastComponent` via `set_content` (preserving its
+    /// selected-show/episode/scroll/bucket semantics exactly), then runs the
+    /// cover-fetch bridge (task 5.3d.9) for the selected show's cover.
+    /// Called at the writers of the projected inputs, so it is deterministic
+    /// in `App` state and duplicate pushes are idempotent.
+    /// `sync_audiobookshelf_podcast` keeps only mount lifecycle management.
+    pub(super) fn push_audiobookshelf_podcast_content(&mut self) {
         let Some(id) = self.abs_podcast_id.as_ref() else {
             return;
         };
+        // Mirror `sync_audiobookshelf_podcast`'s active-tab guard: only
+        // project while this tab's browse kind is still Podcast, so a stale
+        // mounted podcast component never receives a non-Podcast snapshot
+        // before mount reconciliation (task 5.3d).
         let index = match self.app.tab {
-            TabSelection::AudiobookshelfLibrary(index) => index,
+            TabSelection::AudiobookshelfLibrary(index)
+                if matches!(
+                    self.app.audiobookshelf_kind_at(index),
+                    Some(AudiobookshelfBrowseKind::Podcast)
+                ) =>
+            {
+                index
+            }
             _ => return,
         };
         let Some(snapshot) = self.app.audiobookshelf_browse.get(index) else {
@@ -153,9 +174,8 @@ impl Model {
         }
         // Cover-fetch bridge (task 5.3d.9): the selected show's cover was
         // previously fetched as an unconditional side effect inside the legacy
-        // underpaint renderer. It now runs here, under the post-mount projection
-        // every sync, preserving the image-disabled gate (no fetch when images
-        // are off).
+        // underpaint renderer. It now runs under this projection, preserving
+        // the image-disabled gate (no fetch when images are off).
         if self.app.images_enabled() {
             let server = self
                 .app

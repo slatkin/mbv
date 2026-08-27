@@ -160,10 +160,6 @@ impl AudiobookshelfBrowseState {
         }
     }
 
-    pub fn enter_episode_selection(&mut self) {
-        self.episode_selection = Some(0);
-    }
-
     pub fn append_page(
         &mut self,
         page: usize,
@@ -546,7 +542,7 @@ mod tests {
         let mut state = AudiobookshelfBrowseState::new(library());
         state.append_page(1, 20, 2, vec![show("a", "A"), show("b", "B")]);
         state.episodes = Some(vec![episode("a", "shared"), episode("a", "two")]);
-        state.enter_episode_selection();
+        state.episode_selection = Some(0);
         state.select(1);
         assert_eq!(state.episodes, None);
         assert_eq!(state.episode_selection, None);
