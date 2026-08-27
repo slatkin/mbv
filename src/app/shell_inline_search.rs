@@ -5,15 +5,42 @@ use mbv_core::config::ServiceKind;
 use ratatui::layout::Rect;
 
 impl Model {
-    pub(super) fn inline_search_component_id(&self, index: usize) -> Option<ComponentId> {
+    fn inline_search_expected_id(&self, index: usize) -> Option<ComponentId> {
         let library = self.app.libs.get(index)?;
-        let expected = ComponentId::InlineSearch(BrowserKey {
+        Some(ComponentId::InlineSearch(BrowserKey {
             service: ServiceKind::Emby,
             library_id: library.library.id.clone(),
             kind: BrowserKind::from_collection_type(&library.library.collection_type),
-        });
+        }))
+    }
+
+    pub(super) fn inline_search_component_id(&self, index: usize) -> Option<ComponentId> {
+        let expected = self.inline_search_expected_id(index)?;
         // `Some` exactly when the search for this library is mounted.
         self.application.mounted(&expected).then_some(expected)
+    }
+
+    /// Remove searches left mounted for a library that is no longer active.
+    /// TuiRealm has no component enumeration, so derive every possible inline
+    /// search id from the current library list and use `mounted()` as the
+    /// registry source of truth.
+    fn unmount_stale_inline_searches(&mut self, keep: Option<&ComponentId>) {
+        let stale_ids: Vec<_> = self
+            .app
+            .libs
+            .iter()
+            .map(|library| {
+                ComponentId::InlineSearch(BrowserKey {
+                    service: ServiceKind::Emby,
+                    library_id: library.library.id.clone(),
+                    kind: BrowserKind::from_collection_type(&library.library.collection_type),
+                })
+            })
+            .filter(|id| keep != Some(id) && self.application.mounted(id))
+            .collect();
+        for id in stale_ids {
+            let _ = self.application.umount(&id);
+        }
     }
 
     fn inline_search_area(&self) -> Rect {
@@ -40,10 +67,16 @@ impl Model {
     /// are unreachable while it is open except at those boundaries.
     ///
     pub(super) fn push_inline_search_content(&mut self) {
-        let TabSelection::EmbyLibrary(index) = self.app.tab else {
+        let expected = match self.app.tab {
+            TabSelection::EmbyLibrary(index) => self.inline_search_expected_id(index),
+            _ => None,
+        };
+        let Some(id) = expected.as_ref().filter(|id| self.application.mounted(id)) else {
+            self.unmount_stale_inline_searches(expected.as_ref());
             return;
         };
-        let Some(id) = self.inline_search_component_id(index) else {
+        let id = id.clone();
+        let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
         let recursive = self.app.recursive_album_search_enabled(index);
@@ -86,20 +119,16 @@ impl Model {
 
     pub(super) fn open_inline_search(&mut self) {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
+            self.unmount_stale_inline_searches(None);
             return;
         };
-        if self.inline_search_component_id(index).is_some() {
+        let Some(id) = self.inline_search_expected_id(index) else {
+            return;
+        };
+        if self.application.mounted(&id) {
             return;
         }
-        let Some(id) = self.app.libs.get(index).map(|library| {
-            ComponentId::InlineSearch(BrowserKey {
-                service: ServiceKind::Emby,
-                library_id: library.library.id.clone(),
-                kind: BrowserKind::from_collection_type(&library.library.collection_type),
-            })
-        }) else {
-            return;
-        };
+        self.unmount_stale_inline_searches(Some(&id));
         self.application
             .mount(id.clone(), Box::new(InlineSearchComponent::new()), vec![])
             .expect("mount inline library Search");
@@ -267,6 +296,7 @@ mod tests {
     use super::*;
     use crate::app::components::{InlineSearchComponent, LegacyTerminalEvent, Msg};
     use crate::app::render::make_movie_app;
+    use crate::app::{LibEvent, LibraryTab};
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
@@ -296,5 +326,33 @@ mod tests {
             .as_any()
             .downcast_ref::<InlineSearchComponent>()
             .is_some());
+    }
+
+    #[test]
+    fn inline_search_tab_switch_unmounts_stale_component_before_open() {
+        let mut app = make_movie_app();
+        let mut stale_library = LibraryTab::new(app.libs[0].library.clone());
+        stale_library.library.id = "lib-stale".into();
+        app.libs.push(stale_library);
+        app.tab = TabSelection::EmbyLibrary(1);
+
+        let mut model = Model::new(app);
+        model.open_inline_search();
+        let stale_id = model
+            .inline_search_component_id(1)
+            .expect("stale inline Search component mounted");
+
+        model.handle_inline_search_lib_event(LibEvent::NavigateTo {
+            lib_idx: 0,
+            nav_stack: Vec::new(),
+            switch_tab: true,
+        });
+        assert!(!model.application.mounted(&stale_id));
+
+        model.open_inline_search();
+        let current_id = model
+            .inline_search_component_id(0)
+            .expect("current inline Search component mounted");
+        assert!(model.application.mounted(&current_id));
     }
 }
