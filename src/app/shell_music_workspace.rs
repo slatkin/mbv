@@ -60,20 +60,38 @@ impl Model {
                     .active(&id)
                     .expect("activate Music workspace");
                 self.music_workspace_id = Some(id);
+                self.push_music_workspace_content();
             }
         }
 
-        let Some(id) = self.music_workspace_id.as_ref() else {
+        if self.music_workspace_id.is_none() {
             // No Music workspace is mounted right now: a pending focus
             // request (recursive album activation / position restore that
             // landed on a non-mountable state) cannot be delivered, and must
             // not fire later on an unrelated album.
             self.music_track_focus_request = None;
+        }
+    }
+
+    /// Event-scoped projection replacing the per-frame content mirror:
+    /// mirrors the active Music browse snapshot and panel geometry into the
+    /// mounted component, preserving its local cursor and track-focus state.
+    pub(super) fn push_music_workspace_content(&mut self) {
+        let Some(id) = self.music_workspace_id.as_ref() else {
             return;
         };
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
+        let Some(library) = self.app.libs.get(index) else {
+            return;
+        };
+        if library.library.collection_type != "music"
+            || !self.app.is_music_group_view(index)
+            || !self.app.is_viewing_album_folders(index)
+        {
+            return;
+        }
         let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index);
         let columns = self.app.current_library_columns(index);
         let wide = self.app.layout.main.is_wide_music_active();
@@ -365,7 +383,7 @@ mod tests {
     fn recursive_album_activation_enters_track_focus_only_in_wide() {
         // Recursive album activation used to write
         // `Some(0)` on the deleted inline track-focus field; the shell now delivers a
-        // one-shot enter request consumed at the next sync -- wide only, so
+        // one-shot enter request consumed at the next content push -- wide only, so
         // narrow stays explicitly unfocused.
         let mut model = Model::new(make_music_group_app());
         let mut track = crate::app::tests::make_item("Track One", "Audio");
@@ -382,7 +400,7 @@ mod tests {
             .expect("narrow Music workspace mounted");
 
         model.music_track_focus_request = Some(true);
-        model.sync_music_workspace();
+        model.push_music_workspace_content();
         let component = model
             .application
             .get_component_mut(&id)
@@ -399,7 +417,7 @@ mod tests {
         model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
         model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
         model.music_track_focus_request = Some(true);
-        model.sync_music_workspace();
+        model.push_music_workspace_content();
         let component = model
             .application
             .get_component_mut(&id)
@@ -440,9 +458,11 @@ mod tests {
             }));
 
         // The deleted track-focus-clear rehome: a position-restore request
-        // clears the component's inline track focus at the next sync.
+        // clears the component's inline track focus at the next content push.
         model.music_track_focus_request = Some(false);
         model.sync_music_workspace();
+        assert_eq!(model.music_track_focus_request, Some(false));
+        model.push_music_workspace_content();
         let component = model
             .application
             .get_component_mut(&id)

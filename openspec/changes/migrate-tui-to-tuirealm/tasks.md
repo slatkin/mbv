@@ -235,7 +235,7 @@ tests repainted as part of the production rows.
   to typed requests carrying the resolved pane/episode/season cursor; keep episode
   play/enqueue raw for 18f. 3 files; Emby template commits `8929248`/`24e645b9`/`6fa217fb`.
   Campaign predecessor: `U6`.
-- [ ] **5.3d.19a — Music mount/idempotent mirror.** Idempotent mount + content
+- [x] **5.3d.19a — Music mount/idempotent mirror.** Idempotent mount + content
   mirror (album cursor via `move/jump/page_grouped_album_cursor`, focused track via
   `focused_music_track`); no behavioural change. ≤3 files. Campaign predecessor:
   `5.3d.18a`.

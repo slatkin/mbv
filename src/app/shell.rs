@@ -270,6 +270,7 @@ impl Model {
             if drained_abs_events {
                 self.push_audiobookshelf_podcast_content();
                 self.push_audiobookshelf_book_content();
+                self.push_music_workspace_content();
             }
             if let Ok(ev) = self.app.player_rx.try_recv() {
                 had_events = true;
@@ -283,6 +284,7 @@ impl Model {
                 self.push_audiobookshelf_podcast_content();
                 // Player events can reconcile ABS book progress; re-project (5.3d).
                 self.push_audiobookshelf_book_content();
+                self.push_music_workspace_content();
                 if restart {
                     continue 'outer;
                 }
@@ -340,6 +342,7 @@ impl Model {
                 // ABS book async completions (BooksFetched / BookDetailFetched)
                 // and saved-position restore arrive via lib events; re-project (5.3d).
                 self.push_audiobookshelf_book_content();
+                self.push_music_workspace_content();
             }
 
             // Search results drain: the shell drains `search_rx` and writes
@@ -412,6 +415,7 @@ impl Model {
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
                 self.push_emby_browser_content();
+                self.push_music_workspace_content();
             }
 
             while let Ok(ev) = self.app.audiobookshelf_socket_rx.try_recv() {
@@ -422,6 +426,7 @@ impl Model {
                 self.push_audiobookshelf_podcast_content();
                 // Socket events reconcile ABS book progress; re-project (5.3d).
                 self.push_audiobookshelf_book_content();
+                self.push_music_workspace_content();
             }
 
             // Drain idle feed items
@@ -545,6 +550,7 @@ impl Model {
                             // panel-focus keys) write the active ABS browse
                             // state in App's handler; re-project (5.3d).
                             self.push_audiobookshelf_book_content();
+                            self.push_music_workspace_content();
                         }
                         Msg::Legacy(LegacyTerminalEvent::Mouse(_mouse)) => {}
                         Msg::Legacy(LegacyTerminalEvent::Resize) => {
@@ -554,6 +560,7 @@ impl Model {
                             // Resize is the only reachable focus/layout change
                             // while the search is mounted (it swallows keys).
                             self.push_inline_search_content();
+                            self.push_music_workspace_content();
                         }
                         Msg::Legacy(LegacyTerminalEvent::FocusGained) => {
                             self.app.note_focus_gained();
@@ -595,6 +602,7 @@ impl Model {
                                     }
                                 }
                             }
+                            self.push_music_workspace_content();
                         }
                         // Inline album-track activation/enqueue/context-menu
                         // target resolution: the component owns the cursor,
@@ -606,6 +614,7 @@ impl Model {
                                     self.app.play_album_track(&album_id, &track);
                                 }
                             }
+                            self.push_music_workspace_content();
                         }
                         Msg::Shell(ShellRequest::MusicTrackEnqueue) => {
                             if let Some(lib_idx) = self.app.tab.emby_library_index() {
@@ -613,6 +622,7 @@ impl Model {
                                     self.app.enqueue_lib_item(lib_idx, track);
                                 }
                             }
+                            self.push_music_workspace_content();
                         }
                         Msg::Shell(ShellRequest::MusicTrackContextMenu) => {
                             if let Some((_, track)) = self
@@ -623,6 +633,7 @@ impl Model {
                             {
                                 self.app.open_context_menu_for(track);
                             }
+                            self.push_music_workspace_content();
                         }
                         // Help overlay cross-boundary requests (design D4).
                         Msg::Shell(ShellRequest::Quit) => quit = true,

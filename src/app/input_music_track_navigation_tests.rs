@@ -153,7 +153,7 @@ fn selecting_music_group_clears_track_focus() {
 
     drive(&mut model, &id, TuiKey::Enter);
     model.app.select_music_group(0, 1);
-    model.sync_music_workspace();
+    model.push_music_workspace_content();
 
     let component = model
         .application
@@ -175,7 +175,7 @@ fn switching_music_group_clears_track_focus() {
 
     drive(&mut model, &id, TuiKey::Enter);
     model.app.switch_music_group(0, 1);
-    model.sync_music_workspace();
+    model.push_music_workspace_content();
 
     let component = model
         .application
