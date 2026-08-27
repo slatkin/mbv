@@ -15,8 +15,7 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::to_crossterm_key_event;
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{render_feeds_content, FeedsRenderModel};
@@ -208,9 +207,8 @@ impl FeedsComponent {
         if key.modifiers.contains(KeyModifiers::CONTROL)
             || key.modifiers.contains(KeyModifiers::ALT)
         {
-            return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+            return None;
         }
-        let noop = || Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
         match key.code {
             Key::Char('r') => Some(Msg::Shell(ShellRequest::RefreshFeeds)),
             Key::Char('w') => {
@@ -218,15 +216,15 @@ impl FeedsComponent {
                 self.cursor = 0;
                 self.scroll = 0;
                 self.rebuild_visible_entries();
-                noop()
+                None
             }
             Key::Up | Key::Char('k') => {
                 self.move_cursor_rows(-1);
-                noop()
+                None
             }
             Key::Down | Key::Char('j') => {
                 self.move_cursor_rows(1);
-                noop()
+                None
             }
             Key::Left | Key::Char('h')
                 if self.layout.left_area.width > 0
@@ -235,7 +233,7 @@ impl FeedsComponent {
                     ) > 1 =>
             {
                 self.move_cursor(-1);
-                noop()
+                None
             }
             Key::Right | Key::Char('l')
                 if self.layout.left_area.width > 0
@@ -244,35 +242,35 @@ impl FeedsComponent {
                     ) > 1 =>
             {
                 self.move_cursor(1);
-                noop()
+                None
             }
             Key::PageUp => {
                 self.cursor = self
                     .cursor
                     .saturating_sub(self.layout.left_area.height.saturating_sub(1).max(1) as usize);
-                noop()
+                None
             }
             Key::PageDown => {
                 self.cursor = (self.cursor
                     + self.layout.left_area.height.saturating_sub(1).max(1) as usize)
                     .min(self.visible_entries.len().saturating_sub(1));
-                noop()
+                None
             }
             Key::Home => {
                 self.cursor = 0;
-                noop()
+                None
             }
             Key::End => {
                 self.cursor = self.visible_entries.len().saturating_sub(1);
-                noop()
+                None
             }
             Key::Char('[') => {
                 self.cycle_group(-1);
-                noop()
+                None
             }
             Key::Char(']') => {
                 self.cycle_group(1);
-                noop()
+                None
             }
             Key::Enter => self
                 .visible_entries
@@ -282,9 +280,7 @@ impl FeedsComponent {
                 .visible_entries
                 .get(self.cursor)
                 .map(|entry| Msg::Shell(ShellRequest::FeedsEnqueue(entry.guid.clone()))),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::Key(
-                to_crossterm_key_event(key),
-            ))),
+            _ => None,
         }
     }
 
@@ -311,7 +307,7 @@ impl FeedsComponent {
                         self.scroll = 0;
                         self.rebuild_visible_entries();
                     }
-                    return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+                    return None;
                 }
                 if self.layout.left_area.contains(position) {
                     let list_area = self.layout.left_area;
@@ -365,7 +361,7 @@ impl FeedsComponent {
             }
             _ => {}
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+        None
     }
 }
 
@@ -416,7 +412,7 @@ impl AppComponent<Msg, UserEvent> for FeedsComponent {
         match event {
             Event::Keyboard(key) => self.handle_key(key),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }

@@ -6,7 +6,7 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{LegacyTerminalEvent, Msg, PersistRequest, ServiceRequest, ShellRequest};
+use super::msg::{Msg, PersistRequest, ServiceRequest, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
 use crate::app::types_settings::SettingsDestination;
@@ -149,7 +149,7 @@ impl SettingsComponent {
 
     fn setup_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let Some(setup) = self.setup.as_mut() else {
-            return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+            return None;
         };
         let busy = match setup {
             SetupDraft::Emby { busy, .. } | SetupDraft::Audiobookshelf { busy, .. } => *busy,
@@ -223,7 +223,7 @@ impl SettingsComponent {
                 error.clear();
                 None
             }
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 
@@ -256,7 +256,7 @@ impl SettingsComponent {
                         key: super::legacy_input::to_crossterm_key_event(key),
                     }))
                 }
-                _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+                _ => None,
             };
         }
         match key.code {
@@ -288,13 +288,12 @@ impl SettingsComponent {
                     key: super::legacy_input::to_crossterm_key_event(key),
                 }))
             }
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 
     fn handle_mouse(&mut self, mouse: &tuirealm::event::MouseEvent) -> Option<Msg> {
-        use crossterm::event::{MouseButton, MouseEventKind};
-        let mouse = super::legacy_input::to_crossterm_mouse_event(mouse);
+        use tuirealm::event::{MouseButton, MouseEventKind};
         let position = (mouse.column, mouse.row).into();
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && !self.geometry.panel_area.contains(position)
@@ -376,7 +375,7 @@ impl AppComponent<Msg, UserEvent> for SettingsComponent {
         match event {
             Event::Keyboard(key) => self.handle_key(key),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }

@@ -2,12 +2,12 @@ use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, MouseEvent};
+use tuirealm::event::{Event, Key, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg, QueueHitRegion, QueueMove, QueueRequest, ShellRequest};
+use super::legacy_input::to_crossterm_key_event;
+use super::msg::{Msg, QueueHitRegion, QueueMove, QueueRequest, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{
     render_queue_content, render_queue_title_content, QueueRenderGeometry, QueueTitleModel,
@@ -170,10 +170,9 @@ impl QueueComponent {
     /// every `view`) and emits typed shell intent. It holds no double-click
     /// or scroll timing; the shell decides *when* using App's shared fields.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let mouse = to_crossterm_mouse_event(mouse);
         let position: Position = (mouse.column, mouse.row).into();
         match mouse.kind {
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+            MouseEventKind::Down(MouseButton::Left) => {
                 if self.title.is_some() {
                     if self.geometry.scope_local_area.contains(position) {
                         self.scope = QueueScope::Local;
@@ -214,7 +213,7 @@ impl QueueComponent {
                     }));
                 }
             }
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
+            MouseEventKind::Down(MouseButton::Right) => {
                 if self.area.contains(position) {
                     // Resolve the slot under the click; a blank click keeps
                     // the previous slot, preserving the legacy no-op.
@@ -239,12 +238,10 @@ impl QueueComponent {
                     }));
                 }
             }
-            crossterm::event::MouseEventKind::ScrollUp
-            | crossterm::event::MouseEventKind::ScrollDown
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
                 if self.area.contains(position) =>
             {
-                let delta: i64 = if matches!(mouse.kind, crossterm::event::MouseEventKind::ScrollUp)
-                {
+                let delta: i64 = if matches!(mouse.kind, MouseEventKind::ScrollUp) {
                     -1
                 } else {
                     1
@@ -253,7 +250,7 @@ impl QueueComponent {
             }
             _ => {}
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
+        None
     }
 
     #[cfg(test)]

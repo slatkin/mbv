@@ -9,7 +9,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::to_crossterm_key_event;
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_feeds_manage_content, FeedsManageRenderModel};
 use crate::app::types_feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
@@ -67,7 +67,7 @@ impl FeedsManageComponent {
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let Some(stage) = self.stage.clone() else {
-            return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+            return None;
         };
         match stage {
             FeedsManageStage::List => self.handle_list_key(key),
@@ -79,18 +79,18 @@ impl FeedsManageComponent {
         match key.code {
             Key::Up => {
                 self.cursor = self.cursor.saturating_sub(1);
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Down => {
                 if !self.feeds.is_empty() {
                     self.cursor = (self.cursor + 1).min(self.feeds.len() - 1);
                 }
-                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+                None
             }
             Key::Esc | Key::Char('a') | Key::Enter | Key::Char('e') | Key::Char('d') => {
                 self.shell_key(key)
             }
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 
@@ -113,7 +113,7 @@ impl FeedsManageComponent {
                 _ if matches!(key.code, Key::Enter | Key::Esc) => return self.shell_key(key),
                 _ => {}
             }
-            return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+            return None;
         }
         if !self.submitting()
             && matches!(key.code, Key::Char(_))
@@ -123,7 +123,7 @@ impl FeedsManageComponent {
                 self.push_char(c);
             }
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+        None
     }
 
     fn shell_key(&self, key: &KeyEvent) -> Option<Msg> {
@@ -235,7 +235,7 @@ impl AppComponent<Msg, UserEvent> for FeedsManageComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
-            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+            _ => None,
         }
     }
 }

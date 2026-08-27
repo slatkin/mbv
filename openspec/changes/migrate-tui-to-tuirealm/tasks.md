@@ -425,7 +425,7 @@ definition of done.
     families reach zero-reference gates. ABS Book R1/R2/R3 leaves are complete,
     but its component still has legitimate Legacy fallback/mouse endpoints for
     this phase.
-    - [ ] **5.3d.23-B1 — typed request/key surfaces:** Serial child; allowlisted
+    - [x] **5.3d.23-B1 — typed request/key surfaces:** Serial child; allowlisted
       to `src/app/components/queue.rs`, `save_playlist.rs`, `settings.rs`,
       `feeds_manage.rs`, and `feeds.rs`. Convert local/typed authority before
       the zero-reference gate for both crossterm adapters and `Msg::Legacy`;
