@@ -321,7 +321,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
     `shell_inline_search.rs` + `parent_id` guard.
   - [x] **5.3d.20d — drop recursive pool branch (≤2 files):** `shell_inline_search.rs`
     recursive `Albums` pool branch.
-  - [ ] **5.3d.20e — re-host `/` trigger (≤2 files):** `components/browser.rs:90-92`
+  - [x] **5.3d.20e — re-host `/` trigger (≤2 files):** `components/browser.rs:90-92`
     `ShellRequest::OpenInlineSearch`.
   - [ ] **5.3d.20f — mouse `left_area` quirk (≤2 files):** `components/inline_search.rs`
     Default-layout mismatch.
