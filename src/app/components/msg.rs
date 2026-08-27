@@ -28,9 +28,14 @@ pub enum Msg {
     // TODO(migrate-tui-to-tuirealm): delete this variant at task 5.3 when
     // `LegacyInput` is removed and the last surface leaves the legacy path.
     Legacy(LegacyTerminalEvent),
+    /// Terminal event observed by the permanent `UiRoot` subscription. The
+    /// shell uses this as a redraw signal; it only falls back to the legacy
+    /// handler when `UiRoot` itself owns focus.
+    TerminalEvent(LegacyTerminalEvent),
 }
 
-/// Terminal-event payload for the temporary `Msg::Legacy` bridge (design D13).
+/// Terminal-event payload for the temporary `Msg::Legacy` bridge and the
+/// typed `Msg::TerminalEvent` emitted by the permanent UiRoot observer (D13).
 ///
 /// `LegacyInput` reconstructs crossterm events from TuiRealm's `Event` and
 /// carries them here so the `Model` can call the existing `App::handle_key` /

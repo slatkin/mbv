@@ -107,14 +107,14 @@ impl Model {
             home_section_pref_semantic: home_section.clone(),
             home_section_pending: home_section,
         };
-        // UiRoot owns overlay z-order and delegates terminal translation to the
-        // temporary bridge while converted surfaces still mirror App state.
+        // UiRoot owns overlay z-order and permanently observes terminal events;
+        // its temporary bridge remains the fallback when UiRoot has focus.
         model
             .application
             .mount(
                 ComponentId::UiRoot,
                 Box::new(UiRootComponent::new()),
-                vec![],
+                UiRootComponent::subscriptions(),
             )
             .expect("mount UiRoot");
         model
@@ -491,14 +491,14 @@ impl Model {
             // Terminal event poll is now driven by TuiRealm. `tick` polls the
             // crossterm listener (a background worker) for one event within
             // the same timeout the legacy loop used (8 ms with the visualizer,
-            // 50 ms otherwise), then forwards it to the active `LegacyInput`
-            // bridge, which translates it into a `Msg::Legacy`. A non-empty
-            // result means an event was processed → mark the frame dirty via
-            // the existing `had_events` path (design D12). When the terminal
-            // closes (SIGHUP), the listener's failed poll/read surfaces as a
-            // tick error; breaking here lets the post-loop cleanup run
-            // (player.stop + join) so the mpv window closes — same contract as
-            // the legacy direct `event::poll`/`event::read` path.
+            // 50 ms otherwise). UiRoot observes every event independently of
+            // the active component's `Option<Msg>`; its typed event signal is
+            // only handed to the legacy fallback when UiRoot has focus. This
+            // preserves D12 redraws for local mutations without duplicating
+            // legacy handling on converted surfaces. When the terminal closes
+            // (SIGHUP), the listener's failed poll/read surfaces as a tick
+            // error; breaking here lets post-loop cleanup run (player.stop +
+            // join) — same contract as the legacy direct poll/read path.
             let poll_timeout = if self.app.visualizer.is_some() {
                 Duration::from_millis(8)
             } else {
@@ -516,6 +516,18 @@ impl Model {
                 // break inside the fold.
                 let mut quit = false;
                 for msg in messages {
+                    // UiRoot's subscription sees the same event as the active
+                    // component. Converted surfaces already handled it; only
+                    // the root fallback should run the legacy event handler.
+                    let msg = match msg {
+                        Msg::TerminalEvent(_)
+                            if self.application.focus() != Some(&ComponentId::UiRoot) =>
+                        {
+                            continue
+                        }
+                        Msg::TerminalEvent(event) => Msg::Legacy(event),
+                        msg => msg,
+                    };
                     match msg {
                         Msg::Legacy(LegacyTerminalEvent::Key(key)) => {
                             // F1 opens the Help overlay unless a blocking

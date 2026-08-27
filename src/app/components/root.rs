@@ -5,6 +5,7 @@ use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
+use tuirealm::subscription::{EventClause, Sub, SubClause};
 
 use super::{ComponentId, LegacyInput, Msg, UserEvent};
 
@@ -38,6 +39,13 @@ impl UiRootComponent {
         }
     }
 
+    /// Subscribe the root to every terminal event so the shell can distinguish
+    /// a processed event from an empty component message. The root remains a
+    /// permanent observer even while another component owns focus.
+    pub(in crate::app) fn subscriptions() -> Vec<Sub<ComponentId, UserEvent>> {
+        vec![Sub::new(EventClause::Any, SubClause::Always)]
+    }
+
     pub(in crate::app) fn overlay_ids() -> &'static [ComponentId] {
         OVERLAY_IDS
     }
@@ -63,6 +71,32 @@ impl Component for UiRootComponent {
 
 impl AppComponent<Msg, UserEvent> for UiRootComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        self.legacy_input.on(event)
+        self.legacy_input.on(event).map(|msg| match msg {
+            Msg::Legacy(event) => Msg::TerminalEvent(event),
+            _ => msg,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::components::{FeedsComponent, LegacyTerminalEvent};
+    use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn root_observer_marks_none_returning_local_key_as_processed() {
+        let event = Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        });
+        let mut feeds = FeedsComponent::new();
+        assert!(feeds.on(&event).is_none());
+
+        let mut root = UiRootComponent::new();
+        assert!(matches!(
+            root.on(&event),
+            Some(Msg::TerminalEvent(LegacyTerminalEvent::Key(_)))
+        ));
     }
 }
