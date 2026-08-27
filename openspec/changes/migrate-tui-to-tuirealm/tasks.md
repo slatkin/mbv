@@ -338,11 +338,20 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
 
 ### 5.3d.13 — ABS Book Phase-B report gate (open, report-only)
 
-- [ ] **5.3d.13** Scout the ABS book typed-input, interaction-reader, legacy-render,
+- [x] **5.3d.13** Scout the ABS book typed-input, interaction-reader, legacy-render,
   image, and layout teardown at symbol level; add the resulting bounded rows here
   before any Phase-B book writer starts. **Open report-only gate** before any ABS
   Book Phase-B writer; no Phase-B production tasks are invented below it. (The
   Phase-A push helper at 5.3d.12 is checked.)
+  - Report outcome: `audiobookshelf_book_area`, component geometry, image path, and
+    mount-only sync remain; no teardown rows are created for those surfaces.
+  - [ ] **5.3d.13-R1 — typed ABS Book input:** Convert raw
+    `AudiobookshelfBookKey` handling to typed component requests, mirroring podcast
+    U6.
+  - [ ] **5.3d.13-R2 — ABS Book legacy reader teardown:** After R1's zero-ref gate,
+    delete `handle_key_audiobookshelf_book_library` and its shell bridge.
+  - [ ] **5.3d.13-R3 — ABS Book App-state cleanup:** After R2, remove the remaining
+    obsolete App reader/state pieces.
 
 ---
 
