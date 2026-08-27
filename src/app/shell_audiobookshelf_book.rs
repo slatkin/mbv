@@ -1,3 +1,4 @@
+use super::components::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, ShellRequest};
 use super::components::{AudiobookshelfBookComponent, BrowserKey, BrowserKind, ComponentId};
 use super::shell::Model;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
@@ -10,6 +11,73 @@ impl Model {
         key: crossterm::event::KeyEvent,
     ) -> bool {
         self.app.handle_key(key)
+    }
+
+    /// Applies a typed book request to the existing App operations. The
+    /// component has already updated its local cursor/focus, so the App call
+    /// preserves the legacy persistence, detail-fetch, and playback effects;
+    /// the push reconciles the mounted component after that write.
+    pub(super) fn handle_audiobookshelf_book_request(&mut self, request: ShellRequest) {
+        match request {
+            ShellRequest::AudiobookshelfBookMove(movement) => match movement {
+                AudiobookshelfBookMove::PreviousBucket => {
+                    self.app.cycle_audiobookshelf_book_bucket(-1)
+                }
+                AudiobookshelfBookMove::NextBucket => self.app.cycle_audiobookshelf_book_bucket(1),
+                AudiobookshelfBookMove::PreviousChapter => {
+                    self.app.move_audiobookshelf_book_row(-1)
+                }
+                AudiobookshelfBookMove::NextChapter => self.app.move_audiobookshelf_book_row(1),
+                AudiobookshelfBookMove::FocusChapters => {
+                    self.app.focus_audiobookshelf_book_chapters()
+                }
+                AudiobookshelfBookMove::FocusBrowser => {
+                    self.app.focus_audiobookshelf_book_browser()
+                }
+                AudiobookshelfBookMove::PreviousBookRow => {
+                    self.app.move_audiobookshelf_book_cursor(-1)
+                }
+                AudiobookshelfBookMove::NextBookRow => self.app.move_audiobookshelf_book_cursor(1),
+                AudiobookshelfBookMove::PreviousBookPage => {
+                    let page = self.app.lib_page_size() as i64;
+                    self.app.move_audiobookshelf_book_cursor(-page);
+                }
+                AudiobookshelfBookMove::NextBookPage => {
+                    let page = self.app.lib_page_size() as i64;
+                    self.app.move_audiobookshelf_book_cursor(page);
+                }
+                AudiobookshelfBookMove::FirstBook => {
+                    self.app.jump_audiobookshelf_book_cursor(false)
+                }
+                AudiobookshelfBookMove::LastBook => self.app.jump_audiobookshelf_book_cursor(true),
+            },
+            ShellRequest::AudiobookshelfBookIntent(intent) => match intent {
+                AudiobookshelfBookIntent::Play => {
+                    if let Some(index) = self.app.tab.audiobookshelf_index() {
+                        self.app.play_selected_audiobookshelf_book(index);
+                    }
+                }
+                AudiobookshelfBookIntent::Activate => {
+                    if self.app.layout.main.is_wide_book_active() {
+                        if let Some(index) = self.app.tab.audiobookshelf_index() {
+                            self.app.play_selected_audiobookshelf_book(index);
+                        }
+                    } else {
+                        self.app.activate_audiobookshelf_book_parent();
+                    }
+                }
+                AudiobookshelfBookIntent::Enqueue => {
+                    if let Some(index) = self.app.tab.audiobookshelf_index() {
+                        self.app.enqueue_selected_audiobookshelf_book(index);
+                    }
+                }
+                AudiobookshelfBookIntent::ActivateChapter => {
+                    self.app.activate_audiobookshelf_book_row();
+                }
+            },
+            _ => unreachable!("non-book request routed to book handler"),
+        }
+        self.push_audiobookshelf_book_content();
     }
 
     fn abs_book_component_id(&self, index: usize) -> Option<ComponentId> {
@@ -131,6 +199,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::components::msg::AudiobookshelfBookMove;
     use crate::app::components::{Msg, ShellRequest};
     use crate::app::tests::make_app_stub;
     use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
@@ -162,6 +231,10 @@ mod tests {
             audio_files: Vec::new(),
         }];
         state.selected_id = Some("book".into());
+        let mut second = state.books[0].clone();
+        second.library_item_id = "book-2".into();
+        second.title = "Book 2".into();
+        state.books.push(second);
         state.buckets =
             crate::app::types_audiobookshelf_browse::build_surname_buckets(&state.books);
         app.audiobookshelf_libraries.push(library);
@@ -181,7 +254,18 @@ mod tests {
             }));
         assert!(matches!(
             message,
-            Some(Msg::Shell(ShellRequest::AudiobookshelfBookKey(_)))
+            Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                AudiobookshelfBookMove::NextBookRow
+            )))
         ));
+        model.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::NextBookRow,
+        ));
+        assert_eq!(
+            model.app.audiobookshelf_book_browse[0]
+                .selected_id
+                .as_deref(),
+            Some("book-2")
+        );
     }
 }

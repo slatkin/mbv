@@ -345,7 +345,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
   Phase-A push helper at 5.3d.12 is checked.)
   - Report outcome: `audiobookshelf_book_area`, component geometry, image path, and
     mount-only sync remain; no teardown rows are created for those surfaces.
-  - [ ] **5.3d.13-R1 — typed ABS Book input:** Convert raw
+  - [x] **5.3d.13-R1 — typed ABS Book input:** Convert raw
     `AudiobookshelfBookKey` handling to typed component requests, mirroring podcast
     U6.
   - [ ] **5.3d.13-R2 — ABS Book legacy reader teardown:** After R1's zero-ref gate,

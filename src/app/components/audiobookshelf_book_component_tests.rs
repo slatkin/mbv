@@ -1,4 +1,7 @@
 use super::audiobookshelf_book::AudiobookshelfBookComponent;
+use super::msg::{
+    AudiobookshelfBookIntent, AudiobookshelfBookMove, LegacyTerminalEvent, Msg, ShellRequest,
+};
 use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
 use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfLibrary};
 use ratatui::backend::TestBackend;
@@ -55,7 +58,33 @@ fn abs_book_component_keeps_local_cursor_and_renders_without_app_state() {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(message.is_some());
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::NextBookRow
+        )))
+    ));
+
+    let play = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char(' '),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        play,
+        Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+            AudiobookshelfBookIntent::Play
+        )))
+    ));
+
+    let unrelated = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('z'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        unrelated,
+        Some(Msg::Legacy(LegacyTerminalEvent::Key(key)))
+            if key.code == crossterm::event::KeyCode::Char('z')
+    ));
 
     let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
     terminal

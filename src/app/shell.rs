@@ -819,12 +819,20 @@ impl Model {
                             // state (cursor/selection); re-project (5.3d.11 U6).
                             self.push_audiobookshelf_podcast_content();
                         }
+                        Msg::Shell(ShellRequest::AudiobookshelfBookMove(movement)) => {
+                            self.handle_audiobookshelf_book_request(
+                                ShellRequest::AudiobookshelfBookMove(movement),
+                            );
+                        }
+                        Msg::Shell(ShellRequest::AudiobookshelfBookIntent(intent)) => {
+                            self.handle_audiobookshelf_book_request(
+                                ShellRequest::AudiobookshelfBookIntent(intent),
+                            );
+                        }
                         Msg::Shell(ShellRequest::AudiobookshelfBookKey(key)) => {
-                            // Component-originated book key writer seam (5.3d):
-                            // the key rewrites the active ABS browse state in
-                            // App's handler; re-project (5.3d). Preserve quit
-                            // handling -- re-project regardless so the mounted
-                            // book browser tracks App state even on the quit key.
+                            // Retained raw bridge for R2: converted component
+                            // keys use typed requests, but legacy handling stays
+                            // available until the reader teardown lands.
                             if self.handle_audiobookshelf_book_key(key) {
                                 quit = true;
                             }

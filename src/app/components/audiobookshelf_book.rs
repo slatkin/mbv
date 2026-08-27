@@ -2,12 +2,14 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, MouseEvent};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
+use super::msg::{
+    AudiobookshelfBookIntent, AudiobookshelfBookMove, LegacyTerminalEvent, Msg, ShellRequest,
+};
 use super::user_event::UserEvent;
 use crate::app::render::{
     render_audiobookshelf_book_content, AudiobookshelfBookGeometry, HomeImagePaint,
@@ -109,24 +111,113 @@ impl AudiobookshelfBookComponent {
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let chapters_focused = self.state.chapter_selection.is_some();
         match key.code {
-            Key::Char('[') if key.modifiers.is_empty() => self.cycle_bucket(-1),
-            Key::Char(']') if key.modifiers.is_empty() => self.cycle_bucket(1),
-            Key::Up | Key::Char('k') if chapters_focused => self.move_chapter(-1),
-            Key::Down | Key::Char('j') if chapters_focused => self.move_chapter(1),
-            Key::Right if chapters_focused => self.state.chapter_selection = None,
-            Key::Left if !chapters_focused => self.state.chapter_selection = Some(0),
-            Key::Up | Key::Char('k') => self.move_book(-1),
-            Key::Down | Key::Char('j') => self.move_book(1),
-            Key::PageUp if !chapters_focused => self.move_book(-(self.page_size() as i64)),
-            Key::PageDown if !chapters_focused => self.move_book(self.page_size() as i64),
-            Key::Home if !chapters_focused => self.select_bucket_edge(false),
-            Key::End if !chapters_focused => self.select_bucket_edge(true),
-            Key::Esc | Key::Backspace if chapters_focused => self.state.chapter_selection = None,
-            _ => {}
+            Key::Char('[')
+                if !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                self.cycle_bucket(-1);
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::PreviousBucket,
+                )))
+            }
+            Key::Char(']')
+                if !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                self.cycle_bucket(1);
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::NextBucket,
+                )))
+            }
+            Key::Up | Key::Char('k') if chapters_focused => {
+                self.move_chapter(-1);
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::PreviousChapter,
+                )))
+            }
+            Key::Down | Key::Char('j') if chapters_focused => {
+                self.move_chapter(1);
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::NextChapter,
+                )))
+            }
+            Key::Right if chapters_focused => {
+                self.state.chapter_selection = None;
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::FocusBrowser,
+                )))
+            }
+            Key::Left if !chapters_focused => {
+                self.state.chapter_selection = Some(0);
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::FocusChapters,
+                )))
+            }
+            Key::Up | Key::Char('k') => {
+                self.move_book(-1);
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::PreviousBookRow,
+                )))
+            }
+            Key::Down | Key::Char('j') => {
+                self.move_book(1);
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::NextBookRow,
+                )))
+            }
+            Key::PageUp if !chapters_focused => {
+                self.move_book(-(self.page_size() as i64));
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::PreviousBookPage,
+                )))
+            }
+            Key::PageDown if !chapters_focused => {
+                self.move_book(self.page_size() as i64);
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::NextBookPage,
+                )))
+            }
+            Key::Home if !chapters_focused => {
+                self.select_bucket_edge(false);
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::FirstBook,
+                )))
+            }
+            Key::End if !chapters_focused => {
+                self.select_bucket_edge(true);
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::LastBook,
+                )))
+            }
+            Key::Esc | Key::Backspace if chapters_focused => {
+                self.state.chapter_selection = None;
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                    AudiobookshelfBookMove::FocusBrowser,
+                )))
+            }
+            Key::Char(' ') if chapters_focused => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::ActivateChapter),
+            )),
+            Key::Enter if chapters_focused => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::ActivateChapter),
+            )),
+            Key::Char(' ') => Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+                AudiobookshelfBookIntent::Play,
+            ))),
+            Key::Enter => Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+                AudiobookshelfBookIntent::Activate,
+            ))),
+            Key::Char('a')
+                if !chapters_focused && key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+                    AudiobookshelfBookIntent::Enqueue,
+                )))
+            }
+            _ => Some(Msg::Legacy(LegacyTerminalEvent::Key(
+                to_crossterm_key_event(key),
+            ))),
         }
-        Some(Msg::Shell(ShellRequest::AudiobookshelfBookKey(
-            to_crossterm_key_event(key),
-        )))
     }
 
     fn cycle_bucket(&mut self, delta: i64) {

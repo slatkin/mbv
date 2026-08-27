@@ -186,6 +186,36 @@ pub enum PodcastEpisodeIntent {
     /// no-op.
     Enqueue,
 }
+/// Closed set of Audiobookshelf book browser movements (task 5.3d.13-R1).
+/// The component updates its local browse state and the shell applies the
+/// corresponding legacy App operation, preserving position/detail effects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudiobookshelfBookMove {
+    PreviousBucket,
+    NextBucket,
+    PreviousChapter,
+    NextChapter,
+    FocusChapters,
+    FocusBrowser,
+    PreviousBookRow,
+    NextBookRow,
+    PreviousBookPage,
+    NextBookPage,
+    FirstBook,
+    LastBook,
+}
+
+/// Closed set of Audiobookshelf book actions (task 5.3d.13-R1). The shell
+/// resolves narrow/wide activation from current App state as the legacy reader
+/// did, while the component owns the mounted browser's interaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudiobookshelfBookIntent {
+    Play,
+    Activate,
+    Enqueue,
+    ActivateChapter,
+}
+
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
 /// Shell-level requests from Interactive Components: mount/dismiss overlays,
@@ -352,8 +382,15 @@ pub enum ShellRequest {
     /// selection and wide/narrow conditions from current App state/layout and
     /// runs the existing App play/enter/modal/enqueue effect (D17).
     AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent),
-    /// Forward Audiobookshelf book effects to the legacy App handler while
-    /// the browser's local state remains component-owned.
+    /// Typed Audiobookshelf book browser movement (task 5.3d.13-R1). The
+    /// component updates its local browse state and the shell applies the
+    /// corresponding legacy App operation, preserving position/detail effects.
+    AudiobookshelfBookMove(AudiobookshelfBookMove),
+    /// Typed Audiobookshelf book action (task 5.3d.13-R1). The shell resolves
+    /// narrow/wide activation from current App state as the legacy reader did.
+    AudiobookshelfBookIntent(AudiobookshelfBookIntent),
+    /// Forward an unmatched key to the legacy App handler until R2 removes the
+    /// obsolete reader and bridge. Converted book keys use typed requests.
     AudiobookshelfBookKey(crossterm::event::KeyEvent),
     /// Close the nested playlist view without dismissing the sidebar.
     PlaylistsBack,
