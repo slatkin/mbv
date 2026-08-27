@@ -111,19 +111,13 @@ impl AudiobookshelfBookComponent {
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let chapters_focused = self.state.chapter_selection.is_some();
         match key.code {
-            Key::Char('[')
-                if !key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
+            Key::Char('[') if key.modifiers.is_empty() => {
                 self.cycle_bucket(-1);
                 Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
                     AudiobookshelfBookMove::PreviousBucket,
                 )))
             }
-            Key::Char(']')
-                if !key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
+            Key::Char(']') if key.modifiers.is_empty() => {
                 self.cycle_bucket(1);
                 Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
                     AudiobookshelfBookMove::NextBucket,
