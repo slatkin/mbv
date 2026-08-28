@@ -21,7 +21,7 @@
 
 ## 2. Move the services-cursor Back-reset into the component
 
-- [ ] 2.1 In `SettingsComponent` (`src/app/components/settings.rs`), reset the
+- [x] 2.1 In `SettingsComponent` (`src/app/components/settings.rs`), reset the
   component's own `services_cursor = 0` at the point the component emits
   `Msg::Settings(SettingsIntent::Back)`, so the reset survives once
   `shell_settings.rs`'s `self.app.services_cursor = 0` (in the

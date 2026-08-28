@@ -264,13 +264,20 @@ impl SettingsComponent {
                 | Key::Char('r')
                 | Key::Char('R') => self.service_key(key),
                 Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
-                    Some(Msg::Shell(ShellRequest::SettingsIntent(match key.code {
+                    let intent = match key.code {
                         Key::Esc => SettingsIntent::Back,
                         Key::Function(3) => SettingsIntent::OpenSessions,
                         Key::Function(4) => SettingsIntent::OpenPlaylists,
                         Key::Char('q') => SettingsIntent::Quit,
                         _ => unreachable!(),
-                    })))
+                    };
+                    if matches!(intent, SettingsIntent::Back) {
+                        // Leaving Services zeroes the local cursor so the next
+                        // entry starts at the top; the shell-side mirror of
+                        // this reset is being deleted.
+                        self.services_cursor = 0;
+                    }
+                    Some(Msg::Shell(ShellRequest::SettingsIntent(intent)))
                 }
                 _ => None,
             };
@@ -463,5 +470,70 @@ mod tests {
             .collect();
         assert!(output.contains("SETTINGS"));
         assert!(output.contains("Stay alive"));
+    }
+
+    #[test]
+    fn back_from_services_zeroes_the_local_services_cursor() {
+        let mut component = SettingsComponent::new();
+        component.set_content(SettingsSnapshot {
+            destination: SettingsDestination::Services,
+            rows: Vec::new(),
+            services: vec![
+                ServiceRow {
+                    name: "Emby".into(),
+                    detail: "Not configured".into(),
+                    muted: false,
+                },
+                ServiceRow {
+                    name: "Audiobookshelf".into(),
+                    detail: "Not configured".into(),
+                    muted: false,
+                },
+            ],
+            setup: None,
+            cursor: 0,
+            services_cursor: 0,
+            scroll: 0,
+            area: Rect::new(0, 0, 40, 12),
+        });
+        // Move the Services cursor off the top row (Down is a local cursor
+        // move; it emits no message).
+        assert!(component.on(&key(Key::Down)).is_none());
+        // Leaving Services via Back zeroes the component's own cursor, so a
+        // re-entry snapshot that carries the component's current value starts
+        // back at the top instead of remembering the old position.
+        assert!(matches!(
+            component.on(&key(Key::Esc)),
+            Some(Msg::Shell(ShellRequest::SettingsIntent(
+                SettingsIntent::Back
+            )))
+        ));
+        component.set_content(SettingsSnapshot {
+            destination: SettingsDestination::Services,
+            rows: Vec::new(),
+            services: vec![
+                ServiceRow {
+                    name: "Emby".into(),
+                    detail: "Not configured".into(),
+                    muted: false,
+                },
+                ServiceRow {
+                    name: "Audiobookshelf".into(),
+                    detail: "Not configured".into(),
+                    muted: false,
+                },
+            ],
+            setup: None,
+            cursor: 0,
+            services_cursor: 0,
+            scroll: 0,
+            area: Rect::new(0, 0, 40, 12),
+        });
+        // Effective local cursor after re-entry: 0 (the fix), not 1 (the
+        // stale position a pre-fix component would carry into the next entry).
+        assert!(matches!(
+            component.on(&key(Key::Enter)),
+            Some(Msg::Service(ServiceRequest::ActivateService(0)))
+        ));
     }
 }
