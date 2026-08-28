@@ -1,7 +1,7 @@
 use super::components::{BrowserKey, BrowserKind, ComponentId};
 use super::shell::Model;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
-use super::TabSelection;
+use super::{PanelFocus, TabSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -12,8 +12,21 @@ impl Model {
     /// no-op. The old `sync_library_parent` mirrored routing state into
     /// `LibraryComponent` each tick and read it back to activate the child;
     /// the child is derived directly now (task 5.3d — no routing mirror).
+    ///
+    /// Short-circuits when Queue owns panel focus (and no blocking overlay
+    /// is up): `sync_queue` already activated `ComponentId::Queue` a few
+    /// lines earlier in the same tick, and we must not stomp it by
+    /// re-activating the Library child or `UiRoot` on top. Without this
+    /// guard Queue falls back to legacy key routing (issue #610, blocks
+    /// the #607 acceptance gate). Mirrors the exact condition
+    /// `sync_queue` uses to claim focus.
     pub(super) fn sync_active_destination(&mut self) {
         if self.library_overlay_mounted() {
+            return;
+        }
+        let queue_owns_focus = matches!(self.app.effective_panel_focus(), PanelFocus::Queue)
+            && !self.blocking_overlay_active();
+        if queue_owns_focus {
             return;
         }
         let target = self
@@ -155,5 +168,101 @@ mod tests {
             model.application.focus(),
             Some(&ComponentId::Overlay(OverlayId::Help))
         );
+    }
+
+    /// Production-style acceptance test for #610 / #607: when Queue owns
+    /// panel focus, the per-tick sync sequence (`sync_queue` followed by
+    /// `sync_active_destination` in `shell_run.rs`) must leave
+    /// `ComponentId::Queue` as the active TuiRealm component. Without the
+    /// Queue-owner guard in `sync_active_destination`, the destination
+    /// sync re-activates the Library child (or `UiRoot`) on top of Queue,
+    /// and Queue falls back to legacy key routing.
+    #[test]
+    fn shell_preserves_queue_focus_across_destination_sync() {
+        use crate::app::components::QueueComponent;
+        let mut model = Model::new(make_movie_app());
+        // Pretend a user action (Alt+Right, mouse click, etc.) just
+        // moved panel focus to Queue. With no overlay mounted, this is
+        // exactly the precondition the production main loop sees each
+        // tick once `sync_queue` activates the component.
+        model.app.tab = TabSelection::EmbyLibrary(0);
+        model.app.panel_focus = PanelFocus::Queue;
+        model.app.panel_mode = PanelMode::Both;
+
+        // Mirror the production call order at shell_run.rs:427-433.
+        model.sync_queue();
+        model.sync_active_destination();
+
+        assert!(
+            model.application.mounted(&ComponentId::Queue),
+            "sync_queue must mount Queue so it can claim focus"
+        );
+        assert_eq!(
+            model.application.focus(),
+            Some(&ComponentId::Queue),
+            "Queue must remain the active TuiRealm component when it owns panel focus"
+        );
+        // The component is the Queue surface, not a re-claimed destination
+        // or UiRoot fallback. A downcast succeeds iff focus is actually
+        // on the Queue component (i.e., it's mounted and active).
+        let component = model
+            .application
+            .get_component(&ComponentId::Queue)
+            .expect("Queue mounted")
+            .as_any()
+            .downcast_ref::<QueueComponent>();
+        assert!(
+            component.is_some(),
+            "active component must be QueueComponent when Queue owns panel focus"
+        );
+    }
+
+    /// Symmetric regression guard: when a blocking modal is up but
+    /// `panel_focus` is still `Queue` (e.g. a stale focus from a just-
+    /// closed sidebar), the destination sync must still route focus to
+    /// the Library child. `sync_queue` itself skips activation under
+    /// blocking overlays, so the destination is the only legitimate
+    /// focus owner in that window. Help is non-blocking (it dims the
+    /// Library but does not consume the keyboard), so we mount a
+    /// blocking modal — `ComponentId::Modal(ModalId::Confirm)` — that
+    /// `blocking_overlay_active` actually reports.
+    #[test]
+    fn shell_routes_focus_to_destination_when_blocking_overlay_suppresses_queue() {
+        use crate::app::components::{BrowserComponent, ConfirmComponent, ModalId};
+        let mut model = Model::new(make_movie_app());
+        model.app.tab = TabSelection::EmbyLibrary(0);
+        model.app.panel_focus = PanelFocus::Queue;
+        model.app.panel_mode = PanelMode::Both;
+        // Mount a blocking modal so `blocking_overlay_active` is true and
+        // `sync_queue` will not claim focus.
+        model
+            .application
+            .mount(
+                ComponentId::Modal(ModalId::Confirm),
+                Box::new(ConfirmComponent::new()),
+                vec![],
+            )
+            .expect("mount Confirm");
+        model.sync_emby_browser();
+
+        model.sync_queue();
+        model.sync_active_destination();
+
+        let child = model
+            .emby_browser_id
+            .clone()
+            .expect("generic browser mounted");
+        assert_eq!(
+            model.application.focus(),
+            Some(&child),
+            "destination must own TuiRealm focus when a blocking overlay suppresses Queue"
+        );
+        assert!(model
+            .application
+            .get_component(&child)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<BrowserComponent>()
+            .is_some());
     }
 }

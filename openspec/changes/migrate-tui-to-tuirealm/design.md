@@ -262,6 +262,20 @@ over typed data**, not a second tree structure:
   in the owning component. Parents own child presence and the selected child; children return
   typed `Msg`s and never mutate a parent or sibling.
 
+  **Per-tick sync invariant:** the main loop calls `sync_queue` and then
+  `sync_active_destination` (in that order) every frame. `sync_queue`
+  activates `ComponentId::Queue` when `effective_panel_focus() ==
+  PanelFocus::Queue` and no blocking modal is up. `sync_active_destination`
+  must mirror that condition: when Queue owns panel focus, it
+  short-circuits with an early return and leaves Queue as the active
+  TuiRealm component, instead of re-activating the destination child or
+  `UiRoot` on top of Queue. Without this guard, Queue fell back to legacy
+  key routing (issue #610, blocks the #607 acceptance gate). The guard
+  is local to `sync_active_destination` so the invariant is enforced
+  next to the violation rather than at the call site, and it is
+  symmetric with `sync_queue`'s own activation condition so the two
+  functions cannot disagree about who owns focus.
+
 Alternative considered: TuiRealm's render-only `Container` as the hierarchy —
 rejected, `Container` broadcasts commands to `dyn Component` children and is not
 an independently-routed interactive tree.
