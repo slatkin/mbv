@@ -32,7 +32,7 @@
 
 ## 3. Delete the legacy Settings/Services painter
 
-- [ ] 3.1 Delete `App::render_settings_panel` and `App::render_services_panel`
+- [x] 3.1 Delete `App::render_settings_panel` and `App::render_services_panel`
   (and their private helpers `render_emby_setup_panel` /
   `render_audiobookshelf_setup_panel` if they have no other caller — check
   before deleting) from `src/app/render/components/settings.rs`, keeping the
@@ -41,7 +41,7 @@
   which the live component render path and the reshaped
   `handle_settings_activate` still use. Verify: `rtk cargo check -p mbv`
   reports no more references to the deleted functions.
-- [ ] 3.2 Delete `src/app/render/tests_settings.rs` and its
+- [x] 3.2 Delete `src/app/render/tests_settings.rs` and its
   `#[path = "tests_settings.rs"]` registration at
   `src/app/render/mod.rs:205`. Verify: `rtk cargo check -p mbv` and
   `rtk cargo nextest run` both pass with the module gone.

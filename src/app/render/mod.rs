@@ -202,9 +202,6 @@ mod search_sidebar_tests;
 #[path = "tests_sessions.rs"]
 mod sessions_tests;
 #[cfg(test)]
-#[path = "tests_settings.rs"]
-mod settings_tests;
-#[cfg(test)]
 #[path = "test_helpers.rs"]
 mod test_helpers;
 #[cfg(test)]
