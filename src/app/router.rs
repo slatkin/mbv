@@ -35,7 +35,14 @@ pub(super) fn resolve_router_outcome(key: KeyEvent, snapshot: &RouterSnapshot) -
         Some(entry) if entry.blocking => RouterOutcome::Swallow,
         Some(entry) => command_for_policy(entry.binding, chord, snapshot)
             .map(RouterOutcome::Command)
-            .unwrap_or(RouterOutcome::FallThrough),
+            .unwrap_or_else(|| {
+                if snapshot.blocking_overlay_open {
+                    RouterOutcome::Swallow
+                } else {
+                    RouterOutcome::FallThrough
+                }
+            }),
+        None if snapshot.blocking_overlay_open => RouterOutcome::Swallow,
         None => RouterOutcome::FallThrough,
     }
 }

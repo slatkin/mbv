@@ -35,7 +35,7 @@
 
 - [x] 4.3 Move playback and visualizer resolution into the policy, preserving per-key eligibility, the `idle_feed_command_for_key` path, and the 300 ms double-tap (`last_space_press`/`last_esc_press`). Per design Decision 3, the first press resolves `FallThrough` so the focused leaf's existing request stands (`BrowserBack`/`TvBack`, `AudiobookshelfBookIntent::Play`, `PodcastEpisodeIntent::FocusOrPlay`) and the second within 300 ms resolves `Command`. Leaves keep their ordinary Space/Escape meanings and gain no timer. Verify the double-tap matrix rows pass.
 
-- [ ] 4.4 Confirm blocking overlays resolve `Swallow` for every unmatched chord through the router rather than through per-component catch-alls, and verify the overlay-swallow matrix rows pass.
+- [x] 4.4 Confirm blocking overlays resolve `Swallow` for every unmatched chord through the router rather than through per-component catch-alls, and verify the overlay-swallow matrix rows pass.
 
 ## 5. Replace Raw-Key Overlay and Form Requests
 

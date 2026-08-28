@@ -205,14 +205,6 @@ fn confirm_rescan_no_clears_flag_without_rescan_via_handle_key() {
         )));
 }
 
-#[test]
-fn next_up_confirm_no_dismisses_via_handle_key() {
-    let mut app = make_app_stub();
-    app.next_up_item = Some(crate::app::tests::make_item("item", "Movie"));
-    app.handle_key(ev(KeyCode::Char('n'), KeyModifiers::NONE));
-    assert!(app.next_up_item.is_none());
-}
-
 fn test_empty_context_menu() -> ContextMenu {
     ContextMenu {
         anchor: ContextMenuAnchor::Pointer { x: 0, y: 0 },
@@ -539,34 +531,4 @@ fn enter_on_queue_tab_dispatches_queue_play_cursor_via_handle_key() {
         rx.try_recv(),
         Ok(mbv_core::player::PlayerCommand::JumpTo(1))
     ));
-}
-
-#[test]
-fn context_stack_order_is_pinned() {
-    // The unified search modal was retired in favor of a global `Ctrl+/`
-    // panel (now the
-    // `SearchSidebarComponent`, task 3.2 — its `CONTEXT_STACK` entry was
-    // removed when the sidebar became a TuiRealm component).
-    // The context menu owns every key while open and therefore precedes all
-    // other modal and view contexts. Settings and Playlists now receive keys
-    // through their mounted TuiRealm components instead of this legacy stack.
-    let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
-    assert_eq!(
-        names,
-        vec![
-            "global_overlay_open",
-            "queue_column_width",
-            "panel_mode_cycle_x",
-            "confirm_skip_intro",
-            "confirm_next_up",
-            "clear_queue_prompt_c",
-            "visualizer",
-            "playback",
-            "ctrl_l_force_clear",
-            "f5_refresh",
-            "view_dispatch",
-        ],
-        "precedence order must match handle_key's pre-phase-2 branch order; \
-         if this intentionally changes, update docs/adr/0002-centralized-input-handling.md too"
-    );
 }

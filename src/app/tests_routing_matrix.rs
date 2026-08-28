@@ -123,6 +123,22 @@ fn blocking_overlay_swallows_global_chord() {
     );
 }
 
+#[test]
+fn live_blocking_overlay_swallows_unmatched_and_global_chords() {
+    let snapshot = RouterSnapshot {
+        blocking_overlay_open: true,
+        ..RouterSnapshot::default()
+    };
+
+    for code in [KeyCode::Char('z'), KeyCode::Char('q')] {
+        assert_eq!(
+            resolve_router_outcome(key(code), &snapshot),
+            RouterOutcome::Swallow,
+            "blocking overlays must swallow {code:?} in the central router"
+        );
+    }
+}
+
 /// Router `Command` discards the focused leaf's message for that tick and
 /// dispatches the command instead.
 #[test]
@@ -326,7 +342,7 @@ fn visualizer_resolves_to_router_command() {
 }
 
 #[test]
-fn playback_and_visualizer_commands_fall_through_under_blocking_overlay() {
+fn playback_and_visualizer_commands_are_swallowed_under_blocking_overlay() {
     let snapshot = RouterSnapshot {
         player_active: true,
         blocking_overlay_open: true,
@@ -336,11 +352,11 @@ fn playback_and_visualizer_commands_fall_through_under_blocking_overlay() {
 
     assert_eq!(
         resolve_router_outcome(key(KeyCode::Char('v')), &snapshot),
-        RouterOutcome::FallThrough
+        RouterOutcome::Swallow
     );
     assert_eq!(
         resolve_router_outcome(key(KeyCode::Char('m')), &snapshot),
-        RouterOutcome::FallThrough
+        RouterOutcome::Swallow
     );
 }
 
@@ -519,7 +535,7 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
     snapshot.blocking_overlay_open = true;
     assert_eq!(
         resolve_router_outcome(key(KeyCode::F(1)), &snapshot),
-        RouterOutcome::FallThrough,
+        RouterOutcome::Swallow,
         "F1 must not open Help over a blocking overlay"
     );
 
