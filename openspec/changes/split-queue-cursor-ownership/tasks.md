@@ -66,13 +66,13 @@
 
 ## 5. Final gates
 
-- [ ] 5.1 `rtk cargo check -p mbv` clean.
-- [ ] 5.2 `rtk cargo nextest run` clean (workspace).
-- [ ] 5.3 `rtk cargo clippy --workspace --all-targets` clean.
-- [ ] 5.4 `rtk ast-grep scan` clean (interactive-component-boundary rule:
+- [x] 5.1 `rtk cargo check -p mbv` clean.
+- [x] 5.2 `rtk cargo nextest run` clean (workspace).
+- [x] 5.3 `rtk cargo clippy --workspace --all-targets` clean.
+- [x] 5.4 `rtk ast-grep scan` clean (interactive-component-boundary rule:
       no component receives `App`/`PlayerProxy`/`Config`/credentials/mpsc;
       no new `App`→component back-projection of cursor/scroll introduced).
-- [ ] 5.5 Confirm the "Done when" criteria in issue #617: queue cursor and
+- [x] 5.5 Confirm the "Done when" criteria in issue #617: queue cursor and
       scroll each have exactly one owner, named in `design.md` D1/D3; no
       `App`→component back-projection of a component-owned queue
       cursor/scroll remains.
