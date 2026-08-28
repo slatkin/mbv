@@ -374,7 +374,7 @@ fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
         "off"
     );
 
-    app.handle_settings_activate();
+    app.handle_settings_activate(SettingKey::AutoReconnect);
     let cfg = app.config.lock().unwrap().clone();
     assert!(cfg.auto_reconnect);
     assert_eq!(
@@ -386,7 +386,7 @@ fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
         "settings toggle must use the delayed save path"
     );
 
-    app.handle_settings_activate();
+    app.handle_settings_activate(SettingKey::AutoReconnect);
     assert!(!app.config.lock().unwrap().auto_reconnect);
 }
 
@@ -399,7 +399,7 @@ fn enabling_auto_reconnect_persists_the_active_remote_target() {
         .find(|&idx| settings::settings_cursor_to_key(idx) == SettingKey::AutoReconnect)
         .expect("AutoReconnect setting row must exist");
 
-    app.handle_settings_activate();
+    app.handle_settings_activate(SettingKey::AutoReconnect);
 
     assert_eq!(
         crate::config::load_last_remote_connection().unwrap(),

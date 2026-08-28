@@ -176,10 +176,7 @@ impl App {
         ));
     }
 
-    pub(super) fn activate_service_entry(&mut self) {
-        let Some(&entry) = SERVICE_ENTRIES.get(self.services_cursor) else {
-            return;
-        };
+    pub(super) fn activate_service_entry(&mut self, entry: ServiceEntry) {
         let intent = match entry {
             ServiceEntry::Emby => match self.emby_runtime.state {
                 ServiceState::NotConfigured | ServiceState::NeedsAuthentication => {

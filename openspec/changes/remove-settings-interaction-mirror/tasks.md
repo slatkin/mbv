@@ -1,6 +1,6 @@
 ## 1. Reshape the App-side handlers to take resolved values
 
-- [ ] 1.1 Change `App::activate_service_entry` (`src/app/services_settings.rs`)
+- [x] 1.1 Change `App::activate_service_entry` (`src/app/services_settings.rs`)
   to take the resolved `ServiceEntry` (or the cursor as a plain parameter,
   doing the `SERVICE_ENTRIES.get()` lookup itself) instead of reading
   `self.services_cursor`. Update its one call site in
@@ -9,7 +9,7 @@
   in directly, deleting the `self.app.services_cursor = cursor;` write.
   Verify: `rtk cargo check -p mbv` passes with the new signature and its
   single call site.
-- [ ] 1.2 Change `App::handle_settings_activate` (in the `impl App` block
+- [x] 1.2 Change `App::handle_settings_activate` (in the `impl App` block
   currently in `src/app/render/components/settings.rs`, alongside the legacy
   painter it will move out of at task 3.1) to take the resolved `SettingKey`
   instead of reading `self.settings_cursor`. Update its one call site in

@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::types_settings::ServiceEntry;
 use crate::config::TestStateDirGuard;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::config::{EmbySetup, FeedKind, FeedSubscription};
@@ -13,11 +14,11 @@ fn unavailable_emby_retry_is_one_bounded_generation() {
     app.emby_runtime.state = ServiceState::Unavailable;
     app.open_services_settings();
     let generation = app.emby_runtime.generation();
-    app.activate_service_entry();
+    app.activate_service_entry(ServiceEntry::Emby);
     assert_eq!(app.emby_runtime.state, ServiceState::Connecting);
     assert_ne!(app.emby_runtime.generation(), generation);
     let retry_generation = app.emby_runtime.generation();
-    app.activate_service_entry();
+    app.activate_service_entry(ServiceEntry::Emby);
     assert_eq!(app.emby_runtime.generation(), retry_generation);
     assert!(app.emby_startup_rx.is_some());
 }
@@ -30,7 +31,7 @@ fn unavailable_emby_without_secret_offers_setup_instead_of_placeholder_auth() {
         Some(EmbySetup::new("https://emby.example.test", "user-id"));
     app.emby_runtime.state = ServiceState::Unavailable;
     app.open_services_settings();
-    app.activate_service_entry();
+    app.activate_service_entry(ServiceEntry::Emby);
     assert_eq!(app.emby_runtime.state, ServiceState::NeedsAuthentication);
     assert!(app.emby_setup_form.is_some());
     assert!(app.emby_startup_rx.is_none());
@@ -225,7 +226,7 @@ fn retry_failure_completion_preserves_existing_runtime_and_advances_generation()
         .unwrap();
     app.open_services_settings();
     let old_generation = app.emby_runtime.generation();
-    app.activate_service_entry();
+    app.activate_service_entry(ServiceEntry::Emby);
     let generation = app.emby_runtime.generation();
     assert_ne!(generation, old_generation);
     app.emby_startup_rx = None;
@@ -312,7 +313,7 @@ fn transient_setup_rejection_preserves_persisted_secret_setup_and_content() {
         .unwrap();
     app.emby_runtime.state = ServiceState::NeedsAuthentication;
     app.open_services_settings();
-    app.activate_service_entry();
+    app.activate_service_entry(ServiceEntry::Emby);
     let generation = app.emby_runtime.begin_setup();
     app.emby_setup_form.as_mut().unwrap().generation = Some(generation);
     app.emby_setup_form.as_mut().unwrap().busy = true;
@@ -340,7 +341,7 @@ fn ready_emby_repair_opens_the_transactional_setup_form() {
     let mut app = tests::make_app_stub();
     app.emby_runtime.state = ServiceState::Ready;
     app.open_services_settings();
-    app.activate_service_entry();
+    app.activate_service_entry(ServiceEntry::Emby);
     assert!(app.emby_setup_form.is_some());
     assert!(!matches!(
         app.pending_overlay,
@@ -362,7 +363,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     mbv_core::config::save_service_secret(mbv_core::config::ServiceKind::Emby, "old-token")
         .unwrap();
     app.open_services_settings();
-    app.activate_service_entry();
+    app.activate_service_entry(ServiceEntry::Emby);
     let generation = app.emby_runtime.begin_setup();
     app.emby_setup_form.as_mut().unwrap().generation = Some(generation);
     app.emby_setup_form.as_mut().unwrap().busy = true;

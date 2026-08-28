@@ -2,7 +2,6 @@
 use super::super::super::layout::AppLayout;
 #[cfg(test)]
 use super::super::super::palette;
-use super::super::super::settings::settings_cursor_to_key;
 #[cfg(test)]
 use super::super::super::settings::{setting_label, setting_value, settings_total_rows};
 use super::super::super::types_overlay::OverlayRequest;
@@ -36,8 +35,7 @@ impl App {
         self.settings_destination = SettingsDestination::Main;
     }
 
-    pub(crate) fn handle_settings_activate(&mut self) {
-        let key = settings_cursor_to_key(self.settings_cursor);
+    pub(crate) fn handle_settings_activate(&mut self, key: SettingKey) {
         match key {
             SettingKey::Services => {
                 self.open_services_settings();

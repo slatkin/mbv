@@ -165,8 +165,9 @@ impl Model {
             ServiceRequest::ActivateService(cursor) => {
                 self.mount_sidebar(super::SidebarId::Settings);
                 self.app.settings_destination = SettingsDestination::Services;
-                self.app.services_cursor = cursor;
-                self.app.activate_service_entry();
+                if let Some(&entry) = SERVICE_ENTRIES.get(cursor) {
+                    self.app.activate_service_entry(entry);
+                }
                 false
             }
             ServiceRequest::SubmitEmbySetup {
@@ -233,8 +234,8 @@ impl Model {
             }
             SettingsIntent::Quit => self.app.try_quit(),
             SettingsIntent::Activate(cursor) => {
-                self.app.settings_cursor = cursor;
-                self.app.handle_settings_activate();
+                self.app
+                    .handle_settings_activate(super::settings::settings_cursor_to_key(cursor));
                 false
             }
         }
