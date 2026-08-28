@@ -78,7 +78,7 @@
   four must be green. Confirm via `rtk grep` that `settings_cursor`,
   `services_cursor`, and `settings_scroll` no longer appear anywhere under
   `src/app/app_struct.rs` or as `self.app.` reads/writes.
-- [ ] 5.2 Update `docs/architecture/interactive-surface-ledger.md`'s Settings
+- [x] 5.2 Update `docs/architecture/interactive-surface-ledger.md`'s Settings
   row (currently line 75) if its existing "App-free render seam" note needs
   amending now that the interaction-state fields are actually gone (it may
   already read correctly; check before editing).
