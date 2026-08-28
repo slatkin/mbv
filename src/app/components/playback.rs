@@ -17,8 +17,6 @@ use crate::app::palette;
 use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::types_playback::PlaybackState;
 
-/// Set while any blocking overlay is mounted.
-pub const ATTR_BLOCKING_OVERLAY_ACTIVE: Attribute = Attribute::Custom("blocking_overlay_active");
 /// Set while the active Emby library has inline Search open.
 pub const ATTR_LIB_SEARCH_ACTIVE: Attribute = Attribute::Custom("lib_search_active");
 
@@ -61,7 +59,6 @@ pub struct PlaybackComponent {
 impl PlaybackComponent {
     pub fn new() -> Self {
         let mut props = Props::default();
-        props.set(ATTR_BLOCKING_OVERLAY_ACTIVE, AttrValue::Flag(false));
         props.set(ATTR_LIB_SEARCH_ACTIVE, AttrValue::Flag(false));
         Self {
             projection: PlaybackProjection {

@@ -29,7 +29,7 @@
 
 ## 4. Activate the Policy and Move the Globals In
 
-- [ ] 4.1 Turn `key_policy.rs` into the router's live ordered policy reading a plain-data snapshot; remove `#![allow(dead_code)]`, the `Custom("...")` gates, the `KeyPolicyGate::sub_clause()` bridge, and the tests comparing the table to `CONTEXT_STACK`. Correct the lossy gates recorded in design Decision 2: `queue_column_width` is `PanelMode::Both` + Shift+Left/Right (not `IsMounted(Queue)`); `playback` is the per-key `resolve_key` table plus the separate `idle_feed_command_for_key` path, not a boolean. Add no `SubClause` keyboard gates. Verify the routing matrix still passes.
+- [x] 4.1 Turn `key_policy.rs` into the router's live ordered policy reading a plain-data snapshot; remove `#![allow(dead_code)]`, the `Custom("...")` gates, the `KeyPolicyGate::sub_clause()` bridge, and the tests comparing the table to `CONTEXT_STACK`. Correct the lossy gates recorded in design Decision 2: `queue_column_width` is `PanelMode::Both` + Shift+Left/Right (not `IsMounted(Queue)`); `playback` is the per-key `resolve_key` table plus the separate `idle_feed_command_for_key` path, not a boolean. Add no `SubClause` keyboard gates. Verify the routing matrix still passes.
 
 - [ ] 4.2 Move the destination-independent globals into the router as `Command`/`Swallow`: `q`, Tab/BackTab, `1`–`9`, Ctrl+L force-clear, F5 refresh, Panel-mode cycle, overlay-open keys, the F1 Help-open case with its blocking-overlay guard, and the `handle_key_alt` path (Alt+Left/Right panel focus, Alt+Up/Down tab cycle, catch-all Alt swallow). Verify root/help/focus-restoration tests and the global rows of the matrix pass.
 

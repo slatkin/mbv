@@ -16,7 +16,6 @@
 
 use std::time::Duration;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
@@ -147,21 +146,32 @@ pub(super) fn apply_router_outcome(
 }
 
 impl Model {
-    /// Build the router snapshot and resolve the observed chord. The router
+    /// Build the router snapshot and resolve the terminal chord. The router
     /// reads a plain-data snapshot, never component attributes (ADR 0023).
-    fn router_outcome(&self, focused: &Option<ComponentId>) -> RouterOutcome {
+    fn router_outcome(&self, messages: &[Msg]) -> RouterOutcome {
+        let Some(key) = messages.iter().find_map(|msg| match msg {
+            Msg::TerminalEvent(TerminalObserverEvent::Key(key)) => Some(*key),
+            _ => None,
+        }) else {
+            return RouterOutcome::FallThrough;
+        };
+
         let snapshot = RouterSnapshot {
             player_active: self.app.player.status.lock().unwrap().active,
             has_remote_session: self.app.connected_session_id.is_some()
                 || self.app.player.is_remote()
                 || self.app.is_cast_attached(),
+            panel_mode: self.app.effective_panel_mode(),
+            blocking_overlay_open: self.is_blocking_overlay_open(),
+            selection_modal_open: self
+                .application
+                .mounted(&ComponentId::Overlay(OverlayId::SelectionModal)),
+            context_menu_open: self
+                .application
+                .mounted(&ComponentId::Overlay(OverlayId::ContextMenu)),
+            idle_feed_link_available: self.app.idle_feed_link_available(),
         };
-        // The observer key signal carries the chord; when no key was observed
-        // (Resize/Focus/NoOp), there is nothing to route and every message
-        // passes through. `focused` is currently unused by the empty policy;
-        // section 4's live policy reads the snapshot and the chord.
-        let _ = focused;
-        resolve_router_outcome(KeyEvent::new(KeyCode::Null, KeyModifiers::NONE), &snapshot)
+        resolve_router_outcome(key, &snapshot)
     }
 }
 

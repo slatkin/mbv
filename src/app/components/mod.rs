@@ -57,7 +57,6 @@ pub use self::msg::{
 };
 pub use self::multiselect::MultiselectComponent;
 pub use self::music_workspace::MusicWorkspaceComponent;
-pub use self::playback::ATTR_BLOCKING_OVERLAY_ACTIVE;
 pub(in crate::app) use self::playback::{PlaybackComponent, PlaybackProjection};
 pub use self::playlists::PlaylistsComponent;
 pub use self::queue::QueueComponent;

@@ -75,17 +75,17 @@ fn fold_tick_with_outcome(
 
 fn idle_snapshot() -> RouterSnapshot {
     RouterSnapshot {
-        player_active: false,
-        has_remote_session: false,
+        ..RouterSnapshot::default()
     }
 }
 
 fn active_snapshot() -> RouterSnapshot {
     RouterSnapshot {
         player_active: true,
-        has_remote_session: false,
+        ..RouterSnapshot::default()
     }
 }
+
 
 // ── U2 coverage rows ────────────────────────────────────────────────────────
 
