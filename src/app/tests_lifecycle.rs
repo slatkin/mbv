@@ -356,13 +356,16 @@ fn render_interval_is_slow_when_idle_with_no_fetches_in_flight() {
     assert_eq!(app.render_interval(), Duration::from_secs(1));
 }
 
+fn auto_reconnect_settings_row() -> usize {
+    (0..settings::settings_total_rows())
+        .find(|&idx| settings::settings_cursor_to_key(idx) == SettingKey::AutoReconnect)
+        .expect("AutoReconnect setting row must exist")
+}
+
 #[test]
 fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
     let mut app = make_app_stub();
     app.config.lock().unwrap().auto_reconnect = false;
-    app.settings_cursor = (0..settings::settings_total_rows())
-        .find(|&idx| settings::settings_cursor_to_key(idx) == SettingKey::AutoReconnect)
-        .expect("AutoReconnect setting row must exist");
 
     let cfg = app.config.lock().unwrap().clone();
     assert_eq!(
@@ -395,9 +398,6 @@ fn enabling_auto_reconnect_persists_the_active_remote_target() {
     let mut app = make_app_stub();
     app.config.lock().unwrap().auto_reconnect = false;
     app.active_route = Some("music".to_string());
-    app.settings_cursor = (0..settings::settings_total_rows())
-        .find(|&idx| settings::settings_cursor_to_key(idx) == SettingKey::AutoReconnect)
-        .expect("AutoReconnect setting row must exist");
 
     app.handle_settings_activate(SettingKey::AutoReconnect);
 

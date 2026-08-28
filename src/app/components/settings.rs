@@ -48,9 +48,6 @@ pub(crate) struct SettingsSnapshot {
     pub rows: Vec<SettingsRow>,
     pub services: Vec<ServiceRow>,
     pub setup: Option<SetupDraft>,
-    pub cursor: usize,
-    pub services_cursor: usize,
-    pub scroll: usize,
     pub area: Rect,
 }
 
@@ -122,20 +119,21 @@ impl SettingsComponent {
         self.destination = snapshot.destination;
         self.rows = snapshot.rows;
         self.services = snapshot.services;
+        // The component owns its interaction state; content pushes never
+        // carry cursor/scroll values. First content (and each destination
+        // change) starts from the component-local defaults — Services
+        // re-entry is already handled by the Back reset, so a fresh
+        // destination begins at the top. Only the bounds follow the pushed
+        // content, so a cursor can never land on a removed row.
         if !self.initialized || destination_changed {
-            self.cursor = snapshot.cursor.min(self.rows.len().saturating_sub(1));
-            self.services_cursor = snapshot
-                .services_cursor
-                .min(self.services.len().saturating_sub(1));
-        } else {
-            self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
-            self.services_cursor = self
-                .services_cursor
-                .min(self.services.len().saturating_sub(1));
+            self.cursor = 0;
+            self.services_cursor = 0;
+            self.scroll = 0;
         }
-        if !self.initialized || destination_changed {
-            self.scroll = snapshot.scroll;
-        }
+        self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
+        self.services_cursor = self
+            .services_cursor
+            .min(self.services.len().saturating_sub(1));
         self.area = snapshot.area;
         self.initialized = true;
     }
@@ -426,9 +424,6 @@ mod tests {
                 busy: false,
                 error: String::new(),
             }),
-            cursor: 0,
-            services_cursor: 0,
-            scroll: 0,
             area: Rect::new(0, 0, 40, 12),
         });
         component.on(&key(Key::Char('x')));
@@ -452,9 +447,6 @@ mod tests {
             }],
             services: Vec::new(),
             setup: None,
-            cursor: 0,
-            services_cursor: 0,
-            scroll: 0,
             area: Rect::new(0, 0, 40, 12),
         });
         let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
@@ -491,17 +483,14 @@ mod tests {
                 },
             ],
             setup: None,
-            cursor: 0,
-            services_cursor: 0,
-            scroll: 0,
             area: Rect::new(0, 0, 40, 12),
         });
         // Move the Services cursor off the top row (Down is a local cursor
         // move; it emits no message).
         assert!(component.on(&key(Key::Down)).is_none());
-        // Leaving Services via Back zeroes the component's own cursor, so a
-        // re-entry snapshot that carries the component's current value starts
-        // back at the top instead of remembering the old position.
+        // Leaving Services via Back zeroes the component's own cursor, so the
+        // next Services entry starts back at the top instead of remembering
+        // the old position.
         assert!(matches!(
             component.on(&key(Key::Esc)),
             Some(Msg::Shell(ShellRequest::SettingsIntent(
@@ -524,13 +513,11 @@ mod tests {
                 },
             ],
             setup: None,
-            cursor: 0,
-            services_cursor: 0,
-            scroll: 0,
             area: Rect::new(0, 0, 40, 12),
         });
         // Effective local cursor after re-entry: 0 (the fix), not 1 (the
-        // stale position a pre-fix component would carry into the next entry).
+        // stale position the component would otherwise carry into the next
+        // entry). The re-entry push itself carries no cursor value.
         assert!(matches!(
             component.on(&key(Key::Enter)),
             Some(Msg::Service(ServiceRequest::ActivateService(0)))

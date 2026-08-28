@@ -1,6 +1,4 @@
-use super::types_settings::{
-    ServiceActionIntent, ServiceEntry, SettingsDestination, SERVICE_ENTRIES,
-};
+use super::types_settings::{ServiceActionIntent, ServiceEntry, SettingsDestination};
 use super::App;
 use super::{ConfirmAction, ConfirmModal};
 use mbv_core::service_runtime::ServiceState;
@@ -48,7 +46,6 @@ impl App {
     pub(crate) fn open_services_settings(&mut self) {
         self.request_sidebar_open(super::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Services;
-        self.services_cursor = self.services_cursor.min(SERVICE_ENTRIES.len() - 1);
     }
 
     fn open_emby_setup(&mut self) {

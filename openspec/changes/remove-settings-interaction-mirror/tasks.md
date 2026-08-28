@@ -48,7 +48,7 @@
 
 ## 4. Delete the three App fields and the outbound push
 
-- [ ] 4.1 Delete `settings_cursor`, `services_cursor`, `settings_scroll` from
+- [x] 4.1 Delete `settings_cursor`, `services_cursor`, `settings_scroll` from
   `App` in `src/app/app_struct.rs` (currently lines 213, 215, 216). Delete the
   `self.app.services_cursor = 0` reset from `SettingsIntent::Back`
   (`src/app/shell_settings.rs:217-219`, superseded by task 2.1). Remove the
@@ -64,7 +64,7 @@
   hints; resolve by reading `set_content()`'s `!self.initialized` branch and
   choosing the option that requires no `App` field). Verify: `rtk cargo check
   -p mbv` passes with the fields gone and no dangling references.
-- [ ] 4.2 Open `App::open_services_settings`
+- [x] 4.2 Open `App::open_services_settings`
   (`src/app/services_settings.rs:51`) and remove the now-defunct
   `self.services_cursor = self.services_cursor.min(SERVICE_ENTRIES.len() - 1)`
   clamp (the field no longer exists after task 4.1; the component clamps its

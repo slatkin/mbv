@@ -118,9 +118,6 @@ impl Model {
             rows,
             services,
             setup,
-            cursor: self.app.settings_cursor,
-            services_cursor: self.app.services_cursor,
-            scroll: self.app.settings_scroll,
             area: (self.app.layout.main.panel_area.width > 0)
                 .then_some(self.app.layout.main.panel_area)
                 .unwrap_or(Rect {
@@ -215,7 +212,6 @@ impl Model {
             SettingsIntent::Back => {
                 if self.app.settings_destination == SettingsDestination::Services {
                     self.app.settings_destination = SettingsDestination::Main;
-                    self.app.services_cursor = 0;
                 } else {
                     self.app.close_settings();
                 }
