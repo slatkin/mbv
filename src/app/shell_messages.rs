@@ -96,26 +96,26 @@ impl Model {
                 self.mount_sidebar(super::super::SidebarId::Playlists);
                 self.app.open_playlists_panel();
             }
-            Msg::Shell(ShellRequest::ConfirmKey(key)) => {
-                self.handle_confirm_key(key);
+            Msg::Shell(ShellRequest::ConfirmIntent(intent)) => {
+                self.handle_confirm_intent(intent);
                 // Confirmations rewrite Home content/focus; re-project (5.3d).
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
                 self.push_emby_browser_content();
             }
-            Msg::Shell(ShellRequest::DaemonLostKey(key)) => {
-                if self.handle_daemon_lost_key(key) {
+            Msg::Shell(ShellRequest::DaemonLostIntent(intent)) => {
+                if self.handle_daemon_lost_intent(intent) {
                     quit = true;
                 }
             }
-            Msg::Shell(ShellRequest::RemoteReanchorKey(key)) => {
-                self.handle_remote_reanchor_key(key);
+            Msg::Shell(ShellRequest::RemoteReanchorIntent(intent)) => {
+                self.handle_remote_reanchor_intent(intent);
             }
             // Context menu: the shell owns cursor navigation and
-            // action execution; the component owns the key/click
-            // forwarding (task 5.3c).
-            Msg::Shell(ShellRequest::ContextMenuKey(key)) => {
-                self.handle_context_menu_key(key);
+            // action execution; the component owns key interpretation
+            // (task 5.1).
+            Msg::Shell(ShellRequest::ContextMenuIntent(intent)) => {
+                self.handle_context_menu_intent(intent);
                 // Enter executes the action, which can refetch Home; re-project (5.3d).
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).

@@ -2,20 +2,18 @@
 //!
 //! Owns the modal's display content (last_playing_title, daemon_log_path,
 //! restart_error) set by the shell via downcast before each render. The shell
-//! owns restart/quit dispatch in the shell; the component forwards every key as
-//! `Msg::Shell(ShellRequest::DaemonLostKey(key))` so the shell can run the
-//! existing handler unchanged. Mouse and other events are swallowed by the
+//! owns restart/quit dispatch in the shell; the component interprets keys as
+//! semantic restart/quit intents. Mouse and other events are swallowed by the
 //! blocking modal; UiRoot's permanent observer supplies the redraw signal
 //! (design D12).
 
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::Event;
+use tuirealm::event::{Event, Key};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{Msg, ShellRequest};
-use super::typed_key::to_crossterm_key_event;
+use super::msg::{DaemonLostIntent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_daemon_lost_modal_content;
 
@@ -94,17 +92,16 @@ impl Component for DaemonLostComponent {
 
 impl AppComponent<Msg, UserEvent> for DaemonLostComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
-        match ev {
-            // Forward every key to the shell's existing daemon-lost-modal
-            // handler. The shell owns restart/quit (process-lifecycle effects).
-            Event::Keyboard(key) => {
-                let crossterm_key = to_crossterm_key_event(key);
-                Some(Msg::Shell(ShellRequest::DaemonLostKey(crossterm_key)))
-            }
-            // Mouse and other events are swallowed by the blocking modal.
-            // UiRoot's permanent observer supplies the redraw signal.
-            _ => None,
-        }
+        let Event::Keyboard(key) = ev else {
+            return None;
+        };
+        let intent = match key.code {
+            Key::Char('r') | Key::Char('R') => DaemonLostIntent::RestartWithTray,
+            Key::Char('s') | Key::Char('S') => DaemonLostIntent::RestartWithoutTray,
+            Key::Char('q') | Key::Char('Q') => DaemonLostIntent::Quit,
+            _ => return None,
+        };
+        Some(Msg::Shell(ShellRequest::DaemonLostIntent(intent)))
     }
 }
 
@@ -118,7 +115,7 @@ mod tests {
     }
 
     #[test]
-    fn key_forwards_daemon_lost_key_to_shell() {
+    fn restart_key_emits_restart_intent() {
         let mut comp = DaemonLostComponent::new();
         let msg = comp.on(&Event::Keyboard(make_key(
             Key::Char('r'),
@@ -126,22 +123,22 @@ mod tests {
         )));
         assert!(matches!(
             msg,
-            Some(Msg::Shell(ShellRequest::DaemonLostKey(key)))
-                if key.code == crossterm::event::KeyCode::Char('r')
+            Some(Msg::Shell(ShellRequest::DaemonLostIntent(
+                DaemonLostIntent::RestartWithTray
+            )))
         ));
     }
 
     #[test]
-    fn unbound_key_forwards_to_shell() {
+    fn unbound_key_is_swallowed_locally() {
         let mut comp = DaemonLostComponent::new();
-        let msg = comp.on(&Event::Keyboard(make_key(
-            Key::Char('x'),
-            KeyModifiers::NONE,
-        )));
-        assert!(matches!(
-            msg,
-            Some(Msg::Shell(ShellRequest::DaemonLostKey(_)))
-        ));
+        assert_eq!(
+            comp.on(&Event::Keyboard(make_key(
+                Key::Char('x'),
+                KeyModifiers::NONE,
+            ))),
+            None
+        );
     }
 
     #[test]

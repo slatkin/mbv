@@ -1,3 +1,4 @@
+use super::components::msg::{ConfirmIntent, DaemonLostIntent, RemoteReanchorIntent};
 use super::components::{
     ComponentId, ConfirmComponent, DaemonLostComponent, ModalId, RemoteReanchorComponent,
     SavePlaylistComponent,
@@ -7,6 +8,27 @@ use super::types_confirm::ConfirmAction;
 use crossterm::event::{KeyCode, KeyEvent};
 
 impl Model {
+    pub(super) fn handle_confirm_intent(&mut self, intent: ConfirmIntent) {
+        let key = match intent {
+            ConfirmIntent::Accept => {
+                KeyEvent::new(KeyCode::Enter, crossterm::event::KeyModifiers::NONE)
+            }
+            ConfirmIntent::Cancel => {
+                KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE)
+            }
+            ConfirmIntent::Save => {
+                KeyEvent::new(KeyCode::Char('s'), crossterm::event::KeyModifiers::NONE)
+            }
+            ConfirmIntent::Discard => {
+                KeyEvent::new(KeyCode::Char('d'), crossterm::event::KeyModifiers::NONE)
+            }
+            ConfirmIntent::Dismiss => {
+                KeyEvent::new(KeyCode::Char('x'), crossterm::event::KeyModifiers::NONE)
+            }
+        };
+        self.handle_confirm_key(key);
+    }
+
     pub(super) fn handle_confirm_key(&mut self, key: KeyEvent) {
         let id = ComponentId::Modal(ModalId::Confirm);
         let Some(action) = self
@@ -23,30 +45,39 @@ impl Model {
         self.app.apply_confirm_action(action, key);
     }
 
-    pub(super) fn handle_daemon_lost_key(&mut self, key: KeyEvent) -> bool {
+    pub(super) fn handle_daemon_lost_intent(&mut self, intent: DaemonLostIntent) -> bool {
         let id = ComponentId::Modal(ModalId::DaemonLost);
         if !self.application.mounted(&id) {
             return false;
         }
-        match key.code {
-            KeyCode::Char('r') | KeyCode::Char('R') => {
+        match intent {
+            DaemonLostIntent::RestartWithTray => {
                 if let Err(error) = self.app.restart_local_daemon(true) {
                     self.set_daemon_lost_restart_error(error);
                 }
                 false
             }
-            KeyCode::Char('s') | KeyCode::Char('S') => {
+            DaemonLostIntent::RestartWithoutTray => {
                 if let Err(error) = self.app.restart_local_daemon(false) {
                     self.set_daemon_lost_restart_error(error);
                 }
                 false
             }
-            KeyCode::Char('q') | KeyCode::Char('Q') => {
+            DaemonLostIntent::Quit => {
                 self.dismiss_modal(&id);
                 self.app.try_quit()
             }
-            _ => false,
         }
+    }
+
+    pub(super) fn handle_daemon_lost_key(&mut self, key: KeyEvent) -> bool {
+        let intent = match key.code {
+            KeyCode::Char('r') | KeyCode::Char('R') => DaemonLostIntent::RestartWithTray,
+            KeyCode::Char('s') | KeyCode::Char('S') => DaemonLostIntent::RestartWithoutTray,
+            KeyCode::Char('q') | KeyCode::Char('Q') => DaemonLostIntent::Quit,
+            _ => return false,
+        };
+        self.handle_daemon_lost_intent(intent)
     }
 
     fn set_daemon_lost_restart_error(&mut self, error: String) {
@@ -58,24 +89,24 @@ impl Model {
         }
     }
 
-    pub(super) fn handle_remote_reanchor_key(&mut self, key: KeyEvent) {
+    pub(super) fn handle_remote_reanchor_intent(&mut self, intent: RemoteReanchorIntent) {
         let id = ComponentId::Modal(ModalId::RemoteReanchor);
         if !self.application.mounted(&id) {
             return;
         }
-        match key.code {
-            KeyCode::Esc => self.dismiss_modal(&id),
-            KeyCode::Up | KeyCode::Down => {
+        match intent {
+            RemoteReanchorIntent::Dismiss => self.dismiss_modal(&id),
+            RemoteReanchorIntent::MoveUp | RemoteReanchorIntent::MoveDown => {
                 if let Some(component) = self.application.get_component_mut(&id) {
                     if let Some(popup) = component
                         .as_any_mut()
                         .downcast_mut::<RemoteReanchorComponent>()
                     {
-                        popup.move_cursor(key.code == KeyCode::Down);
+                        popup.move_cursor(matches!(intent, RemoteReanchorIntent::MoveDown));
                     }
                 }
             }
-            KeyCode::Enter => {
+            RemoteReanchorIntent::Accept => {
                 let target = self
                     .application
                     .get_component(&id)
@@ -88,8 +119,18 @@ impl Model {
                     self.app.reanchor_remote_target(target);
                 }
             }
-            _ => {}
         }
+    }
+
+    pub(super) fn handle_remote_reanchor_key(&mut self, key: KeyEvent) {
+        let intent = match key.code {
+            KeyCode::Esc => RemoteReanchorIntent::Dismiss,
+            KeyCode::Up => RemoteReanchorIntent::MoveUp,
+            KeyCode::Down => RemoteReanchorIntent::MoveDown,
+            KeyCode::Enter => RemoteReanchorIntent::Accept,
+            _ => return,
+        };
+        self.handle_remote_reanchor_intent(intent);
     }
 
     pub(super) fn handle_save_playlist_key(&mut self, key: KeyEvent) {

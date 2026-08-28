@@ -39,7 +39,7 @@
 
 ## 5. Replace Raw-Key Overlay and Form Requests
 
-- [ ] 5.1 Convert Confirm, daemon-lost, remote-reanchor, and context-menu components from raw-key shell requests to accept/cancel/move/submit/dismiss intents, reusing existing shell effect methods. Verify the focused component and shell tests pass and the handoff matrix shows no raw-key producer for the family.
+- [x] 5.1 Convert Confirm, daemon-lost, remote-reanchor, and context-menu components from raw-key shell requests to accept/cancel/move/submit/dismiss intents, reusing existing shell effect methods. Verify the focused component and shell tests pass and the handoff matrix shows no raw-key producer for the family.
 
 - [ ] 5.2 Convert Settings, Feeds management, and Save-playlist to semantic intents with local text/navigation state retained in their components — including `ServiceRequest::SettingsKey { cursor, key }` and `PersistRequest::SettingsKey { cursor, key }`, not just the bare `*Key` forwards. Verify focused Settings/Feeds/playlist tests pass and the handoff matrix shows no raw-key producer for the family.
 

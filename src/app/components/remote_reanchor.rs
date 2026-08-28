@@ -1,20 +1,18 @@
 //! Interactive Component for the Remote-reanchor popup (design D3–D9).
 //!
 //! Owns the popup's display content (targets, cursor) set by the shell via
-//! downcast before each render. The shell owns reconciliation; the component
-//! forwards keys as `Msg::Shell(ShellRequest::RemoteReanchorKey(key))` so the
-//! shell can run the reconciliation effect. Mouse and other events are
-//! swallowed by the blocking popup; UiRoot's permanent observer supplies the
-//! redraw signal (design D12).
+//! downcast before each render. The component owns key interpretation and
+//! emits semantic movement/accept/dismiss intents; the shell owns
+//! reconciliation. Mouse and other events are swallowed by the blocking popup;
+//! UiRoot's permanent observer supplies the redraw signal (design D12).
 
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::Event;
+use tuirealm::event::{Event, Key};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{Msg, ShellRequest};
-use super::typed_key::to_crossterm_key_event;
+use super::msg::{Msg, RemoteReanchorIntent, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_remote_reanchor_popup_content;
 
@@ -91,15 +89,17 @@ impl Component for RemoteReanchorComponent {
 
 impl AppComponent<Msg, UserEvent> for RemoteReanchorComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
-        match ev {
-            Event::Keyboard(key) => {
-                let crossterm_key = to_crossterm_key_event(key);
-                Some(Msg::Shell(ShellRequest::RemoteReanchorKey(crossterm_key)))
-            }
-            // Mouse and other events are swallowed by the popup.
-            // UiRoot's permanent observer supplies the redraw signal.
-            _ => None,
-        }
+        let Event::Keyboard(key) = ev else {
+            return None;
+        };
+        let intent = match key.code {
+            Key::Up => RemoteReanchorIntent::MoveUp,
+            Key::Down => RemoteReanchorIntent::MoveDown,
+            Key::Enter => RemoteReanchorIntent::Accept,
+            Key::Esc => RemoteReanchorIntent::Dismiss,
+            _ => return None,
+        };
+        Some(Msg::Shell(ShellRequest::RemoteReanchorIntent(intent)))
     }
 }
 
@@ -113,27 +113,27 @@ mod tests {
     }
 
     #[test]
-    fn key_forwards_remote_reanchor_key_to_shell() {
+    fn navigation_key_emits_move_intent() {
         let mut comp = RemoteReanchorComponent::new();
         let msg = comp.on(&Event::Keyboard(make_key(Key::Up, KeyModifiers::NONE)));
-        assert!(matches!(
+        assert_eq!(
             msg,
-            Some(Msg::Shell(ShellRequest::RemoteReanchorKey(key)))
-                if key.code == crossterm::event::KeyCode::Up
-        ));
+            Some(Msg::Shell(ShellRequest::RemoteReanchorIntent(
+                RemoteReanchorIntent::MoveUp
+            )))
+        );
     }
 
     #[test]
-    fn unbound_key_forwards_to_shell() {
+    fn unbound_key_is_swallowed_locally() {
         let mut comp = RemoteReanchorComponent::new();
-        let msg = comp.on(&Event::Keyboard(make_key(
-            Key::Char('x'),
-            KeyModifiers::NONE,
-        )));
-        assert!(matches!(
-            msg,
-            Some(Msg::Shell(ShellRequest::RemoteReanchorKey(_)))
-        ));
+        assert_eq!(
+            comp.on(&Event::Keyboard(make_key(
+                Key::Char('x'),
+                KeyModifiers::NONE,
+            ))),
+            None
+        );
     }
 
     #[test]

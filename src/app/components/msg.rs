@@ -205,6 +205,38 @@ pub enum AudiobookshelfBookIntent {
     ActivateChapter,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfirmIntent {
+    Accept,
+    Cancel,
+    Save,
+    Discard,
+    Dismiss,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DaemonLostIntent {
+    RestartWithTray,
+    RestartWithoutTray,
+    Quit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteReanchorIntent {
+    MoveUp,
+    MoveDown,
+    Accept,
+    Dismiss,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContextMenuIntent {
+    MoveUp,
+    MoveDown,
+    Select,
+    Dismiss,
+}
+
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
 /// Shell-level requests from Interactive Components: mount/dismiss overlays,
@@ -241,21 +273,15 @@ pub enum ShellRequest {
     OpenSessions,
     /// Switch from the current overlay to Playlists (F4).
     OpenPlaylists,
-    /// Forward a key to the shell's existing daemon-lost-modal handler. The
-    /// DaemonLost component owns rendering and the blocking-modal swallow
-    /// semantics; the shell owns restart/quit dispatch (which calls
-    /// `restart_local_daemon`/`try_quit` — process-lifecycle effects that
-    /// stay shell-owned).
-    ConfirmKey(crossterm::event::KeyEvent),
-    DaemonLostKey(crossterm::event::KeyEvent),
-    /// Forward a key to the shell's existing remote-reanchor handler. The
-    /// RemoteReanchor component owns rendering and the blocking-modal swallow
-    /// semantics; the shell owns cursor/targets and the reconciliation effect.
-    RemoteReanchorKey(crossterm::event::KeyEvent),
-    /// Forward a key to the shell's existing context-menu handler. The
-    /// ContextMenu component owns rendering and the blocking-modal swallow
-    /// semantics; the shell owns cursor navigation and action execution.
-    ContextMenuKey(crossterm::event::KeyEvent),
+    /// Semantic confirmation intent; the component owns key interpretation and
+    /// the shell owns the pending action's effect.
+    ConfirmIntent(ConfirmIntent),
+    /// Semantic daemon-lost intent; process-lifecycle effects remain shell-owned.
+    DaemonLostIntent(DaemonLostIntent),
+    /// Semantic remote-reanchor intent; cursor movement remains component-owned.
+    RemoteReanchorIntent(RemoteReanchorIntent),
+    /// Semantic context-menu intent; the component owns key interpretation.
+    ContextMenuIntent(ContextMenuIntent),
     /// Activate the context-menu entry at the component-owned cursor. The
     /// shell reads the entry's `ContextAction` and executes it (task 5.3c).
     ContextMenuSelect(usize),

@@ -1,4 +1,5 @@
 use super::super::components::audiobookshelf_book::AudiobookshelfBookComponent;
+use super::super::components::msg::ContextMenuIntent;
 use super::super::components::{
     ComponentId, ContextMenuComponent, HomeComponent, LibraryRoutesComponent, MultiselectComponent,
     OverlayId, PopupId, SelectionModalComponent, ShellRequest,
@@ -156,20 +157,20 @@ impl Model {
 
     /// Shell-owned key handling for the Context menu (task 5.3c): the component
     /// owns cursor/selection rendering; the shell owns action dispatch.
-    pub(in crate::app) fn handle_context_menu_key(&mut self, key: crossterm::event::KeyEvent) {
+    pub(in crate::app) fn handle_context_menu_intent(&mut self, intent: ContextMenuIntent) {
         let id = Self::context_menu_id();
         if !self.application.mounted(&id) {
             return;
         }
-        match key.code {
-            crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Down => {
+        match intent {
+            ContextMenuIntent::MoveUp | ContextMenuIntent::MoveDown => {
                 if let Some(comp) = self.application.get_component_mut(&id) {
                     if let Some(menu) = comp.as_any_mut().downcast_mut::<ContextMenuComponent>() {
-                        menu.move_cursor(key.code == crossterm::event::KeyCode::Down);
+                        menu.move_cursor(matches!(intent, ContextMenuIntent::MoveDown));
                     }
                 }
             }
-            crossterm::event::KeyCode::Enter => {
+            ContextMenuIntent::Select => {
                 let action = self
                     .application
                     .get_component(&id)
@@ -178,9 +179,19 @@ impl Model {
                 self.dismiss_context_menu();
                 self.app.execute_context_action(action, self.home_cw_item());
             }
-            crossterm::event::KeyCode::Esc => self.dismiss_context_menu(),
-            _ => {}
+            ContextMenuIntent::Dismiss => self.dismiss_context_menu(),
         }
+    }
+
+    pub(in crate::app) fn handle_context_menu_key(&mut self, key: crossterm::event::KeyEvent) {
+        let intent = match key.code {
+            crossterm::event::KeyCode::Up => ContextMenuIntent::MoveUp,
+            crossterm::event::KeyCode::Down => ContextMenuIntent::MoveDown,
+            crossterm::event::KeyCode::Enter => ContextMenuIntent::Select,
+            crossterm::event::KeyCode::Esc => ContextMenuIntent::Dismiss,
+            _ => return,
+        };
+        self.handle_context_menu_intent(intent);
     }
 
     /// Activate the context-menu entry at the component-owned cursor (mouse

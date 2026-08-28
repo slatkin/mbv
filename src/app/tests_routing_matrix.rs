@@ -20,12 +20,12 @@
 //! the effect into the router. Playback rows additionally pin the live
 //! first-press FallThrough / second-press Command policy.
 
-use super::*;
 use crate::app::action::Command;
 use crate::app::components::{
     BrowserKey, BrowserKind, ComponentId, ModalId, Msg, OverlayId, QueueRequest, ShellRequest,
     TerminalObserverEvent,
 };
+use crate::app::components::msg::{ConfirmIntent, ContextMenuIntent};
 use crate::app::input_resolver::KeyChord;
 use crate::app::router::{resolve_router_outcome, RouterOutcome, RouterSnapshot};
 use crate::app::shell::apply_router_outcome;
@@ -94,7 +94,7 @@ fn active_snapshot() -> RouterSnapshot {
 /// nothing.
 #[test]
 fn blocking_overlay_swallows_unbound_chord() {
-    let leaf = Some(Msg::Shell(ShellRequest::ConfirmKey(key(KeyCode::Char('x')))));
+    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Dismiss)));
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('x')),
@@ -110,7 +110,7 @@ fn blocking_overlay_swallows_unbound_chord() {
 /// Blocking overlay `Swallow`s a global chord (`q` would otherwise quit).
 #[test]
 fn blocking_overlay_swallows_global_chord() {
-    let leaf = Some(Msg::Shell(ShellRequest::ConfirmKey(key(KeyCode::Char('q')))));
+    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Dismiss)));
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('q')),
@@ -390,7 +390,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
 /// 4.4 activates; with the empty policy the menu's own key handling stands.
 #[test]
 fn clear_queue_c_does_not_fire_under_open_context_menu() {
-    let leaf = Some(Msg::Shell(ShellRequest::ContextMenuKey(key(KeyCode::Char('c')))));
+    let leaf = Some(Msg::Shell(ShellRequest::ContextMenuIntent(ContextMenuIntent::Dismiss)));
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('c')),

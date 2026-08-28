@@ -3,8 +3,8 @@
 //! Owns the menu's display state (`entries`, `cursor`, `anchor`) and the
 //! painted `menu_rect`, set by the shell via downcast before each render.
 //! The shell owns context-menu actions (`execute_context_action`); the
-//! component forwards keys as `Msg::Shell(ShellRequest::ContextMenuKey(key))`
-//! and handles its own mouse hit-test (click-inside/outside and hover),
+//! component interprets keyboard input as semantic intents and handles its own
+//! mouse hit-test (click-inside/outside and hover),
 //! emitting `ContextMenuSelect`/`ContextMenuDismiss` (task 5.3c — the
 //! component owns its rect and hit test, replacing the old
 //! `layout.context_menu_rect` global).
@@ -186,10 +186,15 @@ impl Component for ContextMenuComponent {
 impl AppComponent<Msg, UserEvent> for ContextMenuComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
-            // Forward every key to the shell's existing context-menu handler.
             Event::Keyboard(key) => {
-                let crossterm_key = super::typed_key::to_crossterm_key_event(key);
-                Some(Msg::Shell(ShellRequest::ContextMenuKey(crossterm_key)))
+                let intent = match key.code {
+                    tuirealm::event::Key::Up => super::msg::ContextMenuIntent::MoveUp,
+                    tuirealm::event::Key::Down => super::msg::ContextMenuIntent::MoveDown,
+                    tuirealm::event::Key::Enter => super::msg::ContextMenuIntent::Select,
+                    tuirealm::event::Key::Esc => super::msg::ContextMenuIntent::Dismiss,
+                    _ => return None,
+                };
+                Some(Msg::Shell(ShellRequest::ContextMenuIntent(intent)))
             }
             // The component owns its mouse hit-test (task 5.3c).
             Event::Mouse(mouse) => self.handle_mouse(mouse),
@@ -210,27 +215,27 @@ mod tests {
     }
 
     #[test]
-    fn key_forwards_context_menu_key_to_shell() {
+    fn navigation_key_emits_move_intent() {
         let mut comp = ContextMenuComponent::new();
         let msg = comp.on(&Event::Keyboard(make_key(Key::Down, KeyModifiers::NONE)));
-        assert!(matches!(
+        assert_eq!(
             msg,
-            Some(Msg::Shell(ShellRequest::ContextMenuKey(key)))
-                if key.code == crossterm::event::KeyCode::Down
-        ));
+            Some(Msg::Shell(ShellRequest::ContextMenuIntent(
+                crate::app::components::msg::ContextMenuIntent::MoveDown
+            )))
+        );
     }
 
     #[test]
-    fn unbound_key_forwards_to_shell() {
+    fn unbound_key_is_swallowed_locally() {
         let mut comp = ContextMenuComponent::new();
-        let msg = comp.on(&Event::Keyboard(make_key(
-            Key::Char('x'),
-            KeyModifiers::NONE,
-        )));
-        assert!(matches!(
-            msg,
-            Some(Msg::Shell(ShellRequest::ContextMenuKey(_)))
-        ));
+        assert_eq!(
+            comp.on(&Event::Keyboard(make_key(
+                Key::Char('x'),
+                KeyModifiers::NONE,
+            ))),
+            None
+        );
     }
 
     #[test]

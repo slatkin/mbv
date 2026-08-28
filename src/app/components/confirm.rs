@@ -1,22 +1,19 @@
 //! Interactive Component for the Confirm modal overlay (design D3–D9).
 //!
 //! Owns the modal's display content (title, message, hint) set by the shell
-//! via downcast before each render. The shell owns the `ConfirmAction` and
-//! key-to-action dispatch in the shell; the component
-//! forwards every key as `Msg::Shell(ShellRequest::ConfirmKey(key))` so the
-//! shell can run the existing handler unchanged. The component owns rendering
-//! and blocking-modal event semantics; non-key events return `None` because the
-//! permanent UiRoot observer owns the redraw signal (design D12).
+//! via downcast before each render. The component owns key interpretation and
+//! emits semantic confirmation intents; the shell owns the `ConfirmAction` and
+//! effect dispatch. Non-key events return `None` because the permanent UiRoot
+//! observer owns the redraw signal (design D12).
 
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::Event;
+use tuirealm::event::{Event, Key};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{Msg, ShellRequest};
-use super::typed_key::to_crossterm_key_event;
+use super::msg::{ConfirmIntent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_confirm_modal_content;
 use crate::app::types_confirm::{ConfirmAction, ConfirmModal};
@@ -104,19 +101,53 @@ impl Component for ConfirmComponent {
 
 impl AppComponent<Msg, UserEvent> for ConfirmComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
-        match ev {
-            // Forward every key to the shell's existing confirm-modal handler.
-            // The shell owns `ConfirmAction` dispatch (which key means yes/
-            // cancel/save/discard depends on the pending action, which is
-            // shell-owned state the component cannot see).
-            Event::Keyboard(key) => {
-                let crossterm_key = to_crossterm_key_event(key);
-                Some(Msg::Shell(ShellRequest::ConfirmKey(crossterm_key)))
+        let Event::Keyboard(key) = ev else {
+            return None;
+        };
+        let Some(action) = self.on_confirm.as_ref() else {
+            return None;
+        };
+        let intent = confirm_intent_for_key(action, key.code)?;
+        Some(Msg::Shell(ShellRequest::ConfirmIntent(intent)))
+    }
+}
+
+fn confirm_intent_for_key(action: &ConfirmAction, key: Key) -> Option<ConfirmIntent> {
+    match action {
+        ConfirmAction::ClearQueue => match key {
+            Key::Char('y') | Key::Char('Y') | Key::Enter => Some(ConfirmIntent::Accept),
+            Key::Esc => Some(ConfirmIntent::Cancel),
+            _ => Some(ConfirmIntent::Dismiss),
+        },
+        ConfirmAction::RemoveActiveQueueItem(_) | ConfirmAction::RemoveFeedSubscription(_) => {
+            match key {
+                Key::Char('y') => Some(ConfirmIntent::Accept),
+                Key::Esc => Some(ConfirmIntent::Cancel),
+                _ => Some(ConfirmIntent::Dismiss),
             }
-            // Mouse and other events are swallowed by the blocking modal.
-            // UiRoot's permanent observer supplies the redraw signal.
-            _ => None,
         }
+        ConfirmAction::RescanLibrary(_)
+        | ConfirmAction::RemoveEmby
+        | ConfirmAction::ReplaceEmby(_)
+        | ConfirmAction::RemoveAudiobookshelf
+        | ConfirmAction::ReplaceAudiobookshelf(_) => match key {
+            Key::Char('y') | Key::Char('Y') | Key::Enter => Some(ConfirmIntent::Accept),
+            Key::Esc => Some(ConfirmIntent::Cancel),
+            _ => None,
+        },
+        ConfirmAction::SaveOverwritePlaylist { .. } | ConfirmAction::DeletePlaylist { .. } => {
+            match key {
+                Key::Char('y') => Some(ConfirmIntent::Accept),
+                Key::Esc => Some(ConfirmIntent::Cancel),
+                _ => None,
+            }
+        }
+        ConfirmAction::DiscardOrSaveDirtyPlaylist => match key {
+            Key::Char('s') | Key::Char('S') => Some(ConfirmIntent::Save),
+            Key::Char('d') | Key::Char('D') => Some(ConfirmIntent::Discard),
+            Key::Char('c') | Key::Char('C') | Key::Esc => Some(ConfirmIntent::Cancel),
+            _ => None,
+        },
     }
 }
 
@@ -130,38 +161,62 @@ mod tests {
     }
 
     #[test]
-    fn key_forwards_confirm_key_to_shell() {
+    fn key_emits_accept_intent() {
         let mut comp = ConfirmComponent::new();
+        comp.set_modal(&ConfirmModal {
+            title: String::new(),
+            message: String::new(),
+            hint: String::new(),
+            on_confirm: ConfirmAction::ClearQueue,
+        });
         let msg = comp.on(&Event::Keyboard(make_key(
             Key::Char('y'),
             KeyModifiers::NONE,
         )));
         assert!(matches!(
             msg,
-            Some(Msg::Shell(ShellRequest::ConfirmKey(key)))
-                if key.code == crossterm::event::KeyCode::Char('y')
+            Some(Msg::Shell(ShellRequest::ConfirmIntent(
+                ConfirmIntent::Accept
+            )))
         ));
     }
 
     #[test]
-    fn esc_forwards_confirm_key_to_shell() {
+    fn esc_emits_cancel_intent() {
         let mut comp = ConfirmComponent::new();
+        comp.set_modal(&ConfirmModal {
+            title: String::new(),
+            message: String::new(),
+            hint: String::new(),
+            on_confirm: ConfirmAction::ClearQueue,
+        });
         let msg = comp.on(&Event::Keyboard(make_key(Key::Esc, KeyModifiers::NONE)));
         assert!(matches!(
             msg,
-            Some(Msg::Shell(ShellRequest::ConfirmKey(key)))
-                if key.code == crossterm::event::KeyCode::Esc
+            Some(Msg::Shell(ShellRequest::ConfirmIntent(
+                ConfirmIntent::Cancel
+            )))
         ));
     }
 
     #[test]
-    fn unbound_key_forwards_to_shell() {
+    fn unbound_key_is_swallowed_locally() {
         let mut comp = ConfirmComponent::new();
-        let msg = comp.on(&Event::Keyboard(make_key(
-            Key::Char('x'),
-            KeyModifiers::NONE,
-        )));
-        assert!(matches!(msg, Some(Msg::Shell(ShellRequest::ConfirmKey(_)))));
+        comp.set_modal(&ConfirmModal {
+            title: String::new(),
+            message: String::new(),
+            hint: String::new(),
+            on_confirm: ConfirmAction::ClearQueue,
+        });
+        assert_eq!(
+            comp.on(&Event::Keyboard(make_key(
+                Key::Char('x'),
+                KeyModifiers::NONE,
+            ))),
+            Some(Msg::Shell(ShellRequest::ConfirmIntent(
+                ConfirmIntent::Dismiss
+            )))
+        );
     }
 
     #[test]
