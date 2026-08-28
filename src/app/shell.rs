@@ -162,6 +162,7 @@ impl Model {
             has_remote_session: self.app.connected_session_id.is_some()
                 || self.app.player.is_remote()
                 || self.app.is_cast_attached(),
+            connected_session_id_present: self.app.connected_session_id.is_some(),
             panel_mode: self.app.effective_panel_mode(),
             panel_focus: self.app.effective_panel_focus(),
             blocking_overlay_open: self.is_blocking_overlay_open(),

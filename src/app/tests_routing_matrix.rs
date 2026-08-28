@@ -326,12 +326,43 @@ fn visualizer_resolves_to_router_command() {
 }
 
 #[test]
-fn idle_feed_path_resolves_to_router_command() {
-    let mut snapshot = idle_snapshot();
-    snapshot.idle_feed_link_available = true;
+fn playback_and_visualizer_commands_fall_through_under_blocking_overlay() {
+    let snapshot = RouterSnapshot {
+        player_active: true,
+        blocking_overlay_open: true,
+        space_double_tap: true,
+        ..RouterSnapshot::default()
+    };
+
+    assert_eq!(
+        resolve_router_outcome(key(KeyCode::Char('v')), &snapshot),
+        RouterOutcome::FallThrough
+    );
+    assert_eq!(
+        resolve_router_outcome(key(KeyCode::Char('m')), &snapshot),
+        RouterOutcome::FallThrough
+    );
+}
+
+#[test]
+fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
+    let snapshot = RouterSnapshot {
+        has_remote_session: true,
+        idle_feed_link_available: true,
+        ..RouterSnapshot::default()
+    };
     assert_eq!(
         resolve_router_outcome(key(KeyCode::Char('o')), &snapshot),
         RouterOutcome::Command(Command::OpenIdleFeedLink)
+    );
+
+    let connected = RouterSnapshot {
+        connected_session_id_present: true,
+        ..snapshot
+    };
+    assert_eq!(
+        resolve_router_outcome(key(KeyCode::Char('o')), &connected),
+        RouterOutcome::FallThrough
     );
 }
 

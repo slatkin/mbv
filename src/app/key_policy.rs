@@ -16,6 +16,7 @@ use crossterm::event::{KeyCode, KeyModifiers};
 pub(super) struct RouterSnapshot {
     pub player_active: bool,
     pub has_remote_session: bool,
+    pub connected_session_id_present: bool,
     pub panel_mode: PanelMode,
     pub panel_focus: PanelFocus,
     pub blocking_overlay_open: bool,
@@ -161,6 +162,9 @@ impl KeyPolicyGate {
             Self::QueueColumnWidth => snapshot.panel_mode == PanelMode::Both,
             Self::NoContextMenu => !snapshot.context_menu_open,
             Self::Playback => {
+                if snapshot.blocking_overlay_open {
+                    return false;
+                }
                 let input = InputSnapshot {
                     player_active: snapshot.player_active,
                     has_remote_session: snapshot.has_remote_session,
@@ -171,7 +175,7 @@ impl KeyPolicyGate {
                 ) || idle_feed_command_for_key(
                     chord,
                     snapshot.player_active,
-                    snapshot.has_remote_session,
+                    snapshot.connected_session_id_present,
                     snapshot.idle_feed_link_available,
                 )
                 .is_some()
@@ -277,7 +281,7 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         name: "visualizer",
         owner: KeyPolicyOwner::Sub(ComponentId::Playback),
         binding: KeyPolicyBinding::Visualizer,
-        gate: KeyPolicyGate::Always,
+        gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
@@ -390,7 +394,7 @@ pub(super) fn command_for_policy(
             let command = idle_feed_command_for_key(
                 key,
                 snapshot.player_active,
-                snapshot.has_remote_session,
+                snapshot.connected_session_id_present,
                 snapshot.idle_feed_link_available,
             )
             .or_else(|| {
