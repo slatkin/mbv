@@ -390,6 +390,22 @@ routed surface's local presentation state, input interpretation, updates,
 rendering, and geometry, and returns typed requests for work outside its authority.
 _Avoid_: component (bare), controller, render component, widget
 
+**Keyboard Router**:
+The single keyboard routing authority, in the `UiRoot` Interactive Component
+(ADR 0023). It observes every chord regardless of focus and resolves it against
+ordered policy to one of ADR 0002's outcomes — `Command`, `Swallow`, or
+`FallThrough` — where `FallThrough` lets the focused Interactive Component's own
+typed request stand. There is exactly one.
+_Avoid_: input handler, dispatcher, context stack, key policy (the policy is
+data the router evaluates, not a second router)
+
+**Global chord**:
+A key combination whose meaning does not depend on which surface is focused, and
+which is therefore claimed by the Keyboard Router rather than interpreted by an
+Interactive Component. A selection-dependent chord (`.` for the context menu) is
+not global even though every destination binds it.
+_Avoid_: global key, hotkey, shortcut (bare — a shortcut may be leaf-local)
+
 **`component` state**:
 The intermediate interactive-surface ledger state in which an Interactive
 Component paints the surface while the shell still mirrors `App` state and/or

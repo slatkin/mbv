@@ -482,13 +482,6 @@ impl Model {
             Msg::Playback(request) => {
                 self.handle_playback_request(request);
             }
-            Msg::Shell(ShellRequest::PlaybackPromptKey(key)) => {
-                if self.app.skip_intro_end_ticks.is_some() {
-                    self.app.handle_key_confirm_skip_intro(key, false, None);
-                } else if self.app.next_up_item.is_some() {
-                    self.app.handle_key_confirm_next_up(key, false, None);
-                }
-            }
             Msg::Service(request) => {
                 if self.handle_service_request(request) {
                     quit = true;

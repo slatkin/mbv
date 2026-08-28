@@ -141,14 +141,6 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_panel_mode_cycle,
     },
     ContextEntry {
-        name: "confirm_skip_intro",
-        handler: App::handle_key_confirm_skip_intro,
-    },
-    ContextEntry {
-        name: "confirm_next_up",
-        handler: App::handle_key_confirm_next_up,
-    },
-    ContextEntry {
         name: "clear_queue_prompt_c",
         handler: App::handle_key_clear_queue_prompt,
     },

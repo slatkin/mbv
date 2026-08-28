@@ -17,11 +17,6 @@ use crate::app::palette;
 use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::types_playback::PlaybackState;
 
-/// Set when `App.skip_intro_end_ticks.is_some()`.
-pub const ATTR_SKIP_INTRO_PROMPT_VISIBLE: Attribute =
-    Attribute::Custom("skip_intro_prompt_visible");
-/// Set when `App.next_up_item.is_some()`.
-pub const ATTR_NEXT_UP_PROMPT_VISIBLE: Attribute = Attribute::Custom("next_up_prompt_visible");
 /// Set while any blocking overlay is mounted.
 pub const ATTR_BLOCKING_OVERLAY_ACTIVE: Attribute = Attribute::Custom("blocking_overlay_active");
 /// Set while the active Emby library has inline Search open.
@@ -66,8 +61,6 @@ pub struct PlaybackComponent {
 impl PlaybackComponent {
     pub fn new() -> Self {
         let mut props = Props::default();
-        props.set(ATTR_SKIP_INTRO_PROMPT_VISIBLE, AttrValue::Flag(false));
-        props.set(ATTR_NEXT_UP_PROMPT_VISIBLE, AttrValue::Flag(false));
         props.set(ATTR_BLOCKING_OVERLAY_ACTIVE, AttrValue::Flag(false));
         props.set(ATTR_LIB_SEARCH_ACTIVE, AttrValue::Flag(false));
         Self {

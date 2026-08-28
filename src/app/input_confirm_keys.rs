@@ -6,7 +6,6 @@ use super::{
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::RemoveSlotResult;
-use mbv_core::player::PlayerCommand;
 
 impl App {
     /// Shared dispatcher for the confirmation-modal component (see
@@ -178,63 +177,6 @@ impl App {
                     _ => {}
                 }
             }
-        }
-        Some(false)
-    }
-
-    pub(super) fn handle_key_confirm_skip_intro(
-        &mut self,
-        key: KeyEvent,
-        _home_cw_selected: bool,
-        _cw_item: Option<EmbyItem>,
-    ) -> Option<bool> {
-        self.skip_intro_end_ticks?;
-        if matches!(
-            key.code,
-            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-        ) {
-            if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
-                let secs = end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
-                self.player.send_command(PlayerCommand::SeekAbsolute(secs));
-                self.player.send_command(PlayerCommand::SkipIntroDismiss);
-                self.status.clear();
-            }
-        } else {
-            self.skip_intro_end_ticks = None;
-            self.player.send_command(PlayerCommand::SkipIntroDismiss);
-            self.status.clear();
-        }
-        Some(false)
-    }
-
-    pub(super) fn handle_key_confirm_next_up(
-        &mut self,
-        key: KeyEvent,
-        _home_cw_selected: bool,
-        _cw_item: Option<EmbyItem>,
-    ) -> Option<bool> {
-        self.next_up_item.as_ref()?;
-        if matches!(
-            key.code,
-            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-        ) {
-            if let Some(item) = self.next_up_item.take() {
-                if let Some(idx) = self
-                    .playback_queue()
-                    .slots()
-                    .iter()
-                    .position(|s| matches!(&s.item, mbv_core::playback_queue::QueueItem::Emby(e) if e.id == item.id))
-                {
-                    let label = item.playback_label();
-                    self.player.send_command(PlayerCommand::JumpTo(idx));
-                    self.playback_queue_mut().queue_cursor = idx;
-                    self.flash(label, ToastSeverity::Success);
-                }
-            }
-        } else {
-            self.next_up_item = None;
-            self.player.send_command(PlayerCommand::NextUpDismiss);
-            self.status.clear();
         }
         Some(false)
     }

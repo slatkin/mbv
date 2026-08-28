@@ -59,6 +59,13 @@ impl Model {
         .iter()
         .any(|id| self.application.mounted(id))
     }
+
+    /// Whether a blocking overlay is open (the F1 Help-open guard). The
+    /// prompt removal deleted `shell_playback_prompt.rs`; the wrapper now
+    /// lives next to the fact it mirrors.
+    pub(super) fn is_blocking_overlay_open(&self) -> bool {
+        self.blocking_overlay_active()
+    }
 }
 
 #[cfg(test)]

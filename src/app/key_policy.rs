@@ -110,22 +110,6 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         gate: KeyPolicyGate::IsMounted(ComponentId::Library),
         blocking: false,
     },
-    // 16–17 — Playback prompts, gated by real ephemeral state
-    // (`App.skip_intro_end_ticks`/`App.next_up_item`; see
-    // `components::playback` for the attribute carrier that exposes
-    // this state to a future `SubClause::HasAttrValue` guard).
-    KeyPolicyEntry {
-        name: "confirm_skip_intro",
-        owner: KeyPolicyOwner::Sub(ComponentId::Playback),
-        gate: KeyPolicyGate::Custom("skip_intro_end_ticks.is_some()"),
-        blocking: false,
-    },
-    KeyPolicyEntry {
-        name: "confirm_next_up",
-        owner: KeyPolicyOwner::Sub(ComponentId::Playback),
-        gate: KeyPolicyGate::Custom("next_up_item.is_some()"),
-        blocking: false,
-    },
     // 18 — Clear-queue prompt. Despite the name, `handle_key_clear_queue_prompt`
     // claims 'c' (sans Alt) unconditionally -- it never checks a "prompt
     // visible" flag, it always shows the confirmation itself. Always-eligible,

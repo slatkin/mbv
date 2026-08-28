@@ -13,13 +13,19 @@ use tuirealm::event::{
 fn ui_root_terminal_key_reaches_legacy_help_handler() {
     let mut model = Model::new(make_app_stub());
     let key = KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE);
-    let routed = route_terminal_observer_message(
-        Msg::TerminalEvent(TerminalObserverEvent::Key(key)),
+    // UiRoot focused, empty policy: the fold's `FallThrough` keeps the
+    // observer key so `handle_legacy_key` still runs (F1 opens Help).
+    let router = RouterOutcome::FallThrough;
+    let routed = apply_router_outcome(
+        vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key))],
         Some(&ComponentId::UiRoot),
+        &router,
     );
-    let Some(Msg::TerminalEvent(TerminalObserverEvent::Key(key))) = routed else {
+    let mut iter = routed.into_iter();
+    let Some(Msg::TerminalEvent(TerminalObserverEvent::Key(key))) = iter.next() else {
         panic!("UiRoot terminal key was not retained for the shell handler");
     };
+    assert!(iter.next().is_none());
 
     assert!(!model.handle_legacy_key(key));
     assert!(model
@@ -31,17 +37,23 @@ fn ui_root_terminal_key_reaches_legacy_help_handler() {
 fn converted_surface_skips_observer_key_but_retains_redraw_signal() {
     let focused = ComponentId::Playback;
     let key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
-    assert!(route_terminal_observer_message(
-        Msg::TerminalEvent(TerminalObserverEvent::Key(key)),
+    // Leaf focused, empty policy: the fold drops the observer's Key trigger
+    // (the leaf already got the event) but keeps non-key observer signals.
+    let router = RouterOutcome::FallThrough;
+    let routed = apply_router_outcome(
+        vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key))],
         Some(&focused),
-    )
-    .is_none());
+        &router,
+    );
+    assert!(routed.is_empty());
+    let routed = apply_router_outcome(
+        vec![Msg::TerminalEvent(TerminalObserverEvent::NoOp)],
+        Some(&focused),
+        &router,
+    );
     assert!(matches!(
-        route_terminal_observer_message(
-            Msg::TerminalEvent(TerminalObserverEvent::NoOp),
-            Some(&focused),
-        ),
-        Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+        routed.as_slice(),
+        [Msg::TerminalEvent(TerminalObserverEvent::NoOp)]
     ));
 }
 

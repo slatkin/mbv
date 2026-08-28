@@ -16,6 +16,7 @@
 
 use std::time::Duration;
 
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
@@ -26,6 +27,7 @@ use super::components::{
     ComponentId, Msg, OverlayId, PlaybackComponent, ShellRequest, TerminalObserverEvent,
     UiRootComponent, UserEvent,
 };
+use super::router::{resolve_router_outcome, RouterOutcome, RouterSnapshot};
 use super::service_startup;
 use super::types_feeds_manage::FeedsManagePopup;
 use super::types_playback::{HomeContent, HomeLatestSource};
@@ -84,14 +86,82 @@ pub struct Model {
     pub(super) home_section_pending: Option<HomeLatestSource>,
 }
 
-fn route_terminal_observer_message(msg: Msg, focused: Option<&ComponentId>) -> Option<Msg> {
-    match msg {
-        Msg::TerminalEvent(TerminalObserverEvent::Key(_))
-            if focused != Some(&ComponentId::UiRoot) =>
-        {
-            None
+/// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
+/// tick's message list and return the messages that survive.
+///
+/// `Application::tick` returns the focused component's message first, then the
+/// UiRoot observer's `TerminalEvent`. With `PollStrategy::Once` there is at
+/// most one terminal event per tick, so the messages for a key chord are:
+///
+/// * **UiRoot focused** — only the observer's `TerminalEvent(Key)`. This is
+///   the active component's own message; `FallThrough` keeps it (so
+///   `handle_legacy_key` runs, preserving today's behavior), while
+///   `Command`/`Swallow` replace it (the command is dispatched by the caller).
+/// * **Leaf focused** — the leaf's request (or `None`) plus the observer's
+///   `TerminalEvent(Key)`. The router's outcome selects between them:
+///   `FallThrough` keeps the leaf's request; `Command`/`Swallow` discard it.
+///
+/// Non-key observer signals (`Resize`, `FocusGained/Lost`, `NoOp`) always pass
+/// through: they are redraw/layout signals, not chords.
+pub(super) fn apply_router_outcome(
+    messages: Vec<Msg>,
+    focused: Option<&ComponentId>,
+    router: &RouterOutcome,
+) -> Vec<Msg> {
+    let observed_key = messages
+        .iter()
+        .any(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::Key(_))));
+    let mut out = Vec::with_capacity(messages.len());
+    for msg in messages {
+        match msg {
+            Msg::TerminalEvent(TerminalObserverEvent::Key(_)) => {
+                // The observed chord. When UiRoot itself is focused this is
+                // the leaf message (the active component's own request) and
+                // its survival is decided by the router like any leaf message.
+                if focused == Some(&ComponentId::UiRoot) {
+                    match router {
+                        RouterOutcome::FallThrough => out.push(msg),
+                        RouterOutcome::Command(_) | RouterOutcome::Swallow => {}
+                    }
+                }
+                // When a leaf is focused the observer key is only the router's
+                // trigger; the fold already applied the outcome to the leaf's
+                // own message below. It never reaches the legacy handler as a
+                // raw key.
+            }
+            Msg::TerminalEvent(_) => out.push(msg),
+            leaf => {
+                // The focused component's request (or a typed shell request
+                // from a subscription). `FallThrough` lets it stand; the
+                // router's `Command`/`Swallow` discards it for this tick.
+                // With no key observed, nothing was routed and every message
+                // stands.
+                match (router, observed_key) {
+                    (RouterOutcome::FallThrough, _) | (_, false) => out.push(leaf),
+                    (RouterOutcome::Command(_) | RouterOutcome::Swallow, true) => {}
+                }
+            }
         }
-        msg => Some(msg),
+    }
+    out
+}
+
+impl Model {
+    /// Build the router snapshot and resolve the observed chord. The router
+    /// reads a plain-data snapshot, never component attributes (ADR 0023).
+    fn router_outcome(&self, focused: &Option<ComponentId>) -> RouterOutcome {
+        let snapshot = RouterSnapshot {
+            player_active: self.app.player.status.lock().unwrap().active,
+            has_remote_session: self.app.connected_session_id.is_some()
+                || self.app.player.is_remote()
+                || self.app.is_cast_attached(),
+        };
+        // The observer key signal carries the chord; when no key was observed
+        // (Resize/Focus/NoOp), there is nothing to route and every message
+        // passes through. `focused` is currently unused by the empty policy;
+        // section 4's live policy reads the snapshot and the chord.
+        let _ = focused;
+        resolve_router_outcome(KeyEvent::new(KeyCode::Null, KeyModifiers::NONE), &snapshot)
     }
 }
 

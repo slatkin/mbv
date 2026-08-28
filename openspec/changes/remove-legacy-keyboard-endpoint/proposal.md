@@ -1,15 +1,45 @@
 ## Why
 
-The TuiRealm migration left one live keyboard route back through `App`: D15 explicitly chose static precedence proofs instead of wiring the replacement policy while the legacy bridge was active, then the teardown rows required handlers to be unreferenced even though converted components still emitted `GlobalViewKey`. This circular gate made the cleanup a documented no-op, leaving the migration short of ADR 0022 and issue #607's completion contract.
+The TuiRealm migration left one live keyboard route back through `App`, and it
+is not removable as dead code. TuiRealm's `Application::tick` forwards every
+event to the focused component **and** to every satisfied subscription, with no
+consumed signal and no priority among subscriptions. ADR 0002's ordered,
+first-match `Command` / `Swallow` / `FallThrough` model therefore has no
+representation in the framework's delivery, and `GlobalViewKey` +
+`Model::handle_legacy_key` are standing in for the missing ordering relation.
+
+Task `5.3d.22` framed the cleanup as "delete when unreferenced" while converted
+components still emitted `GlobalViewKey`, so it recorded a no-op; D15 declined
+`perform(Cmd)` and left `key_policy.rs` a `#![allow(dead_code)]` shadow table
+with no execution path. Both are consequences of the same missing relation, not
+independent oversights.
+
+ADR 0023 supplies it: one central Keyboard Router in `UiRoot`.
 
 ## What Changes
 
-- Replace component-to-shell raw key forwarding with component-local TuiRealm key interpretation and typed semantic requests for shell-owned effects.
-- Make the preserved ADR 0002 precedence behavior execute through TuiRealm focus and guarded subscriptions, including blocking-overlay swallow and parent/global bindings.
-- Remove `Model::handle_legacy_key`, `App::handle_key_with_home_context`, `CONTEXT_STACK`, obsolete per-surface context handlers, `GlobalViewKey`, raw `*Key` shell requests (including the cursor-carrying `ServiceRequest::SettingsKey`/`PersistRequest::SettingsKey`), and the TuiRealm-to-Crossterm reconstruction adapter.
-- Resolve the shared-globals crux (`q`, Tab/BackTab, `1`–`9`, `.`) and the destination-independent Alt-key path; own the global playback keys (Space/Escape double-tap) by one global handler that dispatches the existing typed first-press leaf request by focus (no per-screen playback-timer mirror). The skip-intro/next-up prompts are already a focused modal, so no attribute mirror is required for them.
-- Preserve all existing shortcuts, modifier gates, double-tap behavior, modal blocking, focus behavior, and effect targets; this is an ownership/routing change, not a keybinding redesign.
-- Add production-style TuiRealm integration coverage and structural gates proving that no legacy raw-key fallback remains.
+- Make `UiRoot` the single Keyboard Router (ADR 0023). It resolves every chord
+  against ordered policy and returns `Command` / `Swallow` / `FallThrough`;
+  `FallThrough` lets the focused leaf's own typed request stand. `key_policy.rs`
+  becomes that live policy instead of a descriptive table.
+- Stop leaves interpreting global chords. A leaf interprets only what its own
+  surface means, emits a typed semantic request, and returns `None` otherwise —
+  it never forwards, wraps, or re-emits a key.
+- Replace every raw-key `ShellRequest` with the smallest semantic request set
+  for that surface, including the cursor-carrying
+  `ServiceRequest::SettingsKey` / `PersistRequest::SettingsKey`.
+- Remove the TUI skip-intro and next-up prompts entirely; mpv's on-screen
+  buttons become their sole interface. This deletes `PlaybackPromptComponent`,
+  `App.skip_intro_end_ticks`, the `status`-as-prompt writes, and the
+  notification-action input path for those two decisions.
+- Remove `Model::handle_legacy_key`, `App::handle_key_with_home_context`,
+  `CONTEXT_STACK`, the per-surface context handlers, `GlobalViewKey`, the raw
+  `*Key` requests, and `typed_key.rs`.
+- Preserve every other shortcut, modifier gate, double-tap behavior, modal
+  blocking, focus behavior, and effect target. Apart from the removed prompts,
+  this is an ownership and routing change, not a keybinding redesign.
+- Add a production-style `Application::tick()` routing matrix and structural
+  gates proving no legacy raw-key fallback remains.
 
 ## Capabilities
 
@@ -19,9 +49,30 @@ The TuiRealm migration left one live keyboard route back through `App`: D15 expl
 
 ### Modified Capabilities
 
-- None. This change makes the implementation conform to the existing `interactive-component-framework` requirements introduced by `migrate-tui-to-tuirealm`; it preserves externally observable keyboard behavior, so `.openspec.yaml` declares `skip_specs: true` rather than duplicating that contract.
+- `toast-notification-semantics` — its severity model carves out "interactive
+  prompts (next-up, skip-intro, clear-queue confirmation)" as non-toasts using
+  standard status-bar styling. Two of those three no longer exist in the TUI.
+  The delta narrows both requirements to the clear-queue confirmation, which is
+  a real modal.
+
+This change otherwise makes the implementation conform to the
+`interactive-component-framework` requirements introduced by
+`migrate-tui-to-tuirealm`; that contract is unchanged and not restated here.
 
 ## Impact
 
-- Affects `src/app/components/`, shell message handling, the legacy input resolver/handlers under `src/app/input*.rs` (including the `handle_key_alt`, `handle_global_view_key`, `handle_key_emby_library`, and `handle_lib_key` precedence branches), key-policy wiring, and keyboard integration/architecture tests. (The `handle_key_with_home_context` call sites in `shell_home.rs` are `#[cfg(test)]`-only, not production bypasses.)
-- Removes internal raw-key message variants and adapters; no external API, protocol, configuration, dependency, daemon, Local-daemon, Service, playback, or persistence behavior changes.
+- **New ADR 0023** (One Central Keyboard Router) records the routing decision
+  and the rules a future change must not violate.
+- **New** `docs/architecture/mpv-owned-playback-prompts.md` records the prompt
+  removal, what stayed and why, the remote-daemon gap, and the conditions any
+  re-added TUI affordance must satisfy.
+- Affects `src/app/components/` (all 16 `to_crossterm_key_event` call sites),
+  `key_policy.rs`, shell message handling, and the legacy input resolver and
+  handlers under `src/app/input*.rs`.
+- Removes internal raw-key message variants and adapters. No external API,
+  protocol, configuration, dependency, daemon, Local-daemon, Service, or
+  persistence behavior changes. The only user-visible behavior change is the
+  removal of the TUI skip-intro/next-up prompts and their `Y`/`n` keys.
+- `App.next_up_item` is retained — `PlayerEvent::NextUpPlay` reads it to resolve
+  the `JumpTo` index when the user clicks mpv's button. It is player state, not
+  prompt state.

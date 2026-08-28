@@ -580,7 +580,18 @@ note naming this decision.
 
 ## Risks / Trade-offs
 
-- **TuiRealm delivers to active + subscribers, not first-match.** This differs
+- **TuiRealm delivers to active + subscribers, not first-match.**
+  **SUPERSEDED by ADR 0023 and the `remove-legacy-keyboard-endpoint` change.**
+  This row judged the mismatch "routine to reproduce" and proposed that globals
+  become gated subscriptions. That proved wrong, and it is why the legacy
+  keyboard endpoint could not be deleted: `SubClause` cannot express `Swallow`
+  or `FallThrough`, so reconstructing first-match precedence as mutually
+  exclusive gates requires mirroring shell state onto components as attributes.
+  Globals are now owned by one central Keyboard Router in `UiRoot`; keyboard
+  subscriptions carry no precedence. Read ADR 0023 before wiring any keyboard
+  routing. D15 (`perform(Cmd)`) is unaffected and stays declined. The original
+  text follows for history:
+  This differs
   from mbv's current loop but is routine to reproduce, not a real risk: nearly all
   keys go to the focused component, and the small fixed set of global bindings
   (quit, tab, overlay-open, transport) become gated subscriptions. The global key

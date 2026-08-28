@@ -90,7 +90,6 @@ impl Model {
 
     fn library_overlay_mounted(&self) -> bool {
         [
-            ComponentId::PlaybackPrompt,
             ComponentId::Overlay(super::components::OverlayId::Search),
             ComponentId::Overlay(super::components::OverlayId::Settings),
             ComponentId::Overlay(super::components::OverlayId::Sessions),

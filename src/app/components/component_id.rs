@@ -21,7 +21,6 @@ pub enum ComponentId {
     Home,
     Browser(BrowserKey),
     Feeds,
-    PlaybackPrompt,
     InlineSearch(BrowserKey),
     Overlay(OverlayId),
     Modal(ModalId),

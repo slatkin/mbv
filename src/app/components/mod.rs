@@ -25,7 +25,6 @@ pub mod msg;
 pub mod multiselect;
 pub mod music_workspace;
 pub mod playback;
-pub mod playback_prompt;
 pub mod playlists;
 pub mod queue;
 pub mod remote_reanchor;
@@ -60,7 +59,6 @@ pub use self::multiselect::MultiselectComponent;
 pub use self::music_workspace::MusicWorkspaceComponent;
 pub use self::playback::ATTR_BLOCKING_OVERLAY_ACTIVE;
 pub(in crate::app) use self::playback::{PlaybackComponent, PlaybackProjection};
-pub use self::playback_prompt::PlaybackPromptComponent;
 pub use self::playlists::PlaylistsComponent;
 pub use self::queue::QueueComponent;
 pub use self::remote_reanchor::RemoteReanchorComponent;
@@ -93,9 +91,6 @@ mod home_component_tests;
 #[cfg(test)]
 #[path = "music_workspace_component_tests.rs"]
 mod music_workspace_component_tests;
-#[cfg(test)]
-#[path = "playback_prompt_component_tests.rs"]
-mod playback_prompt_component_tests;
 #[cfg(test)]
 #[path = "playlists_component_tests.rs"]
 mod playlists_component_tests;

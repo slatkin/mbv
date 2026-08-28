@@ -396,10 +396,17 @@ impl Model {
                 // observer message is folded; routing by the live focus then
                 // double-delivers that same terminal event.
                 let focused = self.application.focus().cloned();
-                for msg in messages {
-                    let Some(msg) = route_terminal_observer_message(msg, focused.as_ref()) else {
-                        continue;
-                    };
+                // ADR 0023: the Keyboard Router fold. `Application::tick`
+                // returns the focused component's message first, then the
+                // UiRoot observer's. With `PollStrategy::Once` there is at
+                // most one terminal event per tick, so the leaf's request and
+                // the router's resolution for the same chord arrive together.
+                // The router's outcome selects between them: `Command` runs the
+                // semantic command and discards the leaf's message, `Swallow`
+                // runs nothing and discards it, `FallThrough` lets the leaf's
+                // own request stand.
+                let router = self.router_outcome(&focused);
+                for msg in apply_router_outcome(messages, focused.as_ref(), &router) {
                     if self.handle_terminal_message(
                         msg,
                         focused.as_ref(),
@@ -426,7 +433,6 @@ impl Model {
             self.sync_audiobookshelf_book();
             self.sync_queue();
             self.update_playlists_content();
-            self.sync_playback_prompt();
             self.sync_emby_browser();
             self.sync_tv_workspace();
             self.sync_music_workspace();
@@ -492,7 +498,6 @@ impl Model {
                     self.render_music_workspace_component(f);
                     self.render_inline_search_component(f);
                     self.render_queue_component(f);
-                    self.render_playback_prompt(f);
                     self.render_overlay_stack(f);
                 }) {
                     log::error!(

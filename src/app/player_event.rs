@@ -292,16 +292,7 @@ impl App {
                     let show_title = item.series_name.clone();
                     let ep_title = item.name.clone();
                     let artist = item.artist.clone();
-                    let label = item.playback_label();
                     self.next_up_item = Some(item.clone());
-                    let next_up_msg = format!("Next up: {} (Y/n)", label);
-                    self.notify_with_actions(
-                        &item.name,
-                        "Next up?",
-                        &[("next_up:play", "Play Now"), ("next_up:skip", "Skip")],
-                    );
-                    self.status = next_up_msg;
-                    self.status_expires = None;
                     // Daemon sends NextUpShow to mpv directly; only send from local player.
                     if !self.player.is_remote() {
                         self.player.send_command(PlayerCommand::NextUpShow {
@@ -377,20 +368,6 @@ impl App {
                     let secs = intro_end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
                     self.player.send_command(PlayerCommand::SeekAbsolute(secs));
                     self.player.send_command(PlayerCommand::SkipIntroDismiss);
-                } else {
-                    self.skip_intro_end_ticks = Some(intro_end_ticks);
-                    let playing_title = self
-                        .playback_queue()
-                        .item_at(self.playback_queue().queue_cursor)
-                        .map(|i| i.title().to_string())
-                        .unwrap_or_else(|| "mbv".into());
-                    self.notify_with_actions(
-                        &playing_title,
-                        "Skip intro?",
-                        &[("skip_intro:skip", "Skip"), ("skip_intro:ignore", "Ignore")],
-                    );
-                    self.status = "Skip intro? (Y/n)".into();
-                    self.status_expires = None;
                 }
             }
             PlayerEvent::IntroEnded => {

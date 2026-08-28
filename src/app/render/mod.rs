@@ -55,7 +55,6 @@ pub(in crate::app) use components::multiselect::{
 pub(in crate::app) use components::music_wide::{
     render_wide_music_group_with_ctx, MusicWideRenderCtx,
 };
-pub(in crate::app) use components::playback_prompt::render_playback_prompt_content;
 pub(in crate::app) use components::playlists::{
     render_playlists_content, render_save_playlist_content, PlaylistsRenderGeometry,
 };

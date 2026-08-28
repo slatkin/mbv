@@ -366,3 +366,98 @@ No *unexplained* production matches: every hit traces to a producer/consumer abo
 Explicitly **excluded** (not legacy-keyboard): `BroadcastKey`, `PlaybackKeyCode`,
 `KeyModifiers`, media keys, `MediaKeyCode` hits in `typed_key.rs`, `Keyboard` event
 payloads, and the `SyncKey`/`ui_util` naming noise.
+
+---
+
+## 8. Amendment for ADR 0023 + prompt removal (task 1.4)
+
+Amends the 1.1 inventory for the routing decision (`docs/adr/0023-one-central-keyboard-router.md`)
+and the skip-intro/next-up prompt removal (design Decision 4). This is the
+**conversion checklist**: every row in sections 1–6 must be accounted for before
+the final deletion unit (8.1) runs.
+
+### 8.1 `playback_prompt` and `PlaybackPromptKey`: **deleted, not converted**
+
+`ShellRequest::PlaybackPromptKey` (msg.rs:320) and its producer `playback_prompt.rs`
+are **removed outright** — mpv's on-screen Skip Intro / Next Up buttons
+(`scripts/mbv_intro.lua`, `scripts/mbv_visibility.lua`) become the sole interface.
+No semantic replacement request exists or is added. This removes from the
+conversion checklist:
+
+- the producer rows for `playback_prompt` (handoff §1.7, `to_crossterm_key_event` table);
+- the consumer `shell_messages.rs:485-491` (the `handle_key_confirm_skip_intro` /
+  `handle_key_confirm_next_up` dispatch) and the handlers in `input_confirm_keys.rs`;
+- both `CONTEXT_STACK` and `KEY_POLICY` entries (`confirm_skip_intro`,
+  `confirm_next_up`), the dead `ATTR_SKIP_INTRO_PROMPT_VISIBLE` /
+  `ATTR_NEXT_UP_PROMPT_VISIBLE` attributes, `ComponentId::PlaybackPrompt`,
+  `sync_playback_prompt`, `render_playback_prompt`, `render_playback_prompt_content`,
+  `shell_playback_prompt.rs`, and both `self.status = "... (Y/n)"` writes with
+  `status_expires = None` (`player_event.rs` QueueNextUp, `run_loop_drains.rs` IntroStarted path).
+
+### 8.2 The fourth input path: `notif_action_tx` → `drain_notif_actions`
+
+`App::notif_action_rx` is a fourth input path outside the routing policy,
+delivered by `shell_run.rs:157` / `run_loop_drains.rs:141`. Arms after removal:
+
+| arm | disposition |
+| --- | --- |
+| `skip_intro:skip` (run_loop_drains.rs:146) | **removed** — seeks via `skip_intro_end_ticks` + sends `SkipIntroDismiss`; the prompt is gone, Lua owns the seek |
+| `next_up:play` (run_loop_drains.rs:154) | **removed** — the `notify_with_actions` producer is deleted; `PlayerEvent::NextUpPlay` (player_event.rs:320) keeps the equivalent JumpTo logic for mpv's button |
+| `next_up:skip` (run_loop_drains.rs:170) | **removed** — sends `NextUpDismiss`; the button's own dismiss path covers this |
+| `clear:yes` (run_loop_drains.rs:175) | **retained** — `dismiss_confirm()` + `replace_queue_or_prompt(PendingQueueAction::ClearQueue)` |
+| `__notif_failed__` (run_loop_drains.rs:179) | **retained** — sets `notif_failed` |
+| `_` fallback (run_loop_drains.rs:182) | retained — dismissed/"ignore"/"cancel"/empty leave the TUI prompt untouched |
+
+The `notify_with_actions` producers in `player_event.rs` (QueueNextUp and the
+IntroStarted arm) are removed with the prompts; `notify_with_actions` itself and
+the `clear:yes` / `__notif_failed__` producers stay.
+
+### 8.3 `App.next_up_item`: retained player state
+
+**Kept** (`app_struct.rs:172`). `PlayerEvent::NextUpPlay` (player_event.rs:320)
+reads it to resolve the `JumpTo` index when the user clicks mpv's on-screen
+button; `notif_action_rx` may also `take()` it (run_loop_drains.rs:155). All
+existing clear sites stand: `construct.rs`, `daemon_restart.rs`, `session_switch.rs`
+(×3), `session_connect.rs`, `session_command_actions.rs`, `player_event.rs`
+(×4 incl. the NextUpPlay take), `emby_service_actions.rs`, `tests.rs`,
+`input_resolver_handle_key_tests.rs`, `shell_overlays_tests.rs`.
+
+### 8.4 `App.skip_intro_end_ticks`: becomes readerless, then deleted
+
+**Deleted** (app_struct.rs:171). After the prompt removal the field has only
+writes and clears, no reader: the `IntroStarted` writer (player_event.rs:381),
+the clear sites (`player_event.rs` ×3, `run_loop_drains.rs:147` arm removed,
+`daemon_restart.rs`, `session_switch.rs` ×3, `session_connect.rs`,
+`session_command_actions.rs`, `emby_service_actions.rs`, `tests.rs`,
+`input_resolver_handle_key_tests.rs`, `shell_overlays_tests.rs`), and the
+`KEY_POLICY` `Custom("skip_intro_end_ticks.is_some()")` gate (key_policy.rs:120).
+`PlayerEvent::IntroStarted` must still auto-seek under `always_skip_intro` and
+`SkipIntroDismiss` / `NextUpDismiss` / `NextUpShow` must still reach mpv unchanged.
+
+### 8.5 Matrix coverage check (1.1 rows → routing-matrix rows)
+
+| 1.1/1.3 row | disposition | matrix row / test |
+| --- | --- | --- |
+| `GlobalViewKey` producers (home/browser/music/tv/abs_book/abs_podcast) | converted section 7 | destination rows (2.2) |
+| `ConfirmKey` (confirm.rs:114) | converted 5.1 | overlay-swallow rows |
+| `DaemonLostKey` (daemon_lost.rs:102) | converted 5.1 | overlay-swallow rows |
+| `RemoteReanchorKey` (remote_reanchor.rs:97) | converted 5.1 | overlay-swallow rows |
+| `ContextMenuKey` (context_menu.rs:192) | converted 5.1 | `'c'`/menu mutual exclusion row (6a) |
+| `FeedsManageKey` (feeds_manage.rs:130-132) | converted 5.2 | form rows |
+| `PlaybackPromptKey` (playback_prompt.rs:79-81) | **deleted** (8.1) | n/a — no matrix row |
+| `SavePlaylistKey` (save_playlist.rs:72-74) | converted 5.2 | form rows |
+| `QueueKey` (queue.rs:163) | converted 6.1 | Queue rows + `[`/`]` split (6c) |
+| `ServiceRequest::SettingsKey` / `PersistRequest::SettingsKey` (settings.rs) | converted 5.2 | form rows |
+| `TerminalObserverEvent::Key` producer (root.rs:73) + `to_crossterm_key_event` (16 components) | seam 2.1 replaces the focus check with the fold; all call sites deleted by 8.1 | every row |
+| F1 Help-open special case (shell.rs:128-138) | moved to router 4.2 with blocking-overlay guard | Help/overlay rows |
+| Five blanket `push_*_content` (shell.rs:150/152/156/159/160) | replaced by targeted pushes per unit | per-unit tests |
+| `handle_key_home` / `handle_key_feeds` pure swallows | no raw producer — documented only | n/a |
+| clear-queue vs context-menu exclusion (6a) | `'c'` policy gate | `'c'` row |
+| `Ctrl+a` enqueue-before-playback (6b) | policy ordering | `Ctrl+a` row |
+| `[`/`]` Queue-vs-Library split (6c) | leaf-local (Queue vs Library dest) | `[`/`]` rows |
+| `handle_lib_key` Ctrl/Alt catch-all (6d) | library leaf local swallow | `Ctrl+z` row |
+| Space/Escape double-tap (6e) | policy 4.3: first press `FallThrough`, second `Command` | double-tap rows |
+| Ctrl+/ terminal-encoding ambiguity (6f) | policy overlay-open gate matches `Char('/')` OR `Char('_')` | Ctrl+/ row |
+
+Every row in sections 1–6 maps to either a conversion unit (4–7), a deletion
+(8.1), or a routing-matrix row (2.2). Nothing is silently dropped.

@@ -1,128 +1,305 @@
 ## Context
 
-See `proposal.md` for motivation. ADR 0002 requires first-match `Command` / `Swallow` / `FallThrough` keyboard precedence, and ADR 0022 requires TuiRealm focus and subscriptions to replace the old loop without changing that behavior.
+See `proposal.md` for motivation and `docs/adr/0023-one-central-keyboard-router.md`
+for the routing decision this design implements.
 
-The remaining endpoint is not mechanically dead:
+The endpoint is not mechanically dead. Its removal was blocked by a missing
+capability, and three separate symptoms were read as three separate problems:
 
-- `key_policy.rs` is a static proof only; production never installs the subscriptions it describes.
-- D15's `Component::perform(Cmd)` path was explicitly declined while `LegacyInput` and `CONTEXT_STACK` were live.
-- Converted media components still emit `GlobalViewKey` for unmatched keys, so `Model::handle_legacy_key` and every `CONTEXT_STACK` handler remain reachable by construction.
-- The 5.3d.22 deletion rows required zero references rather than authorizing replacement of the live route. They therefore documented a no-op instead of breaking the cycle.
-- `handle_legacy_key` also re-pushes Home, Emby browser, Audiobookshelf, and Music presentation after every key. Removing it requires each typed effect path to push only the content it actually changes.
-- D7 assigned one parent binding to `ComponentId::Library`, but no `LibraryComponent` is mounted. That table cannot be wired literally.
-- F1 Help-open is handled inside `handle_legacy_key` itself, outside `CONTEXT_STACK`. (The `handle_key_with_home_context` call sites in `shell_home.rs` are `#[cfg(test)]` only, not production bypasses; the production Home `.` path goes through `handle_legacy_key` → `CONTEXT_STACK` → `handle_global_view_key`.)
-- Several `CONTEXT_STACK` gates are not static booleans: `confirm_skip_intro`/`confirm_next_up` depend on ephemeral App fields (`skip_intro_end_ticks`/`next_up_item`), `playback` is a per-key command table plus a 300ms double-tap that falls through on the first press, and `queue_column_width` is gated on `PanelMode::Both` + Shift+Left/Right — none of which the shadow `KEY_POLICY` table captures faithfully.
+- `key_policy.rs` is a static proof only; production never installs the
+  subscriptions it describes, and the file still carries `#![allow(dead_code)]`.
+- D15's `Component::perform(Cmd)` path was declined at task 5.4 while
+  `LegacyInput` and `CONTEXT_STACK` were live.
+- The `5.3d.22` deletion rows required zero references rather than authorizing a
+  replacement for the live route, so they documented a no-op.
 
-This is a deeper ownership and precedence entanglement, not a Rust, TuiRealm, or event-conversion limitation. The temporary endpoint survived because the replacement execution path was deferred and the final task was framed as dead-code deletion.
+All three are the same fact: **TuiRealm's dispatch has no ordering relation.**
+`Application::tick` forwards each event to the focused component *and* to every
+satisfied subscription; there is no consumed signal, `sub_lock` is
+all-or-nothing, and `SubClause` can only read `mounted()`, `state()`, and
+`query(Attribute)`. `Swallow` and `FallThrough` — the two ADR 0002 outcomes that
+*are* precedence — cannot be expressed. `GlobalViewKey` is the relation's
+stand-in, which is why it is unremovable rather than merely unreferenced.
+
+Two further entanglements are real and are handled explicitly below:
+
+- `handle_legacy_key` re-pushes Home, Emby browser, ABS podcast, ABS book, and
+  Music presentation after **every** key. Removing it requires each typed effect
+  path to push only what it changes.
+- The skip-intro/next-up prompts are a status-bar prompt, a desktop
+  notification, and an invisible focus-stealing component for one decision that
+  mpv already renders a button for. They are removed rather than routed.
+
+D7's assignment of a parent binding to `ComponentId::Library` remains unwirable
+— no `LibraryComponent` is mounted — and stays with #607.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Give every keyboard chord one live TuiRealm owner and preserve current precedence and effects.
-- Keep local interpretation in the focused Interactive Component and send only semantic cross-boundary requests to the shell.
-- Make the key policy executable through TuiRealm subscriptions rather than retaining a descriptive shadow table.
-- Delete all production raw-key fallback and TuiRealm-to-Crossterm reconstruction.
+- One live keyboard routing authority, in `UiRoot`, implementing ADR 0002's
+  three outcomes.
+- Leaves interpret only their own surface and emit typed semantic requests.
+- `key_policy.rs` becomes the router's executable policy.
+- Delete all production raw-key fallback and Crossterm reconstruction.
 - Keep implementation units reviewable despite the broad consumer fanout.
 
 **Non-Goals:**
 
-- Changing shortcuts, fixing input quirks, adding configurable keybindings, or adopting `CmdResult` redraw gating.
-- Creating a placeholder `LibraryComponent`; issue #607 owns the separate Library-parent architecture discrepancy.
-- Moving shell/runtime, Player, Service, persistence, or canonical Queue effects into Interactive Components.
+- Changing shortcuts (other than removing the skip-intro/next-up `Y`/`n`),
+  fixing input quirks, adding configurable keybindings, or adopting `CmdResult`
+  redraw gating.
+- Adopting `perform(Cmd)` as the component input API. ADR 0023 records it as a
+  separate, later decision.
+- Creating a placeholder `LibraryComponent`.
+- Moving shell/runtime, Player, Service, persistence, or canonical Queue effects
+  into Interactive Components.
 - Restoring deferred mouse paths or changing rendering.
+- Re-adding a TUI skip-intro/next-up affordance.
 
 ## Decisions
 
-### 1. Use the existing `on(Event)` path; do not revive wholesale `perform(Cmd)` adoption
+### 1. `UiRoot` is the Keyboard Router; its resolution selects between two messages
 
-Focused components already interpret native TuiRealm keyboard events in `on`. They will continue to update local state there and emit typed `Msg` values only for shell-owned effects. Shared parent/global chords will be delivered by concrete TuiRealm subscriptions installed from the live key policy.
+`UiRoot` is permanently mounted and already subscribes with
+`EventClause::Any` / `SubClause::Always`, so it observes every chord regardless
+of focus. It is skipped by `forward_to_subscriptions` while focused and receives
+the event as the active component instead, so delivery is exactly once either
+way.
 
-This removes the legacy path without changing all components to a second command-entry API. `perform` remains `NoChange`; `CmdResult` redraw work stays out of scope.
+`Application::tick` returns the focused component's message before subscribers'.
+With `PollStrategy::Once` there is at most one terminal event per tick, so the
+leaf's request and the router's resolution for the same chord arrive together:
 
-**Alternative considered:** adopt D15's `perform(Cmd)` design now that wholesale conversion is possible. Rejected because it would replace a working component input API across every component without adding behavior needed by #608.
+```
+key ──┬─▶ focused leaf ─────▶ Option<Msg>   local meaning, or None
+      │
+      └─▶ UiRoot router ────▶ Command     → run it,  discard the leaf's Msg
+                              Swallow     → run none, discard the leaf's Msg
+                              FallThrough → the leaf's Msg stands
+```
 
-### 2. Replace the shadow policy with executable TuiRealm routing
+`shell_run.rs` already snapshots focus before folding messages and already
+notes that `PollStrategy::Once` yields 0 or 1 terminal events per tick; the fold
+becomes "apply the router's outcome to this tick's leaf message" rather than
+"discard the observer key unless UiRoot is focused"
+(`route_terminal_observer_message`).
 
-`key_policy.rs` will become the single installation point for parent/global keyboard subscriptions. It will register concrete chord clauses and real TuiRealm gates on existing owners; descriptive `Custom("...")` gates and tests that compare the policy to `CONTEXT_STACK` will be removed.
+**Alternatives considered:** (a) gated subscriptions per owner — rejected, see
+ADR 0023: it cannot express `Swallow`/`FallThrough` without a distributed
+attribute mirror of shell state. (b) a shell pre-router in `Model` — rejected:
+the same relation sited outside the component framework. (c) `perform(Cmd)` as
+the policy execution path — rejected as orthogonal; `Cmd` carries no modifiers,
+so modifier-sensitive chords resolve router-side regardless.
 
-Ownership follows the smallest existing authority:
+### 2. Router policy reads a snapshot, not component attributes
 
-- A focused blocking overlay receives and swallows every key; lower subscriptions are gated off while it is mounted.
-- `UiRoot` owns application-wide overlay opening, force-clear, refresh, Panel-mode cycling, tab switching, and quit requests.
-- `Playback` owns visualizer and playback chords, including player/route eligibility and the existing Space/Escape double-tap state. Space and Escape are **global playback keys** (double-tap = Stop/TogglePlayPause); the leaf meanings (Escape = browse `go_back`, Space = Audiobookshelf select/play) are the first-press fall-through. See Decision 6 for the single-owner resolution.
-- `Queue` owns queue-width and clear-Queue chords plus Queue-local navigation and actions.
-- The focused Library destination owns selection-dependent actions such as opening a context menu for its selected item and emits the explicit target in its request.
+`key_policy.rs` becomes the ordered policy the router evaluates, with real
+runtime conditions rather than `Custom("...")` descriptions. It reads a
+plain-data snapshot — ADR 0002's `InputSnapshot`, grown to cover the conditions
+the current `CONTEXT_STACK` gates actually use — so policy stays a pure,
+testable function.
 
-No fake `LibraryComponent` is introduced solely to satisfy the old table. This change may remove the stale `ComponentId::Library` policy entry, but it does not resolve the broader parent/ledger discrepancy tracked by #607.
+The shadow table's gates are lossy today and are corrected while activating:
 
-The shared globals (`q`, Tab/BackTab, `1`–`9`, `.`) are the precedence crux. They are currently claimed by `handle_global_view_key` *ahead of* panel dispatch, so they are neither a parent binding nor a destination-local key. The `.` context-menu key is selection-dependent and must move to the focused destination, which emits the explicit target — including the Home-only Continue Watching special case whose target (`home_cw_selected`/`cw_item`) is resolved at the Model boundary and threaded through every `CONTEXT_STACK` handler signature today. The destination-independent Alt-key path (`handle_key_alt`: Alt+Left/Right panel-focus switch, Alt+Up/Down tab cycle, catch-all swallow) is a separate global that must be assigned to `UiRoot`.
+| entry | shadow gate | actual condition |
+| --- | --- | --- |
+| `queue_column_width` | `IsMounted(Queue)` | `PanelMode::Both` + Shift+Left/Right |
+| `playback` | boolean | per-key `resolve_key` table + 300 ms double-tap |
+| `clear_queue_prompt_c` | `Always` | `'c'` sans Alt, gated on no open context menu |
+| `confirm_skip_intro` / `confirm_next_up` | `Custom(...)` | **deleted** — see Decision 4 |
 
-The playback transport gate is a per-key command table (`resolve_key`) plus a 300ms double-tap on Space/Escape that returns `None` on the first press. The skip-intro/next-up prompts are **already** a focused modal (`PlaybackPromptComponent` mounted with `application.active()`), so focus is their blocking mechanism — no attribute mirror is needed for them (the existing `ATTR_*_PROMPT_VISIBLE` attributes are dead and are deleted).
+No `SubClause` gate is added. `UiRoot`'s universal observer subscription remains
+the only keyboard subscription, and it carries no precedence.
 
-**Alternative considered:** retain a shell pre-router for parent/global keys. Rejected because it would be the same parallel endpoint under a new name and would violate ADR 0022.
+### 3. Double-tap fall-through needs no special case
 
-### 6. Space/Escape are owned by one global handler; leaves do not claim them
+The Space/Escape 300 ms double-tap already returns `None` on the first press and
+`Some(dispatch(cmd))` on the second (`input_lib_keys.rs`). Under Decision 1 that
+maps directly onto the router's outcomes with no rewrite of meaning:
 
-Space and Escape are global playback keys (double-tap → Stop / TogglePlayPause). The legacy `CONTEXT_STACK` ran the playback double-tap *above* the focused leaf, so the first press fell through to the leaf (browse `go_back`, Audiobookshelf select/play) and the second press within 300ms was claimed by playback (Stop / TogglePlayPause). TuiRealm's fan-out fires the focused leaf and the Playback subscription independently — there is no "above", so a leaf claiming Space/Escape double-acts against the global playback key on the second press.
+- **first press** → `FallThrough` → the leaf's own request stands (browse
+  `go_back` via `BrowserBack`/`TvBack`, Audiobookshelf
+  `AudiobookshelfBookIntent::Play` / `PodcastEpisodeIntent::FocusOrPlay`).
+- **second press within 300 ms** → `Command(Stop)` /
+  `Command(TogglePlayPause)` → the leaf's request is discarded.
 
-Global keys must not be resolved by per-screen logic (the reason the migration exists). Therefore Space and Escape are owned by **one global handler** that implements the 300ms double-tap and dispatches, by focused leaf, the existing typed first-press request (`ShellRequest::BrowserBack`/`TvBack` for browse `go_back`; `AudiobookshelfBookIntent::Play`/`PodcastEpisodeIntent::FocusOrPlay` for Audiobookshelf select) on the first press and the playback command (Stop / TogglePlayPause) on the second press. Leaves stop claiming Space and Escape for their own actions; the first-press leaf behavior is dispatched by the global handler via the existing typed request set, so no leaf interprets a raw Space/Escape and no per-screen playback-timer mirror is introduced. The dispatch table is the same focus→effect mapping `handle_key_view_dispatch` performs today, moved into a TuiRealm subscription owner.
+Leaves keep their ordinary Escape/Space meanings; nothing mirrors a timer, and
+the router does not need a focus→effect dispatch table for these chords.
 
-**Alternatives considered:** (a) leaves mirror Playback's double-tap timer and decline the second press — rejected: it is per-screen logic for a global feature. (b) Playback's double-tap only fires when the Playback component is focused — rejected: drops the global playback-key behavior the app is designed around. (c) a shell pre-router running the double-tap before the leaf — rejected as the same parallel endpoint under a new name (Decision 2).
+This supersedes the earlier plan in which one global handler owned Space/Escape
+outright and re-dispatched the leaf's first-press action by focus. That was a
+workaround for fan-out; with an ordering relation it is unnecessary.
 
-### 3. Raw keys stop at the component boundary
+### 4. The skip-intro and next-up TUI prompts are removed, not routed
 
-Every `ShellRequest` that carries a Crossterm `KeyEvent` will be replaced by the smallest semantic request set for that surface. Components decide accept/cancel/move/submit/dismiss locally; the shell performs only effects outside component authority. Existing target-bearing request types are reused. This includes not only the bare `*Key` forwards (`ConfirmKey`, `DaemonLostKey`, `RemoteReanchorKey`, `ContextMenuKey`, `FeedsManageKey`, `PlaybackPromptKey`, `SavePlaylistKey`, `QueueKey`, `GlobalViewKey`) but also the cursor-carrying `ServiceRequest::SettingsKey { cursor, key }` and `PersistRequest::SettingsKey { cursor, key }` variants, which are raw-key payloads under a different shape.
+They are three UIs for one decision that mpv already renders a clickable button
+for (`scripts/mbv_intro.lua`, `scripts/mbv_visibility.lua`), with its own
+show/accept/self-dismiss lifecycle. Routing them would have meant preserving:
 
-The conversion proceeds by behavior family while the old endpoint remains available only to not-yet-converted families. A family is complete only when its component has no `to_crossterm_key_event` call and emits neither `GlobalViewKey` nor another raw `*Key` request.
+- a prompt written into `App.status` with `status_expires = None` as a sentinel;
+- a component mounted **and** `active()` on prompt state but rendered only when
+  desktop notifications are off or failed — an invisible focus owner that
+  swallowed every key, so `q` during a skip-intro window did not quit;
+- a fourth input path (`notif_action_tx` → `drain_notif_actions`) mutating the
+  same state outside any routing policy.
 
-Shared key matching will use native TuiRealm key values. Framework-neutral action helpers may be retained only where multiple owners already share the same semantic command mapping; no new generic dispatcher is added.
+Removed: both `CONTEXT_STACK`/`KEY_POLICY` entries,
+`handle_key_confirm_skip_intro`, `handle_key_confirm_next_up`,
+`PlaybackPromptComponent`, `ComponentId::PlaybackPrompt`,
+`ShellRequest::PlaybackPromptKey`, `sync_playback_prompt`,
+`render_playback_prompt`, `render_playback_prompt_content`, the dead
+`ATTR_SKIP_INTRO_PROMPT_VISIBLE` / `ATTR_NEXT_UP_PROMPT_VISIBLE` attributes,
+both `self.status = "... (Y/n)"` writes, the two `notify_with_actions` calls,
+and the `skip_intro:*` / `next_up:*` arms of `drain_notif_actions`.
 
-**Alternative considered:** change raw request payloads from Crossterm keys to TuiRealm keys. Rejected because that renames the forwarding bridge instead of removing it.
+Retained deliberately:
 
-### 4. Split the work by precedence/effect family, then delete globally
+| | disposition |
+| --- | --- |
+| `App.next_up_item` | **kept.** `PlayerEvent::NextUpPlay` takes it to resolve the `JumpTo` index when the user clicks mpv's button. Player state, not prompt state; all existing clear sites stand. |
+| `App.skip_intro_end_ticks` | **deleted.** Lua performs the seek itself; after the prompt is gone the field has writes and clears but no reader. |
+| `always_skip_intro` | unaffected — `IntroStarted` still auto-seeks and never prompted. |
 
-The consumer fanout is larger than one safe writer unit. Implementation will use serial, compile-complete families:
+Consequence for `App.status`: these were its only writers with
+`status_expires: None`. Afterwards `status` is a toast slot with a TTL,
+unconditionally. Prompts that require an answer stay modals (`ConfirmModal`,
+`clear_queue_prompt_c`), which is the only blocking shape the router offers.
 
-1. root/global policy and integration harness;
-2. blocking overlays and dialogs;
-3. Playback and playback prompts;
-4. Queue;
-5. Library destinations/media workspaces;
-6. global deletion and architecture gates.
+The remote-daemon gap (mpv's button renders on the daemon's display) is
+accepted and recorded in `docs/architecture/mpv-owned-playback-prompts.md`,
+along with the conditions any re-added affordance must satisfy.
 
-Each family reuses its existing shell effect entry points and replaces the blanket post-key presentation pushes with targeted pushes at that request's handler. The final deletion happens only after repository searches show no production raw-key request or adapter consumer.
+**Alternative considered:** keep the notification path and drop only the
+status-bar prompt. Deferred rather than rejected — it is the recorded remedy if
+the remote-daemon gap needs covering. It is out of scope here because it is a
+fourth input path into state the router cannot see.
 
-**Alternative considered:** delete `CONTEXT_STACK` first and fix compile errors outward. Rejected because it obscures precedence regressions and creates one unreviewable cross-repository edit.
+### 5. Raw keys stop at the component boundary
 
-### 5. Preserve behavior with one production-style routing matrix
+Every `ShellRequest` carrying a Crossterm `KeyEvent` is replaced by the smallest
+semantic request set for that surface. Components decide
+accept/cancel/move/submit/dismiss locally; the shell performs only effects
+outside component authority. Existing target-bearing request types are reused.
 
-Existing direct `component.on(...)` tests remain useful for local interpretation, but they cannot prove focus/subscription behavior. Extend the current TuiRealm shell integration coverage with one table-driven `Application::tick()`-level matrix that catches realistic failures:
+This covers the bare forwards (`ConfirmKey`, `DaemonLostKey`,
+`RemoteReanchorKey`, `ContextMenuKey`, `FeedsManageKey`, `SavePlaylistKey`,
+`QueueKey`, `GlobalViewKey`) and the cursor-carrying
+`ServiceRequest::SettingsKey { cursor, key }` /
+`PersistRequest::SettingsKey { cursor, key }`, which are raw-key payloads under
+a different shape. `PlaybackPromptKey` is deleted with its component.
 
-- a blocking overlay swallows an unbound/global key;
-- a focused leaf falls through to exactly one eligible parent/global subscription;
-- a locally claimed key does not also trigger a global effect;
-- Queue and Library focus route their representative keys to the correct owner;
-- playback gating and double-tap behavior remain unchanged.
+Shared key matching uses native TuiRealm key values. Framework-neutral action
+helpers may be retained only where multiple owners already share the same
+semantic mapping; no new generic dispatcher is added.
 
-Existing characterization tests will be repointed or removed when this integration matrix supersedes their legacy-loop assertions. The component boundary architecture gate will reject production Crossterm `KeyEvent` payloads/raw fallback variants under `src/app/components/`.
+**Alternative considered:** change raw payloads from Crossterm keys to TuiRealm
+keys. Rejected — it renames the forwarding bridge instead of removing it.
+
+### 6. Selection-dependent chords are leaf requests, not router commands
+
+`.` (context menu) is selection-dependent, so it is a leaf meaning: the focused
+destination resolves its own selected item and emits the explicit target,
+following `browser.rs` (`BrowserContextMenu { item }`) and `music_workspace.rs`
+(`MusicTrackContextMenu`). The Home Continue Watching target
+(`home_cw_selected` / `cw_item`) is resolved by `HomeComponent` from
+Model-owned `home_content` — the same resolution site as today, emitted by the
+component rather than threaded through every `CONTEXT_STACK` handler signature.
+
+The router's policy therefore does not claim `.`; it falls through. The
+genuinely destination-independent globals — `q`, Tab/BackTab, `1`–`9`, Ctrl+L,
+F5, F1 Help-open with its blocking-overlay guard, and the `handle_key_alt` path
+(Alt+Left/Right panel focus, Alt+Up/Down tab cycle, catch-all Alt swallow) —
+are router `Command`s and `Swallow`s.
+
+### 7. Split the work by routing responsibility, then delete globally
+
+The consumer fanout exceeds one safe writer unit. Serial, compile-complete
+units, each ending green:
+
+1. router seam + integration harness (behavior-preserving);
+2. prompt removal (isolated, and it removes the invisible focus owner that makes
+   the rest hard to reason about);
+3. executable policy + globals moved into the router;
+4. blocking overlays, dialogs, and forms off raw-key requests;
+5. Queue;
+6. Library destinations and media workspaces;
+7. global deletion and architecture gates.
+
+Each unit replaces the blanket post-key presentation pushes with targeted pushes
+at that request's handler. Final deletion happens only after repository searches
+show no production raw-key consumer.
+
+**Alternative considered:** delete `CONTEXT_STACK` first and fix compile errors
+outward. Rejected — it obscures precedence regressions and creates one
+unreviewable edit.
+
+### 8. Behavior is pinned by one production-style routing matrix
+
+Direct `component.on(...)` tests prove local interpretation but cannot prove
+routing. One table-driven `Application::tick()`-level matrix covers:
+
+- a blocking overlay `Swallow`s an unbound and a global chord;
+- a router `Command` discards the focused leaf's message for that tick;
+- a router `FallThrough` lets exactly one leaf message stand, and fires no
+  global effect;
+- Queue and Library focus route representative chords to the correct owner;
+- playback gating, and the double-tap's first-press fall-through / second-press
+  claim.
+
+Existing characterization tests are repointed or removed as this matrix
+supersedes their legacy-loop assertions. The component boundary architecture
+gate rejects production Crossterm `KeyEvent` payloads and raw fallback variants
+under `src/app/components/`.
 
 ## Risks / Trade-offs
 
-- **[A subscription and the active component both claim a chord]** → Use mutually exclusive runtime gates and the integration matrix to prove exactly one effect.
-- **[A typed replacement loses a legacy side effect hidden in `handle_legacy_key`]** → Inventory each raw request's mutations and add only the corresponding targeted presentation push before removing that family.
-- **[Broad fanout produces an unreviewable change]** → Land serial behavior families and run focused component/shell checks after each; keep the global deletion last.
-- **[The missing Library parent blocks literal D7 ownership]** → Route only application-wide bindings through existing `UiRoot`; keep selection-dependent behavior in the focused destination and leave the separate Library-parent decision to #607.
-- **[Static characterization tests pass while production routing is wrong]** → Require the production-style `Application::tick()` routing matrix before deleting the endpoint.
-- **[A load-bearing precedence quirk is silently dropped]** → The `clear_queue_prompt_c` vs context-menu mutual exclusion (#135), the `Ctrl+a` enqueue-before-playback claim (#209), the `[`/`]` Queue-vs-Library meaning split, the `handle_lib_key` Ctrl/Alt catch-all swallow, the Space/Escape first-press fall-through, and the Ctrl+/ terminal-encoding ambiguity are each pinned by a routing-matrix row (task 1.3) before any family converts.
-- **[The blanket re-projection masks a mutation]** → The five `push_*_content` calls in `handle_legacy_key` re-project Home, Emby browser, ABS podcast, ABS book, and Music workspace after *every* key; each family must replace only the pushes its handlers actually need (task 6.1), and the inventory (task 1.1) records which handler mutates which surface.
+- **[The router and a leaf both act on one chord]** → The outcome is a single
+  selection over one tick's messages, not two independent gates. Pinned by the
+  `Command`-discards-leaf and `FallThrough`-keeps-leaf rows of the matrix.
+- **[A typed replacement loses a side effect hidden in `handle_legacy_key`]** →
+  Inventory each raw request's mutations (task 1.1) and add the corresponding
+  targeted presentation push before removing that family.
+- **[The blanket re-projection masks a mutation]** → The five `push_*_content`
+  calls fire after *every* key today. Each unit replaces only the pushes its own
+  handlers need; the inventory records which handler mutates which surface.
+- **[A load-bearing precedence quirk is silently dropped]** → The
+  `clear_queue_prompt_c` vs context-menu mutual exclusion (#135), the `Ctrl+a`
+  enqueue-before-playback claim (#209), the `[`/`]` Queue-vs-Library meaning
+  split, the `handle_lib_key` Ctrl/Alt catch-all swallow, the Space/Escape
+  first-press fall-through, and the Ctrl+/ terminal-encoding ambiguity are each
+  pinned by a matrix row (task 1.3) before any unit converts.
+- **[Prompt removal is noticed as a regression]** → It is a deliberate,
+  documented removal with a named re-add contract
+  (`docs/architecture/mpv-owned-playback-prompts.md`) and a spec delta, not a
+  silent drop.
+- **[The remote-daemon prompt gap]** → Accepted and recorded. The remedy, if
+  needed, is restoring the notification path, not the status-bar prompt.
+- **[The missing Library parent blocks literal D7 ownership]** → Route only
+  application-wide bindings through the router; keep selection-dependent
+  behavior in the focused destination; leave the Library-parent decision to
+  #607.
 
 ## Migration Plan
 
-1. Record the exact raw-key producer/consumer and mutation matrix from current HEAD; treat it as the checklist for the serial families.
-2. Land the TuiRealm routing integration harness and executable global policy without changing current observable behavior.
-3. Convert each behavior family to native component interpretation and semantic requests, deleting its raw forwarding and blanket re-projection as it reaches zero consumers.
-4. Delete `GlobalViewKey`, remaining raw `*Key` requests, `typed_key.rs`, `Model::handle_legacy_key`, `App::handle_key_with_home_context`, `CONTEXT_STACK`, obsolete handlers, and static-only policy scaffolding.
-5. Run formatting, package checks/tests, Clippy, architecture gates, and the code-size gate; verify searches return no production legacy keyboard endpoint.
+1. Record the exact raw-key producer/consumer and mutation matrix from current
+   HEAD; treat it as the checklist for the serial units.
+2. Land the router seam and the `Application::tick()` integration harness with
+   policy still empty, so behavior is unchanged and the harness is trustworthy.
+3. Remove the skip-intro/next-up prompts, with the spec delta and the
+   architecture note.
+4. Activate `key_policy.rs` as the router's policy and move the globals in.
+5. Convert each remaining unit to component-local interpretation and semantic
+   requests, deleting its raw forwarding and blanket re-projection as it reaches
+   zero consumers.
+6. Delete `GlobalViewKey`, the remaining raw `*Key` requests, `typed_key.rs`,
+   `Model::handle_legacy_key`, `App::handle_key_with_home_context`,
+   `CONTEXT_STACK`, obsolete handlers, and static-only scaffolding.
+7. Run formatting, package checks and tests, Clippy, architecture gates, and the
+   code-size gate; verify searches return no production legacy keyboard
+   endpoint.
 
-All steps are internal to one development branch. Before the final deletion, rollback is a normal commit revert of the latest family. After deletion, rollback is the revert of the complete change so the old and new authorities are not mixed.
+All steps are internal to one development branch. Before the final deletion,
+rollback is a normal commit revert of the latest unit. After deletion, rollback
+is the revert of the complete change so the old and new authorities are not
+mixed.

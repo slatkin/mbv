@@ -1,6 +1,4 @@
-use super::notify_actions::ToastSeverity;
 use super::types_playback::PendingQueueAction;
-use mbv_core::player::PlayerCommand;
 
 use super::App;
 
@@ -134,44 +132,15 @@ impl App {
         produced
     }
 
-    /// Drain and act on notification-originated actions (skip-intro, next-up,
-    /// clear-queue confirmation, notif-failure flag). Extracted from `run()`'s
-    /// loop body; returns whether any action was received so the caller can
-    /// fold that into its own `had_events` for render scheduling.
+    /// Drain and act on retained notification-originated actions (clear-queue
+    /// confirmation and notification-failure flag).
+    /// Extracted from `run()`'s loop body; returns whether any action was
+    /// received so the caller can fold that into its own `had_events` for render scheduling.
     pub(super) fn drain_notif_actions(&mut self) -> bool {
         let mut produced = false;
         while let Ok(action) = self.notif_action_rx.try_recv() {
             produced = true;
             match action.as_str() {
-                "skip_intro:skip" => {
-                    if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
-                        let secs = end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
-                        self.player.send_command(PlayerCommand::SeekAbsolute(secs));
-                        self.player.send_command(PlayerCommand::SkipIntroDismiss);
-                        self.status.clear();
-                    }
-                }
-                "next_up:play" => {
-                    if let Some(item) = self.next_up_item.take() {
-                        if let Some(idx) = self
-                            .playback_queue()
-                            .slots()
-                            .iter()
-                            .position(|s| matches!(&s.item, mbv_core::playback_queue::QueueItem::Emby(e) if e.id == item.id))
-                        {
-                            let label = item.playback_label();
-                            self.player.send_command(PlayerCommand::JumpTo(idx));
-                            self.playback_queue_mut().queue_cursor = idx;
-                            self.flash(label, ToastSeverity::Success);
-                        }
-                    }
-                    self.status.clear();
-                }
-                "next_up:skip" => {
-                    self.next_up_item = None;
-                    self.player.send_command(PlayerCommand::NextUpDismiss);
-                    self.status.clear();
-                }
                 "clear:yes" => {
                     self.dismiss_confirm();
                     self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
@@ -179,7 +148,7 @@ impl App {
                 "__notif_failed__" => {
                     self.notif_failed = true;
                 }
-                _ => {} // dismissed, "ignore", "cancel", or empty: leave TUI prompt untouched
+                _ => {} // dismissed, "ignore", "cancel", or empty
             }
         }
         produced

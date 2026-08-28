@@ -3,7 +3,7 @@ mod tests {
     use super::*;
     use crate::app::components::{
         FeedsManageComponent, LibraryRoutesComponent, Msg, MultiselectComponent,
-        PlaybackPromptComponent, SelectionModalComponent, ShellRequest, UserEvent,
+        SelectionModalComponent, ShellRequest, UserEvent,
     };
     use crate::app::tests::make_app_stub;
     use crate::app::types_context_menu::{LibraryRoutePopup, LibraryRouteStage};
@@ -16,29 +16,6 @@ mod tests {
     use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-    #[test]
-    fn playback_prompt_shell_sync_mounts_and_mirrors_status() {
-        let mut model = Model::new(make_app_stub());
-        model.app.skip_intro_end_ticks = Some(100);
-        model.app.status = "Skip intro? (Y/n)".into();
-
-        model.sync_playback_prompt();
-
-        let id = ComponentId::PlaybackPrompt;
-        assert!(model.application.mounted(&id));
-        let component = model
-            .application
-            .get_component(&id)
-            .expect("Playback prompt mounted")
-            .as_any()
-            .downcast_ref::<PlaybackPromptComponent>()
-            .expect("Playback prompt type");
-        assert_eq!(component.status(), "Skip intro? (Y/n)");
-
-        model.app.skip_intro_end_ticks = None;
-        model.sync_playback_prompt();
-        assert!(!model.application.mounted(&id));
-    }
 
     #[test]
     fn selection_modal_shell_syncs_and_routes_dismissal() {

@@ -138,3 +138,7 @@ mod tests_music_grouping;
 #[cfg(test)]
 #[path = "tests_player_event.rs"]
 mod tests_player_event;
+
+#[cfg(test)]
+#[path = "tests_routing_matrix.rs"]
+mod tests_routing_matrix;
