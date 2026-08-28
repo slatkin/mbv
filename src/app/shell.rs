@@ -14,9 +14,9 @@
 //! shell. It shrinks as surfaces convert and is gone at the completion gate
 //! (task 5.3/5.6), leaving only shell/runtime authority + the `Application`.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use super::action::Command;
+use super::action::{playback_command_for_key, Command};
 use super::components::msg::{
     AlbumCursorKind, BrowserHitRegion, PodcastShowMove, QueueHitRegion, TvHitRegion,
 };
@@ -32,6 +32,7 @@ use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
 use super::{App, IdleFeed, QueueScope, ToastSeverity};
+use crossterm::event::KeyCode;
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
@@ -148,7 +149,7 @@ pub(super) fn apply_router_outcome(
 impl Model {
     /// Build the router snapshot and resolve the terminal chord. The router
     /// reads a plain-data snapshot, never component attributes (ADR 0023).
-    fn router_outcome(&self, messages: &[Msg]) -> RouterOutcome {
+    fn router_outcome(&mut self, messages: &[Msg]) -> RouterOutcome {
         let Some(key) = messages.iter().find_map(|msg| match msg {
             Msg::TerminalEvent(TerminalObserverEvent::Key(key)) => Some(*key),
             _ => None,
@@ -174,9 +175,67 @@ impl Model {
                 .application
                 .mounted(&ComponentId::Overlay(OverlayId::ContextMenu)),
             idle_feed_link_available: self.app.idle_feed_link_available(),
+            space_double_tap: self
+                .app
+                .last_space_press
+                .is_some_and(|pressed| pressed.elapsed() < Duration::from_millis(300)),
+            esc_double_tap: self
+                .app
+                .last_esc_press
+                .is_some_and(|pressed| pressed.elapsed() < Duration::from_millis(300)),
         };
 
-        resolve_router_outcome(key, &snapshot)
+        let outcome = resolve_router_outcome(key, &snapshot);
+        // A GlobalViewKey (or UiRoot's observer-only message) still takes the
+        // legacy path for its first FallThrough, where the existing handler
+        // arms the timer. Typed leaf requests have no legacy handler, so the
+        // router arms their timer itself. A second claimed press always clears
+        // the timer here because its leaf message is discarded.
+        let legacy_path = messages
+            .iter()
+            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::GlobalViewKey(_))))
+            || self.application.focus() == Some(&ComponentId::UiRoot);
+        self.update_double_tap_state(key, &snapshot, &outcome, !legacy_path);
+        outcome
+    }
+
+    /// Keep the existing App-owned double-tap timestamps in sync while the
+    /// router owns playback resolution. A first eligible press falls through
+    /// to the focused leaf and starts its timer; a second press is claimed by
+    /// the router and clears the timer after dispatch is selected.
+    fn update_double_tap_state(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+        snapshot: &RouterSnapshot,
+        outcome: &RouterOutcome,
+        arm_first_press: bool,
+    ) {
+        let playback = playback_command_for_key(
+            super::input_resolver::KeyChord::from_key(key),
+            snapshot.player_active,
+            snapshot.has_remote_session,
+        );
+        match (key.code, playback, outcome) {
+            (KeyCode::Char(' '), Some(Command::TogglePlayPause), RouterOutcome::FallThrough)
+                if arm_first_press && !snapshot.space_double_tap =>
+            {
+                self.app.last_space_press = Some(Instant::now());
+            }
+            (
+                KeyCode::Char(' '),
+                Some(Command::TogglePlayPause),
+                RouterOutcome::Command(Command::TogglePlayPause),
+            ) => self.app.last_space_press = None,
+            (KeyCode::Esc, Some(Command::Stop), RouterOutcome::FallThrough)
+                if arm_first_press && !snapshot.esc_double_tap =>
+            {
+                self.app.last_esc_press = Some(Instant::now());
+            }
+            (KeyCode::Esc, Some(Command::Stop), RouterOutcome::Command(Command::Stop)) => {
+                self.app.last_esc_press = None;
+            }
+            _ => {}
+        }
     }
 }
 

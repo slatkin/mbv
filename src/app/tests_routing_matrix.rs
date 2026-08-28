@@ -17,7 +17,8 @@
 //! The matrix began against the empty policy; global rows now assert the live
 //! `Command`/`Swallow` outcomes while the remaining migration rows continue to
 //! pin their deliberate `FallThrough` behavior until their owning task moves
-//! the effect into the router.
+//! the effect into the router. Playback rows additionally pin the live
+//! first-press FallThrough / second-press Command policy.
 
 use super::*;
 use crate::app::action::Command;
@@ -228,9 +229,8 @@ fn library_focus_routes_bracket_to_library_leaf() {
 // ── Playback gating and the double-tap (handoff 6e) ─────────────────────────
 
 /// Space with playback active: first press falls through (leaf's request
-/// stands — no toggle), second press within 300 ms claims `TogglePlayPause`.
-/// The empty policy cannot know the 300 ms window yet, so both presses fall
-/// through here; section 4.3 wires the timing and flips the second press.
+/// stands — no toggle). The router claims the second press within 300 ms;
+/// the live timer is exercised by the shell-level test in `shell_tests`.
 #[test]
 fn playback_gating_space_first_press_falls_through() {
     let leaf = Some(Msg::Shell(ShellRequest::GlobalViewKey(key(KeyCode::Char(' ')))));
@@ -268,6 +268,71 @@ fn playback_gating_esc_first_press_falls_through() {
     );
     assert_eq!(out.len(), 1);
     assert!(matches!(&out[0], Msg::Shell(ShellRequest::BrowserBack)));
+}
+
+#[test]
+fn playback_gating_space_second_press_claims_toggle() {
+    let mut snapshot = active_snapshot();
+    snapshot.space_double_tap = true;
+    assert_eq!(
+        resolve_router_outcome(key(KeyCode::Char(' ')), &snapshot),
+        RouterOutcome::Command(Command::TogglePlayPause)
+    );
+}
+
+#[test]
+fn playback_gating_esc_second_press_claims_stop() {
+    let mut snapshot = active_snapshot();
+    snapshot.esc_double_tap = true;
+    assert_eq!(
+        resolve_router_outcome(key(KeyCode::Esc), &snapshot),
+        RouterOutcome::Command(Command::Stop)
+    );
+}
+
+#[test]
+fn playback_policy_preserves_per_key_eligibility() {
+    let active = active_snapshot();
+    assert_eq!(
+        resolve_router_outcome(
+            key(KeyCode::Char('<')),
+            &active,
+        ),
+        RouterOutcome::Command(Command::SeekRelative(-5.0))
+    );
+    assert_eq!(
+        resolve_router_outcome(key(KeyCode::Char('a')), &active),
+        RouterOutcome::Command(Command::ToggleMuteOrCycleAudio)
+    );
+    assert_eq!(
+        resolve_router_outcome(
+            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL),
+            &active,
+        ),
+        RouterOutcome::FallThrough
+    );
+    assert_eq!(
+        resolve_router_outcome(key(KeyCode::Char('m')), &idle_snapshot()),
+        RouterOutcome::Command(Command::ToggleMute)
+    );
+}
+
+#[test]
+fn visualizer_resolves_to_router_command() {
+    assert_eq!(
+        resolve_router_outcome(key(KeyCode::Char('v')), &idle_snapshot()),
+        RouterOutcome::Command(Command::ToggleVisualizer)
+    );
+}
+
+#[test]
+fn idle_feed_path_resolves_to_router_command() {
+    let mut snapshot = idle_snapshot();
+    snapshot.idle_feed_link_available = true;
+    assert_eq!(
+        resolve_router_outcome(key(KeyCode::Char('o')), &snapshot),
+        RouterOutcome::Command(Command::OpenIdleFeedLink)
+    );
 }
 
 // ── Task 1.3 load-bearing quirks ────────────────────────────────────────────

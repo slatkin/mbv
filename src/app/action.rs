@@ -23,6 +23,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Command {
     OpenIdleFeedLink,
+    ToggleVisualizer,
     TogglePlayPause,
     Stop,
     /// Relative seek in seconds; negative rewinds, positive fast-forwards.
@@ -335,6 +336,7 @@ impl App {
             Command::OpenIdleFeedLink => {
                 self.open_idle_feed_link();
             }
+            Command::ToggleVisualizer => self.toggle_visualizer(),
 
             Command::TogglePlayPause => {
                 self.playback_target().toggle_play_pause(self);

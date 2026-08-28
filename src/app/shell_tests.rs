@@ -31,6 +31,40 @@ fn ui_root_router_command_opens_help() {
 }
 
 #[test]
+fn router_records_first_space_for_second_claim() {
+    let mut model = Model::new(make_app_stub());
+    model.app.player.status.lock().unwrap().active = true;
+    model.application.active(&ComponentId::Playback).unwrap();
+    let key = KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE);
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key))];
+
+    assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
+    assert!(model.app.last_space_press.is_some());
+    assert_eq!(
+        model.router_outcome(&messages),
+        RouterOutcome::Command(Command::TogglePlayPause)
+    );
+    assert!(model.app.last_space_press.is_none());
+}
+
+#[test]
+fn router_records_first_esc_for_second_claim() {
+    let mut model = Model::new(make_app_stub());
+    model.app.player.status.lock().unwrap().active = true;
+    model.application.active(&ComponentId::Playback).unwrap();
+    let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key))];
+
+    assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
+    assert!(model.app.last_esc_press.is_some());
+    assert_eq!(
+        model.router_outcome(&messages),
+        RouterOutcome::Command(Command::Stop)
+    );
+    assert!(model.app.last_esc_press.is_none());
+}
+
+#[test]
 fn converted_surface_skips_observer_key_but_retains_redraw_signal() {
     let focused = ComponentId::Playback;
     let key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);

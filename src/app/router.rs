@@ -33,7 +33,7 @@ pub(super) fn resolve_router_outcome(key: KeyEvent, snapshot: &RouterSnapshot) -
     let chord = KeyChord::from_key(key);
     match resolve_policy(chord, snapshot) {
         Some(entry) if entry.blocking => RouterOutcome::Swallow,
-        Some(entry) => command_for_policy(entry.binding, chord)
+        Some(entry) => command_for_policy(entry.binding, chord, snapshot)
             .map(RouterOutcome::Command)
             .unwrap_or(RouterOutcome::FallThrough),
         None => RouterOutcome::FallThrough,

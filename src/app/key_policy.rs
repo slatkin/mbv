@@ -23,6 +23,14 @@ pub(super) struct RouterSnapshot {
     pub selection_modal_open: bool,
     pub context_menu_open: bool,
     pub idle_feed_link_available: bool,
+    /// Whether the previous eligible Space press is within the double-tap
+    /// window. The timer remains App-owned; this is the router's plain-data
+    /// view of it.
+    pub space_double_tap: bool,
+    /// Whether the previous eligible Esc press is within the double-tap
+    /// window. The timer remains App-owned; this is the router's plain-data
+    /// view of it.
+    pub esc_double_tap: bool,
 }
 
 /// One ordered layer of the keyboard policy.
@@ -348,7 +356,11 @@ pub(super) fn resolve_policy(
 }
 
 /// Translate a matched router binding into the semantic command it owns.
-pub(super) fn command_for_policy(binding: KeyPolicyBinding, key: KeyChord) -> Option<Command> {
+pub(super) fn command_for_policy(
+    binding: KeyPolicyBinding,
+    key: KeyChord,
+    snapshot: &RouterSnapshot,
+) -> Option<Command> {
     match binding {
         KeyPolicyBinding::SettingsOpen => Some(Command::ToggleSettings),
         KeyPolicyBinding::SessionsOpen => Some(Command::OpenSessions),
@@ -373,6 +385,30 @@ pub(super) fn command_for_policy(binding: KeyPolicyBinding, key: KeyChord) -> Op
         KeyPolicyBinding::PanelModeCycle => Some(Command::CyclePanelMode),
         KeyPolicyBinding::CtrlL => Some(Command::ForceClear),
         KeyPolicyBinding::F5 => Some(Command::RefreshCurrentView),
+        KeyPolicyBinding::Visualizer => Some(Command::ToggleVisualizer),
+        KeyPolicyBinding::Playback => {
+            let command = idle_feed_command_for_key(
+                key,
+                snapshot.player_active,
+                snapshot.has_remote_session,
+                snapshot.idle_feed_link_available,
+            )
+            .or_else(|| {
+                let input = InputSnapshot {
+                    player_active: snapshot.player_active,
+                    has_remote_session: snapshot.has_remote_session,
+                };
+                match resolve_key(InputContext::Playback, &input, key) {
+                    KeyResolution::Command(command) => Some(command),
+                    KeyResolution::FallThrough | KeyResolution::Swallow => None,
+                }
+            })?;
+            match command {
+                Command::TogglePlayPause if !snapshot.space_double_tap => None,
+                Command::Stop if !snapshot.esc_double_tap => None,
+                command => Some(command),
+            }
+        }
         _ => None,
     }
 }
