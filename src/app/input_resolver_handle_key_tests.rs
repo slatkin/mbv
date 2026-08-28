@@ -206,14 +206,6 @@ fn confirm_rescan_no_clears_flag_without_rescan_via_handle_key() {
 }
 
 #[test]
-fn skip_intro_confirm_no_dismisses_via_handle_key() {
-    let mut app = make_app_stub();
-    app.skip_intro_end_ticks = Some(1000);
-    app.handle_key(ev(KeyCode::Char('n'), KeyModifiers::NONE));
-    assert!(app.skip_intro_end_ticks.is_none());
-}
-
-#[test]
 fn next_up_confirm_no_dismisses_via_handle_key() {
     let mut app = make_app_stub();
     app.next_up_item = Some(crate::app::tests::make_item("item", "Movie"));

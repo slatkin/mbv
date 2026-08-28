@@ -48,7 +48,6 @@ impl App {
                     position_ticks / mbv_core::api::TICKS_PER_SECOND);
                 if self.player.is_remote_disconnected() {
                     self.next_up_item = None;
-                    self.skip_intro_end_ticks = None;
                     // An announced shutdown never reaches here: the reader
                     // thread sends PlayerEvent::DaemonShutdownAnnounced
                     // instead of a synthetic Stopped for that case (see the
@@ -134,7 +133,6 @@ impl App {
                     }
                 }
                 self.next_up_item = None;
-                self.skip_intro_end_ticks = None;
                 self.status.clear();
                 if is_delete {
                     // The removal, undo-push, and cursor-clamp already happened
@@ -222,7 +220,6 @@ impl App {
             }
             PlayerEvent::TrackChanged(idx) => {
                 self.visualizer_failed = false;
-                self.skip_intro_end_ticks = None;
                 self.next_up_item = None;
                 if self.status.starts_with("Next up:") {
                     self.status.clear();
@@ -370,18 +367,12 @@ impl App {
                     self.player.send_command(PlayerCommand::SkipIntroDismiss);
                 }
             }
-            PlayerEvent::IntroEnded => {
-                if self.skip_intro_end_ticks.take().is_some() {
-                    self.status.clear();
-                }
-            }
+            PlayerEvent::IntroEnded => {}
             PlayerEvent::SkipIntroPlay => {
-                self.skip_intro_end_ticks = None;
                 self.status.clear();
             }
             PlayerEvent::MpvQuit => {
                 self.next_up_item = None;
-                self.skip_intro_end_ticks = None;
                 self.status.clear();
                 self.refresh_after_stop();
             }

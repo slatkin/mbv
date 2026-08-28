@@ -306,7 +306,6 @@ impl App {
     }
 
     pub(super) fn clear_playback_overlays(&mut self) {
-        self.skip_intro_end_ticks = None;
         self.next_up_item = None;
         self.status.clear();
     }

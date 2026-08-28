@@ -221,7 +221,6 @@ pub(crate) fn make_app_stub() -> App {
         pending_remote_move_cursor: None,
         pending_queue_edit_cursor: None,
         pending_active_idx: None,
-        skip_intro_end_ticks: None,
         next_up_item: None,
         panel_focus: PanelFocus::default(),
         tab: TabSelection::Home,

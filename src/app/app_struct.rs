@@ -168,7 +168,6 @@ pub struct App {
     /// `remove_from_queue` and `PlayerEvent::UnifiedQueueUpdated`.
     pub(super) pending_queue_edit_cursor: Option<usize>,
     pub(super) pending_active_idx: Option<usize>,
-    pub(super) skip_intro_end_ticks: Option<i64>,
     pub(super) next_up_item: Option<EmbyItem>,
     // Main UI scalars.
     // reuses shared self.libs.

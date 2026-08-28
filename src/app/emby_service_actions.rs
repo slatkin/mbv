@@ -67,7 +67,6 @@ impl App {
         self.remote_tracker = None;
         self.remote_queue_projection = None;
         self.next_up_item = None;
-        self.skip_intro_end_ticks = None;
         self.last_played_item_id = None;
         self.last_played_completed = false;
         // Home content is Model-owned (task 5.3d): clearing it is delivered

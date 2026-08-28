@@ -105,7 +105,6 @@ impl App {
             pending_remote_move_cursor: None,
             pending_queue_edit_cursor: None,
             pending_active_idx: None,
-            skip_intro_end_ticks: None,
             next_up_item: None,
             // #361: read the new prefs key, falling back to the pre-#361 one
             // for one release. `power_focus`/`power_left_tab`/`power_left_width`
