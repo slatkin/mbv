@@ -73,7 +73,7 @@
 
 ## 5. Verification gate
 
-- [ ] 5.1 Run `rtk cargo check -p mbv`, `rtk cargo nextest run`,
+- [x] 5.1 Run `rtk cargo check -p mbv`, `rtk cargo nextest run`,
   `rtk cargo clippy --workspace --all-targets`, and `rtk ast-grep scan`; all
   four must be green. Confirm via `rtk grep` that `settings_cursor`,
   `services_cursor`, and `settings_scroll` no longer appear anywhere under
