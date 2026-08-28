@@ -87,9 +87,9 @@
 
 ## 5. Full verification gate
 
-- [ ] 5.1 `rtk cargo check -p mbv`
-- [ ] 5.2 `rtk cargo nextest run`
-- [ ] 5.3 `rtk cargo clippy --workspace --all-targets`
-- [ ] 5.4 `rtk ast-grep scan`
-- [ ] 5.5 `rtk cargo fmt` (accept its output) and confirm `rtk cargo fmt
+- [x] 5.1 `rtk cargo check -p mbv`
+- [x] 5.2 `rtk cargo nextest run`
+- [x] 5.3 `rtk cargo clippy --workspace --all-targets`
+- [x] 5.4 `rtk ast-grep scan`
+- [x] 5.5 `rtk cargo fmt` (accept its output) and confirm `rtk cargo fmt
       --check` is clean
