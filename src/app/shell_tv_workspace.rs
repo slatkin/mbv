@@ -297,4 +297,174 @@ mod tests {
         assert!(!model.app.play_tv_episode("movie-focused", 1, 1));
         assert!(!model.app.play_tv_episode("missing-series", 1, 0));
     }
+
+    /// Build a two-level stack: a Series parent list whose cursor is parked
+    /// off the child's parent, plus an empty Seasons child whose `parent_id`
+    /// points back at parent item 0. Used to prove `go_back` restores the
+    /// parent cursor by `parent_id`, never by the popped (mirrored) cursor.
+    fn tv_two_level_model() -> Model {
+        let mut model = mounted_tv_model();
+        model.app.libs[0].nav_stack[0].cursor = 1;
+        model.app.libs[0].nav_stack.push(crate::app::BrowseLevel {
+            parent_id: "movie-focused".into(),
+            title: "Seasons".into(),
+            items: vec![],
+            total_count: 0,
+            cursor: 0,
+            scroll: 0,
+            item_types: Some("Season".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        });
+        model
+    }
+
+    /// Build a three-level stack: Series parent -> Seasons child -> Episodes
+    /// grandchild, so a single `go_back` from Episodes must auto-skip the
+    /// Season level and still restore the Series cursor by `parent_id`.
+    fn tv_season_skip_model() -> Model {
+        let mut model = mounted_tv_model();
+        model.app.libs[0].nav_stack[0].cursor = 1;
+        let mut season = crate::app::tests::make_item("Season 1", "Season");
+        season.id = "season-1".into();
+        model.app.libs[0].nav_stack.push(crate::app::BrowseLevel {
+            parent_id: "movie-focused".into(),
+            title: "Seasons".into(),
+            items: vec![season],
+            total_count: 1,
+            cursor: 0,
+            scroll: 0,
+            item_types: Some("Season".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        });
+        model.app.libs[0].nav_stack.push(crate::app::BrowseLevel {
+            parent_id: "season-1".into(),
+            title: "Episodes".into(),
+            items: vec![crate::app::tests::make_item("Episode 1", "Episode")],
+            total_count: 1,
+            cursor: 0,
+            scroll: 0,
+            item_types: Some("Episode".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        });
+        model
+    }
+
+    #[test]
+    fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
+        let mut model = mounted_tv_model();
+
+        // The only cursor `activate_selected_series` consults is the one the
+        // mirror writes (`nav_stack.last().cursor` via `selected_series_item`).
+        // Mirror the component's selected Series ("movie-focused") onto it.
+        model.mirror_tv_workspace_cursor(0);
+        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
+        assert_eq!(
+            model.app.selected_series_item(0).map(|i| i.id),
+            Some("movie-focused".into()),
+            "selected_series_item reads nav_stack.last().cursor, the mirror target"
+        );
+
+        // Wide TV layout => `enter_series_selection` (wide fetch); returns true
+        // for a valid Series without consulting any other App-side cursor.
+        assert!(model.app.activate_selected_series(0));
+
+        // Narrow layout => `open_series_selection_modal`, raising a modal that
+        // the wide path does not.
+        model.app.layout.main.tv_wide_right_area = ratatui::layout::Rect::default();
+        model.mirror_tv_workspace_cursor(0);
+        model.app.activate_selected_series(0);
+        assert!(
+            model.app.pending_overlay.is_some(),
+            "narrow layout must open the series selection modal"
+        );
+        model.app.pending_overlay = None;
+
+        // Guard 1: a non-tvshows collection_type rejects.
+        model.app.libs[0].library.collection_type = "movies".into();
+        assert!(!model.app.activate_selected_series(0));
+
+        // Guard 2: a selected item that is not a Series rejects.
+        model.app.libs[0].library.collection_type = "tvshows".into();
+        model.app.libs[0].nav_stack[0].items[0].item_type = "Movie".into();
+        assert!(!model.app.activate_selected_series(0));
+    }
+
+    #[test]
+    fn go_back_ignores_popped_level_cursor_and_restores_by_parent_id() {
+        // Without a prior mirror: the popped child cursor is deliberately
+        // stale, yet go_back restores the Series cursor by `parent_id`.
+        let mut no_mirror = tv_two_level_model();
+        no_mirror.app.libs[0].nav_stack.last_mut().unwrap().cursor = 99;
+        no_mirror.app.go_back(0);
+        assert_eq!(no_mirror.app.libs[0].nav_stack.len(), 1);
+        assert_eq!(no_mirror.app.libs[0].nav_stack[0].cursor, 0);
+
+        // With a prior mirror call (which writes the popped child cursor): the
+        // restored parent cursor is identical, proving go_back never reads
+        // `nav_stack.last().cursor`.
+        let mut with_mirror = tv_two_level_model();
+        with_mirror.app.libs[0].nav_stack.last_mut().unwrap().cursor = 99;
+        with_mirror.mirror_tv_workspace_cursor(0);
+        with_mirror.app.go_back(0);
+        assert_eq!(with_mirror.app.libs[0].nav_stack.len(), 1);
+        assert_eq!(with_mirror.app.libs[0].nav_stack[0].cursor, 0);
+
+        // Season auto-skip: from the Episodes level, one go_back skips the
+        // Season level and still restores the Series cursor by `parent_id`.
+        let mut skip = tv_season_skip_model();
+        skip.app.libs[0].nav_stack.last_mut().unwrap().cursor = 42;
+        skip.app.go_back(0);
+        assert_eq!(skip.app.libs[0].nav_stack.len(), 1);
+        assert_eq!(skip.app.libs[0].nav_stack[0].cursor, 0);
+    }
+
+    #[test]
+    fn cycle_letter_pill_derives_from_filter_not_cursor() {
+        // A tvshows library large enough to surface letter pills, at its top
+        // browse level with pill bucket 0 (A–C) selected.
+        let mut model = mounted_tv_model();
+        model.app.libs[0].library_total = Some(1000);
+        model.app.libs[0].nav_stack[0].letter_filter =
+            Some(crate::app::render::LetterFilter::for_index(0).unwrap());
+
+        // Stale cursor: cycle_letter_pill must ignore `level.cursor` and
+        // advance the filter 0 -> 1 purely from `letter_filter`.
+        model.app.libs[0].nav_stack[0].cursor = 7;
+        model.app.cycle_letter_pill(0, 1);
+        let after_stale = model.app.libs[0].nav_stack[0].letter_filter.clone();
+        assert_eq!(after_stale.as_ref().map(|f| f.index), Some(1));
+        assert!(model.app.libs[0].nav_stack[0].loading);
+
+        // Fresh cursor at a different value: identical filter result, proving
+        // the cycle never consults `level.cursor` (select_letter_pill resets
+        // the cursor anyway).
+        let mut fresh = mounted_tv_model();
+        fresh.app.libs[0].library_total = Some(1000);
+        fresh.app.libs[0].nav_stack[0].letter_filter =
+            Some(crate::app::render::LetterFilter::for_index(0).unwrap());
+        fresh.app.libs[0].nav_stack[0].cursor = 0;
+        fresh.app.cycle_letter_pill(0, 1);
+        assert_eq!(
+            fresh.app.libs[0].nav_stack[0].letter_filter, after_stale,
+            "cycle_letter_pill result must not depend on level.cursor"
+        );
+    }
 }

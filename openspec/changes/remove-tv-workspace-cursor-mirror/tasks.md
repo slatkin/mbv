@@ -1,13 +1,13 @@
 ## 1. Characterize the current mirror dependents (discovery, per D17)
 
-- [ ] 1.1 Write a characterization test proving `App::activate_selected_series(lib_idx)`'s
+- [x] 1.1 Write a characterization test proving `App::activate_selected_series(lib_idx)`'s
       only dependency on the mirrored cursor is `selected_series_item(lib_idx)`
       (`src/app/render/components/detail.rs:137`) — trace and record its two
       guards (`collection_type == "tvshows"`, `item.item_type == "Series"`) so
       D1's item-targeted method can reproduce them structurally instead of by
       re-reading `App`. Verify: test passes against current `main`/pre-change
       behavior.
-- [ ] 1.2 Write a characterization test proving `App::go_back(lib_idx)`
+- [x] 1.2 Write a characterization test proving `App::go_back(lib_idx)`
       (`src/app/actions_navigation.rs:217`) never reads
       `nav_stack.last().cursor` — only the popped level's `parent_id` and the
       parent level's cursor. Assert this by driving `go_back` with the
@@ -17,7 +17,7 @@
       `nav_stack` results with and without a prior mirror call. Verify:
       `rtk cargo nextest run -p mbv` passes; if the assertion fails, stop and
       report the discovery instead of proceeding to task 3.
-- [ ] 1.3 Write a characterization test proving `App::cycle_letter_pill(lib_idx, delta)`
+- [x] 1.3 Write a characterization test proving `App::cycle_letter_pill(lib_idx, delta)`
       (`src/app/music_actions.rs:218`) never reads `.cursor` — only
       `letter_filter`. Same stale-cursor technique as 1.2. Verify: `rtk cargo
       nextest run -p mbv` passes; a failure is a blocking discovery result,
