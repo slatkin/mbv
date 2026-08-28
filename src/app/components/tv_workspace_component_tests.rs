@@ -194,7 +194,8 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
     ));
     assert!(matches!(
         component.on(&key(Key::Enter)),
-        Some(Msg::Shell(ShellRequest::TvActivate))
+        Some(Msg::Shell(ShellRequest::TvActivate { item }))
+            if item.name == "Series B" && item.item_type == "Series"
     ));
     assert!(matches!(
         component.on(&key(Key::Up)),

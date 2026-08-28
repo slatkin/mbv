@@ -12,6 +12,8 @@ use tuirealm::event::{Event, Key, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use mbv_core::api::EmbyItem;
+
 use super::msg::{Msg, ShellRequest, TvHit, TvHitRegion};
 use super::user_event::UserEvent;
 #[cfg(test)]
@@ -107,6 +109,19 @@ impl TvWorkspaceComponent {
             .with_cursor_scroll(self.cursor, self.scroll)
             .selected_item()
             .map(|item| item.id.clone())
+    }
+
+    /// The series item under the component's own cursor, cloned out of the
+    /// cached render context. `handle_key`'s Series Enter attaches this to
+    /// `ShellRequest::TvActivate` so the shell effect targets the component
+    /// selection instead of the mirrored App browse cursor.
+    pub(in crate::app) fn selected_item(&self) -> Option<EmbyItem> {
+        self.context
+            .list
+            .clone()
+            .with_cursor_scroll(self.cursor, self.scroll)
+            .selected_item()
+            .cloned()
     }
 
     /// Return the component-owned selection needed to activate an episode.
@@ -243,7 +258,11 @@ impl TvWorkspaceComponent {
             Key::Enter if self.pane == Pane::Series => {
                 self.episode_cursor = Some(0);
                 self.pane = Pane::Episodes;
-                Some(ShellRequest::TvActivate)
+                // Resolve the selected Series from the component's own cursor
+                // and carry it in the typed request; if nothing is resolvable
+                // (defensive), do not emit the request.
+                self.selected_item()
+                    .map(|item| ShellRequest::TvActivate { item })
             }
             Key::Enter => Some(ShellRequest::TvEpisodeActivate),
             Key::Esc | Key::Backspace => {

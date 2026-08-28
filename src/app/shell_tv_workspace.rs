@@ -24,13 +24,13 @@ impl Model {
             ShellRequest::TvMoveRows { .. }
             | ShellRequest::TvMoveColumn { .. }
             | ShellRequest::TvJumpCursor { .. }
-            | ShellRequest::TvActivate
+            | ShellRequest::TvActivate { .. }
             | ShellRequest::TvBack
             | ShellRequest::TvCycleLetterPill { .. } => {
                 self.mirror_tv_workspace_cursor(lib_idx);
                 match request {
-                    ShellRequest::TvActivate => {
-                        self.app.activate_selected_series(lib_idx);
+                    ShellRequest::TvActivate { item } => {
+                        self.app.activate_selected_series_item(&item);
                     }
                     ShellRequest::TvBack => self.app.go_back(lib_idx),
                     ShellRequest::TvCycleLetterPill { delta } => {
@@ -223,6 +223,36 @@ mod tests {
             .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
             .and_then(TvWorkspaceComponent::selected_item_id);
         assert_eq!(selected_id, Some("movie-second".into()));
+    }
+
+    #[test]
+    fn tv_series_enter_carries_the_component_selected_item() {
+        let mut model = mounted_tv_model();
+        let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+
+        // Park the App browse cursor somewhere other than the component's
+        // selection: the emitted TvActivate must carry the component's own
+        // selected Series, not the (mirrored) App cursor's item.
+        model.app.libs[0].nav_stack[0].cursor = 1;
+        let request = model
+            .application
+            .get_component_mut(&id)
+            .expect("TV workspace component mounted")
+            .as_any_mut()
+            .downcast_mut::<TvWorkspaceComponent>()
+            .expect("TV workspace component type")
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Enter,
+                modifiers: KeyModifiers::NONE,
+            }));
+        let Some(Msg::Shell(ShellRequest::TvActivate { item })) = request else {
+            panic!("series Enter must emit TvActivate carrying the selected item");
+        };
+        assert_eq!(
+            item.id, "movie-focused",
+            "TvActivate must carry the component's selected Series, not the stale App cursor"
+        );
+        assert_eq!(item.item_type, "Series");
     }
 
     #[test]

@@ -271,7 +271,11 @@ pub enum ShellRequest {
         to_end: bool,
     },
     /// Enter on a series row starts the component's episode-selection pane.
-    TvActivate,
+    /// Carries the component-resolved Series item so the shell effect never
+    /// consults the (mirrored) App browse cursor.
+    TvActivate {
+        item: EmbyItem,
+    },
     /// Enter on the focused TV episode pane plays the component-selected
     /// episode through the existing playback path.
     TvEpisodeActivate,

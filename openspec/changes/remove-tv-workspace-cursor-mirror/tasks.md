@@ -25,7 +25,7 @@
 
 ## 2. Add the item-targeted activation entry point (D1)
 
-- [ ] 2.1 Add `App::activate_selected_series_item(&mut self, item: &EmbyItem) -> bool`
+- [x] 2.1 Add `App::activate_selected_series_item(&mut self, item: &EmbyItem) -> bool`
       (or the name chosen at implementation time) in
       `src/app/input_browse_dispatch.rs`, sharing the `is_wide_tv_active()`
       branch (`enter_series_selection` / `open_series_selection_modal`) with
@@ -34,10 +34,10 @@
       wide/narrow logic. Leave `activate_selected_series(lib_idx)` in place
       for `mouse_gestures.rs:166,234` (mouse remains accepted-broken, D16).
       Verify: `rtk cargo check -p mbv` passes; `mouse_gestures.rs` unchanged.
-- [ ] 2.2 Add `item: mbv_core::api::EmbyItem` to `ShellRequest::TvActivate` in
+- [x] 2.2 Add `item: mbv_core::api::EmbyItem` to `ShellRequest::TvActivate` in
       `src/app/components/msg/shell.rs`. Verify: `rtk cargo check -p mbv`
       surfaces every call site needing updates (compiler-forced).
-- [ ] 2.3 In `TvWorkspaceComponent::handle_key`'s `Key::Enter if self.pane == Pane::Series`
+- [x] 2.3 In `TvWorkspaceComponent::handle_key`'s `Key::Enter if self.pane == Pane::Series`
       arm (`src/app/components/tv_workspace.rs:246`), resolve the selected
       item via the same lookup `selected_item_id()` performs and attach it
       to `ShellRequest::TvActivate { item }`. If no item is resolvable
@@ -45,7 +45,7 @@
       -p mbv` — extend `typed_tv_requests_keep_component_cursor_authoritative`
       (`shell_tv_workspace.rs:200`) or add a sibling test asserting `TvActivate`
       carries the expected `EmbyItem`.
-- [ ] 2.4 Update `handle_tv_request`'s `ShellRequest::TvActivate` arm
+- [x] 2.4 Update `handle_tv_request`'s `ShellRequest::TvActivate` arm
       (`src/app/shell_tv_workspace.rs:32-34`) to call
       `self.app.activate_selected_series_item(&item)` instead of
       `activate_selected_series(lib_idx)`. Verify: `rtk cargo nextest run -p

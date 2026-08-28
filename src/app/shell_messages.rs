@@ -416,7 +416,7 @@ impl Model {
                 request @ (ShellRequest::TvMoveRows { .. }
                 | ShellRequest::TvMoveColumn { .. }
                 | ShellRequest::TvJumpCursor { .. }
-                | ShellRequest::TvActivate
+                | ShellRequest::TvActivate { .. }
                 | ShellRequest::TvEpisodeActivate
                 | ShellRequest::TvBack
                 | ShellRequest::TvCycleLetterPill { .. }
