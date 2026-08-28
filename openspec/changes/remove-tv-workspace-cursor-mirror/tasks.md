@@ -66,20 +66,20 @@
 
 ## 4. Extend the named characterization tests to lock the end state
 
-- [ ] 4.1 Extend `typed_tv_requests_keep_component_cursor_authoritative`
+- [x] 4.1 Extend `typed_tv_requests_keep_component_cursor_authoritative`
       (`shell_tv_workspace.rs:200`) to assert `App.libs[0].nav_stack[0].cursor`
       is unchanged by `TvMoveRows`, `TvMoveColumn`, `TvJumpCursor`, and
       `TvCycleLetterPill` (component cursor moves; `App`'s does not) — the
       inverse of the pre-change assertion at line 219, which expected the
       mirror to have written `App`'s cursor to 1. Verify: `rtk cargo nextest
       run -p mbv`.
-- [ ] 4.2 Extend `tv_episode_activation_uses_component_cursors_and_cached_season_id`
+- [x] 4.2 Extend `tv_episode_activation_uses_component_cursors_and_cached_season_id`
       (`shell_tv_workspace.rs:229`) to assert episode activation still
       succeeds with a stale `App` cursor and that `TvBack` after activation
       restores the parent series-list cursor via `go_back`'s own
       `parent_id` lookup, not via any mirror. Verify: `rtk cargo nextest run
       -p mbv`.
-- [ ] 4.3 Add or extend an ast-grep rule / assertion (see `rtk ast-grep scan`
+- [x] 4.3 Add or extend an ast-grep rule / assertion (see `rtk ast-grep scan`
       fixtures under `rules/`) if one already forbids `App` back-projection
       of component-owned cursor state for migrated surfaces; otherwise skip —
       do not introduce a new architectural gate as part of this slice.

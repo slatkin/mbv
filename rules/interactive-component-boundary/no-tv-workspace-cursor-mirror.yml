@@ -1,0 +1,20 @@
+id: no-tv-workspace-cursor-mirror
+language: rust
+severity: error
+message: >-
+  src/app/ must not reintroduce `mirror_tv_workspace_cursor` or any App-side
+  back-projection of the TV component's selection cursor into
+  `nav_stack.last().cursor`. The TV workspace component owns its selection
+  cursor (openspec/changes/remove-tv-workspace-cursor-mirror): effects resolve
+  the component's item directly (`ShellRequest::TvActivate { item }`,
+  `TvWorkspaceComponent::selected_item` / `selected_series_snapshot`), and
+  `push_tv_workspace_content` derives the pushed Series snapshot from the
+  component, never from a stale App browse cursor.
+files:
+  - "src/app/**/*.rs"
+rule:
+  any:
+    - pattern: "self.mirror_tv_workspace_cursor($$$ARGS)"
+    - pattern: "mirror_tv_workspace_cursor($$$ARGS)"
+    - pattern: "Model::mirror_tv_workspace_cursor($$$ARGS)"
+    - pattern: "fn mirror_tv_workspace_cursor($$$ARGS) { $$$BODY }"
