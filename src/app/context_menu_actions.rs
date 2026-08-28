@@ -29,20 +29,18 @@ impl App {
                         self.cw_play(item);
                     }
                 } else if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
-                    // Was its own third copy of queue-cursor activation, with
-                    // a subtly narrower `else` branch than the keyboard/mouse
-                    // paths (no seek-to-start for an already-playing audio
-                    // item) -- now the same seam as Enter on the queue tab
-                    // and a queue-row double-click (see #134's follow-up).
-                    // The right-click that opened this menu already resolved
-                    // the slot into `queue_cursor`, so that resolved index is
-                    // passed explicitly (D2) rather than re-read by the
-                    // command.
+                    // The queue menu carries the resolved index explicitly
+                    // (ContextAction::PlayQueue, D2); bare Play on Queue
+                    // focus should not occur, but keep the legacy read for
+                    // defensive parity with the pre-D2 behavior.
                     let index = self.displayed_queue().queue_cursor;
                     self.dispatch(super::action::Command::QueuePlayCursor(index));
                 } else if let Some(lib_idx) = lib_idx {
                     self.select(lib_idx);
                 }
+            }
+            Some(ContextAction::PlayQueue(index)) => {
+                self.dispatch(super::action::Command::QueuePlayCursor(index));
             }
             Some(ContextAction::PlayFolder(id)) => {
                 let ct = if let Some(lib_idx) = lib_idx {
@@ -435,6 +433,13 @@ impl App {
         // rows, non-Emby queue items, and absent or stale targets produce no
         // Emby menu. `cw_focused` / `lib_idx` above drive the Emby-menu content
         // that follows; this match only resolves which target (if any) exists.
+        // On the queue, the resolved index (the right-clicked slot, written by
+        // `handle_mouse_single_click_queue` before the menu opens) is retained
+        // once and carried into every menu action that targets it (D2): the
+        // `PlayQueue(index)` and `RemoveFromQueue(index)` actions close over
+        // the clicked slot, so a follow update to `queue_cursor` cannot
+        // redirect them to another row.
+        let mut queue_cursor = None;
         let current_item = match (self.effective_panel_focus(), self.tab) {
             (crate::app::PanelFocus::Library, crate::app::TabSelection::Home) => cw_item,
             (crate::app::PanelFocus::Library, crate::app::TabSelection::EmbyLibrary(lib_idx)) => {
@@ -446,8 +451,9 @@ impl App {
             )
             | (crate::app::PanelFocus::Library, crate::app::TabSelection::Feeds) => return None,
             (crate::app::PanelFocus::Queue, _) => {
-                let queue = self.displayed_queue();
-                queue.clone_emby_item_at(queue.queue_cursor)
+                let cursor = self.displayed_queue().queue_cursor;
+                queue_cursor = Some(cursor);
+                self.displayed_queue().clone_emby_item_at(cursor)
             }
         };
 
@@ -487,7 +493,22 @@ impl App {
                     );
                 }
             } else {
-                Self::push_context_action(&mut entries, "Play", ContextAction::Play);
+                // Queue menus carry the resolved index in the action itself
+                // (ContextAction::PlayQueue, D2); Home/library menus keep the
+                // bare Play that the execution arm routes by focus.
+                if matches!(self.effective_panel_focus(), crate::app::PanelFocus::Queue) {
+                    if let Some(pos) = queue_cursor {
+                        Self::push_context_action(
+                            &mut entries,
+                            "Play",
+                            ContextAction::PlayQueue(pos),
+                        );
+                    } else {
+                        Self::push_context_action(&mut entries, "Play", ContextAction::Play);
+                    }
+                } else {
+                    Self::push_context_action(&mut entries, "Play", ContextAction::Play);
+                }
                 if cw_focused
                     || lib_idx.is_some()
                     || !matches!(self.effective_panel_focus(), crate::app::PanelFocus::Queue)

@@ -128,21 +128,18 @@ impl App {
     pub(super) fn handle_mouse_single_click_queue(
         &mut self,
         slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
-    ) -> bool {
+    ) -> Option<usize> {
         self.set_panel_focus(super::PanelFocus::Queue);
-        let Some(slot_id) = slot_id else { return false };
-        if let Some(index) = self
+        let slot_id = slot_id?;
+        let index = self
             .displayed_queue()
             .queue
             .slots()
             .iter()
-            .position(|slot| slot.slot_id == slot_id)
-        {
-            self.mark_queue_cursor_user_active();
-            self.displayed_queue_mut().queue_cursor = index;
-            return true;
-        }
-        false
+            .position(|slot| slot.slot_id == slot_id)?;
+        self.mark_queue_cursor_user_active();
+        self.displayed_queue_mut().queue_cursor = index;
+        Some(index)
     }
 
     pub(super) fn handle_mouse_selector_click_queue(&mut self, scope: QueueScope) {
@@ -172,11 +169,11 @@ impl App {
         &mut self,
         slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
     ) {
-        if self.handle_mouse_single_click_queue(slot_id) {
-            // The single-click already resolved the slot into
-            // `queue_cursor`; pass that resolved index explicitly (D2)
-            // rather than letting the command re-read it.
-            let index = self.displayed_queue().queue_cursor;
+        // The single-click resolves the clicked slot to an index; that
+        // resolved index is passed straight to the play effect (D2) instead
+        // of being recovered from `queue_cursor`, so a follow update cannot
+        // play a different row.
+        if let Some(index) = self.handle_mouse_single_click_queue(slot_id) {
             self.dispatch(Command::QueuePlayCursor(index));
         }
     }

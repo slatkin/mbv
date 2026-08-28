@@ -20,6 +20,11 @@ pub(super) enum ContextMenuAnchor {
 #[derive(Clone, Debug)]
 pub(super) enum ContextAction {
     Play,
+    /// Play the queue item at this explicit index (split-queue-cursor-
+    /// ownership D2): the queue menu retains the index resolved when the
+    /// menu opened (the right-clicked slot), so a follow update to
+    /// `queue_cursor` cannot redirect playback to another row.
+    PlayQueue(usize),
     PlayFolder(String),
     ShuffleFolder(String),
     Enqueue,

@@ -90,6 +90,95 @@ fn context_menu_play_on_queue_tab_seeks_to_start_for_current_playing_audio_item(
 }
 
 #[test]
+fn queue_menu_play_carries_clicked_index_not_follow_cursor() {
+    use crate::app::action::Command;
+    use crate::app::tests::make_item;
+    use crate::app::types_overlay::OverlayRequest;
+    use crate::player::PlayerCommand;
+
+    // The queue menu's Play action must retain the index resolved when the
+    // menu opened (the right-clicked slot) rather than re-reading
+    // `queue_cursor` at execution (split-queue-cursor-ownership D2): a
+    // follow update while the menu is open must not redirect playback to
+    // another row.
+    let mut app = crate::app::tests::make_app_stub();
+    app.panel_focus = crate::app::PanelFocus::Queue;
+    app.player_tab
+        .set_items(vec![make_item("A", "Movie"), make_item("B", "Movie")], 0);
+    let slot_b = app.player_tab.queue.slots()[1].slot_id;
+
+    // Right-click row B (index 1): the click resolves slot -> index 1 and
+    // opens the menu; the menu's Play action closes over 1.
+    app.handle_mouse_right_click_queue(Some(slot_b), 0, 0, false);
+    let menu = match app.pending_overlay.as_ref() {
+        Some(OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("queue context menu must open on right-click"),
+    };
+    let play_index = menu
+        .entries
+        .iter()
+        .find_map(|entry| match entry.action.as_ref() {
+            Some(crate::app::ContextAction::PlayQueue(pos)) => Some(*pos),
+            _ => None,
+        })
+        .expect("queue menu must carry a PlayQueue action");
+    assert_eq!(
+        play_index, 1,
+        "menu Play must close over the clicked index 1, got {play_index}"
+    );
+
+    // Follow update while the menu is open: playback advances the follow
+    // cursor to 0 (row A). Executing the retained PlayQueue(1) must still
+    // play row B.
+    app.player_tab.queue_cursor = 0;
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.current_idx = 0;
+        st.queue_len = 2;
+    }
+    let rx = app.player.spy_on_commands();
+    app.execute_context_action(Some(crate::app::ContextAction::PlayQueue(play_index)), None);
+
+    assert!(
+        matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))),
+        "menu Play must jump to the retained clicked index 1, not follow cursor 0"
+    );
+}
+
+#[test]
+fn queue_double_click_plays_clicked_index_not_follow_cursor() {
+    use crate::app::tests::make_item;
+    use crate::player::PlayerCommand;
+
+    // The queue-row double-click must play the index resolved from the
+    // clicked slot, passed straight through (D2), not recovered from
+    // `queue_cursor`: a follow cursor pointing elsewhere must not redirect.
+    let mut app = crate::app::tests::make_app_stub();
+    app.panel_focus = crate::app::PanelFocus::Queue;
+    app.player_tab
+        .set_items(vec![make_item("A", "Movie"), make_item("B", "Movie")], 0);
+    // Follow cursor points at row A (index 0).
+    app.player_tab.queue_cursor = 0;
+    let slot_b = app.player_tab.queue.slots()[1].slot_id;
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.current_idx = 0;
+        st.queue_len = 2;
+    }
+    let rx = app.player.spy_on_commands();
+
+    // Double-click row B (index 1).
+    app.handle_mouse_double_click_queue(Some(slot_b));
+
+    assert!(
+        matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))),
+        "double-click must jump to the clicked index 1, not follow cursor 0"
+    );
+}
+
+#[test]
 fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     use crate::app::action::Command;
     use crate::app::tests::make_item;
