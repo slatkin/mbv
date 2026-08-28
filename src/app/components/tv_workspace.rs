@@ -124,6 +124,14 @@ impl TvWorkspaceComponent {
             .cloned()
     }
 
+    /// The Series snapshot the shell pushed for this frame (`context
+    /// .selected_series`), exposed so tests can verify the pushed detail
+    /// follows the component's authoritative selection rather than the App
+    /// browse cursor.
+    pub(in crate::app) fn selected_series_snapshot(&self) -> Option<&EmbyItem> {
+        self.context.selected_series.as_ref()
+    }
+
     /// Return the component-owned selection needed to activate an episode.
     /// The shell uses these cursors to resolve the episode from App's cache;
     /// it never re-reads the library cursor for this action.

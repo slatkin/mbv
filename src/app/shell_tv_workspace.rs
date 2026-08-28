@@ -103,10 +103,22 @@ impl Model {
             return;
         }
         let list = self.app.library_list_render_ctx(index, false);
-        let selected_series = list
-            .selected_item()
-            .cloned()
-            .filter(|item| item.item_type == "Series");
+        // The TV component owns the selection cursor. Derive the pushed Series
+        // snapshot from the component's authoritative selection (its own cursor
+        // over its cached list), not the App browse cursor (which the removed
+        // mirror used to keep in sync). Only on first mount, when the component
+        // has no prior content, fall back to the App-derived item.
+        let selected_series = self
+            .application
+            .get_component(id)
+            .and_then(|comp| comp.as_any().downcast_ref::<TvWorkspaceComponent>())
+            .and_then(TvWorkspaceComponent::selected_item)
+            .filter(|item| item.item_type == "Series")
+            .or_else(|| {
+                list.selected_item()
+                    .cloned()
+                    .filter(|item| item.item_type == "Series")
+            });
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
@@ -235,6 +247,60 @@ mod tests {
             "TvActivate must carry the component's selected Series, not the stale App cursor"
         );
         assert_eq!(item.item_type, "Series");
+    }
+
+    #[test]
+    fn push_tv_workspace_content_uses_component_selection_over_stale_app_cursor() {
+        let mut model = mounted_tv_model();
+        let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+
+        // Seed detail for the second series so the pushed snapshot's target is
+        // observable via the component's selected_series_snapshot().
+        model.app.series_detail_cache.insert(
+            "movie-second".into(),
+            crate::app::SeriesDetail {
+                seasons: vec![],
+                episodes: std::collections::HashMap::new(),
+            },
+        );
+
+        // Component-local selection: move the component cursor onto the second
+        // series (index 1) while the App browse cursor stays at 0 — the
+        // divergence the removed mirror used to hide.
+        let moved = model
+            .application
+            .get_component_mut(&id)
+            .expect("TV workspace component mounted")
+            .as_any_mut()
+            .downcast_mut::<TvWorkspaceComponent>()
+            .expect("TV workspace component type")
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Down,
+                modifiers: KeyModifiers::NONE,
+            }));
+        assert!(matches!(
+            moved,
+            Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
+        ));
+        assert_eq!(
+            model.app.libs[0].nav_stack[0].cursor, 0,
+            "App browse cursor must stay stale (no mirror)"
+        );
+
+        // The push must derive the Series snapshot from the component's
+        // authoritative selection, not the stale App cursor.
+        model.push_tv_workspace_content();
+        let pushed = model
+            .application
+            .get_component(&id)
+            .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
+            .and_then(TvWorkspaceComponent::selected_series_snapshot)
+            .map(|item| item.id.clone());
+        assert_eq!(
+            pushed,
+            Some("movie-second".into()),
+            "pushed TV detail must follow the component selection, not the stale App cursor"
+        );
     }
 
     #[test]
