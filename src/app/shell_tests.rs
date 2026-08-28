@@ -10,24 +10,21 @@ use tuirealm::event::{
 };
 
 #[test]
-fn ui_root_terminal_key_reaches_legacy_help_handler() {
+fn ui_root_router_command_opens_help() {
     let mut model = Model::new(make_app_stub());
     let key = KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE);
-    // UiRoot focused, empty policy: the fold's `FallThrough` keeps the
-    // observer key so `handle_legacy_key` still runs (F1 opens Help).
-    let router = RouterOutcome::FallThrough;
-    let routed = apply_router_outcome(
-        vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key))],
-        Some(&ComponentId::UiRoot),
-        &router,
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key))];
+    assert_eq!(
+        model.router_outcome(&messages),
+        RouterOutcome::Command(Command::OpenHelp)
     );
-    let mut iter = routed.into_iter();
-    let Some(Msg::TerminalEvent(TerminalObserverEvent::Key(key))) = iter.next() else {
-        panic!("UiRoot terminal key was not retained for the shell handler");
-    };
-    assert!(iter.next().is_none());
-
-    assert!(!model.handle_legacy_key(key));
+    assert!(apply_router_outcome(
+        messages,
+        Some(&ComponentId::UiRoot),
+        &RouterOutcome::Command(Command::OpenHelp)
+    )
+    .is_empty());
+    assert!(!model.dispatch_router_command(Command::OpenHelp));
     assert!(model
         .application
         .mounted(&ComponentId::Overlay(OverlayId::Help)));
@@ -112,7 +109,7 @@ fn terminal_focus_observer_preserves_refocus_side_effects() {
 }
 
 #[test]
-fn global_view_key_from_media_surface_reaches_app_handler() {
+fn global_view_key_from_media_surface_is_claimed_by_router() {
     let mut surface = TvWorkspaceComponent::new();
     surface.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(Vec::new(), 0, 0),
@@ -133,7 +130,14 @@ fn global_view_key_from_media_surface_reaches_app_handler() {
     };
 
     let mut model = Model::new(make_app_stub());
-    assert!(!model.handle_legacy_key(key));
+    let messages = vec![
+        Msg::Shell(ShellRequest::GlobalViewKey(key)),
+        Msg::TerminalEvent(TerminalObserverEvent::Key(key)),
+    ];
+    let outcome = model.router_outcome(&messages);
+    assert_eq!(outcome, RouterOutcome::Command(Command::OpenHelp));
+    assert!(apply_router_outcome(messages, Some(&ComponentId::Playback), &outcome).is_empty());
+    assert!(!model.dispatch_router_command(Command::OpenHelp));
     assert!(model
         .application
         .mounted(&ComponentId::Overlay(OverlayId::Help)));

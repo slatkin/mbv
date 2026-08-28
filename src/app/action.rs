@@ -72,6 +72,22 @@ pub(super) enum Command {
     /// library-only (see `PanelMode`); below the mini-view threshold it
     /// toggles queue-only and library-only.
     CyclePanelMode,
+
+    // ── destination-independent routing ─────────────────────────────────
+    /// Quit the client through the normal dirty-queue/prefs shutdown path.
+    Quit,
+    NextLibraryTab,
+    PreviousLibraryTab,
+    SetLibraryTab(usize),
+    ForceClear,
+    RefreshCurrentView,
+    ToggleSettings,
+    OpenSessions,
+    OpenPlaylists,
+    OpenSearch,
+    /// Model-owned because mounting Help belongs to the TuiRealm shell.
+    OpenHelp,
+    FocusPanel(super::PanelFocus),
 }
 
 /// Resolve the idle-feed link shortcut separately from transport bindings so
@@ -541,6 +557,29 @@ impl App {
                         self.ui_volume,
                     );
                 }
+            }
+
+            Command::Quit => return self.try_quit(),
+            Command::NextLibraryTab => self.library_tab_next(),
+            Command::PreviousLibraryTab => self.library_tab_prev(),
+            Command::SetLibraryTab(index) => {
+                if index < self.tab_count() {
+                    self.set_library_tab(index);
+                }
+            }
+            Command::ForceClear => self.force_clear = true,
+            Command::RefreshCurrentView => self.refresh_current_view(),
+            Command::ToggleSettings => self.request_sidebar_toggle(super::SidebarId::Settings),
+            Command::OpenSessions => self.request_sidebar_open(super::SidebarId::Sessions),
+            Command::OpenPlaylists => self.open_playlists_panel(),
+            Command::OpenSearch => self.open_search_sidebar(),
+            // Model handles this shell-only command before delegating the
+            // remaining commands to App::dispatch.
+            Command::OpenHelp => unreachable!("OpenHelp is dispatched by Model"),
+            Command::FocusPanel(focus) => {
+                self.set_panel_focus(focus);
+                self.last_card_height = 0;
+                self.last_card_width = 0;
             }
 
             Command::CyclePanelMode => {

@@ -10,7 +10,7 @@ use crossterm::event::KeyEvent;
 
 use super::action::Command;
 use super::input_resolver::KeyChord;
-use super::key_policy::resolve_policy;
+use super::key_policy::{command_for_policy, resolve_policy};
 
 pub(super) use super::key_policy::RouterSnapshot;
 
@@ -20,7 +20,6 @@ pub(super) use super::key_policy::RouterSnapshot;
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum RouterOutcome {
     /// Run this semantic command and discard the leaf's message for this tick.
-    #[allow(dead_code)]
     Command(Command),
     /// Run nothing and discard the leaf's message for this tick.
     Swallow,
@@ -28,13 +27,15 @@ pub(super) enum RouterOutcome {
     FallThrough,
 }
 
-/// Resolve a chord against the live ordered policy. Policy layers that have
-/// not yet moved their effects into the router deliberately fall through; the
-/// policy still identifies their precedence and eligibility for the next
-/// migration units. Blocking layers already have their ADR 0002 semantics.
+/// Resolve a chord against the live ordered policy. A matched command is
+/// dispatched by the shell; blocking and catch-all layers swallow the leaf.
 pub(super) fn resolve_router_outcome(key: KeyEvent, snapshot: &RouterSnapshot) -> RouterOutcome {
-    match resolve_policy(KeyChord::from_key(key), snapshot) {
+    let chord = KeyChord::from_key(key);
+    match resolve_policy(chord, snapshot) {
         Some(entry) if entry.blocking => RouterOutcome::Swallow,
-        Some(_) | None => RouterOutcome::FallThrough,
+        Some(entry) => command_for_policy(entry.binding, chord)
+            .map(RouterOutcome::Command)
+            .unwrap_or(RouterOutcome::FallThrough),
+        None => RouterOutcome::FallThrough,
     }
 }

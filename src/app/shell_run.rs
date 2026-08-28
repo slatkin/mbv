@@ -406,6 +406,9 @@ impl Model {
                 // runs nothing and discards it, `FallThrough` lets the leaf's
                 // own request stand.
                 let router = self.router_outcome(&messages);
+                if let RouterOutcome::Command(command) = &router {
+                    quit |= self.dispatch_router_command(command.clone());
+                }
                 for msg in apply_router_outcome(messages, focused.as_ref(), &router) {
                     if self.handle_terminal_message(
                         msg,

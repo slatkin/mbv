@@ -4,11 +4,11 @@
 //! plain-data snapshot. It deliberately does not read TuiRealm attributes:
 //! precedence belongs to the router, not to distributed component mirrors.
 
-use super::action::idle_feed_command_for_key;
+use super::action::{idle_feed_command_for_key, Command};
 use super::components::component_id::OverlayId;
 use super::components::ComponentId;
 use super::input_resolver::{resolve_key, InputContext, InputSnapshot, KeyChord, KeyResolution};
-use super::types_settings::PanelMode;
+use super::types_settings::{PanelFocus, PanelMode};
 use crossterm::event::{KeyCode, KeyModifiers};
 
 /// Plain-data state read by the central keyboard policy.
@@ -17,7 +17,9 @@ pub(super) struct RouterSnapshot {
     pub player_active: bool,
     pub has_remote_session: bool,
     pub panel_mode: PanelMode,
+    pub panel_focus: PanelFocus,
     pub blocking_overlay_open: bool,
+    pub help_overlay_open: bool,
     pub selection_modal_open: bool,
     pub context_menu_open: bool,
     pub idle_feed_link_available: bool,
@@ -41,12 +43,23 @@ pub(super) enum KeyPolicyOwner {
     /// The central router owns the binding.
     Sub(ComponentId),
 }
-
-/// Key shape associated with a policy layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum KeyPolicyBinding {
     Any,
-    GlobalOverlayOpen,
+    SettingsOpen,
+    SessionsOpen,
+    PlaylistsOpen,
+    SearchOpen,
+    HelpOpen,
+    Quit,
+    NextLibraryTab,
+    PreviousLibraryTab,
+    LibraryTabJump,
+    AltPanelRight,
+    AltPanelLeft,
+    AltNextLibraryTab,
+    AltPreviousLibraryTab,
+    AltSwallow,
     QueueColumnWidth,
     PanelModeCycle,
     ClearQueue,
@@ -61,11 +74,31 @@ impl KeyPolicyBinding {
     fn matches(self, chord: KeyChord) -> bool {
         match self {
             Self::Any => true,
-            Self::GlobalOverlayOpen => {
-                matches!(chord.code, KeyCode::F(2) | KeyCode::F(3) | KeyCode::F(4))
-                    || (chord.mods.contains(KeyModifiers::CONTROL)
-                        && matches!(chord.code, KeyCode::Char('/') | KeyCode::Char('_')))
+            Self::SettingsOpen => chord.code == KeyCode::F(2),
+            Self::SessionsOpen => chord.code == KeyCode::F(3),
+            Self::PlaylistsOpen => chord.code == KeyCode::F(4),
+            Self::SearchOpen => {
+                chord.mods.contains(KeyModifiers::CONTROL)
+                    && matches!(chord.code, KeyCode::Char('/') | KeyCode::Char('_'))
             }
+            Self::HelpOpen => chord.code == KeyCode::F(1),
+            Self::Quit => chord.code == KeyCode::Char('q') && chord.mods.is_empty(),
+            Self::NextLibraryTab => chord.code == KeyCode::Tab,
+            Self::PreviousLibraryTab => chord.code == KeyCode::BackTab,
+            Self::LibraryTabJump => matches!(chord.code, KeyCode::Char('1'..='9')),
+            Self::AltPanelRight => {
+                chord.mods.contains(KeyModifiers::ALT) && chord.code == KeyCode::Right
+            }
+            Self::AltPanelLeft => {
+                chord.mods.contains(KeyModifiers::ALT) && chord.code == KeyCode::Left
+            }
+            Self::AltNextLibraryTab => {
+                chord.mods.contains(KeyModifiers::ALT) && chord.code == KeyCode::Down
+            }
+            Self::AltPreviousLibraryTab => {
+                chord.mods.contains(KeyModifiers::ALT) && chord.code == KeyCode::Up
+            }
+            Self::AltSwallow => chord.mods.contains(KeyModifiers::ALT),
             Self::QueueColumnWidth => {
                 matches!(chord.code, KeyCode::Left | KeyCode::Right)
                     && chord.mods == KeyModifiers::SHIFT
@@ -92,6 +125,9 @@ pub(super) enum KeyPolicyGate {
     Always,
     SelectionModal,
     NoBlockingOverlay,
+    NoBlockingOverlayAndHelpClosed,
+    PanelFocusQueue,
+    PanelFocusLibraryBoth,
     QueueColumnWidth,
     NoContextMenu,
     Playback,
@@ -103,6 +139,17 @@ impl KeyPolicyGate {
             Self::Always => true,
             Self::SelectionModal => snapshot.selection_modal_open,
             Self::NoBlockingOverlay => !snapshot.blocking_overlay_open,
+            Self::NoBlockingOverlayAndHelpClosed => {
+                !snapshot.blocking_overlay_open && !snapshot.help_overlay_open
+            }
+            Self::PanelFocusQueue => {
+                !snapshot.blocking_overlay_open && snapshot.panel_focus == PanelFocus::Queue
+            }
+            Self::PanelFocusLibraryBoth => {
+                !snapshot.blocking_overlay_open
+                    && snapshot.panel_focus == PanelFocus::Library
+                    && snapshot.panel_mode == PanelMode::Both
+            }
             Self::QueueColumnWidth => snapshot.panel_mode == PanelMode::Both,
             Self::NoContextMenu => !snapshot.context_menu_open,
             Self::Playback => {
@@ -135,9 +182,65 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         blocking: true,
     },
     KeyPolicyEntry {
-        name: "global_overlay_open",
+        name: "settings_open",
         owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
-        binding: KeyPolicyBinding::GlobalOverlayOpen,
+        binding: KeyPolicyBinding::SettingsOpen,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "sessions_open",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::SessionsOpen,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "playlists_open",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::PlaylistsOpen,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "search_open",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::SearchOpen,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "help_open",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::HelpOpen,
+        gate: KeyPolicyGate::NoBlockingOverlayAndHelpClosed,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "quit",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::Quit,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "next_library_tab",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::NextLibraryTab,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "previous_library_tab",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::PreviousLibraryTab,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "library_tab_jump",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::LibraryTabJump,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
@@ -152,7 +255,7 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         name: "panel_mode_cycle_x",
         owner: KeyPolicyOwner::Sub(ComponentId::Library),
         binding: KeyPolicyBinding::PanelModeCycle,
-        gate: KeyPolicyGate::Always,
+        gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
@@ -180,15 +283,50 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         name: "ctrl_l_force_clear",
         owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
         binding: KeyPolicyBinding::CtrlL,
-        gate: KeyPolicyGate::Always,
+        gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "f5_refresh",
         owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
         binding: KeyPolicyBinding::F5,
-        gate: KeyPolicyGate::Always,
+        gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "alt_panel_right",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::AltPanelRight,
+        gate: KeyPolicyGate::PanelFocusQueue,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "alt_panel_left",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::AltPanelLeft,
+        gate: KeyPolicyGate::PanelFocusLibraryBoth,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "alt_previous_library_tab",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::AltPreviousLibraryTab,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "alt_next_library_tab",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::AltNextLibraryTab,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "alt_swallow",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::AltSwallow,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: true,
     },
     KeyPolicyEntry {
         name: "view_dispatch",
@@ -209,11 +347,41 @@ pub(super) fn resolve_policy(
         .find(|entry| entry.binding.matches(key) && entry.gate.allows(key, snapshot))
 }
 
+/// Translate a matched router binding into the semantic command it owns.
+pub(super) fn command_for_policy(binding: KeyPolicyBinding, key: KeyChord) -> Option<Command> {
+    match binding {
+        KeyPolicyBinding::SettingsOpen => Some(Command::ToggleSettings),
+        KeyPolicyBinding::SessionsOpen => Some(Command::OpenSessions),
+        KeyPolicyBinding::PlaylistsOpen => Some(Command::OpenPlaylists),
+        KeyPolicyBinding::SearchOpen => Some(Command::OpenSearch),
+        KeyPolicyBinding::HelpOpen => Some(Command::OpenHelp),
+        KeyPolicyBinding::Quit => Some(Command::Quit),
+        KeyPolicyBinding::NextLibraryTab | KeyPolicyBinding::AltNextLibraryTab => {
+            Some(Command::NextLibraryTab)
+        }
+        KeyPolicyBinding::PreviousLibraryTab | KeyPolicyBinding::AltPreviousLibraryTab => {
+            Some(Command::PreviousLibraryTab)
+        }
+        KeyPolicyBinding::LibraryTabJump => match key.code {
+            KeyCode::Char(c @ '1'..='9') => {
+                Some(Command::SetLibraryTab((c as usize) - '1' as usize))
+            }
+            _ => None,
+        },
+        KeyPolicyBinding::AltPanelRight => Some(Command::FocusPanel(PanelFocus::Library)),
+        KeyPolicyBinding::AltPanelLeft => Some(Command::FocusPanel(PanelFocus::Queue)),
+        KeyPolicyBinding::PanelModeCycle => Some(Command::CyclePanelMode),
+        KeyPolicyBinding::CtrlL => Some(Command::ForceClear),
+        KeyPolicyBinding::F5 => Some(Command::RefreshCurrentView),
+        _ => None,
+    }
+}
 // ---------------------------------------------------------------------------
 // Mouse subscription pattern (design D8)
 // ---------------------------------------------------------------------------
 //
 // Per-surface conversion tasks follow this pattern for mouse routing:
+
 //
 // * Each currently visible top-level region (Queue, the active Library
 //   destination, an overlay) subscribes to mouse events with its own guard.

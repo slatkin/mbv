@@ -16,9 +16,7 @@
 
 use std::time::Duration;
 
-use tuirealm::application::{Application, PollStrategy};
-use tuirealm::listener::EventListenerCfg;
-
+use super::action::Command;
 use super::components::msg::{
     AlbumCursorKind, BrowserHitRegion, PodcastShowMove, QueueHitRegion, TvHitRegion,
 };
@@ -34,6 +32,8 @@ use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
 use super::{App, IdleFeed, QueueScope, ToastSeverity};
+use tuirealm::application::{Application, PollStrategy};
+use tuirealm::listener::EventListenerCfg;
 
 #[path = "shell_messages.rs"]
 mod shell_messages;
@@ -162,7 +162,11 @@ impl Model {
                 || self.app.player.is_remote()
                 || self.app.is_cast_attached(),
             panel_mode: self.app.effective_panel_mode(),
+            panel_focus: self.app.effective_panel_focus(),
             blocking_overlay_open: self.is_blocking_overlay_open(),
+            help_overlay_open: self
+                .application
+                .mounted(&ComponentId::Overlay(OverlayId::Help)),
             selection_modal_open: self
                 .application
                 .mounted(&ComponentId::Overlay(OverlayId::SelectionModal)),
@@ -171,6 +175,7 @@ impl Model {
                 .mounted(&ComponentId::Overlay(OverlayId::ContextMenu)),
             idle_feed_link_available: self.app.idle_feed_link_available(),
         };
+
         resolve_router_outcome(key, &snapshot)
     }
 }
@@ -206,39 +211,30 @@ fn apply_terminal_observer(
 impl Model {
     /// Handle a key that remains on the legacy App path.
     fn handle_legacy_key(&mut self, key: crossterm::event::KeyEvent) -> bool {
-        // F1 opens the Help overlay unless a blocking overlay is active (those
-        // swallow it). Once Help is mounted it is the active component, so
-        // F1 arrives as Msg::Shell(DismissHelp) instead.
-        let quit = if key.code == crossterm::event::KeyCode::F(1)
-            && !self
-                .application
-                .mounted(&ComponentId::Overlay(OverlayId::Help))
-            && !self.is_blocking_overlay_open()
-        {
-            self.mount_help();
-            false
-        } else {
-            self.app.handle_key_with_home_context(
-                key,
-                self.home_continue_watching_selected(),
-                self.home_cw_item(),
-            )
-        };
-        // F5/context-menu/confirm keys and panel-focus keys write Home
-        // content or focus inside App's handler; re-project after every key
-        // at this seam (idempotent) (task 5.3d, sync_home deletion).
+        let quit = self.app.handle_key_with_home_context(
+            key,
+            self.home_continue_watching_selected(),
+            self.home_cw_item(),
+        );
+        // F5/context-menu/confirm keys and panel-focus keys write Home content
+        // or focus inside App's handler; re-project at this seam until those
+        // surfaces migrate.
         self.push_home_content();
-        // Emby browser content may have changed (5.3d.15/M2).
         self.push_emby_browser_content();
-        // Podcast keys (cursor/selection/filter moves and panel-focus keys)
-        // write the active ABS browse state in App's handler; re-project
-        // (5.3d.11 U6).
         self.push_audiobookshelf_podcast_content();
-        // Book keys (cursor/selection/bucket moves and panel-focus keys) write
-        // the active ABS browse state in App's handler; re-project (task 5.3d).
         self.push_audiobookshelf_book_content();
         self.push_music_workspace_content();
         quit
+    }
+
+    fn dispatch_router_command(&mut self, command: Command) -> bool {
+        match command {
+            Command::OpenHelp => {
+                self.mount_help();
+                false
+            }
+            command => self.app.dispatch(command),
+        }
     }
 
     /// Construct the model, starting the TuiRealm crossterm listener and

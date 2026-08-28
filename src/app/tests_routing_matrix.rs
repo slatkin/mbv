@@ -14,11 +14,10 @@
 //! exactly one leaf message standing, Queue-vs-Library focus routing, playback
 //! gating, and the double-tap first-press fall-through / second-press claim.
 //!
-//! The matrix must pass against the current (empty-policy) behavior so it is
-//! trustworthy before the policy moves in section 4. The empty policy resolves
-//! every chord `FallThrough`, so each row asserts the leaf-kept outcome today;
-//! section 4 flips individual rows to `Command`/`Swallow` as the policy
-//! activates, and the matrix becomes the regression net for the move.
+//! The matrix began against the empty policy; global rows now assert the live
+//! `Command`/`Swallow` outcomes while the remaining migration rows continue to
+//! pin their deliberate `FallThrough` behavior until their owning task moves
+//! the effect into the router.
 
 use super::*;
 use crate::app::action::Command;
@@ -378,5 +377,86 @@ fn ctrl_slash_both_terminal_encodings_route_identically() {
         slash_out.len(),
         underscore_out.len(),
         "both Ctrl+/ encodings must route identically"
+    );
+}
+
+#[test]
+fn destination_independent_globals_resolve_to_router_commands() {
+    let mut snapshot = idle_snapshot();
+    let globals = [
+        (key(KeyCode::Char('q')), Command::Quit),
+        (key(KeyCode::Tab), Command::NextLibraryTab),
+        (key(KeyCode::BackTab), Command::PreviousLibraryTab),
+        (key(KeyCode::Char('1')), Command::SetLibraryTab(0)),
+        (
+            KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL),
+            Command::ForceClear,
+        ),
+        (key(KeyCode::F(5)), Command::RefreshCurrentView),
+        (key(KeyCode::Char('x')), Command::CyclePanelMode),
+        (key(KeyCode::F(2)), Command::ToggleSettings),
+        (key(KeyCode::F(3)), Command::OpenSessions),
+        (key(KeyCode::F(4)), Command::OpenPlaylists),
+        (
+            KeyEvent::new(KeyCode::Char('/'), KeyModifiers::CONTROL),
+            Command::OpenSearch,
+        ),
+    ];
+    for (key, command) in globals {
+        assert_eq!(
+            resolve_router_outcome(key, &snapshot),
+            RouterOutcome::Command(command),
+            "global {key:?} must be claimed by the router"
+        );
+    }
+
+    snapshot.help_overlay_open = false;
+    assert_eq!(
+        resolve_router_outcome(key(KeyCode::F(1)), &snapshot),
+        RouterOutcome::Command(Command::OpenHelp)
+    );
+}
+
+#[test]
+fn help_and_alt_router_guards_preserve_overlay_precedence() {
+    let mut snapshot = idle_snapshot();
+    snapshot.blocking_overlay_open = true;
+    assert_eq!(
+        resolve_router_outcome(key(KeyCode::F(1)), &snapshot),
+        RouterOutcome::FallThrough,
+        "F1 must not open Help over a blocking overlay"
+    );
+
+    snapshot.blocking_overlay_open = false;
+    snapshot.help_overlay_open = true;
+    assert_eq!(
+        resolve_router_outcome(key(KeyCode::F(1)), &snapshot),
+        RouterOutcome::FallThrough,
+        "Help keeps F1 for its dismiss request"
+    );
+
+    snapshot.help_overlay_open = false;
+    snapshot.panel_focus = crate::app::PanelFocus::Queue;
+    assert_eq!(
+        resolve_router_outcome(
+            KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
+            &snapshot
+        ),
+        RouterOutcome::Command(Command::FocusPanel(crate::app::PanelFocus::Library))
+    );
+    assert_eq!(
+        resolve_router_outcome(
+            KeyEvent::new(KeyCode::Down, KeyModifiers::ALT),
+            &snapshot
+        ),
+        RouterOutcome::Command(Command::NextLibraryTab)
+    );
+    assert_eq!(
+        resolve_router_outcome(
+            KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT),
+            &snapshot
+        ),
+        RouterOutcome::Swallow,
+        "unhandled Alt chords must not leak into destination handling"
     );
 }
