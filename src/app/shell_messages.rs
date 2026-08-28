@@ -434,9 +434,6 @@ impl Model {
                     self.app.handle_mouse_scroll_browse(delta);
                 }
                 self.push_tv_workspace_content();
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    self.mirror_tv_workspace_cursor(lib_idx);
-                }
             }
             Msg::Shell(ShellRequest::TvClick { region, col, row }) => {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
@@ -454,9 +451,6 @@ impl Model {
                     }
                 }
                 self.push_tv_workspace_content();
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    self.mirror_tv_workspace_cursor(lib_idx);
-                }
             }
             Msg::Shell(
                 request @ (ShellRequest::PlaylistsBack

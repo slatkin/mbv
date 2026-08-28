@@ -19,15 +19,15 @@ impl Model {
                 self.app
                     .play_tv_episode(&series_id, season_cursor, episode_cursor);
             }
-            // The component owns the cursor; mirror its selected item only at
-            // this writer seam so App effects resolve the same target.
+            // Activation, back, and letter-pill effects resolve the
+            // component's selection directly (item-targeted) or from the App
+            // nav stack; no cursor mirror remains.
             ShellRequest::TvMoveRows { .. }
             | ShellRequest::TvMoveColumn { .. }
             | ShellRequest::TvJumpCursor { .. }
             | ShellRequest::TvActivate { .. }
             | ShellRequest::TvBack
             | ShellRequest::TvCycleLetterPill { .. } => {
-                self.mirror_tv_workspace_cursor(lib_idx);
                 match request {
                     ShellRequest::TvActivate { item } => {
                         self.app.activate_selected_series_item(&item);
@@ -39,7 +39,6 @@ impl Model {
                     _ => {}
                 }
                 self.push_tv_workspace_content();
-                self.mirror_tv_workspace_cursor(lib_idx);
             }
             // Episode and season cursors are component-local until the later
             // episode action slice; retain typed routing without touching App.
@@ -54,25 +53,6 @@ impl Model {
             .get_component(id)
             .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
             .and_then(TvWorkspaceComponent::episode_activation_selection)
-    }
-
-    pub fn mirror_tv_workspace_cursor(&mut self, lib_idx: usize) {
-        let Some(id) = self.tv_workspace_id.as_ref() else {
-            return;
-        };
-        let Some(item_id) = self
-            .application
-            .get_component(id)
-            .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
-            .and_then(TvWorkspaceComponent::selected_item_id)
-        else {
-            return;
-        };
-        if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
-            if let Some(cursor) = level.items.iter().position(|item| item.id == item_id) {
-                level.cursor = cursor;
-            }
-        }
     }
 
     fn tv_workspace_component_id(&self) -> Option<ComponentId> {
@@ -216,7 +196,9 @@ mod tests {
         };
         assert!(matches!(request, ShellRequest::TvMoveRows { rows: 1 }));
         model.handle_tv_request(request);
-        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
+        // With the cursor mirror removed (task 3), TvMoveRows no longer writes
+        // the component cursor into App's browse level; it stays at 0.
+        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
         let selected_id = model
             .application
             .get_component(&id)
@@ -431,19 +413,20 @@ mod tests {
 
         // Divergence: park App's cursor on "movie-second" (index 1) while the
         // mounted component still selects "movie-focused". Without the mirror
-        // the resolution would follow the stale App cursor; with it,
-        // activation follows the component's selected item.
+        // the resolution follows the stale App cursor; writing the cursor
+        // back to 0 (the mirror's former effect) realigns it to the
+        // component's selection.
         model.app.libs[0].nav_stack[0].cursor = 1;
         assert_eq!(
             model.app.selected_series_item(0).map(|i| i.id),
             Some("movie-second".into()),
-            "stale App cursor resolves a different Series before the mirror"
+            "stale App cursor resolves a different Series before realignment"
         );
-        model.mirror_tv_workspace_cursor(0);
+        model.app.libs[0].nav_stack[0].cursor = 0;
         assert_eq!(
             model.app.selected_series_item(0).map(|i| i.id),
             Some("movie-focused".into()),
-            "mirror realigns the cursor to the component's selected Series"
+            "realigned cursor resolves the component's selected Series"
         );
 
         // Wide TV layout => enter_series_selection targets the component's
@@ -455,7 +438,7 @@ mod tests {
         // Narrow layout => open_series_selection_modal targets the same
         // Series, proven by the modal's Series source id.
         model.app.layout.main.tv_wide_right_area = ratatui::layout::Rect::default();
-        model.mirror_tv_workspace_cursor(0);
+        model.app.libs[0].nav_stack[0].cursor = 0;
         model.app.activate_selected_series(0);
         match model.app.pending_overlay.as_ref() {
             Some(crate::app::types_overlay::OverlayRequest::SelectionModal(modal)) => {
@@ -504,7 +487,7 @@ mod tests {
         // not the mutated child cursor.
         let mut with_mirror = tv_two_level_model();
         with_mirror.app.libs[0].nav_stack.last_mut().unwrap().cursor = 99;
-        with_mirror.mirror_tv_workspace_cursor(0);
+        with_mirror.app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
         assert_eq!(
             with_mirror.app.libs[0].nav_stack.last().unwrap().cursor,
             1,

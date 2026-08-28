@@ -55,11 +55,11 @@
 
 ## 3. Remove the mirror (D3)
 
-- [ ] 3.1 Remove both `self.mirror_tv_workspace_cursor(lib_idx)` calls in
+- [x] 3.1 Remove both `self.mirror_tv_workspace_cursor(lib_idx)` calls in
       `handle_tv_request` (`shell_tv_workspace.rs:30`, `:42`). Verify: `rtk
       cargo check -p mbv` compiles clean (confirms nothing else still depends
       on the mirrored value).
-- [ ] 3.2 Delete `Model::mirror_tv_workspace_cursor` (`shell_tv_workspace.rs:59-76`).
+- [x] 3.2 Delete `Model::mirror_tv_workspace_cursor` (`shell_tv_workspace.rs:59-76`).
       Verify: `rtk cargo check -p mbv` and `rtk cargo clippy --workspace
       --all-targets` — no dead-code warnings, no remaining callers
       (`rtk grep -n "mirror_tv_workspace_cursor" -- src/` returns nothing).
