@@ -78,13 +78,15 @@ issue didn't name. `queue_cursor` today serves three roles, not two:
    the issue, found by reading `select_queue_slot`'s callers). When the
    component emits `QueueRequest::Play` / `Remove` / `Move`,
    `select_queue_slot` resolves `slot_id` to an index and *writes it into
-   `queue_cursor` before calling `handle_queue_key` with a synthetic key
-   event* (`shell_queue.rs:91,97,111`). `handle_queue_key`'s Enter/Delete/
-   Shift+Up/Down branches then read `queue_cursor` back out as their
-   operand (`remove_from_queue(t)` reads `displayed_queue().queue_cursor`;
-   `move_queue_item_by` reads `queue.queue_cursor` as `from`). The write is
-   load-bearing today — not only presentation — because it is the only way
-   the resolved index reaches those effect functions.
+   `queue_cursor`* (`shell_queue.rs:217`), and the arm then reads that same
+   value straight back out as its operand (`shell_queue.rs:91-111`):
+   `Remove` does `let cursor = queue_for_scope(scope).queue_cursor;
+   remove_from_queue(cursor)`, `Move` calls `move_queue_item_up/down()`
+   which read `queue.queue_cursor` as `from` (`queue_actions.rs:124`), and
+   `Play` dispatches `Command::QueuePlayCursor`, which reads the cursor
+   inside `action.rs:377`. The write is load-bearing today — not only
+   presentation — because it is the only way the resolved index reaches
+   those effect functions.
 
 Role 1 legitimately keeps the name `queue_cursor` on `PlayerTab` and stays
 shell-owned. Role 2 belongs entirely to `QueueComponent` and must never be
@@ -123,12 +125,15 @@ passed explicitly to the effect it is really an argument for:
   The component already knows its own cursor; there is nothing left to
   write.
 
-Synthetic `KeyEvent` construction and routing through `handle_queue_key`
-for Enter/Delete/Shift+arrows is kept (D17: "keep shell-owned effects at
-existing boundaries" — this is the sanctioned reuse pattern, not a new
-resolution site, and changing it is ADR 0023 territory, out of scope here).
-Only the operand each branch reads changes, from an ambient field to an
-explicit parameter carried alongside the synthetic event.
+The existing effect entry points are kept (D17: "keep shell-owned effects
+at existing boundaries"). Only the operand each one reads changes, from an
+ambient `queue_cursor` read to an explicit parameter:
+`remove_from_queue(pos)` already takes one, so its arm simply stops
+round-tripping through the field; `move_queue_item_up/down` gain an
+explicit `from`; and `Command::QueuePlayCursor` needs the resolved index
+supplied rather than read from `App` — the one entry point of the three
+whose signature change reaches beyond `shell_queue.rs`, since
+`context_menu_actions.rs:37` and `mouse_gestures.rs:176` also dispatch it.
 
 ### D3 — `queue_scroll` moves wholly into `QueueComponent`
 
@@ -168,12 +173,11 @@ role changes what a slot is.
 
 - [Risk] `move_queue_item_by`'s new explicit `from` parameter could drift
   from `queue.queue_cursor` at other call sites that aren't going through
-  `select_queue_slot` (e.g. any surviving legacy Shift+Up/Down path that
-  still relies on reading `queue_cursor` internally) → Mitigation: keep a
-  `queue_cursor`-reading overload only for the legacy call path
-  (`handle_queue_key`'s own Shift+Up/Down branch when reached without a
-  synthetic event), explicitly noted as legacy and slated for removal with
-  `remove-legacy-keyboard-endpoint`.
+  `select_queue_slot` → Mitigation: `move_queue_item_up/down` have no other
+  production callers on this branch, so convert them outright rather than
+  keeping a `queue_cursor`-reading overload. `Command::QueuePlayCursor` is
+  the real fan-out (`context_menu_actions.rs:37`, `mouse_gestures.rs:176`);
+  resolve each of those to an explicit index at its own call site.
 - [Risk] Removing the scroll merge/clamp in `set_content` changes clamp
   timing relative to today's per-frame `.max(scroll).min(cursor)` → could
   under- or over-scroll on the first frame after a large queue edit →
