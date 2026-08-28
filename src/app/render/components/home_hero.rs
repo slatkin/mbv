@@ -272,24 +272,10 @@ impl App {
         }
     }
 
-    pub(in crate::app::render) fn render_home_hero_data(
-        &mut self,
-        f: &mut Frame,
-        hero_data: &HeroData,
-        two_column: bool,
-        focused: bool,
-    ) {
-        let image_paint =
-            render_home_hero_content(f, hero_data, two_column, focused, self.use_nerd_fonts);
-        self.paint_home_image(f, image_paint);
-    }
-
     /// Fetches (if needed) and paints the image a [`HomeImagePaint`] request
-    /// describes, using App's image-cache authority. Shared by
-    /// `render_home_hero_data`'s wrapper above and the `App::render_home_list`
-    /// wrapper (`home.rs`), which computes its own `HomeImagePaint` via the
-    /// shared `render_home_content` orchestration and must not re-render the
-    /// hero text a second time by calling `render_home_hero_data` again.
+    /// describes, using App's image-cache authority. Shared by the
+    /// `App::render_home_list` wrapper (`home.rs`), which computes its own
+    /// `HomeImagePaint` via the shared `render_home_content` orchestration.
     pub(in crate::app) fn paint_home_image(
         &mut self,
         f: &mut Frame,
@@ -339,11 +325,10 @@ impl App {
 }
 
 /// The image an in-progress Home hero render needs painted, computed
-/// without `App` (design D2): the caller (the `App::render_home_hero_data`
-/// wrapper, or the shell on the `HomeComponent`'s behalf) fetches/looks up
-/// the cached protocol and paints it into `area` using App's image-cache
-/// authority right after `view()` returns (task 3.4's confirmed extraction:
-/// share orchestration, defer only the pixel paint).
+/// without `App` (design D2): the shell on the `HomeComponent`'s behalf
+/// fetches/looks up the cached protocol and paints it into `area` using App's
+/// image-cache authority right after `view()` returns (task 3.4's confirmed
+/// extraction: share orchestration, defer only the pixel paint).
 pub(in crate::app) enum HomeImagePaint {
     Emby {
         area: Rect,
@@ -387,9 +372,8 @@ fn render_hero_layout_meta_content(
 
 /// Renders a Home hero's non-image content (title/meta/overview text, or --
 /// for the text-only `Generic` variant -- the whole detail block) without
-/// `App`, returning the cover image (if any) still needing paint. Shared by
-/// the legacy `App::render_home_hero_data` wrapper and `HomeComponent`'s
-/// render path so the two can't drift (task 3.4's confirmed extraction).
+/// `App`, returning the cover image (if any) still needing paint for the
+/// `HomeComponent` render path (task 3.4's confirmed extraction).
 pub(in crate::app) fn render_home_hero_content(
     f: &mut Frame,
     hero_data: &HeroData,

@@ -1,7 +1,7 @@
 use super::super::components::audiobookshelf_book::AudiobookshelfBookComponent;
 use super::super::components::{
-    ComponentId, ContextMenuComponent, FeedsManageComponent, HomeComponent, LibraryRoutesComponent,
-    MultiselectComponent, OverlayId, PopupId, SelectionModalComponent, ShellRequest,
+    ComponentId, ContextMenuComponent, HomeComponent, LibraryRoutesComponent, MultiselectComponent,
+    OverlayId, PopupId, SelectionModalComponent, ShellRequest,
 };
 use super::super::shell::Model;
 use crate::app::types_context_menu::{

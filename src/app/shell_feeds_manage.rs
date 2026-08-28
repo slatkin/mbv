@@ -9,18 +9,8 @@
 
 use super::components::{ComponentId, FeedsManageComponent, PopupId};
 use super::types_feeds_manage::{FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage};
-use super::App;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use mbv_core::config::{FeedKind, FeedSubscription};
-
-impl App {
-    /// Opens the feeds management overlay (§6.1), from the `Manage feeds`
-    /// Settings row. Now a shell handoff target (task 5.3c): the shell mounts
-    /// the component and seeds it from `Model::feeds_manage`.
-    pub(crate) fn open_feeds_manage_popup(&mut self) {
-        self.pending_overlay = Some(super::types_overlay::OverlayRequest::OpenFeedsManage);
-    }
-}
+use crossterm::event::{KeyCode, KeyEvent};
+use mbv_core::config::FeedSubscription;
 
 impl super::shell::Model {
     /// Mount the feeds-management component and seed it (task 5.3c/5.3d).

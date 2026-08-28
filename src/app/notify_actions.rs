@@ -23,18 +23,6 @@ impl ToastSeverity {
             ToastSeverity::Warning | ToastSeverity::Error => Duration::from_secs(5),
         }
     }
-
-    /// Toast background color for this severity when rendered as a colored
-    /// toast (not status-bar styling). Neutral is never rendered this way,
-    /// but is mapped for exhaustiveness rather than left `unreachable!()`.
-    pub fn toast_bg(&self) -> ratatui::style::Color {
-        match self {
-            ToastSeverity::Neutral => super::palette::TOAST_BG_NEUTRAL,
-            ToastSeverity::Success => super::palette::TOAST_BG_SUCCESS,
-            ToastSeverity::Warning => super::palette::TOAST_BG_WARNING,
-            ToastSeverity::Error => super::palette::TOAST_BG_ERROR,
-        }
-    }
 }
 
 impl App {

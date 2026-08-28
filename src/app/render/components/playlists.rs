@@ -1,6 +1,8 @@
 use super::super::super::palette;
 use super::super::super::ui_util::trunc_str;
+#[cfg(test)]
 use super::super::super::App;
+#[cfg(test)]
 use super::super::super::PLAYLISTS_PANEL_W;
 use super::chrome;
 use crate::app::render::components::modal_frame::render_modal_frame;
@@ -328,6 +330,7 @@ fn render_open_playlist_content(
     chrome::render_sidebar_scrollbar(frame, content, total, before);
 }
 
+#[cfg(test)]
 impl App {
     pub(in crate::app::render) fn render_playlists_panel(
         &mut self,

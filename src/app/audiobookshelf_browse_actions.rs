@@ -208,6 +208,7 @@ impl App {
     /// Kept as a 1-arg read-only activation seam (reads the App mirror) for
     /// the pre-U5 App-level tests; the shell play/enqueue path threads an
     /// explicit component-resolved episode index directly (task 5.3d.11 U5).
+    #[cfg(test)]
     pub(super) fn activate_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
@@ -222,6 +223,7 @@ impl App {
     /// Resolve the selected episode for enqueue without mutating any queue or
     /// opening a playback lifecycle. Kept as a 1-arg read-only activation seam
     /// for the pre-U5 App-selection (see `activate_audiobookshelf_episode`).
+    #[cfg(test)]
     pub(super) fn enqueue_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,

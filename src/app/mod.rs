@@ -134,9 +134,10 @@ use self::types_browse::{
     SeriesDetail,
 };
 use self::types_confirm::{ConfirmAction, ConfirmModal};
+#[cfg(test)]
+use self::types_context_menu::LibraryRoutePopup;
 use self::types_context_menu::{
-    ContextAction, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup, LibraryRouteStage,
-    MultiSelectKind, MultiSelectPopup,
+    ContextAction, ContextMenuAnchor, ContextMenuEntry, LibraryRouteStage, MultiSelectKind,
 };
 use self::types_daemon_lost::DaemonLostModal;
 use self::types_events::{LibEvent, ReconciliationCommand, SessionEvent};
@@ -327,6 +328,7 @@ const PREFETCH_AHEAD: usize = 25;
 const SESSIONS_PANEL_W: u16 = 40;
 const HELP_PANEL_W: u16 = 40;
 const SETTINGS_PANEL_W: u16 = 40;
+#[cfg(test)]
 const PLAYLISTS_PANEL_W: u16 = 40;
 const SEARCH_PANEL_W: u16 = 40;
 impl App {

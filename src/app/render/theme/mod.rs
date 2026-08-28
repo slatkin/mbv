@@ -65,13 +65,6 @@ pub const PLAYBACK_META_FG: Color = primitives::PLAYBACK_META_FG; // captions/ti
 pub const PROGRESS_TRACK: Color = primitives::SEEK_TRACK; // unplayed seek/progress track
 pub const QUEUE_ROW_FG: Color = primitives::QUEUE_UNFOCUSED_FG;
 
-// Toast severities
-pub const TOAST_BG_NEUTRAL: Color = primitives::DARK_BG;
-pub const TOAST_BG_SUCCESS: Color = primitives::TOAST_BG_SUCCESS;
-pub const TOAST_BG_WARNING: Color = primitives::TOAST_BG_WARNING;
-pub const TOAST_BG_ERROR: Color = primitives::TOAST_BG;
-pub const TOAST_FG: Color = primitives::TOAST_FG;
-
 // Chrome
 pub const SCROLLBAR: Color = primitives::SCROLLBAR;
 

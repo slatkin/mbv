@@ -1,17 +1,28 @@
+#[cfg(test)]
 use super::super::super::layout::AppLayout;
+#[cfg(test)]
 use super::super::super::palette;
-use super::super::super::settings::{
-    setting_label, setting_value, settings_cursor_to_key, settings_total_rows,
-};
+use super::super::super::settings::settings_cursor_to_key;
+#[cfg(test)]
+use super::super::super::settings::{setting_label, setting_value, settings_total_rows};
 use super::super::super::types_overlay::OverlayRequest;
-use super::super::super::types_settings::{ServiceEntry, SettingsDestination, SERVICE_ENTRIES};
+use super::super::super::types_settings::SettingsDestination;
+#[cfg(test)]
+use super::super::super::types_settings::{ServiceEntry, SERVICE_ENTRIES};
 use super::super::super::ui_util::{cycle_lang, next_subtitle_mode};
 use super::super::super::App;
-use super::super::super::{MultiSelectKind, SettingKey, SETTINGS_PANEL_W, SETTING_SECTIONS};
+use super::super::super::{MultiSelectKind, SettingKey};
+#[cfg(test)]
+use super::super::super::{SETTINGS_PANEL_W, SETTING_SECTIONS};
+#[cfg(test)]
 use super::chrome;
+#[cfg(test)]
 use ratatui::style::{Modifier, Style};
+#[cfg(test)]
 use ratatui::text::{Line, Span};
+#[cfg(test)]
 use ratatui::widgets::Paragraph;
+#[cfg(test)]
 use ratatui::Frame;
 use std::time::{Duration, Instant};
 
@@ -151,6 +162,7 @@ impl App {
         self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
     }
 
+    #[cfg(test)]
     pub(in crate::app::render) fn render_settings_panel(
         &mut self,
         f: &mut Frame,
@@ -177,7 +189,12 @@ impl App {
         let content = if panel {
             content
         } else {
-            Self::settings_content_area(content)
+            ratatui::layout::Rect {
+                x: content.x.saturating_add(2),
+                y: content.y.saturating_add(1),
+                width: content.width.saturating_sub(4),
+                height: content.height.saturating_sub(2),
+            }
         };
 
         let cfg = self.config.lock().unwrap().clone();
@@ -263,6 +280,7 @@ impl App {
         chrome::render_sidebar_scrollbar(f, content, total, self.settings_scroll);
     }
 
+    #[cfg(test)]
     fn render_services_panel(
         &mut self,
         f: &mut Frame,
@@ -329,6 +347,7 @@ impl App {
         f.render_widget(Paragraph::new(lines), content);
     }
 
+    #[cfg(test)]
     fn render_emby_setup_panel(
         &mut self,
         f: &mut Frame,
@@ -396,6 +415,7 @@ impl App {
         f.render_widget(Paragraph::new(lines), content);
     }
 
+    #[cfg(test)]
     fn render_audiobookshelf_setup_panel(
         &mut self,
         f: &mut Frame,

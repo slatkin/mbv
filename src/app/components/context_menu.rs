@@ -13,7 +13,9 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, KeyEvent as TuiKeyEvent, MouseButton, MouseEvent, MouseEventKind};
+#[cfg(test)]
+use tuirealm::event::KeyEvent as TuiKeyEvent;
+use tuirealm::event::{Event, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 

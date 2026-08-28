@@ -46,10 +46,12 @@ impl MbvTray {
         }
     }
 
+    #[cfg(test)]
     fn toggle_play_pause(&self) {
         self.send_command(PlayerCommand::TogglePause);
     }
 
+    #[cfg(test)]
     fn next(&self) {
         let idx = self.status.lock().unwrap().next_idx();
         if let Some(idx) = idx {
@@ -57,6 +59,7 @@ impl MbvTray {
         }
     }
 
+    #[cfg(test)]
     fn previous(&self) {
         let idx = self.status.lock().unwrap().previous_idx();
         if let Some(idx) = idx {
@@ -94,21 +97,29 @@ impl ksni::Tray for MbvTray {
                 } else {
                     "media-playback-start".into()
                 },
-                activate: Box::new(|tray: &mut Self| tray.toggle_play_pause()),
+                activate: Box::new(|tray: &mut Self| tray.send_command(PlayerCommand::TogglePause)),
                 ..Default::default()
             }
             .into(),
             StandardItem {
                 label: "Next".into(),
                 icon_name: "media-skip-forward".into(),
-                activate: Box::new(|tray: &mut Self| tray.next()),
+                activate: Box::new(|tray: &mut Self| {
+                    if let Some(idx) = tray.status.lock().unwrap().next_idx() {
+                        tray.send_command(PlayerCommand::JumpTo(idx));
+                    }
+                }),
                 ..Default::default()
             }
             .into(),
             StandardItem {
                 label: "Previous".into(),
                 icon_name: "media-skip-backward".into(),
-                activate: Box::new(|tray: &mut Self| tray.previous()),
+                activate: Box::new(|tray: &mut Self| {
+                    if let Some(idx) = tray.status.lock().unwrap().previous_idx() {
+                        tray.send_command(PlayerCommand::JumpTo(idx));
+                    }
+                }),
                 ..Default::default()
             }
             .into(),

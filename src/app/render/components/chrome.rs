@@ -345,14 +345,3 @@ pub(in crate::app) fn toast_line(s: &str, fg: Color) -> Line<'static> {
     }
     Line::from(Span::styled(s.to_string(), text_style))
 }
-
-impl App {
-    pub(in crate::app::render) fn settings_content_area(content: Rect) -> Rect {
-        Rect {
-            x: content.x.saturating_add(2),
-            y: content.y.saturating_add(1),
-            width: content.width.saturating_sub(4),
-            height: content.height.saturating_sub(2),
-        }
-    }
-}

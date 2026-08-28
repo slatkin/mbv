@@ -46,7 +46,7 @@ pub(in crate::app) use arrangements::library::wide_library_panes;
 pub(in crate::app) use arrangements::padded_rect;
 pub(in crate::app) use components::hero::render_search_box;
 pub(in crate::app) use components::home_hero::{
-    prepare_wide_emby_hero_card, render_home_hero_content, HeroData, KeepWatchingHeroLayout,
+    prepare_wide_emby_hero_card, render_home_hero_content, HeroData,
 };
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
 pub(in crate::app) use components::multiselect::{
@@ -118,7 +118,7 @@ pub(crate) use theme::{
     SURFACE_CHROME, SURFACE_FOCUSED, SURFACE_ITEM_FOCUSED, SURFACE_PLAYBACK, SURFACE_RESTING,
     SURFACE_SIDEBAR, SURFACE_STATUS_PILL, TEXT_ACCENT_MUTED, TEXT_DETAIL_META, TEXT_EMPHASIS,
     TEXT_FOCUS_ACCENT, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY,
-    TEXT_STRONG, TOAST_BG_ERROR, TOAST_BG_NEUTRAL, TOAST_BG_SUCCESS, TOAST_BG_WARNING,
+    TEXT_STRONG,
 };
 
 use super::ui_util::natural_sort_key;

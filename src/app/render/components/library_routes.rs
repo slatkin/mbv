@@ -1,7 +1,7 @@
-use super::super::super::notify_actions::ToastSeverity;
 use super::super::super::palette;
-use super::super::super::App;
-use super::super::super::{LibraryRoutePopup, LibraryRouteStage};
+#[cfg(test)]
+use super::super::super::LibraryRoutePopup;
+use super::super::super::LibraryRouteStage;
 use crate::app::render::components::modal_frame::render_modal_frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;

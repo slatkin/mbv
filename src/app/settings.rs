@@ -136,6 +136,7 @@ pub fn bool_val(v: bool) -> String {
     }
 }
 
+#[cfg(test)]
 pub fn settings_total_rows() -> usize {
     SETTING_SECTIONS.iter().map(|(_, keys)| keys.len()).sum()
 }

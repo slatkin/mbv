@@ -50,13 +50,6 @@ pub(crate) struct LayoutPlayback {
     pub idle_feed_link_area: Rect,
 }
 
-/// Geometry for the Home sub-tab,
-/// separate from `LayoutHome` which belongs to the regular Home tab.
-#[derive(Default)]
-pub(crate) struct LayoutHome {
-    pub hitmap: Vec<(Rect, usize)>,
-}
-
 /// Library panel, queue panel, and home-grid geometry.
 #[derive(Default)]
 pub(crate) struct LayoutMain {
@@ -94,18 +87,10 @@ pub(crate) struct LayoutMain {
     /// Selected-parent geometry only for inline replacement. Wide hero areas
     /// remain render bookkeeping and are intentionally not interactive.
     pub inline_hero_area: Rect,
-    /// Geometry for the Home sub-tab grid. Distinct from
-    /// `AppLayout::home` (`LayoutHome`), which is the regular Home-tab.
-    pub home: LayoutHome,
     pub queue_row_map: Vec<Option<usize>>,
     pub queue_area: Rect,
     pub queue_scope_local_area: Rect,
     pub queue_scope_remote_area: Rect,
-    /// Visible Audiobookshelf episode rows and their filtered episode indices.
-    /// Populated by the podcast hero renderer for mouse selection.
-    pub audiobookshelf_episode_rows: Vec<(Rect, usize)>,
-    /// Visible Audiobookshelf book chapter rows and their chapter indices.
-    pub audiobookshelf_book_chapter_rows: Vec<(Rect, usize)>,
     /// Screen rect of the selected row/cell in the library panel. The outer
     /// selectable renderer owns this; nested detail/hero renderers never
     /// overwrite it. Consumed by the context menu's keyboard anchor.
@@ -224,9 +209,6 @@ impl LayoutMain {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum LibraryRowTarget {
     Album(usize),
-    /// A book row in the Audiobookshelf book tab's right-pane browser,
-    /// carrying the book's index into the surname-sorted `books` list.
-    Book(usize),
 }
 
 /// All per-frame layout geometry, grouped by the view that produces it.
