@@ -53,11 +53,11 @@
 
 ## 4. Verify non-component writers and reconciliation are unaffected
 
-- [ ] 4.1 Verify `rtk cargo nextest run -p mbv` — full suite, including
+- [x] 4.1 Verify `rtk cargo nextest run -p mbv` — full suite, including
       `tests_queue_reorder.rs`, `tests_queue_mutation.rs`, and
       `tests_remote_reconciliation*.rs` — passes with no assertion changes
       beyond access-path updates for moved fields (`queue_scroll`).
-- [ ] 4.2 Manually trace (code read, not new tests per `writing-tests`
+- [x] 4.2 Manually trace (code read, not new tests per `writing-tests`
       guidance) that `player_event.rs:271-272,319`,
       `run_loop_events.rs:130`, `run_loop_events_session.rs:133`,
       `library_position_state.rs:117-119`, and `actions.rs:376` are
