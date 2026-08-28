@@ -127,7 +127,6 @@ impl App {
             // Always start on Home. The saved queue is restored independently;
             // the saved library tab remains available for runtime persistence.
             library_tab_pending: 0,
-            queue_scroll: 0,
             ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
             pre_mute_volume: prefs["pre_mute_volume"].as_u64().map(|v| v as u8),
             mute_on: prefs["mute_on"].as_bool().unwrap_or(false),

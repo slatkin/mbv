@@ -51,18 +51,25 @@ impl QueueComponent {
         &mut self,
         slots: Vec<QueueSlot>,
         cursor: usize,
-        scroll: usize,
         scope: QueueScope,
         focused: bool,
         playback: PlaybackState,
         title: QueueTitleModel,
     ) {
+        // Scroll is component-owned (split-queue-cursor-ownership D3): a new
+        // scope's content starts at the top. Reset before cursor-identity
+        // reconciliation so the clamp below never reuses an old viewport.
+        if scope != self.scope {
+            self.scroll = 0;
+        }
         let selected_slot = self.slots.get(self.cursor).map(|slot| slot.slot_id);
         self.slots = slots;
         self.cursor = selected_slot
             .and_then(|slot_id| self.slots.iter().position(|slot| slot.slot_id == slot_id))
             .unwrap_or_else(|| cursor.min(self.slots.len().saturating_sub(1)));
-        self.scroll = self.scroll.max(scroll).min(self.cursor);
+        // Clamp against the component's own scroll/cursor/slot count only;
+        // no scroll value is pushed from the shell anymore.
+        self.scroll = self.scroll.min(self.cursor);
         self.scope = scope;
         self.focused = focused;
         self.playback = playback;
@@ -113,6 +120,10 @@ impl QueueComponent {
                     && !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) =>
             {
                 self.scope = QueueScope::Local;
+                // Scope is preassigned here, before the request reaches the
+                // shell, so the set_content scope-change reset would not fire;
+                // the component resets its own scroll itself (D3).
+                self.scroll = 0;
                 return Some(Msg::Queue(QueueRequest::Scope(self.scope)));
             }
             Key::Char(']')
@@ -122,6 +133,10 @@ impl QueueComponent {
                     && !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) =>
             {
                 self.scope = QueueScope::Remote;
+                // Scope is preassigned here, before the request reaches the
+                // shell, so the set_content scope-change reset would not fire;
+                // the component resets its own scroll itself (D3).
+                self.scroll = 0;
                 return Some(Msg::Queue(QueueRequest::Scope(self.scope)));
             }
             Key::Left | Key::Right if key.modifiers == tuirealm::event::KeyModifiers::SHIFT => {
@@ -249,6 +264,9 @@ impl QueueComponent {
                 if self.title.is_some() {
                     if self.geometry.scope_local_area.contains(position) {
                         self.scope = QueueScope::Local;
+                        // Same preassignment caveat as the '['/']' keys: reset
+                        // the component's own scroll on scope switch (D3).
+                        self.scroll = 0;
                         return Some(Msg::Shell(ShellRequest::QueueClick {
                             region: QueueHitRegion::ScopeLocal,
                             col: mouse.column,
@@ -257,6 +275,9 @@ impl QueueComponent {
                     }
                     if self.geometry.scope_remote_area.contains(position) {
                         self.scope = QueueScope::Remote;
+                        // Same preassignment caveat as the '['/']' keys: reset
+                        // the component's own scroll on scope switch (D3).
+                        self.scroll = 0;
                         return Some(Msg::Shell(ShellRequest::QueueClick {
                             region: QueueHitRegion::ScopeRemote,
                             col: mouse.column,
@@ -329,6 +350,11 @@ impl QueueComponent {
     #[cfg(test)]
     pub(crate) fn test_rows(&self) -> &[(Rect, mbv_core::playback_queue::QueueSlotId)] {
         &self.geometry.rows
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_scroll(&self) -> usize {
+        self.scroll
     }
 }
 

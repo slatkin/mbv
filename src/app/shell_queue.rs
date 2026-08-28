@@ -26,13 +26,9 @@ impl Model {
         }
 
         let scope = self.app.visible_queue_scope();
-        let (slots, cursor, scroll) = {
+        let (slots, cursor) = {
             let queue = self.app.queue_for_scope(scope);
-            (
-                queue.slots().to_vec(),
-                queue.queue_cursor,
-                self.app.queue_scroll,
-            )
+            (queue.slots().to_vec(), queue.queue_cursor)
         };
         let playback = self.app.displayed_queue_playback_state();
         let title = self.app.queue_title_model();
@@ -47,7 +43,7 @@ impl Model {
         });
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
-                queue.set_content(slots, cursor, scroll, scope, queue_focused, playback, title);
+                queue.set_content(slots, cursor, scope, queue_focused, playback, title);
                 queue.set_area(self.app.layout.main.queue_area);
                 queue.set_title_area(title_area);
             }

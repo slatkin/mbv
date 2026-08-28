@@ -18,6 +18,25 @@ use unicode_width::UnicodeWidthStr;
 // which are already accounted for separately via `pct_w`/`right_w`.
 const QUEUE_TITLE_QUIET_COLUMNS: usize = 2;
 
+// The interactive QueueComponent owns scroll for the TuiRealm surface
+// (split-queue-cursor-ownership D3: `App::queue_scroll` is deleted and the
+// component resets its own scroll on scope change). This legacy screen
+// painter keeps a viewport purely local to this module so its rendering
+// behavior and tests are preserved unchanged while `App` carries no
+// queue scroll state; the component path overpaints this painter each
+// frame, so this static only serves the legacy renderer itself.
+thread_local! {
+    static QUEUE_VIEWPORT: std::cell::RefCell<usize> = const { std::cell::RefCell::new(0) };
+}
+
+fn queue_viewport() -> usize {
+    QUEUE_VIEWPORT.with(|viewport| *viewport.borrow())
+}
+
+fn set_queue_viewport(value: usize) {
+    QUEUE_VIEWPORT.with(|viewport| *viewport.borrow_mut() = value);
+}
+
 /// Time text for one queue row. The now-playing row shows the moving
 /// elapsed time next to its duration (`1:05 / 3:22`), matching the playback
 /// panel's time readout; every other row shows just its duration. Empty
@@ -294,7 +313,7 @@ impl App {
         };
         let n = slots_snapshot.len();
         if n == 0 {
-            self.queue_scroll = 0;
+            set_queue_viewport(0);
             f.render_widget(
                 Paragraph::new(if self.visible_queue_scope() == QueueScope::Local {
                     "  Add items with p from Home or library tabs"
@@ -320,16 +339,18 @@ impl App {
             .position(|r| matches!(r, QueueRow::Slot { slot_idx } if *slot_idx == cursor))
             .unwrap_or(0);
         let max_offset = total.saturating_sub(visible);
-        self.queue_scroll = self.queue_scroll.min(max_offset);
-        if cursor_row < self.queue_scroll {
-            self.queue_scroll = cursor_row;
-        } else if cursor_row >= self.queue_scroll + visible {
-            self.queue_scroll = cursor_row.saturating_sub(visible.saturating_sub(1));
+        set_queue_viewport(queue_viewport().min(max_offset));
+        let mut scroll = queue_viewport();
+        if cursor_row < scroll {
+            scroll = cursor_row;
+        } else if cursor_row >= scroll + visible {
+            scroll = cursor_row.saturating_sub(visible.saturating_sub(1));
         }
-        let offset = self.queue_scroll;
+        set_queue_viewport(scroll);
+        let offset = scroll;
         layout.queue_selected_item_rect = Some(Rect {
             x: area.x,
-            y: area.y + (cursor_row.saturating_sub(self.queue_scroll)) as u16,
+            y: area.y + (cursor_row.saturating_sub(scroll)) as u16,
             width: area.width,
             height: 1,
         });
@@ -644,13 +665,13 @@ mod tests {
             })
             .unwrap();
             assert!(
-                app.queue_scroll <= prev_scroll,
+                queue_viewport() <= prev_scroll,
                 "scroll regressed from {prev_scroll} to {} at cursor {cursor}",
-                app.queue_scroll
+                queue_viewport()
             );
-            prev_scroll = app.queue_scroll;
+            prev_scroll = queue_viewport();
         }
-        assert_eq!(app.queue_scroll, 0);
+        assert_eq!(queue_viewport(), 0);
     }
 
     #[test]
@@ -676,7 +697,7 @@ mod tests {
         .unwrap();
 
         let page = 14usize; // area.height - 1
-        let mut prev_scroll = app.queue_scroll;
+        let mut prev_scroll = queue_viewport();
         loop {
             let cur = app.player_tab.queue_cursor;
             let next = cur.saturating_sub(page);
@@ -686,15 +707,15 @@ mod tests {
             })
             .unwrap();
             assert!(
-                app.queue_scroll <= prev_scroll,
+                queue_viewport() <= prev_scroll,
                 "scroll regressed from {prev_scroll} to {} at cursor {next}",
-                app.queue_scroll
+                queue_viewport()
             );
-            prev_scroll = app.queue_scroll;
+            prev_scroll = queue_viewport();
             if next == 0 {
                 break;
             }
         }
-        assert_eq!(app.queue_scroll, 0);
+        assert_eq!(queue_viewport(), 0);
     }
 }

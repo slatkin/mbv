@@ -41,7 +41,6 @@ fn queue_activation_uses_slot_id_after_snapshot_reorder() {
     component.set_content(
         slots.clone(),
         0,
-        0,
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -57,7 +56,6 @@ fn queue_activation_uses_slot_id_after_snapshot_reorder() {
     reordered.swap(0, 1);
     component.set_content(
         reordered,
-        0,
         0,
         QueueScope::Local,
         true,
@@ -75,7 +73,6 @@ fn queue_component_emits_typed_keyboard_intents() {
     let mut component = QueueComponent::new();
     component.set_content(
         queue(),
-        0,
         0,
         QueueScope::Local,
         true,
@@ -128,7 +125,6 @@ fn queue_component_renders_a_snapshot_without_app_state() {
     component.set_content(
         queue(),
         0,
-        0,
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -155,7 +151,6 @@ fn queue_right_click_uses_the_rendered_slot_target() {
     component.set_content(
         slots,
         0,
-        0,
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -176,5 +171,90 @@ fn queue_right_click_uses_the_rendered_slot_target() {
         matches!(message, Some(Msg::Shell(super::msg::ShellRequest::QueueClick {
         region: super::msg::QueueHitRegion::ContextMenu(Some(slot_id)), ..
     })) if slot_id == second)
+    );
+}
+
+/// A queue long enough that rendering the bottom cursor produces a nonzero
+/// viewport scroll (30 slots in an 8-row terminal).
+fn long_queue() -> Vec<mbv_core::playback_queue::QueueSlot> {
+    let items: Vec<QueueItem> = (0..30)
+        .map(|i| {
+            QueueItem::Emby(Box::new(crate::app::tests::make_item(
+                &format!("item-{i}"),
+                "Audio",
+            )))
+        })
+        .collect();
+    PlaybackQueue::from_queue_items(items, None)
+        .slots()
+        .to_vec()
+}
+
+#[test]
+fn queue_scope_switch_resets_component_scroll() {
+    // Scroll is component-owned (split-queue-cursor-ownership D3): switching
+    // scope resets the component's own scroll to 0. Drive scroll nonzero by
+    // rendering with a bottom cursor, then switch scope.
+    let slots = long_queue();
+    let mut component = QueueComponent::new();
+    component.set_content(
+        slots,
+        29,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    assert!(
+        component.test_scroll() > 0,
+        "bottom cursor must produce nonzero scroll, got {}",
+        component.test_scroll()
+    );
+
+    // Keyboard scope change preassigns `self.scope` before the request, so
+    // the shell's `set_content` scope-diff reset would not fire; the
+    // component must reset its own scroll at key time.
+    component.on(&Event::Keyboard(key(Key::Char(']'))));
+    assert_eq!(
+        component.test_scroll(),
+        0,
+        "keyboard scope change must reset the component's own scroll"
+    );
+
+    // External scope change (e.g. session switch) flows through
+    // `set_content` with a differing scope; the component resets there too.
+    component.set_content(
+        long_queue(),
+        29,
+        QueueScope::Remote,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    assert!(
+        component.test_scroll() > 0,
+        "remote content must again produce nonzero scroll, got {}",
+        component.test_scroll()
+    );
+    component.set_content(
+        long_queue(),
+        0,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    assert_eq!(
+        component.test_scroll(),
+        0,
+        "set_content scope change must reset the component's own scroll"
     );
 }

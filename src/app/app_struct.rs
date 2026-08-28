@@ -181,7 +181,6 @@ pub struct App {
     pub(super) queue_column_width: u16,
     pub(super) panel_mode: PanelMode,
     pub(super) library_tab_pending: usize, // restored from prefs; applied once libs have loaded
-    pub(super) queue_scroll: usize,
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,
     pub(super) card_image_states: std::collections::HashMap<String, images::CachedImage>,

@@ -1,15 +1,15 @@
 ## 1. Move `queue_scroll` into `QueueComponent` (D3)
 
-- [ ] 1.1 Delete `App::queue_scroll` (`app_struct.rs:184`) and its
+- [x] 1.1 Delete `App::queue_scroll` (`app_struct.rs:184`) and its
       construction site; `QueueComponent` already has a `scroll` field —
       verify `rtk cargo check -p mbv` finds every removed reader/writer.
-- [ ] 1.2 Remove the `queue_scroll = 0` reset in `set_queue_scope`
+- [x] 1.2 Remove the `queue_scroll = 0` reset in `set_queue_scope`
       (`queue_scope.rs:295`); have `QueueComponent::set_content` reset its
       own `scroll` when the incoming `scope` differs from its current
       `scope` field, before the existing cursor-identity reconciliation
       runs. Verify with a `components/queue_component_tests.rs` case that
       switching scope resets scroll to 0.
-- [ ] 1.3 Stop `sync_queue` from reading `self.app.queue_scroll` and stop
+- [x] 1.3 Stop `sync_queue` from reading `self.app.queue_scroll` and stop
       `set_content` from accepting a pushed scroll value; remove the
       `self.scroll.max(scroll).min(self.cursor)` clamp and replace it with
       a clamp against the component's own `scroll`/`cursor`/slot count only.

@@ -292,6 +292,5 @@ impl App {
         } else {
             QueueScope::Local
         };
-        self.queue_scroll = 0;
     }
 }
