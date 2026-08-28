@@ -154,7 +154,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     app.panel_focus = PanelFocus::Queue;
     app.player_tab.queue_cursor = 1;
 
-    app.dispatch(Command::QueuePlayCursor);
+    app.dispatch(Command::QueuePlayCursor(1));
 
     assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))));
 }

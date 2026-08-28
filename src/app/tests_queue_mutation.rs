@@ -492,7 +492,7 @@ fn boundary_queue_edit_does_not_retire_tracking() {
     app.remote_tracker = Some(tracking_stub());
     app.player_tab.queue_cursor = 0;
 
-    app.move_queue_item_up();
+    app.move_queue_item_up(app.player_tab.queue_cursor);
 
     assert!(app.remote_tracker.is_some());
     assert_eq!(app.player_tab.emby_items().len(), 2);

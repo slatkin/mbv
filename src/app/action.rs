@@ -58,7 +58,7 @@ pub(super) enum Command {
     ToggleMuteOrCycleAudio,
 
     // ── queue activation (issue #134) ───────────────────────────────────
-    /// Activate the item at the visible queue's cursor: `Enter` on the queue
+    /// Activate the item at the given queue index: `Enter` on the queue
     /// tab, or a double-click on a queue row (`handle_mouse`'s
     /// `is_double`/queue branch — the two were already made to match in
     /// a70ad7a, before either went through `Command`; this variant is the
@@ -67,7 +67,11 @@ pub(super) enum Command {
     /// the already-playing audio item, jumps to it if it's elsewhere in the
     /// active playback queue, or replaces the local playback queue and plays
     /// from this index if the visible queue isn't the one currently playing.
-    QueuePlayCursor,
+    /// The target index is carried explicitly (split-queue-cursor-ownership
+    /// D2): the shell resolves the slot the user selected and passes it
+    /// rather than this command re-reading `queue.queue_cursor` as an
+    /// ambient argument channel.
+    QueuePlayCursor(usize),
 
     /// `x`: cycle the Power View layout through both, queue-only, and
     /// library-only (see `PanelMode`); below the mini-view threshold it
@@ -374,13 +378,12 @@ impl App {
                 }
             }
 
-            Command::QueuePlayCursor => {
-                let (t, n, item) = {
+            Command::QueuePlayCursor(t) => {
+                let (n, item) = {
                     let queue = self.displayed_queue();
-                    let t = queue.queue_cursor;
                     let n = queue.total_queue_len();
                     let item = queue.item_at(t).cloned();
-                    (t, n, item)
+                    (n, item)
                 };
                 if t >= n {
                     return false;

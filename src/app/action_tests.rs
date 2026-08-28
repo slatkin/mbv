@@ -297,7 +297,7 @@ fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_core::api::EmbyItem
 #[test]
 fn queue_play_cursor_on_empty_queue_is_a_no_op() {
     let mut app = make_app_stub();
-    assert!(!app.dispatch(Command::QueuePlayCursor));
+    assert!(!app.dispatch(Command::QueuePlayCursor(0)));
     assert!(app.status.is_empty());
 }
 
@@ -314,7 +314,7 @@ fn queue_play_cursor_while_attached_to_session_hands_off_to_session() {
     );
     app.connected_session_id = Some("session-1".into());
 
-    app.dispatch(Command::QueuePlayCursor);
+    app.dispatch(Command::QueuePlayCursor(1));
 
     assert!(
         app.status.contains("Requesting playback"),
@@ -330,7 +330,7 @@ fn queue_play_cursor_with_direct_remote_switches_to_remote_scope() {
     app.set_queue_scope(QueueScope::Local);
     app.connected_session_id = Some("session-1".into());
 
-    app.dispatch(Command::QueuePlayCursor);
+    app.dispatch(Command::QueuePlayCursor(1));
 
     assert!(
         app.status.contains("Requesting playback"),
@@ -357,7 +357,7 @@ fn queue_play_cursor_without_direct_remote_stays_on_local_scope() {
     );
     app.connected_session_id = Some("session-1".into());
 
-    app.dispatch(Command::QueuePlayCursor);
+    app.dispatch(Command::QueuePlayCursor(1));
 
     assert!(
         app.status.contains("Requesting playback"),
@@ -389,7 +389,7 @@ fn queue_play_cursor_jumps_to_cursor_when_active_and_playback_scope() {
     }
     let rx = app.player.spy_on_commands();
 
-    app.dispatch(Command::QueuePlayCursor);
+    app.dispatch(Command::QueuePlayCursor(1));
 
     assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))));
 }
@@ -405,7 +405,7 @@ fn queue_play_cursor_seeks_to_start_when_cursor_is_the_current_playing_audio_ite
     }
     let rx = app.player.spy_on_commands();
 
-    app.dispatch(Command::QueuePlayCursor);
+    app.dispatch(Command::QueuePlayCursor(0));
 
     assert!(matches!(
         rx.try_recv(),

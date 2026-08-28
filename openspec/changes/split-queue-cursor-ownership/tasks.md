@@ -17,14 +17,14 @@
 
 ## 2. Replace the `queue_cursor` argument-channel with explicit parameters (D2)
 
-- [ ] 2.1 Give `move_queue_item_by` (`queue_actions.rs:121`) an explicit
+- [x] 2.1 Give `move_queue_item_by` (`queue_actions.rs:121`) an explicit
       `from: usize` parameter instead of reading `queue.queue_cursor`
       internally; update `move_queue_item_up`/`move_queue_item_down`
       call sites that still need the legacy (non-component) behavior to
       pass `queue.queue_cursor` explicitly, preserving current behavior.
       Verify `rtk cargo check -p mbv` and `tests_queue_reorder.rs` pass
       unmodified.
-- [ ] 2.2 In `shell_queue.rs`, change `handle_queue_request`'s
+- [x] 2.2 In `shell_queue.rs`, change `handle_queue_request`'s
       `QueueRequest::Remove` and `QueueRequest::Move` arms to resolve the
       index via `select_queue_slot`'s existing lookup and pass it directly
       to `remove_from_queue`/`move_queue_item_by` instead of writing
@@ -32,7 +32,7 @@
       key. Verify the existing `shell_queue.rs` test
       (`queue_shell_mounts_and_routes_slot_cursor`) still passes, updated
       only if its assertion targets the now-removed write.
-- [ ] 2.3 Do the same for `QueueRequest::Play`: resolve the index/slot and
+- [x] 2.3 Do the same for `QueueRequest::Play`: resolve the index/slot and
       invoke the `QueuePlayCursor`-equivalent effect directly with that
       target instead of relying on `queue_cursor` being pre-set by a prior
       write. Verify a component-routing test exercising Enter on a queue

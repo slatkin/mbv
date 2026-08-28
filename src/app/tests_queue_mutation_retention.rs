@@ -19,7 +19,7 @@ fn reorder_retires_tracking_after_successful_move() {
     app.player_tab.queue_cursor = 0;
     app.remote_tracker = Some(tracking_stub());
 
-    app.move_queue_item_down();
+    app.move_queue_item_down(app.player_tab.queue_cursor);
 
     assert!(app.remote_tracker.is_none());
     assert_eq!(
@@ -69,7 +69,7 @@ fn boundary_move_down_leaves_tracking_active() {
     app.player_tab.queue_cursor = 1;
     app.remote_tracker = Some(tracking_stub());
 
-    app.move_queue_item_down();
+    app.move_queue_item_down(app.player_tab.queue_cursor);
 
     assert!(app.remote_tracker.is_some());
     assert_eq!(app.player_tab.emby_items().len(), 2);

@@ -173,7 +173,11 @@ impl App {
         slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
     ) {
         if self.handle_mouse_single_click_queue(slot_id) {
-            self.dispatch(Command::QueuePlayCursor);
+            // The single-click already resolved the slot into
+            // `queue_cursor`; pass that resolved index explicitly (D2)
+            // rather than letting the command re-read it.
+            let index = self.displayed_queue().queue_cursor;
+            self.dispatch(Command::QueuePlayCursor(index));
         }
     }
 

@@ -215,14 +215,14 @@ fn direct_selection_payload_is_identical_with_and_without_tracking() {
     let mut untracked = remote_command_app(&listener);
     untracked.player_tab.queue_cursor = 1;
     let untracked_req = capture_remote_command(&listener, &mut untracked, |app| {
-        app.dispatch(crate::app::action::Command::QueuePlayCursor);
+        app.dispatch(crate::app::action::Command::QueuePlayCursor(1));
     });
 
     let mut tracked = remote_command_app(&listener);
     tracked.player_tab.queue_cursor = 1;
     attach_tracking_to(&mut tracked);
     let tracked_req = capture_remote_command(&listener, &mut tracked, |app| {
-        app.dispatch(crate::app::action::Command::QueuePlayCursor);
+        app.dispatch(crate::app::action::Command::QueuePlayCursor(1));
     });
 
     assert_eq!(tracked_req, untracked_req);
@@ -248,14 +248,14 @@ fn restart_current_payload_is_identical_with_and_without_tracking() {
     let mut untracked = remote_command_app(&listener);
     untracked.player_tab.queue_cursor = 0;
     let untracked_req = capture_remote_command(&listener, &mut untracked, |app| {
-        app.dispatch(crate::app::action::Command::QueuePlayCursor);
+        app.dispatch(crate::app::action::Command::QueuePlayCursor(0));
     });
 
     let mut tracked = remote_command_app(&listener);
     tracked.player_tab.queue_cursor = 0;
     attach_tracking_to(&mut tracked);
     let tracked_req = capture_remote_command(&listener, &mut tracked, |app| {
-        app.dispatch(crate::app::action::Command::QueuePlayCursor);
+        app.dispatch(crate::app::action::Command::QueuePlayCursor(0));
     });
 
     assert_eq!(tracked_req, untracked_req);

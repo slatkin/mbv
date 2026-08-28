@@ -81,17 +81,21 @@ impl Model {
                 }
             }
             QueueRequest::Cursor { scope, slot_id } => {
-                self.select_queue_slot(scope, slot_id);
+                if self.select_queue_slot(scope, slot_id).is_some() {
+                    // Plain navigation: only scope/focus/hold-window side
+                    // effects apply; there is no effect to drive with the
+                    // resolved index (D2).
+                }
             }
             QueueRequest::Play { scope, slot_id } => {
-                if self.select_queue_slot(scope, slot_id) {
-                    self.app.dispatch(super::action::Command::QueuePlayCursor);
+                if let Some(index) = self.select_queue_slot(scope, slot_id) {
+                    self.app
+                        .dispatch(super::action::Command::QueuePlayCursor(index));
                 }
             }
             QueueRequest::Remove { scope, slot_id } => {
-                if self.select_queue_slot(scope, slot_id) {
-                    let cursor = self.app.queue_for_scope(scope).queue_cursor;
-                    self.app.remove_from_queue(cursor);
+                if let Some(index) = self.select_queue_slot(scope, slot_id) {
+                    self.app.remove_from_queue(index);
                 }
             }
             QueueRequest::Move {
@@ -99,10 +103,10 @@ impl Model {
                 slot_id,
                 direction,
             } => {
-                if self.select_queue_slot(scope, slot_id) {
+                if let Some(index) = self.select_queue_slot(scope, slot_id) {
                     match direction {
-                        QueueMove::Up => self.app.move_queue_item_up(),
-                        QueueMove::Down => self.app.move_queue_item_down(),
+                        QueueMove::Up => self.app.move_queue_item_up(index),
+                        QueueMove::Down => self.app.move_queue_item_down(index),
                     }
                 }
             }
@@ -163,10 +167,9 @@ impl Model {
                 }
             }
             QueueIntent::Navigate { scope, slot_id } => {
-                if !self.select_queue_slot(scope, slot_id) {
+                let Some(cursor) = self.select_queue_slot(scope, slot_id) else {
                     return;
-                }
-                let cursor = self.app.queue_for_scope(scope).queue_cursor;
+                };
                 let Some(item) = self.app.queue_for_scope(scope).emby_item_at(cursor) else {
                     return;
                 };
@@ -190,28 +193,32 @@ impl Model {
         }
     }
 
+    /// Resolves `slot_id` to its index in `scope`'s queue and applies the
+    /// scope/focus/hold-window side effects, returning the resolved index.
+    /// The index is the operand for the shell-owned effect the caller is
+    /// about to run (D2: `remove_from_queue(index)`, `move_queue_item_up/
+    /// down(index)`, `Command::QueuePlayCursor(index)`); it is no longer
+    /// read back out of `queue.queue_cursor`. (The write-back below is
+    /// removed by task 3.1 once no caller relies on it.)
     fn select_queue_slot(
         &mut self,
         scope: QueueScope,
         slot_id: mbv_core::playback_queue::QueueSlotId,
-    ) -> bool {
+    ) -> Option<usize> {
         if scope == QueueScope::Remote && !self.app.has_direct_remote_queue() {
-            return false;
+            return None;
         }
-        let Some(index) = self
+        let index = self
             .app
             .queue_for_scope(scope)
             .slots()
             .iter()
-            .position(|slot| slot.slot_id == slot_id)
-        else {
-            return false;
-        };
+            .position(|slot| slot.slot_id == slot_id)?;
         self.app.set_queue_scope(scope);
         self.app.set_panel_focus(PanelFocus::Queue);
         self.app.mark_queue_cursor_user_active();
         self.app.queue_for_scope_mut(scope).queue_cursor = index;
-        true
+        Some(index)
     }
 }
 

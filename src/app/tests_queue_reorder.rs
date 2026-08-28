@@ -10,7 +10,7 @@ fn move_queue_item_up_swaps_items_and_cursor_follows() {
         .set_items(items.clone(), app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 1;
 
-    app.move_queue_item_up();
+    app.move_queue_item_up(app.player_tab.queue_cursor);
 
     assert_eq!(
         app.player_tab
@@ -37,7 +37,7 @@ fn move_queue_item_down_swaps_items_and_cursor_follows() {
         .set_items(items.clone(), app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 1;
 
-    app.move_queue_item_down();
+    app.move_queue_item_down(app.player_tab.queue_cursor);
 
     assert_eq!(
         app.player_tab
@@ -64,7 +64,7 @@ fn move_queue_item_up_is_noop_at_start_of_queue() {
         .set_items(items.clone(), app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 0;
 
-    app.move_queue_item_up();
+    app.move_queue_item_up(app.player_tab.queue_cursor);
 
     assert_eq!(
         app.player_tab
@@ -87,7 +87,7 @@ fn move_queue_item_down_is_noop_at_end_of_queue() {
         .set_items(items.clone(), app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 2;
 
-    app.move_queue_item_down();
+    app.move_queue_item_down(app.player_tab.queue_cursor);
 
     assert_eq!(
         app.player_tab
@@ -110,7 +110,7 @@ fn undo_reverses_a_move_and_cursor_follows_back() {
         .set_items(items.clone(), app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 1;
 
-    app.move_queue_item_up();
+    app.move_queue_item_up(app.player_tab.queue_cursor);
     assert_eq!(app.player_tab.queue_cursor, 0);
 
     app.undo_last_queue_edit(QueueScope::Local);
@@ -139,7 +139,7 @@ fn undo_of_move_does_not_disturb_prior_removal_undo_history() {
     // A removal, then a move -- undoing once should only reverse the move.
     app.remove_from_queue(0);
     app.player_tab.queue_cursor = 0;
-    app.move_queue_item_down();
+    app.move_queue_item_down(app.player_tab.queue_cursor);
     assert_eq!(app.queue_undo_stack.len(), 2);
 
     app.undo_last_queue_edit(QueueScope::Local);
@@ -160,7 +160,7 @@ fn undo_of_move_is_refused_if_the_moved_item_is_no_longer_at_to() {
         .set_items(items.clone(), app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 0;
 
-    app.move_queue_item_down(); // items[0] now sits at index 1
+    app.move_queue_item_down(app.player_tab.queue_cursor); // items[0] now sits at index 1
     assert_eq!(app.queue_undo_stack.len(), 1);
 
     // Something untracked by this undo stack happens to the queue
@@ -197,7 +197,7 @@ fn undo_of_move_is_refused_when_duplicate_id_masks_changed_queue() {
     app.player_tab.set_items(items.clone(), 0);
     app.player_tab.queue_cursor = 0;
 
-    app.move_queue_item_down(); // First duplicate now sits at index 1.
+    app.move_queue_item_down(app.player_tab.queue_cursor); // First duplicate now sits at index 1.
     assert_eq!(app.queue_undo_stack.len(), 1);
 
     // Remove the moved item and insert the second duplicate at index 1.
@@ -265,7 +265,7 @@ fn move_queue_item_for_remote_scope_sends_move_command_and_preserves_local_queue
     app.set_queue_scope(QueueScope::Remote);
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
 
-    app.move_queue_item_up();
+    app.move_queue_item_up(app.remote_player_tab.as_ref().unwrap().queue_cursor);
 
     assert_eq!(
         app.remote_player_tab
@@ -360,7 +360,7 @@ fn remote_queue_update_after_move_keeps_cursor_on_moved_item() {
     app.set_queue_scope(QueueScope::Remote);
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
 
-    app.move_queue_item_up();
+    app.move_queue_item_up(app.remote_player_tab.as_ref().unwrap().queue_cursor);
 
     app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
         emby_unified_state(
@@ -398,7 +398,7 @@ fn remote_queue_update_after_move_tracks_duplicate_item_by_position() {
     app.set_queue_scope(QueueScope::Remote);
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
 
-    app.move_queue_item_down();
+    app.move_queue_item_down(app.remote_player_tab.as_ref().unwrap().queue_cursor);
 
     app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
         emby_unified_state(
@@ -442,7 +442,7 @@ fn moving_now_playing_item_keeps_cursor_on_it() {
         st.current_idx = 1;
     }
 
-    app.move_queue_item_down();
+    app.move_queue_item_down(app.player_tab.queue_cursor);
 
     assert_eq!(
         app.player_tab
@@ -519,7 +519,7 @@ fn move_up_on_feed_cursor_preserves_feed_slots() {
     // Cursor on the Feed slot (index 2, past the 2 Emby items).
     app.player_tab.queue_cursor = 2;
 
-    app.move_queue_item_up();
+    app.move_queue_item_up(app.player_tab.queue_cursor);
 
     assert_eq!(
         app.player_tab.queue.slots().len(),

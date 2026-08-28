@@ -34,7 +34,12 @@ impl App {
                     // paths (no seek-to-start for an already-playing audio
                     // item) -- now the same seam as Enter on the queue tab
                     // and a queue-row double-click (see #134's follow-up).
-                    self.dispatch(super::action::Command::QueuePlayCursor);
+                    // The right-click that opened this menu already resolved
+                    // the slot into `queue_cursor`, so that resolved index is
+                    // passed explicitly (D2) rather than re-read by the
+                    // command.
+                    let index = self.displayed_queue().queue_cursor;
+                    self.dispatch(super::action::Command::QueuePlayCursor(index));
                 } else if let Some(lib_idx) = lib_idx {
                     self.select(lib_idx);
                 }
