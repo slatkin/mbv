@@ -1,6 +1,6 @@
 ---
 name: mbv-frontend
-description: Ownership rules and workflow for mbv's terminal UI (src/app/render/). Use before adding or changing rendering code in a screen, before adding a new visual variant, and before reporting a TUI change complete.
+description: Ownership rules and workflow for mbv's terminal UI - the TuiRealm Interactive Components in src/app/components/ and the render tree in src/app/render/. Use this before adding or changing any component, painter, arrangement, or theme role; before handling a key, a mouse event, or component-local state; before adding a new visual variant; and before reporting a TUI change complete. Use it even when the change looks like a one-line tweak, because the two trees have colliding file names and the keyboard has exactly one legal routing site.
 ---
 
 # mbv-frontend
@@ -15,50 +15,105 @@ skill and `CONTEXT.md` ever disagree.
 |---|---|---|
 | `screens/` | app state in, typed content model out | call Ratatui, construct a `Rect`, compute a hit target |
 | `arrangements/` | placement of components within a `Rect`, breakpoints | own painting or app state |
-| `components/` | painting, its own geometry within a `Rect` | take arbitrary `Color`/`Style` from a screen |
+| `render/components/` | painting, its own geometry within a `Rect` | take arbitrary `Color`/`Style` from a screen |
 | `theme/` | semantic roles (public) | expose raw `Color` primitives (private) |
 
-Dependency order: `screens -> arrangements -> components -> Ratatui`.
+Dependency order: `screens -> arrangements -> render/components -> Ratatui`.
+Throughout this section, a bare `components/` means `src/app/render/components/`;
+the TuiRealm Interactive Components in `src/app/components/` are a separate tree,
+described below.
 
 The visual migration ledger is archived with the completed design-system change.
-The separate, proposed interactive-ownership migration is tracked in
-`docs/architecture/interactive-surface-ledger.md`. Existing violations and legacy
-interactive ownership are not licence to add new ones, including in the same file.
+The interactive-ownership migration to TuiRealm (ADR 0022) is **complete**: every
+row of `docs/architecture/interactive-surface-ledger.md` reached `migrated` on
+2026-08-27. Existing violations are not licence to add new ones, including in the
+same file.
 
-## Framework context (tuirealm)
+## Two trees, not one
 
-mbv's `src/app/render/` boundary maps onto the
-[tuirealm](https://github.com/veeso/tui-realm) component model (v4; pinned in
-`Cargo.toml` as `tuirealm = "4.1"` in the migration worktree). Knowing the
-framework helps you place code correctly:
+This is the easiest place to put code in the wrong file, because the two trees
+have colliding names. `src/app/components/help.rs` and
+`src/app/render/components/help.rs` are different things:
 
-- `theme/` → tuirealm `Theme` / `Style` / `Color`. mbv keeps palette primitives
-  private here and exposes **semantic roles**; components consume roles, never raw
-  `Color`. (tuirealm's own `Theme` already models foreground/background/
-  highlighted/etc. — mbv's `theme/` is the project's source of truth for those
-  roles.)
-- `components/` → tuirealm `Component` implementations: the `view()`/render half
-  (painting into an area) plus any `update()` / `Props` / `Msg` handling. A
-  component owns its geometry and its painting.
-- `arrangements/` → tuirealm **layout** composition (`Layout` / flex boxes,
-  `Constraint`s, breakpoints). Placement of components within a `Rect` lives
-  here, not in screens.
-- `screens/` → the top-level composition / app state: it builds a typed content
-  model and mounts/selects components and arrangements. It must not call Ratatui,
-  build `Rect`s, or compute hit targets itself.
+| Tree | What lives there | Example |
+|---|---|---|
+| `src/app/components/` | **Interactive Components** — TuiRealm `impl Component`: local interaction state, event interpretation, `update()`, and the `view()` entry point | `HelpComponent` |
+| `src/app/render/` | **The visual substrate** — the Ratatui painters, arrangements, and theme roles a component's `view()` calls into | `render_help_panel` |
 
-Why this matters: the boundary rules above are really tuirealm's separation of
-concerns (state vs. view vs. layout vs. style) expressed as hard module ownership
-in mbv. When in doubt about *where* a difference belongs, ask "is this state,
-painting, layout, or style?" and route to `screens` / `components` /
-`arrangements` / `theme` accordingly.
+The seam is `Component::view(&mut self, f: &mut Frame, area: Rect)`: it receives
+an outer area from an arrangement or the root layout, and delegates the painting
+to a `render/` function. A component holds *cursor, scroll, drafts, viewport, and
+hit geometry*; `render/` holds *pixels*. When unsure where a difference belongs,
+ask "is this interaction, state, painting, layout, or style?" and route to
+`components/` / `screens/` / `render/components/` / `arrangements/` / `theme/`
+accordingly.
 
-Scope note: on `main`, mbv still depends only on `ratatui = "0.30"`; the tuirealm
-migration is in progress in the `migrate-tui-to-tuirealm` worktree and is **not
-merged to main yet**. The module boundary already exists on main; the tuirealm
-vocabulary is the target shape. Confirm the locked version and API in `Cargo.toml`
-/ the crate docs before relying on a specific tuirealm call — APIs drift between
-major versions, and the `find-docs` skill can pull current tuirealm references.
+## Interactive ownership (ADR 0022)
+
+An Interactive Component owns its private presentation state, event
+interpretation, local updates, rendering, viewport, and render-derived hit
+geometry. It emits a typed `Msg` (`src/app/components/msg.rs`) for anything
+crossing that boundary. The shell `Model` (`src/app/shell*.rs`) owns `App`,
+terminal/Service/worker lifecycle, Player and canonical queue authority,
+persistence, and external effects.
+
+A component therefore never receives `App`, a Service client, `PlayerProxy`,
+`Config`, credentials, or an mpsc channel. `rules/interactive-component-boundary/`
+enforces that mechanically (`rtk ast-grep scan`), but the reason matters more than
+the rule: this migration existed to delete an `App`-wide input snapshot, and every
+one of those handles is a way to grow it back.
+
+Data flows shell→component one way, through `sync_<surface>()` and `push_*`
+helpers that project validated snapshots. A `sync_*` that reads component-local
+interaction state back into `App` reintroduces exactly the mirror that was
+removed — if you find yourself needing one, the state is on the wrong side.
+
+## Keyboard routing (ADR 0023)
+
+There is exactly one keyboard resolution site: `src/app/router.rs`, with its
+ordered policy in `src/app/key_policy.rs`, folded into the tick in
+`shell_run.rs`. It returns ADR 0002's `Command` / `Swallow` / `FallThrough` from
+a plain-data `RouterSnapshot`. A component interprets only its own local chords
+and emits a semantic intent.
+
+Two approaches that look reasonable and are not:
+
+- **A second resolution site** — a global chord claimed inside a component, a
+  shell method, or a subscription. Precedence then stops being readable in one
+  ordered place, which is the property ADR 0002 bought and ADR 0023 preserves.
+- **Precedence expressed as a `SubClause`** — TuiRealm's `tick()` fans events out
+  unconditionally to the focused component *and* every satisfied subscription,
+  with no consumed signal and an all-or-nothing `sub_lock`. `SubClause` can read
+  only `mounted()`, `state()`, and `query()`, so it cannot express `Swallow` or
+  `FallThrough`. Reproducing first-match through gates would require every gate
+  to encode the negation of every higher-priority claimant — the distributed
+  mirror state the migration deleted. That gap is the whole reason the router
+  exists.
+
+Legacy-endpoint removal is in flight
+(`openspec/changes/remove-legacy-keyboard-endpoint`): `GlobalViewKey`, the raw
+`*Key` shell request variants, `CONTEXT_STACK`, `Model::handle_legacy_key`, and
+`src/app/components/typed_key.rs` still exist and are scheduled for deletion.
+They are not an escape hatch — add no new callers.
+
+## Mouse is accepted-broken (D16)
+
+Per **D16** in `openspec/changes/migrate-tui-to-tuirealm/design.md`, the legacy
+mouse framework was deleted rather than migrated, and mouse behaviour is not part
+of any ledger row's verification record for the alpha. The old
+`src/app/input_mouse*.rs` coordinate arithmetic no longer exists; the surfaces
+that do handle mouse (`browser`, `home`, `queue`, `tv_workspace`, partially
+`music_workspace`, `playlists`) own their hit geometry inside their component. A
+broken mouse path is a known state, not a regression you just found — repair it
+only when the work is actually asked for.
+
+## Version scope
+
+`main` still depends only on `ratatui = "0.30"`; `tuirealm = "4.1"` is pinned in
+the `migrate-tui-to-tuirealm` worktree and is **not merged to main yet**. The
+`src/app/render/` module boundary exists on both. Confirm the locked version and
+API in `Cargo.toml` before relying on a specific TuiRealm call — APIs drift
+between major versions, and the `find-docs` skill can pull current references.
 
 ## Reuse workflow
 
@@ -156,17 +211,29 @@ one you're relying on:
 
 1. **The compiler** — private theme primitives. A raw `Color` outside
    `theme/` is a compile error. Cannot be bypassed.
-2. **ast-grep**, scoped to `src/app/render/screens/`
-   (`rules/frontend-boundary/*.yml`, run via `rtk ast-grep scan` from repo root) —
-   flags `use ratatui::`, `render_widget`/`render_stateful_widget`,
-   `Layout::...`, `Rect` construction, and `buffer_mut()` in screen modules.
-   This catches the common bypass and nothing subtler. It does **not** catch:
+2. **ast-grep**, run as `rtk ast-grep scan` from the repo root over two rule
+   directories (`sgconfig.yml` registers both):
+   - `rules/frontend-boundary/` scopes to `src/app/render/screens/` and flags
+     `use ratatui::`, `render_widget`/`render_stateful_widget`, `Layout::...`,
+     `Rect` construction, and `buffer_mut()` in screen modules.
+   - `rules/interactive-component-boundary/` scopes to `src/app/components/` and
+     rejects `impl App`, `App` as a type, Service clients / `PlayerProxy` /
+     `RemotePlayer`, and `std::sync::mpsc`. Fixtures live in
+     `rules/interactive-component-boundary-tests/`; `rtk ast-grep test` runs them,
+     and `rtk ast-grep test -U` regenerates snapshots after an intentional rule
+     change.
+
+   The scan catches the common bypasses and nothing subtler. Note that it reports
+   a standing set of pre-existing screen-boundary diagnostics; the bar is that
+   your change adds none, not that the output is empty. It does **not** catch:
    - **Duplicated arrangement geometry** — a screen that calls an existing
      arrangement correctly but a second, near-identical arrangement was added
      elsewhere instead of extending the first one.
-   - **Hit targets drifted from painting** — a component's geometry changes
-     but the corresponding coordinate arithmetic in `src/app/input_mouse*.rs`
-     is not updated to match.
+   - **State smuggled through a sync** — a `sync_*` or push helper that carries
+     component-local interaction state back into `App`. This reads as ordinary
+     shell plumbing and only review catches it.
+   - **Hit targets drifted from painting** — a component's painted geometry
+     changes but its own `hit_test`/region arithmetic is not updated to match.
    - Test files (`*tests*.rs`) and inline `#[cfg(test)] mod tests { ... }`
      blocks inside an otherwise-production file are not distinguished by
      these rules; a `#[cfg(test)]` block that legitimately builds a
@@ -180,14 +247,21 @@ one you're relying on:
 
 Before reporting a TUI change complete:
 
-- [ ] **Component ownership** — no `use ratatui::`, `render_widget`, `Layout::`,
+- [ ] **Render boundary** — no `use ratatui::`, `render_widget`, `Layout::`,
   `Rect` construction, or `buffer_mut()` was added to a `screens/` module. If
   ast-grep flags something you added, fix it rather than widening an `ignores`
   glob.
 - [ ] **Narrow-width behaviour** — the change was checked at the narrow/mini
   breakpoint, not only the default width.
 - [ ] **Interaction targets** — if painted geometry moved or resized, the
-  corresponding hit-target arithmetic in `input_mouse*.rs` still matches it.
+  component's own hit-geometry arithmetic still matches it. (Mouse is
+  accepted-broken per D16; this is about not widening the gap in a surface that
+  does own its geometry.)
+- [ ] **Component boundary** — no `App`, Service client, `PlayerProxy`, `Config`, or mpsc
+  reached a component; anything crossing the boundary went out as a typed `Msg`.
+- [ ] **One router** — no chord is resolved outside `router.rs`/`key_policy.rs`,
+  and no new caller of `GlobalViewKey`, a raw `*Key` request, `CONTEXT_STACK`, or
+  `handle_legacy_key` was added.
 - [ ] **Buffer tests** — a characterization test exists (or was added first,
   in its own commit, per the ledger migration flow) and passes unchanged
   where the change is not expected to alter output.
