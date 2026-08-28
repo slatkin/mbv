@@ -3,14 +3,13 @@ use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::{make_item, make_items};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers as CrosstermKeyModifiers};
+
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{
     Event, Key, KeyEvent as TuiKeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
-
 /// Local keyboard navigation routes through typed `ShellRequest`s (task
 /// 5.3d): while focused, the component moves its own cursor exactly the way
 /// the legacy `App::move_lib_cursor_rows`/`jump_lib_cursor` bindings move
@@ -24,24 +23,24 @@ use tuirealm::event::{
 fn browser_local_navigation_mirrors_legacy_flat_movement() {
     let cases = [
         // (key, from, expected)
-        (KeyCode::Down, 0, 2),
-        (KeyCode::Char('j'), 0, 2),
-        (KeyCode::Up, 4, 2),
-        (KeyCode::Char('k'), 4, 2),
-        (KeyCode::Left, 4, 3),
-        (KeyCode::Char('h'), 4, 3),
-        (KeyCode::Right, 4, 5),
-        (KeyCode::Char('l'), 4, 5),
-        (KeyCode::Down, 39, 39),  // clamp at the last item
-        (KeyCode::Up, 1, 0),      // clamp at the first item
-        (KeyCode::Left, 0, 0),    // clamp at the left edge
-        (KeyCode::Right, 39, 39), // clamp at the right edge
+        (Key::Down, 0, 2),
+        (Key::Char('j'), 0, 2),
+        (Key::Up, 4, 2),
+        (Key::Char('k'), 4, 2),
+        (Key::Left, 4, 3),
+        (Key::Char('h'), 4, 3),
+        (Key::Right, 4, 5),
+        (Key::Char('l'), 4, 5),
+        (Key::Down, 39, 39),  // clamp at the last item
+        (Key::Up, 1, 0),      // clamp at the first item
+        (Key::Left, 0, 0),    // clamp at the left edge
+        (Key::Right, 39, 39), // clamp at the right edge
         // PageDown/PageUp stride (height - 1) * cols — the page excludes
         // the count/search header line, not the full painted height.
-        (KeyCode::PageDown, 10, 28),
-        (KeyCode::PageUp, 28, 10),
-        (KeyCode::Home, 39, 0),
-        (KeyCode::End, 0, 39),
+        (Key::PageDown, 10, 28),
+        (Key::PageUp, 28, 10),
+        (Key::Home, 39, 0),
+        (Key::End, 0, 39),
     ];
     for (key, from, expected) in cases {
         let mut browser = BrowserComponent::new();
@@ -51,7 +50,10 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
         terminal
             .draw(|frame| browser.view(frame, frame.area()))
             .unwrap();
-        let message = browser.handle_crossterm_key(KeyEvent::new(key, CrosstermKeyModifiers::NONE));
+        let message = browser.handle_tui_key(TuiKeyEvent {
+            code: key,
+            modifiers: KeyModifiers::NONE,
+        });
         assert_eq!(
             browser.cursor(),
             expected,
@@ -64,9 +66,8 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
         );
     }
 
-    // Unfocused (Queue/playback own panel focus): the movement keys do not
-    // mutate the component cursor and the raw key is consumed (no legacy
-    // forwarding), keeping those surfaces authoritative.
+    // Unfocused (Queue/playback own panel focus): movement keys do not
+    // mutate the component cursor and remain unclaimed by this component.
     let mut browser = BrowserComponent::new();
     browser.set_content(
         LibraryListRenderCtx::from_items(make_items(40), 0, 0),
@@ -78,29 +79,29 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
         .draw(|frame| browser.view(frame, frame.area()))
         .unwrap();
     for key in [
-        KeyCode::Up,
-        KeyCode::Down,
-        KeyCode::Left,
-        KeyCode::Right,
-        KeyCode::PageUp,
-        KeyCode::PageDown,
-        KeyCode::Home,
-        KeyCode::End,
-        KeyCode::Char('h'),
-        KeyCode::Char('j'),
-        KeyCode::Char('k'),
-        KeyCode::Char('l'),
+        Key::Up,
+        Key::Down,
+        Key::Left,
+        Key::Right,
+        Key::PageUp,
+        Key::PageDown,
+        Key::Home,
+        Key::End,
+        Key::Char('h'),
+        Key::Char('j'),
+        Key::Char('k'),
+        Key::Char('l'),
     ] {
-        let message = browser.handle_crossterm_key(KeyEvent::new(key, CrosstermKeyModifiers::NONE));
+        let message = browser.handle_tui_key(TuiKeyEvent {
+            code: key,
+            modifiers: KeyModifiers::NONE,
+        });
         assert_eq!(
             browser.cursor(),
             7,
             "unfocused {key:?} must not move the cursor"
         );
-        assert!(
-            matches!(message, Some(Msg::Shell(ShellRequest::GlobalViewKey(_)))),
-            "unfocused {key:?} must be forwarded through the typed global bridge"
-        );
+        assert_eq!(message, None, "unfocused {key:?} must stay unclaimed");
     }
 }
 
@@ -110,16 +111,16 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
 /// The page payload is the painted display-row stride `(height - 1) = 9`
 /// the 100-wide, 10-tall test list reports via `page_rows()` — the App
 /// applies its own column count to that stride, exactly like the legacy arm.
-fn expected_movement_request(key: KeyCode) -> ShellRequest {
+fn expected_movement_request(key: Key) -> ShellRequest {
     match key {
-        KeyCode::Up | KeyCode::Char('k') => ShellRequest::BrowserMoveRows { rows: -1 },
-        KeyCode::Down | KeyCode::Char('j') => ShellRequest::BrowserMoveRows { rows: 1 },
-        KeyCode::PageUp => ShellRequest::BrowserMoveRows { rows: -9 },
-        KeyCode::PageDown => ShellRequest::BrowserMoveRows { rows: 9 },
-        KeyCode::Home => ShellRequest::BrowserJumpCursor { to_end: false },
-        KeyCode::End => ShellRequest::BrowserJumpCursor { to_end: true },
-        KeyCode::Left | KeyCode::Char('h') => ShellRequest::BrowserMoveColumn { delta: -1 },
-        KeyCode::Right | KeyCode::Char('l') => ShellRequest::BrowserMoveColumn { delta: 1 },
+        Key::Up | Key::Char('k') => ShellRequest::BrowserMoveRows { rows: -1 },
+        Key::Down | Key::Char('j') => ShellRequest::BrowserMoveRows { rows: 1 },
+        Key::PageUp => ShellRequest::BrowserMoveRows { rows: -9 },
+        Key::PageDown => ShellRequest::BrowserMoveRows { rows: 9 },
+        Key::Home => ShellRequest::BrowserJumpCursor { to_end: false },
+        Key::End => ShellRequest::BrowserJumpCursor { to_end: true },
+        Key::Left | Key::Char('h') => ShellRequest::BrowserMoveColumn { delta: -1 },
+        Key::Right | Key::Char('l') => ShellRequest::BrowserMoveColumn { delta: 1 },
         _ => unreachable!("{key:?} must be a browsed navigation key"),
     }
 }
@@ -161,15 +162,15 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
 
     let cases = [
         // (key, from, expected) — letter-grouped 2-column layout
-        (KeyCode::Down, 27, 28), // ragged target row [28]: fall back to its last item
-        (KeyCode::Down, 28, 29), // across the D–F header: next *item* row is [29,30]
-        (KeyCode::Up, 29, 28),   // back across the header
-        (KeyCode::Down, 59, 59), // clamp at the very last item
-        (KeyCode::Up, 0, 0),     // clamp at the very first item
-        (KeyCode::Home, 59, 0),  // sorted order first
-        (KeyCode::End, 0, 59),   // sorted order last
-        (KeyCode::Left, 4, 3),   // sorted-order ±1 (column adjacency)
-        (KeyCode::Right, 4, 5),
+        (Key::Down, 27, 28), // ragged target row [28]: fall back to its last item
+        (Key::Down, 28, 29), // across the D–F header: next *item* row is [29,30]
+        (Key::Up, 29, 28),   // back across the header
+        (Key::Down, 59, 59), // clamp at the very last item
+        (Key::Up, 0, 0),     // clamp at the very first item
+        (Key::Home, 59, 0),  // sorted order first
+        (Key::End, 0, 59),   // sorted order last
+        (Key::Left, 4, 3),   // sorted-order ±1 (column adjacency)
+        (Key::Right, 4, 5),
     ];
     for (key, from, expected) in cases {
         let mut browser = BrowserComponent::new();
@@ -179,7 +180,10 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
         terminal
             .draw(|frame| browser.view(frame, frame.area()))
             .unwrap();
-        browser.handle_crossterm_key(KeyEvent::new(key, CrosstermKeyModifiers::NONE));
+        browser.handle_tui_key(TuiKeyEvent {
+            code: key,
+            modifiers: KeyModifiers::NONE,
+        });
         assert_eq!(
             browser.cursor(),
             expected,
@@ -189,13 +193,10 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
 }
 
 /// Wide-Movies exact parity (task 5.3d prep): with the shell's
-/// `set_wide_movies` projection set on a >=82-wide rendered list, the
-/// right rail strides ONE item per row — exactly the legacy
-/// `current_library_columns` result (the wide renderer shows the list in
-/// the right rail even when that rail is wide enough to pack two columns).
-/// Down from 0 lands at 1, not 2, and returns the typed rows request;
-/// Left/Right/h/l stay unbound locally (one-column list) while the raw key
-/// forwards through the typed `GlobalViewKey` bridge.
+/// `set_wide_movies` projection set on a >=82-wide rendered list, the right
+/// rail strides ONE item per row — exactly the legacy
+/// `current_library_columns` result. Down from 0 lands at 1, not 2, and
+/// returns the typed rows request; Left/Right/h/l stay unbound locally.
 #[test]
 fn browser_local_navigation_strides_one_column_for_wide_movies() {
     let mut browser = BrowserComponent::new();
@@ -206,8 +207,10 @@ fn browser_local_navigation_strides_one_column_for_wide_movies() {
         .draw(|frame| browser.view(frame, frame.area()))
         .unwrap();
 
-    let message =
-        browser.handle_crossterm_key(KeyEvent::new(KeyCode::Down, CrosstermKeyModifiers::NONE));
+    let message = browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    });
     assert_eq!(
         browser.cursor(),
         1,
@@ -219,52 +222,42 @@ fn browser_local_navigation_strides_one_column_for_wide_movies() {
         "wide-Movies Down must return the typed rows request"
     );
 
-    browser.handle_crossterm_key(KeyEvent::new(KeyCode::Down, CrosstermKeyModifiers::NONE));
+    browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    });
     assert_eq!(browser.cursor(), 2);
-    browser.handle_crossterm_key(KeyEvent::new(KeyCode::Up, CrosstermKeyModifiers::NONE));
+    browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Up,
+        modifiers: KeyModifiers::NONE,
+    });
     assert_eq!(browser.cursor(), 1);
 
-    for key in [
-        KeyCode::Left,
-        KeyCode::Right,
-        KeyCode::Char('h'),
-        KeyCode::Char('l'),
-    ] {
-        let message = browser.handle_crossterm_key(KeyEvent::new(key, CrosstermKeyModifiers::NONE));
+    for key in [Key::Left, Key::Right, Key::Char('h'), Key::Char('l')] {
+        let message = browser.handle_tui_key(TuiKeyEvent {
+            code: key,
+            modifiers: KeyModifiers::NONE,
+        });
         assert_eq!(
             browser.cursor(),
             1,
             "wide-Movies rail {key:?} must stay unbound locally"
         );
-        assert!(
-            matches!(message, Some(Msg::Shell(ShellRequest::GlobalViewKey(_)))),
-            "wide-Movies {key:?} must use the typed global bridge"
-        );
+        assert_eq!(message, None, "wide-Movies {key:?} must stay unclaimed");
     }
 }
 
 #[test]
-fn browser_alt_navigation_forwards_to_global_dispatch() {
+fn browser_alt_navigation_stays_unclaimed() {
     let mut browser = BrowserComponent::new();
     browser.set_content(LibraryListRenderCtx::from_items(make_items(2), 0, 0), true);
 
-    for (code, expected) in [
-        (Key::Left, KeyCode::Left),
-        (Key::Right, KeyCode::Right),
-        (Key::Up, KeyCode::Up),
-        (Key::Down, KeyCode::Down),
-    ] {
+    for code in [Key::Left, Key::Right, Key::Up, Key::Down] {
         let message = browser.on(&Event::Keyboard(TuiKeyEvent {
             code,
             modifiers: KeyModifiers::ALT,
         }));
-
-        assert!(matches!(
-            message,
-            Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
-                if key.code == expected
-                    && key.modifiers == CrosstermKeyModifiers::ALT
-        ));
+        assert_eq!(message, None, "Alt+{code:?} belongs to the router");
     }
     assert_eq!(
         browser.cursor(),
@@ -272,7 +265,6 @@ fn browser_alt_navigation_forwards_to_global_dispatch() {
         "Alt navigation must not move the local cursor"
     );
 }
-
 #[test]
 fn browser_alt_refresh_stays_component_owned() {
     let mut browser = BrowserComponent::new();
@@ -302,7 +294,10 @@ fn browser_syncs_cursor_from_context_on_set_content() {
         true,
     );
 
-    browser.handle_crossterm_key(KeyEvent::new(KeyCode::Down, CrosstermKeyModifiers::NONE));
+    browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    });
     // Component cursor moved to 1
     assert_eq!(browser.cursor(), 1);
 

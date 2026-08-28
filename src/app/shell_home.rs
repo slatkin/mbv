@@ -13,14 +13,10 @@ use super::{PanelFocus, TabSelection};
 use mbv_core::playback_queue::QueueItem;
 
 impl Model {
-    /// Route the Home typed effects (task 5.3d, Home typed-effect prep) to
-    /// their `App` handlers with the component-provided target index.
-    /// `HomeComponent` owns the cursor; the effect must act on the requested
-    /// target directly — never by copying it into a (now deleted) App flat
-    /// cursor and re-reading that field. (Task 5.3d: the shell resolves the
-    /// flat target via `home_flat_target`/`home_cw_item` against Model-owned
-    /// `home_content`; the section-preference and CW-selected resolvers live
-    /// in `shell_home_content.rs`.)
+    /// Route Home's typed effects and context-menu target request to the App
+    /// handlers. `HomeComponent` owns the flat cursor and resolves the
+    /// Continue Watching section/target snapshot; App acts only on supplied
+    /// targets or Model-owned effects.
     pub(super) fn handle_home_request(&mut self, request: ShellRequest) {
         match request {
             ShellRequest::HomePlay(cursor) => {
@@ -33,6 +29,10 @@ impl Model {
                     self.app.home_enqueue_target(item, from_cw);
                 }
             }
+            ShellRequest::HomeContextMenu {
+                home_cw_selected,
+                cw_item,
+            } => self.app.open_context_menu(home_cw_selected, cw_item),
             // Delete / watched-toggle refetch Home: re-project (5.3d).
             ShellRequest::HomeDelete(cursor) => {
                 if let Some(item) = self.home_content.continue_items.get(cursor).cloned() {
@@ -114,8 +114,8 @@ impl Model {
     /// then does the mounted `HomeComponent` move its section-local cursor
     /// with the same clamped semantics as its keyboard navigation
     /// (`move_local_cursor`), and the independent Continue Watching column's
-    /// `continue_cursor` follows through `App::cw_move_cursor` — the
-    /// pre-existing quirk the migration preserves rather than fixes.
+    /// `continue_cursor` follows through `App::cw_move_cursor`; the component
+    /// refreshes its explicit context-menu target after accepted scrolling.
     pub(super) fn handle_home_scroll(&mut self, delta: i64) {
         if !self.app.note_browse_scroll() {
             return;
@@ -128,10 +128,11 @@ impl Model {
                 home.move_local_cursor(delta);
             }
         }
-        // Preserve the Continue Watching column quirk: the legacy wheel scroll
-        // also moved the column's independent `continue_cursor`, which is not
-        // the Home component's flat cursor mirror. Model-owned now (5.3d).
+        // Preserve the Continue Watching column quirk: the legacy wheel
+        // scroll also moved its independent cursor. Refresh the component's
+        // target snapshot so keyboard '.' follows that Model-owned cursor.
         self.cw_move_cursor(delta);
+        self.push_home_content();
     }
 
     /// Mount `HomeComponent` for the session. Called once from `Model::new`;
@@ -165,6 +166,7 @@ impl Model {
             .iter()
             .map(|(title, source, items, _cursor)| (title.clone(), source.clone(), items.clone()))
             .collect();
+        let cw_item = self.home_cw_item();
         let focused = !matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
         let use_nerd_fonts = self.app.use_nerd_fonts;
         // Snapshot the pending persisted-pill restore before the component
@@ -174,6 +176,7 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(&ComponentId::Home) {
             if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
                 home.set_content(continue_items, latest, self.home_content.loading);
+                home.set_continue_watching_item(cw_item);
                 home.set_focused(focused);
                 home.set_use_nerd_fonts(use_nerd_fonts);
                 if let Some(pending_source) = &pending {
@@ -232,7 +235,6 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::msg::Msg;
     use crate::app::tests::{make_app_stub, make_item, make_items};
     use std::time::Duration;
     use tuirealm::component::AppComponent;
@@ -637,12 +639,12 @@ mod tests {
         );
 
         // Keyboard '.' path under Queue panel focus while Home is the active
-        // Tab selection: the shared `handle_global_view_key` front door
-        // (reached through the CONTEXT_STACK from the Model-boundary
-        // `handle_key_with_home_context`) opens the queue menu, and the odd
-        // coupling entry is present iff the mounted Home component has
-        // Continue Watching selected. With the component on a non-CW section
-        // the entry must be absent — the menu follows the component.
+        // Tab selection: the typed `HomeContextMenu` request the central
+        // router dispatches reaches `handle_home_request` at the Model
+        // boundary, and the odd coupling entry is present iff the mounted
+        // Home component has Continue Watching selected. With the component
+        // on a non-CW section the entry must be absent — the menu follows
+        // the component.
         model.app.player_tab.set_queue_items(
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
                 make_item("Queued", "Movie"),
@@ -651,17 +653,11 @@ mod tests {
         );
         model.app.panel_focus = PanelFocus::Queue;
         model.app.pending_overlay = None;
-        assert!(
-            !model.app.handle_key_with_home_context(
-                crossterm::event::KeyEvent::new(
-                    crossterm::event::KeyCode::Char('.'),
-                    crossterm::event::KeyModifiers::NONE,
-                ),
-                model.home_continue_watching_selected(),
-                model.home_cw_item(),
-            ),
-            "'.' must not quit"
-        );
+        // Keyboard '.' now routes through HomeComponent→HomeContextMenu (task 8.1).
+        model.handle_home_request(ShellRequest::HomeContextMenu {
+            home_cw_selected: model.home_continue_watching_selected(),
+            cw_item: model.home_cw_item(),
+        });
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_non_cw)) =
             model.app.pending_overlay
         else {
@@ -697,17 +693,11 @@ mod tests {
             "resolver must report CW when the component is back on section 0"
         );
         model.app.pending_overlay = None;
-        assert!(
-            !model.app.handle_key_with_home_context(
-                crossterm::event::KeyEvent::new(
-                    crossterm::event::KeyCode::Char('.'),
-                    crossterm::event::KeyModifiers::NONE,
-                ),
-                model.home_continue_watching_selected(),
-                model.home_cw_item(),
-            ),
-            "'.' must not quit"
-        );
+        // Keyboard '.' now routes through HomeComponent→HomeContextMenu (task 8.1).
+        model.handle_home_request(ShellRequest::HomeContextMenu {
+            home_cw_selected: model.home_continue_watching_selected(),
+            cw_item: model.home_cw_item(),
+        });
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_cw)) =
             model.app.pending_overlay
         else {
@@ -719,6 +709,30 @@ mod tests {
                 .iter()
                 .any(|e| e.label == "Remove from Continue Watching"),
             "component back on CW must show the keyboard-menu CW entry"
+        );
+    }
+
+    #[test]
+    fn shell_home_context_menu_request_uses_explicit_target() {
+        let mut model = Model::new(make_app_stub());
+        let target = make_item("cw-target", "Movie");
+        model.handle_home_request(ShellRequest::HomeContextMenu {
+            home_cw_selected: true,
+            cw_item: Some(target),
+        });
+        let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) =
+            model.app.pending_overlay
+        else {
+            panic!("Home context-menu request must open a menu");
+        };
+        assert!(
+            menu.entries.iter().any(|entry| {
+                entry
+                    .action
+                    .as_ref()
+                    .is_some_and(|action| matches!(action, crate::app::ContextAction::Play))
+            }),
+            "Home context-menu request must use its explicit item target"
         );
     }
 

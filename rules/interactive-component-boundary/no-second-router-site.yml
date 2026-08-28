@@ -1,0 +1,38 @@
+id: no-second-router-site
+language: rust
+severity: error
+message: >-
+  Keyboard resolution is centralized in the router
+  (`src/app/router.rs::resolve_router_outcome`,
+  `src/app/key_policy.rs::KeyPolicyGate`, and
+  `src/app/input_resolver.rs::resolve_key` / `playback_command_for_key`).
+  No other module may *call* `playback_command_for_key` or `resolve_key`
+  directly — that is ADR 0023's one-router rule. If a new module needs a
+  binding, route it through a typed `Msg` and let the shell's
+  `router_outcome` resolve it, or extend `key_policy.rs` with the new
+  context. See openspec/changes/remove-legacy-keyboard-endpoint design §2
+  and §5. Imports of the functions in allowed files
+  (router, key_policy, input_resolver, action, shell, and tests) are
+  fine; this rule fires on call sites outside those files.
+files:
+  - "src/app/**/*.rs"
+ignores:
+  - "src/app/router.rs"
+  - "src/app/key_policy.rs"
+  - "src/app/input_resolver.rs"
+  - "src/app/action.rs"
+  - "src/app/shell.rs"
+  - "src/app/action_tests.rs"
+  - "src/app/**/*tests*.rs"
+rule:
+  kind: call_expression
+  any:
+    - has:
+        kind: identifier
+        regex: "^(playback_command_for_key|resolve_key)$"
+    - has:
+        kind: field_identifier
+        regex: "^(playback_command_for_key|resolve_key)$"
+    - has:
+        kind: scoped_identifier
+        regex: "^(playback_command_for_key|resolve_key)$"

@@ -24,6 +24,10 @@ pub(super) struct RouterSnapshot {
     pub selection_modal_open: bool,
     pub context_menu_open: bool,
     pub idle_feed_link_available: bool,
+    /// Whether the focused leaf is a text-entry component (the search sidebar,
+    /// inline library search, or the settings form's text inputs). Global
+    /// bindings do not fire while a text entry owns focus.
+    pub text_entry_focused: bool,
     /// Whether the previous eligible Space press is within the double-tap
     /// window. The timer remains App-owned; this is the router's plain-data
     /// view of it.
@@ -94,7 +98,9 @@ impl KeyPolicyBinding {
             Self::Quit => chord.code == KeyCode::Char('q') && chord.mods.is_empty(),
             Self::NextLibraryTab => chord.code == KeyCode::Tab,
             Self::PreviousLibraryTab => chord.code == KeyCode::BackTab,
-            Self::LibraryTabJump => matches!(chord.code, KeyCode::Char('1'..='9')),
+            Self::LibraryTabJump => {
+                matches!(chord.code, KeyCode::Char('1'..='9')) && chord.mods.is_empty()
+            }
             Self::AltPanelRight => {
                 chord.mods.contains(KeyModifiers::ALT) && chord.code == KeyCode::Right
             }
@@ -250,13 +256,6 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         blocking: false,
     },
     KeyPolicyEntry {
-        name: "library_tab_jump",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
-        binding: KeyPolicyBinding::LibraryTabJump,
-        gate: KeyPolicyGate::NoBlockingOverlay,
-        blocking: false,
-    },
-    KeyPolicyEntry {
         name: "queue_column_width",
         owner: KeyPolicyOwner::Sub(ComponentId::Queue),
         binding: KeyPolicyBinding::QueueColumnWidth,
@@ -339,6 +338,13 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         binding: KeyPolicyBinding::AltSwallow,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: true,
+    },
+    KeyPolicyEntry {
+        name: "library_tab_jump",
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        binding: KeyPolicyBinding::LibraryTabJump,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
     },
     KeyPolicyEntry {
         name: "view_dispatch",

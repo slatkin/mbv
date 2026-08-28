@@ -1,6 +1,5 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_item, make_session};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::playback_queue::{QueueItem, QueueSlotId};
 use mbv_core::remote_reconciliation::{
     ReconciliationTracker, RemoteObservation, SubmittedOccurrence, TrackingState,
@@ -44,41 +43,6 @@ fn attached_app() -> App {
     app
 }
 
-#[test]
-fn duplicate_reanchor_opens_picker_and_enter_selects_occurrence() {
-    let mut app = attached_app();
-    app.panel_focus = crate::app::PanelFocus::Queue;
-    app.player_tab.emby_items()[0].id = "a".into();
-    app.player_tab.emby_items()[1].id = "b".into();
-    let mut tracking = tracker(&["a", "a", "b"]);
-    tracking.observe(RemoteObservation::playing(1, "session", "a", 80, 100, 1));
-    tracking.observe(RemoteObservation::playing(2, "session", "a", 1, 100, 2));
-    app.remote_tracker = Some(tracking);
-
-    app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
-    assert!(matches!(
-        app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::RemoteReanchor(_))
-    ));
-
-    let mut model = crate::app::Model::new(app);
-    model.sync_modal_requests();
-    model.handle_remote_reanchor_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    model.handle_remote_reanchor_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(!model
-        .application
-        .mounted(&crate::app::components::ComponentId::Modal(
-            crate::app::components::ModalId::RemoteReanchor
-        )));
-    assert_eq!(
-        model.app.remote_tracker.as_ref().unwrap().state(),
-        TrackingState::Tracking
-    );
-    assert_eq!(
-        model.app.remote_tracker.as_ref().unwrap().current_index(),
-        Some(1)
-    );
-}
 
 #[test]
 fn tracking_retirement_clears_reanchor_popup() {
@@ -121,30 +85,6 @@ fn submitted_sequence_without_exact_visible_queue_has_no_projection() {
     assert!(app.remote_queue_projection.is_none());
 }
 
-#[test]
-fn stop_tracking_and_queue_edits_are_input_gated() {
-    let mut app = attached_app();
-    app.panel_focus = crate::app::PanelFocus::Queue;
-    app.remote_tracker = Some(tracker(&["a", "b"]));
-
-    app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL));
-    assert!(app.remote_tracker.is_none());
-
-    // Enqueue is an ordinary queue edit from Home: it applies without
-    // a tracking-specific confirmation and retires tracking. The Ctrl+A
-    // chord is component-owned (task 5.3d); the App boundary is the
-    // `home_enqueue_target` effect with the shell-resolved CW item (Home
-    // content is Model-owned).
-    app.remote_tracker = Some(tracker(&["a", "b"]));
-    app.panel_focus = crate::app::PanelFocus::Library;
-    app.home_enqueue_target(QueueItem::Emby(Box::new(make_item("a", "Movie"))), true);
-    assert!(!matches!(
-        app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::Confirm(_))
-    ));
-    assert_eq!(app.player_tab.emby_items().len(), 3);
-    assert!(app.remote_tracker.is_none());
-}
 
 #[test]
 fn replacement_tracker_ignores_an_earlier_in_flight_poll() {

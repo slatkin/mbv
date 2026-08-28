@@ -12,7 +12,6 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
-use super::typed_key::to_crossterm_key_event;
 use super::user_event::UserEvent;
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
 use crate::app::render::{render_wide_music_group_with_ctx, MusicImagePaint, MusicWideRenderCtx};
@@ -211,6 +210,9 @@ impl MusicWorkspaceComponent {
     }
 
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
+        if !self.context.focused {
+            return None;
+        }
         match key.code {
             // Activation while an inline album track is focused: play the
             // focused track through the album queue path. The shell resolves
@@ -227,17 +229,14 @@ impl MusicWorkspaceComponent {
                 return Some(Msg::Shell(ShellRequest::MusicTrackActivate));
             }
             // Enter on an album row (Library panel): enter inline track
-            // focus when wide with cached tracks; otherwise forward the key
-            // to App's global handler (narrow activation is not component-owned
-            // here).
+            // focus when wide with cached tracks; otherwise request the
+            // narrow album activation effect from the shell.
             Key::Enter if self.track_cursor.is_none() => {
                 if self.can_enter_track_focus() {
                     self.track_cursor = Some(0);
                     return None;
                 }
-                return Some(Msg::Shell(ShellRequest::GlobalViewKey(
-                    to_crossterm_key_event(key),
-                )));
+                return Some(Msg::Shell(ShellRequest::MusicAlbumActivate));
             }
             // Exit inline track focus locally; the key must not reach the
             // unprefixed panel's Esc/Stop semantics.
@@ -247,7 +246,8 @@ impl MusicWorkspaceComponent {
             }
             // Track moves are local to the component while a track is
             // focused and the Library panel owns the keys; with the Queue
-            // panel focused the keys fall through to legacy queue handling.
+            // panel focused the keys are left unclaimed for the central
+            // router.
             Key::Up | Key::Char('k')
                 if self.track_cursor.is_some() && self.library_panel_active() =>
             {
@@ -352,11 +352,7 @@ impl MusicWorkspaceComponent {
                     kind: AlbumCursorKind::Page,
                 }));
             }
-            _ => {
-                return Some(Msg::Shell(ShellRequest::GlobalViewKey(
-                    to_crossterm_key_event(key),
-                )));
-            }
+            _ => None,
         }
     }
 

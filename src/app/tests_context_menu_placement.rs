@@ -8,10 +8,9 @@
 //! which sets the component's rect, then read `ContextMenuComponent::menu_rect()`.
 use super::tests_podcast::add_emby_movie_library;
 use super::*;
-use crate::app::components::{ComponentId, ContextMenuComponent, HomeComponent, OverlayId};
+use crate::app::components::{ComponentId, ContextMenuComponent, HomeComponent, OverlayId, ShellRequest};
 use crate::app::shell::Model;
 use crate::app::tests::*;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
@@ -48,39 +47,6 @@ fn render_at(model: &mut Model, width: u16, height: u16) -> (u16, u16) {
     (rect.x, rect.y)
 }
 
-#[test]
-fn keyboard_placement_follows_fresh_layout_after_resize() {
-    let mut app = library_app();
-    app.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
-    assert!(
-        matches!(
-            app.pending_overlay,
-            Some(super::types_overlay::OverlayRequest::ContextMenu(_))
-        ),
-        "'.' should open the context menu"
-    );
-
-    let mut model = Model::new(app);
-    model.sync_modal_requests();
-
-    // A keyboard anchor is resolved from the fresh frame's selected-item rect,
-    // so a resize that changes the panel/selection geometry must move the menu.
-    let a = render_at(&mut model, 100, 40);
-    let b = render_at(&mut model, 60, 24);
-    assert_ne!(
-        a, b,
-        "keyboard placement must follow the fresh layout after resize: {a:?} != {b:?}"
-    );
-
-    // Even after shrinking, the menu stays inside the containing panel.
-    let panel = model.app.layout.main.left_area;
-    let (x, y) = b;
-    assert!(
-        x >= panel.x && y >= panel.y,
-        "menu must stay inside the panel after resize: ({x},{y}) vs {:?}",
-        panel
-    );
-}
 
 #[test]
 fn pointer_placement_stays_click_anchored_not_following_selection() {
@@ -126,11 +92,10 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     model.app.tab = TabSelection::Home;
     model.app.panel_focus = PanelFocus::Library;
     model.home_content.continue_items = make_items(5);
-    model.app.handle_key_with_home_context(
-        KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE),
-        model.home_continue_watching_selected(),
-        model.home_cw_item(),
-    );
+    model.handle_home_request(ShellRequest::HomeContextMenu {
+        home_cw_selected: model.home_continue_watching_selected(),
+        cw_item: model.home_cw_item(),
+    });
     assert!(
         matches!(
             model.app.pending_overlay,

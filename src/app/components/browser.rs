@@ -11,12 +11,13 @@ use ratatui::widgets::Block;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::msg::{BrowserHitRegion, Msg, ShellRequest};
-use super::typed_key::to_crossterm_key_event;
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
@@ -291,130 +292,85 @@ impl BrowserComponent {
         );
     }
 
-    pub(in crate::app) fn handle_crossterm_key(
-        &mut self,
-        key: crossterm::event::KeyEvent,
-    ) -> Option<Msg> {
-        if key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
-            && matches!(
-                key.code,
-                crossterm::event::KeyCode::Left
-                    | crossterm::event::KeyCode::Right
-                    | crossterm::event::KeyCode::Up
-                    | crossterm::event::KeyCode::Down
-            )
-        {
-            return Some(Msg::Shell(ShellRequest::GlobalViewKey(key)));
-        }
+    pub(in crate::app) fn handle_tui_key(&mut self, key: KeyEvent) -> Option<Msg> {
         match key.code {
-            crossterm::event::KeyCode::Char('/') if key.modifiers.is_empty() => {
+            Key::Char('/') if key.modifiers.is_empty() => {
                 return Some(Msg::Shell(super::msg::ShellRequest::OpenInlineSearch));
             }
             _ => {}
         }
-        // Local keyboard navigation routes through typed `ShellRequest`s
-        // (task 5.3d): the component mutates only its own `self.cursor`
-        // through the row/column helpers below, then returns the typed
-        // request in place of the raw key so the shell drives the App
-        // cursor through the same `App::move_lib_cursor_rows` /
-        // `App::move_lib_cursor` / `App::jump_lib_cursor` methods the
-        // legacy `handle_lib_key` movement arms call — never in addition to
-        // the raw key (no double movement). Focused-gated exactly like the
-        // legacy Library-panel gate: while unfocused (Queue/playback own
-        // panel focus) the component does not touch its cursor and the key
-        // passes through the typed global bridge, keeping those surfaces
-        // authoritative.
+        if key.modifiers.contains(KeyModifiers::ALT)
+            && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
+        {
+            return None;
+        }
+        // Local keyboard navigation routes through typed `ShellRequest`s:
+        // the component mutates only its own cursor, then returns the
+        // request in place of the raw key so the shell drives the App cursor
+        // through the same methods as the legacy `handle_lib_key` arms.
+        // Unfocused browsers leave every chord untouched; the central router
+        // handles destination-independent behavior.
         if self.focused {
             match key.code {
-                crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Char('k') => {
+                Key::Up | Key::Char('k') => {
                     self.move_rows(-1);
                     return Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows: -1 }));
                 }
-                crossterm::event::KeyCode::Down | crossterm::event::KeyCode::Char('j') => {
+                Key::Down | Key::Char('j') => {
                     self.move_rows(1);
                     return Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows: 1 }));
                 }
-                crossterm::event::KeyCode::PageUp => {
+                Key::PageUp => {
                     let rows = -self.page_rows();
                     self.move_rows(rows);
                     return Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows }));
                 }
-                crossterm::event::KeyCode::PageDown => {
+                Key::PageDown => {
                     let rows = self.page_rows();
                     self.move_rows(rows);
                     return Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows }));
                 }
-                crossterm::event::KeyCode::Home => {
+                Key::Home => {
                     self.jump_cursor(false);
                     return Some(Msg::Shell(ShellRequest::BrowserJumpCursor {
                         to_end: false,
                     }));
                 }
-                crossterm::event::KeyCode::End => {
+                Key::End => {
                     self.jump_cursor(true);
                     return Some(Msg::Shell(ShellRequest::BrowserJumpCursor { to_end: true }));
                 }
                 // Column navigation applies only to a painted list with
                 // more than one column (the legacy
-                // `current_library_columns(lib_idx) > 1` guard): a
-                // one-column list leaves Left/Right/h/l unbound locally
-                // (legacy `handle_lib_key` does not claim them in 1-col
-                // either — they fall through to other CONTEXT_STACK
-                // handlers), so they emit no movement request and the raw
-                // key is still forwarded through the typed global bridge below.
-                crossterm::event::KeyCode::Left | crossterm::event::KeyCode::Char('h')
-                    if self.columns() > 1 =>
-                {
+                // `current_library_columns(lib_idx) > 1` guard). A
+                // one-column list leaves Left/Right/h/l unbound locally,
+                // matching `handle_lib_key`'s one-column behavior.
+                Key::Left | Key::Char('h') if self.columns() > 1 => {
                     self.move_cursor_delta(-1);
                     return Some(Msg::Shell(ShellRequest::BrowserMoveColumn { delta: -1 }));
                 }
-                crossterm::event::KeyCode::Right | crossterm::event::KeyCode::Char('l')
-                    if self.columns() > 1 =>
-                {
+                Key::Right | Key::Char('l') if self.columns() > 1 => {
                     self.move_cursor_delta(1);
                     return Some(Msg::Shell(ShellRequest::BrowserMoveColumn { delta: 1 }));
                 }
                 _ => {}
             }
         }
-        // Task 5.3d, Emby browser effect decoupling: the selected-item
-        // keyboard effects resolve their target from the component's own
-        // local cursor/content and ride a typed `ShellRequest` carrying the
-        // owned `EmbyItem`, so the Model/App effect acts on that supplied
-        // item directly (never by copying the component cursor into a
-        // `BrowseLevel.cursor` and re-reading it). `focused` preserves the
-        // legacy Library-panel gate exactly (`effective_panel_focus() ==
-        // Library` → these keys reach `handle_lib_key`); when no item is
-        // selected (empty nav level) or while unfocused, the key is forwarded
-        // through the typed global bridge so legacy resolution (e.g. Enter on
-        // the library root) is preserved unchanged. A typed request is returned
-        // in place of the raw legacy key, never in addition to it — no
-        // double execution.
+        // The selected-item effects resolve targets from the component's own
+        // local cursor/content and return typed requests. `focused` preserves
+        // the legacy Library-panel gate exactly; an empty list or an
+        // unclaimed chord returns `None` for the central router to handle.
         if self.focused {
             let selected = self.selected_effect_item();
             let request = match key.code {
-                crossterm::event::KeyCode::Enter => {
-                    selected.map(|item| ShellRequest::BrowserActivate { item })
-                }
-                crossterm::event::KeyCode::Char('p')
-                    if key
-                        .modifiers
-                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
-                {
+                Key::Enter => selected.map(|item| ShellRequest::BrowserActivate { item }),
+                Key::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     selected.map(|item| ShellRequest::BrowserPlay { item })
                 }
-                crossterm::event::KeyCode::Char('a')
-                    if key
-                        .modifiers
-                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
-                {
+                Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     selected.map(|item| ShellRequest::BrowserEnqueue { item })
                 }
-                crossterm::event::KeyCode::Char('w')
-                    if key
-                        .modifiers
-                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
-                {
+                Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     selected.map(|item| ShellRequest::BrowserToggleWatched { item })
                 }
                 // '.' opens the context menu for the component-selected item
@@ -422,39 +378,20 @@ impl BrowserComponent {
                 // modifier guard: the legacy `handle_global_view_key` arm it
                 // replaces matched `Char('.')` with any modifiers, so this
                 // preserves the legacy '.' modifier behavior exactly.
-                crossterm::event::KeyCode::Char('.') => {
-                    selected.map(|item| ShellRequest::BrowserContextMenu { item })
-                }
-                // Ctrl+S shuffles the component-selected item (task 5.3d,
-                // Emby browser shuffle decoupling). Control-modifier guarded
-                // exactly as the legacy `handle_lib_key` arm it replaces; when
-                // no item is selected the key is forwarded to the legacy
-                // bridge below, which shuffles the current browse-level parent
-                // through `shuffle_play` exactly as before.
-                crossterm::event::KeyCode::Char('s')
-                    if key
-                        .modifiers
-                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
-                {
+                Key::Char('.') => selected.map(|item| ShellRequest::BrowserContextMenu { item }),
+                // Ctrl+S shuffles the component-selected item. Control-
+                // modifier guarded exactly as the legacy `handle_lib_key`
+                // arm; with no selected item this chord remains unclaimed.
+                Key::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     selected.map(|item| ShellRequest::BrowserShuffle { item })
                 }
                 // Ctrl+`r` rescans the focused library; bare or Alt+`r`
-                // refreshes it (task 5.3d, Emby browser refresh/rescan). The
-                // CONTROL arm comes first so it can never be shadowed by the
-                // bare arm below, and the bare arm also covers Alt+`r` (no
-                // CONTROL modifier), exactly matching the legacy `handle_lib_key`
-                // ordering — Alt+`r` refreshes, it does not rescan. Neither
-                // carries a selected item: the shell derives the active library
-                // index from its own tab state. Any other modified character is
-                // forwarded to the legacy bridge below.
-                crossterm::event::KeyCode::Char('r')
-                    if key
-                        .modifiers
-                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
-                {
+                // refreshes it. The CONTROL arm comes first so it can never
+                // be shadowed by the bare arm, preserving legacy precedence.
+                Key::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     Some(ShellRequest::BrowserRescan)
                 }
-                crossterm::event::KeyCode::Char('r') => Some(ShellRequest::BrowserRefresh),
+                Key::Char('r') => Some(ShellRequest::BrowserRefresh),
                 // Esc or Backspace go back through the browse history (task
                 // 5.3d, Emby browser back): uses a typed request for the
                 // focused browser. No modifier guard — the legacy
@@ -462,28 +399,14 @@ impl BrowserComponent {
                 // modifiers, so this preserves that modifier-insensitive
                 // behavior exactly. The shell owns the effect (`go_back`) and
                 // derives the active library index from its own tab state.
-                crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Backspace => {
-                    Some(ShellRequest::BrowserBack)
-                }
+                Key::Esc | Key::Backspace => Some(ShellRequest::BrowserBack),
                 // `[`/`]` cycle the letter-range pill row for the focused
-                // generic/Movies/home-video browser (task 5.3d, Emby browser
-                // selector cycling): a typed request carries the delta (-1 for
-                // `[`, +1 for `]`), and the shell derives the active Emby
-                // library index from its own tab state and runs
-                // `App::cycle_letter_pill` on it — whose existing
-                // `should_show_letter_pills` no-op guard and wrap/select
-                // behavior are preserved unchanged. That is the whole effect
-                // for this component: its mount gate already excludes Music
-                // and feed-home-video group views, the two branches the
-                // legacy `handle_key_emby_library` consumed before it reached
-                // the letter pills. Neither CONTROL nor ALT (exactly the
-                // legacy guard); Ctrl/Alt brackets fall through to the legacy
-                // bridge below via `_ => None`.
-                crossterm::event::KeyCode::Char(c @ ('[' | ']'))
-                    if !key
-                        .modifiers
-                        .contains(crossterm::event::KeyModifiers::CONTROL)
-                        && !key.modifiers.contains(crossterm::event::KeyModifiers::ALT) =>
+                // generic/Movies/home-video browser. A typed request carries
+                // the delta, and the shell derives the active Emby library
+                // index from its own tab state.
+                Key::Char(c @ ('[' | ']'))
+                    if !key.modifiers.contains(KeyModifiers::CONTROL)
+                        && !key.modifiers.contains(KeyModifiers::ALT) =>
                 {
                     let delta = if c == '[' { -1 } else { 1 };
                     Some(ShellRequest::BrowserCycleLetterPill { delta })
@@ -497,15 +420,12 @@ impl BrowserComponent {
                 return Some(Msg::Shell(request));
             }
         }
-        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
+        None
     }
 
     /// Resolve the item at the component's own local cursor over the mirrored
-    /// content (task 5.3d, Emby browser effect decoupling). The mirrored
-    /// `context` still carries the App cursor/scroll values; the component's
-    /// local `self.cursor` is authoritative for effect targets, so the item
-    /// is resolved at that cursor — never by re-reading an App field. `None`
-    /// when the list is empty (forwarded to the legacy bridge by the caller).
+    /// content. The local cursor is authoritative for effect targets; no App
+    /// cursor is re-read.
     fn selected_effect_item(&self) -> Option<mbv_core::api::EmbyItem> {
         self.context
             .clone()
@@ -523,17 +443,6 @@ impl BrowserComponent {
     /// Browser mount gate excludes the TV (wide TV, season grids) and feed
     /// home-video-group special cases, so no other legacy branch applies to
     /// this component.
-    fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
-        if key.modifiers.contains(KeyModifiers::ALT)
-            && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
-        {
-            return Some(Msg::Shell(ShellRequest::GlobalViewKey(
-                to_crossterm_key_event(key),
-            )));
-        }
-        let crossterm_key = to_crossterm_key_event(key);
-        self.handle_crossterm_key(crossterm_key)
-    }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         let col = mouse.column;
@@ -722,7 +631,7 @@ impl Component for BrowserComponent {
 impl AppComponent<Msg, UserEvent> for BrowserComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
-            Event::Keyboard(key) => self.handle_key(key),
+            Event::Keyboard(key) => self.handle_tui_key(*key),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }

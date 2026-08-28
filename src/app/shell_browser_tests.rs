@@ -310,16 +310,16 @@ fn shell_emby_browser_effects_honor_component_target() {
     );
 
     // Ctrl/Alt brackets are NOT letter-pill cycling: the legacy guard
-    // excluded CONTROL and ALT, so those combinations are unbound and
-    // forwarded through the typed global bridge.
-    assert!(matches!(
+    // excluded CONTROL and ALT, so those combinations remain unclaimed by
+    // the component and are left to the central router.
+    assert_eq!(
         drive_browser_key(&mut model, &id, Key::Char('['), KeyModifiers::CONTROL),
-        Some(Msg::Shell(ShellRequest::GlobalViewKey(_)))
-    ));
-    assert!(matches!(
+        None
+    );
+    assert_eq!(
         drive_browser_key(&mut model, &id, Key::Char(']'), KeyModifiers::ALT),
-        Some(Msg::Shell(ShellRequest::GlobalViewKey(_)))
-    ));
+        None
+    );
 }
 
 /// Drive one key into the mounted `BrowserComponent` and return its `Msg`
@@ -502,21 +502,16 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     model.handle_browser_request(ShellRequest::BrowserMoveColumn { delta });
     assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
 
-    // One-column list (queue panel restored at a width whose library
-    // pane stays below the 82-column threshold): Left/Right/h/l stay
-    // unbound locally — forwarded through the typed global bridge with no
-    // movement request, App cursor unchanged — while the row keys keep
-    // their typed stride of one item.
+    // One-column list: Left/Right/h/l stay unbound locally with no movement
+    // request, leaving the App cursor unchanged.
     model.app.panel_mode = PanelMode::Both;
     render_browser_model(&mut model, 100, 40);
     model.sync_emby_browser();
     for key in [Key::Left, Key::Right, Key::Char('h'), Key::Char('l')] {
-        assert!(
-            matches!(
-                drive_browser_key(&mut model, &id, key, KeyModifiers::NONE),
-                Some(Msg::Shell(ShellRequest::GlobalViewKey(_)))
-            ),
-            "one-column focused {key:?} must use the typed global bridge"
+        assert_eq!(
+            drive_browser_key(&mut model, &id, key, KeyModifiers::NONE),
+            None,
+            "one-column focused {key:?} must stay unclaimed"
         );
     }
     let comp_cursor = model

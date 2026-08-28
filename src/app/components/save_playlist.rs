@@ -6,8 +6,7 @@ use tuirealm::event::{Event, Key, KeyEvent};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{Msg, ShellRequest};
-use super::typed_key::to_crossterm_key_event;
+use super::msg::{Msg, SavePlaylistIntent, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_save_playlist_content;
 use crate::app::SavePlaylistStage;
@@ -60,18 +59,23 @@ impl SavePlaylistComponent {
         match key.code {
             Key::Backspace => {
                 self.input.pop();
+                None
             }
             Key::Char(c)
                 if key.modifiers == tuirealm::event::KeyModifiers::NONE
                     || key.modifiers == tuirealm::event::KeyModifiers::SHIFT =>
             {
                 self.input.push(c);
+                None
             }
-            _ => {}
+            Key::Esc => Some(Msg::Shell(ShellRequest::SavePlaylistIntent(
+                SavePlaylistIntent::Dismiss,
+            ))),
+            Key::Enter => Some(Msg::Shell(ShellRequest::SavePlaylistIntent(
+                SavePlaylistIntent::Submit,
+            ))),
+            _ => None,
         }
-        Some(Msg::Shell(ShellRequest::SavePlaylistKey(
-            to_crossterm_key_event(key),
-        )))
     }
 }
 

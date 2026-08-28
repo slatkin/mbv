@@ -10,7 +10,7 @@ reframed as migration of the existing TUI framework to TuiRealm. Rows move from
 `legacy` to `component` during the mirror-first implementation stage, then to
 `migrated` after teardown.
 
-Ledger verification: all interactive-surface rows were fully migrated on 2026-08-27 after global bridge teardown (5.3d.23-A).
+Ledger verification: all interactive-surface rows were fully migrated on 2026-08-27 after global bridge teardown (5.3d.23-A). The keyboard-endpoint deletion (8.1 + 8.2 of `openspec/changes/remove-legacy-keyboard-endpoint`) added three architectural gates on 2026-08-28 that now enforce the same verification at compile/scan time: `no-crossterm-key-payloads` (rejects `crossterm::event::{KeyEvent,KeyCode,...}` under `src/app/components/**`), `no-raw-fallback-variants` (rejects `Msg::Legacy`, `Msg::GlobalViewKey`, `Msg::Persist`, and the deleted `*Key` request variants under `src/app/components/**`), and `no-second-router-site` (rejects calls to `playback_command_for_key` / `resolve_key` outside `src/app/{router,key_policy,input_resolver,action,shell}.rs`). All three rules scan clean against the migrated codebase and are pinned by per-rule fixtures in `rules/interactive-component-boundary-tests/`.
 
 ## Mouse ownership is out of scope for `migrated` (2026-08-25)
 

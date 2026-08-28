@@ -1,4 +1,4 @@
-use super::msg::{Msg, ShellRequest};
+use super::msg::{Msg, SavePlaylistIntent, ShellRequest};
 use super::save_playlist::SavePlaylistComponent;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -13,13 +13,16 @@ fn key(code: Key) -> KeyEvent {
 }
 
 #[test]
-fn save_playlist_key_updates_local_input_and_forwards_shell_request() {
+fn save_playlist_key_updates_local_input_and_emits_semantic_request() {
     let mut component = SavePlaylistComponent::new();
     component.set_content("Old".into(), false);
 
+    assert_eq!(component.on(&Event::Keyboard(key(Key::Char('!')))), None);
     assert!(matches!(
-        component.on(&Event::Keyboard(key(Key::Char('!')))),
-        Some(Msg::Shell(ShellRequest::SavePlaylistKey(_)))
+        component.on(&Event::Keyboard(key(Key::Enter))),
+        Some(Msg::Shell(ShellRequest::SavePlaylistIntent(
+            SavePlaylistIntent::Submit
+        )))
     ));
 
     let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();

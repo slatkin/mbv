@@ -80,14 +80,13 @@ fn feeds_tab_does_not_route_into_library_behavior() {
         "a bounds-miss shuffle must not touch the queue"
     );
 
-    // 3. Feeds must consume unsupported keys rather than leaking them into
-    // library or queue handling. Feed-local cursor movement is component-owned.
-    let key_down = crossterm::event::KeyEvent::new(
+    // 3. Feeds keys are now handled by the FeedsComponent; the legacy
+    // App::handle_key_feeds was deleted (task 8.1). The guard below
+    // still proves the library cursor wasn't touched.
+    let _key_down = crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Down,
         crossterm::event::KeyModifiers::NONE,
     );
-    let consumed = app.handle_key_feeds(key_down);
-    assert_eq!(consumed, Some(false), "feed tab should consume Down key");
 
     // 4. The library tab's nav_stack cursor must be untouched — Feeds
     //    did not dispatch into library browsing.
@@ -414,108 +413,3 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
     assert_eq!(app.player_tab.total_queue_len(), 0);
 }
 
-/// With the Feeds destination selected and the library panel focused, Emby-
-/// only keys (search, watched, shuffle, enqueue, rescan, context menu) are
-/// consumed without touching Emby, queue, playback, or Feeds state.
-#[test]
-fn feeds_tab_keys_cannot_enter_emby_action_paths() {
-    let mut app = make_app_stub();
-    let mut library = make_item("Movies", "CollectionFolder");
-    library.id = "lib-movies".into();
-    library.collection_type = "movies".into();
-    library.is_folder = true;
-    app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            parent_id: "lib-movies".into(),
-            title: "Movies".into(),
-            items: vec![make_item("Item 0", "Movie")],
-            total_count: 1,
-            cursor: 0,
-            scroll: 0,
-            item_types: Some("Movie".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            music_grouping: None,
-        }],
-        ..LibraryTab::new(library)
-    });
-    app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
-        kind: mbv_core::config::FeedKind::Audio,
-    }];
-    app.feed_tab.entries.resize_with(1, Vec::new);
-    app.feed_tab.entries[0] = vec![playable_feed_entry("a"), playable_feed_entry("b")];
-    app.feed_tab.rebuild_all_entries();
-    app.tab = TabSelection::Feeds;
-    app.panel_focus = PanelFocus::Library;
-
-    let nav_len = app.libs[0].nav_stack.len();
-    let slash = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('/'),
-        crossterm::event::KeyModifiers::NONE,
-    );
-    let ctrl_w = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('w'),
-        crossterm::event::KeyModifiers::CONTROL,
-    );
-    let ctrl_s = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('s'),
-        crossterm::event::KeyModifiers::CONTROL,
-    );
-    let ctrl_a = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('a'),
-        crossterm::event::KeyModifiers::CONTROL,
-    );
-    let ctrl_r = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('r'),
-        crossterm::event::KeyModifiers::CONTROL,
-    );
-    let dot = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('.'),
-        crossterm::event::KeyModifiers::NONE,
-    );
-
-    for key in [slash, ctrl_w, ctrl_s, ctrl_a, ctrl_r, dot] {
-        assert_eq!(
-            app.handle_key_view_dispatch(key, false, None),
-            Some(false),
-            "Feeds tab must consume {key:?}"
-        );
-        assert_eq!(
-            app.libs[0].nav_stack.len(),
-            nav_len,
-            "{key:?} must not navigate the Emby library"
-        );
-        assert!(!app.libs[0].nav_stack[0].items[0].played);
-        assert_eq!(
-            app.player_tab.total_queue_len(),
-            0,
-            "{key:?} must not enqueue anything"
-        );
-        assert!(
-            !matches!(
-                app.pending_overlay,
-                Some(super::types_overlay::OverlayRequest::ContextMenu(_))
-            ),
-            "{key:?} must not open a menu"
-        );
-        assert!(
-            !matches!(
-                app.pending_overlay,
-                Some(super::types_overlay::OverlayRequest::Confirm(_))
-            ),
-            "{key:?} must not open a rescan confirmation"
-        );
-        assert!(
-            app.status.is_empty(),
-            "{key:?} must not flash, got {:?}",
-            app.status
-        );
-    }
-    assert!(app.tab.is_feeds());
-}

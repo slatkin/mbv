@@ -587,10 +587,10 @@ impl App {
     /// Keyboard '.' entry (the shared `handle_global_view_key` front door
     /// reached by Home/library/queue views). `home_cw_selected` is the
     /// authoritative Continue-Watching-selected fact, threaded from the shell
-    /// (which resolves it from the mounted `HomeComponent`) through
-    /// `App::handle_key_with_home_context` → the `CONTEXT_STACK` →
-    /// `handle_global_view_key` (task 5.3d, Home context-menu section
-    /// decoupling). It is load-bearing under Queue panel focus while Home is
+    /// (which resolves it from the mounted `HomeComponent`) and reaches this
+    /// method via the typed path the central keyboard router dispatches
+    /// (task 5.3d, Home context-menu section decoupling; design §5).
+    /// It is load-bearing under Queue panel focus while Home is
     /// the active Tab selection; the `self.tab.is_home()` guard short-circuits
     /// it on all other paths.
     pub(super) fn open_context_menu(&mut self, home_cw_selected: bool, cw_item: Option<EmbyItem>) {

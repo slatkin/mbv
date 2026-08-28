@@ -8,8 +8,7 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{Msg, ShellRequest};
-use super::typed_key::to_crossterm_key_event;
+use super::msg::{FeedsManageIntent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_feeds_manage_content, FeedsManageRenderModel};
 use crate::app::types_feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
@@ -87,9 +86,10 @@ impl FeedsManageComponent {
                 }
                 None
             }
-            Key::Esc | Key::Char('a') | Key::Enter | Key::Char('e') | Key::Char('d') => {
-                self.shell_key(key)
-            }
+            Key::Esc => Self::shell_intent(FeedsManageIntent::Dismiss),
+            Key::Char('a') => Self::shell_intent(FeedsManageIntent::Add),
+            Key::Enter | Key::Char('e') => Self::shell_intent(FeedsManageIntent::Edit),
+            Key::Char('d') => Self::shell_intent(FeedsManageIntent::Remove),
             _ => None,
         }
     }
@@ -110,7 +110,8 @@ impl FeedsManageComponent {
                 Key::BackTab => self.previous_field(),
                 Key::Left | Key::Right if form.focus == FeedFormField::Kind => self.toggle_kind(),
                 Key::Backspace => self.backspace(),
-                _ if matches!(key.code, Key::Enter | Key::Esc) => return self.shell_key(key),
+                Key::Enter => return Self::shell_intent(FeedsManageIntent::Submit),
+                Key::Esc => return Self::shell_intent(FeedsManageIntent::Cancel),
                 _ => {}
             }
             return None;
@@ -126,10 +127,8 @@ impl FeedsManageComponent {
         None
     }
 
-    fn shell_key(&self, key: &KeyEvent) -> Option<Msg> {
-        Some(Msg::Shell(ShellRequest::FeedsManageKey(
-            to_crossterm_key_event(key),
-        )))
+    fn shell_intent(intent: FeedsManageIntent) -> Option<Msg> {
+        Some(Msg::Shell(ShellRequest::FeedsManageIntent(intent)))
     }
 
     fn next_field(&mut self) {
@@ -273,7 +272,9 @@ mod tests {
 
         assert!(matches!(
             component.on(&key(Key::Enter)),
-            Some(Msg::Shell(ShellRequest::FeedsManageKey(_)))
+            Some(Msg::Shell(ShellRequest::FeedsManageIntent(
+                FeedsManageIntent::Submit
+            )))
         ));
     }
 

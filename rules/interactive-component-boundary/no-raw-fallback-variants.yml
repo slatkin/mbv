@@ -1,0 +1,27 @@
+id: no-raw-fallback-variants
+language: rust
+severity: error
+message: >-
+  src/app/components/ must not produce raw-key fallback `Msg` variants. The
+  legacy `Msg::GlobalViewKey` and the raw `*Key` request variants
+  (`Msg::Shell(SettingsKey)`, `Msg::Service(SettingsKey)`,
+  `Msg::Persist(SettingsKey)`, etc.) were deleted in task 8.1 of
+  openspec/changes/remove-legacy-keyboard-endpoint. The only correct surface
+  output is a typed semantic `Msg` (`Msg::Playback`, `Msg::Queue`,
+  `Msg::Service`, `Msg::Shell`, `Msg::Navigate`, `Msg::TerminalEvent`) plus
+  a component-local `Option<Msg>` for next-tick cascades. See design §5
+  ("Raw keys stop at the component boundary") and ADR 0023.
+files:
+  - "src/app/components/**"
+ignores:
+  - "src/app/components/**/*tests*.rs"
+rule:
+  any:
+    - pattern: "Msg::GlobalViewKey($_)"
+    - pattern: "Msg::Legacy($_)"
+    - pattern: "Msg::Persist($_)"
+    - pattern: "Msg::Shell(SettingsKey($_))"
+    - pattern: "Msg::Service(SettingsKey($_))"
+    - pattern: "SettingsKey"
+    - pattern: "PersistKey"
+    - pattern: "ServiceKey"

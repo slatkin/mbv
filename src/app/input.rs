@@ -1,5 +1,4 @@
-use super::{App, PanelFocus, SidebarId, TabSelection};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use super::{App, PanelFocus, TabSelection};
 use mbv_core::api::EmbyItem;
 // The following are unused by input.rs's own code (the code that used them
 // moved to input_mouse.rs / input_context_menu.rs in #365 step 2 lane B, and
@@ -7,12 +6,6 @@ use mbv_core::api::EmbyItem;
 // submodules (declared below) rely on `use super::*;` to reach them.
 #[cfg(test)]
 use super::ContextAction;
-#[cfg(test)]
-use mbv_core::player::PlayerCommand;
-#[cfg(test)]
-use ratatui::layout::Rect;
-#[cfg(test)]
-use std::time::Instant;
 
 impl App {
     pub(super) fn context_menu_play_state(&self, item: &EmbyItem) -> bool {
@@ -25,9 +18,6 @@ impl App {
 
     pub(super) fn context_menu_lib_idx(&self) -> Option<usize> {
         if matches!(self.effective_panel_focus(), PanelFocus::Library) {
-            // Positive match: the browse dispatch front door has already
-            // normalized the destination, so a library-focused context menu
-            // can only belong to the explicitly selected Emby library.
             match self.tab {
                 TabSelection::EmbyLibrary(lib_idx) => Some(lib_idx),
                 _ => None,
@@ -73,132 +63,6 @@ impl App {
             + if self.has_feeds_subscriptions() { 1 } else { 0 }
     }
 
-    pub(super) fn handle_key(&mut self, key: KeyEvent) -> bool {
-        self.handle_key_with_home_context(key, false, None)
-    }
-
-    /// Model-boundary keyboard entry (task 5.3d, Home context-menu section
-    /// decoupling): the shell resolves the authoritative "is Continue Watching
-    /// selected?" fact from the mounted `HomeComponent` and the Continue
-    /// Watching column item from Model-owned `home_content`, and passes both
-    /// here so the '.' path opens the context menu with the component-derived
-    /// predicate and the resolved CW target. Runs the identical
-    /// `CONTEXT_STACK` precedence — '.' is still claimed by
-    /// `handle_global_view_key` at its established position — the facts are
-    /// merely threaded through. Both are dead for every other key and for the
-    /// no-arg `handle_key` (test/non-Model) caller, which passes `false`/
-    /// `None`.
-    pub(super) fn handle_key_with_home_context(
-        &mut self,
-        key: KeyEvent,
-        home_cw_selected: bool,
-        cw_item: Option<EmbyItem>,
-    ) -> bool {
-        for entry in super::input_resolver::CONTEXT_STACK {
-            if let Some(quit) = (entry.handler)(self, key, home_cw_selected, cw_item.clone()) {
-                return quit;
-            }
-        }
-        false
-    }
-
-    pub(super) fn handle_key_global_overlay_open(
-        &mut self,
-        key: KeyEvent,
-        _home_cw_selected: bool,
-        _cw_item: Option<EmbyItem>,
-    ) -> Option<bool> {
-        if key.code == KeyCode::F(2) {
-            self.request_sidebar_toggle(SidebarId::Settings);
-            return Some(false);
-        }
-        if key.code == KeyCode::F(3) {
-            self.request_sidebar_open(SidebarId::Sessions);
-            return Some(false);
-        }
-        if key.code == KeyCode::F(4) {
-            self.open_playlists_panel();
-            return Some(false);
-        }
-        // Terminals disagree on how they send Ctrl+/: most send the ASCII
-        // unit-separator, which crossterm surfaces as either `Char('/')` or
-        // `Char('_')` with CONTROL depending on the terminal and whether the
-        // kitty keyboard protocol is active. Match both encodings.
-        if key.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(key.code, KeyCode::Char('/') | KeyCode::Char('_'))
-        {
-            self.open_search_sidebar();
-            return Some(false);
-        }
-        None
-    }
-
-    pub(super) fn handle_key_ctrl_l(
-        &mut self,
-        key: KeyEvent,
-        _home_cw_selected: bool,
-        _cw_item: Option<EmbyItem>,
-    ) -> Option<bool> {
-        if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
-            self.force_clear = true;
-            Some(false)
-        } else {
-            None
-        }
-    }
-
-    pub(super) fn handle_key_f5_refresh(
-        &mut self,
-        key: KeyEvent,
-        _home_cw_selected: bool,
-        _cw_item: Option<EmbyItem>,
-    ) -> Option<bool> {
-        if key.code == KeyCode::F(5) {
-            self.refresh_current_view();
-            Some(false)
-        } else {
-            None
-        }
-    }
-
-    pub(super) fn handle_key_visualizer(
-        &mut self,
-        key: KeyEvent,
-        _home_cw_selected: bool,
-        _cw_item: Option<EmbyItem>,
-    ) -> Option<bool> {
-        if key.code == KeyCode::Char('v') && key.modifiers.is_empty() {
-            self.toggle_visualizer();
-            Some(false)
-        } else {
-            None
-        }
-    }
-
-    pub(super) fn handle_key_view_dispatch(
-        &mut self,
-        key: KeyEvent,
-        home_cw_selected: bool,
-        cw_item: Option<EmbyItem>,
-    ) -> Option<bool> {
-        // Shared globals (q, Tab/BackTab, 1-9, `.`) precede every panel and
-        // destination. Historically each browse branch reached these by
-        // falling through to the bottom of `handle_queue_key`; hoisting them
-        // ahead preserves the same precedence because no earlier library or
-        // queue routing arm claims these keys.
-        if let Some(quit) = self.handle_global_view_key(key, home_cw_selected, cw_item.clone()) {
-            return Some(quit);
-        }
-        if key.modifiers.contains(KeyModifiers::ALT) {
-            self.handle_key_alt(key);
-            return Some(false);
-        }
-        match self.effective_panel_focus() {
-            PanelFocus::Queue => Some(self.handle_queue_key(key)),
-            PanelFocus::Library => self.handle_key_browse_dispatch(key, home_cw_selected, cw_item),
-        }
-    }
-
     pub(super) fn visible_tab_range(&self, avail_w: u16) -> (usize, usize) {
         let widths = self.tab_title_widths();
         let n = widths.len();
@@ -230,11 +94,6 @@ impl App {
             self.tab_scroll = pos;
             return;
         }
-        // Use the width `render_tabs` actually budgeted last frame
-        // (`layout.tabs_area`), not a fresh guess from `terminal_width` --
-        // the tab bar sits in the right column alongside a left panel and
-        // has its own padding/reserve math, so re-deriving it here drifted
-        // out of sync with what actually renders.
         let tab_w = if self.layout.tabs_area.width > 0 {
             self.layout.tabs_area.width
         } else {
@@ -276,11 +135,6 @@ impl App {
 
     pub(super) fn save_prefs(&self) {
         let path = crate::config::prefs_path();
-        // New keys only (#361) -- readers still fall back to the old
-        // `panel_focus`/`library_tab`/`queue_column_width` keys in
-        // `load_prefs`'s callers; that fallback can be deleted a release
-        // later. `tab_idx` is gone outright, not migrated: it was
-        // Standard-view-only state.
         let existing_home_section = std::fs::read_to_string(&path)
             .ok()
             .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
@@ -305,19 +159,8 @@ impl App {
 }
 
 #[cfg(test)]
-#[path = "input_movie_detail_tests.rs"]
-mod movie_detail_tests;
-
-#[cfg(test)]
-#[path = "input_music_track_navigation_tests.rs"]
-mod music_track_navigation_tests;
-#[cfg(test)]
 #[path = "input_music_track_scope_tests.rs"]
 mod music_track_scope_tests;
 #[cfg(test)]
 #[path = "input_music_track_test_support.rs"]
 mod music_track_test_support;
-
-#[cfg(test)]
-#[path = "input_library_scope_routing_tests.rs"]
-mod library_scope_routing_tests;

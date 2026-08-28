@@ -312,6 +312,15 @@ mod tests {
         // re-projects content (task 5.3d.5), preserving the App target.
         model.app.move_audiobookshelf_show_rows(1);
         assert_eq!(model.app.audiobookshelf_browse[0].cursor(), 1);
+        let unclaimed = model
+            .application
+            .get_component_mut(&id)
+            .expect("podcast component")
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Char('z'),
+                modifiers: KeyModifiers::NONE,
+            }));
+        assert_eq!(unclaimed, None);
     }
 
     #[test]

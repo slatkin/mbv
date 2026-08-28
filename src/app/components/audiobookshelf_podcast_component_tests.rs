@@ -133,11 +133,26 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
         code: Key::Char('z'),
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(matches!(
-        unrelated,
-        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
-            if key.code == crossterm::event::KeyCode::Char('z')
-    ));
+    assert_eq!(unrelated, None);
+}
+
+#[test]
+fn abs_podcast_component_returns_none_when_unfocused() {
+    let state = &crate::app::tests_podcast::audiobookshelf_app().audiobookshelf_browse[0];
+    let mut component = AudiobookshelfPodcastComponent::new();
+    component.set_content(state, false, false);
+    let cursor = component.cursor();
+
+    for code in [Key::Down, Key::Enter, Key::Char('z')] {
+        assert_eq!(
+            component.on(&Event::Keyboard(KeyEvent {
+                code,
+                modifiers: KeyModifiers::NONE,
+            })),
+            None
+        );
+        assert_eq!(component.cursor(), cursor);
+    }
 }
 
 #[test]

@@ -2,7 +2,7 @@ use super::*;
 use std::time::Instant;
 
 impl Model {
-    pub(super) fn handle_terminal_message(
+    pub(crate) fn handle_terminal_message(
         &mut self,
         msg: Msg,
         focused: Option<&ComponentId>,
@@ -14,12 +14,11 @@ impl Model {
             Msg::TerminalEvent(event) => {
                 apply_terminal_observer(self, event, focused, music_resize, tv_resize, &mut quit)
             }
-            // Media surfaces forward unmatched keys through this
-            // typed adapter so App retains its global shortcuts.
-            Msg::Shell(ShellRequest::GlobalViewKey(key)) => {
-                if self.handle_legacy_key(key) {
-                    quit = true;
+            Msg::Shell(ShellRequest::MusicAlbumActivate) => {
+                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                    self.app.activate_album_folder_row(lib_idx);
                 }
+                self.push_music_workspace_content();
             }
             Msg::Shell(ShellRequest::MusicAlbumCursor { target, kind }) => {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
@@ -203,8 +202,8 @@ impl Model {
             | Msg::Shell(request @ ShellRequest::LibraryRoutesEsc) => {
                 self.handle_library_routes_request(request);
             }
-            Msg::Shell(ShellRequest::FeedsManageKey(key)) => {
-                self.handle_feeds_manage_request(key);
+            Msg::Shell(ShellRequest::FeedsManageIntent(intent)) => {
+                self.handle_feeds_manage_intent(intent);
             }
             Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(intent)) => {
                 // Typed podcast episode action intent (task 5.3d.7).
@@ -355,6 +354,7 @@ impl Model {
             Msg::Shell(
                 request @ (ShellRequest::HomePlay(_)
                 | ShellRequest::HomeEnqueue(_)
+                | ShellRequest::HomeContextMenu { .. }
                 | ShellRequest::HomeDelete(_)
                 | ShellRequest::HomeToggleWatched
                 | ShellRequest::HomeSectionSelected(_)),
@@ -467,14 +467,16 @@ impl Model {
                 | ShellRequest::PlaylistsRefresh
                 | ShellRequest::DismissPlaylists),
             ) => self.handle_playlists_request(request),
-            Msg::Shell(ShellRequest::DismissSettings) => self.app.close_settings(),
-            Msg::Shell(ShellRequest::SavePlaylistKey(key)) => {
-                self.handle_save_playlist_key(key);
-            }
-            Msg::Shell(ShellRequest::QueueKey(key)) => {
-                if self.app.handle_queue_key(key) {
+            Msg::Shell(ShellRequest::SettingsIntent(intent)) => {
+                if self.handle_settings_intent(intent) {
                     quit = true;
                 }
+            }
+            Msg::Shell(ShellRequest::SavePlaylistIntent(intent)) => {
+                self.handle_save_playlist_intent(intent);
+            }
+            Msg::Shell(ShellRequest::QueueIntent(intent)) => {
+                self.handle_queue_intent(intent);
             }
             Msg::Queue(request) => {
                 self.handle_queue_request(request);
@@ -484,11 +486,6 @@ impl Model {
             }
             Msg::Service(request) => {
                 if self.handle_service_request(request) {
-                    quit = true;
-                }
-            }
-            Msg::Persist(request) => {
-                if self.handle_persist_request(request) {
                     quit = true;
                 }
             }

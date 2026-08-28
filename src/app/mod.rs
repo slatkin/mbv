@@ -31,7 +31,6 @@ pub(crate) mod images;
 mod input;
 mod input_browse_dispatch;
 mod input_confirm_keys;
-mod input_feed_tab_keys;
 mod input_lib_keys;
 mod input_playlist_keys;
 mod input_queue_keys;
@@ -155,8 +154,6 @@ use self::types_selection_modal::{
     SelectionModal, SelectionModalFilter, SelectionModalListState, SelectionModalRow,
     SelectionModalSource,
 };
-#[cfg(test)]
-use self::types_settings::SettingsDestination;
 use self::types_settings::{PanelFocus, PanelMode, SettingKey, SETTING_SECTIONS};
 pub(crate) use self::types_sidebar::SidebarId;
 use self::types_tab_selection::TabSelection;

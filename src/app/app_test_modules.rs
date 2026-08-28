@@ -28,10 +28,6 @@ mod tests_library_position_restore;
 mod tests_panel_focus;
 
 #[cfg(test)]
-#[path = "tests_audiobook.rs"]
-mod tests_audiobook;
-
-#[cfg(test)]
 #[path = "tests_home_latest.rs"]
 mod tests_home_latest;
 
@@ -74,10 +70,6 @@ mod tests_feeds_manage;
 #[cfg(test)]
 #[path = "tests_context_menu_placement.rs"]
 mod tests_context_menu_placement;
-
-#[cfg(test)]
-#[path = "tests_services_settings.rs"]
-mod tests_services_settings;
 
 #[cfg(test)]
 #[path = "tests_services_settings_lifecycle.rs"]

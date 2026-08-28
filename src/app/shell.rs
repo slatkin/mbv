@@ -1,19 +1,3 @@
-//! Shell `Model` — the migration's mixed-framework home (design D2/D11/D13).
-//!
-//! The `Model` owns the legacy `App` (it draws the current UI and runs the
-//! existing handlers directly) and the TuiRealm
-//! `Application<ComponentId, Msg, UserEvent>`. `Model::run` is the moved body
-//! of the former `App::run`: the event-poll section is replaced by
-//! `application.tick(PollStrategy::Once(..))`, whose messages are folded back
-//! into the existing `App` input handlers via typed shell requests. Every
-//! other part of the loop (receiver drains, periodic work,
-//! render cadence via `wants_terminal_render`, teardown) is byte-for-byte the
-//! legacy behaviour, only with `self.x` rewritten to `self.app.x`.
-//!
-//! TODO(migrate-tui-to-tuirealm): this whole module is the strangler-phase
-//! shell. It shrinks as surfaces convert and is gone at the completion gate
-//! (task 5.3/5.6), leaving only shell/runtime authority + the `Application`.
-
 use std::time::{Duration, Instant};
 
 use super::action::{playback_command_for_key, Command};
@@ -24,7 +8,7 @@ use super::components::{
     ComponentId, Msg, OverlayId, PlaybackComponent, ShellRequest, TerminalObserverEvent,
     UiRootComponent, UserEvent,
 };
-use super::router::{resolve_router_outcome, RouterOutcome, RouterSnapshot};
+use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
 use super::types_feeds_manage::FeedsManagePopup;
 use super::types_playback::{HomeContent, HomeLatestSource};
@@ -94,8 +78,7 @@ pub struct Model {
 /// most one terminal event per tick, so the messages for a key chord are:
 ///
 /// * **UiRoot focused** — only the observer's `TerminalEvent(Key)`. This is
-///   the active component's own message; `FallThrough` keeps it (so
-///   `handle_legacy_key` runs, preserving today's behavior), while
+///   the active component's own message; `FallThrough` keeps it, while
 ///   `Command`/`Swallow` replace it (the command is dispatched by the caller).
 /// * **Leaf focused** — the leaf's request (or `None`) plus the observer's
 ///   `TerminalEvent(Key)`. The router's outcome selects between them:
@@ -126,8 +109,7 @@ pub(super) fn apply_router_outcome(
                 }
                 // When a leaf is focused the observer key is only the router's
                 // trigger; the fold already applied the outcome to the leaf's
-                // own message below. It never reaches the legacy handler as a
-                // raw key.
+                // own message below.
             }
             Msg::TerminalEvent(_) => out.push(msg),
             leaf => {
@@ -150,12 +132,13 @@ impl Model {
     /// Build the router snapshot and resolve the terminal chord. The router
     /// reads a plain-data snapshot, never component attributes (ADR 0023).
     fn router_outcome(&mut self, messages: &[Msg]) -> RouterOutcome {
-        let Some(key) = messages.iter().find_map(|msg| match msg {
+        let Some(tui_key) = messages.iter().find_map(|msg| match msg {
             Msg::TerminalEvent(TerminalObserverEvent::Key(key)) => Some(*key),
             _ => None,
         }) else {
             return RouterOutcome::FallThrough;
         };
+        let key = super::input_resolver::tuirealm_key_to_crossterm(tui_key);
 
         let snapshot = RouterSnapshot {
             player_active: self.app.player.status.lock().unwrap().active,
@@ -176,6 +159,13 @@ impl Model {
                 .application
                 .mounted(&ComponentId::Overlay(OverlayId::ContextMenu)),
             idle_feed_link_available: self.app.idle_feed_link_available(),
+            text_entry_focused: matches!(
+                self.application.focus(),
+                Some(
+                    ComponentId::Overlay(OverlayId::Search)
+                        | ComponentId::Overlay(OverlayId::Settings)
+                ) | Some(ComponentId::InlineSearch(_))
+            ),
             space_double_tap: self
                 .app
                 .last_space_press
@@ -186,17 +176,12 @@ impl Model {
                 .is_some_and(|pressed| pressed.elapsed() < Duration::from_millis(300)),
         };
 
-        let outcome = resolve_router_outcome(key, &snapshot);
-        // A GlobalViewKey (or UiRoot's observer-only message) still takes the
-        // legacy path for its first FallThrough, where the existing handler
-        // arms the timer. Typed leaf requests have no legacy handler, so the
-        // router arms their timer itself. A second claimed press always clears
-        // the timer here because its leaf message is discarded.
-        let legacy_path = messages
-            .iter()
-            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::GlobalViewKey(_))))
-            || self.application.focus() == Some(&ComponentId::UiRoot);
-        self.update_double_tap_state(key, &snapshot, &outcome, !legacy_path);
+        let outcome = resolve_router_outcome_with_focused(key, &snapshot, self.application.focus());
+        // The router arms the double-tap timer for typed leaf requests.
+        // When UiRoot is focused, the observer key is the leaf message
+        // and the legacy timer path no longer exists.
+        let arm_first_press = self.application.focus() != Some(&ComponentId::UiRoot);
+        self.update_double_tap_state(key, &snapshot, &outcome, arm_first_press);
         outcome
     }
 
@@ -237,54 +222,6 @@ impl Model {
             }
             _ => {}
         }
-    }
-}
-
-fn apply_terminal_observer(
-    model: &mut Model,
-    event: TerminalObserverEvent,
-    focused: Option<&ComponentId>,
-    music_resize: &mut bool,
-    tv_resize: &mut bool,
-    quit: &mut bool,
-) {
-    match event {
-        TerminalObserverEvent::Key(key) if focused == Some(&ComponentId::UiRoot) => {
-            *quit |= model.handle_legacy_key(key);
-        }
-        TerminalObserverEvent::Resize => {
-            model.app.force_clear = true;
-            model.app.card_image_states.clear();
-            model.app.card_image_loading.clear();
-            model.push_inline_search_content();
-            *music_resize = true;
-            *tv_resize = true;
-        }
-        TerminalObserverEvent::FocusGained => model.app.note_focus_gained(),
-        TerminalObserverEvent::FocusLost => model.app.note_focus_lost(),
-        TerminalObserverEvent::Key(_)
-        | TerminalObserverEvent::Mouse
-        | TerminalObserverEvent::NoOp => {}
-    }
-}
-
-impl Model {
-    /// Handle a key that remains on the legacy App path.
-    fn handle_legacy_key(&mut self, key: crossterm::event::KeyEvent) -> bool {
-        let quit = self.app.handle_key_with_home_context(
-            key,
-            self.home_continue_watching_selected(),
-            self.home_cw_item(),
-        );
-        // F5/context-menu/confirm keys and panel-focus keys write Home content
-        // or focus inside App's handler; re-project at this seam until those
-        // surfaces migrate.
-        self.push_home_content();
-        self.push_emby_browser_content();
-        self.push_audiobookshelf_podcast_content();
-        self.push_audiobookshelf_book_content();
-        self.push_music_workspace_content();
-        quit
     }
 
     fn dispatch_router_command(&mut self, command: Command) -> bool {
@@ -335,7 +272,6 @@ impl Model {
             .expect("activate UiRoot");
         // Home is mounted for the whole session but never made active: its
         // input stays on the shell path, only its render is component-owned
-        // (task 3.4; see `shell_home.rs`/`components::home`'s module docs).
         model.mount_home();
         model.mount_feeds();
         // Playback is also the stable attribute carrier for precedence gates.
@@ -349,6 +285,31 @@ impl Model {
             .expect("mount Playback");
         model.update_settings_content();
         model
+    }
+}
+
+fn apply_terminal_observer(
+    model: &mut Model,
+    event: TerminalObserverEvent,
+    _focused: Option<&ComponentId>,
+    music_resize: &mut bool,
+    tv_resize: &mut bool,
+    _quit: &mut bool,
+) {
+    match event {
+        TerminalObserverEvent::Resize => {
+            model.app.force_clear = true;
+            model.app.card_image_states.clear();
+            model.app.card_image_loading.clear();
+            model.push_inline_search_content();
+            *music_resize = true;
+            *tv_resize = true;
+        }
+        TerminalObserverEvent::FocusGained => model.app.note_focus_gained(),
+        TerminalObserverEvent::FocusLost => model.app.note_focus_lost(),
+        TerminalObserverEvent::Key(_)
+        | TerminalObserverEvent::Mouse
+        | TerminalObserverEvent::NoOp => {}
     }
 }
 

@@ -6,7 +6,7 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{Msg, PersistRequest, ServiceRequest, ShellRequest};
+use super::msg::{Msg, ServiceRequest, SettingsIntent, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
 use crate::app::types_settings::SettingsDestination;
@@ -141,10 +141,23 @@ impl SettingsComponent {
     }
 
     fn service_key(&self, key: &KeyEvent) -> Option<Msg> {
-        Some(Msg::Service(ServiceRequest::SettingsKey {
-            cursor: self.services_cursor,
-            key: super::typed_key::to_crossterm_key_event(key),
-        }))
+        let request = match key.code {
+            Key::Enter | Key::Char(' ') => ServiceRequest::ActivateService(self.services_cursor),
+            Key::Char('d') | Key::Char('D') if self.services_cursor == 0 => {
+                ServiceRequest::RemoveEmby
+            }
+            Key::Char('t') | Key::Char('T') if self.services_cursor == 1 => {
+                ServiceRequest::TestAudiobookshelfConnection
+            }
+            Key::Char('r') | Key::Char('R') if self.services_cursor == 1 => {
+                ServiceRequest::ReplaceAudiobookshelf
+            }
+            Key::Char('d') | Key::Char('D') if self.services_cursor == 1 => {
+                ServiceRequest::RemoveAudiobookshelf
+            }
+            _ => return None,
+        };
+        Some(Msg::Service(request))
     }
 
     fn setup_key(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -251,20 +264,26 @@ impl SettingsComponent {
                 | Key::Char('r')
                 | Key::Char('R') => self.service_key(key),
                 Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
-                    Some(Msg::Persist(PersistRequest::SettingsKey {
-                        cursor: self.cursor,
-                        key: super::typed_key::to_crossterm_key_event(key),
-                    }))
+                    Some(Msg::Shell(ShellRequest::SettingsIntent(match key.code {
+                        Key::Esc => SettingsIntent::Back,
+                        Key::Function(3) => SettingsIntent::OpenSessions,
+                        Key::Function(4) => SettingsIntent::OpenPlaylists,
+                        Key::Char('q') => SettingsIntent::Quit,
+                        _ => unreachable!(),
+                    })))
                 }
                 _ => None,
             };
         }
         match key.code {
             Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
-                Some(Msg::Persist(PersistRequest::SettingsKey {
-                    cursor: self.cursor,
-                    key: super::typed_key::to_crossterm_key_event(key),
-                }))
+                Some(Msg::Shell(ShellRequest::SettingsIntent(match key.code {
+                    Key::Esc => SettingsIntent::Back,
+                    Key::Function(3) => SettingsIntent::OpenSessions,
+                    Key::Function(4) => SettingsIntent::OpenPlaylists,
+                    Key::Char('q') => SettingsIntent::Quit,
+                    _ => unreachable!(),
+                })))
             }
             Key::Up => {
                 self.cursor = self.cursor.saturating_sub(1);
@@ -278,16 +297,9 @@ impl SettingsComponent {
                 self.scroll = self.scroll.saturating_sub(10);
                 None
             }
-            Key::PageDown => {
-                self.scroll += 10;
-                None
-            }
-            Key::Left | Key::Right | Key::Char(' ') | Key::Enter => {
-                Some(Msg::Persist(PersistRequest::SettingsKey {
-                    cursor: self.cursor,
-                    key: super::typed_key::to_crossterm_key_event(key),
-                }))
-            }
+            Key::Left | Key::Right | Key::Char(' ') | Key::Enter => Some(Msg::Shell(
+                ShellRequest::SettingsIntent(SettingsIntent::Activate(self.cursor)),
+            )),
             _ => None,
         }
     }
@@ -318,13 +330,9 @@ impl SettingsComponent {
                         return Some(Msg::Service(ServiceRequest::ActivateService(cursor)));
                     }
                     self.cursor = cursor;
-                    return Some(Msg::Persist(PersistRequest::SettingsKey {
-                        cursor,
-                        key: super::typed_key::to_crossterm_key_event(&KeyEvent {
-                            code: Key::Enter,
-                            modifiers: KeyModifiers::NONE,
-                        }),
-                    }));
+                    return Some(Msg::Shell(ShellRequest::SettingsIntent(
+                        SettingsIntent::Activate(cursor),
+                    )));
                 }
             }
             _ => {}

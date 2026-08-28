@@ -13,7 +13,6 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::msg::{Msg, ShellRequest, TvHit, TvHitRegion};
-use super::typed_key::to_crossterm_key_event;
 use super::user_event::UserEvent;
 #[cfg(test)]
 use crate::app::layout::LayoutMain;
@@ -230,9 +229,7 @@ impl TvWorkspaceComponent {
 
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
         if !self.context.focused {
-            return Some(Msg::Shell(ShellRequest::GlobalViewKey(
-                to_crossterm_key_event(key),
-            )));
+            return None;
         }
         let request = match key.code {
             Key::Left | Key::Char('h') => {
@@ -330,7 +327,7 @@ impl TvWorkspaceComponent {
                     delta: if c == '[' { -1 } else { 1 },
                 })
             }
-            _ => Some(ShellRequest::GlobalViewKey(to_crossterm_key_event(key))),
+            _ => None,
         };
         request.map(Msg::Shell)
     }

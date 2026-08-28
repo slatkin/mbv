@@ -1,0 +1,49 @@
+id: no-second-router-site
+valid:
+  - |
+    // The router/key_policy/input_resolver/action/shell files are the
+    // allowed sites; this rule's `files:` filter excludes them. Test
+    // fixtures do not run under the `files:` filter, so this valid case
+    // instead uses the function as a value (a function-pointer type) and
+    // as a path in a `use` declaration — neither is a `call_expression`,
+    // so the rule does not match.
+    use crate::app::input_resolver::resolve_key;
+    type RouterFn = fn(crate::app::input_resolver::InputContext, &crate::app::input_resolver::InputSnapshot, crate::app::input_resolver::KeyChord) -> crate::app::input_resolver::KeyResolution;
+    fn gate() -> RouterFn { resolve_key }
+  - |
+    // Same shape for `playback_command_for_key`: type-only / use-only
+    // references do not constitute a call.
+    use crate::app::action::playback_command_for_key;
+    type PlaybackFn = fn(crate::app::input_resolver::KeyChord, bool, bool) -> Option<crate::app::action::Command>;
+    fn my_router_helper() -> PlaybackFn { playback_command_for_key }
+  - |
+    // The action module defines playback_command_for_key; this rule
+    // ignores src/app/action.rs in production. The fixture here only
+    // references it as a value, not a call.
+    use crate::app::action::playback_command_for_key;
+    fn sample() -> Option<crate::app::action::Command> { None }
+invalid:
+  - |
+    // Calling resolve_key from a non-router module is a regression.
+    use crate::app::input_resolver::resolve_key;
+    use crate::app::input_resolver::{InputContext, InputSnapshot, KeyChord, KeyResolution};
+    fn queue_key_handler() -> KeyResolution {
+        resolve_key(InputContext::Playback, &InputSnapshot { player_active: true, has_remote_session: false }, KeyChord::new(crossterm::event::KeyCode::Null, crossterm::event::KeyModifiers::NONE))
+    }
+  - |
+    // Calling playback_command_for_key from a non-router module is a
+    // regression.
+    use crate::app::action::playback_command_for_key;
+    use crate::app::input_resolver::KeyChord;
+    fn my_local_router() -> Option<crate::app::action::Command> {
+        playback_command_for_key(KeyChord::new(crossterm::event::KeyCode::Null, crossterm::event::KeyModifiers::NONE), true, false)
+    }
+  - |
+    // A new "shadow" router calling both functions is a regression.
+    use crate::app::input_resolver::{resolve_key, InputContext, InputSnapshot, KeyChord, KeyResolution};
+    use crate::app::action::playback_command_for_key;
+    fn my_browser_router() -> (KeyResolution, Option<crate::app::action::Command>) {
+        let r = resolve_key(InputContext::Playback, &InputSnapshot { player_active: true, has_remote_session: false }, KeyChord::new(crossterm::event::KeyCode::Null, crossterm::event::KeyModifiers::NONE));
+        let c = playback_command_for_key(KeyChord::new(crossterm::event::KeyCode::Null, crossterm::event::KeyModifiers::NONE), true, false);
+        (r, c)
+    }

@@ -7,9 +7,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 use tuirealm::subscription::{EventClause, Sub, SubClause};
 
-use super::msg::TerminalObserverEvent;
-use super::typed_key::to_crossterm_key_event;
-use super::{ComponentId, Msg, UserEvent};
+use super::{ComponentId, Msg, TerminalObserverEvent, UserEvent};
 
 const OVERLAY_IDS: &[ComponentId] = &[
     ComponentId::Overlay(super::OverlayId::Settings),
@@ -70,7 +68,7 @@ impl Component for UiRootComponent {
 impl AppComponent<Msg, UserEvent> for UiRootComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         let observed = match event {
-            Event::Keyboard(key) => TerminalObserverEvent::Key(to_crossterm_key_event(key)),
+            Event::Keyboard(key) => TerminalObserverEvent::Key(*key),
             Event::Mouse(_) => TerminalObserverEvent::Mouse,
             Event::WindowResize(_, _) => TerminalObserverEvent::Resize,
             Event::FocusGained => TerminalObserverEvent::FocusGained,

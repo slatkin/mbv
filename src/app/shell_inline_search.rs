@@ -269,7 +269,6 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::{InlineSearchComponent, Msg};
     use crate::app::render::make_movie_app;
     use crate::app::tests::make_item;
     use crate::app::{LibEvent, LibraryTab};

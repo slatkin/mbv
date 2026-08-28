@@ -1,6 +1,6 @@
 use super::components::{
-    ComponentId, PopupId, ServiceRequest, ServiceRow, SettingsComponent, SettingsRow,
-    SettingsSnapshot, SetupDraft,
+    ComponentId, PopupId, ServiceRequest, ServiceRow, SettingsComponent, SettingsIntent,
+    SettingsRow, SettingsSnapshot, SetupDraft,
 };
 use super::shell::Model;
 use super::types_settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
@@ -134,40 +134,32 @@ impl Model {
 
     pub(super) fn handle_service_request(&mut self, request: ServiceRequest) -> bool {
         match request {
-            ServiceRequest::SettingsKey { cursor, key } => {
+            ServiceRequest::RemoveEmby => {
                 self.mount_sidebar(super::SidebarId::Settings);
                 self.app.settings_destination = SettingsDestination::Services;
-                self.app.services_cursor = cursor;
-                match key.code {
-                    crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Char(' ') => {
-                        self.app.activate_service_entry();
-                    }
-                    crossterm::event::KeyCode::Char('d') | crossterm::event::KeyCode::Char('D')
-                        if cursor == 0 =>
-                    {
-                        self.app.request_emby_removal();
-                    }
-                    crossterm::event::KeyCode::Char('t') | crossterm::event::KeyCode::Char('T')
-                        if cursor == 1 =>
-                    {
-                        self.app.test_audiobookshelf_connection();
-                    }
-                    crossterm::event::KeyCode::Char('r') | crossterm::event::KeyCode::Char('R')
-                        if cursor == 1 =>
-                    {
-                        self.app.route_service_action(
-                            super::types_settings::ServiceActionIntent::ReplaceAudiobookshelf,
-                        );
-                    }
-                    crossterm::event::KeyCode::Char('d') | crossterm::event::KeyCode::Char('D')
-                        if cursor == 1 =>
-                    {
-                        self.app.route_service_action(
-                            super::types_settings::ServiceActionIntent::RemoveAudiobookshelf,
-                        );
-                    }
-                    _ => {}
-                }
+                self.app.request_emby_removal();
+                false
+            }
+            ServiceRequest::TestAudiobookshelfConnection => {
+                self.mount_sidebar(super::SidebarId::Settings);
+                self.app.settings_destination = SettingsDestination::Services;
+                self.app.test_audiobookshelf_connection();
+                false
+            }
+            ServiceRequest::ReplaceAudiobookshelf => {
+                self.mount_sidebar(super::SidebarId::Settings);
+                self.app.settings_destination = SettingsDestination::Services;
+                self.app.route_service_action(
+                    super::types_settings::ServiceActionIntent::ReplaceAudiobookshelf,
+                );
+                false
+            }
+            ServiceRequest::RemoveAudiobookshelf => {
+                self.mount_sidebar(super::SidebarId::Settings);
+                self.app.settings_destination = SettingsDestination::Services;
+                self.app.route_service_action(
+                    super::types_settings::ServiceActionIntent::RemoveAudiobookshelf,
+                );
                 false
             }
             ServiceRequest::ActivateService(cursor) => {
@@ -217,58 +209,35 @@ impl Model {
         }
     }
 
-    pub(super) fn handle_persist_request(
-        &mut self,
-        request: super::components::PersistRequest,
-    ) -> bool {
-        let super::components::PersistRequest::SettingsKey { cursor, key } = request;
-        if self.app.settings_destination == SettingsDestination::Services {
-            match key.code {
-                crossterm::event::KeyCode::Esc => {
+    pub(super) fn handle_settings_intent(&mut self, intent: SettingsIntent) -> bool {
+        match intent {
+            SettingsIntent::Back => {
+                if self.app.settings_destination == SettingsDestination::Services {
                     self.app.settings_destination = SettingsDestination::Main;
                     self.app.services_cursor = 0;
-                }
-                crossterm::event::KeyCode::F(3) => {
+                } else {
                     self.app.close_settings();
-                    self.mount_sidebar(super::SidebarId::Sessions);
                 }
-                crossterm::event::KeyCode::F(4) => {
-                    self.app.close_settings();
-                    self.mount_sidebar(super::SidebarId::Playlists);
-                    self.app.open_playlists_panel();
-                }
-                crossterm::event::KeyCode::Char('q') if key.modifiers.is_empty() => {
-                    return self.app.try_quit()
-                }
-                _ => {}
+                false
             }
-            return false;
-        }
-
-        match key.code {
-            crossterm::event::KeyCode::Esc => self.app.close_settings(),
-            crossterm::event::KeyCode::F(3) => {
+            SettingsIntent::OpenSessions => {
                 self.app.close_settings();
                 self.mount_sidebar(super::SidebarId::Sessions);
+                false
             }
-            crossterm::event::KeyCode::F(4) => {
+            SettingsIntent::OpenPlaylists => {
                 self.app.close_settings();
                 self.mount_sidebar(super::SidebarId::Playlists);
                 self.app.open_playlists_panel();
+                false
             }
-            crossterm::event::KeyCode::Char('q') if key.modifiers.is_empty() => {
-                return self.app.try_quit()
-            }
-            crossterm::event::KeyCode::Left
-            | crossterm::event::KeyCode::Right
-            | crossterm::event::KeyCode::Char(' ')
-            | crossterm::event::KeyCode::Enter => {
+            SettingsIntent::Quit => self.app.try_quit(),
+            SettingsIntent::Activate(cursor) => {
                 self.app.settings_cursor = cursor;
                 self.app.handle_settings_activate();
+                false
             }
-            _ => {}
         }
-        false
     }
 }
 

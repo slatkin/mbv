@@ -333,7 +333,7 @@ mod tests {
     }
 
     #[test]
-    fn narrow_music_workspace_ignores_enter_for_inline_track_focus() {
+    fn narrow_music_workspace_requests_album_activation() {
         let mut model = Model::new(make_music_group_app());
         assert!(!model.app.layout.main.is_wide_music_active());
         model.sync_music_workspace();
@@ -341,7 +341,7 @@ mod tests {
             .music_workspace_id
             .clone()
             .expect("narrow Music workspace mounted");
-        model
+        let message = model
             .application
             .get_component_mut(&id)
             .unwrap()
@@ -349,14 +349,16 @@ mod tests {
                 code: Key::Enter,
                 modifiers: KeyModifiers::NONE,
             }));
-        let component = model
-            .application
-            .get_component_mut(&id)
-            .unwrap()
-            .as_any_mut()
-            .downcast_mut::<MusicWorkspaceComponent>()
-            .unwrap();
-        assert_eq!(component.track_cursor(), None);
+        assert_eq!(message, Some(Msg::Shell(ShellRequest::MusicAlbumActivate)));
+        let mut music_resize = false;
+        let mut tv_resize = false;
+        model.handle_terminal_message(
+            message.expect("album activation request"),
+            Some(&id),
+            &mut music_resize,
+            &mut tv_resize,
+        );
+        assert!(model.app.pending_overlay.is_some());
     }
 
     #[test]

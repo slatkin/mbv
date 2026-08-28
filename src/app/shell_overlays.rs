@@ -8,9 +8,7 @@ mod modals;
 mod sidebars;
 
 #[cfg(test)]
-use super::components::{
-    ComponentId, FeedsManageComponent, LibraryRoutesComponent, OverlayId, PopupId, ShellRequest,
-};
+use super::components::{ComponentId, OverlayId, PopupId};
 #[cfg(test)]
 use super::shell::Model;
 

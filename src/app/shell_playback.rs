@@ -1,7 +1,6 @@
 use super::components::{PlaybackComponent, PlaybackProjection, PlaybackRequest};
 use super::shell::Model;
 use super::{palette, PanelFocus, PanelMode};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 impl Model {
     pub(super) fn sync_playback(&mut self) {
@@ -107,8 +106,7 @@ impl Model {
                 self.dispatch_playback(Command::CycleOrToggleSubtitle);
             }
             PlaybackRequest::ToggleVisualizer => {
-                self.app
-                    .handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE));
+                let _ = self.app.dispatch(super::action::Command::ToggleVisualizer);
             }
         }
     }

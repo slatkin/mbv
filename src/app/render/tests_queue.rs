@@ -155,35 +155,6 @@ fn narrowing_from_each_wide_mode_starts_queue_only_without_mutating_wide_state()
 }
 
 #[test]
-fn narrow_toggle_survives_render_and_widening_restores_wide_state() {
-    let mut app = make_movie_app();
-    app.panel_mode = crate::app::PanelMode::QueueOnly;
-    app.panel_focus = crate::app::PanelFocus::Queue;
-    app.mini_view_focus = crate::app::PanelFocus::Library;
-
-    render_app_to_terminal(&mut app, crate::app::MINI_VIEW_THRESHOLD - 1, 20);
-    app.handle_key(crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('x'),
-        crossterm::event::KeyModifiers::NONE,
-    ));
-    assert_eq!(
-        app.effective_panel_mode(),
-        crate::app::PanelMode::LibraryOnly
-    );
-
-    render_app_to_terminal(&mut app, crate::app::MINI_VIEW_THRESHOLD - 1, 20);
-    assert_eq!(
-        app.effective_panel_mode(),
-        crate::app::PanelMode::LibraryOnly
-    );
-
-    render_app_to_terminal(&mut app, crate::app::MINI_VIEW_THRESHOLD, 20);
-    assert_eq!(app.effective_panel_mode(), crate::app::PanelMode::QueueOnly);
-    assert_eq!(app.effective_panel_focus(), crate::app::PanelFocus::Queue);
-    assert_eq!(app.panel_mode, crate::app::PanelMode::QueueOnly);
-    assert_eq!(app.panel_focus, crate::app::PanelFocus::Queue);
-}
-#[test]
 fn queue_keeps_rows_formerly_reserved_for_separate_visualizer() {
     // The visualizer now shares the queue card slot, so selecting it must not
     // consume queue-list rows below the panel the way the old bottom

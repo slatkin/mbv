@@ -46,7 +46,7 @@ fn fold_tick(
     if let Some(leaf) = leaf {
         messages.push(leaf);
     }
-    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key)));
+    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
     let outcome = resolve_router_outcome(key, &snapshot);
     apply_router_outcome(messages, focused.as_ref(), &outcome)
 }
@@ -69,7 +69,7 @@ fn fold_tick_with_outcome(
     if let Some(leaf) = leaf {
         messages.push(leaf);
     }
-    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key)));
+    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
     apply_router_outcome(messages, focused.as_ref(), &outcome)
 }
 
@@ -143,7 +143,7 @@ fn live_blocking_overlay_swallows_unmatched_and_global_chords() {
 /// dispatches the command instead.
 #[test]
 fn router_command_discards_focused_leaf_message() {
-    let leaf = Some(Msg::Shell(ShellRequest::GlobalViewKey(key(KeyCode::Char('q')))));
+    let leaf = Some(Msg::Shell(ShellRequest::Quit));
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('q')),
@@ -165,7 +165,7 @@ fn router_command_discards_focused_leaf_message() {
 /// and the leaf's request survives.
 #[test]
 fn fallthrough_leaves_exactly_one_leaf_message_standing() {
-    let leaf = Some(Msg::Shell(ShellRequest::GlobalViewKey(key(KeyCode::Down))));
+    let leaf = Some(Msg::Shell(ShellRequest::Quit));
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Down),
@@ -179,7 +179,7 @@ fn fallthrough_leaves_exactly_one_leaf_message_standing() {
     assert_eq!(out.len(), 1, "exactly one leaf message must stand");
     assert!(matches!(
         &out[0],
-        Msg::Shell(ShellRequest::GlobalViewKey(_))
+        Msg::Shell(ShellRequest::Quit)
     ));
 }
 
@@ -249,7 +249,7 @@ fn library_focus_routes_bracket_to_library_leaf() {
 /// the live timer is exercised by the shell-level test in `shell_tests`.
 #[test]
 fn playback_gating_space_first_press_falls_through() {
-    let leaf = Some(Msg::Shell(ShellRequest::GlobalViewKey(key(KeyCode::Char(' ')))));
+    let leaf = Some(Msg::Shell(ShellRequest::Quit));
     let out = fold_tick(
         leaf,
         key(KeyCode::Char(' ')),
@@ -471,14 +471,14 @@ fn lib_key_ctrl_catchall_swallows_unmapped_chord() {
 /// to the leaf.
 #[test]
 fn ctrl_slash_both_terminal_encodings_route_identically() {
-    let leaf = Some(Msg::Shell(ShellRequest::GlobalViewKey(key(KeyCode::Char('/')))));
+    let leaf = Some(Msg::Shell(ShellRequest::Quit));
     let slash_out = fold_tick(
         leaf,
         KeyEvent::new(KeyCode::Char('/'), KeyModifiers::CONTROL),
         Some(ComponentId::UiRoot),
         idle_snapshot(),
     );
-    let leaf = Some(Msg::Shell(ShellRequest::GlobalViewKey(key(KeyCode::Char('_')))));
+    let leaf = Some(Msg::Shell(ShellRequest::Quit));
     let underscore_out = fold_tick(
         leaf,
         KeyEvent::new(KeyCode::Char('_'), KeyModifiers::CONTROL),

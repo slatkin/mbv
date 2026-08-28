@@ -112,7 +112,7 @@ fn music_workspace_vertical_move_follows_album_display_order() {
 }
 
 #[test]
-fn music_workspace_enter_ignored_when_inline_track_focus_disabled() {
+fn music_workspace_narrow_enter_requests_album_activation() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_content(context(None));
     let message = component.on(&Event::Keyboard(KeyEvent {
@@ -120,11 +120,7 @@ fn music_workspace_enter_ignored_when_inline_track_focus_disabled() {
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(component.track_cursor(), None);
-    assert!(matches!(
-        message,
-        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
-            if key.code == crossterm::event::KeyCode::Enter
-    ));
+    assert_eq!(message, Some(Msg::Shell(ShellRequest::MusicAlbumActivate)));
 }
 
 #[test]
@@ -163,16 +159,12 @@ fn music_workspace_horizontal_move_is_ignored_at_one_column() {
     component.set_content(grouped_context(1, vec![0, 1, 2, 3], true, None));
     component.set_album_columns(1);
 
-    for (key, expected) in [(Key::Char('h'), 'h'), (Key::Char('l'), 'l')] {
+    for key in [Key::Char('h'), Key::Char('l')] {
         let message = component.on(&Event::Keyboard(KeyEvent {
             code: key,
             modifiers: KeyModifiers::NONE,
         }));
-        assert!(matches!(
-            message,
-            Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
-                if key.code == crossterm::event::KeyCode::Char(expected)
-        ));
+        assert_eq!(message, None);
         assert_eq!(component.album_cursor(), 1);
     }
 }

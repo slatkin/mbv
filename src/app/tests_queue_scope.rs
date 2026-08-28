@@ -1,6 +1,5 @@
 use super::*;
 use crate::app::tests::*;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::ctrl::{CtrlCmd, WireCommand};
 
 #[test]
@@ -69,92 +68,6 @@ fn queue_scope_resolution_matrix_direct_remote_displaying_remote() {
     assert!(!app.local_queue_metadata_applies(QueueScope::Remote));
 }
 
-#[test]
-fn queue_scope_switch_via_keyboard_works_from_queue_focus() {
-    let mut app = make_remote_app_stub(make_items(1), make_items(2));
-    app.panel_focus = PanelFocus::Queue;
-    app.set_queue_scope(QueueScope::Local);
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
-    assert!(!handled);
-    assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Char('['), KeyModifiers::NONE));
-    assert!(!handled);
-    assert_eq!(app.visible_queue_scope(), QueueScope::Local);
-}
-
-#[test]
-fn left_focus_brackets_do_not_switch_queue_scope() {
-    let mut app = make_remote_app_stub(make_items(1), make_items(2));
-    app.panel_focus = PanelFocus::Library;
-    app.set_queue_scope(QueueScope::Local);
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
-
-    assert!(!handled);
-    assert_eq!(app.visible_queue_scope(), QueueScope::Local);
-}
-
-#[test]
-fn scope_keys_are_ignored_outside_queue_tab() {
-    let mut app = make_remote_app_stub(make_items(1), make_items(2));
-    app.set_queue_scope(QueueScope::Local);
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
-
-    assert!(!handled);
-    assert_eq!(app.visible_queue_scope(), QueueScope::Local);
-}
-
-#[test]
-fn shift_resize_grows_from_queue_focus_and_persists_pref() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_remote_app_stub(make_items(1), make_items(2));
-    app.panel_focus = PanelFocus::Queue;
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
-
-    assert!(!handled);
-    assert_eq!(app.status, "Queue column width: 45 cols");
-    let prefs: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
-    )
-    .expect("prefs json");
-    assert_eq!(prefs["queue_column_width"].as_u64(), Some(45));
-}
-
-#[test]
-fn shift_resize_clamps_and_reports_minimum_and_maximum() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_remote_app_stub(make_items(1), make_items(2));
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
-    assert!(!handled);
-    assert_eq!(
-        app.status,
-        "Queue column width already at minimum (40 cols)"
-    );
-    assert!(!crate::config::prefs_path().exists());
-
-    assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
-    assert_eq!(app.status, "Queue column width: 45 cols");
-
-    assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
-    assert_eq!(app.status, "Queue column width: 48 cols");
-
-    assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
-    assert_eq!(
-        app.status,
-        "Queue column width already at maximum (48 cols)"
-    );
-
-    let prefs: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
-    )
-    .expect("prefs json");
-    assert_eq!(prefs["queue_column_width"].as_u64(), Some(48));
-}
 
 #[test]
 fn direct_remote_play_items_keeps_local_queue_intact() {

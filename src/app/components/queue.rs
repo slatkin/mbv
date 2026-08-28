@@ -6,8 +6,9 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseButton, MouseEvent, MouseEventK
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{Msg, QueueHitRegion, QueueMove, QueueRequest, ShellRequest};
-use super::typed_key::to_crossterm_key_event;
+use super::msg::{
+    Msg, QueueColumnResize, QueueHitRegion, QueueIntent, QueueMove, QueueRequest, ShellRequest,
+};
 use super::user_event::UserEvent;
 use crate::app::render::{
     render_queue_content, render_queue_title_content, QueueRenderGeometry, QueueTitleModel,
@@ -99,17 +100,51 @@ impl QueueComponent {
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        let selected = || {
+            self.slots
+                .get(self.cursor)
+                .map(|slot| (self.scope, slot.slot_id))
+        };
         match key.code {
-            Key::Char('[') if key.modifiers.is_empty() => {
+            Key::Char('[')
+                if !key
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) =>
+            {
                 self.scope = QueueScope::Local;
                 return Some(Msg::Queue(QueueRequest::Scope(self.scope)));
             }
-            Key::Char(']') if key.modifiers.is_empty() => {
+            Key::Char(']')
+                if !key
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) =>
+            {
                 self.scope = QueueScope::Remote;
                 return Some(Msg::Queue(QueueRequest::Scope(self.scope)));
             }
-            Key::Up if key.modifiers.is_empty() => return self.move_cursor(-1),
-            Key::Down if key.modifiers.is_empty() => return self.move_cursor(1),
+            Key::Left | Key::Right if key.modifiers == tuirealm::event::KeyModifiers::SHIFT => {
+                return Some(Msg::Shell(ShellRequest::QueueIntent(
+                    QueueIntent::ResizeColumn(if key.code == Key::Left {
+                        QueueColumnResize::Narrower
+                    } else {
+                        QueueColumnResize::Wider
+                    }),
+                )));
+            }
+            Key::Up if key.modifiers.is_empty() => {
+                if self.cursor == 0 {
+                    return None;
+                }
+                return self.move_cursor(-1);
+            }
+            Key::Down if key.modifiers.is_empty() => {
+                if self.cursor + 1 >= self.slots.len() {
+                    return None;
+                }
+                return self.move_cursor(1);
+            }
             Key::PageUp if key.modifiers.is_empty() => {
                 return self.move_cursor(-(self.area.height.saturating_sub(1).max(1) as isize));
             }
@@ -125,44 +160,82 @@ impl QueueComponent {
                 return self.cursor_message();
             }
             Key::Enter => {
-                return self.slots.get(self.cursor).map(|slot| {
-                    Msg::Queue(QueueRequest::Play {
-                        scope: self.scope,
-                        slot_id: slot.slot_id,
-                    })
-                });
+                return selected()
+                    .map(|(scope, slot_id)| Msg::Queue(QueueRequest::Play { scope, slot_id }));
             }
             Key::Delete => {
-                return self.slots.get(self.cursor).map(|slot| {
-                    Msg::Queue(QueueRequest::Remove {
-                        scope: self.scope,
-                        slot_id: slot.slot_id,
-                    })
-                });
+                return selected()
+                    .map(|(scope, slot_id)| Msg::Queue(QueueRequest::Remove { scope, slot_id }));
             }
             Key::Up if key.modifiers.contains(tuirealm::event::KeyModifiers::SHIFT) => {
-                return self.slots.get(self.cursor).map(|slot| {
+                return selected().map(|(scope, slot_id)| {
                     Msg::Queue(QueueRequest::Move {
-                        scope: self.scope,
-                        slot_id: slot.slot_id,
+                        scope,
+                        slot_id,
                         direction: QueueMove::Up,
                     })
                 });
             }
             Key::Down if key.modifiers.contains(tuirealm::event::KeyModifiers::SHIFT) => {
-                return self.slots.get(self.cursor).map(|slot| {
+                return selected().map(|(scope, slot_id)| {
                     Msg::Queue(QueueRequest::Move {
-                        scope: self.scope,
-                        slot_id: slot.slot_id,
+                        scope,
+                        slot_id,
                         direction: QueueMove::Down,
                     })
                 });
             }
+            Key::Char('t')
+                if key
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
+            {
+                return Some(Msg::Shell(ShellRequest::QueueIntent(
+                    QueueIntent::StopRemoteTracking,
+                )));
+            }
+            Key::Char('r')
+                if key
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
+            {
+                return Some(Msg::Shell(ShellRequest::QueueIntent(
+                    QueueIntent::ReanchorRemoteTracking,
+                )));
+            }
+            Key::Char('z')
+                if key
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
+            {
+                return Some(Msg::Queue(QueueRequest::Undo { scope: self.scope }));
+            }
+            Key::Char('i') => {
+                return selected().map(|(scope, slot_id)| {
+                    Msg::Shell(ShellRequest::QueueIntent(QueueIntent::Navigate {
+                        scope,
+                        slot_id,
+                    }))
+                });
+            }
+            Key::Char('p') => {
+                return Some(Msg::Shell(ShellRequest::QueueIntent(QueueIntent::PlayNow)));
+            }
+            Key::Char('s')
+                if key
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
+            {
+                return Some(Msg::Shell(ShellRequest::QueueIntent(
+                    QueueIntent::SavePlaylist,
+                )));
+            }
+            Key::Char('c') if !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) => {
+                return Some(Msg::Shell(ShellRequest::QueueIntent(QueueIntent::Clear)));
+            }
             _ => {}
         }
-        Some(Msg::Shell(ShellRequest::QueueKey(to_crossterm_key_event(
-            key,
-        ))))
+        None
     }
 
     /// The component owns *where* a Queue event lands: it hit-tests its

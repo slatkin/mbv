@@ -9,7 +9,6 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, Msg, ShellRequest};
-use super::typed_key::to_crossterm_key_event;
 use super::user_event::UserEvent;
 use crate::app::render::{
     render_audiobookshelf_book_content, AudiobookshelfBookGeometry, HomeImagePaint,
@@ -143,9 +142,7 @@ impl AudiobookshelfBookComponent {
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if !self.focused {
-            return Some(Msg::Shell(ShellRequest::GlobalViewKey(
-                to_crossterm_key_event(key),
-            )));
+            return None;
         }
 
         let chapters_focused = self.chapters_visible && self.state.chapter_selection.is_some();
@@ -247,9 +244,7 @@ impl AudiobookshelfBookComponent {
                     AudiobookshelfBookIntent::Enqueue,
                 )))
             }
-            _ => Some(Msg::Shell(ShellRequest::GlobalViewKey(
-                to_crossterm_key_event(key),
-            ))),
+            _ => None,
         }
     }
 

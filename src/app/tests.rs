@@ -2,7 +2,6 @@ use super::types_settings::SettingsDestination;
 use super::*;
 
 use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use mbv_core::playback_queue::QueueItem;
 
 use ratatui::backend::TestBackend;
 

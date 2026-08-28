@@ -128,8 +128,6 @@ use super::{palette, App};
 // import them directly), but render/tests.rs and friends still reach them via
 // `use super::*`.
 #[cfg(test)]
-use super::PanelFocus;
-#[cfg(test)]
 use crate::app::layout::LayoutMain;
 #[cfg(test)]
 use components::widgets::right_panel_content_area;

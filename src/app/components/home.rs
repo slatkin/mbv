@@ -5,17 +5,11 @@
 //! selected section (pill), the list scroll offset, and painted geometry
 //! (row hitmap, pill targets), and paints via the shared
 //! `render_home_content` orchestration (`render/components/home.rs`) so it
-//! cannot drift from the legacy `App::render_home_list` path. Keyboard/mouse
-//! input authority stays on the legacy `App::handle_key`/`handle_mouse`
-//! `CONTEXT_STACK` for now (converting it safely requires the precedence-
-//! safe TuiRealm subscription wiring `key_policy.rs` documents as deferred
-//! to per-surface conversion, not yet built). Content is mirrored from the
-//! shell, while cursor/section/scroll state remains local to this component.
-//! `handle_crossterm_key`/`handle_mouse` and the typed
-//! `ShellRequest::Home*` messages below are the live input path: as the
-//! Library parent's active child on the Home tab, the component receives
-//! terminal events and claims Home's own gestures (task 5.3d, home hit_test;
-//! keyboard still falls through to the legacy `App::handle_key`).
+//! cannot drift from the legacy `App::render_home_list` path. Content is
+//! mirrored from the shell, while cursor/section/scroll and Home keyboard
+//! interpretation remain local to this component. It emits typed shell
+//! requests for effects that cross the Model boundary; destination-independent
+//! chords are handled by the central router.
 
 use ratatui::layout::Rect;
 use ratatui::Frame;
@@ -28,7 +22,6 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::msg::{HomeHitRegion, Msg, ShellRequest};
-use super::typed_key::to_crossterm_key_event;
 use super::user_event::UserEvent;
 use crate::app::render::HomeImagePaint;
 use crate::app::types_playback::HomeLatestSource;
@@ -50,6 +43,10 @@ pub struct HomeComponent {
     panel_area: Option<Rect>,
     hitmap: Vec<(Rect, usize)>,
     pill_targets: Vec<(Rect, usize)>,
+    /// The current Continue Watching column target supplied by the shell's
+    /// Model-owned `home_content` snapshot. It remains separate from the
+    /// component's flat cursor, matching the legacy Home context-menu target.
+    cw_item: Option<mbv_core::api::EmbyItem>,
     /// The cover image (if any) `view()` computed but could not paint
     /// itself (no `App`/image-cache authority); the shell takes it via
     /// `take_image_paint` right after `application.view()` returns and
@@ -91,11 +88,19 @@ impl HomeComponent {
             panel_area: None,
             hitmap: Vec::new(),
             pill_targets: Vec::new(),
+            cw_item: None,
             image_paint: None,
             list_area: Rect::default(),
             selected_item_rect: None,
             hero_area: None,
         }
+    }
+
+    pub(in crate::app) fn set_continue_watching_item(
+        &mut self,
+        item: Option<mbv_core::api::EmbyItem>,
+    ) {
+        self.cw_item = item;
     }
 
     /// Replace the shell-owned content snapshot. Section/cursor clamp to
@@ -311,108 +316,68 @@ impl HomeComponent {
         self.select_section(sections[next_pos])
     }
 
-    /// Handle a keyboard event using crossterm types directly. The local
-    /// navigation set and the typed effect-key family (Enter, Ctrl+Enter,
-    /// Ctrl+A, Ctrl+W, Delete) are Home's to claim. `None` is reserved for
-    /// Home-owned local state changes that need only the root observer's
-    /// redraw; unmatched live keys are forwarded through the typed
-    /// `GlobalViewKey` request below. Global keys the `CONTEXT_STACK` already
-    /// claims ahead of Home (`q`, Tab/BackTab, 1-9, `.`) are deliberately *not*
-    /// matched here for that reason: `.` is consumed by
-    /// `handle_global_view_key` before the browse dispatch (and the deleted
-    /// `handle_cw_key`) ever run, so the global context-menu routing stays at
-    /// its original precedence — this component reproduces the reachable set,
-    /// not the unreachable one.
-    ///
-    /// The component claims Home's local keys only while its Library panel is
-    /// focused (`self.focused`, mirrored from the shell's effective panel
-    /// focus every tick). With the Queue panel focused, every key is forwarded
-    /// through `GlobalViewKey` so queue handling (`handle_queue_key`) retains
-    /// authority instead of Home mutating local state.
-    pub(in crate::app) fn handle_crossterm_key(
-        &mut self,
-        key: crossterm::event::KeyEvent,
-    ) -> Option<Msg> {
-        if key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
-            && matches!(
-                key.code,
-                crossterm::event::KeyCode::Left
-                    | crossterm::event::KeyCode::Right
-                    | crossterm::event::KeyCode::Up
-                    | crossterm::event::KeyCode::Down
-            )
-        {
-            return Some(Msg::Shell(ShellRequest::GlobalViewKey(key)));
-        }
+    /// Handle a keyboard event using TuiRealm key types. Home claims
+    /// only its local navigation and typed effect requests; destination-
+    /// independent chords are resolved by the central router.
+    pub(in crate::app) fn handle_crossterm_key(&mut self, key: KeyEvent) -> Option<Msg> {
         if !self.focused {
-            return Some(Msg::Shell(ShellRequest::GlobalViewKey(key)));
+            return None;
         }
-        let ctrl = key
-            .modifiers
-            .contains(crossterm::event::KeyModifiers::CONTROL);
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        if key.modifiers.contains(KeyModifiers::ALT)
+            && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
+        {
+            return None;
+        }
         match key.code {
-            crossterm::event::KeyCode::Up => {
+            Key::Up => {
                 self.move_local_cursor(-1);
                 None
             }
-            crossterm::event::KeyCode::Down => {
+            Key::Down => {
                 self.move_local_cursor(1);
                 None
             }
-            crossterm::event::KeyCode::Char('[') if !ctrl => {
+            Key::Char('[') if !ctrl => {
                 let changed = self.move_section(-1);
                 self.section_msg(changed)
             }
-            crossterm::event::KeyCode::Char(']') if !ctrl => {
+            Key::Char(']') if !ctrl => {
                 let changed = self.move_section(1);
                 self.section_msg(changed)
             }
-            crossterm::event::KeyCode::PageUp => {
+            Key::PageUp => {
                 self.move_local_cursor(-(self.page_size() as i64));
                 None
             }
-            crossterm::event::KeyCode::PageDown => {
+            Key::PageDown => {
                 self.move_local_cursor(self.page_size() as i64);
                 None
             }
-            crossterm::event::KeyCode::Home => {
+            Key::Home => {
                 self.select_start();
                 None
             }
-            crossterm::event::KeyCode::End => {
+            Key::End => {
                 self.select_end();
                 None
             }
-            crossterm::event::KeyCode::Enter if ctrl => {
-                Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor)))
-            }
-            crossterm::event::KeyCode::Enter => {
-                Some(Msg::Shell(ShellRequest::HomePlay(self.cursor)))
-            }
-            crossterm::event::KeyCode::Char('a') if ctrl => {
-                Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor)))
-            }
-            crossterm::event::KeyCode::Char('w') if ctrl => {
-                Some(Msg::Shell(ShellRequest::HomeToggleWatched))
-            }
-            crossterm::event::KeyCode::Delete => {
-                Some(Msg::Shell(ShellRequest::HomeDelete(self.cursor)))
-            }
-            _ => Some(Msg::Shell(ShellRequest::GlobalViewKey(key))),
+            Key::Char('.') => Some(Msg::Shell(ShellRequest::HomeContextMenu {
+                home_cw_selected: self.section == 0,
+                cw_item: self.cw_item.clone(),
+            })),
+            Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor))),
+            Key::Enter => Some(Msg::Shell(ShellRequest::HomePlay(self.cursor))),
+            Key::Char('a') if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor))),
+            Key::Char('w') if ctrl => Some(Msg::Shell(ShellRequest::HomeToggleWatched)),
+            Key::Delete => Some(Msg::Shell(ShellRequest::HomeDelete(self.cursor))),
+            _ => None,
         }
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if key.modifiers.contains(KeyModifiers::ALT)
-            && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
-        {
-            return Some(Msg::Shell(ShellRequest::GlobalViewKey(
-                to_crossterm_key_event(key),
-            )));
-        }
-        self.handle_crossterm_key(to_crossterm_key_event(key))
+        self.handle_crossterm_key(*key)
     }
-
     fn section_msg(&self, changed: bool) -> Option<Msg> {
         changed.then_some(Msg::Shell(ShellRequest::HomeSectionSelected(self.section)))
     }

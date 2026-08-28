@@ -315,14 +315,10 @@ mod tests {
             Some("book-3")
         );
 
-        // Unmatched component keys remain on the typed global-view adapter,
-        // preserving App's global-key behavior without a Legacy message.
+        // Unmatched component keys stay unclaimed so the central router can
+        // resolve global shortcuts without a legacy raw-key fallback.
         let bucket = model.app.audiobookshelf_book_browse[0].selected_bucket;
-        let shift_left = crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char('['),
-            crossterm::event::KeyModifiers::SHIFT,
-        );
-        let bridged = model
+        let unclaimed = model
             .application
             .get_component_mut(&id)
             .unwrap()
@@ -330,14 +326,7 @@ mod tests {
                 code: Key::Char('['),
                 modifiers: KeyModifiers::SHIFT,
             }));
-        assert!(matches!(
-            bridged,
-            Some(Msg::Shell(ShellRequest::GlobalViewKey(key))) if key == shift_left
-        ));
-        assert_eq!(
-            model.app.handle_key_view_dispatch(shift_left, false, None),
-            Some(false)
-        );
+        assert_eq!(unclaimed, None);
         assert_eq!(
             model.app.audiobookshelf_book_browse[0].selected_bucket, bucket,
             "Shift+[ must not enter the ABS Book bucket fallback"

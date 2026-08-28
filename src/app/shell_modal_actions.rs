@@ -1,4 +1,6 @@
-use super::components::msg::{ConfirmIntent, DaemonLostIntent, RemoteReanchorIntent};
+use super::components::msg::{
+    ConfirmIntent, DaemonLostIntent, RemoteReanchorIntent, SavePlaylistIntent,
+};
 use super::components::{
     ComponentId, ConfirmComponent, DaemonLostComponent, ModalId, RemoteReanchorComponent,
     SavePlaylistComponent,
@@ -133,7 +135,7 @@ impl Model {
         self.handle_remote_reanchor_intent(intent);
     }
 
-    pub(super) fn handle_save_playlist_key(&mut self, key: KeyEvent) {
+    pub(super) fn handle_save_playlist_intent(&mut self, intent: SavePlaylistIntent) {
         let id = ComponentId::Modal(ModalId::SavePlaylist);
         let Some((input, rename, rename_id)) = self
             .application
@@ -149,12 +151,9 @@ impl Model {
         else {
             return;
         };
-        if key.code == KeyCode::Esc {
+        if intent == SavePlaylistIntent::Dismiss {
             self.dismiss_modal(&id);
             self.app.force_clear = true;
-            return;
-        }
-        if key.code != KeyCode::Enter {
             return;
         }
         let name = input.trim().to_string();
@@ -198,6 +197,16 @@ impl Model {
             self.app.force_clear = true;
             self.app.save_queue_as_playlist(name);
         }
+    }
+
+    /// Compatibility bridge for callers that still provide crossterm keys.
+    pub(super) fn handle_save_playlist_key(&mut self, key: KeyEvent) {
+        let intent = match key.code {
+            KeyCode::Esc => SavePlaylistIntent::Dismiss,
+            KeyCode::Enter => SavePlaylistIntent::Submit,
+            _ => return,
+        };
+        self.handle_save_playlist_intent(intent);
     }
 }
 

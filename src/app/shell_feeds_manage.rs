@@ -7,6 +7,7 @@
 //! dialog, config persistence — and the background add-feed channel that
 //! cannot live in the component (`Model::feeds_manage`).
 
+use super::components::msg::FeedsManageIntent;
 use super::components::{ComponentId, FeedsManageComponent, PopupId};
 use super::types_feeds_manage::{FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage};
 use crossterm::event::{KeyCode, KeyEvent};
@@ -73,8 +74,27 @@ impl super::shell::Model {
             .unwrap_or(0)
     }
 
-    /// Route a forwarded feeds-management key against the component's live
-    /// stage (task 5.3d — no `sync_feeds_manage_to_app` mirror first).
+    /// Route a semantic feeds-management intent to the existing shell effects.
+    pub(in crate::app) fn handle_feeds_manage_intent(&mut self, intent: FeedsManageIntent) {
+        match intent {
+            FeedsManageIntent::Dismiss => self.dismiss_feeds_manage(),
+            FeedsManageIntent::Add => self.start_add_feed(),
+            FeedsManageIntent::Edit => {
+                if self.config_feed_count() > 0 {
+                    self.start_edit_feed();
+                }
+            }
+            FeedsManageIntent::Remove => {
+                if self.config_feed_count() > 0 {
+                    self.confirm_remove_feed();
+                }
+            }
+            FeedsManageIntent::Cancel => self.cancel_feed_form(),
+            FeedsManageIntent::Submit => self.submit_feed_form(),
+        }
+    }
+
+    /// Compatibility bridge for callers that still provide crossterm keys.
     pub(in crate::app) fn handle_feeds_manage_key(&mut self, key: KeyEvent) {
         let Some(stage) = self.feeds_manage_stage() else {
             return;

@@ -1,0 +1,151 @@
+# Tasks: Router Swallows Its Own Overlay Keys; Globals Fire While Typing
+
+## 1. Router snapshot
+
+- [ ] 1.1 Add `text_entry_focused: bool` to `RouterSnapshot` in
+  `src/app/key_policy.rs`. Update the shell's `router_outcome` in
+  `src/app/shell.rs` to set the field by inspecting the focused leaf:
+  - `Some(ComponentId::Overlay(OverlayId::Search))` → true (search sidebar)
+  - `Some(ComponentId::InlineSearch(_))` → true (inline library search)
+  - `Some(ComponentId::Overlay(OverlayId::Settings))` → true (settings
+    sidebar; the sidebar's form fields own focus)
+  - everything else → false
+  Add a `Default`-deriving placeholder; existing tests that build
+  `RouterSnapshot::default()` keep working.
+
+- [ ] 1.2 Update `resolve_router_outcome` in `src/app/router.rs` with
+  two new rules:
+  - **Never swallow the focused leaf's own typed request.** When the
+    policy would return `Swallow` and the focused leaf is a blocking
+    overlay (i.e. `snapshot.blocking_overlay_open` is true and the
+    focused leaf id is one of the blocking-overlay `ComponentId`s),
+    return `FallThrough` instead. The leaf's request stands.
+  - **Global bindings require no text entry focused.** When the policy
+    matches a global binding whose `KeyPolicyOwner::Sub` is
+    `ComponentId::UiRoot` and `snapshot.text_entry_focused` is true,
+    return `FallThrough` instead of `Command`. The leaf's character
+    input stands.
+  The `blocking_overlay_open` "catch-all" rules stay; they still
+  discard the focused leaf's message when no overlay is mounted.
+  The behavior is: "the focused leaf is the overlay, the policy
+  declines or the overlay's own request is silent → the leaf's
+  request stands."
+
+- [ ] 1.3 Update `KeyPolicyBinding::LibraryTabJump` in
+  `src/app/key_policy.rs:97` to also require `chord.mods.is_empty()`.
+  Move the `library_tab_jump` entry in `KEY_POLICY` so it is
+  ordered **after** `alt_swallow` — `Alt+1` is swallowed, not
+  jumped. Update the policy-name comment table.
+
+## 2. Confirm-intent key translation
+
+- [ ] 2.1 Update `handle_confirm_intent` in
+  `src/app/shell_modal_actions.rs:14-28` to re-encode `Accept` as
+  `KeyEvent::new(KeyCode::Char('y'), NONE)`, matching the action
+  handler's `Char('y')`-only arms. `Cancel` (`Esc`), `Save`
+  (`Char('s')`), `Discard` (`Char('d')`), `Dismiss` (`Char('x')`)
+  stay unchanged. The actions whose handler already accepts Enter
+  (`RemoveEmby`, `ReplaceEmby`, `RemoveAudiobookshelf`,
+  `ReplaceAudiobookshelf`) continue to accept Enter via the
+  existing `confirm_key_dismisses` table; the `Char('y')`
+  re-encoding covers the four actions that previously did not.
+
+## 3. Double-tap timer
+
+- [ ] 3.1 Drop the `arm_first_press = focus() != Some(&ComponentId::UiRoot)`
+  gate in `src/app/shell.rs:176` (or wherever the assignment lives
+  after the snapshot population). The first eligible Space/Esc
+  press arms the timer regardless of focus; the second press
+  within 300 ms is still claimed by `command_for_policy` when
+  `snapshot.space_double_tap` / `snapshot.esc_double_tap` is true.
+  Update the comment to document the new rule.
+
+## 4. Wide-music track hitmap + conformance-matrix
+
+- [ ] 4.1 Publish `wide_music_track_hitmap` from the Music workspace
+  leaf's `view` (or from a `set_content`-time shell reader) so the
+  shell can push it. This is not a return to a global hit map;
+  the leaf owns the geometry and the shell reads a narrow
+  projection through a known accessor. Place the publication
+  where the leaf's own geometry is computed and the
+  `wide_music_track_hitmap` is the same shape the shell currently
+  reads. Verify `shell_music_workspace::tests::music_resize_push_uses_current_frame_geometry`
+  passes after the publication lands.
+
+- [ ] 4.2 Update the three `tests_conformance_matrix` rows that report
+  a blank buffer for the leaf the component owns to assert the
+  post-fix behavior (the rendered buffer must include the leaf's
+  painted surface, not a blank buffer for a leaf the component
+  owns). The third row
+  (`matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer`)
+  is a separate layout-conformance regression and is out of
+  scope for this change.
+
+## 5. Routing matrix
+
+- [ ] 5.1 Rewrite the three `blocking_overlay_swallows_*_chord` tests
+  in `src/app/tests_routing_matrix.rs:96,112,131` to assert the
+  post-fix behavior: the leaf's `ConfirmIntent::Accept` /
+  `ConfirmIntent::Dismiss` stands instead of being discarded.
+  The "blocking overlay `Swallow`s an unbound chord" invariant
+  is moved to a new test that uses `fold_tick_with_outcome` to
+  inject a `Swallow` outcome explicitly, preserving the
+  `apply_router_outcome` fold semantics as the policy's
+  "blocking overlay, no leaf request" path.
+
+- [ ] 5.2 Add new matrix rows pinning the text-entry rule:
+  - `quit_global_does_not_fire_in_search_sidebar` — focused leaf is
+    `Overlay(Search)`, key is `q`, snapshot has
+    `text_entry_focused: true`, outcome is `FallThrough`.
+  - `panel_mode_cycle_global_does_not_fire_in_search_sidebar` —
+    same shape, key is `x`.
+  - `library_tab_jump_does_not_fire_in_search_sidebar` — same
+    shape, key is `Char('1')`.
+  - `quit_global_does_not_fire_in_inline_search` — focused leaf is
+    `InlineSearch(_)`, same shape.
+  - `library_tab_jump_with_modifiers_is_swallowed` — focused leaf
+    is `Browser(_)`, key is `Char('1')` with `ALT`, outcome is
+    `Swallow` (because the policy's `alt_swallow` entry swallows
+    it first).
+
+- [ ] 5.3 Add new matrix rows for the ConfirmIntent re-encoding:
+  - `confirm_accept_re_encodes_to_y_chord` — the action handler's
+    `apply_confirm_action(RemoveActiveQueueItem, Char('y'))` path
+    is invoked. The test confirms the re-encoding from
+    `ConfirmIntent::Accept` reaches the right action.
+
+## 6. Spec delta
+
+- [ ] 6.1 Update the `interactive-component-framework` spec's
+  "Input precedence preserved through focus and subscriptions"
+  requirement with a new scenario: "A global binding does not
+  fire when the focused leaf is a text-entry component." Add a
+  clarifying sentence to the requirement body: "Global bindings
+  (those owned by `ComponentId::UiRoot`) require that the focused
+  leaf is not a text-entry component; otherwise the leaf's
+  character input stands as a typed request."
+
+## 7. Verification
+
+- [ ] 7.1 Run `rtk cargo fmt --all -- --check` — 0 diff.
+- [ ] 7.2 Run `rtk cargo check -p mbv` — 0 errors (25 prod
+  warnings, all pre-existing).
+- [ ] 7.3 Run `rtk cargo nextest run -p mbv` — exactly 4 failures
+  (the pre-existing baseline minus the three conformance-matrix
+  rows and the `music_resize` row this change fixes).
+- [ ] 7.4 Run `rtk cargo clippy --workspace --all-targets` — 0
+  errors (85 warnings, all pre-existing).
+- [ ] 7.5 Run `rtk make check-code-file-lines` — PASS.
+- [ ] 7.6 Run `rtk ast-grep scan` — 69 diagnostics (pre-existing
+  screen-boundary baseline, unchanged).
+- [ ] 7.7 Run `rtk ast-grep test` — 7 passed, 0 failed.
+- [ ] 7.8 Squash all fix commits into one, per user request.
+- [ ] 7.9 Update the `interactive-component-framework` spec
+  (task 6.1) and re-run `openspec validate --specs` — passes.
+
+## 8. Final
+
+- [ ] 8.1 Mark this change complete. The fixes are filed against
+  `fix-router-overlay-textentry`; the just-archived
+  `migrate-tui-to-tuirealm` and `remove-legacy-keyboard-endpoint`
+  are not reopened.

@@ -1,7 +1,9 @@
-use super::components::{ComponentId, QueueComponent, QueueMove, QueueRequest};
+use super::components::{
+    ComponentId, QueueColumnResize, QueueComponent, QueueIntent, QueueMove, QueueRequest,
+};
 use super::shell::Model;
 use super::{PanelFocus, QueueScope};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crate::app::notify_actions::ToastSeverity;
 use ratatui::layout::Rect;
 
 impl Model {
@@ -87,14 +89,13 @@ impl Model {
             }
             QueueRequest::Play { scope, slot_id } => {
                 if self.select_queue_slot(scope, slot_id) {
-                    self.app
-                        .handle_queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+                    self.app.dispatch(super::action::Command::QueuePlayCursor);
                 }
             }
             QueueRequest::Remove { scope, slot_id } => {
                 if self.select_queue_slot(scope, slot_id) {
-                    self.app
-                        .handle_queue_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE));
+                    let cursor = self.app.queue_for_scope(scope).queue_cursor;
+                    self.app.remove_from_queue(cursor);
                 }
             }
             QueueRequest::Move {
@@ -103,13 +104,92 @@ impl Model {
                 direction,
             } => {
                 if self.select_queue_slot(scope, slot_id) {
-                    let key = match direction {
-                        QueueMove::Up => KeyCode::Up,
-                        QueueMove::Down => KeyCode::Down,
-                    };
-                    self.app
-                        .handle_queue_key(KeyEvent::new(key, KeyModifiers::SHIFT));
+                    match direction {
+                        QueueMove::Up => self.app.move_queue_item_up(),
+                        QueueMove::Down => self.app.move_queue_item_down(),
+                    }
                 }
+            }
+            QueueRequest::Undo { scope } => {
+                if scope == QueueScope::Remote {
+                    self.app.flash(
+                        "Undo is not supported for remote queue edits".into(),
+                        ToastSeverity::Error,
+                    );
+                } else {
+                    self.app.undo_last_queue_edit(scope);
+                }
+            }
+        }
+    }
+
+    pub(super) fn handle_queue_intent(&mut self, intent: QueueIntent) {
+        match intent {
+            QueueIntent::Clear => self.app.request_clear_queue(),
+            QueueIntent::ResizeColumn(direction) => {
+                if self.app.effective_panel_mode() == super::PanelMode::Both {
+                    self.app
+                        .resize_queue_column(direction == QueueColumnResize::Wider);
+                }
+            }
+            QueueIntent::StopRemoteTracking => {
+                if self.app.remote_tracker.is_some() {
+                    self.app.stop_remote_tracking();
+                }
+            }
+            QueueIntent::ReanchorRemoteTracking => {
+                if self.app.remote_tracker.is_some() {
+                    self.app.reanchor_remote_tracking();
+                }
+            }
+            QueueIntent::PlayNow => {
+                let (active, current_idx) = {
+                    let status = self.app.player.status.lock().unwrap();
+                    (status.active, status.current_idx)
+                };
+                if active {
+                    self.app.playback_queue_mut().queue_cursor = current_idx;
+                    if self.app.player.is_remote() {
+                        self.app.set_queue_scope(QueueScope::Remote);
+                    }
+                } else {
+                    self.app
+                        .flash("Nothing is playing".into(), ToastSeverity::Error);
+                }
+            }
+            QueueIntent::SavePlaylist => {
+                if self.app.player_tab.total_queue_len() > 0 {
+                    self.app
+                        .open_save_playlist_dialog(super::SavePlaylistDialog {
+                            input: self.app.queue_playlist_name().to_string(),
+                            stage: super::SavePlaylistStage::EnterName,
+                        });
+                }
+            }
+            QueueIntent::Navigate { scope, slot_id } => {
+                if !self.select_queue_slot(scope, slot_id) {
+                    return;
+                }
+                let cursor = self.app.queue_for_scope(scope).queue_cursor;
+                let Some(item) = self.app.queue_for_scope(scope).emby_item_at(cursor) else {
+                    return;
+                };
+                let item_id = item.id.clone();
+                let item_type = item.item_type.clone();
+                let libs = self
+                    .app
+                    .libs
+                    .iter()
+                    .enumerate()
+                    .map(|(i, lib)| {
+                        (
+                            i,
+                            lib.library.id.clone(),
+                            lib.library.collection_type.clone(),
+                        )
+                    })
+                    .collect();
+                self.app.spawn_navigate_to_item(item_id, item_type, libs);
             }
         }
     }

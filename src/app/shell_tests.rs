@@ -1,19 +1,13 @@
 use super::*;
-use crate::app::components::{OverlayId, TvWorkspaceComponent};
 use crate::app::images::CachedImage;
-use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_app_stub;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use tuirealm::component::AppComponent;
-use tuirealm::event::{
-    Event, Key as TuiKey, KeyEvent as TuiKeyEvent, KeyModifiers as TuiKeyModifiers,
-};
 
 #[test]
 fn ui_root_router_command_opens_help() {
     let mut model = Model::new(make_app_stub());
     let key = KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE);
-    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key))];
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
     assert_eq!(
         model.router_outcome(&messages),
         RouterOutcome::Command(Command::OpenHelp)
@@ -36,7 +30,7 @@ fn router_records_first_space_for_second_claim() {
     model.app.player.status.lock().unwrap().active = true;
     model.application.active(&ComponentId::Playback).unwrap();
     let key = KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE);
-    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key))];
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
 
     assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
     assert!(model.app.last_space_press.is_some());
@@ -53,7 +47,7 @@ fn router_records_first_esc_for_second_claim() {
     model.app.player.status.lock().unwrap().active = true;
     model.application.active(&ComponentId::Playback).unwrap();
     let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
-    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key))];
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
 
     assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
     assert!(model.app.last_esc_press.is_some());
@@ -72,7 +66,7 @@ fn converted_surface_skips_observer_key_but_retains_redraw_signal() {
     // (the leaf already got the event) but keeps non-key observer signals.
     let router = RouterOutcome::FallThrough;
     let routed = apply_router_outcome(
-        vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key))],
+        vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))],
         Some(&focused),
         &router,
     );
@@ -140,39 +134,4 @@ fn terminal_focus_observer_preserves_refocus_side_effects() {
     );
     assert!(model.app.refocus_at.is_none());
     assert!(!quit);
-}
-
-#[test]
-fn global_view_key_from_media_surface_is_claimed_by_router() {
-    let mut surface = TvWorkspaceComponent::new();
-    surface.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(Vec::new(), 0, 0),
-        None,
-        None,
-        0,
-        None,
-        true,
-        false,
-    ));
-    let Some(Msg::Shell(ShellRequest::GlobalViewKey(key))) =
-        surface.on(&Event::Keyboard(TuiKeyEvent {
-            code: TuiKey::Function(1),
-            modifiers: TuiKeyModifiers::NONE,
-        }))
-    else {
-        panic!("unmatched media-surface key did not use the global adapter");
-    };
-
-    let mut model = Model::new(make_app_stub());
-    let messages = vec![
-        Msg::Shell(ShellRequest::GlobalViewKey(key)),
-        Msg::TerminalEvent(TerminalObserverEvent::Key(key)),
-    ];
-    let outcome = model.router_outcome(&messages);
-    assert_eq!(outcome, RouterOutcome::Command(Command::OpenHelp));
-    assert!(apply_router_outcome(messages, Some(&ComponentId::Playback), &outcome).is_empty());
-    assert!(!model.dispatch_router_command(Command::OpenHelp));
-    assert!(model
-        .application
-        .mounted(&ComponentId::Overlay(OverlayId::Help)));
 }

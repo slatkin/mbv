@@ -1,0 +1,24 @@
+id: no-crossterm-key-payloads
+language: rust
+severity: error
+message: >-
+  src/app/components/ must not import or use Crossterm key payloads
+  (`crossterm::event::{KeyEvent, KeyCode, KeyModifiers, KeyEventKind,
+  KeyEventState, MediaKeyCode, MouseEvent, MouseButton, MouseEventKind}`).
+  Components receive a `tuirealm::event::KeyEvent` (the framework-level input
+  type) and emit a typed `Msg`; the shell owns the `tuirealm → crossterm`
+  conversion (see `src/app/input_resolver.rs::tuirealm_key_to_crossterm` and
+  ADR 0023). See openspec/changes/remove-legacy-keyboard-endpoint design §5
+  ("Raw keys stop at the component boundary").
+files:
+  - "src/app/components/**"
+ignores:
+  - "src/app/components/**/*tests*.rs"
+rule:
+  any:
+    - kind: use_declaration
+      regex: "^\\s*use\\s+crossterm::event\\b"
+    - kind: scoped_identifier
+      regex: "^crossterm::event::(KeyEvent|KeyCode|KeyModifiers|KeyEventKind|KeyEventState|MediaKeyCode|MouseEvent|MouseButton|MouseEventKind)$"
+    - kind: scoped_type_identifier
+      regex: "^crossterm::event::(KeyEvent|KeyCode|KeyModifiers|KeyEventKind|KeyEventState|MediaKeyCode|MouseEvent|MouseButton|MouseEventKind)$"

@@ -8,7 +8,6 @@ mod tests {
     use crate::app::tests::make_app_stub;
     use crate::app::types_context_menu::{LibraryRoutePopup, LibraryRouteStage};
     use crate::app::types_context_menu::{MultiSelectKind, MultiSelectPopup};
-    use crate::app::types_feeds_manage::FeedsManagePopup;
     use crate::app::types_selection_modal::{
         SelectionModal, SelectionModalItem, SelectionModalListState, SelectionModalRow,
         SelectionModalSource,
@@ -234,10 +233,10 @@ mod tests {
                 modifiers: KeyModifiers::NONE,
             }))
         };
-        let Some(Msg::Shell(ShellRequest::FeedsManageKey(key))) = message else {
+        let Some(Msg::Shell(ShellRequest::FeedsManageIntent(intent))) = message else {
             panic!("Feed management should emit a shell request");
         };
-        model.handle_feeds_manage_request(key);
+        model.handle_feeds_manage_intent(intent);
 
         assert!(model.feeds_manage.is_none());
         assert!(!model.application.mounted(&id));

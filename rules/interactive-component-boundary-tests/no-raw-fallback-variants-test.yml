@@ -1,0 +1,33 @@
+id: no-raw-fallback-variants
+valid:
+  - |
+    use crate::app::components::msg::Msg;
+    use crate::app::components::msg::ShellRequest;
+    fn emit_typed(m: ShellRequest) -> Msg { Msg::Shell(m) }
+  - |
+    use crate::app::components::msg::{Msg, ServiceRequest, QueueRequest, PlaybackRequest};
+    fn emit_queue(q: QueueRequest) -> Msg { Msg::Queue(q) }
+    fn emit_playback(p: PlaybackRequest) -> Msg { Msg::Playback(p) }
+    fn emit_service(s: ServiceRequest) -> Msg { Msg::Service(s) }
+  - |
+    use crate::app::components::msg::Msg;
+    use crate::app::components::msg::TerminalObserverEvent;
+    use tuirealm::event::KeyEvent as TuiKeyEvent;
+    fn observer_redraw(k: TuiKeyEvent) -> Msg {
+        Msg::TerminalEvent(TerminalObserverEvent::Key(k))
+    }
+invalid:
+  - |
+    use crate::app::components::msg::Msg;
+    use crate::app::GlobalViewKey;
+    fn emit_raw(g: GlobalViewKey) -> Msg { Msg::GlobalViewKey(g) }
+  - |
+    use crate::app::components::msg::Msg;
+    use crate::app::components::msg::PersistRequest;
+    fn emit_persist(p: PersistRequest) -> Msg { Msg::Persist(p) }
+  - |
+    use crate::app::components::msg::Msg;
+    use crate::app::components::msg::ShellRequest;
+    fn emit_settings_key(k: crossterm::event::KeyEvent) -> Msg {
+        Msg::Shell(ShellRequest::SettingsKey(k.into()))
+    }

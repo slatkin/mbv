@@ -1,0 +1,33 @@
+id: no-crossterm-key-payloads
+valid:
+  - |
+    use tuirealm::event::{Key, KeyEvent, KeyModifiers};
+    fn view(k: KeyEvent, m: KeyModifiers) -> Key {
+        if m.contains(KeyModifiers::SHIFT) { k.code } else { Key::Null }
+    }
+  - |
+    // TuiRealm's framework-level input type is the only one components see.
+    struct MyComp;
+    impl MyComp {
+        fn on(&mut self, k: KeyEvent) -> Option<Msg> {
+            if k.code == Key::Esc { Some(Msg::Dismiss) } else { None }
+        }
+    }
+invalid:
+  - |
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    struct MyComp;
+    impl MyComp {
+        fn on(&mut self, k: KeyEvent) -> Option<Msg> {
+            if k.code == KeyCode::Esc { Some(Msg::Dismiss) } else { None }
+        }
+    }
+  - |
+    use crossterm::event;
+    fn view(e: event::KeyEvent) {}
+  - |
+    use crossterm::event::MouseEvent;
+    struct MyComp;
+    impl MyComp {
+        fn on(&mut self, _m: MouseEvent) -> Option<Msg> { None }
+    }

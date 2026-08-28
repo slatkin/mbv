@@ -29,15 +29,6 @@ impl App {
             }
             ConfirmAction::RemoveActiveQueueItem(pos) => {
                 if matches!(key.code, KeyCode::Char('y')) {
-                    // Remove the slot from the queue model immediately, rather
-                    // than deferring it until PlayerEvent::Stopped arrives back
-                    // from the player thread — that round trip (send stop() ->
-                    // mpv actually stops -> event travels back) is a real,
-                    // noticeable delay for something the user should see happen
-                    // right away. The gated remove_slot/remove_slot_at (used by
-                    // ordinary removals) refuses the active slot, so this goes
-                    // through remove_active_slot_confirmed directly, same as
-                    // the Stopped handler used to do.
                     let scope = self.visible_queue_scope();
                     let slot_id = self.queue_for_scope_mut(scope).slot_id_at(pos);
                     if let Some(slot_id) = slot_id {
@@ -59,12 +50,6 @@ impl App {
                             if !self.player.is_remote() {
                                 self.queue_undo_stack.push(UndoEntry::Remove(pos, item));
                             }
-
-                            // Only stop playback and record the deferred
-                            // player-side removal if the app model actually
-                            // removed the requested slot. The confirmation
-                            // can outlive a queue refresh, making the slot
-                            // stale by the time the user confirms it.
                             self.pending_delete_slot = Some(slot_id);
                             if self.connected_session_id.is_some() {
                                 self.playback_target().stop(self);
@@ -157,10 +142,6 @@ impl App {
                 match key.code {
                     KeyCode::Char('s') | KeyCode::Char('S') => {
                         self.save_playlist_to_emby();
-                        // Keep the replacement queued until the coordinator
-                        // reports that this save crossed its mutation boundary.
-                        // Starting it here could snapshot/recreate the same
-                        // playlist before the save has executed.
                     }
                     KeyCode::Char('d') | KeyCode::Char('D') => {
                         if let Some(action) = self.pending_queue_action.take() {
@@ -181,18 +162,33 @@ impl App {
         Some(false)
     }
 
+    /// Show the clear-queue confirmation modal (called from QueueIntent::Clear).
+    pub(super) fn request_clear_queue(&mut self) {
+        if matches!(self.effective_panel_focus(), PanelFocus::Queue)
+            && self.visible_queue_scope() == QueueScope::Remote
+        {
+            self.flash(
+                "Remote queue is controlled by the daemon".into(),
+                ToastSeverity::Error,
+            );
+            return;
+        }
+        if self.player_tab.total_queue_len() == 0 {
+            return;
+        }
+        self.ask_confirm(ConfirmModal {
+            title: " Clear Queue ".into(),
+            message: "Clear the queue?".into(),
+            hint: "[y] Confirm    [Esc] Cancel".into(),
+            on_confirm: ConfirmAction::ClearQueue,
+        });
+    }
     pub(super) fn handle_key_clear_queue_prompt(
         &mut self,
         key: KeyEvent,
         _home_cw_selected: bool,
         _cw_item: Option<EmbyItem>,
     ) -> Option<bool> {
-        // Behavior change (phase 6, #135): gate on an open context menu. Before
-        // this fix, `clear_queue_prompt_c` sat above `context_menu` in
-        // CONTEXT_STACK with no guard, so pressing 'c' while a context menu was
-        // open silently opened the clear-queue confirmation instead of being
-        // swallowed by the menu (which has no 'c' binding of its own). See
-        // docs/adr/0002-centralized-input-handling.md phase 6.
         if key.code != KeyCode::Char('c') || key.modifiers.contains(KeyModifiers::ALT) {
             return None;
         }

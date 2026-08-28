@@ -71,7 +71,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::{HelpComponent, ModalId, OverlayId, PopupId};
+    use crate::app::components::{HelpComponent, ModalId, OverlayId};
     use crate::app::tests::make_app_stub;
 
     #[test]

@@ -17,7 +17,6 @@ use tuirealm::state::State;
 use super::msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove, ShellRequest,
 };
-use super::typed_key::to_crossterm_key_event;
 use super::user_event::UserEvent;
 use crate::app::render::{
     render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry, HomeImagePaint,
@@ -149,6 +148,9 @@ impl AudiobookshelfPodcastComponent {
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if !self.focused {
+            return None;
+        }
         match key.code {
             Key::Up | Key::Char('k') if self.state.episode_selection.is_none() => {
                 self.move_cursor(-1);
@@ -261,9 +263,7 @@ impl AudiobookshelfPodcastComponent {
                     ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue),
                 ));
             }
-            _ => Some(Msg::Shell(ShellRequest::GlobalViewKey(
-                to_crossterm_key_event(key),
-            ))),
+            _ => None,
         }
     }
 

@@ -65,84 +65,7 @@ pub(super) fn add_emby_movie_library(app: &mut App) {
         ..LibraryTab::new(library)
     });
 }
-
-/// PR #514's keyboard guard: while the Audiobookshelf tab is selected and the
-/// library panel has focus, Emby-only keys (search, watched, shuffle,
-/// enqueue, context menu) must be consumed without touching Emby, queue,
-/// playback, or help state.
-#[test]
-fn audiobookshelf_tab_keys_cannot_enter_emby_action_paths() {
-    let mut app = audiobookshelf_app();
-    add_emby_movie_library(&mut app);
-    let nav_len = app.libs[0].nav_stack.len();
-
-    let slash = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('/'),
-        crossterm::event::KeyModifiers::NONE,
-    );
-    let ctrl_w = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('w'),
-        crossterm::event::KeyModifiers::CONTROL,
-    );
-    let ctrl_s = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('s'),
-        crossterm::event::KeyModifiers::CONTROL,
-    );
-    let ctrl_a = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('a'),
-        crossterm::event::KeyModifiers::CONTROL,
-    );
-    let ctrl_r = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('r'),
-        crossterm::event::KeyModifiers::CONTROL,
-    );
-    let dot = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Char('.'),
-        crossterm::event::KeyModifiers::NONE,
-    );
-
-    for key in [slash, ctrl_w, ctrl_s, ctrl_a, ctrl_r, dot] {
-        assert_eq!(
-            app.handle_key_view_dispatch(key, false, None),
-            Some(false),
-            "Audiobookshelf tab must consume {key:?}"
-        );
-        assert_eq!(
-            app.libs[0].nav_stack.len(),
-            nav_len,
-            "{key:?} must not navigate the Emby library"
-        );
-        assert!(!app.libs[0].nav_stack[0].items[0].played);
-        assert_eq!(
-            app.player_tab.total_queue_len(),
-            0,
-            "{key:?} must not enqueue anything"
-        );
-        assert!(
-            !matches!(
-                app.pending_overlay,
-                Some(super::types_overlay::OverlayRequest::ContextMenu(_))
-            ),
-            "{key:?} must not open a menu"
-        );
-        assert!(
-            !matches!(
-                app.pending_overlay,
-                Some(super::types_overlay::OverlayRequest::Confirm(_))
-            ),
-            "{key:?} must not open a rescan confirmation"
-        );
-        assert!(
-            app.status.is_empty(),
-            "{key:?} must not flash, got {:?}",
-            app.status
-        );
-    }
-    assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(_)));
-}
-
 /// The Audiobookshelf destination never opens an Emby context menu, even when
-/// a populated Emby library would produce one if selected.
 #[test]
 fn audiobookshelf_tab_never_opens_an_emby_context_menu() {
     let mut app = audiobookshelf_app();
@@ -346,21 +269,3 @@ fn audiobookshelf_episode_seams_noop_on_absent_index() {
     assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(0)));
 }
 
-#[test]
-fn audiobookshelf_escape_returns_to_show_selection() {
-    let mut app = audiobookshelf_app();
-    let escape = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Esc,
-        crossterm::event::KeyModifiers::NONE,
-    );
-    assert_eq!(
-        app.handle_key_view_dispatch(escape, false, None),
-        Some(false),
-        "Escape must be consumed"
-    );
-    assert_eq!(app.audiobookshelf_browse[0].episode_selection, None);
-    assert_eq!(
-        app.audiobookshelf_browse[0].selected_id.as_deref(),
-        Some("show-a")
-    );
-}

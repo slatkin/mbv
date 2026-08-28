@@ -1,7 +1,4 @@
-use super::test_helpers::{
-    assert_surface_pills, buffer_to_string, make_large_movie_library_app, make_movie_app,
-    render_library_to_string_sized,
-};
+use super::test_helpers::{buffer_to_string, make_movie_app, render_library_to_string_sized};
 use super::*;
 use crate::app::layout::LayoutMain;
 use crate::app::tests::make_item;

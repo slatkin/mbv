@@ -1,4 +1,4 @@
-use super::msg::{Msg, QueueRequest};
+use super::msg::{Msg, QueueColumnResize, QueueIntent, QueueRequest, ShellRequest};
 use super::queue::QueueComponent;
 use crate::app::render::QueueTitleModel;
 use crate::app::types_playback::{PlaybackState, QueueScope};
@@ -15,6 +15,10 @@ fn key(code: Key) -> KeyEvent {
         code,
         modifiers: KeyModifiers::NONE,
     }
+}
+
+fn chord(code: Key, modifiers: KeyModifiers) -> KeyEvent {
+    KeyEvent { code, modifiers }
 }
 
 fn queue() -> Vec<mbv_core::playback_queue::QueueSlot> {
@@ -64,6 +68,58 @@ fn queue_activation_uses_slot_id_after_snapshot_reorder() {
         component.on(&Event::Keyboard(key(Key::Enter))),
         Some(Msg::Queue(QueueRequest::Play { slot_id, .. })) if slot_id == second
     ));
+}
+
+#[test]
+fn queue_component_emits_typed_keyboard_intents() {
+    let mut component = QueueComponent::new();
+    component.set_content(
+        queue(),
+        0,
+        0,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    assert!(matches!(
+        component.on(&Event::Keyboard(chord(Key::Char(']'), KeyModifiers::NONE))),
+        Some(Msg::Queue(QueueRequest::Scope(QueueScope::Remote)))
+    ));
+    assert!(matches!(
+        component.on(&Event::Keyboard(chord(
+            Key::Char('z'),
+            KeyModifiers::CONTROL
+        ))),
+        Some(Msg::Queue(QueueRequest::Undo {
+            scope: QueueScope::Remote
+        }))
+    ));
+    assert!(matches!(
+        component.on(&Event::Keyboard(chord(
+            Key::Char('t'),
+            KeyModifiers::CONTROL
+        ))),
+        Some(Msg::Shell(ShellRequest::QueueIntent(
+            QueueIntent::StopRemoteTracking
+        )))
+    ));
+    assert!(matches!(
+        component.on(&Event::Keyboard(chord(Key::Left, KeyModifiers::SHIFT))),
+        Some(Msg::Shell(ShellRequest::QueueIntent(
+            QueueIntent::ResizeColumn(QueueColumnResize::Narrower)
+        )))
+    ));
+    assert!(matches!(
+        component.on(&Event::Keyboard(chord(Key::Char('c'), KeyModifiers::NONE))),
+        Some(Msg::Shell(ShellRequest::QueueIntent(QueueIntent::Clear)))
+    ));
+    assert!(
+        component
+            .on(&Event::Keyboard(chord(Key::Char('x'), KeyModifiers::NONE)))
+            .is_none(),
+        "unhandled queue keys must return None (no legacy QueueKey to reconstruct)"
+    );
 }
 
 #[test]

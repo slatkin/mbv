@@ -162,7 +162,7 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::components::{Msg, ShellRequest, TvWorkspaceComponent};
-    use crate::app::render::{make_movie_app, LibraryListRenderCtx, TvWideRenderCtx};
+    use crate::app::render::make_movie_app;
     use ratatui::layout::Rect;
     use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};

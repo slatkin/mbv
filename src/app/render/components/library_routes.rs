@@ -173,7 +173,6 @@ mod tests {
     use crate::app::tests::make_app_stub;
     use crate::app::{Model, SESSIONS_LOAD_OVERRIDE, SESSIONS_LOAD_TEST_LOCK};
     use mbv_core::remote_player::DaemonEndpoint;
-    use tuirealm::component::AppComponent;
 
     fn library_routes_id() -> ComponentId {
         ComponentId::Popup(PopupId::LibraryRoutes)

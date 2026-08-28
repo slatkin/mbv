@@ -35,7 +35,6 @@ pub mod selection_modal;
 pub mod sessions;
 pub mod settings;
 pub mod tv_workspace;
-mod typed_key;
 pub mod user_event;
 
 pub use self::audiobookshelf_book::AudiobookshelfBookComponent;
@@ -52,8 +51,8 @@ pub use self::home::HomeComponent;
 pub(in crate::app) use self::inline_search::{InlineSearchComponent, SearchPool};
 pub use self::library_routes::LibraryRoutesComponent;
 pub use self::msg::{
-    Msg, PersistRequest, PlaybackRequest, QueueMove, QueueRequest, ServiceRequest, ShellRequest,
-    TerminalObserverEvent,
+    Msg, PlaybackRequest, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ServiceRequest,
+    SettingsIntent, ShellRequest, TerminalObserverEvent,
 };
 pub use self::multiselect::MultiselectComponent;
 pub use self::music_workspace::MusicWorkspaceComponent;

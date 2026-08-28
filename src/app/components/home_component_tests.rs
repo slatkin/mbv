@@ -70,48 +70,29 @@ fn key(code: Key) -> Event<crate::app::components::UserEvent> {
 }
 
 #[test]
-fn home_keys_fall_through_while_the_queue_panel_is_focused() {
+fn home_keys_stay_unclaimed_while_the_queue_panel_is_focused() {
     // Unfocused (Queue panel focused): Home must not claim or mutate
-    // anything — every key is forwarded through the typed global bridge,
-    // where the queue handler owns it. Local navigation and typed effects alike.
+    // anything. Queue owns the focused event and the router owns globals.
     let mut home = two_section_home();
     home.set_focused(false);
-
-    let msg = home.on(&key(Key::Down));
-    assert!(matches!(
-        msg,
-        Some(Msg::Shell(ShellRequest::GlobalViewKey(k)))
-            if k.code == crossterm::event::KeyCode::Down
-    ));
+    for code in [Key::Down, Key::Char(']'), Key::Enter] {
+        let msg = home.on(&key(code));
+        assert_eq!(msg, None, "unfocused {code:?} must stay unclaimed");
+    }
     assert_eq!(
         home.cursor(),
         0,
-        "queue-focused Down must not move Home's cursor"
+        "queue-focused keys must not move Home's cursor"
     );
-
-    let msg = home.on(&key(Key::Char(']')));
-    assert!(matches!(
-        msg,
-        Some(Msg::Shell(ShellRequest::GlobalViewKey(k)))
-            if k.code == crossterm::event::KeyCode::Char(']')
-    ));
     assert_eq!(
         home.section(),
         0,
-        "queue-focused ] must not move Home's pill"
+        "queue-focused keys must not move Home's pill"
     );
-
-    let msg = home.on(&key(Key::Enter));
-    assert!(matches!(
-        msg,
-        Some(Msg::Shell(ShellRequest::GlobalViewKey(k)))
-            if k.code == crossterm::event::KeyCode::Enter
-    ));
-    assert_eq!(home.cursor(), 0, "queue-focused Enter must not act on Home");
 }
 
 #[test]
-fn home_alt_navigation_forwards_to_global_dispatch() {
+fn home_alt_navigation_stays_unclaimed() {
     let mut home = two_section_home();
 
     let message = home.on(&Event::Keyboard(KeyEvent {
@@ -120,12 +101,7 @@ fn home_alt_navigation_forwards_to_global_dispatch() {
     }));
 
     assert_eq!(home.cursor(), 0, "Alt+Up must not move the local cursor");
-    assert!(matches!(
-        message,
-        Some(Msg::Shell(ShellRequest::GlobalViewKey(key)))
-            if key.code == crossterm::event::KeyCode::Up
-                && key.modifiers == crossterm::event::KeyModifiers::ALT
-    ));
+    assert_eq!(message, None, "global Alt navigation belongs to the router");
 }
 
 #[test]
@@ -238,15 +214,11 @@ fn source_for_section_maps_numeric_to_semantic_source() {
 }
 
 #[test]
-fn unmatched_key_uses_typed_global_dispatch() {
+fn unmatched_key_stays_unclaimed() {
     let mut home = two_section_home();
     let msg = home.on(&key(Key::Char('v')));
-    assert!(matches!(
-        msg,
-        Some(Msg::Shell(ShellRequest::GlobalViewKey(k))) if k.code == crossterm::event::KeyCode::Char('v')
-    ));
+    assert_eq!(msg, None);
 }
-
 #[test]
 fn ctrl_w_emits_toggle_watched_without_a_cursor_payload() {
     let mut home = two_section_home();
@@ -255,6 +227,21 @@ fn ctrl_w_emits_toggle_watched_without_a_cursor_payload() {
         modifiers: KeyModifiers::CONTROL,
     }));
     assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomeToggleWatched)));
+}
+
+#[test]
+fn dot_emits_home_context_menu_with_component_target() {
+    let mut home = two_section_home();
+    let target = crate::app::tests::make_item("cw-target", "Movie");
+    home.set_continue_watching_item(Some(target.clone()));
+    let msg = home.on(&key(Key::Char('.')));
+    assert_eq!(
+        msg,
+        Some(Msg::Shell(ShellRequest::HomeContextMenu {
+            home_cw_selected: true,
+            cw_item: Some(target),
+        }))
+    );
 }
 
 #[test]
