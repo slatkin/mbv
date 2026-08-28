@@ -181,8 +181,12 @@ impl SearchSidebarComponent {
     /// Arm the debounce if the query is ≥ 2 characters (matching
     /// `dispatch_search_sidebar_query` exactly). The actual search dispatch
     /// is emitted when `UserEvent::Clock` fires and the deadline has passed.
+    /// If the query drops below two characters we clear any armed debounce
+    /// so a stale longer query doesn't dispatch after the user shortened it.
     fn dispatch_query(&mut self) {
         if self.sidebar.query.len() < 2 {
+            self.debounce_pending = None;
+            self.debounce_deadline = None;
             return;
         }
         self.debounce_pending = Some(self.sidebar.query.clone());
@@ -392,6 +396,24 @@ mod tests {
         ));
         assert!(comp.debounce_pending.is_none());
         assert!(comp.debounce_deadline.is_none());
+    }
+
+    #[test]
+    fn backspace_below_two_chars_clears_armed_debounce() {
+        let mut comp = SearchSidebarComponent::new();
+        comp.handle_key(&make_key(Key::Char('a'), KeyModifiers::NONE));
+        comp.handle_key(&make_key(Key::Char('b'), KeyModifiers::NONE));
+        assert_eq!(comp.sidebar.query, "ab");
+        assert_eq!(comp.debounce_pending.as_deref(), Some("ab"));
+        assert!(comp.debounce_deadline.is_some());
+
+        comp.handle_key(&make_key(Key::Backspace, KeyModifiers::NONE));
+        assert_eq!(comp.sidebar.query, "a");
+        assert!(comp.debounce_pending.is_none());
+        assert!(comp.debounce_deadline.is_none());
+
+        let msg = comp.handle_clock(Instant::now() + Duration::from_secs(1));
+        assert_eq!(msg, None);
     }
 
     #[test]
