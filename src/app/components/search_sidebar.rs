@@ -41,8 +41,13 @@ const SEARCH_DEBOUNCE_MS: u64 = 300;
 /// the existing `render_search_sidebar` free function (design D9).
 pub struct SearchSidebarComponent {
     pub(in crate::app) sidebar: SearchSidebar,
-    debounce_deadline: Option<Instant>,
-    debounce_pending: Option<String>,
+    /// 300 ms deadline past which `tick_clock` dispatches `SearchQuery`.
+    /// `pub(in crate::app)` matches the visibility of the rest of the
+    /// shell/component seam so test harnesses can assert clear-on-dispatch.
+    pub(in crate::app) debounce_deadline: Option<Instant>,
+    /// Query string the deadline was armed with. `pub(in crate::app)`
+    /// for the same reason as `debounce_deadline`.
+    pub(in crate::app) debounce_pending: Option<String>,
     panel_area: Option<Rect>,
 }
 
@@ -198,6 +203,17 @@ impl SearchSidebarComponent {
         self.debounce_deadline = None;
         Some(Msg::Service(ServiceRequest::SearchQuery(query)))
     }
+
+    /// Sweep the debounce deadline using the shell's wall clock. Called by
+    /// the shell once per main-loop iteration next to `drain_search_results`
+    /// (#609): production never wired a `UserEvent::Clock` publisher, so the
+    /// shell fires the clock directly via this method and routes any
+    /// emitted `Msg` through `handle_terminal_message` like the keyboard
+    /// path. `pub(in crate::app)` matches the component/shell boundary used
+    /// by every other shell-side adapter.
+    pub(in crate::app) fn tick_clock(&mut self, now: Instant) -> Option<Msg> {
+        self.handle_clock(now)
+    }
 }
 
 impl Default for SearchSidebarComponent {
@@ -230,8 +246,11 @@ impl AppComponent<Msg, UserEvent> for SearchSidebarComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
-            Event::User(UserEvent::Clock(now)) => self.handle_clock(*now),
-            // Non-key/non-clock events do not affect this component.
+            // Non-keyboard events (mouse, resize, focus, tick, user-event
+            // tokens) do not affect this component. The 300 ms debounce
+            // is driven by the shell sweep via `tick_clock` (#609);
+            // production never wired a `UserEvent::Clock` publisher, so
+            // the original `Event::User` arm was unreachable.
             _ => None,
         }
     }

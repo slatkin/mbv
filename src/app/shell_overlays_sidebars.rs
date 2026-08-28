@@ -166,6 +166,28 @@ impl Model {
         received > 0
     }
 
+    /// Sweep the search debounce deadline from the shell side. Production
+    /// never wired a `UserEvent::Clock` publisher (#609), so the shell
+    /// supplies wall-clock ticks directly via `tick_clock` on the mounted
+    /// component. Returns the `Msg` the component emits when its deadline
+    /// passes, or `None` if the search isn't mounted or the deadline hasn't
+    /// fired yet. Callers forward `Some(msg)` through the same `Msg`
+    /// router the component path uses (`handle_terminal_message`,
+    /// `handle_service_request`).
+    pub(in crate::app) fn tick_search_clock(&mut self, now: std::time::Instant) -> Option<Msg> {
+        let id = Self::search_id();
+        if !self.application.mounted(&id) {
+            return None;
+        }
+        let Some(comp) = self.application.get_component_mut(&id) else {
+            return None;
+        };
+        let Some(search) = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>() else {
+            return None;
+        };
+        search.tick_clock(now)
+    }
+
     // --- Sessions sidebar ---------------------------------------------------
 
     fn sessions_id() -> ComponentId {

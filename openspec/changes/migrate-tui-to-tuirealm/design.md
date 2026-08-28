@@ -231,9 +231,7 @@ mechanism and it restarts the whole listener. The
 queue revisions, session generations, image keys) remain in the shell: the token
 carries the generation, the shell validates it, then writes the validated model
 into the target component via `get_component_mut`+downcast. The component only
-ever holds validated data. No component receives a channel, client, or lock. Clock delivery replaces the manual debounce-deadline
-drains: the shell supplies `Instant` and the owning component decides whether its
-deadline is due (per the Search debounce contract in the map).
+ever holds validated data. No component receives a channel, client, or lock. Clock delivery for debounce-owning components is a **typed downcast on the mounted target** (revision, #609): the shell calls `search.tick_clock(Instant::now())` once per main-loop iteration (guarded by `mounted(&id)`), and the component decides whether its deadline is due and emits `Msg::Service(SearchQuery)` when it fires. The `Event::User(UserEvent::Clock(now))` arm originally planned here was unreachable in production — no shell-side publisher was ever wired — and was removed when the search debounce path was made runnable end-to-end. The `UserEvent::Clock` variant in the enum stays — same convention as every other not-yet-injected completion-token variant (`Startup`, `LibraryReady`, `SearchReady`, `Session`, `Cast`, `SharedData`, `Feed`, `Image`, `Websocket`, `AbsSocket`) — for symmetry and future surface expansion; nothing publishes it as of #609.
 
 Alternative considered: widen `UserEvent` to hold owned models — rejected, it
 forces `Eq`/cheap-`Clone` onto image and result payloads and entangles them with

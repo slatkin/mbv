@@ -211,11 +211,23 @@ impl Model {
 
             // Search results drain: the shell drains `search_rx` and writes
             // each result into the `SearchSidebarComponent` via downcast
-            // (task 3.2). The debounce is component-owned and driven by
-            // `UserEvent::Clock`; when the deadline passes the component
-            // emits `Msg::Service(SearchQuery)`, which the shell handles by
-            // spawning the search.
+            // (task 3.2). The debounce is component-owned; the shell fires
+            // the wall clock via the sweep below (#609) and routes any
+            // emitted `Msg::Service(SearchQuery)` through the same
+            // service-request handler the keyboard path uses.
             had_events |= self.drain_search_results();
+
+            // Search debounce sweep (#609): production never wired a
+            // `UserEvent::Clock` publisher, so the shell supplies the
+            // wall-clock tick directly via `tick_search_clock` once per
+            // main-loop iteration. The component owns the deadline and
+            // emits `Msg::Service(SearchQuery)` when it passes; the shell
+            // dispatches it through `handle_service_request` (the same
+            // path the keyboard arm routes Service requests through).
+            if let Some(Msg::Service(request)) = self.tick_search_clock(Instant::now()) {
+                had_events = true;
+                self.handle_service_request(request);
+            }
 
             had_events |= self.app.drain_session_events();
 
