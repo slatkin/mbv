@@ -60,8 +60,8 @@ inventory handoff the rest build on). Unit SHA column filled as commits land.
 | Unit | Tasks | Bounded family / scope (files) | Base SHA | Commit |
 |------|-------|--------------------------------|----------|--------|
 | **U1** | 1.1 + 1.3 | Read-only inventory: write `openspec/handoffs/remove-legacy-keyboard-endpoint.md` mapping every raw-key producer/consumer, the two direct call sites, F1 case, the 5 blanket pushes, pure-swallow notes, and the 6 precedence quirks (1.3) with their matrix rows. NO code edits. | `23466ac8` | `c0e853d0` |
-| **U2** | 1.2 | Add the table-driven `Application::tick()`-level routing-matrix integration test; verify it passes against current (unconverted) behavior. Test-only. | `c0e853d0` | in flight |
-| **U3** | 2.1 | `key_policy.rs`: replace descriptive/`Custom` gates with concrete TuiRealm subscriptions; fix lossy `queue_column_width` + per-key `playback` gates. | `c0e853d0`+U2 | — |
+| **U2** | 1.2 | **FOLDED IN (user 2026-08-28):** no standalone unit. Each later unit adds its own matrix rows to `src/app/shell_routing_matrix_tests.rs` as it converts its family (U3 global/parent bindings, U4 UiRoot, U5 Playback double-tap, U7 `[`/`]`/`.`, U8 blocking-overlay swallow, etc.). Task 1.2 stays open until all families converted; coverage confirmed at U16. | — | folded |
+| **U3** | 2.1 | `key_policy.rs`: replace descriptive/`Custom` gates with concrete TuiRealm subscriptions; fix lossy `queue_column_width` + per-key `playback` gates; BIRTH the `shell_routing_matrix_tests.rs` file with global/parent-binding rows. | `c0e853d0` | — |
 | **U4** | 2.2 | `root.rs` + `shell.rs` UiRoot: move overlay/force-clear/refresh/Panel-mode/tab/quit + F1 + `handle_key_alt` into UiRoot semantic requests; remove `TerminalObserverEvent::Key` fallback. | U3 sha | — |
 | **U5** | 2.3 | `playback.rs` component + `input_lib_keys.rs::handle_playback_key`: move playback/visualizer chords + Space/Escape double-tap into Playback with typed `PlaybackRequest`s. | U4 sha | — |
 | **U6** | 2.4 | Expose `skip_intro_end_ticks`/`next_up_item` as Playback-component attrs; `confirm_*` gates → real `HasAttrValue`. | U5 sha | — |
@@ -101,7 +101,8 @@ do not chase pre-existing findings; only flag NEW diagnostics from this change.
 
 - [x] Planning committed (`23466ac8`)
 - [x] U1 — inventory handoff (`c0e853d0`)
-- [ ] U2 — routing-matrix test (in flight, run `c715bbc3`)
+- [~] U2 — routing-matrix test FOLDED IN (no standalone unit; rows added per-family)
+- [ ] U3 — activate key_policy subscriptions + birth matrix test
 - [ ] U3–U7 — activate routing
 - [ ] U8–U9 — overlay/form intents
 - [ ] U10 — Queue
