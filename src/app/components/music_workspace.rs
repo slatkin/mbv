@@ -379,6 +379,13 @@ impl MusicWorkspaceComponent {
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<MusicImagePaint> {
         self.image_paint.take()
     }
+
+    /// Geometry painted during the last view pass. The shell mirrors the
+    /// interaction targets into App layout for legacy readers that still
+    /// consume frame geometry.
+    pub(in crate::app) fn layout(&self) -> &LayoutMain {
+        &self.layout
+    }
 }
 
 impl Default for MusicWorkspaceComponent {

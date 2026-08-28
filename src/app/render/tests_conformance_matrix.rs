@@ -4,7 +4,9 @@ use super::test_helpers::{
 };
 use super::*;
 use crate::app::components::audiobookshelf_book::AudiobookshelfBookComponent;
-use crate::app::components::{ComponentId, FeedsComponent, HomeComponent};
+use crate::app::components::{
+    AudiobookshelfPodcastComponent, ComponentId, FeedsComponent, HomeComponent,
+};
 use crate::app::layout::LayoutMain;
 use crate::app::tests::make_item;
 use crate::app::{PanelFocus, SeriesDetail, TabSelection};
@@ -48,6 +50,28 @@ fn render_book_component(
     layout.left_area = area;
     let geometry = component.geometry();
     layout.hero_area = geometry.hero_area.unwrap_or_default();
+    layout.selected_item_rect = geometry.selected_item_rect;
+    layout.selector_tabs = geometry.selector_tabs.clone();
+    (terminal, layout)
+}
+
+fn render_podcast_component(
+    app: &App,
+    width: u16,
+    height: u16,
+) -> (Terminal<TestBackend>, LayoutMain) {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    let area = Rect::new(0, 0, width, height);
+    let mut component = AudiobookshelfPodcastComponent::new();
+    if let Some(state) = app.audiobookshelf_browse.get(0) {
+        component.set_content(state, true, app.images_enabled());
+    }
+    terminal.draw(|frame| component.view(frame, area)).unwrap();
+    let mut layout = LayoutMain::default();
+    layout.left_area = area;
+    let geometry = component.geometry();
+    layout.hero_area = geometry.hero_area;
+    layout.inline_hero_area = geometry.inline_hero_area;
     layout.selected_item_rect = geometry.selected_item_rect;
     layout.selector_tabs = geometry.selector_tabs.clone();
     (terminal, layout)
@@ -279,6 +303,8 @@ fn matrix_cannot_fit_preserves_an_ordinary_selected_row() {
     for (surface, mut app, title) in cases {
         let (terminal, layout) = if surface == "Books" {
             render_book_component(&app, 60, 4)
+        } else if surface == "Podcasts" {
+            render_podcast_component(&app, 60, 4)
         } else {
             render_library(&mut app, 60, 4)
         };
@@ -332,6 +358,8 @@ fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
     for (surface, mut app, title) in cases {
         let (terminal, layout) = if surface == "Books" {
             render_book_component(&app, 70, 30)
+        } else if surface == "Podcasts" {
+            render_podcast_component(&app, 70, 30)
         } else {
             render_library(&mut app, 70, 30)
         };
@@ -428,6 +456,8 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
     for (surface, mut app, width) in cases {
         let (terminal, layout) = if surface == "Books" {
             render_book_component(&app, width, 30)
+        } else if surface == "Podcasts" {
+            render_podcast_component(&app, width, 30)
         } else {
             render_library(&mut app, width, 30)
         };

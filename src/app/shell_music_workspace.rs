@@ -136,12 +136,24 @@ impl Model {
             context.publish_geometry(area, &mut self.app.layout.main);
         }
         self.application.view(id, frame, area);
-        let image_paint = self
+        let projection = self
             .application
             .get_component_mut(id)
             .and_then(|comp| comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>())
-            .and_then(MusicWorkspaceComponent::take_image_paint);
-        self.app.paint_music_image(frame, image_paint);
+            .map(|music| {
+                let image_paint = music.take_image_paint();
+                let layout = music.layout();
+                (
+                    image_paint,
+                    layout.wide_music_track_hitmap.clone(),
+                    layout.selected_item_rect,
+                )
+            });
+        if let Some((image_paint, track_hitmap, selected_item_rect)) = projection {
+            self.app.paint_music_image(frame, image_paint);
+            self.app.layout.main.wide_music_track_hitmap = track_hitmap;
+            self.app.layout.main.selected_item_rect = selected_item_rect;
+        }
     }
 }
 
@@ -291,7 +303,12 @@ mod tests {
         model.sync_music_workspace();
 
         let mut wide_terminal = Terminal::new(TestBackend::new(160, 30)).unwrap();
-        wide_terminal.draw(|frame| model.app.render(frame)).unwrap();
+        wide_terminal
+            .draw(|frame| {
+                model.app.render(frame);
+                model.render_music_workspace_component(frame);
+            })
+            .unwrap();
         model.push_music_workspace_content();
         let id = model.music_workspace_id.clone().unwrap();
         {
@@ -307,7 +324,11 @@ mod tests {
             assert_eq!(wide.track_cursor(), Some(0));
         }
         let hitmap_before = model.app.layout.main.wide_music_track_hitmap.len();
-        assert!(hitmap_before > 0);
+        assert!(
+            hitmap_before > 0,
+            "wide music render did not publish track hitmap: area={:?}, id={id:?}",
+            model.app.layout.main.wide_music_area
+        );
         wide_terminal
             .draw(|frame| model.render_music_workspace_component(frame))
             .unwrap();
@@ -318,7 +339,10 @@ mod tests {
 
         let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
         narrow_terminal
-            .draw(|frame| model.app.render(frame))
+            .draw(|frame| {
+                model.app.render(frame);
+                model.render_music_workspace_component(frame);
+            })
             .unwrap();
         model.push_music_workspace_content();
         let narrow = model
