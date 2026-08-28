@@ -40,13 +40,13 @@
 
 ## 3. Remove the cursor write-back in `select_queue_slot` (D1, D2 prerequisite complete)
 
-- [ ] 3.1 Delete `self.app.queue_for_scope_mut(scope).queue_cursor = index`
+- [x] 3.1 Delete `self.app.queue_for_scope_mut(scope).queue_cursor = index`
       from `select_queue_slot` (`shell_queue.rs:137`); keep
       `set_queue_scope`, `set_panel_focus`, and
       `mark_queue_cursor_user_active` (all still legitimate shell
       concerns). Verify `rtk cargo check -p mbv` — no remaining caller
       expects this write.
-- [ ] 3.2 Confirm `QueueRequest::Cursor` (plain navigation) no longer
+- [x] 3.2 Confirm `QueueRequest::Cursor` (plain navigation) no longer
       touches `PlayerTab::queue_cursor` at all. Verify with a new/updated
       `shell_queue.rs` test that arrowing in the component does not change
       `app.player_tab.queue_cursor`, only the component's own cursor.

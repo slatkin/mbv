@@ -197,9 +197,9 @@ impl Model {
     /// scope/focus/hold-window side effects, returning the resolved index.
     /// The index is the operand for the shell-owned effect the caller is
     /// about to run (D2: `remove_from_queue(index)`, `move_queue_item_up/
-    /// down(index)`, `Command::QueuePlayCursor(index)`); it is no longer
-    /// read back out of `queue.queue_cursor`. (The write-back below is
-    /// removed by task 3.1 once no caller relies on it.)
+    /// down(index)`, `Command::QueuePlayCursor(index)`). The component's
+    /// own cursor is authoritative for selection; App's `queue_cursor` is
+    /// not written here (task 3.1: the mirror is gone).
     fn select_queue_slot(
         &mut self,
         scope: QueueScope,
@@ -217,7 +217,6 @@ impl Model {
         self.app.set_queue_scope(scope);
         self.app.set_panel_focus(PanelFocus::Queue);
         self.app.mark_queue_cursor_user_active();
-        self.app.queue_for_scope_mut(scope).queue_cursor = index;
         Some(index)
     }
 }
@@ -230,7 +229,11 @@ mod tests {
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
-    fn queue_shell_mounts_and_routes_slot_cursor() {
+    fn queue_arrow_moves_component_cursor_only_not_app_follow() {
+        // QueueRequest::Cursor is plain component navigation: arrowing in
+        // the mounted component moves only the component's own cursor; App's
+        // `queue_cursor` (the shell-owned follow position) is not written
+        // (task 3.2 — the mirror in select_queue_slot is gone).
         let mut app = make_app_stub();
         app.player_tab.set_queue_items(
             vec![
@@ -243,6 +246,21 @@ mod tests {
         let mut model = Model::new(app);
         model.sync_queue();
         let id = ComponentId::Queue;
+        let component_cursor = |model: &Model| {
+            model
+                .application
+                .get_component(&id)
+                .and_then(|component| {
+                    component
+                        .as_any()
+                        .downcast_ref::<QueueComponent>()
+                        .map(QueueComponent::test_cursor)
+                })
+                .expect("Queue component mounted")
+        };
+        assert_eq!(component_cursor(&model), 0);
+        assert_eq!(model.app.player_tab.queue_cursor, 0);
+
         let message = model
             .application
             .get_component_mut(&id)
@@ -254,7 +272,16 @@ mod tests {
         let Some(Msg::Queue(request @ QueueRequest::Cursor { .. })) = message else {
             panic!("queue navigation must emit a slot cursor request");
         };
+        // The request carries the moved-to slot; the component cursor moved.
         model.handle_queue_request(request);
-        assert_eq!(model.app.player_tab.queue_cursor, 1);
+        assert_eq!(
+            component_cursor(&model),
+            1,
+            "component cursor moved to row 1"
+        );
+        assert_eq!(
+            model.app.player_tab.queue_cursor, 0,
+            "QueueRequest::Cursor must not write App's follow cursor"
+        );
     }
 }

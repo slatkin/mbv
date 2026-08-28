@@ -353,6 +353,11 @@ impl QueueComponent {
     }
 
     #[cfg(test)]
+    pub(crate) fn test_cursor(&self) -> usize {
+        self.cursor
+    }
+
+    #[cfg(test)]
     pub(crate) fn test_scroll(&self) -> usize {
         self.scroll
     }
