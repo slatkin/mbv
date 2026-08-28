@@ -103,7 +103,7 @@ Consumer: `shell_messages.rs:485-491` — if `App.skip_intro_end_ticks.is_some()
 `App.next_up_item.is_some()` → `handle_key_confirm_next_up` (input_confirm_keys.rs:210).
 `y`/`Y`/`Enter` confirm; any other key dismisses. No push in consumer.
 
-Owner target: **Playback component prompt attrs (`skip_intro_end_ticks`/`next_up_item`)** (§2.4).
+Owner target: **`PlaybackPromptComponent` is already a focused modal (`application.active()` in `sync_playback_prompt`); focus is the blocking mechanism.** The component interprets `y`/`Y`/`Enter` → Confirm, any other key → Dismiss locally (task 3.1), emitting a typed `PlaybackPromptIntent`; the shell consumer at `shell_messages.rs:485` keeps choosing `handle_key_confirm_skip_intro` vs `_next_up` by App field. No attribute mirror; `ATTR_SKIP_INTRO_PROMPT_VISIBLE`/`ATTR_NEXT_UP_PROMPT_VISIBLE` are dead (init `false`, never read as guards) and are deleted with task 2.3. Task 2.4 was removed from the plan.
 
 ### 1.8 `ShellRequest::SavePlaylistKey(KeyEvent)` (msg.rs:404)
 
