@@ -79,7 +79,7 @@
       restores the parent series-list cursor via `go_back`'s own
       `parent_id` lookup, not via any mirror. Verify: `rtk cargo nextest run
       -p mbv`.
-- [ ] 4.3 Add or extend an ast-grep rule / assertion (see `rtk ast-grep scan`
+- [x] 4.3 Add or extend an ast-grep rule / assertion (see `rtk ast-grep scan`
       fixtures under `rules/`) if one already forbids `App` back-projection
       of component-owned cursor state for migrated surfaces; otherwise skip —
       do not introduce a new architectural gate as part of this slice.
