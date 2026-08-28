@@ -25,7 +25,7 @@
 
 - [x] 3.2 Delete `App.skip_intro_end_ticks` and every write/clear site (`construct.rs`, `daemon_restart.rs`, `player_event.rs`, `session_command_actions.rs`, `session_connect.rs`, `session_switch.rs`, `emby_service_actions.rs`, `tests.rs`). **Retain `App.next_up_item` and all of its clear sites** — `PlayerEvent::NextUpPlay` reads it to resolve the `JumpTo` index. Verify `PlayerEvent::IntroStarted` still auto-seeks under `always_skip_intro`, and that `SkipIntroDismiss`/`NextUpDismiss`/`NextUpShow` still reach mpv unchanged.
 
-- [ ] 3.3 Land the `toast-notification-semantics` spec delta narrowing both prompt carve-outs to the clear-queue confirmation, and add `docs/architecture/mpv-owned-playback-prompts.md`. Verify `openspec validate remove-legacy-keyboard-endpoint --strict` passes.
+- [x] 3.3 Land the `toast-notification-semantics` spec delta narrowing both prompt carve-outs to the clear-queue confirmation, and add `docs/architecture/mpv-owned-playback-prompts.md`. Verify `openspec validate remove-legacy-keyboard-endpoint --strict` passes.
 
 ## 4. Activate the Policy and Move the Globals In
 
