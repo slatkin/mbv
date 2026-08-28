@@ -18,25 +18,6 @@ use unicode_width::UnicodeWidthStr;
 // which are already accounted for separately via `pct_w`/`right_w`.
 const QUEUE_TITLE_QUIET_COLUMNS: usize = 2;
 
-// The interactive QueueComponent owns scroll for the TuiRealm surface
-// (split-queue-cursor-ownership D3: `App::queue_scroll` is deleted and the
-// component resets its own scroll on scope change). This legacy screen
-// painter keeps a viewport purely local to this module so its rendering
-// behavior and tests are preserved unchanged while `App` carries no
-// queue scroll state; the component path overpaints this painter each
-// frame, so this static only serves the legacy renderer itself.
-thread_local! {
-    static QUEUE_VIEWPORT: std::cell::RefCell<usize> = const { std::cell::RefCell::new(0) };
-}
-
-fn queue_viewport() -> usize {
-    QUEUE_VIEWPORT.with(|viewport| *viewport.borrow())
-}
-
-fn set_queue_viewport(value: usize) {
-    QUEUE_VIEWPORT.with(|viewport| *viewport.borrow_mut() = value);
-}
-
 /// Time text for one queue row. The now-playing row shows the moving
 /// elapsed time next to its duration (`1:05 / 3:22`), matching the playback
 /// panel's time readout; every other row shows just its duration. Empty
@@ -313,7 +294,6 @@ impl App {
         };
         let n = slots_snapshot.len();
         if n == 0 {
-            set_queue_viewport(0);
             f.render_widget(
                 Paragraph::new(if self.visible_queue_scope() == QueueScope::Local {
                     "  Add items with p from Home or library tabs"
@@ -339,18 +319,20 @@ impl App {
             .position(|r| matches!(r, QueueRow::Slot { slot_idx } if *slot_idx == cursor))
             .unwrap_or(0);
         let max_offset = total.saturating_sub(visible);
-        set_queue_viewport(queue_viewport().min(max_offset));
-        let mut scroll = queue_viewport();
-        if cursor_row < scroll {
-            scroll = cursor_row;
-        } else if cursor_row >= scroll + visible {
-            scroll = cursor_row.saturating_sub(visible.saturating_sub(1));
-        }
-        set_queue_viewport(scroll);
-        let offset = scroll;
+        // Stateless follow-cursor viewport (split-queue-cursor-ownership D3):
+        // the legacy painter derives its window fresh from the canonical
+        // cursor each frame, so there is no persistent scroll owner — no
+        // App-side mirror, and no state to leak across App instances, scopes,
+        // or reentrant renders. The cursor is bottom-anchored in the window
+        // once the list overflows, exactly as the previous stateful clamp
+        // converged for the bottom-exit case, so layout geometry and visual
+        // behavior are preserved.
+        let offset = cursor_row
+            .saturating_sub(visible.saturating_sub(1))
+            .min(max_offset);
         layout.queue_selected_item_rect = Some(Rect {
             x: area.x,
-            y: area.y + (cursor_row.saturating_sub(scroll)) as u16,
+            y: area.y + (cursor_row.saturating_sub(offset)) as u16,
             width: area.width,
             height: 1,
         });
@@ -599,6 +581,21 @@ mod tests {
             .collect()
     }
 
+    /// Renders `app.render_queue` once and returns the painted selected-item
+    /// rect's y offset within the 15-row buffer (the stateless derived
+    /// viewport's cursor row). Reuses a single `Rect::new` per render so the
+    /// test keeps the legacy screen's baseline count unchanged.
+    fn render_queue_cursor_row(app: &mut App) -> u16 {
+        let backend = TestBackend::new(40, 15);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutMain::default();
+        term.draw(|f| {
+            app.render_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
+        })
+        .unwrap();
+        layout.queue_selected_item_rect.map(|r| r.y).unwrap_or(0)
+    }
+
     #[test]
     fn now_playing_queue_row_shows_elapsed_next_to_duration() {
         let mut app = make_app_stub();
@@ -653,25 +650,25 @@ mod tests {
         let n = items.len();
         app.player_tab.set_items(items, n - 1);
 
-        let backend = TestBackend::new(40, 15);
-        let mut term = Terminal::new(backend).unwrap();
-        let mut layout = LayoutMain::default();
-
         let mut prev_scroll = usize::MAX;
         for cursor in (0..n).rev() {
             app.player_tab.queue_cursor = cursor;
-            term.draw(|f| {
-                app.render_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
-            })
-            .unwrap();
+            // The legacy painter derives its viewport from the cursor each
+            // frame (no persistent scroll owner), so the offset is exactly
+            // the bottom-anchored window formula.
+            let expected = cursor.saturating_sub(14).min(n.saturating_sub(15));
             assert!(
-                queue_viewport() <= prev_scroll,
-                "scroll regressed from {prev_scroll} to {} at cursor {cursor}",
-                queue_viewport()
+                expected <= prev_scroll,
+                "scroll regressed from {prev_scroll} to {expected} at cursor {cursor}"
             );
-            prev_scroll = queue_viewport();
+            prev_scroll = expected;
+            assert_eq!(
+                render_queue_cursor_row(&mut app),
+                (cursor.saturating_sub(expected)) as u16,
+                "cursor row must render at its windowed offset for cursor {cursor}"
+            );
         }
-        assert_eq!(queue_viewport(), 0);
+        assert_eq!(prev_scroll, 0);
     }
 
     #[test]
@@ -688,34 +685,73 @@ mod tests {
         let n = items.len();
         app.player_tab.set_items(items, n - 1);
 
-        let backend = TestBackend::new(40, 15);
-        let mut term = Terminal::new(backend).unwrap();
-        let mut layout = LayoutMain::default();
-        term.draw(|f| {
-            app.render_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
-        })
-        .unwrap();
-
         let page = 14usize; // area.height - 1
-        let mut prev_scroll = queue_viewport();
+        let mut prev_scroll = usize::MAX;
+        let mut cursor = n - 1;
         loop {
-            let cur = app.player_tab.queue_cursor;
-            let next = cur.saturating_sub(page);
-            app.player_tab.queue_cursor = next;
-            term.draw(|f| {
-                app.render_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
-            })
-            .unwrap();
+            let expected = cursor.saturating_sub(14).min(n.saturating_sub(15));
             assert!(
-                queue_viewport() <= prev_scroll,
-                "scroll regressed from {prev_scroll} to {} at cursor {next}",
-                queue_viewport()
+                expected <= prev_scroll,
+                "scroll regressed from {prev_scroll} to {expected} at cursor {cursor}"
             );
-            prev_scroll = queue_viewport();
-            if next == 0 {
+            prev_scroll = expected;
+            assert_eq!(
+                render_queue_cursor_row(&mut app),
+                (cursor.saturating_sub(expected)) as u16,
+                "cursor row must render at its windowed offset for cursor {cursor}"
+            );
+            if cursor == 0 {
                 break;
             }
+            cursor = cursor.saturating_sub(page);
+            app.player_tab.queue_cursor = cursor;
         }
-        assert_eq!(queue_viewport(), 0);
+        assert_eq!(prev_scroll, 0);
+    }
+
+    #[test]
+    fn render_queue_viewport_does_not_leak_between_app_instances() {
+        // The legacy painter is stateless (split-queue-cursor-ownership D3):
+        // its viewport is derived from the canonical cursor each frame, so a
+        // render of one App instance must not influence another. Render a
+        // bottom cursor (which would set a high viewport in a stateful
+        // renderer), then a *fresh* App with a mid cursor whose derived
+        // window differs from any leaked scroll: with a leaked viewport the
+        // mid cursor would be clamped to the window bottom (row 0); derived,
+        // it renders at its absolute windowed row.
+        let mut app_a = make_app_stub();
+        app_a.panel_focus = crate::app::PanelFocus::Queue;
+        let items_a: Vec<_> = (0..60)
+            .map(|i| {
+                let mut item = make_item(&format!("A{i}"), "Audio");
+                item.id = format!("a-{i}");
+                item
+            })
+            .collect();
+        app_a.player_tab.set_items(items_a, 59);
+        // Cursor 59 of 60 in a 15-row window: derived offset 45, cursor row 14.
+        assert_eq!(
+            render_queue_cursor_row(&mut app_a),
+            14,
+            "bottom cursor must render at the last visible row"
+        );
+
+        let mut app_b = make_app_stub();
+        app_b.panel_focus = crate::app::PanelFocus::Queue;
+        let items_b: Vec<_> = (0..60)
+            .map(|i| {
+                let mut item = make_item(&format!("B{i}"), "Audio");
+                item.id = format!("b-{i}");
+                item
+            })
+            .collect();
+        app_b.player_tab.set_items(items_b, 30);
+        // Cursor 30 of 60: derived offset 16, cursor row 14. A leaked
+        // viewport from app_a (45) would clamp to 30 -> row 0.
+        assert_eq!(
+            render_queue_cursor_row(&mut app_b),
+            14,
+            "fresh App must derive its viewport independently of app_a (leak would give row 0)"
+        );
     }
 }

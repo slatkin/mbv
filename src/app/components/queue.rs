@@ -356,6 +356,14 @@ impl QueueComponent {
     pub(crate) fn test_scroll(&self) -> usize {
         self.scroll
     }
+
+    #[cfg(test)]
+    pub(crate) fn test_scope_pill_areas(&self) -> (Rect, Rect) {
+        (
+            self.geometry.scope_local_area,
+            self.geometry.scope_remote_area,
+        )
+    }
 }
 
 impl Default for QueueComponent {

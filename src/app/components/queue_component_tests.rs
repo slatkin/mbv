@@ -1,4 +1,4 @@
-use super::msg::{Msg, QueueColumnResize, QueueIntent, QueueRequest, ShellRequest};
+use super::msg::{Msg, QueueColumnResize, QueueHitRegion, QueueIntent, QueueRequest, ShellRequest};
 use super::queue::QueueComponent;
 use crate::app::render::QueueTitleModel;
 use crate::app::types_playback::{PlaybackState, QueueScope};
@@ -256,5 +256,104 @@ fn queue_scope_switch_resets_component_scroll() {
         component.test_scroll(),
         0,
         "set_content scope change must reset the component's own scroll"
+    );
+}
+
+#[test]
+fn queue_scope_mouse_pills_reset_component_scroll_from_nonzero() {
+    // The mouse scope-pill branches (components/queue.rs handle_mouse) must
+    // reset the component's own scroll from a nonzero viewport, just like the
+    // '['/']' keys and set_content scope changes. Drive each pill branch
+    // independently from nonzero scroll and assert the reset.
+    let title = QueueTitleModel {
+        local_icon: "L".into(),
+        local_label: "Local".into(),
+        remote_icon: "R".into(),
+        remote_label: "Remote".into(),
+        local_selected: true,
+        show_split: true,
+        is_mbv_session: true,
+    };
+
+    let slots = long_queue();
+    let mut component = QueueComponent::new();
+    component.set_content(
+        slots,
+        29,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        title.clone(),
+    );
+    component.set_title_area(Some(ratatui::layout::Rect::new(0, 0, 40, 1)));
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    assert!(
+        component.test_scroll() > 0,
+        "bottom cursor must produce nonzero scroll, got {}",
+        component.test_scroll()
+    );
+    let (local_pill, remote_pill) = component.test_scope_pill_areas();
+    assert!(
+        local_pill.width > 0 && remote_pill.width > 0,
+        "scope pills must be painted for the split title"
+    );
+
+    // Click the Remote pill: scope preassigned to Remote, scroll reset to 0.
+    let message = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: remote_pill.x,
+        row: remote_pill.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(
+        matches!(
+            message,
+            Some(Msg::Shell(ShellRequest::QueueClick {
+                region: QueueHitRegion::ScopeRemote,
+                ..
+            }))
+        ),
+        "remote pill click must emit a ScopeRemote QueueClick"
+    );
+    assert_eq!(
+        component.test_scroll(),
+        0,
+        "remote pill click must reset the component's own scroll"
+    );
+
+    // Re-render at the bottom cursor to restore nonzero scroll, then click
+    // the Local pill: scope preassigned to Local, scroll reset to 0.
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    assert!(
+        component.test_scroll() > 0,
+        "bottom cursor must again produce nonzero scroll, got {}",
+        component.test_scroll()
+    );
+    let (local_pill, _) = component.test_scope_pill_areas();
+    let message = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: local_pill.x,
+        row: local_pill.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(
+        matches!(
+            message,
+            Some(Msg::Shell(ShellRequest::QueueClick {
+                region: QueueHitRegion::ScopeLocal,
+                ..
+            }))
+        ),
+        "local pill click must emit a ScopeLocal QueueClick"
+    );
+    assert_eq!(
+        component.test_scroll(),
+        0,
+        "local pill click must reset the component's own scroll"
     );
 }
