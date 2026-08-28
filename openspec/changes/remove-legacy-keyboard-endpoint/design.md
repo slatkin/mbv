@@ -10,7 +10,7 @@ The remaining endpoint is not mechanically dead:
 - The 5.3d.22 deletion rows required zero references rather than authorizing replacement of the live route. They therefore documented a no-op instead of breaking the cycle.
 - `handle_legacy_key` also re-pushes Home, Emby browser, Audiobookshelf, and Music presentation after every key. Removing it requires each typed effect path to push only the content it actually changes.
 - D7 assigned one parent binding to `ComponentId::Library`, but no `LibraryComponent` is mounted. That table cannot be wired literally.
-- The endpoint is reached by two **direct** `handle_key_with_home_context` call sites in `shell_home.rs` (the Home context-menu `.` path under Queue focus), not only through `handle_legacy_key`; and F1 Help-open is handled inside `handle_legacy_key` itself, outside `CONTEXT_STACK`.
+- F1 Help-open is handled inside `handle_legacy_key` itself, outside `CONTEXT_STACK`. (The `handle_key_with_home_context` call sites in `shell_home.rs` are `#[cfg(test)]` only, not production bypasses; the production Home `.` path goes through `handle_legacy_key` → `CONTEXT_STACK` → `handle_global_view_key`.)
 - Several `CONTEXT_STACK` gates are not static booleans: `confirm_skip_intro`/`confirm_next_up` depend on ephemeral App fields (`skip_intro_end_ticks`/`next_up_item`), `playback` is a per-key command table plus a 300ms double-tap that falls through on the first press, and `queue_column_width` is gated on `PanelMode::Both` + Shift+Left/Right — none of which the shadow `KEY_POLICY` table captures faithfully.
 
 This is a deeper ownership and precedence entanglement, not a Rust, TuiRealm, or event-conversion limitation. The temporary endpoint survived because the replacement execution path was deferred and the final task was framed as dead-code deletion.
@@ -50,7 +50,7 @@ Ownership follows the smallest existing authority:
 
 - A focused blocking overlay receives and swallows every key; lower subscriptions are gated off while it is mounted.
 - `UiRoot` owns application-wide overlay opening, force-clear, refresh, Panel-mode cycling, tab switching, and quit requests.
-- `Playback` owns visualizer and playback chords, including player/route eligibility and the existing Space/Escape double-tap state.
+- `Playback` owns visualizer and playback chords, including player/route eligibility and the existing Space/Escape double-tap state. Space and Escape are **global playback keys** (double-tap = Stop/TogglePlayPause); the leaf meanings (Escape = browse `go_back`, Space = Audiobookshelf select/play) are the first-press fall-through. See Decision 6 for the single-owner resolution.
 - `Queue` owns queue-width and clear-Queue chords plus Queue-local navigation and actions.
 - The focused Library destination owns selection-dependent actions such as opening a context menu for its selected item and emits the explicit target in its request.
 
@@ -58,9 +58,17 @@ No fake `LibraryComponent` is introduced solely to satisfy the old table. This c
 
 The shared globals (`q`, Tab/BackTab, `1`–`9`, `.`) are the precedence crux. They are currently claimed by `handle_global_view_key` *ahead of* panel dispatch, so they are neither a parent binding nor a destination-local key. The `.` context-menu key is selection-dependent and must move to the focused destination, which emits the explicit target — including the Home-only Continue Watching special case whose target (`home_cw_selected`/`cw_item`) is resolved at the Model boundary and threaded through every `CONTEXT_STACK` handler signature today. The destination-independent Alt-key path (`handle_key_alt`: Alt+Left/Right panel-focus switch, Alt+Up/Down tab cycle, catch-all swallow) is a separate global that must be assigned to `UiRoot`.
 
-Two gates cannot be expressed as static `SubClause`s and must become real state: the ephemeral prompt fields (`skip_intro_end_ticks`/`next_up_item`) must be mirrored into Playback-component attributes, and the playback transport gate is a per-key command table (`resolve_key`) plus a 300ms double-tap that returns `None` on the first press — so the subscription cannot simply claim Space/Escape.
+The playback transport gate is a per-key command table (`resolve_key`) plus a 300ms double-tap on Space/Escape that returns `None` on the first press. The skip-intro/next-up prompts are **already** a focused modal (`PlaybackPromptComponent` mounted with `application.active()`), so focus is their blocking mechanism — no attribute mirror is needed for them (the existing `ATTR_*_PROMPT_VISIBLE` attributes are dead and are deleted).
 
 **Alternative considered:** retain a shell pre-router for parent/global keys. Rejected because it would be the same parallel endpoint under a new name and would violate ADR 0022.
+
+### 6. Space/Escape are owned by one global handler; leaves do not claim them
+
+Space and Escape are global playback keys (double-tap → Stop / TogglePlayPause). The legacy `CONTEXT_STACK` ran the playback double-tap *above* the focused leaf, so the first press fell through to the leaf (browse `go_back`, Audiobookshelf select/play) and the second press within 300ms was claimed by playback (Stop / TogglePlayPause). TuiRealm's fan-out fires the focused leaf and the Playback subscription independently — there is no "above", so a leaf claiming Space/Escape double-acts against the global playback key on the second press.
+
+Global keys must not be resolved by per-screen logic (the reason the migration exists). Therefore Space and Escape are owned by **one global handler** that implements the 300ms double-tap and dispatches, by focused leaf, the existing typed first-press request (`ShellRequest::BrowserBack`/`TvBack` for browse `go_back`; `AudiobookshelfBookIntent::Play`/`PodcastEpisodeIntent::FocusOrPlay` for Audiobookshelf select) on the first press and the playback command (Stop / TogglePlayPause) on the second press. Leaves stop claiming Space and Escape for their own actions; the first-press leaf behavior is dispatched by the global handler via the existing typed request set, so no leaf interprets a raw Space/Escape and no per-screen playback-timer mirror is introduced. The dispatch table is the same focus→effect mapping `handle_key_view_dispatch` performs today, moved into a TuiRealm subscription owner.
+
+**Alternatives considered:** (a) leaves mirror Playback's double-tap timer and decline the second press — rejected: it is per-screen logic for a global feature. (b) Playback's double-tap only fires when the Playback component is focused — rejected: drops the global playback-key behavior the app is designed around. (c) a shell pre-router running the double-tap before the leaf — rejected as the same parallel endpoint under a new name (Decision 2).
 
 ### 3. Raw keys stop at the component boundary
 
