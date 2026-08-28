@@ -1,6 +1,6 @@
 ## 1. Inventory and Lock the Routing Contract
 
-- [ ] 1.1 Record a symbol-level handoff at `openspec/handoffs/remove-legacy-keyboard-endpoint.md` that maps every production raw-key producer/consumer to its precedence, mutation, shell effect, presentation push, and target TuiRealm owner. Enumerate exhaustively, not by family name:
+- [x] 1.1 Record a symbol-level handoff at `openspec/handoffs/remove-legacy-keyboard-endpoint.md` that maps every production raw-key producer/consumer to its precedence, mutation, shell effect, presentation push, and target TuiRealm owner. Enumerate exhaustively, not by family name:
   - every `GlobalViewKey` and raw `*Key` `ShellRequest` variant (`ConfirmKey`, `DaemonLostKey`, `RemoteReanchorKey`, `ContextMenuKey`, `FeedsManageKey`, `PlaybackPromptKey`, `SavePlaylistKey`, `QueueKey`) **and** the two cursor-carrying raw-key variants `ServiceRequest::SettingsKey { cursor, key }` and `PersistRequest::SettingsKey { cursor, key }`;
   - every `TerminalObserverEvent::Key` producer and `to_crossterm_key_event` call site (16 components: audiobookshelf_book, audiobookshelf_podcast, browser, confirm, context_menu, daemon_lost, feeds_manage, home, music_workspace, playback_prompt, queue, remote_reanchor, root, save_playlist, settings, tv_workspace);
   - the two **direct** `handle_key_with_home_context` call sites in `shell_home.rs` (the Home context-menu `.` path under Queue focus) that bypass `handle_legacy_key` entirely;
@@ -11,7 +11,7 @@
 
 - [ ] 1.2 Extend the existing shell/TuiRealm integration tests with one table-driven production-style routing matrix covering blocking-overlay swallow, leaf fallthrough to exactly one subscription, no local/global double action, Queue-versus-Library focus, and playback gating/double-tap behavior; verify the focused integration tests pass before routing code changes.
 
-- [ ] 1.3 Record the load-bearing precedence quirks that must survive the conversion, each with a routing-matrix row: the `clear_queue_prompt_c` vs context-menu mutual exclusion (#135), the `Ctrl+a` enqueue-before-playback claim (#209), the `[`/`]` bracket key meaning different things under Queue vs Library focus, the `handle_lib_key` Ctrl/Alt catch-all swallow, the Space/Escape double-tap that *falls through on the first press*, and the Ctrl+/ terminal-encoding ambiguity (`Char('/')` vs `Char('_')` with CONTROL).
+- [x] 1.3 Record the load-bearing precedence quirks that must survive the conversion, each with a routing-matrix row: the `clear_queue_prompt_c` vs context-menu mutual exclusion (#135), the `Ctrl+a` enqueue-before-playback claim (#209), the `[`/`]` bracket key meaning different things under Queue vs Library focus, the `handle_lib_key` Ctrl/Alt catch-all swallow, the Space/Escape double-tap that *falls through on the first press*, and the Ctrl+/ terminal-encoding ambiguity (`Char('/')` vs `Char('_')` with CONTROL).
 
 ## 2. Activate Parent and Global Routing
 
