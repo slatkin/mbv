@@ -190,16 +190,19 @@ mod tests {
 
     #[test]
     fn typed_tv_requests_keep_component_cursor_authoritative() {
-        let mut model = mounted_tv_model();
-        // Letter pills need a captured total for TvCycleLetterPill to run.
-        model.app.libs[0].library_total = Some(1000);
-        let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
-
-        // Drive each component-cursor request and assert App's browse cursor
-        // never moves: the component owns the cursor; App's nav level is not
-        // written by any mirror (the inverse of the pre-change assertion).
-        let drive = |model: &mut Model, code: Key| {
-            let Some(Msg::Shell(request)) = model
+        // Each cursor-moving request is driven from a *fresh* mount so no
+        // action's side effects can leak into the next: a chained sequence
+        // (Down, End, ']', Right) would let a later assertion pass because of
+        // the preceding action's state (e.g. End after Down both land on the
+        // last row, and ']' clears the pill-cycled list). A fresh mount
+        // guarantees component cursor 0, pane Series, and App browse cursor 0
+        // before every key, isolating exactly one request per model.
+        fn drive(code: Key) -> (Model, ShellRequest) {
+            let mut model = mounted_tv_model();
+            // Letter pills need a captured total for TvCycleLetterPill to run.
+            model.app.libs[0].library_total = Some(1000);
+            let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+            let request = model
                 .application
                 .get_component_mut(&id)
                 .expect("TV workspace component mounted")
@@ -209,35 +212,83 @@ mod tests {
                 .on(&Event::Keyboard(KeyEvent {
                     code,
                     modifiers: KeyModifiers::NONE,
-                }))
-            else {
+                }));
+            let Some(Msg::Shell(request)) = request else {
                 panic!("TV key {code:?} must produce a typed shell request");
             };
-            model.handle_tv_request(request);
-        };
+            (model, request)
+        }
 
-        // TvMoveRows (Down): component cursor -> 1, App cursor stays 0.
-        drive(&mut model, Key::Down);
-        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
+        // TvMoveRows (Down): the component cursor moves 0 -> 1 (movie-second)
+        // and the emitted request carries rows: 1; App's browse cursor stays 0
+        // — the removed mirror's former effect would have written 1 here.
+        let (mut model, request) = drive(Key::Down);
+        assert!(matches!(request, ShellRequest::TvMoveRows { rows: 1 }));
+        model.handle_tv_request(request);
+        assert_eq!(
+            model.app.libs[0].nav_stack[0].cursor, 0,
+            "TvMoveRows must not write the component cursor into App's browse level"
+        );
         let selected_id = model
             .application
-            .get_component(&id)
+            .get_component(&model.tv_workspace_id.clone().expect("TV workspace mounted"))
             .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
             .and_then(TvWorkspaceComponent::selected_item_id);
-        assert_eq!(selected_id, Some("movie-second".into()));
+        assert_eq!(
+            selected_id,
+            Some("movie-second".into()),
+            "the component cursor must have moved while App's cursor stayed put"
+        );
 
-        // TvJumpCursor (End): component cursor jumps, App cursor stays 0.
-        drive(&mut model, Key::End);
-        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
+        // TvJumpCursor (End): fresh mount again — the component jumps to the
+        // last row; the request carries to_end: true (distinct from Home's
+        // to_end: false); App's browse cursor still stays 0.
+        let (mut model, request) = drive(Key::End);
+        assert!(matches!(
+            request,
+            ShellRequest::TvJumpCursor { to_end: true }
+        ));
+        model.handle_tv_request(request);
+        assert_eq!(
+            model.app.libs[0].nav_stack[0].cursor, 0,
+            "TvJumpCursor must not write the component cursor into App's browse level"
+        );
+        let selected_id = model
+            .application
+            .get_component(&model.tv_workspace_id.clone().expect("TV workspace mounted"))
+            .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
+            .and_then(TvWorkspaceComponent::selected_item_id);
+        assert_eq!(
+            selected_id,
+            Some("movie-second".into()),
+            "the component cursor must have jumped while App's cursor stayed put"
+        );
 
-        // TvCycleLetterPill (']' in the Series pane): pill advances, App
+        // TvCycleLetterPill (']' in the Series pane): fresh mount with a
+        // captured total — the pill advances the letter filter; the request
+        // carries delta: 1 (distinct from '[''s delta: -1); App's browse
         // cursor stays 0 (select_letter_pill's own reset is not a mirror).
-        drive(&mut model, Key::Char(']'));
-        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
+        let (mut model, request) = drive(Key::Char(']'));
+        assert!(matches!(
+            request,
+            ShellRequest::TvCycleLetterPill { delta: 1 }
+        ));
+        model.handle_tv_request(request);
+        assert_eq!(
+            model.app.libs[0].nav_stack[0].cursor, 0,
+            "TvCycleLetterPill must not write the component cursor into App's browse level"
+        );
 
-        // TvMoveColumn (Right): pane moves to Episodes, App cursor stays 0.
-        drive(&mut model, Key::Right);
-        assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
+        // TvMoveColumn (Right): fresh mount again — the pane moves to
+        // Episodes; the request carries delta: 1 (distinct from Left's
+        // delta: -1); App's browse cursor still stays 0.
+        let (mut model, request) = drive(Key::Right);
+        assert!(matches!(request, ShellRequest::TvMoveColumn { delta: 1 }));
+        model.handle_tv_request(request);
+        assert_eq!(
+            model.app.libs[0].nav_stack[0].cursor, 0,
+            "TvMoveColumn must not write the component cursor into App's browse level"
+        );
     }
 
     #[test]
@@ -397,16 +448,27 @@ mod tests {
         assert!(!model.app.play_tv_episode("missing-series", 1, 0));
 
         // TvBack after activation must restore the parent series-list cursor
-        // via go_back's own parent_id lookup — not via any mirror (App's
-        // cursor was deliberately stale at 1). Push a seasons child whose
-        // parent_id points back at "movie-focused" so the pop restores the
-        // series cursor to its parent_id position.
+        // via go_back's own parent_id lookup — not via any mirror. The stale
+        // App cursor (1, "movie-second") diverges from the component's
+        // selection ("movie-focused" at row 0). Append a third series so the
+        // child's parent_id can target a *discriminating nonzero row*: the
+        // seasons child's parent_id "movie-third" restores the series cursor
+        // to row 2, so a reset-to-0 implementation (0), a child-cursor
+        // implementation (99), and a stale-mirror implementation (1) all
+        // fail.
+        let mut third = crate::app::tests::make_item("Third Series", "Series");
+        third.id = "movie-third".into();
+        model.app.libs[0].nav_stack[0].items.push(third);
+        assert_eq!(
+            model.app.libs[0].nav_stack[0].cursor, 1,
+            "the stale App cursor must still diverge before TvBack"
+        );
         model.app.libs[0].nav_stack.push(crate::app::BrowseLevel {
-            parent_id: "movie-focused".into(),
+            parent_id: "movie-third".into(),
             title: "Seasons".into(),
             items: vec![],
             total_count: 0,
-            cursor: 0,
+            cursor: 99,
             scroll: 0,
             item_types: Some("Season".into()),
             unplayed_only: false,
@@ -424,8 +486,8 @@ mod tests {
             "TvBack must pop the seasons child level"
         );
         assert_eq!(
-            model.app.libs[0].nav_stack[0].cursor, 0,
-            "TvBack restores the series cursor by parent_id (position of movie-focused), not the stale 1"
+            model.app.libs[0].nav_stack[0].cursor, 2,
+            "TvBack restores the series cursor by parent_id (row of movie-third), not a reset 0, the popped child cursor 99, or the stale 1"
         );
     }
 
