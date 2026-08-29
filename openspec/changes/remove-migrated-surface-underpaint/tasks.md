@@ -376,19 +376,76 @@ six production files and preserves behaviour.
 
 ## 5. Ledger + gate (D5)
 
-- [ ] 5.1 Update each affected row's Notes cell in
+- [x] 5.1 Update each affected row's Notes cell in
       `docs/architecture/interactive-surface-ledger.md`: single-painter
       ownership for component-owned surfaces; "wide: component; narrow: sole
       legacy renderer" for split surfaces (TV, Music); note that
       `self.app.render(f)` underpaint is removed and the draw path is one
       `Model::draw_frame` entry point. Verify: no row still describes a
       legacy painter running beneath a component.
-- [ ] 5.2 `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
+      Real writer: rows updated across two commits — earlier working tree had
+      Playback chrome, Home, Emby browser, Inline Search, TV workspace, Music
+      workspace; this commit adds ABS podcast, ABS book, and Feeds (each now
+      records geometry-only base-frame reservation, the component as sole body
+      painter with its D4 execution-ownership test, and the single
+      `Model::draw_frame` / `App::compose_base_frame` draw path with no
+      `self.app.render(f)` underpaint). No ledger row for tab bar / status bar
+      (chrome has no interactive-surface row); the "Inline album-track
+      interaction" row needed no change (album-track was already a sole legacy
+      painter — component inactive at that nav level — and the Music workspace
+      row documents it). `grep underpaint` on the ledger: every remaining
+      mention is "no legacy underpaint" / "underpaint resolved" / "sole legacy
+      renderer (D5)" — no row describes a legacy painter beneath a component.
+- [x] 5.2 `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
       `rtk cargo clippy --workspace --all-targets`,
       `rtk cargo fmt --all -- --check`, `rtk ast-grep scan`,
       `rtk make check-code-file-lines` — all green.
-- [ ] 5.3 `openspec validate remove-migrated-surface-underpaint --strict` passes.
-- [ ] 5.4 Confirm issue #607's acceptance criterion "Migrated surfaces are not
+      Real writer: green against the Section 3/4 baselines, no new failures.
+      `rtk cargo check -p mbv` 0 errors (27 pre-existing warnings).
+      `rtk cargo nextest run -p mbv --no-fail-fast` 1142 passed, 1 failed —
+      only the pre-existing allowed `browser_local_navigation_mirrors_legacy_flat_movement`.
+      `rtk cargo clippy --workspace --all-targets` 0 errors, 97 warnings (baseline 97).
+      `rtk cargo fmt --all -- --check` clean.
+      `rtk ast-grep scan` 66 errors (baseline 66, all pre-existing screen-boundary).
+      `rtk make check-code-file-lines` all governed files at or below 800.
+- [x] 5.3 `openspec validate remove-migrated-surface-underpaint --strict` passes.
+      Real writer: the CLI is not on PATH; ran it via
+      `rtk proxy bun x @fission-ai/openspec@1.11.0 validate
+      remove-migrated-surface-underpaint --strict` → "Change
+      'remove-migrated-surface-underpaint' is valid". First run failed: the
+      delta's MODIFIED "Complete conversion with no mixed-framework endpoint"
+      block was stale — `keep-destination-components-mounted`,
+      `add-tick-integration-coverage`, and `resolve-library-parent-phantom`
+      were archived into the canonical spec after this delta was authored, and
+      a MODIFIED requirement replaces the whole block on archive. Rebased the
+      block onto current canonical: kept this change's underpaint prose (three
+      paragraphs) and four new scenarios, re-absorbed the canonical's
+      destination-state / active-target / ledger-non-contradiction /
+      keyboard-policy-owner paragraphs and their six scenarios. The uncommitted
+      working-tree edit that only appended the six scenarios (not the prose)
+      would still have dropped the prose on archive; replaced with the full
+      rebase.
+- [x] 5.4 Confirm issue #607's acceptance criterion "Migrated surfaces are not
       painted by a parallel legacy path" is now satisfied, and note in the PR
       that #614 can proceed on the ledger/ADR/source reconciliation for these
       rows.
+      Real writer (no code): #607's criterion is satisfied. `App::render` is
+      deleted (4.2, renamed to `App::compose_base_frame` — base-frame composer
+      only, no parallel render path); all three terminal draws route through
+      the single `Model::draw_frame` entry point (2.3–2.4); and every migrated
+      body's suppression is proven by execution ownership, not buffer diff, via
+      the D4 tests listed in Section 3 — Home
+      (`legacy_base_frame_does_not_paint_home_content_before_the_component`),
+      wide Movies (`wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows`),
+      wide TV (`wide_tv_legacy_base_frame_publishes_geometry_but_paints_no_workspace`),
+      wide Music (`wide_music_legacy_base_frame_publishes_geometry_but_paints_no_rows`),
+      ABS book/podcast/Feeds (`abs_book_*` / `abs_podcast_*` /
+      `feeds_legacy_base_frame_publishes_geometry_but_paints_no_*` in
+      `tests_conformance_matrix.rs`), inline search
+      (`inline_search_active_legacy_base_frame_publishes_geometry_but_paints_no_rows`),
+      and player chrome
+      (`player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel`).
+      Narrow TV / narrow Music / album-track / queue-only player panels remain
+      explicit sole-legacy-for-breakpoint painters (D5), recorded in the ledger.
+      #614 can now proceed on ledger/ADR 0022/source reconciliation for these
+      rows. Nothing posted to GitHub.
