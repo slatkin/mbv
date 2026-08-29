@@ -237,7 +237,7 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
-        // Per-draw adapter (D18 step 1): the legacy base frame (self.app.render(f))
+        // Per-draw adapter (D18 step 1): the legacy base frame (self.app.compose_base_frame(f))
         // has already populated movies_wide_right_area / movies_wide_area this
         // frame. The base frame and the mounted component share one paint, so
         // the 1-column right-rail stride (the only reader of this field) is

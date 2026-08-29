@@ -340,17 +340,39 @@ six production files and preserves behaviour.
 
 ## 4. Dead renderer deletion (D6)
 
-- [ ] 4.1 For each suppressed body whose legacy renderer now runs only to
+- [x] 4.1 For each suppressed body whose legacy renderer now runs only to
       publish an `AppLayout` field: move that derivation into
       `compute_frame_layout` (or the owning component per D18 step 2), then
       delete the renderer. Verify: `rtk cargo check -p mbv` — no remaining
       caller; `rtk ast-grep scan` clean.
-- [ ] 4.2 Confirm `App::render` (the old entry point) has no remaining callers
+      Real writer: `render_audiobookshelf_library`
+      (`src/app/render/components/widgets.rs`) was the one pure-geometry
+      renderer — an unused `_f`/`_focused` and nothing but
+      `audiobookshelf_book_area`/`audiobookshelf_podcast_area` assignments.
+      Inlined the Book-vs-Podcast area reservation into `render_library`'s ABS
+      dispatch arm and deleted the function (grep-confirmed sole caller). No
+      other renderer is pure-geometry; Section 3 suppressed the rest in place
+      with geometry already published upstream.
+- [x] 4.2 Confirm `App::render` (the old entry point) has no remaining callers
       and delete it, or reduce it to the two-call shim if a test still uses it
       — prefer deletion, update tests to `compute_frame_layout` +
       `paint_legacy_chrome`. Verify: `rtk cargo nextest run -p mbv`.
-- [ ] 4.3 `rtk make check-code-file-lines` — split any file the extraction
+      Real writer: `App::render`'s body is entirely `App`-scoped (chrome
+      checkpoint, fresh draft `AppLayout`, toast expiry, now-playing-title
+      derivation, `render_main`, atomic install), so a `Model` wrapper or a
+      `compute_frame_layout` + `paint_legacy_chrome` shim would only add
+      indirection. Renamed the method to `App::compose_base_frame` (not
+      `render` — #607: no parallel legacy render path, only the base-frame
+      composer beneath the mounted component views). `Model::draw_frame` and
+      all 15 test call sites route to the new name; the zero-area
+      `compute_frame_layout` → `None` no-mutation guard and the single atomic
+      `self.layout = layout` install are byte-for-byte unchanged. Full suite:
+      1142 passed, 1 failed (only the pre-existing allowed
+      `browser_local_navigation_mirrors_legacy_flat_movement`).
+- [x] 4.3 `rtk make check-code-file-lines` — split any file the extraction
       pushed over 800 lines in the same change.
+      No split needed: `shell_run.rs` 559→559, `root.rs` 597→604 (+7 doc
+      comment), `list.rs` 596→596. All governed files at or below 800.
 
 ## 5. Ledger + gate (D5)
 

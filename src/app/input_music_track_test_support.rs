@@ -188,7 +188,7 @@ pub(super) fn add_following_artist_albums(app: &mut App, album_count: usize) {
 pub(super) fn render_full_app(app: &mut App, width: u16, height: u16) {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
+    term.draw(|f| app.compose_base_frame(f)).unwrap();
 }
 
 pub(super) struct RecursiveFetchServer {

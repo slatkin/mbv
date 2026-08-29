@@ -303,7 +303,7 @@ pub fn render_view_to_terminal(
 pub fn render_app_to_terminal(app: &mut App, width: u16, height: u16) -> Terminal<TestBackend> {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
+    term.draw(|f| app.compose_base_frame(f)).unwrap();
     term
 }
 
@@ -344,7 +344,7 @@ pub fn render_home_shell_with(
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        model.app.render(f);
+        model.app.compose_base_frame(f);
         model.render_home_component(f);
     })
     .unwrap();

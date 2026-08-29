@@ -309,7 +309,7 @@ mod tests {
         let mut wide_terminal = Terminal::new(TestBackend::new(160, 30)).unwrap();
         wide_terminal
             .draw(|frame| {
-                model.app.render(frame);
+                model.app.compose_base_frame(frame);
                 model.render_music_workspace_component(frame);
             })
             .unwrap();
@@ -344,7 +344,7 @@ mod tests {
         let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
         narrow_terminal
             .draw(|frame| {
-                model.app.render(frame);
+                model.app.compose_base_frame(frame);
                 model.render_music_workspace_component(frame);
             })
             .unwrap();

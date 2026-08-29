@@ -1,5 +1,5 @@
-//! Per-frame layout geometry produced by `render()` and consumed by mouse
-//! hit-testing in `input.rs`.
+//! Per-frame layout geometry produced by `App::compose_base_frame` and
+//! consumed by mouse hit-testing in `input.rs`.
 //!
 //! `App` owns a single `AppLayout` value (`app.layout`) instead of ~35
 //! scattered `layout_*`/`*`/`queue_*` fields. Grouping by view
@@ -7,12 +7,13 @@
 //! inventing a new one.
 //!
 //! Render code does not write into `self.layout` in place. Each call to
-//! `App::render` builds a fresh, local `AppLayout::default()` and threads it
+//! `App::compose_base_frame` builds a fresh, local `AppLayout::default()` and threads it
 //! (or the relevant per-view sub-struct) through the render call graph as an
 //! explicit parameter; every render function that used to write
 //! `self.layout.<view>.<field> = ...` now writes `layout.<field> = ...` on
-//! that local value instead. Only once the full pass completes does `render`
-//! swap it into `self.layout` in a single atomic assignment. This means
+//! that local value instead. Only once the full pass completes does
+//! `compose_base_frame` swap it into `self.layout` in a single atomic
+//! assignment. This means
 //! `self.layout` (read by `input.rs`) always reflects the last frame that
 //! rendered in full, or is left completely untouched by an early return
 //! (e.g. the zero-area guard) -- it can never hold a mix of fields from two
@@ -94,7 +95,7 @@ pub(crate) struct LayoutMain {
     /// The full area `App::render_home_list` was given (hero + pills + list,
     /// not just the inner list). The shell reads this to re-paint the
     /// mounted `HomeComponent`'s `view()` over the same area right after
-    /// `App::render` returns (task 3.4).
+    /// `App::compose_base_frame` returns (task 3.4).
     pub home_area: Rect,
     /// The full area passed to the Feeds renderer. The shell uses this to
     /// repaint the mounted `FeedsComponent` over the legacy frame.
@@ -191,7 +192,7 @@ pub(crate) struct LayoutMain {
     /// underpaint renderer was removed.
     pub audiobookshelf_book_wide_right_area: Rect,
     /// The destination (`self.tab`) the last completed render frame was drawn
-    /// for. Set by `App::render` only on the layout that completes and is
+    /// for. Set by `App::compose_base_frame` only on the layout that completes and is
     /// installed, never on intermediate drafts; the fresh-frame replacement
     /// (a new `AppLayout::default()` per frame) resets every other field.
     /// Browse mouse handling compares this tag with the normalized selected

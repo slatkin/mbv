@@ -531,7 +531,25 @@ impl App {
                 layout.feeds_area = area;
             }
             TabSelection::AudiobookshelfLibrary(_) => {
-                self.render_audiobookshelf_library(f, area, focused, layout);
+                // The Book surface is painted by the mounted
+                // `AudiobookshelfBookComponent` (task 5.3d.13) and the Podcast
+                // surface by the mounted `AudiobookshelfPodcastComponent` (task
+                // 5.3d.10, Unit E); the legacy App renderers were removed. This
+                // arm only reserves the destination content area the shell
+                // reads to place those component overlays.
+                let is_book = self.tab.audiobookshelf_index().is_some_and(|index| {
+                    matches!(
+                        self.audiobookshelf_kind_at(index),
+                        Some(
+                            crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book
+                        )
+                    )
+                });
+                if is_book {
+                    layout.audiobookshelf_book_area = area;
+                } else {
+                    layout.audiobookshelf_podcast_area = area;
+                }
             }
             TabSelection::EmbyLibrary(lib_idx) => {
                 self.ensure_music_group_album_level(lib_idx);
@@ -571,38 +589,6 @@ impl App {
                 }
             }
         }
-    }
-
-    fn render_audiobookshelf_library(
-        &mut self,
-        _f: &mut Frame,
-        area: Rect,
-        _focused: bool,
-        layout: &mut LayoutMain,
-    ) {
-        // The Book surface is painted by the mounted `AudiobookshelfBookComponent`
-        // (task 5.3d.13, render ownership); the legacy App renderer was removed, so
-        // nothing is painted here for Book. The Podcast surface is painted by the
-        // mounted `AudiobookshelfPodcastComponent` (task 5.3d.10, Unit E, render
-        // ownership); the legacy App renderer was removed, so nothing is painted
-        // here for Podcast either — the area is reserved for the shell's
-        // `render_audiobookshelf_podcast_component` overlay, mirroring the Book
-        // sibling contract above.
-        if let Some(index) = self.tab.audiobookshelf_index() {
-            if matches!(
-                self.audiobookshelf_kind_at(index),
-                Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book)
-            ) {
-                // Populate the area the shell reads to place the Book component
-                // overlay (`render_audiobookshelf_book_component`), mirroring the
-                // podcast sibling contract in `render_audiobookshelf_podcasts`.
-                layout.audiobookshelf_book_area = area;
-                return;
-            }
-        }
-        // Reserve the Podcast content area for the mounted component overlay;
-        // do not invoke the legacy underpaint renderer (task 5.3d.10, Unit E).
-        layout.audiobookshelf_podcast_area = area;
     }
 
     /// Returns the currently cursor-selected item at the album-folder-listing

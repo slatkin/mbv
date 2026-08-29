@@ -36,7 +36,7 @@ impl App {
     /// frame that rendered in full. Otherwise updates the frame-dependent
     /// inputs (terminal size, mini-view focus, queue column width) and then
     /// computes the root/chrome geometry into the typed partial subresult
-    /// `FrameChromeGeometry`. `render` publishes the migrated chrome fields
+    /// `FrameChromeGeometry`. `compose_base_frame` publishes the migrated chrome fields
     /// into the fresh `AppLayout` and `render_main` consumes this subresult
     /// instead of recomputing root/chrome geometry inline.
     pub(in crate::app) fn compute_frame_layout(
@@ -200,7 +200,14 @@ impl App {
         }
     }
 
-    pub fn render(&mut self, f: &mut Frame) {
+    /// Compose and paint the legacy base frame for one draw: the paint-free
+    /// chrome checkpoint, the fresh draft `AppLayout`, the ordered `render_main`
+    /// dispatch, and one atomic install of the completed layout. Called by the
+    /// sole draw entry point `Model::draw_frame` and, in tests, directly against
+    /// a bare `App`. Not named `render` — issue #607: there is no parallel
+    /// legacy render path, only this base-frame composer beneath the mounted
+    /// component views.
+    pub fn compose_base_frame(&mut self, f: &mut Frame) {
         let area = f.area();
         let Some(chrome) = self.compute_frame_layout(area) else {
             // Zero-dimension terminal: `self.layout` is left untouched here --

@@ -619,7 +619,7 @@ fn render_browser_model(model: &mut Model, width: u16, height: u16) {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        model.app.render(f);
+        model.app.compose_base_frame(f);
         model.render_emby_browser_component(f);
     })
     .unwrap();
@@ -780,7 +780,7 @@ fn emby_browser_refreshes_content_on_repoint_after_switch() {
     let backend = TestBackend::new(120, 40);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        model.app.render(f);
+        model.app.compose_base_frame(f);
         model.render_emby_browser_component(f);
     })
     .unwrap();

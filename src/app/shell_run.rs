@@ -53,7 +53,7 @@ impl Model {
             crate::app::TabSelection::EmbyLibrary(index)
                 if self.inline_search_component_id(index).is_some()
         );
-        self.app.render(f);
+        self.app.compose_base_frame(f);
         if music_resize {
             self.push_music_workspace_content();
         }
