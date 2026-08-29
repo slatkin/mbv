@@ -364,16 +364,10 @@ impl App {
         layout.breadcrumbs = Vec::new();
         layout.selector_tabs = Vec::new();
 
-        // Pre-body legacy chrome (column backgrounds, tab bar, right-column
-        // player panel) underpaints the card/queue/library body below.
-        self.paint_legacy_chrome(
-            f,
-            chrome,
-            playback,
-            player_h,
-            show_controls,
-            now_playing_title,
-        );
+        // Pre-body legacy chrome (column backgrounds, tab bar) underpaints the
+        // card/queue/library body below. The right-column player panel is
+        // painted solely by the mounted `PlaybackComponent` (row 3.9).
+        self.paint_legacy_chrome(f, chrome);
 
         let (lib_area, queue_area) = if self.effective_panel_mode() == PanelMode::LibraryOnly {
             (right_area, Rect::default())
@@ -549,31 +543,30 @@ impl App {
     }
 
     /// Paints the pre-body legacy chrome that underpaints the card/queue/library
-    /// body: the left/right column backgrounds, the tab bar, and the
-    /// right-column player panel.
+    /// body: the left/right column backgrounds and the tab bar.
+    ///
+    /// The right-column player panel is not painted here: the mounted
+    /// `PlaybackComponent` is its sole painter (row 3.9). The queue-only-mode
+    /// player panels stay in `render_main` as the sole legacy renderer (D5),
+    /// because `player_area` is empty in queue-only mode so the component
+    /// cannot paint there.
     ///
     /// Called from within `render_main` at the root/chrome checkpoint -- after
     /// the `self.tab` normalization block and `normalize_stale_browse_destination`,
     /// before any body paint -- because `render_tabs` reads the normalized
     /// `self.tab`. Task 2.3's `Model::draw_frame` will hoist this call out of
     /// `render_main` and settle the `self.tab` normalization ordering so it can
-    /// run after the body. Painting only pre-body chrome for now keeps output
-    /// byte-identical; later rows may fold in the remaining legacy paint.
+    /// run after the body.
     pub(in crate::app::render) fn paint_legacy_chrome(
         &mut self,
         f: &mut Frame,
         chrome: &FrameChromeGeometry,
-        playback: &mut LayoutPlayback,
-        player_h: u16,
-        show_controls: bool,
-        now_playing_title: &Option<(String, Color)>,
     ) {
         let FrameChromeGeometry {
             left_area,
             right_full_area,
             tab_bar_area,
             tabs_area,
-            player_area,
             right_visible,
             queue_focused,
             ..
@@ -599,26 +592,6 @@ impl App {
         // Tab bar at the very top of the right column.
         if right_visible {
             self.render_tabs(f, tab_bar_area, tabs_area);
-        }
-
-        // Player panel below the tab bar.
-        if right_visible && player_h > 0 {
-            let playback_panel_bg = if queue_focused {
-                palette::SURFACE_FOCUSED
-            } else {
-                palette::SURFACE_PLAYBACK
-            };
-            crate::app::render::render_player_panel(
-                f,
-                self.playback_panel_context(
-                    player_area,
-                    playback,
-                    player_h,
-                    show_controls,
-                    now_playing_title,
-                    playback_panel_bg,
-                ),
-            );
         }
     }
 }

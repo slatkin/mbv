@@ -186,6 +186,41 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
     assert_eq!(layout.next_area.width, next_glyph.width() as u16);
 }
 
+/// `remove-migrated-surface-underpaint` 3.9 (D4): the right-column player
+/// chrome is painted solely by the mounted `PlaybackComponent`. The legacy
+/// base frame (`App::render`) still reserves `player_area` as the placement
+/// hand-off, but paints no seekbar or transport row there. Mirrors
+/// `wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows`.
+#[test]
+fn player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel() {
+    let mut app = make_movie_app();
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.queue_len = 1;
+        st.current_idx = 0;
+        st.runtime_ticks = 90 * TICKS_PER_SECOND;
+    }
+
+    let terminal = render_app_to_terminal(&mut app, 100, 20);
+
+    let player_area = app.layout.playback.player_area;
+    assert!(
+        player_area.height > 0 && player_area.width > 0,
+        "player_area must still be reserved for the component: {player_area:?}"
+    );
+    let buf = terminal.backend().buffer();
+    for y in player_area.y..player_area.y + player_area.height {
+        for x in player_area.x..player_area.x + player_area.width {
+            assert_eq!(
+                buf[(x, y)].symbol().trim(),
+                "",
+                "legacy base frame painted into the player panel at ({x}, {y})"
+            );
+        }
+    }
+}
+
 #[test]
 fn narrow_queue_only_panel_puts_title_on_bottom_now_playing_row() {
     let mut app = make_app_stub();
@@ -529,8 +564,23 @@ fn remote_status_spans_shows_local_device_name_when_off() {
     assert!(!text.contains("remote:"));
 }
 
-fn rendered_text(app: &mut App, width: u16, height: u16) -> String {
-    let terminal = render_app_to_terminal(app, width, height);
+fn rendered_text(app: App, width: u16, height: u16) -> String {
+    // The now-playing title is painted solely by the mounted
+    // `PlaybackComponent` (row 3.9), so render through the shell path that
+    // syncs and paints it rather than the legacy base frame alone. The first
+    // frame installs `layout.playback.player_area`; `sync_playback` projects
+    // that area into the component, mirroring the steady-state loop order.
+    let mut model = crate::app::shell::Model::new(app);
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| model.app.render(f)).unwrap();
+    model.sync_playback();
+    terminal
+        .draw(|f| {
+            model.app.render(f);
+            model.render_playback_component(f);
+        })
+        .unwrap();
     let buf = terminal.backend().buffer();
     let area = buf.area;
     let mut text = String::new();
@@ -572,8 +622,8 @@ fn dispatched_cast_status(state: mbv_core::cast_client::CastPlaybackState) -> Ap
 #[test]
 fn cast_now_playing_title_renders_while_the_receiver_is_playing() {
     use mbv_core::cast_client::CastPlaybackState;
-    let mut app = dispatched_cast_status(CastPlaybackState::Playing);
-    let text = rendered_text(&mut app, 100, 20);
+    let app = dispatched_cast_status(CastPlaybackState::Playing);
+    let text = rendered_text(app, 100, 20);
     assert!(
         text.contains("Chromecast Episode Title"),
         "expected the dispatched item's title while the receiver plays:\n{text}"
@@ -583,8 +633,8 @@ fn cast_now_playing_title_renders_while_the_receiver_is_playing() {
 #[test]
 fn cast_now_playing_title_is_absent_while_the_receiver_is_idle() {
     use mbv_core::cast_client::CastPlaybackState;
-    let mut app = dispatched_cast_status(CastPlaybackState::Idle);
-    let text = rendered_text(&mut app, 100, 20);
+    let app = dispatched_cast_status(CastPlaybackState::Idle);
+    let text = rendered_text(app, 100, 20);
     assert!(
         !text.contains("Chromecast Episode Title"),
         "an idle receiver should show no now-playing title:\n{text}"

@@ -295,11 +295,48 @@ six production files and preserves behaviour.
       component directly and is unaffected. The dead `search_active` blocks
       in `render_list` are left in place — possible follow-up cleanup, out of
       scope for 3.8.
-- [ ] 3.9 Player chrome — suppress the legacy player-chrome paint if the scout
+- [x] 3.9 Player chrome — suppress the legacy player-chrome paint if the scout
       confirms `PlaybackComponent` is the sole painter; otherwise move the
       chrome paint into `paint_legacy_chrome` and record it as sole-legacy.
-- [ ] 3.10 After each unit: `rtk cargo nextest run -p mbv` full suite,
+      Real writer: the right-column player panel was a true redundant
+      underpaint — `PlaybackComponent::view` (`src/app/components/playback.rs`)
+      and `paint_legacy_chrome` (`src/app/render/screens/root.rs`) both called
+      `render_player_panel` into the same `player_area` every right-column
+      frame. Deleted the `render_player_panel` block from `paint_legacy_chrome`
+      and dropped its now-unused `playback`/`player_h`/`show_controls`/
+      `now_playing_title` params (and the `player_area` destructure); the
+      queue-only-mode panels in `render_main` (~lines 411/429) stay untouched
+      as the sole legacy renderer (D5) because `player_area` is
+      `Rect::default()` in queue-only mode. Background match confirmed: legacy
+      `queue_focused` (`root.rs:107`) and component `focused`
+      (`shell_playback.rs`) are the identical
+      `matches!(effective_panel_focus(), PanelFocus::Queue)` expression, both
+      resolving `SURFACE_FOCUSED` / `SURFACE_PLAYBACK`. Field audit: the only
+      production reader of `App.layout.playback.{seekbar,play_pause,stop,next}_area`
+      is `seek_to_col` (`mouse_gestures.rs`), reached solely via
+      `PlaybackRequest::SeekTo` from `PlaybackComponent`'s own seekbar
+      left-click — a D16 accepted-broken mouse path, not a hit-test/layout/
+      persistence reader; after this change that field stays `Rect::default()`
+      in right-column mode so seekbar click-seek is a no-op there (mouse,
+      out of scope). Parity fix: `sync_playback` derived the now-playing title
+      from the local queue slot even when `effective_playback_state` reports
+      `active` for a cast target with an empty local queue, so the cast title
+      (previously painted by the legacy chrome) vanished; added a
+      `cast_now_playing_title` fallback in that branch. Tests: added D4 proof
+      `player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel`
+      (`tests.rs`), and rerouted `rendered_text` (feeding the two
+      `cast_now_playing_title_*` tests) through the shell playback-component
+      path since the legacy frame no longer paints the title. Component-direct
+      `render_player_panel`/`playback_panel_context` tests unaffected;
+      `startup_frame_paints_loading_affordances_not_blank_panes` still passes.
+- [x] 3.10 After each unit: `rtk cargo nextest run -p mbv` full suite,
       `rtk ast-grep scan`, `rtk cargo clippy --workspace --all-targets` green.
+      All Section 3 units pass the gate: full `rtk cargo nextest run -p mbv
+      --no-fail-fast` is green except the pre-existing allowed failure
+      `browser_local_navigation_mirrors_legacy_flat_movement`; `rtk ast-grep
+      scan` holds at 66 pre-existing errors (no new); `rtk cargo clippy
+      --workspace --all-targets` holds at 97 warnings (no new); `rtk cargo fmt`
+      accepted.
 
 ## 4. Dead renderer deletion (D6)
 
