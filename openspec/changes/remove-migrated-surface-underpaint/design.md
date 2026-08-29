@@ -72,7 +72,22 @@ a legacy variant is, (e) the smallest compile-complete suppression units in
 dependency order. This mirrors D17's scout requirement and the
 `scout-remove-browser-cursor-scroll-mirror.md` precedent.
 
-**D2 — Split `App::render` into `compute_frame_layout` + `paint_legacy_chrome`.**
+**D2 — Stage the geometry/paint split by bounded surface family.**
+
+The original one-shot row 2.1 was widened by explicit user approval after the
+scout found 18 render modules and 110 layout assignments. Commit
+`94002d25b75e0f34df200c3def57939c6cffd156` is a preparatory partial extraction:
+it adds the seam but does not satisfy the geometry-only contract and must not
+be treated as completion. The remaining work is staged so each family moves
+its layout publication behind a paint-free seam, with focused compile and
+characterization gates before the next family.
+
+The family boundaries are: (A) root/chrome, (B) queue/pills, (C)
+lists/albums, (D) feeds/home, (E) music surfaces, and (F) TV/widgets. A family
+may touch only its named production modules and its tests; no family changes
+interaction, visual design, or later suppression behavior.
+
+**D2 — Split `App::render` into `compute_frame_layout` + `paint_legacy_chrome`."},{
 
 `compute_frame_layout(&mut self, area) -> AppLayout` runs the existing geometry
 math (the `Layout::vertical`/`Layout::horizontal` splits, breakpoint selection,
