@@ -81,25 +81,21 @@ impl AudiobookshelfPodcastComponent {
                     .any(|show| &show.library_item_id == id)
             })
         });
-        match survivor {
-            Some((id, episode_filter, episode_selection, scroll)) => {
-                self.state.selected_id = id;
-                self.state.episodes = self
-                    .state
-                    .selected_id
-                    .as_ref()
-                    .and_then(|id| self.state.detail_cache.get(id).cloned())
-                    .or_else(|| snapshot.episodes.clone());
-                self.state.episode_filter = episode_filter;
-                self.state.episode_selection = episode_selection;
-                self.state.scroll = scroll.min(self.state.shows.len().saturating_sub(1));
-            }
-            None if self.initialized => {
-                self.state.episode_filter = AudiobookshelfEpisodeFilter::All;
-                self.state.episode_selection = None;
-                self.state.scroll = 0;
-            }
-            None => {}
+        if let Some((id, episode_filter, episode_selection, scroll)) = survivor {
+            self.state.selected_id = id;
+            self.state.episodes = self
+                .state
+                .selected_id
+                .as_ref()
+                .and_then(|id| self.state.detail_cache.get(id).cloned())
+                .or_else(|| snapshot.episodes.clone());
+            self.state.episode_filter = episode_filter;
+            self.state.episode_selection = episode_selection;
+            self.state.scroll = scroll.min(self.state.shows.len().saturating_sub(1));
+        } else if self.initialized {
+            self.state.episode_filter = AudiobookshelfEpisodeFilter::All;
+            self.state.episode_selection = None;
+            self.state.scroll = 0;
         }
         self.initialized = true;
         self.focused = focused;

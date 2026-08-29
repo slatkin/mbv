@@ -80,24 +80,19 @@ impl AudiobookshelfBookComponent {
                     .any(|book| &book.library_item_id == id)
             })
         });
-        match survivor {
-            Some((id, chapter_selection, browser_offset, selected_bucket)) => {
-                self.state.selected_id = id;
-                self.state.chapter_selection = chapter_selection;
-                self.browser_offset = browser_offset;
-                self.state.selected_bucket =
-                    selected_bucket.min(self.state.buckets.len().saturating_sub(1));
-            }
-            None if self.initialized => {
-                self.state.chapter_selection = None;
-                self.browser_offset = 0;
-                self.state.selected_bucket = self
-                    .state
-                    .selected_bucket
-                    .min(self.state.buckets.len().saturating_sub(1));
-            }
-            None => {}
+        if let Some((id, chapter_selection, browser_offset, selected_bucket)) = survivor {
+            self.state.selected_id = id;
+            self.state.chapter_selection = chapter_selection;
+            self.browser_offset = browser_offset;
+            self.state.selected_bucket = selected_bucket;
+        } else if self.initialized {
+            self.state.chapter_selection = None;
+            self.browser_offset = 0;
         }
+        self.state.selected_bucket = self
+            .state
+            .selected_bucket
+            .min(self.state.buckets.len().saturating_sub(1));
         self.initialized = true;
         self.focused = focused;
         self.images_enabled = images_enabled;

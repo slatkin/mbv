@@ -58,6 +58,18 @@ component-local state on every render pass; it MAY push shell-owned
 navigation state (a browse level's resting cursor/scroll) into the component
 only at the discrete event where the visible level changes.
 
+A movement stride (page size, column count, or equivalent) used to resolve a
+component-local movement SHALL have exactly one source. Where the component
+resolves the movement, that source is the component's own painted geometry;
+the shell SHALL NOT apply a second stride to the same movement.
+
+Where a projection replaces a component's state wholesale, the component's own
+interaction values SHALL take precedence over the incoming snapshot's
+unconditionally. When the projected content no longer contains the item a
+component-owned value referred to, the component SHALL reset that value to its
+own default or clamp it against the new content; it SHALL NOT fall through to
+the value carried in the shell's snapshot.
+
 #### Scenario: Local interaction does not become a global message
 
 - **WHEN** the user moves a cursor, scrolls, cycles a filter chip, or edits a local form field
@@ -87,6 +99,33 @@ only at the discrete event where the visible level changes.
 - **AND** the shell applies that index directly to its persisted state and
   runs the associated effects, without independently recomputing the
   movement
+
+#### Scenario: Audiobookshelf show and book movement carries a resolved value
+
+- **WHEN** the user moves the show cursor, the book cursor, the surname-bucket
+  pill, or the chapter focus in an Audiobookshelf browser
+- **THEN** the component resolves the movement against its own content and
+  geometry and emits a `Msg` carrying the resolved index, bucket position, or
+  chapter selection
+- **AND** the shell applies that value through its existing index-taking entry
+  point, running the position-save and detail-fetch effects unchanged
+- **AND** no `App` helper recomputes the same movement from a delta
+
+#### Scenario: Paging uses one stride
+
+- **WHEN** the user pages a component-owned list whose movement also drives a
+  shell-owned effect
+- **THEN** the page stride comes from the component's painted geometry alone
+- **AND** the shell does not re-page the same movement with a stride of its own
+
+#### Scenario: A projection never reinstates a component value the shell happens to hold
+
+- **WHEN** the shell pushes content in which the item a component-owned
+  selection referred to is no longer present
+- **THEN** the component resets that selection, and any scroll, filter, or
+  sub-selection derived from it, to its own defaults
+- **AND** the values carried in the shell's snapshot for those fields are
+  discarded rather than adopted
 
 #### Scenario: Painted output is not written back into shell state every frame
 
