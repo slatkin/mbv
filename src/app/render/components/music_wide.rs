@@ -204,7 +204,6 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     ctx.publish_geometry(area, layout);
     layout.wide_music_track_hitmap.clear();
     let mut output = MusicWideRenderOutput::default();
-
     let Some(panes) = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y) else {
         return output;
     };
@@ -225,6 +224,8 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     let track_active = ctx.track_cursor.is_some();
     let left_focused = ctx.focused && track_active;
     let right_focused = ctx.focused && !track_active;
+    // Reuse the arrangement computed during `publish_geometry` so the wide
+    // frame runs pure arrangement math exactly once per frame.
     let left_layout = music_arrangement::wide_music_left_layout(
         left_area,
         ctx.selected_album.is_some() && ctx.images_enabled,

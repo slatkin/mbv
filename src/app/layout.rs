@@ -122,12 +122,15 @@ pub(crate) struct LayoutMain {
     pub queue_selected_item_rect: Option<Rect>,
     /// Pill/tab hitboxes published by the owning pill painters; placement and
     /// width remain owned by the shared pill-bar component.
+    /// Pill/tab hitboxes published by the owning pill painters; placement and
+    /// width remain owned by the shared pill-bar component. The music
+    /// group-selector publishes these before paint.
     pub selector_tabs: Vec<(Rect, usize)>,
     pub breadcrumbs: Vec<(u16, u16, u16, usize)>,
     /// Per-track hit targets for the wide Music left pane. Each entry is
     /// `(screen_rect, track_index)` covering all wrapped physical rows of
     /// that logical track. Cleared every frame; populated only when the
-    /// wide Music layout is active.
+    /// wide Music layout is active. This remains paint-coupled by design.
     pub wide_music_track_hitmap: Vec<(Rect, usize)>,
     /// Bounding rect of the wide Music left pane's hero artwork area.
     /// Clicks here should not activate track selection or playback.
@@ -157,6 +160,7 @@ pub(crate) struct LayoutMain {
     /// indexed relative to this rect's top -- set by both the wide and
     /// narrow inline callers of the shared browser renderer, since
     /// they share row-target indexing but differ in outer gating rect.
+    /// This is published at its natural checkpoint before paint.
     pub wide_music_browser_area: Rect,
     /// Bounding rect of the Audiobookshelf podcast tab's right pane (show
     /// workspace). Populated only when the wide hero-on-left podcast layout

@@ -1,6 +1,7 @@
 use super::components::album::AlbumRowsCursorCtx;
 use super::components::album_detail::album_hero_detail_rows;
 use super::components::hero::HERO_BLOCK_EXTRA_ROWS;
+use super::components::music_wide::MusicWideRenderCtx;
 use super::screens::album_plan::{
     sorted_group_album_order, GroupedAlbumDisplayRow, HeaderFocusCtx,
 };
@@ -8,6 +9,7 @@ use super::test_helpers::*;
 use super::*;
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
 use ratatui::Terminal;
 
 #[test]
@@ -650,4 +652,44 @@ fn grouped_music_maps_reordered_non_contiguous_album_source() {
             .count(),
         1
     );
+}
+
+#[test]
+fn wide_music_frame_publishes_identical_geometry_from_publish_and_paint() {
+    // The paint path must consume the arrangement published by
+    // `publish_geometry` rather than recomputing it: the pure arrangement
+    // math runs once per wide frame and both passes produce the same
+    // geometry.
+    let app = make_music_group_app();
+    let mut app2 = make_music_group_app();
+
+    let mut publish_layout = LayoutMain::default();
+    let mut paint_layout = LayoutMain::default();
+
+    let ctx = app.wide_music_render_ctx(0);
+    ctx.publish_geometry(Rect::new(0, 0, 120, 24), &mut publish_layout);
+
+    let mut terminal = Terminal::new(TestBackend::new(120, 24)).unwrap();
+    terminal
+        .draw(|f| {
+            render_wide_music_group_with_ctx(
+                f,
+                Rect::new(0, 0, 120, 24),
+                &app2.wide_music_render_ctx(0),
+                &mut paint_layout,
+            );
+        })
+        .unwrap();
+
+    assert_eq!(publish_layout.wide_music_area, paint_layout.wide_music_area);
+    assert_eq!(publish_layout.left_area, paint_layout.left_area);
+    assert_eq!(
+        publish_layout.wide_music_right_area,
+        paint_layout.wide_music_right_area
+    );
+    assert_eq!(
+        publish_layout.wide_music_art_area,
+        paint_layout.wide_music_art_area
+    );
+    assert_eq!(publish_layout.hero_area, paint_layout.hero_area);
 }
