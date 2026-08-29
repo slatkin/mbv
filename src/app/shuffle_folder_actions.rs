@@ -13,21 +13,20 @@ impl App {
         if lib_idx >= self.libs.len() {
             return;
         }
-        // Resolve the folder target at the selected browse item, delegating
-        // the current-parent fallback to the shared tail below. Cloning this
-        // resolution into a `shuffle_play_target` call keeps the legacy
-        // `shuffle_play(lib_idx)` behaviour byte-for-byte identical while
-        // letting the component-sourced browser Ctrl+S path reuse the same
-        // explicit-target tail without this cursor read.
-        let parent_id = {
-            let lib = &self.libs[lib_idx];
-            let item = lib
-                .nav_stack
-                .last()
-                .and_then(|lvl| lvl.items.get(lvl.cursor));
-            item.filter(|i| i.is_folder).map(|i| i.id.clone())
+        // Resolve the item at the nav level's cursor (task 4.3, R13: the
+        // legacy `impl App` path resolves at its own boundary and hands the
+        // resolved item to the shared selected-item tail — never a
+        // `BrowseLevel.cursor` read inside the effect).
+        let item = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.last())
+            .and_then(|lvl| lvl.items.get(lvl.cursor))
+            .cloned();
+        let Some(item) = item else {
+            return;
         };
-        self.shuffle_play_target(lib_idx, parent_id);
+        self.shuffle_play_selected(lib_idx, item);
     }
 
     /// Shuffle from the generic Emby browser's component-resolved selected
