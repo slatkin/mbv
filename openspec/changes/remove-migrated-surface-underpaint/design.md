@@ -83,17 +83,24 @@ its layout publication behind a paint-free seam, with focused compile and
 characterization gates before the next family.
 
 The family boundaries are: (A) root/chrome, (B) queue/pills, (C)
-lists/albums, (D) feeds/home, (E) music surfaces, and (F) TV/widgets. A family
-may touch only its named production modules and its tests; no family changes
-interaction, visual design, or later suppression behavior.
+lists/albums, (D) feeds/home, (E) music surfaces, and (F) TV/widgets. `AppLayout`
+is the aggregate shared by all families, so root/chrome does not claim to
+compute or publish a complete aggregate prematurely. A family may touch only
+its named production modules and its tests; no family changes interaction,
+visual design, or later suppression behavior.
 
 **D2 — Split `App::render` into `compute_frame_layout` + `paint_legacy_chrome`."},{
 
-`compute_frame_layout(&mut self, area) -> AppLayout` runs the existing geometry
-math (the `Layout::vertical`/`Layout::horizontal` splits, breakpoint selection,
-indicator rects, `layout.main` / `layout.playback` / `layout.tabs_area`) and
-paints nothing. It still does the atomic `self.layout = layout` swap and the
-early-return zero-area guard.
+`compute_frame_layout` owns a plain-data frame context/result seam and runs
+paint-free root/chrome geometry. In 2.1a it publishes only the typed
+root/chrome subresult; legacy aggregate fields for queue/list/card and other
+deferred families remain authoritative until their rows. The helper is
+zero-area-safe before every mutation. Each migrated field has one authoritative
+computation, while deferred fields retain their existing computation until
+migrated. `render_main` and chrome painters consume the migrated result rather
+than conflictingly recomputing it. Complete `AppLayout` publication and
+retirement of deferred legacy computation wait for the final family
+consolidation gate.
 
 `paint_legacy_chrome(&mut self, f)` paints only what no component owns this
 frame: tab bar, status bar, player chrome (until `PlaybackComponent` is the sole

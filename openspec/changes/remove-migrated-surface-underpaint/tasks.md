@@ -28,12 +28,19 @@ contract and is not proof that this section is complete.
 
 - [x] 2.1-prep Preserve the preparatory seam in `root.rs` from commit 94002d25;
       do not treat it as the completed geometry extraction.
-- [ ] 2.1a Root/chrome family: make `compute_frame_layout` zero-area-safe before
-      any mutation and move root/chrome-owned `AppLayout` initialization and
-      publication into the paint-free pass. Production boundary:
-      `src/app/render/screens/root.rs`, `src/app/render/components/chrome*.rs`,
-      and directly required root/chrome tests. Verify focused root/chrome tests,
-      `cargo check -p mbv`, and fmt.
+- [ ] 2.1a Root/chrome foundation: introduce the plain-data frame
+      context/result seam and migrate only root/chrome geometry into an
+      explicitly partial typed subresult. `AppLayout` remains the aggregate
+      shared by all families; non-migrated queue/list/card/etc. fields remain
+      authoritative under their legacy computation until later rows. The seam
+      must be zero-area-safe before any mutation, and each migrated field must
+      have one authoritative computation consumed by `render_main`/painters.
+      Production boundary: `src/app/layout.rs`,
+      `src/app/render/screens/root.rs`,
+      `src/app/render/components/chrome.rs`, `chrome_player.rs`,
+      `chrome_status.rs`, and `chrome_tabs.rs`, plus focused tests only if
+      required. Verify focused root/chrome tests, `cargo check -p mbv`, and
+      fmt.
 - [ ] 2.1b Queue/pills family: move queue and pill geometry publication into the
       paint-free seam without changing paint. Boundary:
       `render/screens/queue.rs`, `render/screens/pills.rs`, queue/pill component
@@ -54,7 +61,13 @@ contract and is not proof that this section is complete.
       producers, preserving breakpoint behavior. Boundary: `tv_wide.rs`,
       `widgets.rs`, and focused TV/widget tests. Depends on 2.1e. Verify TV
       tests and check/fmt.
-- [ ] 2.2 After families 2.1a–f, extract `paint_legacy_chrome` from the now
+- [ ] 2.1g Final aggregate consolidation: publish the complete `AppLayout`
+      from the family results, retire deferred legacy field computation, and
+      verify one authoritative computation for every aggregate field. Boundary
+      is the union of the six family boundaries plus `layout.rs` as needed.
+      Depends on 2.1a–f. Verify full render characterization, check, fmt, and
+      the aggregate zero-area contract.
+- [ ] 2.2 After 2.1g, extract `paint_legacy_chrome` from the now
       paint-free geometry pass, preserving all legacy painting initially.
       Depends on 2.1f. Verify full nextest and fmt.
 - [ ] 2.3 Add `Model::draw_frame` in `shell_run.rs` (or `shell_draw.rs` if
