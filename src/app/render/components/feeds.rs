@@ -148,15 +148,14 @@ pub(in crate::app) fn render_feeds_content(
     // there's no hero to be below.
     let will_show_hero = has_subs && !model.visible_entries.is_empty();
 
-    let (selector_tabs, list_area) = if will_show_hero {
-        (Vec::new(), area)
-    } else {
-        render_selector_content(f, area)
-    };
+    let (selector_tabs, list_area) = render_selector_content(f, area);
     layout.selector_tabs = selector_tabs;
     layout.left_area = list_area;
     if list_area.height == 0 {
         return;
+    }
+    if will_show_hero {
+        layout.hero_area = area;
     }
     // Empty / help state.
     if !has_subs {
@@ -250,9 +249,10 @@ pub(in crate::app) fn render_feeds_content(
         paint_hero_content(f, content_rect, &hero_content, focused);
     }
 
+    // Paint the post-hero selector content now that layout publication is
+    // already complete for this frame's natural checkpoint.
     let (selector_tabs, list_area) = render_selector_content(f, post_hero_area);
     layout.selector_tabs = selector_tabs;
-
     layout.left_area = list_area;
     if list_area.height == 0 {
         return;
