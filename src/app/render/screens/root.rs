@@ -1,4 +1,6 @@
-use crate::app::layout::{AppLayout, FrameChromeGeometry, LayoutMain, LayoutPlayback};
+use crate::app::layout::{
+    AppLayout, CardGeometry, FrameChromeGeometry, LayoutMain, LayoutPlayback,
+};
 use crate::app::render::components::chrome;
 use crate::app::render::components::widgets::{
     render_queue_panel_frame, right_panel_content_area, COLUMN_GAP,
@@ -410,8 +412,15 @@ impl App {
             // the rows below it. Short terminals keep that same structure.
             let is_queue_only = self.effective_panel_mode() == PanelMode::QueueOnly;
             let is_wide = is_queue_only && left_area.width >= 100;
+            // The card's cache/size/fetch operation is authoritative for its
+            // dimensions. Publish its unchanged tuple result into the fresh
+            // frame draft before deriving the downstream queue area.
             let (card_h, card_w, _) = self.render_card(f, left_content, is_wide);
-            let mut left_remaining = left_content.height.saturating_sub(card_h);
+            layout.card = CardGeometry {
+                height: card_h,
+                width: card_w,
+            };
+            let mut left_remaining = left_content.height.saturating_sub(layout.card.height);
 
             // Queue-only mode has no right column, so the playback panel
             // (seekbar + title + controls) renders here instead: stacked
@@ -420,10 +429,10 @@ impl App {
             if is_queue_only {
                 if is_wide {
                     let panel_area = Rect {
-                        x: left_content.x + card_w + 2,
+                        x: left_content.x + layout.card.width + 2,
                         y: left_content.y,
-                        width: left_content.width.saturating_sub(card_w + 2),
-                        height: card_h,
+                        width: left_content.width.saturating_sub(layout.card.width + 2),
+                        height: layout.card.height,
                     };
                     f.render_widget(
                         Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
@@ -443,7 +452,7 @@ impl App {
                 } else {
                     let panel_area = Rect {
                         x: left_content.x,
-                        y: left_content.y + card_h,
+                        y: left_content.y + layout.card.height,
                         width: left_content.width,
                         height: player_h,
                     };
@@ -467,7 +476,7 @@ impl App {
             (
                 right_area,
                 Rect {
-                    y: left_content.y + card_h + narrow_player_h + 1,
+                    y: left_content.y + layout.card.height + narrow_player_h + 1,
                     height: queue_h,
                     ..left_content
                 },

@@ -50,9 +50,24 @@ pub(crate) struct LayoutPlayback {
     pub idle_feed_link_area: Rect,
 }
 
+/// Geometry produced by the queue card's authoritative render operation.
+///
+/// The card renderer returns the existing `(height, width, loading)` tuple;
+/// this typed checkpoint records its dimensions in the fresh frame draft so
+/// downstream queue placement consumes the published dimensions instead of
+/// deriving them independently.
+#[derive(Default)]
+pub(crate) struct CardGeometry {
+    pub height: u16,
+    pub width: u16,
+}
+
 /// Library panel, queue panel, and home-grid geometry.
 #[derive(Default)]
 pub(crate) struct LayoutMain {
+    /// Card geometry published immediately after the card's authoritative
+    /// cache/size/fetch render path.
+    pub card: CardGeometry,
     /// Full expanded sidebar covered by an F1-F4 panel, when present.
     pub panel_area: Rect,
     /// Content bounds inside `panel_area`, shared with panel mouse hit-testing.
