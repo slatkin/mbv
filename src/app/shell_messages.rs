@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::components::MusicWorkspaceComponent;
 use std::time::Instant;
 
 impl Model {
@@ -16,7 +17,21 @@ impl Model {
             }
             Msg::Shell(ShellRequest::MusicAlbumActivate) => {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    self.app.activate_album_folder_row(lib_idx);
+                    // Outcome 3 reader: get the album from the component, which owns
+                    // the selection cursor. Fall back to the App cursor only if the
+                    // component is not mounted (should not happen in normal flow).
+                    let album = self
+                        .music_workspace_id
+                        .as_ref()
+                        .and_then(|id| self.application.get_component(id))
+                        .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
+                        .and_then(|comp| comp.selected_item())
+                        .or_else(|| self.app.selected_album_item(lib_idx));
+                    if let Some(album) = album {
+                        if !self.app.layout.main.is_wide_music_active() {
+                            self.app.open_album_selection_modal(&album);
+                        }
+                    }
                 }
                 self.push_music_workspace_content();
             }

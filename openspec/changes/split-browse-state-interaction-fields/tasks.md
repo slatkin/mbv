@@ -61,10 +61,17 @@
       write-back as a `&mut usize` render parameter. Verify:
       `rtk cargo check -p mbv` after each group; commit in
       reviewable units rather than one sweep.
-- [ ] 4.4 Re-point every outcome-3 reader from 1.1 (and 1.1b) to the component
+- [~] 4.4 Re-point every outcome-3 reader from 1.1 (and 1.1b) to the component
       accessor, adding the accessors 1.1b names where they do not exist yet
       (`MusicWorkspaceComponent::selected_item`). Verify:
       `rtk cargo check -p mbv`.
+      R16/R18 (Music `selected_item`) done in `c99e496d`; R14
+      (`library_list_render_ctx` and its transitive readers `list.rs`,
+      `tv_wide.rs`, `detail_series_view.rs`, `music_wide_browser.rs`,
+      R19/R20 in `detail.rs`) still open. R14 constraint: verify the mounted
+      component is reachable at the `library_list_render_ctx` call site; if it
+      is not, stop and report the concrete design blocker per task 1.3 — do
+      not add an App-side mirror or invent a fourth D2 outcome.
 - [ ] 4.5 Delete `BrowseLevel::cursor` and `BrowseLevel::scroll`. Verify:
       `rtk cargo check -p mbv` is clean with no transitional accessor left
       behind (D5).

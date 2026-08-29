@@ -10,15 +10,15 @@ impl Model {
     /// component owns the cursor index, the shell owns the target resolution
     /// (album + cached track list). Returns `None` when no track is focused,
     /// the cache has no entry, or the cursor is out of bounds.
-    pub(super) fn focused_music_track(&self, lib_idx: usize) -> Option<(String, EmbyItem)> {
+    pub(super) fn focused_music_track(&self, _lib_idx: usize) -> Option<(String, EmbyItem)> {
         let id = self.music_workspace_id.as_ref()?;
-        let cursor = self
+        let comp = self
             .application
             .get_component(id)?
             .as_any()
-            .downcast_ref::<MusicWorkspaceComponent>()?
-            .track_cursor()?;
-        let album = self.app.selected_album_item(lib_idx)?;
+            .downcast_ref::<MusicWorkspaceComponent>()?;
+        let cursor = comp.track_cursor()?;
+        let album = comp.selected_item()?;
         let track = self
             .app
             .album_tracks_cache
@@ -101,7 +101,17 @@ impl Model {
         {
             return;
         }
-        let selected_album = self.app.selected_album_item(index);
+        // The Music component owns the selection cursor. Derive the selected
+        // album from the component's authoritative selection (its own cursor),
+        // not the App browse cursor. Only on first mount fall back to the
+        // App-derived item.
+        let list = self.app.library_list_render_ctx(index, true);
+        let selected_album = self
+            .application
+            .get_component(id)
+            .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
+            .and_then(MusicWorkspaceComponent::selected_item)
+            .or_else(|| list.selected_item().cloned());
         if let Some(album) = selected_album.as_ref() {
             if !self.app.album_tracks_cache.contains_key(&album.id)
                 && !self.app.album_tracks_loading.contains(&album.id)

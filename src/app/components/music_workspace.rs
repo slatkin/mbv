@@ -126,6 +126,21 @@ impl MusicWorkspaceComponent {
         self.album_cursor
     }
 
+    /// The album item under the component's own album cursor, cloned out of
+    /// the cached render context. Mirrors `TvWorkspaceComponent::selected_item()`
+    /// for outcome 3 readers (R16/R18): the shell supplies this instead of
+    /// reading `BrowseLevel.cursor` for selected-album construction.
+    /// First-mount fallback to App-derived item when the component is
+    /// freshly mounted (before the first content push from the shell).
+    pub(in crate::app) fn selected_item(&self) -> Option<mbv_core::api::EmbyItem> {
+        self.context
+            .list
+            .clone()
+            .with_cursor_scroll(self.album_cursor, self.album_scroll)
+            .selected_item()
+            .cloned()
+    }
+
     fn move_album_rows(&mut self, rows: i64, columns: usize, wrap: bool) -> Option<usize> {
         let order = &self.context.album_order;
         if order.is_empty() {
