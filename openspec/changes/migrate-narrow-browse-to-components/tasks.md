@@ -23,8 +23,9 @@ Known at planning time (verified against `b34ee375`):
 | Emby TV browse | narrow | F1 | task 3 |
 | Emby podcast browse | narrow **and** wide | F1 | task 3 |
 | Emby generic/Movies/home-video browse | narrow | F2 | task 3 |
-| Emby grouped Music browse | narrow | F2 (degenerate) | task 3 |
-| Queue | all | F2 | deferred — `remove-queue-legacy-underpaint` |
+| Emby grouped Music browse | narrow | **F1 + F2** — mounted but never focused (`shell_library.rs:64-68`) *and* never painted | task 3 |
+| Feed / home-video group picker | all | F1 — nothing mounts (`shell_browser.rs:130`), all nav dead | task 3 |
+| Queue | all | F2 | deferred — #629 `remove-queue-legacy-underpaint` |
 
 ## 2. Ownership for every surface (D4, D5, D6)
 

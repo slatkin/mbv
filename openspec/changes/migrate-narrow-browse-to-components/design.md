@@ -14,12 +14,26 @@ Actual per-surface state at the narrow breakpoint:
 | Narrow surface | Component mounted? | Painted by | Symptom |
 |---|---|---|---|
 | generic / Movies / home video | `BrowserComponent`, yes | **both** legacy `render_list` *and* `BrowserComponent::view`, same `left_area` | double paint, diverged cursors |
-| grouped Music | `MusicWorkspaceComponent`, yes (no width gate on `music_workspace_component_id`) | legacy only — the component is placed with `wide_music_area`, empty at narrow | painted cursor frozen |
+| grouped Music | `MusicWorkspaceComponent`, yes (no width gate on `music_workspace_component_id`) — but **never focused**: `emby_library_child_id` (`shell_library.rs:64-68`) requires `is_wide_music_active()`, so focus falls back to `UiRoot` | legacy only — the component is placed with `wide_music_area`, empty at narrow | **all navigation dead**, and the painted cursor is frozen |
 | TV | **no** | legacy only | navigation dead |
 | Emby podcast | **no**, at either width | legacy narrow only | narrow dead; wide blank |
+| feed / home-video group picker | **no** — excluded at `shell_browser.rs:130`; `emby_library_child_id` (`shell_library.rs:57`) returns `None` | legacy only (paints the pills) | **all navigation dead**, not only `[`/`]` |
 
-The feed/home-video group view reads its own `feed_home_video.video_cursor`,
-not `BrowseLevel`, and is out of scope.
+Two corrections to an earlier reading of this table, both from the audit
+recorded in #623:
+
+- **Narrow grouped Music is F1, not merely a degenerate F2.** The component
+  mounting is not the same as the component owning: it is never focused, so
+  `handle_key` bails on `!self.context.focused` and every key routes to
+  `UiRoot` and dies. Threading the cursor into the painter (D5) is necessary
+  but **not sufficient** — the focus gate at `shell_library.rs:64-68` must
+  drop its width condition as well, or the surface stays inert.
+- **The feed/home-video group picker belongs in scope.** It was previously
+  excluded on the grounds that it reads its own `feed_home_video.video_cursor`
+  rather than `BrowseLevel`. That is true and is why it does not block #626 —
+  but it is irrelevant to D1, which is about ownership, not about which field
+  holds the cursor. Nothing mounts for it and every key is dead, so it is an F1
+  instance like any other.
 
 ## Decisions
 
@@ -226,21 +240,35 @@ above) and the keyboard-routing family, already scoped by the existing
 `fix-router-overlay-textentry` change (#627, committed `de45cdb8`). Neither
 blocks nor is blocked by #625/#626/#614.
 
-### Conflict with #627 — the wide-music track hitmap
+### The #627 wide-music hitmap — investigated, no conflict
 
-`fix-router-overlay-textentry`'s "What Changes" includes *"Restores the
-wide-music track hitmap underpaint that `dce4389d` removed, scoped to the
-leaf's own painted geometry."* `dce4389d` is one of the wide-surface underpaint
-removals this change's D1/D2 generalize. **Restoring an underpaint while this
-change is removing the second painter from every surface is a direct
-collision** — #627 would reintroduce an F2 instance on wide Music at the same
-time #625 is asserting one painter per surface.
+A first reading of `fix-router-overlay-textentry`'s *"Restores the wide-music
+track hitmap underpaint that `dce4389d` removed"* looked like a direct
+collision: #627 reintroducing an F2 instance on wide Music exactly as this
+change asserts one painter per surface. **Investigation dissolved it.** Recorded
+here so it is not re-raised:
 
-Not resolved here. Recommendation: **#625 lands first**, and #627's hitmap item
-is then re-derived against the post-hoist tree, where the wide-Music track
-geometry is owned and published by `MusicWorkspaceComponent` rather than
-recovered by an underpaint — which is likely to dissolve the item rather than
-reschedule it. Two things to confirm before committing to that order (neither
-verified during this planning pass): whether #627's hitmap item has a caller
-that breaks in the interim, and whether the "scoped to the leaf's own painted
-geometry" wording already anticipates component ownership. Maintainer call.
+- **No surviving consumer.** `wide_music_track_hitmap` is read only by
+  `LayoutMain::wide_music_track_at()` (`layout.rs:243`), whose only caller is
+  `MusicWorkspaceComponent::handle_mouse` (`music_workspace.rs:372`) — mouse,
+  accepted-broken under D16 — and which reads the **component's own**
+  `LayoutMain`, not the shell projection. The shell-side assignment
+  (`shell_music_workspace.rs:181`) has no live reader at all.
+- **The item is already satisfied.** `de45cdb8` recorded
+  `music_resize_push_uses_current_frame_geometry` as a baseline failure, but the
+  progressive-geometry series landed after it (`324386f2`, `b7e97d5b`,
+  `971106ab`) and the test passes at HEAD. The hitmap is now published by the
+  component's own `view` and copied into `app.layout.main` through a narrow
+  accessor.
+- **#627 already describes component ownership, not an underpaint.** Its design
+  §5 says *"the leaf owns the geometry and the shell reads a narrow projection
+  through a known accessor"* — which is this change's D1/D2 model. `dce4389d`
+  removed a branch in `render_list` (`impl App`); nothing re-added an App-side
+  painter and #627 never proposed to.
+
+**No ordering constraint between #625 and #627 on this axis.** #627's remaining
+work (router `text_entry_focused`, confirm-intent re-encoding, double-tap
+arming, `LibraryTabJump` modifiers) touches `router.rs` / `key_policy.rs` /
+`shell.rs` / `shell_modal_actions.rs` and does not overlap the hoist. #627's
+task 4.1 should be annotated *satisfied by the progressive-geometry series*
+rather than implemented.
