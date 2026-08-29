@@ -40,6 +40,7 @@ impl Model {
             .collect();
         for id in stale_ids {
             let _ = self.application.umount(&id);
+            self.unregister_destination(&id);
         }
     }
 
@@ -143,6 +144,7 @@ impl Model {
         self.application
             .mount(id.clone(), Box::new(InlineSearchComponent::new()), vec![])
             .expect("mount inline library Search");
+        self.register_destination(&id);
         self.application
             .active(&id)
             .expect("activate inline library Search");
@@ -176,6 +178,7 @@ impl Model {
         };
         if let Some(id) = self.inline_search_component_id(index) {
             let _ = self.application.umount(&id);
+            self.unregister_destination(&id);
         }
     }
 

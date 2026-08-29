@@ -660,3 +660,140 @@ fn browser_app_with_flat_movies(n: usize) -> App {
 
     app
 }
+
+/// A two-Emby-library app: the generic `lib-films` (index 0) and a second
+/// generic `lib-series` (index 1), each with its own `nav_stack` cursor.
+fn two_library_app() -> App {
+    let mut app = browser_app_with_flat_movies(6);
+    let mut library = make_item("Series", "CollectionFolder");
+    library.id = "lib-series".into();
+    library.is_folder = true;
+    library.collection_type = "generic".into();
+    app.libs.push(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            parent_id: "lib-series".into(),
+            title: "Series".into(),
+            items: make_items(4),
+            total_count: 4,
+            cursor: 0,
+            scroll: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        }],
+        ..LibraryTab::new(library)
+    });
+    app
+}
+
+fn browser_component_cursor(model: &Model, id: &ComponentId) -> usize {
+    model
+        .application
+        .get_component(id)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<BrowserComponent>()
+        .unwrap()
+        .cursor()
+}
+
+/// keep-destination-components-mounted task 2.2: the Emby browser stays
+/// mounted across tab switches (keep-mounted, D1), so switching away from
+/// library A and back must leave A's `BrowserComponent` still `mounted()`
+/// with its cursor preserved at the row it was moved to — not reset to 0 by
+/// a switch-time unmount/remount.
+#[test]
+fn emby_browser_stays_mounted_and_preserves_cursor_across_switch() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut model = Model::new(two_library_app());
+    model.sync_emby_browser();
+    let a_id = model.emby_browser_id.clone().expect("A browser mounted");
+
+    // Move A's browser cursor to row 2 (component emits the typed index
+    // request; the shell applies it to A's nav level, which retains it).
+    let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
+        drive_browser_key(&mut model, &a_id, Key::Down, KeyModifiers::NONE)
+    else {
+        panic!("A Down must emit BrowserCursorIndex, got no typed request");
+    };
+    model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
+    assert_eq!(model.app.libs[0].nav_stack[0].cursor, index);
+    assert_eq!(browser_component_cursor(&model, &a_id), index);
+
+    // Switch to library B: A's component must stay mounted (keep-mounted).
+    model.app.tab = TabSelection::EmbyLibrary(1);
+    model.sync_emby_browser();
+    assert!(
+        model.application.mounted(&a_id),
+        "A's browser must stay mounted after switching to B"
+    );
+    let b_id = model.emby_browser_id.clone().expect("B browser mounted");
+    assert_ne!(a_id, b_id, "B must be a distinct browser");
+    assert!(model.application.mounted(&b_id));
+
+    // Switch back to A: still mounted, and the cursor is N (not 0).
+    model.app.tab = TabSelection::EmbyLibrary(0);
+    model.sync_emby_browser();
+    assert_eq!(model.emby_browser_id.as_ref(), Some(&a_id));
+    assert!(
+        model.application.mounted(&a_id),
+        "A's browser must still be mounted after switching back"
+    );
+    assert_eq!(
+        browser_component_cursor(&model, &a_id),
+        index,
+        "A's browser cursor must be preserved across the switch, not reset to 0"
+    );
+}
+
+/// keep-destination-components-mounted task 2.3: with keep-mounted, content
+/// is refreshed on re-point (D1 + risk mitigation). Switching away from
+/// library A, mutating A's item list, and switching back must make the first
+/// `render_emby_browser_component` frame reflect the new items — not stale
+/// pre-switch content.
+#[test]
+fn emby_browser_refreshes_content_on_repoint_after_switch() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut model = Model::new(two_library_app());
+    model.sync_emby_browser();
+    let a_id = model.emby_browser_id.clone().expect("A browser mounted");
+
+    // Switch away to B (A stays mounted with its pre-mutation content).
+    model.app.tab = TabSelection::EmbyLibrary(1);
+    model.sync_emby_browser();
+    assert!(model.application.mounted(&a_id));
+
+    // Mutate A's item list while away: replace every item with a new one.
+    let mut fresh = make_item("Fresh Movie", "Movie");
+    fresh.id = "fresh-movie".into();
+    model.app.libs[0].nav_stack[0].items = vec![fresh];
+    model.app.libs[0].nav_stack[0].total_count = 1;
+
+    // Switch back to A and paint the first frame.
+    model.app.tab = TabSelection::EmbyLibrary(0);
+    model.sync_emby_browser();
+    let backend = TestBackend::new(120, 40);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| {
+        model.app.render(f);
+        model.render_emby_browser_component(f);
+    })
+    .unwrap();
+    let buffer = term.backend().buffer();
+    let output: String = (0..buffer.area().height)
+        .flat_map(|y| (0..buffer.area().width).map(move |x| buffer[(x, y)].symbol().to_owned()))
+        .collect();
+    assert!(
+        output.contains("Fresh Movie"),
+        "the first frame after re-point must show the mutated item, got: {output:?}"
+    );
+    assert!(
+        !output.contains("Item 1"),
+        "the stale pre-switch content must not survive re-point"
+    );
+}

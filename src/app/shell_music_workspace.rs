@@ -49,18 +49,20 @@ impl Model {
     pub(super) fn sync_music_workspace(&mut self) {
         let next_id = self.music_workspace_component_id();
         if self.music_workspace_id != next_id {
-            if let Some(id) = self.music_workspace_id.take() {
-                let _ = self.application.umount(&id);
-            }
-            if let Some(id) = next_id.clone() {
-                self.application
-                    .mount(id.clone(), Box::new(MusicWorkspaceComponent::new()), vec![])
-                    .expect("mount Music workspace");
-                self.application
-                    .active(&id)
-                    .expect("activate Music workspace");
-                self.music_workspace_id = Some(id);
-                self.push_music_workspace_content();
+            match next_id {
+                Some(id) => {
+                    if !self.application.mounted(&id) {
+                        self.application
+                            .mount(id.clone(), Box::new(MusicWorkspaceComponent::new()), vec![])
+                            .expect("mount Music workspace");
+                        self.register_destination(&id);
+                    }
+                    self.music_workspace_id = Some(id);
+                    self.push_music_workspace_content();
+                }
+                None => {
+                    self.music_workspace_id = None;
+                }
             }
         }
 
@@ -163,6 +165,8 @@ mod tests {
     use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
     use crate::app::components::Msg;
     use crate::app::render::make_music_group_app;
+    use crate::app::tests::make_item;
+    use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
@@ -512,5 +516,181 @@ mod tests {
             .downcast_mut::<MusicWorkspaceComponent>()
             .unwrap();
         assert_eq!(component.track_cursor(), None);
+    }
+
+    /// keep-destination-components-mounted task 3.2: the Music workspace
+    /// stays mounted across a drill into a track list and back (keep-mounted,
+    /// D1). Viewing album folders, moving the album cursor, drilling into a
+    /// track list (`is_viewing_album_folders` → false, pointer → `None`), and
+    /// going back must leave the `MusicWorkspaceComponent` still mounted with
+    /// the album cursor where it was — not reset by a drill-time
+    /// unmount/remount.
+    ///
+    /// The component-local cursor is deliberately made to DIVERGE from the
+    /// App/library cursor: a key event moves the component cursor to 1 while
+    /// App's nav cursor stays 0 (the emitted request is deliberately not
+    /// applied). A remount would re-sync the component cursor from App (0),
+    /// so preserving the divergent value 1 across drill→return proves the
+    /// component was not remounted and its private state survived.
+    #[test]
+    fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.tab = TabSelection::EmbyLibrary(0);
+        app.panel_focus = PanelFocus::Library;
+        app.music_levels = vec!["group".into(), "album".into()];
+        let mut library = make_item("Music", "CollectionFolder");
+        library.id = "lib-music".into();
+        library.is_folder = true;
+        library.collection_type = "music".into();
+        let mut group = make_item("Alpha", "MusicArtist");
+        group.id = "group-0".into();
+        group.is_folder = true;
+        let albums: Vec<_> = (0..3)
+            .map(|i| {
+                let mut album = make_item(&format!("Album {i}"), "MusicAlbum");
+                album.id = format!("album-{i}");
+                album.artist = "Alpha".into();
+                album.is_folder = true;
+                album
+            })
+            .collect();
+        app.libs.push(LibraryTab {
+            nav_stack: vec![
+                BrowseLevel {
+                    parent_id: "lib-music".into(),
+                    title: "Music".into(),
+                    items: vec![group],
+                    total_count: 1,
+                    cursor: 0,
+                    scroll: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                    letter_filter: None,
+                    music_grouping: None,
+                },
+                BrowseLevel {
+                    parent_id: "group-0".into(),
+                    title: "Alpha".into(),
+                    items: albums,
+                    total_count: 3,
+                    cursor: 0,
+                    scroll: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                    letter_filter: None,
+                    music_grouping: None,
+                },
+            ],
+            ..LibraryTab::new(library)
+        });
+        let mut model = Model::new(app);
+        model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+        model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+        model.sync_music_workspace();
+        let id = model
+            .music_workspace_id
+            .clone()
+            .expect("Music workspace mounted");
+        let album_cursor = |model: &Model| {
+            model
+                .application
+                .get_component(
+                    &model
+                        .music_workspace_id
+                        .clone()
+                        .expect("Music workspace mounted"),
+                )
+                .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
+                .map(MusicWorkspaceComponent::album_cursor)
+                .expect("album cursor")
+        };
+        // App and component cursors both start at 0.
+        assert_eq!(model.app.libs[0].nav_stack[1].cursor, 0);
+        assert_eq!(album_cursor(&model), 0);
+
+        // Move ONLY the component-local cursor to a divergent value (1): the
+        // emitted MusicAlbumCursor request is deliberately not applied to App,
+        // so App stays at 0. A remount would re-sync the component from App
+        // (0), so this divergence is the discriminating signal.
+        let message = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Down,
+                modifiers: KeyModifiers::NONE,
+            }));
+        assert!(matches!(
+            message,
+            Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                target: 1,
+                kind: AlbumCursorKind::Move
+            }))
+        ));
+        assert_eq!(album_cursor(&model), 1, "component cursor must diverge");
+        assert_eq!(
+            model.app.libs[0].nav_stack[1].cursor, 0,
+            "App cursor must stay put"
+        );
+
+        // Drill into a track list: push a third nav level so
+        // `is_viewing_album_folders` becomes false (top music_levels entry
+        // is no longer "album"). The pointer goes None but the component
+        // stays mounted (keep-mounted).
+        let mut track = make_item("Track 1", "Audio");
+        track.id = "track-1".into();
+        model.app.libs[0].nav_stack.push(BrowseLevel {
+            parent_id: "album-0".into(),
+            title: "Tracks".into(),
+            items: vec![track],
+            total_count: 1,
+            cursor: 0,
+            scroll: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        });
+        model.sync_music_workspace();
+        assert!(!model.app.is_viewing_album_folders(0));
+        assert_eq!(model.music_workspace_id, None);
+        assert!(
+            model.application.mounted(&id),
+            "the Music workspace must stay mounted across the drill"
+        );
+
+        // Go back: the album level returns, the pointer is restored, and the
+        // same component is re-pointed (not remounted), preserving the
+        // divergent component-local cursor.
+        model.app.go_back(0);
+        model.sync_music_workspace();
+        assert!(model.app.is_viewing_album_folders(0));
+        assert_eq!(
+            model.music_workspace_id.as_ref(),
+            Some(&id),
+            "re-point must restore the same component id"
+        );
+        assert!(model.application.mounted(&id));
+        assert_eq!(
+            album_cursor(&model),
+            1,
+            "the divergent component-local album cursor must survive the drill-and-return round trip"
+        );
+        assert_eq!(
+            model.app.libs[0].nav_stack[1].cursor, 0,
+            "App cursor stays at its own value throughout"
+        );
     }
 }

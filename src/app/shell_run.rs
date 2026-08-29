@@ -439,6 +439,10 @@ impl Model {
             self.sync_emby_browser();
             self.sync_tv_workspace();
             self.sync_music_workspace();
+            // Retire destination components whose Service library left the
+            // catalog before the focus pass routes to the active destination
+            // (keep-destination-components-mounted tasks 1.3).
+            self.reconcile_destination_mounts();
             self.sync_active_destination();
 
             self.app.expire_music_grouping_candidates();

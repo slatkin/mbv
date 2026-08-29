@@ -103,25 +103,28 @@ impl Model {
             _ => None,
         };
         if self.abs_book_id != next_id {
-            if let Some(id) = self.abs_book_id.take() {
-                let _ = self.application.umount(&id);
-            }
-            if let Some(id) = next_id.clone() {
-                self.application
-                    .mount(
-                        id.clone(),
-                        Box::new(AudiobookshelfBookComponent::new()),
-                        vec![],
-                    )
-                    .expect("mount Audiobookshelf book browser");
-                self.application
-                    .active(&id)
-                    .expect("activate Audiobookshelf book browser");
-                self.abs_book_id = Some(id);
-                // Fresh mount: project the active tab's browse state so the
-                // component is initialized with the current books/selection
-                // before it is painted (the active-tab writer).
-                self.push_audiobookshelf_book_content();
+            match next_id {
+                Some(id) => {
+                    if !self.application.mounted(&id) {
+                        self.application
+                            .mount(
+                                id.clone(),
+                                Box::new(AudiobookshelfBookComponent::new()),
+                                vec![],
+                            )
+                            .expect("mount Audiobookshelf book browser");
+                        self.register_destination(&id);
+                    }
+                    self.abs_book_id = Some(id);
+                    // Re-point: project the active tab's browse state so the
+                    // component paints the current books/selection (the
+                    // active-tab writer); keep-mounted preserves its private
+                    // selection across the switch.
+                    self.push_audiobookshelf_book_content();
+                }
+                None => {
+                    self.abs_book_id = None;
+                }
             }
         }
     }
@@ -330,6 +333,120 @@ mod tests {
         assert_eq!(
             model.app.audiobookshelf_book_browse[0].selected_bucket, bucket,
             "Shift+[ must not enter the ABS Book bucket fallback"
+        );
+    }
+
+    /// keep-destination-components-mounted task 3.3: the ABS book browser
+    /// stays mounted across a tab switch and back (keep-mounted, D1).
+    /// Switching away must not unmount the book component, and switching
+    /// back must re-point the SAME component (not remount), preserving its
+    /// private selection.
+    #[test]
+    fn abs_book_stays_mounted_and_preserves_selection_across_switch() {
+        let mut app = make_app_stub();
+        // Book library at index 0.
+        let book_library = AudiobookshelfLibrary {
+            id: "abs-books".into(),
+            name: "ABS Books".into(),
+            media_type: "book".into(),
+        };
+        let mut book_state = AudiobookshelfBookBrowseState::new(book_library.clone());
+        let mut book1 = AudiobookshelfBook {
+            library_item_id: "book-a".into(),
+            title: "Book A".into(),
+            author_display: None,
+            author_sort_key: "A".into(),
+            cover_path: None,
+            duration_seconds: 0.0,
+            narrator: None,
+            published_year: None,
+            genres: Vec::new(),
+            description: None,
+            series_name: None,
+            chapters: Vec::new(),
+            audio_files: Vec::new(),
+        };
+        let mut book2 = book1.clone();
+        book2.library_item_id = "book-b".into();
+        book2.title = "Book B".into();
+        book2.author_sort_key = "B".into();
+        book_state.books = vec![book1, book2];
+        book_state.selected_id = Some("book-a".into());
+        book_state.buckets =
+            crate::app::types_audiobookshelf_browse::build_surname_buckets(&book_state.books);
+        // Podcast library at index 1, so switching changes the destination.
+        let podcast_library = AudiobookshelfLibrary {
+            id: "abs-podcasts".into(),
+            name: "ABS Podcasts".into(),
+            media_type: "podcast".into(),
+        };
+        app.audiobookshelf_libraries.push(book_library);
+        app.audiobookshelf_libraries.push(podcast_library.clone());
+        app.audiobookshelf_book_browse.push(book_state);
+        app.audiobookshelf_browse.push(
+            crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState::new(
+                podcast_library,
+            ),
+        );
+        app.tab = TabSelection::AudiobookshelfLibrary(0);
+        app.panel_focus = PanelFocus::Library;
+        let mut model = Model::new(app);
+        model.sync_audiobookshelf_book();
+        let id = model.abs_book_id.clone().expect("book component mounted");
+        let selected_book_id = |model: &Model| {
+            model
+                .application
+                .get_component(&model.abs_book_id.clone().expect("book component mounted"))
+                .and_then(|comp| comp.as_any().downcast_ref::<AudiobookshelfBookComponent>())
+                .and_then(AudiobookshelfBookComponent::selected_book_id)
+                .map(|s| s.to_owned())
+        };
+        // Drive the component-local selection to a non-default value: move
+        // Down (which selects the second book), keeping the request unapplied
+        // to App so the component selection diverges.
+        let message = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Down,
+                modifiers: KeyModifiers::NONE,
+            }));
+        assert!(matches!(
+            message,
+            Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                AudiobookshelfBookMove::NextBookRow
+            )))
+        ));
+        assert_eq!(
+            selected_book_id(&model),
+            Some("book-b".into()),
+            "component selection must have moved to the second book"
+        );
+
+        // Switch to the Podcast library: the book component stays mounted.
+        model.app.tab = TabSelection::AudiobookshelfLibrary(1);
+        model.sync_audiobookshelf_book();
+        assert_eq!(model.abs_book_id, None);
+        assert!(
+            model.application.mounted(&id),
+            "the book browser must stay mounted across the switch"
+        );
+
+        // Switch back: the SAME component is re-pointed, still mounted, and
+        // its selection is preserved.
+        model.app.tab = TabSelection::AudiobookshelfLibrary(0);
+        model.sync_audiobookshelf_book();
+        assert_eq!(
+            model.abs_book_id.as_ref(),
+            Some(&id),
+            "re-point must restore the same book component id"
+        );
+        assert!(model.application.mounted(&id));
+        assert_eq!(
+            selected_book_id(&model),
+            Some("book-b".into()),
+            "the book selection must survive the switch-and-return round trip"
         );
     }
 }

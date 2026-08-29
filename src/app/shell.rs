@@ -48,6 +48,14 @@ pub struct Model {
     pub(super) music_workspace_id: Option<ComponentId>,
     pub(super) abs_podcast_id: Option<ComponentId>,
     pub(super) abs_book_id: Option<ComponentId>,
+    /// Maintained registry of every mounted destination surface component
+    /// (`Browser` workspaces and `InlineSearch`). TuiRealm's `Application`
+    /// exposes no component enumeration, so stale-discovery for
+    /// reconciliation cannot read the view registry; this set mirrors every
+    /// destination `mount`/`umount` (tasks 1.2 correction) so
+    /// `reconcile_destination_mounts` can find a retired library's component
+    /// even when no `*_id` pointer still names it.
+    pub(super) mounted_destinations: std::collections::HashSet<ComponentId>,
     /// One-shot shell→component request for the mounted Music workspace's
     /// inline track focus, applied at the next `sync_music_workspace` after
     /// the component is mounted/synced (so mount-timing never loses it).
@@ -251,6 +259,7 @@ impl Model {
             music_workspace_id: None,
             abs_podcast_id: None,
             abs_book_id: None,
+            mounted_destinations: std::collections::HashSet::new(),
             music_track_focus_request: None,
             feeds_manage: None,
             home_content: HomeContent::new(),

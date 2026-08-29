@@ -149,28 +149,40 @@ impl Model {
     /// idempotently. If the active id matches the gate (`emby_browser_component_id`)
     /// it does nothing. Mount lifecycle only; content projection and layout
     /// adapters stay in `sync_emby_browser`.
+    ///
+    /// Keep-mounted (keep-destination-components-mounted task 2.1): the
+    /// component stays mounted across tab switches so it retains its private
+    /// state; the `*_id` field is an active-destination pointer. When the
+    /// active id differs, mount the new id only if not already mounted,
+    /// repoint the pointer (which may become `None`), and refresh content on
+    /// re-point. Focus is owned by `sync_active_destination`, so this no
+    /// longer calls `active()`.
     pub(super) fn mount_emby_browser(&mut self) {
         let next_id = self.emby_browser_component_id();
-        if self.emby_browser_id == next_id {
-            return;
-        }
-        if let Some(id) = self.emby_browser_id.take() {
-            let _ = self.application.umount(&id);
-        }
-        if let Some(id) = next_id.clone() {
-            let kind = match &id {
-                ComponentId::Browser(key) => key.kind,
-                _ => unreachable!("Emby browser id must be Browser"),
-            };
-            self.application
-                .mount(
-                    id.clone(),
-                    Box::new(BrowserComponent::new_for_kind(kind)),
-                    vec![],
-                )
-                .expect("mount Emby browser");
-            self.application.active(&id).expect("activate Emby browser");
-            self.emby_browser_id = Some(id);
+        if self.emby_browser_id != next_id {
+            match next_id {
+                Some(id) => {
+                    if !self.application.mounted(&id) {
+                        let kind = match &id {
+                            ComponentId::Browser(key) => key.kind,
+                            _ => unreachable!("Emby browser id must be Browser"),
+                        };
+                        self.application
+                            .mount(
+                                id.clone(),
+                                Box::new(BrowserComponent::new_for_kind(kind)),
+                                vec![],
+                            )
+                            .expect("mount Emby browser");
+                        self.register_destination(&id);
+                    }
+                    self.emby_browser_id = Some(id);
+                    self.push_emby_browser_content();
+                }
+                None => {
+                    self.emby_browser_id = None;
+                }
+            }
         }
     }
 

@@ -216,24 +216,31 @@ mod tests {
         );
     }
 
-    /// Symmetric regression guard: when a blocking modal is up but
-    /// `panel_focus` is still `Queue` (e.g. a stale focus from a just-
-    /// closed sidebar), the destination sync must still route focus to
-    /// the Library child. `sync_queue` itself skips activation under
-    /// blocking overlays, so the destination is the only legitimate
-    /// focus owner in that window. Help is non-blocking (it dims the
-    /// Library but does not consume the keyboard), so we mount a
-    /// blocking modal — `ComponentId::Modal(ModalId::Confirm)` — that
-    /// `blocking_overlay_active` actually reports.
+    /// Symmetric regression guard under D3 (single focus pass): when a
+    /// blocking modal is up, `sync_active_destination` short-circuits on
+    /// `library_overlay_mounted()` — the modal owns native LIFO focus (D3
+    /// first-match-wins), never the destination child. `sync_queue` also
+    /// skips activation under blocking overlays. After the modal is
+    /// dismissed, the next `sync_active_destination` pass routes focus back
+    /// to the destination child.
     #[test]
-    fn shell_routes_focus_to_destination_when_blocking_overlay_suppresses_queue() {
-        use crate::app::components::{BrowserComponent, ConfirmComponent, ModalId};
+    fn shell_blocking_overlay_owns_focus_and_dismiss_returns_to_destination() {
+        use crate::app::components::{ConfirmComponent, ModalId};
         let mut model = Model::new(make_movie_app());
         model.app.tab = TabSelection::EmbyLibrary(0);
-        model.app.panel_focus = PanelFocus::Queue;
+        model.app.panel_focus = PanelFocus::Library;
         model.app.panel_mode = PanelMode::Both;
-        // Mount a blocking modal so `blocking_overlay_active` is true and
-        // `sync_queue` will not claim focus.
+        // First: the destination child owns focus (the single focus pass).
+        model.sync_emby_browser();
+        model.sync_active_destination();
+        let child = model
+            .emby_browser_id
+            .clone()
+            .expect("generic browser mounted");
+        assert_eq!(model.application.focus(), Some(&child));
+
+        // The production modal-open path mounts AND activates the blocking
+        // modal; the destination pass must not stomp it (D3 first-match).
         model
             .application
             .mount(
@@ -242,9 +249,50 @@ mod tests {
                 vec![],
             )
             .expect("mount Confirm");
-        model.sync_emby_browser();
-
+        model
+            .application
+            .active(&ComponentId::Modal(ModalId::Confirm))
+            .expect("activate Confirm");
         model.sync_queue();
+        model.sync_active_destination();
+        assert_eq!(
+            model.application.focus(),
+            Some(&ComponentId::Modal(ModalId::Confirm)),
+            "the blocking modal must own TuiRealm focus while mounted (D3 first-match)"
+        );
+
+        // Dismiss the modal; the next destination pass routes focus to the
+        // destination child.
+        model
+            .application
+            .umount(&ComponentId::Modal(ModalId::Confirm))
+            .expect("dismiss Confirm");
+        model.sync_active_destination();
+        assert_eq!(
+            model.application.focus(),
+            Some(&child),
+            "dismissing the blocking modal must return focus to the destination child"
+        );
+    }
+
+    /// keep-destination-components-mounted task 4.2: with `active()` removed
+    /// from every `sync_*` (D1), the FIRST tick after startup must land
+    /// TuiRealm focus on the active destination child via the single
+    /// `sync_active_destination` pass (D3). `Model::new` activates UiRoot;
+    /// after the destination mounts, the focus pass must route to the child.
+    #[test]
+    fn shell_first_tick_focus_lands_on_the_active_destination_child() {
+        let mut model = Model::new(make_movie_app());
+        model.app.tab = TabSelection::EmbyLibrary(0);
+        model.app.panel_focus = PanelFocus::Library;
+        model.app.panel_mode = PanelMode::Both;
+        // Startup state: UiRoot is active (Model::new), no destination child
+        // has been activated yet (no prior active() in sync_*).
+        assert_eq!(model.application.focus(), Some(&ComponentId::UiRoot));
+
+        // Mirror the first tick: mount the destination, then the single focus
+        // pass routes to the child.
+        model.sync_emby_browser();
         model.sync_active_destination();
 
         let child = model
@@ -254,14 +302,124 @@ mod tests {
         assert_eq!(
             model.application.focus(),
             Some(&child),
-            "destination must own TuiRealm focus when a blocking overlay suppresses Queue"
+            "the first tick must land focus on the active destination child"
         );
-        assert!(model
-            .application
-            .get_component(&child)
-            .unwrap()
-            .as_any()
-            .downcast_ref::<BrowserComponent>()
-            .is_some());
+    }
+
+    /// keep-destination-components-mounted task 4.2: after dismissing an
+    /// overlay, TuiRealm's LIFO stack restores focus to the prior component;
+    /// the next `sync_active_destination` pass must re-route it to the active
+    /// destination child (not a stale lazily-mounted sibling or UiRoot).
+    #[test]
+    fn shell_overlay_dismiss_returns_focus_to_the_active_destination_child() {
+        let mut model = Model::new(make_movie_app());
+        model.app.tab = TabSelection::EmbyLibrary(0);
+        model.app.panel_focus = PanelFocus::Library;
+        model.app.panel_mode = PanelMode::Both;
+        model.sync_emby_browser();
+        model.sync_active_destination();
+        let child = model
+            .emby_browser_id
+            .clone()
+            .expect("generic browser mounted");
+        assert_eq!(model.application.focus(), Some(&child));
+
+        // Mount Help (overlay owns focus); the destination pass short-circuits.
+        model.mount_help();
+        assert_eq!(
+            model.application.focus(),
+            Some(&ComponentId::Overlay(OverlayId::Help))
+        );
+        model.sync_active_destination();
+        assert_eq!(
+            model.application.focus(),
+            Some(&ComponentId::Overlay(OverlayId::Help)),
+            "an overlay keeps focus while mounted"
+        );
+
+        // Dismiss the overlay: LIFO restores focus to the prior component;
+        // the next destination pass must route it back to the destination
+        // child (never a stale sibling or UiRoot).
+        model.umount_help();
+        model.sync_active_destination();
+        assert_eq!(
+            model.application.focus(),
+            Some(&child),
+            "overlay dismiss must return focus to the active destination child"
+        );
+    }
+
+    /// keep-destination-components-mounted task 4.3 (D4): a mounted-but-
+    /// inactive destination component paints nothing. `render_emby_browser_`
+    /// `component` early-returns when the `*_id` pointer is `None` (narrow /
+    /// drilled away / inactive), so the mounted instance never paints over
+    /// the legacy frame. Deterministic proof by frame diff over COMPLETE
+    /// cell state: with the pointer `Some`, the component adds its content
+    /// (symbols, styles, modifiers) to the frame; with the pointer `None`
+    /// (component still mounted), the frame is identical to the App-only
+    /// frame (zero cells contributed).
+    #[test]
+    fn mounted_but_inactive_destination_paints_nothing() {
+        fn frame_cells(model: &mut Model, render_component: bool) -> String {
+            let backend = ratatui::backend::TestBackend::new(120, 40);
+            let mut term = ratatui::Terminal::new(backend).unwrap();
+            term.draw(|f| {
+                model.app.render(f);
+                if render_component {
+                    model.render_emby_browser_component(f);
+                }
+            })
+            .unwrap();
+            let buffer = term.backend().buffer();
+            let mut out = String::new();
+            for y in 0..buffer.area().height {
+                for x in 0..buffer.area().width {
+                    let cell = &buffer[(x, y)];
+                    // Complete cell state: symbol + style (which carries the
+                    // full style including any add/remove modifiers), so a
+                    // render that changed only styling/attributes is caught.
+                    out.push_str(cell.symbol());
+                    out.push('|');
+                    out.push_str(&format!("{:?}", cell.style()));
+                    out.push(';');
+                }
+            }
+            out
+        }
+
+        let mut model = Model::new(make_movie_app());
+        model.app.tab = TabSelection::EmbyLibrary(0);
+        model.app.panel_focus = PanelFocus::Library;
+        model.app.panel_mode = PanelMode::Both;
+        model.sync_emby_browser();
+        let id = model.emby_browser_id.clone().expect("browser mounted");
+        assert!(model.application.mounted(&id));
+
+        // Baseline: the App-only frame (the component is not rendered).
+        let app_only = frame_cells(&mut model, false);
+        // Active: the component paints its content over the frame. This must
+        // differ from app-only — otherwise the test could not discriminate a
+        // broken gate.
+        let active = frame_cells(&mut model, true);
+        assert_ne!(
+            active, app_only,
+            "the active browser must add content to the frame (gate sanity)"
+        );
+
+        // Inactive: clear the pointer (narrow/drill transition). The
+        // component stays mounted (keep-mounted) but the render gate must
+        // suppress it, so the frame is identical to App-only across the full
+        // cell state.
+        model.emby_browser_id = None;
+        let inactive = frame_cells(&mut model, true);
+        assert_eq!(
+            inactive, app_only,
+            "a mounted-but-inactive destination must paint nothing over the frame"
+        );
+        assert_eq!(model.emby_browser_id, None);
+        assert!(
+            model.application.mounted(&id),
+            "the component stays mounted but inactive"
+        );
     }
 }
