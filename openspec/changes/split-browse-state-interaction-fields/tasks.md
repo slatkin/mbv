@@ -49,7 +49,7 @@
 
 ## 4. Split live cursor from resting position in `BrowseLevel` (D1)
 
-- [ ] 4.1 Characterization tests for: position restore on entering a library,
+- [x] 4.1 Characterization tests for: position restore on entering a library,
       `go_back`'s parent-cursor re-anchor (`actions_navigation.rs:239-278`),
       and prefetch triggering at the cursor threshold
       (`library_search_actions.rs:240`). Verify: passes pre-change.

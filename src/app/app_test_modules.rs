@@ -23,6 +23,10 @@ mod tests_library_position_activation;
 mod tests_library_position_restore;
 
 #[cfg(test)]
+#[path = "split_browse_state_browse_level_tests.rs"]
+mod split_browse_state_browse_level_tests;
+
+#[cfg(test)]
 #[cfg(test)]
 #[path = "tests_panel_focus.rs"]
 mod tests_panel_focus;
