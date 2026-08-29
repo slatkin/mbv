@@ -17,8 +17,8 @@ impl App {
         }
         if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
             let idx = target;
-            if level.cursor != idx {
-                level.cursor = idx;
+            if level.resting().cursor() != idx {
+                level.set_resting_cursor(idx);
             }
         }
         true
@@ -40,7 +40,7 @@ impl App {
         }
         if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
             let idx = target;
-            level.cursor = idx;
+            level.set_resting_cursor(idx);
         }
         true
     }
@@ -74,8 +74,8 @@ impl App {
 
         if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
             let new_cursor = target;
-            if level.cursor != new_cursor {
-                level.cursor = new_cursor;
+            if level.resting().cursor() != new_cursor {
+                level.set_resting_cursor(new_cursor);
             }
         }
         if idle {

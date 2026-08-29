@@ -149,7 +149,7 @@ impl App {
             .unwrap_or_default();
         let (groups, group_cursor) = if lib.nav_stack.len() >= 2 {
             let group = &lib.nav_stack[lib.nav_stack.len() - 2];
-            (group.items.clone(), group.cursor)
+            (group.items.clone(), group.resting().cursor())
         } else {
             (Vec::new(), 0)
         };

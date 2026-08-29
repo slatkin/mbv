@@ -16,7 +16,7 @@ impl App {
         let lib = &self.libs[lib_idx];
         if lib.nav_stack.len() >= 2 {
             let group_lvl = &lib.nav_stack[lib.nav_stack.len() - 2];
-            (group_lvl.items.clone(), group_lvl.cursor)
+            (group_lvl.items.clone(), group_lvl.resting().cursor())
         } else {
             (Vec::new(), 0)
         }
