@@ -34,7 +34,7 @@
 
 ## 3. Audiobookshelf podcast struct (D4, second)
 
-- [ ] 3.1 Characterization tests for show position save/restore, episode-mode
+- [x] 3.1 Characterization tests for show position save/restore, episode-mode
       entry and exit, and episode filter surviving a refresh. Verify: passes
       pre-change.
 - [ ] 3.2 Split `AudiobookshelfBrowseState` the same way, applying whatever the

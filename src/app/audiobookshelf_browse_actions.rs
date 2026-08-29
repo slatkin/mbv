@@ -561,3 +561,7 @@ mod book_seek_tests;
 #[cfg(test)]
 #[path = "split_browse_state_book_tests.rs"]
 mod split_browse_state_book_tests;
+
+#[cfg(test)]
+#[path = "split_browse_state_podcast_tests.rs"]
+mod split_browse_state_podcast_tests;
