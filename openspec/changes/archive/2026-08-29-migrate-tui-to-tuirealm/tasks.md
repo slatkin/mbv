@@ -363,7 +363,7 @@ definition of done.
 
 ### 5.3d aggregate + final rows (open)
 
-- [ ] **5.3d** Teardown — framework removal. Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10.
+- [x] **5.3d** Teardown — framework removal. Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10.
   Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, the global mouse
   router/hit map and duplicated mouse-coordinate paths, every interaction-state
   `sync_<surface>()` mirror, and all remaining temporary interaction adapters.
