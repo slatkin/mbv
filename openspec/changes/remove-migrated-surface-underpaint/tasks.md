@@ -20,7 +20,7 @@
 
 ## 2. Geometry / paint split (D2, D3)
 
-- [ ] 2.1 In `src/app/render/screens/root.rs`, extract
+- [x] 2.1 In `src/app/render/screens/root.rs`, extract
       `App::compute_frame_layout(&mut self, area: Rect) -> ()` (keeps the
       atomic `self.layout = layout` swap and the zero-area early return) from
       `App::render` — move the geometry statements, paint nothing. Verify:

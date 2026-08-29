@@ -23,14 +23,13 @@ impl App {
         )
     }
 
-    pub fn render(&mut self, f: &mut Frame) {
-        let area = f.area();
-        // Guard against zero-dimension terminal (e.g. minimized or piped).
-        // `self.layout` is left untouched here -- it still reflects the last
-        // frame that rendered in full.
-        if area.width == 0 || area.height == 0 {
-            return;
-        }
+    /// Updates the frame-dependent geometry inputs before the render pass.
+    ///
+    /// The zero-area guard deliberately remains in `render`: an incomplete
+    /// frame must leave the previously installed layout untouched. The full
+    /// `AppLayout` swap remains at the end of `render` until the paint pass is
+    /// extracted in the following task.
+    pub(in crate::app) fn compute_frame_layout(&mut self, area: Rect) {
         if area.width != self.terminal_width || area.height != self.terminal_height {
             self.card_image_states.clear();
             self.card_image_loading.clear();
@@ -45,6 +44,17 @@ impl App {
         if self.clamp_queue_column_width() {
             self.save_prefs();
         }
+    }
+
+    pub fn render(&mut self, f: &mut Frame) {
+        let area = f.area();
+        // Guard against zero-dimension terminal (e.g. minimized or piped).
+        // `self.layout` is left untouched here -- it still reflects the last
+        // frame that rendered in full.
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+        self.compute_frame_layout(area);
 
         // Every render sub-call below writes into this fresh, local value
         // instead of `self.layout` directly. It's swapped into `self.layout`
