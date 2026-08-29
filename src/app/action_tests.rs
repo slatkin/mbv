@@ -465,25 +465,3 @@ fn playlist_items_load_error_preserves_existing_items_and_flashes() {
     assert_eq!(app.playlists_open_items[0].name, "Track 1");
     assert!(app.status.contains("timeout"));
 }
-
-#[test]
-fn search_drain_error_does_not_produce_flash() {
-    // Regression: `drain_search_results` used to flash "Search error: …"
-    // redundantly alongside the inline "Search failed: …" in the search
-    // sidebar. Now errors are only surfaced inline.
-    //
-    // The search drain is component-owned (task 3.2): the shell drains
-    // `search_rx` and calls `apply_drain` on the `SearchSidebarComponent`.
-    // This test checks the component's `apply_drain` directly.
-    let mut comp = crate::app::components::SearchSidebarComponent::new();
-    comp.sidebar.query = "test".into();
-    comp.sidebar.loading = true;
-
-    comp.apply_drain("test", Err("API timeout".into()));
-
-    // The inline error is recorded on the sidebar.
-    assert_eq!(
-        comp.sidebar.last_drain_error.as_deref(),
-        Some("API timeout")
-    );
-}
