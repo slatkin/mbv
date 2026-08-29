@@ -138,6 +138,22 @@ duplicated mouse paths are removed; render-only layout state MAY remain; all
 temporary interaction adapters and state mirrors are removed; and no parallel
 legacy interaction framework remains.
 
+A `migrated` surface SHALL have exactly one painter for each frame at its
+active layout breakpoint. The shell SHALL NOT run a legacy surface painter for
+a surface body that a mounted component paints in the same frame. Verification
+is execution ownership — the legacy painter is demonstrably not reached for
+that surface at that breakpoint — not final-buffer similarity.
+
+The per-frame geometry computation that components read (the `AppLayout` and
+equivalent facts) MAY be shared shell code and is not a "parallel legacy
+framework"; it paints nothing that a component owns.
+
+Where a surface has a component variant at one breakpoint and only a legacy
+renderer at another (for example a wide workspace component and a narrow
+legacy body), the legacy renderer at the breakpoint with no component is the
+**sole** painter for that breakpoint. The ledger row SHALL state this
+explicitly so it is not mistaken for an underpaint.
+
 A `migrated` destination surface with a stable identity SHALL retain its
 component-private interaction state (cursor, scroll, local focus, drafts)
 across destination switches and layout-breakpoint changes. Leaving a
@@ -161,6 +177,24 @@ the time the chord can fire, or `UiRoot` for a global chord. The single
 keyboard router classifies a binding as global-versus-focused by its owner
 tag; an owner that names an unmounted or non-existent component misclassifies
 the binding and can leak a global chord into a focused text-entry surface.
+
+Four framework behaviours — which component holds focus after the shell's
+synchronisation pass, which components a terminal event is delivered to and in
+what order, whether a blocking overlay withholds input from the surfaces
+beneath it, and whether an injected `UserEvent` reaches its mounted target —
+are properties of the composition, not of any one component. They SHALL be
+verified by exercising `Application::tick()` against the shell's own
+synchronisation order. A test that calls `Component::on` directly, hand-builds
+the message list `tick()` would have returned, or re-lists the `sync_*` calls
+in an order of its own choosing does not satisfy this requirement: each of
+those substitutes the wiring under test for the test's own assumption about
+it.
+
+Consequently the shell SHALL expose the seams that make this verification
+possible without a terminal: the event-listener configuration SHALL be
+substitutable at `Model` construction, and the run loop's synchronisation
+sequence SHALL be a single callable unit rather than a statement list inlined
+in the loop body.
 
 #### Scenario: A converted surface does not regain App-owned state
 
@@ -188,6 +222,73 @@ the binding and can leak a global chord into a focused text-entry surface.
   behaviour, and render characterization coverage remain satisfied
 - **AND** mouse parity is required only for the alpha-supported mouse paths named
   by this capability
+
+#### Scenario: A terminal event is delivered through a live tick
+
+- **WHEN** a key event is injected into a mounted `Application` through its
+  event listener and `tick()` is called
+- **THEN** the focused component receives the event and its message appears
+  first
+- **AND** the permanently subscribed `UiRoot` observer's message appears second
+- **AND** neither message is produced twice for a single injected event
+
+#### Scenario: Focus after the synchronisation pass is asserted in its real order
+
+- **WHEN** the shell's full synchronisation sequence runs as one unit and the
+  Queue panel holds focus
+- **THEN** `Application::focus()` is the Queue component when the sequence
+  completes
+- **AND** the assertion is made after the whole sequence, so a later
+  synchronisation step that reactivates a different component fails the test
+
+#### Scenario: A blocking overlay withholds input from the surfaces beneath it
+
+- **WHEN** a blocking overlay is mounted and the synchronisation sequence runs
+- **THEN** the overlay still holds focus when the sequence completes
+- **AND** a key injected through the listener is delivered to the overlay, not
+  to Queue or the active destination
+- **AND** a global chord resolves to a swallow rather than reaching a surface
+  beneath the overlay
+
+#### Scenario: An injected user event reaches its mounted component
+
+- **WHEN** a `UserEvent` is published through an event-listener port and
+  `tick()` is called
+- **THEN** the mounted component subscribed to that event observes it
+- **AND** the shell-side path that ships in production for the same effect is
+  covered by its own assertion, so replacing one with the other is a visible
+  change
+
+#### Scenario: A migrated surface body is painted once per frame
+
+- **WHEN** a mounted component is the active painter for a surface at the
+  current layout breakpoint
+- **THEN** the legacy renderer for that surface body is not reached that frame
+- **AND** a debug assertion or test counter that fires when the legacy painter
+  runs while the component is active stays silent across the surface's render
+  characterization tests
+
+#### Scenario: Geometry is computed without painting owned surfaces
+
+- **WHEN** the shell computes the per-frame layout that components read
+- **THEN** that computation produces the `AppLayout` and equivalent facts
+- **AND** it paints no surface body that a component owns this frame
+
+#### Scenario: Startup and steady-state frames paint identically
+
+- **WHEN** the first full frame is drawn at startup and any later frame is drawn
+- **THEN** both go through the same shell draw entry point
+- **AND** the first frame includes the component views, showing loading
+  affordances rather than a chrome-only frame followed by a component pop-in
+
+#### Scenario: A breakpoint with no component keeps a sole legacy painter
+
+- **WHEN** a surface is shown at a layout breakpoint for which no component
+  variant exists (for example narrow TV or narrow Music)
+- **THEN** the legacy renderer is the only painter for that surface at that
+  breakpoint
+- **AND** the ledger row records "wide: component; narrow: sole legacy
+  renderer" so the endpoint is unambiguous
 
 #### Scenario: Destination state survives a switch away and back
 
