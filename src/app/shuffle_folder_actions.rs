@@ -24,6 +24,10 @@ impl App {
             .and_then(|lvl| lvl.items.get(lvl.cursor))
             .cloned();
         let Some(item) = item else {
+            // Preserve the old behaviour: when the current level exists
+            // but has no item at the resolved cursor (empty/loading),
+            // fall back to shuffling the current level's parent.
+            self.shuffle_play_target(lib_idx, None);
             return;
         };
         self.shuffle_play_selected(lib_idx, item);
