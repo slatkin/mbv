@@ -14,36 +14,18 @@ impl Model {
     pub(super) fn handle_audiobookshelf_book_request(&mut self, request: ShellRequest) {
         match request {
             ShellRequest::AudiobookshelfBookMove(movement) => match movement {
-                AudiobookshelfBookMove::PreviousBucket => {
-                    self.app.cycle_audiobookshelf_book_bucket(-1)
+                // Resolved-value routing
+                // (split-audiobookshelf-cursor-ownership D1/D3): the
+                // component carries the landed value; apply it through the
+                // existing index-taking entry points, never recomputing the
+                // movement from a delta.
+                AudiobookshelfBookMove::Book(index) => self.app.select_audiobookshelf_book(index),
+                AudiobookshelfBookMove::Bucket(position) => {
+                    self.app.select_audiobookshelf_book_bucket(position)
                 }
-                AudiobookshelfBookMove::NextBucket => self.app.cycle_audiobookshelf_book_bucket(1),
-                AudiobookshelfBookMove::PreviousChapter => {
-                    self.app.move_audiobookshelf_book_row(-1)
+                AudiobookshelfBookMove::ChapterFocus(selection) => {
+                    self.app.set_audiobookshelf_book_chapter_focus(selection)
                 }
-                AudiobookshelfBookMove::NextChapter => self.app.move_audiobookshelf_book_row(1),
-                AudiobookshelfBookMove::FocusChapters => {
-                    self.app.focus_audiobookshelf_book_chapters()
-                }
-                AudiobookshelfBookMove::FocusBrowser => {
-                    self.app.focus_audiobookshelf_book_browser()
-                }
-                AudiobookshelfBookMove::PreviousBookRow => {
-                    self.app.move_audiobookshelf_book_cursor(-1)
-                }
-                AudiobookshelfBookMove::NextBookRow => self.app.move_audiobookshelf_book_cursor(1),
-                AudiobookshelfBookMove::PreviousBookPage => {
-                    let page = self.app.lib_page_size() as i64;
-                    self.app.move_audiobookshelf_book_cursor(-page);
-                }
-                AudiobookshelfBookMove::NextBookPage => {
-                    let page = self.app.lib_page_size() as i64;
-                    self.app.move_audiobookshelf_book_cursor(page);
-                }
-                AudiobookshelfBookMove::FirstBook => {
-                    self.app.jump_audiobookshelf_book_cursor(false)
-                }
-                AudiobookshelfBookMove::LastBook => self.app.jump_audiobookshelf_book_cursor(true),
             },
             ShellRequest::AudiobookshelfBookIntent(intent) => match intent {
                 AudiobookshelfBookIntent::Play => {
@@ -180,21 +162,14 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
-        let page_size = self.app.lib_page_size();
-        if let Some(comp) = self.application.get_component_mut(id) {
-            if let Some(book) = comp
-                .as_any_mut()
-                .downcast_mut::<AudiobookshelfBookComponent>()
-            {
-                book.set_page_size(page_size);
-            }
-        }
         self.application.view(id, frame, area);
         // Component owns painting; read back its painted geometry so the
         // still-required legacy `LayoutMain` readers (interaction wide/narrow
-        // gating via `is_wide_book_active`, library page stride, and
-        // overlay/menu anchors) stay correct once the legacy underpaint
-        // renderer was removed (2.1j). Wide reports a nonzero right area and
+        // gating via `is_wide_book_active` and overlay/menu anchors) stay
+        // correct once the legacy underpaint renderer was removed (2.1j). The
+        // page stride is now the component's own
+        // (split-audiobookshelf-cursor-ownership D1), so the shell projects
+        // no page size in. Wide reports a nonzero right area and
         // the painted left area; narrow resets both to the narrow content
         // area / zero wide flag, including the wide-to-narrow redraw.
         let projection = self
@@ -304,14 +279,15 @@ mod tests {
                 code: Key::Down,
                 modifiers: KeyModifiers::NONE,
             }));
-        assert!(matches!(
-            message,
-            Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                AudiobookshelfBookMove::NextBookRow
-            )))
-        ));
+        let Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(AudiobookshelfBookMove::Book(
+            index,
+        )))) = message
+        else {
+            panic!("Down must emit a resolved book index, got {message:?}");
+        };
+        assert_eq!(index, 1, "component resolved the next book row locally");
         model.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::NextBookRow,
+            AudiobookshelfBookMove::Book(index),
         ));
         assert_eq!(
             model.app.audiobookshelf_book_browse[0]
@@ -320,10 +296,10 @@ mod tests {
             Some("book-2")
         );
 
-        // Page size is handed from App's layout contract, rather than inferred
-        // from the inline replacement's painted book rows. With a three-row
-        // library area, both the component and App must move by two books.
-        model.app.layout.main.left_area = Rect::new(0, 0, 10, 3);
+        // The page stride is now the component's own painted geometry
+        // (split-audiobookshelf-cursor-ownership D1): the shell applies no
+        // competing stride. PageDown resolves a page jump against the painted
+        // list and clamps to the selected surname bucket.
         model.app.layout.main.audiobookshelf_book_area = Rect::new(0, 0, 60, 20);
         let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
         terminal
@@ -337,14 +313,15 @@ mod tests {
                 code: Key::PageDown,
                 modifiers: KeyModifiers::NONE,
             }));
-        assert!(matches!(
-            page,
-            Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                AudiobookshelfBookMove::NextBookPage
-            )))
-        ));
+        let Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(AudiobookshelfBookMove::Book(
+            index,
+        )))) = page
+        else {
+            panic!("PageDown must emit a resolved book index, got {page:?}");
+        };
+        assert!(index > 1, "page jump advanced past a single row");
         model.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::NextBookPage,
+            AudiobookshelfBookMove::Book(index),
         ));
         assert_eq!(
             model.app.audiobookshelf_book_browse[0]
@@ -450,7 +427,7 @@ mod tests {
         assert!(matches!(
             message,
             Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                AudiobookshelfBookMove::NextBookRow
+                AudiobookshelfBookMove::Book(1)
             )))
         ));
         assert_eq!(
@@ -485,9 +462,102 @@ mod tests {
         );
     }
 
+    /// split-audiobookshelf-cursor-ownership D4 / task 5.3: a real shell
+    /// content push that drops the component's selected book must not leave
+    /// any App-sourced interaction value (here `chapter_selection`) in the
+    /// component.
+    #[test]
+    fn abs_book_shell_push_drops_stale_component_chapter_focus() {
+        let mut app = make_app_stub();
+        let library = AudiobookshelfLibrary {
+            id: "books".into(),
+            name: "Books".into(),
+            media_type: "book".into(),
+        };
+        let chapter = mbv_core::audiobookshelf::AudiobookshelfChapter {
+            id: 0,
+            start: 0.0,
+            end: 60.0,
+            title: "Chapter 1".into(),
+        };
+        let book = |id: &str| AudiobookshelfBook {
+            library_item_id: id.into(),
+            title: format!("Book {id}"),
+            author_display: Some("Author".into()),
+            author_sort_key: "Author".into(),
+            cover_path: None,
+            duration_seconds: 60.0,
+            narrator: None,
+            published_year: None,
+            genres: Vec::new(),
+            description: None,
+            series_name: None,
+            chapters: vec![chapter.clone()],
+            audio_files: Vec::new(),
+        };
+        let mut state = AudiobookshelfBookBrowseState::new(library.clone());
+        state.books = vec![book("a")];
+        state.selected_id = Some("a".into());
+        state
+            .detail_cache
+            .insert("a".into(), (vec![chapter.clone()], Vec::new()));
+        state.buckets =
+            crate::app::types_audiobookshelf_browse::build_surname_buckets(&state.books);
+        app.audiobookshelf_libraries.push(library);
+        app.audiobookshelf_book_browse.push(state);
+        app.tab = TabSelection::AudiobookshelfLibrary(0);
+        app.panel_focus = PanelFocus::Library;
+        let mut model = Model::new(app);
+        model.sync_audiobookshelf_book();
+        let id = model.abs_book_id.clone().expect("book component mounted");
+
+        // Paint wide so the chapter pane exists, then focus it locally.
+        model.app.layout.main.audiobookshelf_book_area = Rect::new(0, 0, 120, 24);
+        let mut terminal = Terminal::new(TestBackend::new(120, 24)).unwrap();
+        terminal
+            .draw(|frame| model.render_audiobookshelf_book_component(frame))
+            .unwrap();
+        let focus = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Left,
+                modifiers: KeyModifiers::NONE,
+            }));
+        assert!(matches!(
+            focus,
+            Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                AudiobookshelfBookMove::ChapterFocus(Some(0))
+            )))
+        ));
+
+        // App content changes: book "a" is gone and the App snapshot carries
+        // a stale chapter selection.
+        let state = &mut model.app.audiobookshelf_book_browse[0];
+        state.books = vec![book("z")];
+        state.selected_id = Some("z".into());
+        state.chapter_selection = Some(4);
+        state.buckets =
+            crate::app::types_audiobookshelf_browse::build_surname_buckets(&state.books);
+        model.push_audiobookshelf_book_content();
+
+        let chapter_selection = model
+            .application
+            .get_component(&id)
+            .and_then(|comp| comp.as_any().downcast_ref::<AudiobookshelfBookComponent>())
+            .and_then(AudiobookshelfBookComponent::chapter_selection);
+        assert_eq!(
+            chapter_selection, None,
+            "the content push must not adopt App's stale chapter selection"
+        );
+    }
+
     /// 2.1j book mirror: after the component paints, the shell projects its
     /// geometry (left area, hero, selected rect, selector tabs) into
-    /// `LayoutMain`, and `lib_page_size` derives the real painted stride.
+    /// `LayoutMain`, and that projected left area matches the component's own
+    /// painted content area (the page stride source,
+    /// split-audiobookshelf-cursor-ownership D1).
     #[test]
     fn book_mirror_projects_component_geometry_and_page_stride() {
         let mut app = make_app_stub();
@@ -538,19 +608,24 @@ mod tests {
             .draw(|frame| model.render_audiobookshelf_book_component(frame))
             .unwrap();
 
-        // Narrow: wide flag false, wide right area zero, left area mirrors
-        // the painted content area, and the page stride is the painted
-        // height minus one (matching `lib_page_size`).
+        // Narrow: wide flag false, wide right area zero, and the projected
+        // left area mirrors the component's own painted content area (the
+        // page stride now comes from that geometry alone,
+        // split-audiobookshelf-cursor-ownership D1 — the shell projects no
+        // page size in).
         assert!(!model.app.layout.main.is_wide_book_active());
         assert_eq!(
             model.app.layout.main.audiobookshelf_book_wide_right_area,
             Rect::default()
         );
         assert!(model.app.layout.main.left_area.height > 0);
-        assert_eq!(
-            model.app.lib_page_size(),
-            model.app.layout.main.left_area.height as usize - 1
-        );
+        let component_left_area = model
+            .application
+            .get_component(&model.abs_book_id.clone().unwrap())
+            .and_then(|comp| comp.as_any().downcast_ref::<AudiobookshelfBookComponent>())
+            .map(|book| book.geometry().left_area)
+            .unwrap();
+        assert_eq!(component_left_area, model.app.layout.main.left_area);
         assert!(
             model.app.layout.main.selected_item_rect.is_some()
                 || model.app.layout.main.hero_area.width > 0

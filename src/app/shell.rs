@@ -1,9 +1,7 @@
 use std::time::{Duration, Instant};
 
 use super::action::{playback_command_for_key, Command};
-use super::components::msg::{
-    AlbumCursorKind, BrowserHitRegion, PodcastShowMove, QueueHitRegion, TvHitRegion,
-};
+use super::components::msg::{AlbumCursorKind, BrowserHitRegion, QueueHitRegion, TvHitRegion};
 use super::components::{
     ComponentId, Msg, OverlayId, PlaybackComponent, ShellRequest, TerminalObserverEvent,
     UiRootComponent, UserEvent,

@@ -168,40 +168,6 @@ impl App {
         }
     }
 
-    pub(super) fn move_audiobookshelf_show_cursor(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_browse.get(index) else {
-            return;
-        };
-        if state.shows.is_empty() || state.episode_selection.is_some() {
-            return;
-        }
-        let cursor = super::ui_util::move_cursor(state.cursor(), delta, state.shows.len());
-        self.select_audiobookshelf_show(cursor);
-    }
-
-    pub(super) fn move_audiobookshelf_show_rows(&mut self, rows: i64) {
-        let columns = crate::app::library_column_width::library_column_count(
-            self.layout.main.left_area.width,
-        );
-        self.move_audiobookshelf_show_cursor(rows * columns as i64);
-    }
-
-    pub(super) fn jump_audiobookshelf_show_cursor(&mut self, end: bool) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_browse.get(index) else {
-            return;
-        };
-        if state.shows.is_empty() || state.episode_selection.is_some() {
-            return;
-        }
-        self.select_audiobookshelf_show(if end { state.shows.len() - 1 } else { 0 });
-    }
-
     /// Resolve the selected downloaded episode at the Audiobookshelf playback
     /// boundary. Queue submission remains the responsibility of the later
     /// action stage; browse state never sees credentials or playback state.
@@ -376,86 +342,25 @@ impl App {
         }
     }
 
-    /// Moves the right-pane browser cursor within the selected surname
-    /// bucket only -- books outside it are not reachable by scrolling
-    /// (book-browsing spec) until a different bucket is selected.
-    pub(super) fn move_audiobookshelf_book_cursor(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_book_browse.get(index) else {
-            return;
-        };
-        let Some(bucket) = state.buckets.get(state.selected_bucket) else {
-            return;
-        };
-        if bucket.end <= bucket.start {
-            return;
-        }
-        let (start, end) = (bucket.start as i64, bucket.end as i64 - 1);
-        let cursor = (state.cursor() as i64).clamp(start, end);
-        let new_cursor = (cursor + delta).clamp(start, end) as usize;
-        self.select_audiobookshelf_book(new_cursor);
-    }
-
-    pub(super) fn jump_audiobookshelf_book_cursor(&mut self, end: bool) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_book_browse.get(index) else {
-            return;
-        };
-        let Some(bucket) = state.buckets.get(state.selected_bucket) else {
-            return;
-        };
-        if bucket.end <= bucket.start {
-            return;
-        }
-        self.select_audiobookshelf_book(if end { bucket.end - 1 } else { bucket.start });
-    }
-
-    /// Left/right pane-focus toggle (book-browsing spec: "Left/right arrow
-    /// toggles pane focus without hiding either pane"), replacing the old
-    /// Enter-to-enter/Esc-to-leave modal transition. `chapter_selection`
-    /// doubles as the focus flag -- `Some` focuses the hero's chapter list,
-    /// `None` focuses the right-pane browser -- the same shape Music's
-    /// inline track focus uses (component-owned `track_cursor`).
-    pub(super) fn focus_audiobookshelf_book_chapters(&mut self) {
+    /// Applies the component-resolved chapter focus
+    /// (split-audiobookshelf-cursor-ownership D3): `Some(row)` focuses the
+    /// hero chapter list, `None` returns focus to the right-pane browser.
+    /// Replaces `focus_audiobookshelf_book_chapters` /
+    /// `focus_audiobookshelf_book_browser` / `move_audiobookshelf_book_row`,
+    /// which were three verbs over one field. The `selected_id.is_some()`
+    /// precondition is preserved (a chapter list can only be focused while a
+    /// book is selected); the `chapter_selection.is_none()` transition guard
+    /// now lives with the component's rendered-geometry gate.
+    pub(super) fn set_audiobookshelf_book_chapter_focus(&mut self, selection: Option<usize>) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
         if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
-            if state.selected_id.is_some() && state.chapter_selection.is_none() {
-                state.chapter_selection = Some(0);
+            if selection.is_some() && state.selected_id.is_none() {
+                return;
             }
+            state.chapter_selection = selection;
         }
-    }
-
-    pub(super) fn focus_audiobookshelf_book_browser(&mut self) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
-            state.chapter_selection = None;
-        }
-    }
-
-    /// Cycles the selected alphabetical-bucket pill by `delta`, wrapping
-    /// around -- the established pattern from `switch_music_group`/
-    /// `cycle_letter_pill`.
-    pub(super) fn cycle_audiobookshelf_book_bucket(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_book_browse.get(index) else {
-            return;
-        };
-        let n = state.buckets.len();
-        if n == 0 {
-            return;
-        }
-        let next = (state.selected_bucket as i64 + delta).rem_euclid(n as i64) as usize;
-        self.select_audiobookshelf_book_bucket(next);
     }
 
     /// Selects bucket `bucket_pos` (a position in `state.buckets`, matching
@@ -489,27 +394,6 @@ impl App {
             self.select_audiobookshelf_book(target);
         } else {
             self.save_audiobookshelf_book_position(index);
-        }
-    }
-
-    /// Move the chapter/audio-file selection inside the selected book.
-    pub(super) fn move_audiobookshelf_book_row(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_book_browse.get_mut(index) else {
-            return;
-        };
-        let Some(cursor) = state.chapter_selection else {
-            return;
-        };
-        let Some(id) = state.selected_id.as_deref() else {
-            return;
-        };
-        let count = state.visible_rows(id).len();
-        if count > 0 {
-            state.chapter_selection =
-                Some((cursor as i64 + delta).clamp(0, count as i64 - 1) as usize);
         }
     }
 

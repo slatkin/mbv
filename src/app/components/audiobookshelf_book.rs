@@ -17,13 +17,14 @@ use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
 
 pub struct AudiobookshelfBookComponent {
     state: AudiobookshelfBookBrowseState,
+    /// `false` until the first `set_content`: the initial projection adopts
+    /// the shell snapshot wholesale; only later pushes reset stale
+    /// component-owned fields (split-audiobookshelf-cursor-ownership D4).
+    initialized: bool,
     browser_offset: usize,
     focused: bool,
     images_enabled: bool,
     geometry: AudiobookshelfBookGeometry,
-    /// Shell-provided page stride matching `App::lib_page_size`; the painted
-    /// book rows are not a reliable source when an inline hero replaces rows.
-    page_size: usize,
     /// Whether the last rendered presentation actually exposes chapter focus.
     /// Narrow layouts may retain chapter state across a projection, so input
     /// must follow the rendered wide/chapter geometry rather than that state.
@@ -41,11 +42,11 @@ impl AudiobookshelfBookComponent {
                     media_type: "book".into(),
                 },
             ),
+            initialized: false,
             browser_offset: 0,
             focused: false,
             images_enabled: false,
             geometry: AudiobookshelfBookGeometry::default(),
-            page_size: 1,
             chapters_visible: false,
             image_paint: None,
         }
@@ -57,37 +58,53 @@ impl AudiobookshelfBookComponent {
         focused: bool,
         images_enabled: bool,
     ) {
-        let selected_id = self.state.selected_id.clone();
-        let chapter_selection = self.state.chapter_selection;
-        let browser_offset = self.browser_offset;
-        let selected_bucket = self.state.selected_bucket;
+        // The component's own interaction values win over the incoming
+        // snapshot unconditionally (split-audiobookshelf-cursor-ownership D4).
+        // When the book the component had selected is gone from the new
+        // content, its own fields reset to their defaults — the snapshot's
+        // `chapter_selection` / `selected_bucket` are never adopted.
+        let carried = self.initialized.then(|| {
+            (
+                self.state.selected_id.clone(),
+                self.state.chapter_selection,
+                self.browser_offset,
+                self.state.selected_bucket,
+            )
+        });
         self.state = snapshot.clone();
-        self.browser_offset = 0;
-        if selected_id.as_ref().is_some_and(|id| {
-            self.state
-                .books
-                .iter()
-                .any(|book| &book.library_item_id == id)
-        }) {
-            self.state.selected_id = selected_id;
-            self.state.chapter_selection = chapter_selection;
-            self.browser_offset = browser_offset;
-            self.state.selected_bucket =
-                selected_bucket.min(self.state.buckets.len().saturating_sub(1));
+        let survivor = carried.filter(|(id, ..)| {
+            id.as_ref().is_some_and(|id| {
+                self.state
+                    .books
+                    .iter()
+                    .any(|book| &book.library_item_id == id)
+            })
+        });
+        match survivor {
+            Some((id, chapter_selection, browser_offset, selected_bucket)) => {
+                self.state.selected_id = id;
+                self.state.chapter_selection = chapter_selection;
+                self.browser_offset = browser_offset;
+                self.state.selected_bucket =
+                    selected_bucket.min(self.state.buckets.len().saturating_sub(1));
+            }
+            None if self.initialized => {
+                self.state.chapter_selection = None;
+                self.browser_offset = 0;
+                self.state.selected_bucket = self
+                    .state
+                    .selected_bucket
+                    .min(self.state.buckets.len().saturating_sub(1));
+            }
+            None => {}
         }
+        self.initialized = true;
         self.focused = focused;
         self.images_enabled = images_enabled;
     }
 
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<HomeImagePaint> {
         self.image_paint.take()
-    }
-
-    /// Shell projection of the existing App page-size contract. The component
-    /// cannot derive this from `book_rows`: inline replacement heroes can make
-    /// that painted-row list empty or partial.
-    pub(in crate::app) fn set_page_size(&mut self, page_size: usize) {
-        self.page_size = page_size.max(1);
     }
 
     /// The geometry the component computed during its last `view`, exposed so
@@ -110,8 +127,33 @@ impl AudiobookshelfBookComponent {
         self.state.selected_bucket
     }
 
+    /// The page stride from the component's own painted geometry
+    /// (split-audiobookshelf-cursor-ownership D1): the list/content area's
+    /// height minus its header line — the same value `App::lib_page_size()`
+    /// derived from the projected `left_area`, now sourced locally so the
+    /// shell applies no competing stride.
     fn page_size(&self) -> usize {
-        self.page_size
+        (self.geometry.left_area.height as usize)
+            .saturating_sub(1)
+            .max(1)
+    }
+
+    fn book_request(&self) -> Msg {
+        Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::Book(self.state.cursor()),
+        ))
+    }
+
+    fn bucket_request(&self) -> Msg {
+        Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::Bucket(self.state.selected_bucket),
+        ))
+    }
+
+    fn chapter_focus_request(&self) -> Msg {
+        Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::ChapterFocus(self.state.chapter_selection),
+        ))
     }
 
     fn move_book(&mut self, delta: i64) {
@@ -149,81 +191,55 @@ impl AudiobookshelfBookComponent {
         match key.code {
             Key::Char('[') if key.modifiers.is_empty() => {
                 self.cycle_bucket(-1);
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::PreviousBucket,
-                )))
+                Some(self.bucket_request())
             }
             Key::Char(']') if key.modifiers.is_empty() => {
                 self.cycle_bucket(1);
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::NextBucket,
-                )))
+                Some(self.bucket_request())
             }
             Key::Up | Key::Char('k') if chapters_focused => {
                 self.move_chapter(-1);
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::PreviousChapter,
-                )))
+                Some(self.chapter_focus_request())
             }
             Key::Down | Key::Char('j') if chapters_focused => {
                 self.move_chapter(1);
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::NextChapter,
-                )))
+                Some(self.chapter_focus_request())
             }
             Key::Right if chapters_focused => {
                 self.state.chapter_selection = None;
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::FocusBrowser,
-                )))
+                Some(self.chapter_focus_request())
             }
             Key::Left if self.chapters_visible && !chapters_focused => {
                 self.state.chapter_selection = Some(0);
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::FocusChapters,
-                )))
+                Some(self.chapter_focus_request())
             }
             Key::Up | Key::Char('k') => {
                 self.move_book(-1);
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::PreviousBookRow,
-                )))
+                Some(self.book_request())
             }
             Key::Down | Key::Char('j') => {
                 self.move_book(1);
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::NextBookRow,
-                )))
+                Some(self.book_request())
             }
             Key::PageUp if !chapters_focused => {
                 self.move_book(-(self.page_size() as i64));
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::PreviousBookPage,
-                )))
+                Some(self.book_request())
             }
             Key::PageDown if !chapters_focused => {
                 self.move_book(self.page_size() as i64);
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::NextBookPage,
-                )))
+                Some(self.book_request())
             }
             Key::Home if !chapters_focused => {
                 self.select_bucket_edge(false);
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::FirstBook,
-                )))
+                Some(self.book_request())
             }
             Key::End if !chapters_focused => {
                 self.select_bucket_edge(true);
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::LastBook,
-                )))
+                Some(self.book_request())
             }
             Key::Esc | Key::Backspace if chapters_focused => {
                 self.state.chapter_selection = None;
-                Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-                    AudiobookshelfBookMove::FocusBrowser,
-                )))
+                Some(self.chapter_focus_request())
             }
             Key::Char(' ') if chapters_focused => Some(Msg::Shell(
                 ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::ActivateChapter),

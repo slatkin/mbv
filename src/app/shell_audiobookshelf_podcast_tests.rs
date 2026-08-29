@@ -1,7 +1,5 @@
 use super::*;
-use crate::app::components::msg::{
-    PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove,
-};
+use crate::app::components::msg::{PodcastEpisodeIntent, PodcastEpisodeTransition};
 use crate::app::components::{Msg, ShellRequest};
 use crate::app::render::HomeImagePaint;
 use crate::app::tests_podcast::audiobookshelf_app;
@@ -41,13 +39,14 @@ fn abs_podcast_shell_mounts_and_routes_component() {
             code: Key::Down,
             modifiers: KeyModifiers::NONE,
         }));
-    let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(movement))) = message else {
-        panic!("show movement should be routed as a typed show-move request");
+    let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { index })) = message else {
+        panic!("show movement should carry the resolved show index");
     };
-    assert_eq!(movement, PodcastShowMove::NextRow);
-    // The shell arm maps NextRow onto the legacy row-stride move and
-    // re-projects content (task 5.3d.5), preserving the App target.
-    model.app.move_audiobookshelf_show_rows(1);
+    assert_eq!(index, 1, "component resolved the next row locally");
+    // The shell applies the resolved index directly through the index-taking
+    // entry point (split-audiobookshelf-cursor-ownership D1), preserving the
+    // detail-fetch / position-save target.
+    model.app.select_audiobookshelf_show(index);
     assert_eq!(model.app.audiobookshelf_browse[0].cursor(), 1);
     let unclaimed = model
         .application
@@ -58,6 +57,48 @@ fn abs_podcast_shell_mounts_and_routes_component() {
             modifiers: KeyModifiers::NONE,
         }));
     assert_eq!(unclaimed, None);
+}
+
+/// split-audiobookshelf-cursor-ownership D4 / task 5.3: a real shell content
+/// push that drops the component's selected show must not leave any
+/// App-sourced interaction value in the component.
+#[test]
+fn abs_podcast_shell_push_drops_stale_component_episode_state() {
+    let mut model = Model::new(audiobookshelf_app());
+    model.app.audiobookshelf_browse[0].append_page(
+        1,
+        20,
+        2,
+        vec![AudiobookshelfShow {
+            library_item_id: "show-b".into(),
+            title: "Show B".into(),
+            author: None,
+            description: None,
+            cover_path: None,
+        }],
+    );
+    model.sync_audiobookshelf_podcast();
+    model
+        .abs_podcast_component_mut(0)
+        .expect("podcast component mounted")
+        .set_episode_selection(Some(0));
+
+    // App content changes: show-a is removed and the App snapshot carries a
+    // stale episode selection.
+    let state = &mut model.app.audiobookshelf_browse[0];
+    state.shows.retain(|show| show.library_item_id != "show-a");
+    state.selected_id = Some("show-b".into());
+    state.episode_selection = Some(9);
+    model.push_audiobookshelf_podcast_content();
+
+    assert_eq!(
+        model
+            .abs_podcast_component_mut(0)
+            .expect("podcast component mounted")
+            .episode_selection(),
+        None,
+        "the content push must not adopt App's stale episode selection"
+    );
 }
 
 #[test]
@@ -520,9 +561,9 @@ fn abs_podcast_stays_mounted_and_preserves_selection_across_switch() {
         }));
     assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(
-            PodcastShowMove::NextRow
-        )))
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            index: 1
+        }))
     ));
     assert_eq!(
         selected_id(&model),

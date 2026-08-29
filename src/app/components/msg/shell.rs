@@ -13,8 +13,7 @@ use super::hit_regions::{BrowserHitRegion, HomeHitRegion, QueueHitRegion, TvHitR
 use super::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
     ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,
-    PodcastEpisodeTransition, PodcastShowMove, RemoteReanchorIntent, SavePlaylistIntent,
-    SettingsIntent,
+    PodcastEpisodeTransition, RemoteReanchorIntent, SavePlaylistIntent, SettingsIntent,
 };
 use super::queue::QueueIntent;
 
@@ -167,12 +166,17 @@ pub enum ShellRequest {
         col: u16,
         row: u16,
     },
-    /// Typed podcast show-list movement (task 5.3d.5). Emitted by the component
+    /// Resolved podcast show-list cursor
+    /// (split-audiobookshelf-cursor-ownership D1). Emitted by the component
     /// after its local cursor mutation for Up/k, Down/j, Left/h, Right/l,
-    /// PageUp/PageDown, Home/End while no episode selection is active; the
-    /// shell maps the variant onto the legacy App show-move operations and
-    /// re-projects podcast content.
-    AudiobookshelfPodcastShowMove(PodcastShowMove),
+    /// PageUp/PageDown, Home/End while no episode selection is active. Carries
+    /// the show index the component landed on; the shell applies it via
+    /// `App::select_audiobookshelf_show` (clamp + `state.select` +
+    /// detail-fetch), saves the position, and re-projects podcast content
+    /// without recomputing the movement.
+    AudiobookshelfPodcastShowMove {
+        index: usize,
+    },
     /// Typed podcast episode-mode transition (task 5.3d.6). Emitted by the
     /// component after its local episode-cursor/filter/exit mutation while
     /// episode selection is active (Up/k, Down/j, `[`, `]`, Esc, Backspace);
@@ -184,9 +188,12 @@ pub enum ShellRequest {
     /// selection and wide/narrow conditions from current App state/layout and
     /// runs the existing App play/enter/modal/enqueue effect (D17).
     AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent),
-    /// Typed Audiobookshelf book browser movement (task 5.3d.13-R1). The
-    /// component updates its local browse state and the shell applies the
-    /// corresponding legacy App operation, preserving position/detail effects.
+    /// Resolved Audiobookshelf book browser movement
+    /// (split-audiobookshelf-cursor-ownership D1/D3). The component resolves
+    /// the movement against its own content/geometry and carries the landed
+    /// book index, bucket position, or chapter focus; the shell applies it
+    /// through the matching index-taking entry point, preserving
+    /// position/detail effects, without recomputing from a delta.
     AudiobookshelfBookMove(AudiobookshelfBookMove),
     /// Typed Audiobookshelf book action (task 5.3d.13-R1). The shell resolves
     /// narrow/wide activation from current App state as the legacy reader did.

@@ -59,7 +59,7 @@ fn abs_book_component_keeps_local_cursor_and_renders_without_app_state() {
     assert!(matches!(
         message,
         Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::NextBookRow
+            AudiobookshelfBookMove::Book(1)
         )))
     ));
 
@@ -197,7 +197,7 @@ fn abs_book_component_does_not_focus_hidden_chapters_on_narrow_left() {
     assert!(matches!(
         movement,
         Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::NextBookRow
+            AudiobookshelfBookMove::Book(_)
         )))
     ));
     let activate = component.on(&Event::Keyboard(KeyEvent {
@@ -231,7 +231,7 @@ fn abs_book_component_gates_chapter_focus_after_wide_to_narrow_resize() {
     assert!(matches!(
         focus,
         Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::FocusChapters
+            AudiobookshelfBookMove::ChapterFocus(Some(0))
         )))
     ));
     let chapter_move = component.on(&Event::Keyboard(KeyEvent {
@@ -241,7 +241,7 @@ fn abs_book_component_gates_chapter_focus_after_wide_to_narrow_resize() {
     assert!(matches!(
         chapter_move,
         Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::NextChapter
+            AudiobookshelfBookMove::ChapterFocus(Some(_))
         )))
     ));
 
@@ -256,7 +256,7 @@ fn abs_book_component_gates_chapter_focus_after_wide_to_narrow_resize() {
     assert!(matches!(
         movement,
         Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::NextBookRow
+            AudiobookshelfBookMove::Book(_)
         )))
     ));
     let activate = component.on(&Event::Keyboard(KeyEvent {
@@ -281,39 +281,88 @@ fn abs_book_component_gates_chapter_focus_after_wide_to_narrow_resize() {
     ));
 }
 
+/// split-audiobookshelf-cursor-ownership D1 / task 1.2: the page stride comes
+/// from the component's own painted list geometry, and nothing else. A taller
+/// painted area pages further than a shorter one, and PageDown carries the
+/// resolved book index it landed on.
 #[test]
-fn abs_book_component_page_stride_is_independent_of_inline_painted_rows() {
-    let state = book_state(6, false);
+fn abs_book_component_page_stride_comes_from_painted_geometry() {
+    let page_jump = |height: u16| {
+        let state = book_state(30, false);
+        let mut component = AudiobookshelfBookComponent::new();
+        component.set_content(&state, true, false);
+        let mut terminal = Terminal::new(TestBackend::new(60, height)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        let page = component.on(&Event::Keyboard(KeyEvent {
+            code: Key::PageDown,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(AudiobookshelfBookMove::Book(
+            index,
+        )))) = page
+        else {
+            panic!("PageDown must carry the resolved book index, got {page:?}");
+        };
+        index
+    };
+
+    let short = page_jump(8);
+    let tall = page_jump(24);
+    assert!(
+        short >= 1,
+        "a page jump advances past a single row: {short}"
+    );
+    assert!(
+        tall > short,
+        "a taller painted list pages further: tall={tall} short={short}"
+    );
+}
+
+/// split-audiobookshelf-cursor-ownership D4 / task 1.3 → 5.2: when a content
+/// push drops the book the component had selected, the component resets its
+/// own `chapter_selection` / `browser_offset` / `selected_bucket` rather than
+/// adopting the shell snapshot's copies.
+#[test]
+fn abs_book_component_drops_stale_chapter_focus_when_selection_vanishes() {
+    let state = book_state(1, true);
     let mut component = AudiobookshelfBookComponent::new();
     component.set_content(&state, true, false);
-    component.set_page_size(3);
-    let mut terminal = Terminal::new(TestBackend::new(60, 8)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
+    assert!(!component.geometry().chapter_rows.is_empty());
 
-    let page = component.on(&Event::Keyboard(KeyEvent {
-        code: Key::PageDown,
+    // Focus the chapter list locally.
+    let focus = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Left,
         modifiers: KeyModifiers::NONE,
     }));
     assert!(matches!(
-        page,
+        focus,
         Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::NextBookPage
+            AudiobookshelfBookMove::ChapterFocus(Some(0))
         )))
     ));
-    let mut output = Terminal::new(TestBackend::new(60, 8)).unwrap();
-    output
-        .draw(|frame| component.view(frame, frame.area()))
-        .unwrap();
-    let rendered: String = output
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .map(|cell| cell.symbol().to_owned())
-        .collect();
-    assert!(rendered.contains("Book 3"), "output: {rendered:?}");
+    assert_eq!(component.chapter_selection(), Some(0));
+
+    // New content: book-0 is gone, and the snapshot carries a chapter
+    // selection `App` has no business owning.
+    let mut replacement = book_state(1, true);
+    replacement.books[0].library_item_id = "book-99".into();
+    replacement.selected_id = Some("book-99".into());
+    replacement.buckets =
+        crate::app::types_audiobookshelf_browse::build_surname_buckets(&replacement.books);
+    replacement.chapter_selection = Some(3);
+    component.set_content(&replacement, true, false);
+
+    assert_eq!(
+        component.chapter_selection(),
+        None,
+        "stale chapter focus must reset, not adopt the snapshot's Some(3)"
+    );
 }
 
 #[test]

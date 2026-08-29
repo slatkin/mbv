@@ -23,8 +23,7 @@ pub use self::hit_regions::{BrowserHitRegion, HomeHitRegion, QueueHitRegion, TvH
 pub use self::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
     ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,
-    PodcastEpisodeTransition, PodcastShowMove, RemoteReanchorIntent, SavePlaylistIntent,
-    SettingsIntent,
+    PodcastEpisodeTransition, RemoteReanchorIntent, SavePlaylistIntent, SettingsIntent,
 };
 pub use self::playback::PlaybackRequest;
 pub use self::queue::{QueueColumnResize, QueueIntent, QueueMove, QueueRequest};

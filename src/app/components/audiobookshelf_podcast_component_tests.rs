@@ -1,11 +1,11 @@
 use super::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
-use super::msg::{
-    Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, PodcastShowMove, ShellRequest,
-};
+use super::msg::{Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, ShellRequest};
 use crate::app::images::audiobookshelf_cover_cache_key;
 use crate::app::shell::Model;
 use crate::app::tests_podcast::audiobookshelf_app;
-use crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState;
+use crate::app::types_audiobookshelf_browse::{
+    AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
+};
 use mbv_core::audiobookshelf::{AudiobookshelfLibrary, AudiobookshelfShow};
 use mbv_core::config::{AudiobookshelfSetup, ServiceKind};
 use ratatui::backend::TestBackend;
@@ -13,6 +13,62 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+/// split-audiobookshelf-cursor-ownership D4 / task 1.3 → 5.1: when a content
+/// push drops the show the component had selected, the component resets its
+/// own `episode_selection` / `episode_filter` / `scroll` to their defaults —
+/// it never adopts the values carried in the shell's snapshot for those
+/// fields.
+#[test]
+fn abs_podcast_component_drops_stale_episode_state_when_selection_vanishes() {
+    let library = AudiobookshelfLibrary {
+        id: "abs-podcasts".into(),
+        name: "ABS Podcasts".into(),
+        media_type: "podcast".into(),
+    };
+    let show = |id: &str, title: &str| AudiobookshelfShow {
+        library_item_id: id.into(),
+        title: title.into(),
+        author: None,
+        description: None,
+        cover_path: None,
+    };
+
+    let mut first = AudiobookshelfBrowseState::new(library.clone());
+    first.append_page(
+        0,
+        20,
+        2,
+        vec![show("show-a", "Show A"), show("show-b", "Show B")],
+    );
+    first.select(0);
+
+    let mut component = AudiobookshelfPodcastComponent::new();
+    component.set_content(&first, true, false);
+    component.set_episode_selection(Some(1));
+    component.set_episode_filter(AudiobookshelfEpisodeFilter::Unplayed);
+
+    // New content: show-a is gone, and the snapshot carries interaction
+    // values `App` has no business owning.
+    let mut second = AudiobookshelfBrowseState::new(library);
+    second.append_page(0, 20, 1, vec![show("show-b", "Show B")]);
+    second.episode_selection = Some(5);
+    second.episode_filter = AudiobookshelfEpisodeFilter::Played;
+    second.scroll = 7;
+
+    component.set_content(&second, true, false);
+
+    assert_eq!(
+        component.episode_selection(),
+        None,
+        "stale episode selection must reset, not adopt the snapshot's Some(5)"
+    );
+    assert_eq!(
+        component.episode_filter(),
+        AudiobookshelfEpisodeFilter::All,
+        "stale episode filter must reset to All, not adopt the snapshot's Played"
+    );
+}
 
 #[test]
 fn abs_podcast_component_keeps_local_show_cursor_and_renders_without_app_state() {
@@ -25,10 +81,10 @@ fn abs_podcast_component_keeps_local_show_cursor_and_renders_without_app_state()
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove(movement))) = message else {
-        panic!("show movement should be a typed show-move request");
+    let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { index })) = message else {
+        panic!("show movement should carry the resolved show index");
     };
-    assert_eq!(movement, PodcastShowMove::NextRow);
+    assert_eq!(index, 0, "single show clamps the resolved cursor to 0");
     assert_eq!(component.cursor(), 0);
 
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();

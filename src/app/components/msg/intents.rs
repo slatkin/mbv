@@ -21,22 +21,6 @@ pub enum AlbumCursorKind {
     Page,
 }
 
-/// Closed set of podcast show-list movement operations (task 5.3d.5). The
-/// component performs its local cursor arithmetic and emits the matching
-/// variant; the shell maps it onto the legacy App show-move operations
-/// preserving the current position-save/detail-fetch target (D17).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PodcastShowMove {
-    PreviousRow,
-    NextRow,
-    PreviousItem,
-    NextItem,
-    PreviousPage,
-    NextPage,
-    First,
-    Last,
-}
-
 /// Closed set of podcast episode-mode transitions (task 5.3d.6). The
 /// component performs its local episode/cursor/filter mutation and emits the
 /// matching variant while episode selection is active; the shell maps it onto
@@ -69,23 +53,23 @@ pub enum PodcastEpisodeIntent {
     Enqueue,
 }
 
-/// Closed set of Audiobookshelf book browser movements (task 5.3d.13-R1).
-/// The component updates its local browse state and the shell applies the
-/// corresponding legacy App operation, preserving position/detail effects.
+/// Resolved-value Audiobookshelf book browser movements
+/// (split-audiobookshelf-cursor-ownership D1/D3). The component resolves the
+/// movement against its own content and geometry and carries the landed
+/// value; the shell applies it through the matching index-taking entry point
+/// without recomputing the movement from a delta.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudiobookshelfBookMove {
-    PreviousBucket,
-    NextBucket,
-    PreviousChapter,
-    NextChapter,
-    FocusChapters,
-    FocusBrowser,
-    PreviousBookRow,
-    NextBookRow,
-    PreviousBookPage,
-    NextBookPage,
-    FirstBook,
-    LastBook,
+    /// The book-list cursor the component landed on (arrows, page keys,
+    /// Home/End) — applied via `App::select_audiobookshelf_book`.
+    Book(usize),
+    /// The surname-bucket pill position the component landed on (`[`/`]`) —
+    /// applied via `App::select_audiobookshelf_book_bucket`.
+    Bucket(usize),
+    /// The resolved chapter focus (`Some(row)` focuses the hero chapter list,
+    /// `None` returns focus to the browser) — applied via
+    /// `App::set_audiobookshelf_book_chapter_focus`.
+    ChapterFocus(Option<usize>),
 }
 
 /// Closed set of Audiobookshelf book actions (task 5.3d.13-R1). The shell
