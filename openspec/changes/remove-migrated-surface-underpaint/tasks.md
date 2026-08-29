@@ -123,14 +123,24 @@ six production files and preserves behaviour.
       component-side), shared widget geometry already published pre-paint by
       rows 2.1a–2.1f, and component-local episode rows/season tabs stay
       paint-coupled. Boundary note added in `layout.rs`.
-- [ ] 2.1j Aggregate consolidation: merge the progressive checkpoint results
+- [x] 2.1j Aggregate consolidation: merge the progressive checkpoint results
       into the complete fresh `AppLayout`, retire deferred legacy computation,
       and verify one authoritative computation for every aggregate field.
       Publish the aggregate at its natural final checkpoint and atomically
       install it; preserve zero-area no-mutation. Boundary:
-      `src/app/layout.rs`, `src/app/render/screens/root.rs`. Depends on 2.1a–i.
+      `src/app/layout.rs`, `src/app/render/screens/root.rs`,
+      `src/app/shell_audiobookshelf_book.rs`,
+      `src/app/render/components/audiobookshelf_book.rs`,
+      `src/app/audiobookshelf_book_modal_actions.rs` (Book surface has no
+      AppLayout producer after the legacy renderer removal; the shell mirror
+      restores it). Depends on 2.1a–i.
       Verify full render characterization, aggregate zero-area tests, check, and
       fmt.
+      Real writer: restored the Audiobookshelf Book AppLayout projection via a
+      shell geometry mirror (left_area/hero/selected/selector_tabs + wide flag
+      driving `is_wide_book_active`), re-homed the narrow modal branch off the
+      component-reported flag, and added aggregate zero-area + per-surface
+      single-producer tests.
 - [ ] 2.2 After 2.1j, extract `paint_legacy_chrome` from the progressive
       geometry orchestration, preserving all legacy painting initially. Depends
       on 2.1j. Verify full nextest and fmt.

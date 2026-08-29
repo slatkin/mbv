@@ -23,6 +23,15 @@ pub(in crate::app) struct AudiobookshelfBookGeometry {
     pub selector_tabs: Vec<(Rect, usize)>,
     pub book_rows: Vec<(Rect, usize)>,
     pub chapter_rows: Vec<(Rect, usize)>,
+    /// Painted book-list rect: the wide right-pane browser, or the narrow
+    /// content area below the pill bar. Mirrors the legacy
+    /// `LayoutMain.left_area` so `lib_page_size()` regains its real stride
+    /// after render ownership moved to the component (2.1j).
+    pub left_area: Rect,
+    /// Whether the last painted presentation is the wide hero-on-left
+    /// layout (mirrors the legacy wide/narrow gate; drives
+    /// `is_wide_book_active()` and the Enter activate decision).
+    pub wide: bool,
     /// Hero rect the component painted for the selected book (wide left pane,
     /// or narrow inline-detail flow). Mirrors the legacy `LayoutMain.hero_area`
     /// so conformance/context-menu readers keep working after render ownership
@@ -64,6 +73,8 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
     if hero_left::shared_hero_presentation(area).is_some() {
         let panes = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y)?;
         let left_area = panes.left_area;
+        geometry.left_area = panes.left_area;
+        geometry.wide = true;
         let hero_content_area = padded_rect(left_area, PANE_PAD_X, 0);
         let hero_height = (plan.content_rows + 1).min(hero_content_area.height);
         let hero_area = Rect {
@@ -135,6 +146,8 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
     }
 
     let parts = hero_left::pill_bar_areas(area);
+    geometry.left_area = parts.content_area;
+    geometry.wide = false;
     geometry.selector_tabs = render_book_pills(frame, parts.pills_area, state);
     let plan = book_hero_plan(
         state,

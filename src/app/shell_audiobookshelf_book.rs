@@ -4,6 +4,7 @@ use super::shell::Model;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
 use super::{PanelFocus, TabSelection};
 use mbv_core::config::ServiceKind;
+use ratatui::layout::Rect;
 
 impl Model {
     /// Applies a typed book request to the existing App operations. The
@@ -189,15 +190,49 @@ impl Model {
             }
         }
         self.application.view(id, frame, area);
-        let image_paint = self
+        // Component owns painting; read back its painted geometry so the
+        // still-required legacy `LayoutMain` readers (interaction wide/narrow
+        // gating via `is_wide_book_active`, library page stride, and
+        // overlay/menu anchors) stay correct once the legacy underpaint
+        // renderer was removed (2.1j). Wide reports a nonzero right area and
+        // the painted left area; narrow resets both to the narrow content
+        // area / zero wide flag, including the wide-to-narrow redraw.
+        let projection = self
             .application
             .get_component_mut(id)
             .and_then(|comp| {
                 comp.as_any_mut()
                     .downcast_mut::<AudiobookshelfBookComponent>()
             })
-            .and_then(AudiobookshelfBookComponent::take_image_paint);
-        self.app.paint_home_image(frame, image_paint);
+            .map(|component| {
+                let image_paint = component.take_image_paint();
+                let geometry = component.geometry();
+                (
+                    image_paint,
+                    geometry.left_area,
+                    geometry.wide,
+                    geometry.hero_area,
+                    geometry.selected_item_rect,
+                    geometry.selector_tabs.clone(),
+                )
+            });
+        if let Some((image_paint, left_area, wide, hero_area, selected_item_rect, selector_tabs)) =
+            projection
+        {
+            self.app.paint_home_image(frame, image_paint);
+            self.app.layout.main.left_area = left_area;
+            // Drive `is_wide_book_active` from the component-reported wide
+            // flag: wide keeps a nonzero right area, narrow resets it to
+            // zero (including the wide-to-narrow redraw).
+            self.app.layout.main.audiobookshelf_book_wide_right_area = if wide {
+                self.app.layout.main.audiobookshelf_book_area
+            } else {
+                Rect::default()
+            };
+            self.app.layout.main.hero_area = hero_area.unwrap_or_default();
+            self.app.layout.main.selected_item_rect = selected_item_rect;
+            self.app.layout.main.selector_tabs = selector_tabs;
+        }
     }
 }
 
@@ -447,6 +482,78 @@ mod tests {
             selected_book_id(&model),
             Some("book-b".into()),
             "the book selection must survive the switch-and-return round trip"
+        );
+    }
+
+    /// 2.1j book mirror: after the component paints, the shell projects its
+    /// geometry (left area, hero, selected rect, selector tabs) into
+    /// `LayoutMain`, and `lib_page_size` derives the real painted stride.
+    #[test]
+    fn book_mirror_projects_component_geometry_and_page_stride() {
+        let mut app = make_app_stub();
+        let library = AudiobookshelfLibrary {
+            id: "books".into(),
+            name: "Books".into(),
+            media_type: "book".into(),
+        };
+        let mut state = AudiobookshelfBookBrowseState::new(library.clone());
+        let mut book = AudiobookshelfBook {
+            library_item_id: "book-a".into(),
+            title: "Book A".into(),
+            author_display: None,
+            author_sort_key: "A".into(),
+            cover_path: None,
+            duration_seconds: 0.0,
+            narrator: None,
+            published_year: None,
+            genres: Vec::new(),
+            description: None,
+            series_name: None,
+            chapters: Vec::new(),
+            audio_files: Vec::new(),
+        };
+        for (i, suffix) in ["B", "C", "D", "E", "F"].iter().enumerate() {
+            let mut b = book.clone();
+            b.library_item_id = format!("book-{}", suffix.to_lowercase());
+            b.title = format!("Book {}", suffix);
+            b.author_sort_key = suffix.to_string();
+            state.books.push(b);
+            let _ = i;
+        }
+        state.books.insert(0, book.clone());
+        state.selected_id = Some("book-a".into());
+        state.buckets =
+            crate::app::types_audiobookshelf_browse::build_surname_buckets(&state.books);
+        app.audiobookshelf_libraries.push(library);
+        app.audiobookshelf_book_browse.push(state);
+        app.tab = TabSelection::AudiobookshelfLibrary(0);
+        app.panel_focus = PanelFocus::Library;
+        let mut model = Model::new(app);
+        model.sync_audiobookshelf_book();
+        // Narrow book area (60x20): the component paints the narrow
+        // presentation; the mirror must project the narrow content area.
+        model.app.layout.main.audiobookshelf_book_area = Rect::new(0, 0, 60, 20);
+        let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+        terminal
+            .draw(|frame| model.render_audiobookshelf_book_component(frame))
+            .unwrap();
+
+        // Narrow: wide flag false, wide right area zero, left area mirrors
+        // the painted content area, and the page stride is the painted
+        // height minus one (matching `lib_page_size`).
+        assert!(!model.app.layout.main.is_wide_book_active());
+        assert_eq!(
+            model.app.layout.main.audiobookshelf_book_wide_right_area,
+            Rect::default()
+        );
+        assert!(model.app.layout.main.left_area.height > 0);
+        assert_eq!(
+            model.app.lib_page_size(),
+            model.app.layout.main.left_area.height as usize - 1
+        );
+        assert!(
+            model.app.layout.main.selected_item_rect.is_some()
+                || model.app.layout.main.hero_area.width > 0
         );
     }
 }

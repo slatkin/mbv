@@ -47,13 +47,17 @@ pub(super) fn book_modal_state(
 impl App {
     /// Narrow parent activation opens the chapter modal while its inline hero
     /// is admitted; a cannot-fit hero restores ordinary book activation.
+    /// The narrow/wide discriminator and hero presence come from the
+    /// component-reported geometry mirror (2.1j), not the removed legacy
+    /// `inline_hero_area`.
     pub(super) fn activate_audiobookshelf_book_parent(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        if self.layout.main.inline_hero_area.width > 0
-            && self.layout.main.inline_hero_area.height > 0
-        {
+        let narrow_with_hero = !self.layout.main.is_wide_book_active()
+            && self.layout.main.hero_area.width > 0
+            && self.layout.main.hero_area.height > 0;
+        if narrow_with_hero {
             self.open_audiobookshelf_book_selection_modal();
         } else {
             self.play_selected_audiobookshelf_book(index);

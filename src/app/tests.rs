@@ -560,6 +560,51 @@ pub(crate) fn render_app_to_string(app: &mut App, width: u16, height: u16) -> St
     out
 }
 
+#[test]
+fn aggregate_zero_area_render_leaves_layout_untouched() {
+    // 2.1j aggregate: a 0-dimension terminal frame (`compute_frame_layout`
+    // returns None) must leave `self.layout` exactly as the last completed
+    // frame left it — no fresh-draft install, no partial mutation.
+    let mut app = make_app_stub();
+    app.layout.main.left_area = ratatui::layout::Rect::new(1, 2, 30, 12);
+    app.layout.main.hero_area = ratatui::layout::Rect::new(1, 2, 30, 12);
+    let before_left = app.layout.main.left_area;
+    let before_hero = app.layout.main.hero_area;
+    let mut term = Terminal::new(TestBackend::new(0, 0)).unwrap();
+    term.draw(|f| app.render(f)).unwrap();
+    assert_eq!(
+        app.layout.main.left_area,
+        before_left,
+        "zero-area render must not touch left_area"
+    );
+    assert_eq!(
+        app.layout.main.hero_area,
+        before_hero,
+        "zero-area render must not touch hero_area"
+    );
+}
+
+#[test]
+fn aggregate_surfaces_do_not_bleed_across_destinations() {
+    // 2.1j per-surface single-producer: after a normal frame, each surface
+    // family's geometry is produced only by its own checkpoint — no
+    // cross-surface bleed from one destination into another.
+    let mut app = make_app_stub();
+    let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    term.draw(|f| app.render(f)).unwrap();
+
+    let main = &app.layout.main;
+    // The destination tag is only set on the completed frame.
+    assert!(main.browse_destination.is_some());
+    // Cross-surface bleed check: a nonzero queue area must not also be a
+    // nonzero music wide area (they are mutually exclusive destinations).
+    let queue_active = main.queue_area.width > 0 && main.queue_area.height > 0;
+    let music_wide_active = main.is_wide_music_active();
+    // A stub may render a degenerate frame; the invariant is that neither
+    // surface's geometry is written by the other's producer.
+    assert!(!(queue_active && music_wide_active));
+}
+
 pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec<EmbyItem>) -> App {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;

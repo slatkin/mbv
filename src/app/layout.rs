@@ -185,7 +185,10 @@ pub(crate) struct LayoutMain {
     pub audiobookshelf_book_area: Rect,
     /// Bounding rect of the Audiobookshelf book tab's wide-only right pane.
     /// Stays empty for the narrow inline presentation and is therefore safe
-    /// for input gating.
+    /// for input gating. Repopulated by the 2.1j shell mirror from the
+    /// component-reported wide flag (`AudiobookshelfBookGeometry::wide`) so
+    /// `is_wide_book_active()` regains its legacy signal after the legacy
+    /// underpaint renderer was removed.
     pub audiobookshelf_book_wide_right_area: Rect,
     /// The destination (`self.tab`) the last completed render frame was drawn
     /// for. Set by `App::render` only on the layout that completes and is
