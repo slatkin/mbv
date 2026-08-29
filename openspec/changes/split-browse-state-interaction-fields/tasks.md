@@ -56,7 +56,7 @@
 - [x] 4.2 Introduce the resting-position type and move `BrowseLevel`'s
       persistence-facing uses onto it, leaving `cursor`/`scroll` in place for
       now. Verify: `rtk cargo check -p mbv`; 4.1's tests still pass.
-- [ ] 4.3 Re-point every outcome-1 reader from 1.1 (and 1.1b) to take the resolved
+- [x] 4.3 Re-point every outcome-1 reader from 1.1 (and 1.1b) to take the resolved
       value as a parameter, including `render_list`'s per-frame scroll
       write-back as a `&mut usize` render parameter. Verify:
       `rtk cargo check -p mbv` after each group; commit in
