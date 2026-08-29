@@ -250,11 +250,7 @@ impl AppComponent<Msg, UserEvent> for SearchSidebarComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
-            // Non-keyboard events (mouse, resize, focus, tick, user-event
-            // tokens) do not affect this component. The 300 ms debounce
-            // is driven by the shell sweep via `tick_clock` (#609);
-            // production never wired a `UserEvent::Clock` publisher, so
-            // the original `Event::User` arm was unreachable.
+            Event::User(UserEvent::Clock(now)) => self.handle_clock(*now),
             _ => None,
         }
     }

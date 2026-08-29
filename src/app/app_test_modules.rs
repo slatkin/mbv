@@ -134,3 +134,11 @@ mod tests_player_event;
 #[cfg(test)]
 #[path = "tests_routing_matrix.rs"]
 mod tests_routing_matrix;
+
+#[cfg(test)]
+#[path = "tests_tick_harness.rs"]
+pub(crate) mod tests_tick_harness;
+
+#[cfg(test)]
+#[path = "tests_tick_integration.rs"]
+mod tests_tick_integration;

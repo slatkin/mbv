@@ -139,7 +139,7 @@ pub(super) fn apply_router_outcome(
 impl Model {
     /// Build the router snapshot and resolve the terminal chord. The router
     /// reads a plain-data snapshot, never component attributes (ADR 0023).
-    fn router_outcome(&mut self, messages: &[Msg]) -> RouterOutcome {
+    pub(in crate::app) fn router_outcome(&mut self, messages: &[Msg]) -> RouterOutcome {
         let Some(tui_key) = messages.iter().find_map(|msg| match msg {
             Msg::TerminalEvent(TerminalObserverEvent::Key(key)) => Some(*key),
             _ => None,
@@ -245,8 +245,17 @@ impl Model {
     /// Construct the model, starting the TuiRealm crossterm listener and
     /// mounting the permanent root observer.
     pub fn new(app: App) -> Self {
-        let listener_cfg = EventListenerCfg::default()
-            .crossterm_input_listener(TERMINAL_LISTENER_INTERVAL, TERMINAL_LISTENER_MAX_POLL);
+        Self::new_with_listener(
+            app,
+            EventListenerCfg::default()
+                .crossterm_input_listener(TERMINAL_LISTENER_INTERVAL, TERMINAL_LISTENER_MAX_POLL),
+        )
+    }
+
+    pub(in crate::app) fn new_with_listener(
+        app: App,
+        listener_cfg: EventListenerCfg<UserEvent>,
+    ) -> Self {
         let application = Application::init(listener_cfg);
         let home_section = App::load_prefs()["home_section"]
             .as_str()

@@ -1,10 +1,10 @@
 //! Table-driven production-style routing matrix (task 2.2).
 //!
-//! This is the `Application::tick()`-level integration harness. TuiRealm's
-//! `with_test_barrier` is `#[cfg(test)]` inside the tuirealm crate, so mbv's
-//! tests cannot inject terminal events into a live `Application::tick`; the
-//! matrix therefore drives the exact seam where routing happens — the ADR 0023
-//! fold (`apply_router_outcome`) — with the exact message ordering
+//! `tests_tick_harness.rs` now injects events into a live `Application::tick()`
+//! via `EventListenerCfg::add_port`; this matrix remains because the cheap
+//! table rows cover precedence combinations that would be wasteful to exercise
+//! through the live harness. It drives the exact seam where routing happens —
+//! the ADR 0023 fold (`apply_router_outcome`) — with the exact message ordering
 //! `Application::tick` produces: the focused component's message first, then
 //! the UiRoot observer's `TerminalEvent`.
 //!

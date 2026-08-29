@@ -3,6 +3,29 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 impl Model {
+    pub(in crate::app) fn sync_mounted_surfaces(&mut self) {
+        // Apply App-owned effect handoffs to their mounted components.
+        // `sync_home` was deleted (task 5.3d, sync_home mirror deletion):
+        // Home content/focus is projected event-driven by
+        // `push_home_content` at the seams above.
+        self.update_settings_content();
+        self.sync_playback();
+        self.sync_modal_requests();
+        self.sync_feeds();
+        self.sync_audiobookshelf_podcast();
+        self.sync_audiobookshelf_book();
+        self.sync_queue();
+        self.update_playlists_content();
+        self.sync_emby_browser();
+        self.sync_tv_workspace();
+        self.sync_music_workspace();
+        // Retire destination components whose Service library left the
+        // catalog before the focus pass routes to the active destination
+        // (keep-destination-components-mounted tasks 1.3).
+        self.reconcile_destination_mounts();
+        self.sync_active_destination();
+    }
+
     /// The run loop — the moved body of the former `App::run`.
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let mut terminal = init_terminal()?;
@@ -424,26 +447,8 @@ impl Model {
                 }
             }
 
-            // Apply App-owned effect handoffs to their mounted components.
-            // `sync_home` was deleted (task 5.3d, sync_home mirror deletion):
-            // Home content/focus is projected event-driven by
-            // `push_home_content` at the seams above.
-            self.update_settings_content();
-            self.sync_playback();
-            self.sync_modal_requests();
-            self.sync_feeds();
-            self.sync_audiobookshelf_podcast();
-            self.sync_audiobookshelf_book();
-            self.sync_queue();
-            self.update_playlists_content();
-            self.sync_emby_browser();
-            self.sync_tv_workspace();
-            self.sync_music_workspace();
-            // Retire destination components whose Service library left the
-            // catalog before the focus pass routes to the active destination
-            // (keep-destination-components-mounted tasks 1.3).
-            self.reconcile_destination_mounts();
-            self.sync_active_destination();
+            // Keep in sync with tests_tick_harness.rs, the other caller of this shared pass.
+            self.sync_mounted_surfaces();
 
             self.app.expire_music_grouping_candidates();
             self.app.sync_volume_from_player();
