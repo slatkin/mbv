@@ -100,7 +100,7 @@ six production files and preserves behaviour.
       loading, empty, populated, image, and responsive states, check, and fmt.
       Real writer: feeds selector computation collapsed to one paint per region
       and feeds/home geometry published at natural checkpoints (`1a4fb6cf`).
-- [ ] 2.1h Music: publish ordinary, wide, browser, and track geometry at each
+- [x] 2.1h Music: publish ordinary, wide, browser, and track geometry at each
       owning natural checkpoint, preserving grouped-album and image handoff
       operations. Boundary: `src/app/layout.rs`,
       `src/app/render/components/music.rs`,
@@ -109,6 +109,9 @@ six production files and preserves behaviour.
       `src/app/render/components/music_wide_tracks.rs`,
       `src/app/render/arrangements/music.rs`. Depends on 2.1g. Verify narrow,
       wide, grouped, track, loading, and responsive states, check, and fmt.
+      Real writer: wide music paint now consumes the arrangement computed
+      once in `publish_geometry` (no recomputation), commits `324386f2` +
+      `b7e97d5b`.
 - [ ] 2.1i TV/widgets: publish TV-wide and shared widget geometry at their
       owning natural checkpoints, preserving breakpoint and loading behaviour.
       Boundary: `src/app/layout.rs`, `src/app/render/components/tv_wide.rs`,
