@@ -113,6 +113,22 @@ impl App {
             }
         }
 
+        // Wide grouped Music: the mounted `MusicWorkspaceComponent` paints the
+        // hero-on-left workspace (grouped rows + hero + track table) itself. The
+        // legacy grouped-album underpaint and its scroll write-back were removed
+        // in dce4389d during the component migration but the suppressing early
+        // return was dropped with them (#613); restore it. `render_library`
+        // already published `wide_music_*` via `publish_geometry` before this
+        // call, so nothing is published here.
+        if let Some(lib_idx) = self.tab.emby_library_index() {
+            if self.is_music_group_view(lib_idx)
+                && self.is_viewing_album_folders(lib_idx)
+                && hero_left::shared_hero_presentation(area).is_some()
+            {
+                return;
+            }
+        }
+
         let mut content_area = area;
 
         // Search is active for the focused Emby library. Its 3-row input box

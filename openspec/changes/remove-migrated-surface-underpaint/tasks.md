@@ -210,18 +210,29 @@ six production files and preserves behaviour.
       (`src/app/render/components/list.rs:113`), after `render_library`
       publishes `tv_wide_*`. Characterized by
       `tv_wide_tests.rs::wide_tv_legacy_base_frame_publishes_geometry_but_paints_no_workspace`.
-- [ ] 3.4 Wide Music workspace body + album-track — suppress when
+- [x] 3.4 Wide Music workspace body + album-track — suppress when
       `MusicWorkspaceComponent` is active and wide.
-      BLOCKED — not actually suppressed. `render_library` publishes
-      `wide_music_*` geometry via `publish_geometry` but then falls through to
-      `render_list`, which has **no** wide-music early return (unlike movies at
-      `list.rs:98` and TV at `list.rs:113`) and paints grouped album rows via
-      `render_grouped_album_rows` (`list.rs:468`/`484`). Confirmed by the
-      passing `tests_music_characterization.rs::music_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states`
-      (asserts `render_library` paints "First Album" at 120x30). The ledger
-      already records this as open (`docs/architecture/interactive-surface-ledger.md`
-      line 66: "Shared underpaint/geometry cleanup remains issue #613"). This
-      is real suppression work needing its own scoping, not a test-only row.
+      Real writer: restored the wide-grouped-Music early return in
+      `render_list` (`src/app/render/components/list.rs:116`), dropped in
+      `dce4389d` during the component migration (#613). It fires on the same
+      predicate that `render_library` (`widgets.rs:545`) uses to publish
+      `wide_music_*` via `publish_geometry` — `is_music_group_view &&
+      is_viewing_album_folders && shared_hero_presentation(area).is_some()` —
+      so geometry (`wide_music_area`, `wide_music_right_area`, `left_area`,
+      `hero_area`, `wide_music_art_area`) is still published by `render_library`
+      before the return; `ensure_lib_loaded_for` also runs before it. The
+      mounted `MusicWorkspaceComponent` (`render_wide_music_group_with_ctx`) is
+      the sole wide-music painter and owns its own pill/track hit geometry;
+      `App.layout.main.selector_tabs` has no non-test reader for wide music.
+      Narrow Music and album-track keep the legacy painter (D5): `shared_hero_presentation`
+      needs width ≥ 82, and album-track is a deeper nav level where
+      `is_viewing_album_folders` is false. Tests updated: rewrote
+      `music_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states`
+      (wide legacy frame now paints no "First Album"; narrow still does), added
+      D4 proof `wide_music_legacy_base_frame_publishes_geometry_but_paints_no_rows`,
+      and routed the Music case of `matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer`
+      through the mounted component (new `render_music_component` helper),
+      mirroring the Home/Book/Podcast precedent.
 - [x] 3.5 ABS book body — suppress when `AudiobookshelfBookComponent` is active.
       Already geometry-only: the Book case of `render_audiobookshelf_library`
       sets `layout.audiobookshelf_book_area = area` and returns with no paint

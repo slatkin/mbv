@@ -19,24 +19,29 @@ fn render_music(app: &mut App, width: u16, height: u16, focused: bool) -> String
 
 #[test]
 fn music_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states() {
-    let states = [(120, 30, true, 0), (120, 30, false, 0), (60, 30, true, 0)];
-    for (width, height, focused, cursor) in states {
+    // Wide grouped Music: the legacy base frame is now geometry-only — the
+    // mounted `MusicWorkspaceComponent` is the sole painter (#613), so
+    // `render_library` paints no grouped-album rows at the wide breakpoint.
+    for (width, height, focused) in [(120, 30, true), (120, 30, false)] {
         let mut app = make_music_group_app();
-        app.libs[0].nav_stack[1].cursor = cursor;
+        app.libs[0].nav_stack[1].cursor = 0;
         let output = render_music(&mut app, width, height, focused);
         assert!(
-            output.contains("First Album"),
-            "music rows missing in {width}x{height}: {output:?}"
+            !output.contains("First Album"),
+            "wide legacy frame must not paint music rows in {width}x{height}: {output:?}"
         );
     }
 
-    let mut selected = make_music_group_app();
-    selected.libs[0].nav_stack[1].cursor = 0;
-    let output = render_music(&mut selected, 60, 8, true);
-    assert!(
-        output.contains("First Album"),
-        "selected music row missing: {output:?}"
-    );
+    // Narrow grouped Music keeps the legacy painter as its sole painter (D5).
+    for (width, height) in [(60, 30), (60, 8)] {
+        let mut app = make_music_group_app();
+        app.libs[0].nav_stack[1].cursor = 0;
+        let output = render_music(&mut app, width, height, true);
+        assert!(
+            output.contains("First Album"),
+            "narrow music row missing in {width}x{height}: {output:?}"
+        );
+    }
 }
 
 /// Task 3.1/3.2: the narrow grouped-album inline hero used to expand the
@@ -84,6 +89,38 @@ fn wide_grouped_music_publishes_same_frame_layout_geometry() {
     assert!(layout.left_area.width > 0);
     assert!(layout.hero_area.width > 0);
     assert!(layout.wide_music_right_area.width > 0);
+}
+
+/// D4 proof: at the wide breakpoint the legacy base frame publishes the
+/// `wide_music_*` hand-off geometry but paints no grouped-album rows — the
+/// mounted `MusicWorkspaceComponent` is the sole painter (#613). Mirrors
+/// `tests_non_music::wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows`.
+#[test]
+fn wide_music_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
+    let mut app = make_music_group_app();
+    app.libs[0].nav_stack[1].cursor = 0;
+    let mut layout = LayoutMain::default();
+    let mut term = Terminal::new(TestBackend::new(120, 40)).unwrap();
+    term.draw(|f| {
+        app.render_library(f, Rect::new(0, 0, 120, 40), true, &mut layout);
+    })
+    .unwrap();
+
+    assert!(
+        layout.wide_music_area.width > 0 && layout.wide_music_area.height > 0,
+        "wide music area hand-off must still be reserved: {:?}",
+        layout.wide_music_area
+    );
+    assert!(
+        layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0,
+        "wide music right area hand-off must still be reserved: {:?}",
+        layout.wide_music_right_area
+    );
+    let output = buffer_to_string(&term);
+    assert!(
+        !output.contains("First Album"),
+        "legacy base frame must not paint grouped-album rows at the wide breakpoint: {output:?}"
+    );
 }
 
 #[test]

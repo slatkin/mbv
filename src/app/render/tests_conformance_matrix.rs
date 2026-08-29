@@ -6,6 +6,7 @@ use super::*;
 use crate::app::components::audiobookshelf_book::AudiobookshelfBookComponent;
 use crate::app::components::{
     AudiobookshelfPodcastComponent, ComponentId, FeedsComponent, HomeComponent,
+    MusicWorkspaceComponent,
 };
 use crate::app::layout::LayoutMain;
 use crate::app::tests::make_item;
@@ -74,6 +75,33 @@ fn render_podcast_component(
     layout.inline_hero_area = geometry.inline_hero_area;
     layout.selected_item_rect = geometry.selected_item_rect;
     layout.selector_tabs = geometry.selector_tabs.clone();
+    (terminal, layout)
+}
+
+/// Render the wide grouped Music workspace through its mounted
+/// `MusicWorkspaceComponent` (the sole wide-music painter, #613) instead of
+/// the legacy `render_library`, surfacing the component's own painted pill
+/// geometry as a `LayoutMain` so the shared conformance assertions still hold.
+fn render_music_component(
+    app: &App,
+    width: u16,
+    height: u16,
+) -> (Terminal<TestBackend>, LayoutMain) {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    let area = Rect::new(0, 0, width, height);
+    let lib_idx = app.tab.emby_library_index().unwrap();
+    let context = app.wide_music_render_ctx(lib_idx);
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context);
+    terminal.draw(|frame| component.view(frame, area)).unwrap();
+    let painted = component.layout();
+    let layout = LayoutMain {
+        left_area: area,
+        hero_area: painted.hero_area,
+        selected_item_rect: painted.selected_item_rect,
+        selector_tabs: painted.selector_tabs.clone(),
+        ..Default::default()
+    };
     (terminal, layout)
 }
 
@@ -458,6 +486,8 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
             render_book_component(&app, width, 30)
         } else if surface == "Podcasts" {
             render_podcast_component(&app, width, 30)
+        } else if surface == "Music" {
+            render_music_component(&app, width, 30)
         } else {
             render_library(&mut app, width, 30)
         };
