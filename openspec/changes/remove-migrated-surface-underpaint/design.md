@@ -55,13 +55,14 @@ dependency order. This mirrors D17's scout requirement and the
 
 Each frame starts a fresh draft `AppLayout`. The 2.1a root/chrome work is the
 paint-free root/chrome checkpoint, not a claim that all geometry is available
-before `render_main`. The base-frame orchestrator advances ordered checkpoints:
-chrome result, progressive surface geometry checkpoints, and the sole legacy
-paint, followed by mounted component views. Pure arrangement geometry is
-published before its owning paint. Producers whose geometry is coupled to an
-authoritative load or paint operation publish immediately after that operation.
-Thus geometry-only is checkpoint-local, not a global property of the whole
-frame.
+before `render_main`. `render_main` is the ordered checkpoint dispatcher at the
+owning natural positions: it computes and publishes each pure arrangement
+result before the corresponding paint, while geometry coupled to an
+authoritative load or paint producer is published immediately after that
+producer. The base-frame orchestrator therefore interleaves progressive
+checkpoints with the sole legacy paint as required by those positions, then
+runs mounted component views. Geometry-only is checkpoint-local, not a global
+property of the whole frame.
 
 Every checkpoint uses the existing zero-area-safe rules before mutation. A
 checkpoint's result is merged into the fresh draft, and the completed draft is
@@ -83,8 +84,12 @@ visual design, or later suppression behaviour.
 ```
 self.app.dim_backdrop_active = self.blocking_overlay_active();
 let chrome = self.app.compute_frame_layout(f.area()); // 2.1a checkpoint
-self.app.advance_geometry_checkpoints(chrome, f);     // ordered 2.1b–2.1j
-self.app.paint_legacy_chrome(f);                      // sole legacy paint
+self.app.render_main(f, &mut draft, chrome);          // ordered dispatcher:
+                                                      // publish pure arrangement
+                                                      // results before paint;
+                                                      // publish coupled geometry
+                                                      // after its producer
+self.app.paint_legacy_chrome(f);                      // remaining sole legacy paint
 // resize content pushes (unchanged)
 self.render_playback_component(f);
 ... the existing mounted component views ...
@@ -92,7 +97,8 @@ self.render_overlay_stack(f);
 ```
 
 The exact helper names may follow the landed seam, but there is one base-frame
-orchestrator: chrome result + progressive checkpoints + sole legacy paint, then
+orchestrator: chrome result, `render_main`'s naturally positioned progressive
+checkpoints interleaved with legacy paint, the remaining sole legacy paint, then
 mounted component views. All three terminal draws use it. Startup therefore
 paints the same complete first frame and component loading affordances as the
 steady state, without the old chrome-only flash.

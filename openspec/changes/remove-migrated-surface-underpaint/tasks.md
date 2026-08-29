@@ -22,11 +22,13 @@
 
 The original 2.1 was a one-shot extraction. The scout found 18 render modules
 and 110 layout assignments, so this is now a dependency-first progressive
-checkpoint queue. Each row publishes geometry at its owning natural checkpoint:
-pure arrangement geometry before paint, and load/paint-coupled geometry after
-its authoritative operation. Geometry-only is checkpoint-local, not a promise
-that the whole frame is paint-free before `render_main`. Every row is bounded to
-at most six production files and preserves behaviour.
+checkpoint queue dispatched by `render_main` at each owning natural position.
+Each pure arrangement result is computed and published before its corresponding
+paint; load/paint-coupled geometry is published immediately after its
+authoritative producer. The base frame does not imply that every checkpoint
+precedes legacy paint: geometry-only is checkpoint-local, not a promise that the
+whole frame is paint-free before `render_main`. Every row is bounded to at most
+six production files and preserves behaviour.
 
 - [x] 2.1-prep Preserve the preparatory seam in `root.rs` from commit
       `94002d25b75e0f34df200c3def57939c6cffd156`; do not treat it as the
