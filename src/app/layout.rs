@@ -106,7 +106,11 @@ pub(crate) struct LayoutMain {
     /// Selected-parent geometry only for inline replacement. Wide hero areas
     /// remain render bookkeeping and are intentionally not interactive.
     pub inline_hero_area: Rect,
+    /// Visible queue slot map, published by the queue painter at its natural
+    /// checkpoint before hit-testing consumes it.
     pub queue_row_map: Vec<Option<usize>>,
+    /// Queue placement and scope areas published independently of mounted
+    /// component-local queue geometry.
     pub queue_area: Rect,
     pub queue_scope_local_area: Rect,
     pub queue_scope_remote_area: Rect,
@@ -116,6 +120,8 @@ pub(crate) struct LayoutMain {
     pub selected_item_rect: Option<Rect>,
     /// Screen rect of the selected queue row. Owned by the queue renderer.
     pub queue_selected_item_rect: Option<Rect>,
+    /// Pill/tab hitboxes published by the owning pill painters; placement and
+    /// width remain owned by the shared pill-bar component.
     pub selector_tabs: Vec<(Rect, usize)>,
     pub breadcrumbs: Vec<(u16, u16, u16, usize)>,
     /// Per-track hit targets for the wide Music left pane. Each entry is
