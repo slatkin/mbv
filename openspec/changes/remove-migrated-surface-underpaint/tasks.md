@@ -112,12 +112,17 @@ six production files and preserves behaviour.
       Real writer: wide music paint now consumes the arrangement computed
       once in `publish_geometry` (no recomputation), commits `324386f2` +
       `b7e97d5b`.
-- [ ] 2.1i TV/widgets: publish TV-wide and shared widget geometry at their
+- [x] 2.1i TV/widgets: publish TV-wide and shared widget geometry at their
       owning natural checkpoints, preserving breakpoint and loading behaviour.
       Boundary: `src/app/layout.rs`, `src/app/render/components/tv_wide.rs`,
       `src/app/render/components/widgets.rs`,
       `src/app/render/components/detail.rs`. Depends on 2.1h. Verify wide and
       narrow TV/widget states, check, and fmt.
+      Docs-only: TV-wide geometry is published at its natural checkpoint
+      before `render_list` (gated by the shared breakpoint, loading
+      component-side), shared widget geometry already published pre-paint by
+      rows 2.1a–2.1f, and component-local episode rows/season tabs stay
+      paint-coupled. Boundary note added in `layout.rs`.
 - [ ] 2.1j Aggregate consolidation: merge the progressive checkpoint results
       into the complete fresh `AppLayout`, retire deferred legacy computation,
       and verify one authoritative computation for every aggregate field.

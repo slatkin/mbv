@@ -148,6 +148,15 @@ pub(crate) struct LayoutMain {
     /// over this same rect, so the shell hands it the full library area
     /// (not just the narrow inner list) when the wide layout is active.
     pub movies_wide_area: Rect,
+    // TV-wide geometry (2.1i): `tv_wide_area`/`tv_wide_left_area`/
+    // `tv_wide_right_area`/`tv_wide_list_area` are published at their
+    // natural checkpoint before `render_list`, gated by the
+    // `shared_hero_presentation` breakpoint, with loading preserved
+    // component-side. Shared widget geometry (`selector_tabs`, left row
+    // maps, hero/selected rects) was already published pre-paint by rows
+    // 2.1a–2.1f. Component-local `tv_wide_episode_rows`/
+    // `tv_wide_season_tabs` are paint-coupled by design (2.1b carve-out,
+    // component-internal only).
     pub tv_wide_right_area: Rect,
     pub tv_wide_list_area: Rect,
     pub tv_wide_episode_rows: Vec<(Rect, usize)>,
