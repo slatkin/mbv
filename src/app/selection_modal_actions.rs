@@ -209,12 +209,7 @@ impl App {
             });
             self.close_selection_modal();
             if let Some(chapter_index) = chapter_index {
-                if let Some(index) = self.tab.audiobookshelf_index() {
-                    if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
-                        state.chapter_selection = Some(chapter_index);
-                    }
-                }
-                self.activate_audiobookshelf_book_row();
+                self.activate_audiobookshelf_book_row(Some(chapter_index));
             }
             return;
         }

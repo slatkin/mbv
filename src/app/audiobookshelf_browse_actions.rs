@@ -305,7 +305,6 @@ impl App {
             state.error = None;
             state.detail_cache.clear();
             state.detail_loading_ids.clear();
-            state.chapter_selection = None;
             state.loading_pages.clear();
             state.loading_pages.insert(0);
             (
@@ -342,26 +341,12 @@ impl App {
         }
     }
 
-    /// Applies the component-resolved chapter focus
-    /// (split-audiobookshelf-cursor-ownership D3): `Some(row)` focuses the
-    /// hero chapter list, `None` returns focus to the right-pane browser.
-    /// Replaces `focus_audiobookshelf_book_chapters` /
-    /// `focus_audiobookshelf_book_browser` / `move_audiobookshelf_book_row`,
-    /// which were three verbs over one field. The `selected_id.is_some()`
-    /// precondition is preserved (a chapter list can only be focused while a
-    /// book is selected); the `chapter_selection.is_none()` transition guard
-    /// now lives with the component's rendered-geometry gate.
-    pub(super) fn set_audiobookshelf_book_chapter_focus(&mut self, selection: Option<usize>) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
-            if selection.is_some() && state.selected_id.is_none() {
-                return;
-            }
-            state.chapter_selection = selection;
-        }
-    }
+    /// The book chapter focus is component-owned interaction state
+    /// (split-browse-state-interaction-fields task 2.2): the component tracks
+    /// it locally and carries the resolved row at activation time. This
+    /// handler exists only so the `ChapterFocus` request stays claimed and
+    /// routed (a redraw nudge); it stores nothing shell-side.
+    pub(super) fn set_audiobookshelf_book_chapter_focus(&mut self, _selection: Option<usize>) {}
 
     /// Selects bucket `bucket_pos` (a position in `state.buckets`, matching
     /// the pill's click target -- the established pattern from
@@ -379,10 +364,9 @@ impl App {
             return;
         };
         let target = {
-            let Some(state) = self.audiobookshelf_book_browse.get_mut(index) else {
+            let Some(state) = self.audiobookshelf_book_browse.get(index) else {
                 return;
             };
-            state.selected_bucket = bucket_pos;
             let cursor = state.cursor();
             if cursor >= bucket.start && cursor < bucket.end {
                 cursor
@@ -400,7 +384,7 @@ impl App {
     /// Chapter-row activation: one absolute seek to `chapters[].start` on the
     /// active book's merged timeline, without stopping/reopening the queue
     /// slot or session (book-playback spec).
-    pub(super) fn activate_audiobookshelf_book_row(&mut self) {
+    pub(super) fn activate_audiobookshelf_book_row(&mut self, chapter_selection: Option<usize>) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -412,7 +396,7 @@ impl App {
             let Some(id) = state.selected_id.as_deref() else {
                 return;
             };
-            let Some(cursor) = state.chapter_selection else {
+            let Some(cursor) = chapter_selection else {
                 return;
             };
             let target = match state.visible_rows(id).get(cursor) {
@@ -573,3 +557,7 @@ fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
 #[cfg(test)]
 #[path = "audiobookshelf_book_seek_tests.rs"]
 mod book_seek_tests;
+
+#[cfg(test)]
+#[path = "split_browse_state_book_tests.rs"]
+mod split_browse_state_book_tests;

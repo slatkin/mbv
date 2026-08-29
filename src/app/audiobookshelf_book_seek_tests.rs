@@ -33,7 +33,6 @@ fn activating_active_book_chapter_seeks_absolute_on_merged_timeline() {
     app.tab = TabSelection::AudiobookshelfLibrary(0);
     let mut state = AudiobookshelfBookBrowseState::new(library());
     state.selected_id = Some("book-1".into());
-    state.chapter_selection = Some(0);
     state.detail_cache.insert(
         "book-1".into(),
         (
@@ -53,7 +52,7 @@ fn activating_active_book_chapter_seeks_absolute_on_merged_timeline() {
         Some(0),
     );
 
-    app.activate_audiobookshelf_book_row();
+    app.activate_audiobookshelf_book_row(Some(0));
 
     assert!(
         matches!(
@@ -73,7 +72,6 @@ fn activating_foreign_book_chapter_does_not_seek() {
     app.tab = TabSelection::AudiobookshelfLibrary(0);
     let mut state = AudiobookshelfBookBrowseState::new(library());
     state.selected_id = Some("book-2".into());
-    state.chapter_selection = Some(0);
     state.detail_cache.insert(
         "book-2".into(),
         (
@@ -92,7 +90,7 @@ fn activating_foreign_book_chapter_does_not_seek() {
         Some(0),
     );
 
-    app.activate_audiobookshelf_book_row();
+    app.activate_audiobookshelf_book_row(Some(0));
 
     assert!(
         rx.try_recv().is_err(),

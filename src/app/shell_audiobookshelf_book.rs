@@ -48,7 +48,15 @@ impl Model {
                     }
                 }
                 AudiobookshelfBookIntent::ActivateChapter => {
-                    self.app.activate_audiobookshelf_book_row();
+                    let chapter_selection = self
+                        .abs_book_id
+                        .as_ref()
+                        .and_then(|id| self.application.get_component(id))
+                        .and_then(|comp| {
+                            comp.as_any().downcast_ref::<AudiobookshelfBookComponent>()
+                        })
+                        .and_then(AudiobookshelfBookComponent::chapter_selection);
+                    self.app.activate_audiobookshelf_book_row(chapter_selection);
                 }
             },
             _ => unreachable!("non-book request routed to book handler"),
@@ -332,7 +340,14 @@ mod tests {
 
         // Unmatched component keys stay unclaimed so the central router can
         // resolve global shortcuts without a legacy raw-key fallback.
-        let bucket = model.app.audiobookshelf_book_browse[0].selected_bucket;
+        let component_bucket = |model: &Model| {
+            model
+                .application
+                .get_component(&id)
+                .and_then(|comp| comp.as_any().downcast_ref::<AudiobookshelfBookComponent>())
+                .map(AudiobookshelfBookComponent::selected_bucket)
+        };
+        let bucket = component_bucket(&model);
         let unclaimed = model
             .application
             .get_component_mut(&id)
@@ -343,7 +358,8 @@ mod tests {
             }));
         assert_eq!(unclaimed, None);
         assert_eq!(
-            model.app.audiobookshelf_book_browse[0].selected_bucket, bucket,
+            component_bucket(&model),
+            bucket,
             "Shift+[ must not enter the ABS Book bucket fallback"
         );
     }
@@ -363,7 +379,7 @@ mod tests {
             media_type: "book".into(),
         };
         let mut book_state = AudiobookshelfBookBrowseState::new(book_library.clone());
-        let mut book1 = AudiobookshelfBook {
+        let book1 = AudiobookshelfBook {
             library_item_id: "book-a".into(),
             title: "Book A".into(),
             author_display: None,
@@ -413,9 +429,9 @@ mod tests {
                 .and_then(AudiobookshelfBookComponent::selected_book_id)
                 .map(|s| s.to_owned())
         };
-        // Drive the component-local selection to a non-default value: move
-        // Down (which selects the second book), keeping the request unapplied
-        // to App so the component selection diverges.
+        // Drive the selection to a non-default value: move Down (which selects
+        // the second book) and apply the resulting request to App, so content
+        // and interaction agree on the second book before the switch.
         let message = model
             .application
             .get_component_mut(&id)
@@ -430,6 +446,10 @@ mod tests {
                 AudiobookshelfBookMove::Book(1)
             )))
         ));
+        model.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::Book(1),
+        ));
+        model.sync_audiobookshelf_book();
         assert_eq!(
             selected_book_id(&model),
             Some("book-b".into()),
@@ -532,12 +552,10 @@ mod tests {
             )))
         ));
 
-        // App content changes: book "a" is gone and the App snapshot carries
-        // a stale chapter selection.
+        // App content changes: book "a" is gone from the projected content.
         let state = &mut model.app.audiobookshelf_book_browse[0];
         state.books = vec![book("z")];
         state.selected_id = Some("z".into());
-        state.chapter_selection = Some(4);
         state.buckets =
             crate::app::types_audiobookshelf_browse::build_surname_buckets(&state.books);
         model.push_audiobookshelf_book_content();
@@ -567,7 +585,7 @@ mod tests {
             media_type: "book".into(),
         };
         let mut state = AudiobookshelfBookBrowseState::new(library.clone());
-        let mut book = AudiobookshelfBook {
+        let book = AudiobookshelfBook {
             library_item_id: "book-a".into(),
             title: "Book A".into(),
             author_display: None,

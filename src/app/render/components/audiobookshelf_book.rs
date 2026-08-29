@@ -18,6 +18,15 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Cell, Row, Table, TableState};
 use ratatui::Frame;
 
+/// The component-owned interaction values the book renderer needs, passed in
+/// rather than read off the projected content type
+/// (split-browse-state-interaction-fields task 2.2).
+#[derive(Clone, Copy)]
+pub(in crate::app) struct BookInteraction {
+    pub chapter_selection: Option<usize>,
+    pub selected_bucket: usize,
+}
+
 #[derive(Default)]
 pub(in crate::app) struct AudiobookshelfBookGeometry {
     pub selector_tabs: Vec<(Rect, usize)>,
@@ -48,6 +57,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
     area: Rect,
     focused: bool,
     state: &mut AudiobookshelfBookBrowseState,
+    interaction: BookInteraction,
     images_enabled: bool,
     geometry: &mut AudiobookshelfBookGeometry,
     browser_offset: &mut usize,
@@ -93,7 +103,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
         );
         frame.render_widget(
             Block::default().style(palette::resolve_surface_focus(
-                focused && state.chapter_selection.is_some(),
+                focused && interaction.chapter_selection.is_some(),
             )),
             panes.left_panel,
         );
@@ -101,7 +111,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             frame,
             hero_area,
             state,
-            focused && state.chapter_selection.is_some(),
+            focused && interaction.chapter_selection.is_some(),
             true,
             &plan,
         );
@@ -114,26 +124,29 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             frame,
             chapters_area,
             state,
-            focused && state.chapter_selection.is_some(),
+            interaction.chapter_selection,
+            focused && interaction.chapter_selection.is_some(),
             geometry,
         );
         frame.render_widget(
             Block::default().style(palette::resolve_surface_focus(
-                focused && state.chapter_selection.is_none(),
+                focused && interaction.chapter_selection.is_none(),
             )),
             panes.right_panel,
         );
         let right_pane =
             hero_left::hero_on_left_right_pane(panes.right_panel, panes.right_area, PANE_PAD_Y);
         let pills = right_pane.pills_area;
-        geometry.selector_tabs = render_book_pills(frame, pills, state);
+        geometry.selector_tabs =
+            render_book_pills(frame, pills, state, interaction.selected_bucket);
         let browser = padded_rect(right_pane.list_panel, PANE_PAD_X, PANE_PAD_Y);
         let image = render_book_browser(
             frame,
             browser,
             state,
+            interaction,
             browser_offset,
-            focused && state.chapter_selection.is_none(),
+            focused && interaction.chapter_selection.is_none(),
             &plan,
             geometry,
         )
@@ -148,7 +161,8 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
     let parts = hero_left::pill_bar_areas(area);
     geometry.left_area = parts.content_area;
     geometry.wide = false;
-    geometry.selector_tabs = render_book_pills(frame, parts.pills_area, state);
+    geometry.selector_tabs =
+        render_book_pills(frame, parts.pills_area, state, interaction.selected_bucket);
     let plan = book_hero_plan(
         state,
         parts
@@ -161,6 +175,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
         frame,
         parts.content_area,
         state,
+        interaction,
         browser_offset,
         focused,
         &plan,
@@ -172,6 +187,7 @@ fn render_book_pills(
     frame: &mut Frame,
     area: Rect,
     state: &AudiobookshelfBookBrowseState,
+    selected_bucket: usize,
 ) -> Vec<(Rect, usize)> {
     if state.buckets.is_empty() || area.width == 0 {
         return Vec::new();
@@ -188,7 +204,7 @@ fn render_book_pills(
         PillBar {
             labels: &labels,
             ids: &ids,
-            selected_pos: state.selected_bucket.min(labels.len().saturating_sub(1)),
+            selected_pos: selected_bucket.min(labels.len().saturating_sub(1)),
             prefix: Some(" ⌘ "),
         },
     )
@@ -198,12 +214,13 @@ fn render_book_browser(
     frame: &mut Frame,
     area: Rect,
     state: &mut AudiobookshelfBookBrowseState,
+    interaction: BookInteraction,
     browser_offset: &mut usize,
     focused: bool,
     plan: &BookHeroPlan,
     geometry: &mut AudiobookshelfBookGeometry,
 ) -> Option<super::home_hero::HomeImagePaint> {
-    let Some(bucket) = state.buckets.get(state.selected_bucket).copied() else {
+    let Some(bucket) = state.buckets.get(interaction.selected_bucket).copied() else {
         render_placeholder(frame, area, " (empty)");
         return None;
     };
@@ -253,6 +270,7 @@ fn render_book_browser(
                         ..hero_area
                     },
                     state,
+                    interaction.chapter_selection,
                     focused,
                     geometry,
                 );
@@ -389,6 +407,7 @@ fn render_book_rows(
     frame: &mut Frame,
     area: Rect,
     state: &AudiobookshelfBookBrowseState,
+    chapter_selection: Option<usize>,
     focused: bool,
     geometry: &mut AudiobookshelfBookGeometry,
 ) {
@@ -415,7 +434,7 @@ fn render_book_rows(
         .iter()
         .enumerate()
         .map(|(index, row)| {
-            let selected = state.chapter_selection == Some(index);
+            let selected = chapter_selection == Some(index);
             let style = if selected && focused {
                 Style::default().fg(palette::TEXT_FOCUS_ACCENT)
             } else if focused {
@@ -449,7 +468,7 @@ fn render_book_rows(
         })
         .collect::<Vec<_>>();
     let mut table_state = TableState::default();
-    table_state.select(state.chapter_selection);
+    table_state.select(chapter_selection);
     frame.render_stateful_widget(
         Table::new(
             table_rows,

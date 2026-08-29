@@ -10,7 +10,7 @@ mod theme;
 // the whole `render::components` module.
 pub(in crate::app) use components::album_art::MusicImagePaint;
 pub(in crate::app) use components::audiobookshelf_book::{
-    render_audiobookshelf_book_content, AudiobookshelfBookGeometry,
+    render_audiobookshelf_book_content, AudiobookshelfBookGeometry, BookInteraction,
 };
 pub(in crate::app) use components::audiobookshelf_podcast::{
     render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry,

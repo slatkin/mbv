@@ -318,6 +318,11 @@ pub(super) struct AudiobookshelfBookBrowseState {
     pub total: usize,
     pub next_page: usize,
     pub loading_pages: HashSet<usize>,
+    /// The shell's *resting* selected book -- the last committed selection,
+    /// written at the select/bucket/restore event and read by position save
+    /// and detail-fetch routing. The component owns the live highlight;
+    /// `chapter_selection` and `selected_bucket` are component-only and never
+    /// projected (split-browse-state-interaction-fields D1/D2).
     pub selected_id: Option<String>,
     pub error: Option<String>,
     pub detail_cache: HashMap<String, (Vec<AudiobookshelfChapter>, Vec<AudiobookshelfAudioFile>)>,
@@ -325,19 +330,9 @@ pub(super) struct AudiobookshelfBookBrowseState {
     pub detail_loading_ids: HashSet<String>,
     pub detail_loading: bool,
     pub progress: HashMap<String, AudiobookshelfBookProgress>,
-    /// Which chapter row is focused within the always-visible hero/chapters
-    /// pane (`Some`), or the right-pane book browser is focused (`None`)
-    /// -- the same focus shape Music's inline track focus uses
-    /// (component-owned `track_cursor`). No longer gates which
-    /// pane renders -- both panes are always visible; see
-    /// `render_audiobookshelf_book_content` (component-owned).
-    pub chapter_selection: Option<usize>,
     /// Fixed alphabetical author-surname ranges over `books`, recomputed
     /// whenever `books` changes (see `append_page_books`).
     pub buckets: Vec<SurnameBucket>,
-    /// Index into `buckets` (not a fixed range index -- empty ranges are
-    /// omitted) filtering the right-pane book list to one bucket.
-    pub selected_bucket: usize,
 }
 
 impl AudiobookshelfBookBrowseState {
@@ -354,9 +349,7 @@ impl AudiobookshelfBookBrowseState {
             detail_loading_ids: HashSet::new(),
             detail_loading: false,
             progress: HashMap::new(),
-            chapter_selection: None,
             buckets: Vec::new(),
-            selected_bucket: 0,
         }
     }
 
@@ -376,7 +369,6 @@ impl AudiobookshelfBookBrowseState {
             .books
             .get(cursor)
             .map(|book| book.library_item_id.clone());
-        self.chapter_selection = None;
         self.detail_loading = self
             .selected_id
             .as_ref()
@@ -440,23 +432,11 @@ impl AudiobookshelfBookBrowseState {
         });
 
         // Recompute the alphabetical surname buckets against the
-        // refreshed/paged-in list, then re-anchor the selected bucket to
-        // wherever the still-selected book landed (book-browsing spec:
-        // refresh/page loading preserves the selected book regardless of its
-        // new bucket).
-        let selected_index = self.selected_id.as_ref().and_then(|id| {
-            self.books
-                .iter()
-                .position(|book| &book.library_item_id == id)
-        });
+        // refreshed/paged-in list. The component re-anchors its
+        // `selected_bucket` onto the still-selected book when it receives the
+        // refreshed content (book-browsing spec: refresh/page loading
+        // preserves the selected book regardless of its new bucket).
         self.buckets = build_surname_buckets(&self.books);
-        self.selected_bucket = selected_index
-            .and_then(|idx| {
-                self.buckets
-                    .iter()
-                    .position(|bucket| idx >= bucket.start && idx < bucket.end)
-            })
-            .unwrap_or(0);
 
         if self.selected_id.is_none() && !self.books.is_empty() {
             self.select(0);

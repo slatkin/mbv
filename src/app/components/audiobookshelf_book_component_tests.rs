@@ -96,9 +96,19 @@ fn abs_book_component_keeps_local_cursor_and_renders_without_app_state() {
 
 #[test]
 fn abs_book_component_returns_none_when_unfocused_without_mutating_state() {
-    let mut state = book_state(4, true);
-    state.chapter_selection = Some(0);
+    let state = book_state(4, true);
     let mut component = AudiobookshelfBookComponent::new();
+    component.set_content(&state, true, false);
+    // Focus the chapter list locally so there is interaction state to guard.
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Left,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.chapter_selection(), Some(0));
     component.set_content(&state, false, false);
 
     for (code, modifiers) in [
@@ -348,20 +358,19 @@ fn abs_book_component_drops_stale_chapter_focus_when_selection_vanishes() {
     ));
     assert_eq!(component.chapter_selection(), Some(0));
 
-    // New content: book-0 is gone, and the snapshot carries a chapter
-    // selection `App` has no business owning.
+    // New content in which the selected book is gone: the component resets
+    // its own chapter focus (the projected type cannot carry one).
     let mut replacement = book_state(1, true);
     replacement.books[0].library_item_id = "book-99".into();
     replacement.selected_id = Some("book-99".into());
     replacement.buckets =
         crate::app::types_audiobookshelf_browse::build_surname_buckets(&replacement.books);
-    replacement.chapter_selection = Some(3);
     component.set_content(&replacement, true, false);
 
     assert_eq!(
         component.chapter_selection(),
         None,
-        "stale chapter focus must reset, not adopt the snapshot's Some(3)"
+        "stale chapter focus must reset when the selected book vanishes"
     );
 }
 

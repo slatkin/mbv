@@ -11,7 +11,7 @@ use tuirealm::state::State;
 use super::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{
-    render_audiobookshelf_book_content, AudiobookshelfBookGeometry, HomeImagePaint,
+    render_audiobookshelf_book_content, AudiobookshelfBookGeometry, BookInteraction, HomeImagePaint,
 };
 use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
 
@@ -21,6 +21,10 @@ pub struct AudiobookshelfBookComponent {
     /// the shell snapshot wholesale; only later pushes reset stale
     /// component-owned fields (split-audiobookshelf-cursor-ownership D4).
     initialized: bool,
+    /// Component-owned interaction state, never present on the projected
+    /// content type (split-browse-state-interaction-fields task 2.2).
+    chapter_selection: Option<usize>,
+    selected_bucket: usize,
     browser_offset: usize,
     focused: bool,
     images_enabled: bool,
@@ -43,6 +47,8 @@ impl AudiobookshelfBookComponent {
                 },
             ),
             initialized: false,
+            chapter_selection: None,
+            selected_bucket: 0,
             browser_offset: 0,
             focused: false,
             images_enabled: false,
@@ -58,39 +64,39 @@ impl AudiobookshelfBookComponent {
         focused: bool,
         images_enabled: bool,
     ) {
-        // The component's own interaction values win over the incoming
-        // snapshot unconditionally (split-audiobookshelf-cursor-ownership D4).
-        // When the book the component had selected is gone from the new
-        // content, its own fields reset to their defaults — the snapshot's
-        // `chapter_selection` / `selected_bucket` are never adopted.
-        let carried = self.initialized.then(|| {
-            (
-                self.state.selected_id.clone(),
-                self.state.chapter_selection,
-                self.browser_offset,
-                self.state.selected_bucket,
-            )
-        });
-        self.state = snapshot.clone();
-        let survivor = carried.filter(|(id, ..)| {
-            id.as_ref().is_some_and(|id| {
-                self.state
+        // Content and interaction are separate types now: the projected
+        // snapshot carries no `chapter_selection` / `selected_bucket`, so
+        // adopting it wholesale cannot clobber them and there is nothing to
+        // save and restore (split-browse-state-interaction-fields task 2.2).
+        // Whether the book the component was showing survived the new content
+        // decides if its derived local state still means anything.
+        let survived = self.initialized
+            && self.state.selected_id.as_ref().is_some_and(|prior| {
+                snapshot
                     .books
                     .iter()
-                    .any(|book| &book.library_item_id == id)
-            })
-        });
-        if let Some((id, chapter_selection, browser_offset, selected_bucket)) = survivor {
-            self.state.selected_id = id;
-            self.state.chapter_selection = chapter_selection;
-            self.browser_offset = browser_offset;
-            self.state.selected_bucket = selected_bucket;
-        } else if self.initialized {
-            self.state.chapter_selection = None;
+                    .any(|book| &book.library_item_id == prior)
+            });
+        self.state = snapshot.clone();
+        if self.initialized && !survived {
+            // The selected book dropped out of the new content: reset the
+            // derived local state rather than adopting anything.
+            self.chapter_selection = None;
             self.browser_offset = 0;
         }
-        self.state.selected_bucket = self
+        // Re-anchor the surname-bucket pill onto the selected book
+        // (book-browsing spec: refresh/paging preserves the selected book
+        // regardless of its new bucket).
+        let cursor = self.state.cursor();
+        if let Some(pos) = self
             .state
+            .buckets
+            .iter()
+            .position(|bucket| cursor >= bucket.start && cursor < bucket.end)
+        {
+            self.selected_bucket = pos;
+        }
+        self.selected_bucket = self
             .selected_bucket
             .min(self.state.buckets.len().saturating_sub(1));
         self.initialized = true;
@@ -109,7 +115,7 @@ impl AudiobookshelfBookComponent {
     }
 
     pub(in crate::app) fn chapter_selection(&self) -> Option<usize> {
-        self.state.chapter_selection
+        self.chapter_selection
     }
 
     #[cfg(test)]
@@ -119,7 +125,7 @@ impl AudiobookshelfBookComponent {
 
     #[cfg(test)]
     pub(crate) fn selected_bucket(&self) -> usize {
-        self.state.selected_bucket
+        self.selected_bucket
     }
 
     /// The page stride from the component's own painted geometry
@@ -141,18 +147,18 @@ impl AudiobookshelfBookComponent {
 
     fn bucket_request(&self) -> Msg {
         Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::Bucket(self.state.selected_bucket),
+            AudiobookshelfBookMove::Bucket(self.selected_bucket),
         ))
     }
 
     fn chapter_focus_request(&self) -> Msg {
         Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::ChapterFocus(self.state.chapter_selection),
+            AudiobookshelfBookMove::ChapterFocus(self.chapter_selection),
         ))
     }
 
     fn move_book(&mut self, delta: i64) {
-        let Some(bucket) = self.state.buckets.get(self.state.selected_bucket) else {
+        let Some(bucket) = self.state.buckets.get(self.selected_bucket) else {
             return;
         };
         if bucket.end <= bucket.start {
@@ -169,8 +175,8 @@ impl AudiobookshelfBookComponent {
         };
         let count = self.state.visible_rows(id).len();
         if count > 0 {
-            self.state.chapter_selection = Some(crate::app::ui_util::move_cursor(
-                self.state.chapter_selection.unwrap_or(0),
+            self.chapter_selection = Some(crate::app::ui_util::move_cursor(
+                self.chapter_selection.unwrap_or(0),
                 delta,
                 count,
             ));
@@ -182,7 +188,7 @@ impl AudiobookshelfBookComponent {
             return None;
         }
 
-        let chapters_focused = self.chapters_visible && self.state.chapter_selection.is_some();
+        let chapters_focused = self.chapters_visible && self.chapter_selection.is_some();
         match key.code {
             Key::Char('[') if key.modifiers.is_empty() => {
                 self.cycle_bucket(-1);
@@ -201,11 +207,11 @@ impl AudiobookshelfBookComponent {
                 Some(self.chapter_focus_request())
             }
             Key::Right if chapters_focused => {
-                self.state.chapter_selection = None;
+                self.chapter_selection = None;
                 Some(self.chapter_focus_request())
             }
             Key::Left if self.chapters_visible && !chapters_focused => {
-                self.state.chapter_selection = Some(0);
+                self.chapter_selection = Some(0);
                 Some(self.chapter_focus_request())
             }
             Key::Up | Key::Char('k') => {
@@ -233,7 +239,7 @@ impl AudiobookshelfBookComponent {
                 Some(self.book_request())
             }
             Key::Esc | Key::Backspace if chapters_focused => {
-                self.state.chapter_selection = None;
+                self.chapter_selection = None;
                 Some(self.chapter_focus_request())
             }
             Key::Char(' ') if chapters_focused => Some(Msg::Shell(
@@ -262,9 +268,9 @@ impl AudiobookshelfBookComponent {
     fn cycle_bucket(&mut self, delta: i64) {
         let count = self.state.buckets.len();
         if count > 0 {
-            self.state.selected_bucket =
-                (self.state.selected_bucket as i64 + delta).rem_euclid(count as i64) as usize;
-            if let Some(bucket) = self.state.buckets.get(self.state.selected_bucket).copied() {
+            self.selected_bucket =
+                (self.selected_bucket as i64 + delta).rem_euclid(count as i64) as usize;
+            if let Some(bucket) = self.state.buckets.get(self.selected_bucket).copied() {
                 if !(bucket.start..bucket.end).contains(&self.state.cursor()) {
                     self.state.select(bucket.start);
                 }
@@ -273,7 +279,7 @@ impl AudiobookshelfBookComponent {
     }
 
     fn select_bucket_edge(&mut self, end: bool) {
-        if let Some(bucket) = self.state.buckets.get(self.state.selected_bucket).copied() {
+        if let Some(bucket) = self.state.buckets.get(self.selected_bucket).copied() {
             if bucket.end > bucket.start {
                 self.state
                     .select(if end { bucket.end - 1 } else { bucket.start });
@@ -299,7 +305,7 @@ impl AudiobookshelfBookComponent {
                     .iter()
                     .find(|(rect, _)| rect.contains(position))
                 {
-                    self.state.chapter_selection = Some(*index);
+                    self.chapter_selection = Some(*index);
                 }
             }
             if let Some((_, bucket)) = self
@@ -309,7 +315,7 @@ impl AudiobookshelfBookComponent {
                 .find(|(rect, _)| rect.contains(position))
             {
                 if let Some(range) = self.state.buckets.get(*bucket).copied() {
-                    self.state.selected_bucket = *bucket;
+                    self.selected_bucket = *bucket;
                     self.state.select(range.start);
                 }
             }
@@ -332,13 +338,17 @@ impl Component for AudiobookshelfBookComponent {
         // chapter pane.
         self.chapters_visible = crate::app::render::shared_hero_presentation(area).is_some();
         if !self.chapters_visible {
-            self.state.chapter_selection = None;
+            self.chapter_selection = None;
         }
         self.image_paint = render_audiobookshelf_book_content(
             frame,
             area,
             self.focused,
             &mut self.state,
+            BookInteraction {
+                chapter_selection: self.chapter_selection,
+                selected_bucket: self.selected_bucket,
+            },
             self.images_enabled,
             &mut self.geometry,
             &mut self.browser_offset,
@@ -348,7 +358,7 @@ impl Component for AudiobookshelfBookComponent {
         // Do not advertise focus for geometry that was not rendered.
         if self.geometry.chapter_rows.is_empty() {
             self.chapters_visible = false;
-            self.state.chapter_selection = None;
+            self.chapter_selection = None;
         }
     }
 

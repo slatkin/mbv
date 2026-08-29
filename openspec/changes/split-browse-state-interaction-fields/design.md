@@ -113,3 +113,105 @@ its removal later.
 - **Mouse.** `mouse_gestures.rs` reads and writes these fields freely and is
   accepted-broken. Deleting its callees will require deleting or stubbing its
   call sites; that is in scope, repairing its behaviour is not.
+
+## Task 1 — Authoritative reader inventory
+
+Method: `rtk grep` over the files that name `BrowseLevel` / `nav_stack` /
+`audiobookshelf_browse` / `audiobookshelf_book_browse`, then read the enclosing
+function of every `.cursor` / `.scroll` / `.selected_id` / `.episode_selection`
+/ `.chapter_selection` / `.selected_bucket` / `.select(` hit and classify by
+D2 outcome. `#[cfg(test)]` sites excluded. ast-grep is syntactic, not
+type-aware, so classification is by binding site, not by a type matcher.
+
+### 1.1 — `BrowseLevel::cursor` / `BrowseLevel::scroll`
+
+**Count: 13 non-test read sites, 11 write clusters (~24 distinct sites).**
+#618's scout figure was ~37. The divergence is downward and explained: the two
+sibling changes (`split-audiobookshelf-cursor-ownership`,
+`remove-music-workspace-cursor-mirror`) plus #615–#618 already deleted the
+round-trip readers the scout counted. Not a concerning divergence.
+
+Writes (become component-owned movement, or an explicit resting-position write
+at a navigation event):
+
+| Site | Context | Disposition |
+|---|---|---|
+| `actions_navigation.rs:99` | `select_item` — `lvl.cursor = pos` after resolving a playable item | drop; component owns live cursor (outcome 1 caller already has the item) |
+| `actions_navigation.rs:244,278` | `go_back` parent re-anchor `parent.cursor = idx` | **resting-position write** (outcome 2) at the pop event |
+| `context_menu_actions.rs:190,339` | clamp after unplayed-only removal | drop; component re-clamps its cursor against the projected content (spec: projection reset) |
+| `lib_cursor_actions.rs:218,232,262,297,309` | `move_lib_cursor_inner` / `jump_lib_cursor` / `apply_lib_cursor_index` | movers deleted (task 5.2); `apply_lib_cursor_index` deleted (5.1) |
+| `lib_cursor_actions.rs:453` | `snap_grouped_album_cursor_to_display_order` (post-load) | resting-position re-anchor at the Loaded event (outcome 2) |
+| `library_position_state.rs:32` | `persist_library_scroll` — `level.scroll = scroll` | **resting-position write** (outcome 2) |
+| `mouse_gestures.rs:122,219,231` | mouse cursor writes | delete call sites (task 5.3, D16) |
+| `music_actions.rs:56,109` | `cycle_music_group` / `select_music_group` group-level cursor on pop | resting-position write at the group-switch event (outcome 2) |
+| `music_actions.rs:196,197` | letter-filter reset `last.cursor = 0; last.scroll = 0` | resting-position write at the query-param event (outcome 2) |
+| `music_grouping.rs:304,306,309` | `settle` re-anchor to album index | resting-position re-anchor at the grouping-settled event (outcome 2) |
+
+Reads:
+
+| # | Site | Function | Value | Outcome |
+|---|---|---|---|---|
+| R1 | `actions.rs:139` | `current_lib_item` — `lvl.items.get(lvl.cursor)` on the visible level | live | **1** — thread the resolved item/index from the component Msg; audit `current_lib_item`'s callers in task 4.3 |
+| R2 | `browse_level_actions.rs:85` | `maybe_auto_push_tv_season_level`, from `handle_loaded_level` | cursor just set by level construction | **2** — reads the resting cursor the shell wrote when it built the level; runs synchronously in the Loaded handler, no user movement can interleave |
+| R3 | `feed_actions.rs:24` | debug-log formatter | live | none — drop the field from the log line |
+| R4 | `lib_cursor_actions.rs:137` | `letter_vertical_delta` | live | deleted with the mover (5.2) |
+| R5 | `lib_cursor_actions.rs:206` | `move_lib_cursor_inner` | live | movement resolution moves to the component (5.2) |
+| R6 | `library_load_actions.rs:298,304` | `reconcile_libraries` old→new `BrowseLevel` copy on Service refresh | resting | **2** |
+| R7 | `library_search_actions.rs:240` | `maybe_fetch_next_page` prefetch threshold `lvl.cursor + PREFETCH_AHEAD` | live | **1** — the component's move Msg already carries the resolved cursor (task 4.3); threshold check takes it as a parameter |
+| R8 | `music_actions.rs:51` | `cycle_music_group` reads the group level's cursor before pop | resting (level below top) | **2** |
+| R9 | `music_actions.rs:254` | auto-push group view reads root `nav_stack[0].cursor` | resting (root, pre-descent) | **2** |
+| R10 | `music_actions.rs:328` | `should_auto_push_music`, from `handle_loaded_level` | cursor just set by construction | **2** — same as R2 |
+| R11 | `music_grouping.rs:296` | `settle` reads anchor album id at the grouping-settled event | cursor just set by construction / prior settle | **2** — same as R2 |
+| R12 | `types_browse.rs:97,98` | `to_position_level` serialization | resting | **2** |
+| R13 | `shuffle_folder_actions.rs:27` | `shuffle_play` (legacy `impl App` path) | live | **1** — the component path (`shuffle_play_selected`) already supplies the target; legacy path re-pointed/removed with the other legacy endpoints |
+
+### 1.2 — Audiobookshelf structs
+
+The sibling change `split-audiobookshelf-cursor-ownership` already moved the
+live paths onto the components. Remaining App-struct interaction reads:
+
+`AudiobookshelfBrowseState` — `selected_id`, `episode_selection`, `scroll`:
+
+| Site | Field | Outcome |
+|---|---|---|
+| `library_position_state.rs:250` (`save_audiobookshelf_position`) | `selected_id`, `cursor()` | **2** — shell keeps a resting `selected_id`, written at the select Msg, read by position save |
+| `lib_event_actions.rs:221,262,281,319,371,740` (detail-fetched routing "is this detail for the current selection?") | `selected_id` | **2** — compare against the resting `selected_id`; the fetch was dispatched for that id |
+| `audiobookshelf_browse_actions.rs:82,164` (post-`select` readback) | `selected_id` | **1** — resolve id from `cursor` against `state.shows` locally, thread it |
+| `audiobookshelf_browse_actions.rs:264` (`selected_show()`) | `selected_id` | folds into the queue-item resolution, outcome **1** |
+| `audiobookshelf_browse_actions.rs:185,200` | `episode_selection` | `#[cfg(test)]` only — dropped with the App-selection test seams |
+| `shell_audiobookshelf_podcast.rs:25` | `episode_selection` | already component-owned (`component.episode_selection()`) |
+| `audiobookshelf_browse_actions.rs:130,131` | `episode_selection`, `scroll` | refresh reset only — move onto the interaction struct / component |
+
+`scroll` has **no** non-test reader — it is written by `refresh` and never read.
+It moves to the component (or is dropped) outright.
+
+`AudiobookshelfBookBrowseState` — `selected_id`, `chapter_selection`, `selected_bucket`:
+
+| Site | Field | Outcome |
+|---|---|---|
+| `library_position_state.rs:280` (`save_audiobookshelf_book_position`) | `selected_id`, `cursor()` | **2** — resting `selected_id` |
+| `lib_event_actions.rs` detail routing | `selected_id` | **2** |
+| `audiobookshelf_browse_actions.rs:337` (post-`select` readback) | `selected_id` | **1** — resolve from `cursor` locally, thread |
+| `audiobookshelf_browse_actions.rs:412,454` (`activate_audiobookshelf_book_row`, `selected_audiobookshelf_book_queue_item`) | `selected_id` | **1** — thread the resolved book id in the `AudiobookshelfBookIntent` Msg |
+| `audiobookshelf_browse_actions.rs:415` (`activate_audiobookshelf_book_row`) | `chapter_selection` | **1** — thread in the `ActivateChapter` Msg (or read the component accessor, outcome 3) |
+| `audiobookshelf_browse_actions.rs:359,362` | `chapter_selection` | already param-driven (`set_audiobookshelf_book_chapter_focus(selection)`) |
+| `selection_modal_actions.rs:214` | `chapter_selection` write | move onto the interaction struct / component |
+| `audiobookshelf_browse_actions.rs:385,386` | `selected_bucket`, `cursor()` | already param-driven (`select_audiobookshelf_book_bucket(bucket_pos)`); component owns `selected_bucket` |
+
+### 1.3 — Flagged readers (fit none of D2's three outcomes)
+
+**None.** R2 / R10 / R11 initially looked like a fourth path (shell reads the
+*visible* level's live cursor at a content-loaded / grouping-settled event).
+They resolve to outcome 2: `handle_loaded_level` replaces the `BrowseLevel`
+wholesale (`*last = level.take()`) and then runs the auto-push / snap / settle
+logic synchronously in the same event-handler call, so the cursor those readers
+see is the resting value the shell itself just computed in
+`BrowseLevel::from_position_level` (or the `0` default from `select_item`), not
+a component-owned live value. The resting-position field must therefore be
+populated at level-construction time (it is) — task 4.2 must keep that invariant
+when it introduces the resting type.
+
+The design-doc Risk "a reader that needs the live cursor where no component is
+mounted" is confirmed to land only on the persistence path
+(`save_audiobookshelf_position` / `save_default_library_position` on
+tab-switch-away), which is outcome 2 by construction. No blocker.

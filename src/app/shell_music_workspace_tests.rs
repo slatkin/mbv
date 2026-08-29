@@ -1,4 +1,3 @@
-
 use super::*;
 use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
 use crate::app::components::Msg;

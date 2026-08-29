@@ -1,35 +1,35 @@
 ## 1. Authoritative reader inventory (D3)
 
-- [ ] 1.1 Produce a type-aware inventory of every non-test reader and writer of
+- [x] 1.1 Produce a type-aware inventory of every non-test reader and writer of
       `BrowseLevel::cursor` and `BrowseLevel::scroll` using `rtk ast-grep`
       (field access on the `BrowseLevel` type), not text search. Record it in
       `design.md` as a table: file:line, live-cursor or resting-position, and
       the D2 outcome assigned. Verify: the count is stated explicitly and
       compared against #618's scout figure of ~37; a large divergence is
       reported before proceeding.
-- [ ] 1.2 Same inventory for `AudiobookshelfBrowseState`'s `selected_id`,
+- [x] 1.2 Same inventory for `AudiobookshelfBrowseState`'s `selected_id`,
       `episode_selection`, `scroll` and `AudiobookshelfBookBrowseState`'s
       `selected_id`, `chapter_selection`, `selected_bucket`. Verify: recorded
       in `design.md`.
-- [ ] 1.3 Flag every reader that fits none of D2's three outcomes and stop for
+- [x] 1.3 Flag every reader that fits none of D2's three outcomes and stop for
       a decision rather than inventing a fourth path. Verify: the flagged list
       is empty, or the change pauses here with it reported.
 
 ## 2. Audiobookshelf book struct (D4, first)
 
-- [ ] 2.1 Write characterization tests for book position save and restore across
+- [x] 2.1 Write characterization tests for book position save and restore across
       a tab switch away and back, and for bucket selection surviving a content
       refresh. Verify: `rtk cargo nextest run -p mbv` passes pre-change.
-- [ ] 2.2 Split `AudiobookshelfBookBrowseState` into a content struct and a
+- [x] 2.2 Split `AudiobookshelfBookBrowseState` into a content struct and a
       component-owned interaction struct. The component holds its own
       interaction state and receives only content. Verify:
       `rtk cargo check -p mbv` surfaces every call site (compiler-forced).
-- [ ] 2.3 Re-point each reader from 1.2 per its assigned outcome. Verify:
+- [x] 2.3 Re-point each reader from 1.2 per its assigned outcome. Verify:
       `rtk cargo check -p mbv`.
-- [ ] 2.4 Delete `AudiobookshelfBookComponent::set_content`'s clobber-then-restore
+- [x] 2.4 Delete `AudiobookshelfBookComponent::set_content`'s clobber-then-restore
       block (`audiobookshelf_book.rs:60-77`) — with content and interaction
       separated it has nothing to restore. Verify: 2.1's tests still pass.
-- [ ] 2.5 Verify: `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace
+- [x] 2.5 Verify: `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace
       --all-targets`, `rtk ast-grep scan` all pass.
 
 ## 3. Audiobookshelf podcast struct (D4, second)
