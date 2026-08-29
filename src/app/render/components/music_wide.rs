@@ -75,13 +75,19 @@ impl MusicWideRenderCtx {
     }
 
     /// Publish the geometry shared by the legacy underpaint and the mounted
-    /// Music workspace before the component view runs.
-    pub(in crate::app) fn publish_geometry(&self, area: Rect, layout: &mut LayoutMain) {
+    /// Music workspace before the component view runs, and return the pure
+    /// arrangement so the paint path consumes the same computed panes and
+    /// left layout instead of recomputing them.
+    pub(in crate::app) fn publish_geometry(
+        &self,
+        area: Rect,
+        layout: &mut LayoutMain,
+    ) -> Option<(library_arrangement::WideLibraryPanes, WideMusicLeftLayout)> {
         layout.wide_music_area = area;
         layout.wide_music_art_area = Rect::default();
 
         let Some(panes) = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y) else {
-            return;
+            return None;
         };
         let left_layout = music_arrangement::wide_music_left_layout(
             panes.left_area,
@@ -94,6 +100,7 @@ impl MusicWideRenderCtx {
         if self.selected_album.is_some() {
             layout.wide_music_art_area = left_layout.art_area;
         }
+        Some((panes, left_layout))
     }
 }
 
@@ -201,12 +208,14 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     ctx: &MusicWideRenderCtx,
     layout: &mut LayoutMain,
 ) -> MusicWideRenderOutput {
-    ctx.publish_geometry(area, layout);
-    layout.wide_music_track_hitmap.clear();
     let mut output = MusicWideRenderOutput::default();
-    let Some(panes) = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y) else {
+    // The pure arrangement is computed exactly once here in
+    // `publish_geometry`; the paint path below consumes the returned panes
+    // and left layout rather than recomputing them.
+    let Some((panes, left_layout)) = ctx.publish_geometry(area, layout) else {
         return output;
     };
+    layout.wide_music_track_hitmap.clear();
     let left_panel = panes.left_panel;
     let right_panel = panes.right_panel;
     f.render_widget(
@@ -224,13 +233,8 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     let track_active = ctx.track_cursor.is_some();
     let left_focused = ctx.focused && track_active;
     let right_focused = ctx.focused && !track_active;
-    // Reuse the arrangement computed during `publish_geometry` so the wide
-    // frame runs pure arrangement math exactly once per frame.
-    let left_layout = music_arrangement::wide_music_left_layout(
-        left_area,
-        ctx.selected_album.is_some() && ctx.images_enabled,
-        ctx.album_tracks.as_ref().map_or(0, Vec::len),
-    );
+    // `left_layout` is the arrangement returned from `publish_geometry`; no
+    // recomputation here.
     f.render_widget(
         ratatui::widgets::Block::default()
             .style(Style::default().bg(palette::resolve_surface_focus(left_focused))),

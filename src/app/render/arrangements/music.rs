@@ -6,7 +6,7 @@ use ratatui::layout::Rect;
 pub(in crate::app::render) const MIN_LEFT_HEIGHT_FOR_SEPARATOR: u16 = 6;
 pub(in crate::app::render) const MIN_HERO_METADATA_SIDE_WIDTH: u16 = 15;
 
-pub(in crate::app::render) struct WideMusicLeftLayout {
+pub(in crate::app) struct WideMusicLeftLayout {
     pub hero_area: Rect,
     pub track_area: Rect,
     pub art_area: Rect,

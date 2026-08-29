@@ -1,7 +1,6 @@
 use super::components::album::AlbumRowsCursorCtx;
 use super::components::album_detail::album_hero_detail_rows;
 use super::components::hero::HERO_BLOCK_EXTRA_ROWS;
-use super::components::music_wide::MusicWideRenderCtx;
 use super::screens::album_plan::{
     sorted_group_album_order, GroupedAlbumDisplayRow, HeaderFocusCtx,
 };
@@ -656,18 +655,20 @@ fn grouped_music_maps_reordered_non_contiguous_album_source() {
 
 #[test]
 fn wide_music_frame_publishes_identical_geometry_from_publish_and_paint() {
-    // The paint path must consume the arrangement published by
+    // The paint path must consume the arrangement returned by
     // `publish_geometry` rather than recomputing it: the pure arrangement
     // math runs once per wide frame and both passes produce the same
     // geometry.
     let app = make_music_group_app();
-    let mut app2 = make_music_group_app();
+    let app2 = make_music_group_app();
 
     let mut publish_layout = LayoutMain::default();
     let mut paint_layout = LayoutMain::default();
 
     let ctx = app.wide_music_render_ctx(0);
-    ctx.publish_geometry(Rect::new(0, 0, 120, 24), &mut publish_layout);
+    let published = ctx
+        .publish_geometry(Rect::new(0, 0, 120, 24), &mut publish_layout)
+        .expect("wide area publishes panes");
 
     let mut terminal = Terminal::new(TestBackend::new(120, 24)).unwrap();
     terminal
@@ -681,6 +682,14 @@ fn wide_music_frame_publishes_identical_geometry_from_publish_and_paint() {
         })
         .unwrap();
 
+    let (published_panes, published_left) = published;
+    assert_eq!(published_panes.left_area, paint_layout.left_area);
+    assert_eq!(
+        published_panes.right_area,
+        paint_layout.wide_music_right_area
+    );
+    assert_eq!(published_left.hero_area, paint_layout.hero_area);
+    assert_eq!(published_left.art_area, paint_layout.wide_music_art_area);
     assert_eq!(publish_layout.wide_music_area, paint_layout.wide_music_area);
     assert_eq!(publish_layout.left_area, paint_layout.left_area);
     assert_eq!(
