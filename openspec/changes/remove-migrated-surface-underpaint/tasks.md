@@ -222,10 +222,31 @@ six production files and preserves behaviour.
       already records this as open (`docs/architecture/interactive-surface-ledger.md`
       line 66: "Shared underpaint/geometry cleanup remains issue #613"). This
       is real suppression work needing its own scoping, not a test-only row.
-- [ ] 3.5 ABS book body — suppress when `AudiobookshelfBookComponent` is active.
-- [ ] 3.6 ABS podcast body — suppress when `AudiobookshelfPodcastComponent` is
+- [x] 3.5 ABS book body — suppress when `AudiobookshelfBookComponent` is active.
+      Already geometry-only: the Book case of `render_audiobookshelf_library`
+      sets `layout.audiobookshelf_book_area = area` and returns with no paint
+      (`src/app/render/components/widgets.rs:599`-`600`; the legacy Book
+      renderer was removed in 5.3d.13). Characterized by
+      `tests_conformance_matrix.rs::abs_book_legacy_base_frame_publishes_geometry_but_paints_no_books`
+      (narrow 60x20 and wide 120x40).
+- [x] 3.6 ABS podcast body — suppress when `AudiobookshelfPodcastComponent` is
       active.
-- [ ] 3.7 Feeds body — suppress when `FeedsComponent` is active.
+      Already geometry-only: the podcast case of `render_audiobookshelf_library`
+      only assigns `layout.audiobookshelf_podcast_area = area`
+      (`src/app/render/components/widgets.rs:605`) and nothing else runs in the
+      function — the scout's "no explicit return" note is moot, the assignment
+      is the last statement. Characterized by
+      `tests_conformance_matrix.rs::abs_podcast_legacy_base_frame_publishes_geometry_but_paints_no_shows`
+      (narrow 60x20 and wide 120x40).
+- [x] 3.7 Feeds body — suppress when `FeedsComponent` is active.
+      Already geometry-only: the Feeds arm of `render_library` is
+      `layout.feeds_area = area` with no `render_list` delegation
+      (`src/app/render/components/widgets.rs:531`), so the legacy base frame
+      paints no feed entry or pill. (The `feeds.rs` component double-pill-bar
+      fix in `33782e1e` was a separate, component-side bug, not this arm.)
+      Characterized by
+      `tests_conformance_matrix.rs::feeds_legacy_base_frame_publishes_geometry_but_paints_no_entries`
+      (narrow 60x20 and wide 140x30).
 - [ ] 3.8 Inline search body — suppress when an `InlineSearchComponent` is
       active.
 - [ ] 3.9 Player chrome — suppress the legacy player-chrome paint if the scout

@@ -554,3 +554,76 @@ fn render_library_sets_book_area_before_component_overlay() {
         "base frame must populate audiobookshelf_book_area before the component overlay paints"
     );
 }
+
+/// `remove-migrated-surface-underpaint` 3.5 (D4): the mounted
+/// `AudiobookshelfBookComponent` owns the Book picture at every breakpoint.
+/// `render_audiobookshelf_library`
+/// (`src/app/render/components/widgets.rs:599`) sets
+/// `audiobookshelf_book_area` and returns without painting a book row, hero,
+/// or pill. Mirrors the Home precedent
+/// `legacy_base_frame_does_not_paint_home_content_before_the_component`.
+#[test]
+fn abs_book_legacy_base_frame_publishes_geometry_but_paints_no_books() {
+    for (width, height) in [(60, 20), (120, 40)] {
+        let mut app = make_audiobookshelf_book_app();
+        let (terminal, layout) = render_library(&mut app, width, height);
+        assert_eq!(
+            layout.audiobookshelf_book_area,
+            Rect::new(0, 0, width, height),
+            "book geometry hand-off must stay reserved at {width}x{height}"
+        );
+        let output = buffer_to_string(&terminal);
+        assert!(
+            !output.contains("Alpha Tales") && !output.contains("◢"),
+            "legacy base frame must not paint the Book surface at {width}x{height}: {output:?}"
+        );
+    }
+}
+
+/// `remove-migrated-surface-underpaint` 3.6 (D4): the mounted
+/// `AudiobookshelfPodcastComponent` owns the Podcast picture. The podcast
+/// case of `render_audiobookshelf_library`
+/// (`src/app/render/components/widgets.rs:605`) only assigns
+/// `audiobookshelf_podcast_area`; nothing else runs in the function, so no
+/// show row, hero, or pill is painted.
+#[test]
+fn abs_podcast_legacy_base_frame_publishes_geometry_but_paints_no_shows() {
+    for (width, height) in [(60, 20), (120, 40)] {
+        let mut app = crate::app::tests_podcast::audiobookshelf_app();
+        let (terminal, layout) = render_library(&mut app, width, height);
+        assert_eq!(
+            layout.audiobookshelf_podcast_area,
+            Rect::new(0, 0, width, height),
+            "podcast geometry hand-off must stay reserved at {width}x{height}"
+        );
+        let output = buffer_to_string(&terminal);
+        assert!(
+            !output.contains("Show A") && !output.contains("◢"),
+            "legacy base frame must not paint the Podcast surface at {width}x{height}: {output:?}"
+        );
+    }
+}
+
+/// `remove-migrated-surface-underpaint` 3.7 (D4): the mounted `FeedsComponent`
+/// owns the Feeds picture. The Feeds arm of `render_library`
+/// (`src/app/render/components/widgets.rs:531`) only assigns `feeds_area` and
+/// never delegates to `render_list`, so the legacy base frame paints no feed
+/// entry, selector pill, or filter pill. (The `feeds.rs` component
+/// double-pill-bar fix in `33782e1e` was a separate, component-side bug.)
+#[test]
+fn feeds_legacy_base_frame_publishes_geometry_but_paints_no_entries() {
+    for (width, height) in [(60, 20), (140, 30)] {
+        let mut app = feed_app();
+        let (terminal, layout) = render_library(&mut app, width, height);
+        assert_eq!(
+            layout.feeds_area,
+            Rect::new(0, 0, width, height),
+            "feeds geometry hand-off must stay reserved at {width}x{height}"
+        );
+        let output = buffer_to_string(&terminal);
+        assert!(
+            !output.contains("Entry One") && !output.contains("Test Feed") && !output.contains("◢"),
+            "legacy base frame must not paint the Feeds surface at {width}x{height}: {output:?}"
+        );
+    }
+}
