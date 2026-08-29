@@ -90,7 +90,7 @@ six production files and preserves behaviour.
       pills, card-consumption, and all rendering-state tests, check, and fmt.
       Existing implementation already fulfilled this checkpoint; this docs-only
       commit records it (`dd46fc6c`).
-- [ ] 2.1g Feeds/home: publish feed and home geometry at their owning natural
+- [x] 2.1g Feeds/home: publish feed and home geometry at their owning natural
       checkpoints, before pure paint and after image/load operations where
       coupled; preserve loading and image handoff. Boundary:
       `src/app/layout.rs`, `src/app/render/components/feeds.rs`,
@@ -98,6 +98,8 @@ six production files and preserves behaviour.
       `src/app/render/components/home_hero.rs`,
       `src/app/render/arrangements/home.rs`. Depends on 2.1f. Verify feeds/home
       loading, empty, populated, image, and responsive states, check, and fmt.
+      Real writer: feeds selector computation collapsed to one paint per region
+      and feeds/home geometry published at natural checkpoints (`1a4fb6cf`).
 - [ ] 2.1h Music: publish ordinary, wide, browser, and track geometry at each
       owning natural checkpoint, preserving grouped-album and image handoff
       operations. Boundary: `src/app/layout.rs`,
