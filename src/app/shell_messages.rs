@@ -31,14 +31,14 @@ impl Model {
                             if self.app.move_music_group_display_cursor(lib_idx, target) {
                                 self.app.save_default_library_position(lib_idx);
                                 if idle {
-                                    self.app.maybe_fetch_next_page(lib_idx);
+                                    self.app.maybe_fetch_next_page(lib_idx, target);
                                 }
                             }
                         }
                         AlbumCursorKind::Jump => {
                             if self.app.jump_music_group_display_cursor(lib_idx, target) {
                                 self.app.save_default_library_position(lib_idx);
-                                self.app.maybe_fetch_next_page(lib_idx);
+                                self.app.maybe_fetch_next_page(lib_idx, target);
                             }
                         }
                         AlbumCursorKind::Page => {

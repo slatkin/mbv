@@ -93,7 +93,7 @@ fn prefetch_holds_until_cursor_is_within_prefetch_ahead_of_loaded_edge() {
     app.libs.push(movie_lib(vec![movie_level(make_items(30), 100, 4)]));
 
     // cursor 4: 4 + 25 = 29 < 30 -> still buffered, no fetch.
-    app.maybe_fetch_next_page(0);
+    app.maybe_fetch_next_page(0, app.libs[0].nav_stack.last().unwrap().cursor);
     assert!(
         !app.libs[0].nav_stack.last().unwrap().loading,
         "cursor comfortably inside the buffer must not trigger a page fetch"
@@ -101,7 +101,7 @@ fn prefetch_holds_until_cursor_is_within_prefetch_ahead_of_loaded_edge() {
 
     // cursor 5: 5 + 25 = 30, not < 30 -> threshold reached, fetch starts.
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 5;
-    app.maybe_fetch_next_page(0);
+    app.maybe_fetch_next_page(0, app.libs[0].nav_stack.last().unwrap().cursor);
     assert!(
         app.libs[0].nav_stack.last().unwrap().loading,
         "cursor within PREFETCH_AHEAD of the loaded edge must trigger a page fetch"

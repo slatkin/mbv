@@ -216,7 +216,12 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn maybe_fetch_next_page(&mut self, lib_idx: usize) {
+    /// Check whether another page should be fetched for the level at the top
+    /// of `lib_idx`'s nav stack, and spawn it. `cursor` is the resolved
+    /// position to threshold against (the caller's live/resting cursor) —
+    /// never re-read from the level, so the prefetch decision no longer
+    /// depends on `BrowseLevel.cursor` (task 4.3, R7).
+    pub(in crate::app) fn maybe_fetch_next_page(&mut self, lib_idx: usize, cursor: usize) {
         let lib = &self.libs[lib_idx];
         let lvl = match lib.nav_stack.last() {
             Some(l) => l,
@@ -237,7 +242,7 @@ impl App {
         // cursor on that hidden level. Paginate it to completion unconditionally.
         let is_feed_home_video_root =
             lib.nav_stack.len() == 1 && self.is_feed_home_video_library(lib_idx);
-        if !is_feed_home_video_root && lvl.cursor + PREFETCH_AHEAD < lvl.items.len() {
+        if !is_feed_home_video_root && cursor + PREFETCH_AHEAD < lvl.items.len() {
             return;
         }
         let start_index = lvl.items.len();

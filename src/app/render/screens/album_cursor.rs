@@ -79,7 +79,7 @@ impl App {
             }
         }
         if idle {
-            self.maybe_fetch_next_page(lib_idx);
+            self.maybe_fetch_next_page(lib_idx, target);
         }
         true
     }

@@ -219,7 +219,7 @@ impl App {
                 }
                 self.save_default_library_position(lib_idx);
                 if idle {
-                    self.maybe_fetch_next_page(lib_idx);
+                    self.maybe_fetch_next_page(lib_idx, new_cursor);
                 }
                 return;
             }
@@ -229,12 +229,13 @@ impl App {
         if let Some(lvl) = lib.nav_stack.last_mut() {
             let n = lvl.items.len();
             if n > 0 {
-                lvl.cursor = super::ui_util::move_cursor(lvl.cursor, delta, n);
+                let next = super::ui_util::move_cursor(lvl.cursor, delta, n);
+                lvl.cursor = next;
                 self.save_default_library_position(lib_idx);
+                if idle {
+                    self.maybe_fetch_next_page(lib_idx, next);
+                }
             }
-        }
-        if idle {
-            self.maybe_fetch_next_page(lib_idx);
         }
     }
 
@@ -263,7 +264,7 @@ impl App {
             self.save_default_library_position(lib_idx);
         }
         if idle {
-            self.maybe_fetch_next_page(lib_idx);
+            self.maybe_fetch_next_page(lib_idx, index);
         }
     }
 
@@ -297,7 +298,7 @@ impl App {
                     lvl.cursor = new_cursor;
                 }
                 self.save_default_library_position(lib_idx);
-                self.maybe_fetch_next_page(lib_idx);
+                self.maybe_fetch_next_page(lib_idx, new_cursor);
                 return;
             }
         }
@@ -306,11 +307,12 @@ impl App {
         if let Some(lvl) = lib.nav_stack.last_mut() {
             let n = lvl.items.len();
             if n > 0 {
-                lvl.cursor = if to_end { n - 1 } else { 0 };
+                let target = if to_end { n - 1 } else { 0 };
+                lvl.cursor = target;
                 self.save_default_library_position(lib_idx);
+                self.maybe_fetch_next_page(lib_idx, target);
             }
         }
-        self.maybe_fetch_next_page(lib_idx);
     }
 
     pub(super) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {

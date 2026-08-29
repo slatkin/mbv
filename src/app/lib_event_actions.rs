@@ -14,7 +14,14 @@ impl App {
         self.maybe_auto_push_tv_season_level(lib_idx);
         self.maybe_auto_push_music_group_level(lib_idx);
         self.maybe_aggregate_feed_after_loaded(lib_idx);
-        self.maybe_fetch_next_page(lib_idx);
+        self.maybe_fetch_next_page(
+            lib_idx,
+            self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .map(|l| l.resting().cursor())
+                .unwrap_or(0),
+        );
         self.spawn_all_items_prefetch(lib_idx);
     }
 
@@ -90,7 +97,14 @@ impl App {
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
         self.maybe_aggregate_feed_after_page_append(lib_idx, &parent_id);
-        self.maybe_fetch_next_page(lib_idx);
+        self.maybe_fetch_next_page(
+            lib_idx,
+            self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .map(|l| l.resting().cursor())
+                .unwrap_or(0),
+        );
     }
 
     fn handle_lib_refreshed(
