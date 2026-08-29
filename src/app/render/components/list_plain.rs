@@ -32,6 +32,10 @@ pub(in crate::app) fn render_plain_rows(
         hero_rows,
     } = ctx;
     let n = items.len();
+    // Publish the identity display order just like letter-grouped lists publish
+    // their sorted order; the fresh frame layout makes this authoritative for
+    // cursor and hit testing even when the list has no grouping.
+    layout.left_sorted_indices = (0..n).collect();
     let visible = content_area.height as usize;
     let cell_w = library_cell_width(content_area, cols) as usize;
 
