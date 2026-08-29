@@ -99,6 +99,37 @@ fn wide_tv_persists_series_workspace_and_separate_targets() {
     assert!(output.contains("1h"));
 }
 
+/// `remove-migrated-surface-underpaint` 3.3 (D4): at the wide hero-on-left
+/// breakpoint the mounted `TvWorkspaceComponent` owns the picture.
+/// `render_library` publishes the `tv_wide_*` geometry hand-off and
+/// `render_list` then returns (`src/app/render/components/list.rs:113`)
+/// without painting the series hero, season tabs, or episode table.
+/// Mirrors the Home precedent
+/// `legacy_base_frame_does_not_paint_home_content_before_the_component`.
+#[test]
+fn wide_tv_legacy_base_frame_publishes_geometry_but_paints_no_workspace() {
+    let mut app = tv_app();
+    let mut layout = LayoutMain::default();
+    let area = Rect::new(0, 0, 100, 30);
+    let mut term = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    term.draw(|f| {
+        app.render_library(f, area, true, &mut layout);
+    })
+    .unwrap();
+
+    assert!(layout.is_wide_tv_active());
+    assert!(
+        layout.tv_wide_right_area.width > 0 && layout.tv_wide_right_area.height > 0,
+        "wide TV geometry hand-off must still be reserved: {:?}",
+        layout.tv_wide_right_area
+    );
+    let output = buffer_to_string(&term);
+    assert!(
+        !output.contains("Pilot") && !output.contains("The Series"),
+        "legacy base frame must not paint the TV workspace at the wide breakpoint: {output:?}"
+    );
+}
+
 #[test]
 fn wide_series_render_keeps_loading_treatment_during_season_fan_out() {
     let mut app = tv_app();

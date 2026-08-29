@@ -185,15 +185,43 @@ six production files and preserves behaviour.
 > arm paints while the component is the active target; (iii) run that surface's
 > render characterization tests + `rtk cargo nextest run -p mbv <surface>`.
 
-- [ ] 3.1 Home body — suppress legacy paint when `HomeComponent` is active.
-- [ ] 3.2 Emby generic/Movies/HomeVideo browser body — suppress when
+- [x] 3.1 Home body — suppress legacy paint when `HomeComponent` is active.
+      Already geometry-only: the Home dispatch arm is `layout.home_area = area`
+      with no width branch (`src/app/render/components/widgets.rs:528`).
+      Characterized by
+      `tests_home_characterization.rs::legacy_base_frame_does_not_paint_home_content_before_the_component`
+      (extended to also cover the wide 120x40 breakpoint).
+- [x] 3.2 Emby generic/Movies/HomeVideo browser body — suppress when
       `BrowserComponent` is active; confirm the #611 browser change already
       removed the `wide_movies` / `movies_wide_right_area` residue, else fold
       D18 step 2 in here.
-- [ ] 3.3 Wide TV workspace body — suppress when `TvWorkspaceComponent` is
+      Already suppressed: `render_list` returns after publishing
+      `movies_wide_*` geometry (`src/app/render/components/list.rs:98`). No
+      legacy `wide_movies` renderer residue in `src/app/render/` — only the
+      geometry publication, `is_wide_movies_library` predicate, and the
+      `is_wide_movies_active()` layout accessor remain (the component's own
+      `render_wide_movies` lives in `src/app/components/browser.rs`).
+      Characterized by
+      `tests_non_music.rs::wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows`.
+- [x] 3.3 Wide TV workspace body — suppress when `TvWorkspaceComponent` is
       active and wide.
+      Already suppressed: `render_list` returns for
+      `is_wide_tv_library || is_podcast_library` under a wide hero presentation
+      (`src/app/render/components/list.rs:113`), after `render_library`
+      publishes `tv_wide_*`. Characterized by
+      `tv_wide_tests.rs::wide_tv_legacy_base_frame_publishes_geometry_but_paints_no_workspace`.
 - [ ] 3.4 Wide Music workspace body + album-track — suppress when
       `MusicWorkspaceComponent` is active and wide.
+      BLOCKED — not actually suppressed. `render_library` publishes
+      `wide_music_*` geometry via `publish_geometry` but then falls through to
+      `render_list`, which has **no** wide-music early return (unlike movies at
+      `list.rs:98` and TV at `list.rs:113`) and paints grouped album rows via
+      `render_grouped_album_rows` (`list.rs:468`/`484`). Confirmed by the
+      passing `tests_music_characterization.rs::music_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states`
+      (asserts `render_library` paints "First Album" at 120x30). The ledger
+      already records this as open (`docs/architecture/interactive-surface-ledger.md`
+      line 66: "Shared underpaint/geometry cleanup remains issue #613"). This
+      is real suppression work needing its own scoping, not a test-only row.
 - [ ] 3.5 ABS book body — suppress when `AudiobookshelfBookComponent` is active.
 - [ ] 3.6 ABS podcast body — suppress when `AudiobookshelfPodcastComponent` is
       active.

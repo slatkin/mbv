@@ -26,22 +26,30 @@ fn emby_cw_item() -> mbv_core::api::EmbyItem {
 /// area (`home_area`) as the placement handoff, but paints no Home rows,
 /// pills, or hero there. Home content is Model-owned now (task 5.3d), so
 /// the legacy frame never even holds a copy to (not) paint.
+///
+/// `remove-migrated-surface-underpaint` 3.1 (D4): the Home dispatch arm
+/// (`render_library`, `src/app/render/components/widgets.rs:528`) is
+/// `layout.home_area = area` with no width branch, so the geometry-only
+/// hand-off holds at every breakpoint; the wide case is exercised here too.
 #[test]
 fn legacy_base_frame_does_not_paint_home_content_before_the_component() {
-    let mut app = home_app();
-    app.terminal_width = 60;
-    app.terminal_height = 20;
-    let terminal = render_app_to_terminal(&mut app, 60, 20);
-    assert!(
-        app.layout.main.home_area.height > 0,
-        "legacy frame must still reserve home_area: {:?}",
-        app.layout.main.home_area
-    );
-    let output = buffer_to_string(&terminal);
-    assert!(
-        !output.contains("Focused Movie"),
-        "legacy frame must not paint Home rows/hero before the component: {output:?}"
-    );
+    for (width, height) in [(60, 20), (120, 40)] {
+        let mut app = home_app();
+        app.terminal_width = width;
+        app.terminal_height = height;
+        let terminal = render_app_to_terminal(&mut app, width, height);
+        assert!(
+            app.layout.main.home_area.height > 0,
+            "legacy frame must still reserve home_area at {width}x{height}: {:?}",
+            app.layout.main.home_area
+        );
+        let output = buffer_to_string(&terminal);
+        assert!(
+            !output.contains("Focused Movie"),
+            "legacy frame must not paint Home rows/hero before the component \
+             at {width}x{height}: {output:?}"
+        );
+    }
 }
 
 /// Task 5.3d, Home legacy underpaint removal: this characterization now

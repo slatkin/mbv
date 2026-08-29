@@ -56,6 +56,43 @@ fn wide_home_video_uses_a_left_detail_and_right_rail() {
     assert!(layout.movies_wide_right_area.height > 0);
 }
 
+/// `remove-migrated-surface-underpaint` 3.2 (D4): at the wide hero-on-left
+/// breakpoint the mounted `BrowserComponent` owns the Movies / home-video
+/// picture. `render_list` returns after publishing the `movies_wide_*`
+/// geometry hand-off (`src/app/render/components/list.rs:98`) without
+/// painting any row, banner, or hero. Mirrors the Home precedent
+/// `legacy_base_frame_does_not_paint_home_content_before_the_component`.
+#[test]
+fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
+    for (mut app, marker) in [
+        (make_movie_app(), "Focused Movie"),
+        (make_home_video_app(), "Birthday Clip"),
+    ] {
+        let mut layout = LayoutMain::default();
+        let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 40)).unwrap();
+        term.draw(|f| {
+            app.render_library(
+                f,
+                ratatui::layout::Rect::new(0, 0, 120, 40),
+                true,
+                &mut layout,
+            );
+        })
+        .unwrap();
+
+        assert!(
+            layout.movies_wide_right_area.width > 0 && layout.movies_wide_right_area.height > 0,
+            "wide movies geometry hand-off must still be reserved: {:?}",
+            layout.movies_wide_right_area
+        );
+        let output = buffer_to_string(&term);
+        assert!(
+            !output.contains(marker),
+            "legacy base frame must not paint browser rows at the wide breakpoint: {output:?}"
+        );
+    }
+}
+
 #[test]
 fn wide_emby_podcast_uses_the_series_workspace_and_right_rail() {
     let mut app = make_movie_app();
