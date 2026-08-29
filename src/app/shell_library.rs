@@ -9,9 +9,9 @@ impl Model {
     /// component, or back to `UiRoot` when the destination has no mounted
     /// surface component (e.g. an un-componented podcast/feed-group Emby
     /// library). Idempotent: `active()` on the already-active component is a
-    /// no-op. The old `sync_library_parent` mirrored routing state into
-    /// `LibraryComponent` each tick and read it back to activate the child;
-    /// the child is derived directly now (task 5.3d — no routing mirror).
+    /// no-op. The destination child is derived directly from `App.tab` via
+    /// `library_child_id`; there is no Library-parent component or routing
+    /// mirror.
     ///
     /// Short-circuits when Queue owns panel focus (and no blocking overlay
     /// is up): `sync_queue` already activated `ComponentId::Queue` a few

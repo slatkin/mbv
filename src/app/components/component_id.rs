@@ -17,7 +17,6 @@ pub enum ComponentId {
     UiRoot,
     Playback,
     Queue,
-    Library,
     Home,
     Browser(BrowserKey),
     Feeds,

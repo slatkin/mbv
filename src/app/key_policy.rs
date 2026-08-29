@@ -264,7 +264,7 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
     },
     KeyPolicyEntry {
         name: "panel_mode_cycle_x",
-        owner: KeyPolicyOwner::Sub(ComponentId::Library),
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
         binding: KeyPolicyBinding::PanelModeCycle,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
@@ -487,6 +487,23 @@ mod tests {
             resolve_policy(chord(KeyCode::Left, KeyModifiers::NONE), &snapshot())
                 .map(|entry| entry.name),
             Some("queue_column_width")
+        );
+    }
+
+    #[test]
+    fn panel_mode_cycle_falls_through_during_text_entry() {
+        let key = crossterm::event::KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE);
+        let mut text_entry = snapshot();
+        text_entry.text_entry_focused = true;
+        assert_eq!(
+            crate::app::router::resolve_router_outcome(key, &text_entry),
+            crate::app::router::RouterOutcome::FallThrough
+        );
+
+        let normal = snapshot();
+        assert_eq!(
+            crate::app::router::resolve_router_outcome(key, &normal),
+            crate::app::router::RouterOutcome::Command(Command::CyclePanelMode)
         );
     }
 
