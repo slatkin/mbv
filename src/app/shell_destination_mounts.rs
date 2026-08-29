@@ -12,50 +12,27 @@
 
 use std::collections::HashSet;
 
-use super::components::{BrowserKey, BrowserKind, ComponentId};
+use super::components::ComponentId;
 use super::shell::Model;
-use mbv_core::config::ServiceKind;
 
 impl Model {
-    /// Every destination `ComponentId::Browser(BrowserKey{..})` the current
-    /// Service catalog could produce, independent of the active tab or view
-    /// mode: per Emby library all five browse kinds (`Generic` / `Movies` /
-    /// `HomeVideos` / `TvShows` / `Music`, keyed by `library.library.id`),
-    /// per Audiobookshelf library both browse kinds (`AudiobookshelfBook` /
-    /// `AudiobookshelfPodcast`). The reconciliation pass (1.2) matches
-    /// mounted `Browser` and `InlineSearch` ids against these keys by
-    /// `library_id`.
-    pub(super) fn live_destination_keys(&self) -> HashSet<ComponentId> {
-        let mut keys = HashSet::new();
-        for tab in &self.app.libs {
-            let library_id = tab.library.id.clone();
-            for kind in [
-                BrowserKind::Generic,
-                BrowserKind::Movies,
-                BrowserKind::HomeVideos,
-                BrowserKind::TvShows,
-                BrowserKind::Music,
-            ] {
-                keys.insert(ComponentId::Browser(BrowserKey {
-                    service: ServiceKind::Emby,
-                    library_id: library_id.clone(),
-                    kind,
-                }));
-            }
-        }
-        for library in &self.app.audiobookshelf_libraries {
-            for kind in [
-                BrowserKind::AudiobookshelfBook,
-                BrowserKind::AudiobookshelfPodcast,
-            ] {
-                keys.insert(ComponentId::Browser(BrowserKey {
-                    service: ServiceKind::Audiobookshelf,
-                    library_id: library.id.clone(),
-                    kind,
-                }));
-            }
-        }
-        keys
+    /// Every Service library id currently in the catalog (`App::libs` plus
+    /// `App::audiobookshelf_libraries`), independent of the active tab or
+    /// view mode. `reconcile_destination_mounts` retires any mounted
+    /// `Browser` / `InlineSearch` component whose `BrowserKey::library_id`
+    /// is not in this set.
+    pub(super) fn live_library_ids(&self) -> HashSet<&str> {
+        self.app
+            .libs
+            .iter()
+            .map(|tab| tab.library.id.as_str())
+            .chain(
+                self.app
+                    .audiobookshelf_libraries
+                    .iter()
+                    .map(|library| library.id.as_str()),
+            )
+            .collect()
     }
 
     /// Retire destination components whose Service library left the catalog.
@@ -72,23 +49,13 @@ impl Model {
     /// while iterating the registry). Idempotent and cheap enough to run
     /// once per tick immediately before `sync_active_destination`.
     pub(super) fn reconcile_destination_mounts(&mut self) {
-        let live_library_ids: HashSet<String> = self
-            .live_destination_keys()
-            .iter()
-            .filter_map(|id| match id {
-                ComponentId::Browser(key) | ComponentId::InlineSearch(key) => {
-                    Some(key.library_id.clone())
-                }
-                _ => None,
-            })
-            .collect();
-
+        let live = self.live_library_ids();
         let retired: Vec<ComponentId> = self
             .mounted_destinations
             .iter()
             .filter_map(|id| match id {
                 ComponentId::Browser(key) | ComponentId::InlineSearch(key)
-                    if !live_library_ids.contains(&key.library_id) =>
+                    if !live.contains(key.library_id.as_str()) =>
                 {
                     Some(id.clone())
                 }
@@ -138,9 +105,11 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::components::{BrowserKey, BrowserKind};
     use crate::app::render::make_movie_app;
     use crate::app::tests::make_item;
     use crate::app::{LibraryTab, TabSelection};
+    use mbv_core::config::ServiceKind;
 
     fn browser_id(library_id: &str, kind: BrowserKind) -> ComponentId {
         ComponentId::Browser(BrowserKey {
@@ -195,7 +164,7 @@ mod tests {
     }
 
     #[test]
-    fn live_destination_keys_enumerates_every_kind_per_emby_library() {
+    fn live_library_ids_lists_every_emby_library() {
         let mut app = make_movie_app();
         let mut second = LibraryTab::new(make_item("Series", "CollectionFolder"));
         second.library.id = "lib-series".into();
@@ -203,25 +172,14 @@ mod tests {
         app.libs.push(second);
         let model = Model::new(app);
 
-        let keys = model.live_destination_keys();
-        // Emby: 5 kinds for each of the two libraries.
-        assert_eq!(keys.len(), 10);
-        for kind in [
-            BrowserKind::Generic,
-            BrowserKind::Movies,
-            BrowserKind::HomeVideos,
-            BrowserKind::TvShows,
-            BrowserKind::Music,
-        ] {
-            assert!(keys.contains(&browser_id("lib-movies", kind)));
-            assert!(keys.contains(&browser_id("lib-series", kind)));
-        }
-        // No ABS keys when the ABS catalog is empty.
-        assert!(!keys.iter().any(|id| matches!(id, ComponentId::Browser(key) if key.service == ServiceKind::Audiobookshelf)));
+        let ids = model.live_library_ids();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains("lib-movies"));
+        assert!(ids.contains("lib-series"));
     }
 
     #[test]
-    fn live_destination_keys_enumerates_abs_book_and_podcast() {
+    fn live_library_ids_includes_audiobookshelf_libraries() {
         use mbv_core::audiobookshelf::AudiobookshelfLibrary;
         let mut app = crate::app::tests::make_app_stub();
         app.audiobookshelf_libraries.push(AudiobookshelfLibrary {
@@ -231,18 +189,9 @@ mod tests {
         });
         let model = Model::new(app);
 
-        let keys = model.live_destination_keys();
-        assert_eq!(keys.len(), 2);
-        assert!(keys.contains(&ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Audiobookshelf,
-            library_id: "abs-lib".into(),
-            kind: BrowserKind::AudiobookshelfBook,
-        })));
-        assert!(keys.contains(&ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Audiobookshelf,
-            library_id: "abs-lib".into(),
-            kind: BrowserKind::AudiobookshelfPodcast,
-        })));
+        let ids = model.live_library_ids();
+        assert_eq!(ids.len(), 1);
+        assert!(ids.contains("abs-lib"));
     }
 
     #[test]

@@ -170,7 +170,7 @@ verification.
 
 ### 5.3d.11 — audiobookshelf podcast interaction re-home (open aggregate)
 
-- [ ] **5.3d.11** **Teardown — ABS podcast re-home.** Re-home remaining podcast
+- [x] **5.3d.11** **Teardown — ABS podcast re-home.** Re-home remaining podcast
   App-level interaction readers to the mounted component; delete obsolete App
   episode/filter handlers and the empty mount/sync/push adapters, keeping the
   shared `AudiobookshelfBrowseState` type. Scout corrections (2026-08-26):
@@ -255,7 +255,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
 
 ### 5.3d.18 — TV workspace teardown (open)
 
-- [ ] **5.3d.18** Refine the TV workspace contract into an exact typed
+- [x] **5.3d.18** Refine the TV workspace contract into an exact typed
   keyboard and writer-seam contract; bounded rows below, no production edit in this
   aggregate.
   - **5.3d.18a — typed keyboard (3 files)** has been promoted to an open active
@@ -288,7 +288,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
 
 ### 5.3d.19 — Music workspace teardown (open)
 
-- [ ] **5.3d.19** Complete the Music contract with exact raw-key, projection,
+- [x] **5.3d.19** Complete the Music contract with exact raw-key, projection,
   geometry, and underpaint rows; bounded rows (Music).
   - **5.3d.19a — mount/idempotent mirror** is promoted to an open active leaf (see
     §3): `components/music_workspace.rs` + `shell_music_workspace.rs`; idempotent
@@ -316,7 +316,7 @@ dependency) tags are technical; the remainder are accepted campaign predecessors
 
 ### 5.3d.20 — inline-library-Search residual scaffolding (open)
 
-- [ ] **5.3d.20** Scout the remaining inline-library-Search mirror and raw endpoint,
+- [x] **5.3d.20** Scout the remaining inline-library-Search mirror and raw endpoint,
   then bounded rows (surface already migrated; residual shell scaffolding).
   - **5.3d.20a — drop mount-id field** is promoted to an open active leaf (see §3):
     `shell.rs` `inline_search_id` + `shell_inline_search.rs`
