@@ -62,6 +62,14 @@ pub struct Model {
     /// state: the component owns the cursor, the shell only delivers the
     /// trigger that used to write the deleted inline track-focus field.
     pub(super) music_track_focus_request: Option<bool>,
+    /// One-shot shell→component re-anchor trigger for the mounted Music
+    /// workspace's album cursor/scroll, consumed at the next
+    /// `push_music_workspace_content`. Set at the three navigation events that
+    /// legitimately move a shell-owned cursor -- group switch, recursive-album
+    /// activation, saved-position restore -- and once after mount. An ordinary
+    /// content push never adopts the shell cursor; this is the explicit
+    /// re-anchor that replaced the deleted echo-suppression test.
+    pub(super) music_workspace_reanchor: bool,
     /// Shell-owned mirror of the feeds-management popup's interaction state
     /// plus its background add-feed channel (task 5.3c). The
     /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
@@ -268,6 +276,7 @@ impl Model {
             abs_book_id: None,
             mounted_destinations: std::collections::HashSet::new(),
             music_track_focus_request: None,
+            music_workspace_reanchor: false,
             feeds_manage: None,
             home_content: HomeContent::new(),
             home_section_pref_semantic: home_section.clone(),

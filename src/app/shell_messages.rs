@@ -287,6 +287,9 @@ impl Model {
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {
                             self.app.handle_mouse_selector_click_emby(lib_idx, target);
                         }
+                        // A music-group pill switch replaces the album level;
+                        // re-anchor the workspace cursor at this nav event.
+                        self.music_workspace_reanchor = true;
                     }
                     BrowserHitRegion::ContextMenu(target) => {
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {

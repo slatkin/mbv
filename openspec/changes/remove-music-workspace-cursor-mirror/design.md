@@ -46,6 +46,26 @@ with a generation counter or a dirty flag). Any such fix is still echo
 detection; it makes the mirror more reliable instead of removing it, and it
 leaves a field whose meaning is "am I in sync with the other owner".
 
+#### `level.cursor` / `level.scroll` write enumeration (task 1.1)
+
+Derived from `rtk grep -n "\.cursor" src/app/music_grouping.rs
+src/app/music_actions.rs`:
+
+| Site | Writes | Classification |
+| --- | --- | --- |
+| `music_grouping.rs:304,306,309` (`commit_music_grouping_candidate`) | `level.cursor = catalog.entries[pos].album_index` — re-anchors the App cursor by album *identity* when a settled grouped catalog replaces the previous one | **Not a component re-anchor.** The component's `album_cursor` is itself an `album_index` into `level.items`, which does not reorder when the grouping metadata settles (only `album_order` does). The component keeps pointing at the same album with no action. |
+| `music_actions.rs:56` (`switch_music_group`) | `group_lvl.cursor = new_cursor` on the *group* level | **Dead code** — `switch_music_group` has no callers (`rtk grep -rn switch_music_group src/` finds only its definition and a doc-comment). |
+| `music_actions.rs:109` (`select_music_group`) | `group_lvl.cursor = group_cursor`; then pushes a fresh album level at `cursor: 0` | **Genuine re-anchor (group switch).** Reached only from `handle_mouse_selector_click_emby` (mouse; accepted-broken for the alpha). Wired via `Model::music_workspace_reanchor` set in the `BrowserClick::SelectorTab` arm. |
+| `music_actions.rs:196-197` (`select_letter_pill`) | `last.cursor = 0; last.scroll = 0` | Letter pills are mutually exclusive with the grouped Music view (`should_show_letter_pills` vs `is_music_group_view`); not a Music-workspace path. |
+| `music_actions.rs:254` (`ensure_music_group_album_level`) | reads `nav_stack[0].cursor` (group level); does not write the album level cursor | Not a re-anchor. |
+| `lib_event_actions.rs` `RecursiveAlbumActivated` / `RestoreLibraryPosition` | replace `lib.nav_stack` wholesale; the new resting `level.cursor` points at the activated / restored album | **Genuine re-anchors.** Wired via `Model::music_workspace_reanchor` set alongside the existing `music_track_focus_request` in the `shell_run.rs` lib-event drain. |
+| First projection after mount (`sync_music_workspace`) | — | **Genuine re-anchor.** A position restored synchronously into the nav stack before the workspace becomes mountable must land; the flag is set inside the `!self.application.mounted(&id)` branch only (a re-point at an already-mounted component keeps its divergent local cursor). |
+
+Implementation: `MusicWorkspaceComponent::re_anchor(cursor, scroll)` is called
+from `push_music_workspace_content` when the one-shot
+`Model::music_workspace_reanchor` flag is set, reading the resting
+cursor/scroll from the same projected context. `set_content` adopts neither.
+
 ### D2 — Deleting `last_mirrored_*` is the acceptance test
 
 The change is done when `rtk grep -c "last_mirrored" src/` returns zero and

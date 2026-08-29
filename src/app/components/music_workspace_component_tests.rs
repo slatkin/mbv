@@ -59,12 +59,20 @@ fn grouped_context(
 #[test]
 fn music_workspace_keeps_track_cursor_local_between_syncs() {
     let mut component = MusicWorkspaceComponent::new();
-    component.set_content(context(Some(0)));
+    component.set_content(context(None));
+    component.set_inline_track_focus_enabled(true);
+    // Enter inline track focus locally, then move within it.
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    component.set_content(context(Some(0)));
+    // An ordinary content push (same album) never touches the local track
+    // cursor.
+    component.set_content(context(None));
     assert_eq!(component.track_cursor(), Some(1));
 }
 
@@ -96,6 +104,9 @@ fn music_workspace_vertical_move_follows_album_display_order() {
         false,
         None,
     ));
+    // The shell re-anchors the album cursor at the navigation event; an
+    // ordinary push no longer carries it.
+    component.re_anchor(2, 0);
     component.set_album_columns(2);
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Down,
@@ -157,6 +168,7 @@ fn music_workspace_renders_without_app() {
 fn music_workspace_horizontal_move_is_ignored_at_one_column() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_content(grouped_context(1, vec![0, 1, 2, 3], true, None));
+    component.re_anchor(1, 0);
     component.set_album_columns(1);
 
     for key in [Key::Char('h'), Key::Char('l')] {
@@ -214,9 +226,14 @@ fn music_workspace_track_keys_are_consumed_locally_and_do_not_move_album_cursor(
         true,
         Some(tracks),
         false,
-        Some(0),
+        None,
     ));
+    component.re_anchor(1, 0);
     component.set_inline_track_focus_enabled(true);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
     component.set_album_columns(2);
 
     let message = component.on(&Event::Keyboard(KeyEvent {
@@ -295,6 +312,47 @@ fn music_workspace_album_change_clears_track_focus() {
         None,
     ));
     assert_eq!(component.track_cursor(), None);
+}
+
+#[test]
+fn music_workspace_re_anchor_overrides_prior_local_move() {
+    // A shell re-anchor at a navigation event adopts the shell's cursor
+    // unconditionally -- the outcome does not depend on whether the user
+    // moved the cursor since the previous projection.
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(grouped_context(0, vec![0, 1, 2, 3], true, None));
+    component.re_anchor(0, 0);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_ne!(
+        component.album_cursor(),
+        0,
+        "local move diverged the cursor"
+    );
+
+    component.set_content(grouped_context(2, vec![0, 1, 2, 3], true, None));
+    component.re_anchor(2, 0);
+    assert_eq!(component.album_cursor(), 2);
+}
+
+#[test]
+fn music_workspace_ordinary_push_leaves_album_cursor_alone() {
+    // Without a re-anchor, a content push never adopts the shell cursor,
+    // and the component holds no stored copy of a previously pushed value.
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(grouped_context(0, vec![0, 1, 2, 3], true, None));
+    component.re_anchor(0, 0);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let moved = component.album_cursor();
+    assert_ne!(moved, 0);
+
+    component.set_content(grouped_context(3, vec![0, 1, 2, 3], true, None));
+    assert_eq!(component.album_cursor(), moved);
 }
 
 #[test]

@@ -237,6 +237,10 @@ impl Model {
                     super::super::LibEvent::RecursiveAlbumActivated { .. } => {
                         self.app.handle_lib_event(ev);
                         self.music_track_focus_request = Some(true);
+                        // Nav stack was replaced wholesale; its resting cursor
+                        // now points at the activated album. Re-anchor the
+                        // component explicitly, regardless of prior local moves.
+                        self.music_workspace_reanchor = true;
                     }
                     // Position restore used to clear the deleted track-focus
                     // field; route the same reset to the component at the
@@ -244,6 +248,10 @@ impl Model {
                     super::super::LibEvent::RestoreLibraryPosition { .. } => {
                         self.app.handle_lib_event(ev);
                         self.music_track_focus_request = Some(false);
+                        // Saved position restored into the nav stack; re-anchor
+                        // the workspace cursor to it at this event rather than
+                        // by an equality test on the next content push.
+                        self.music_workspace_reanchor = true;
                         self.push_inline_search_content();
                     }
                     // App-internal Home writers deliver content/section deltas

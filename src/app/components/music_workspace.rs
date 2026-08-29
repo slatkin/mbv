@@ -24,9 +24,6 @@ pub struct MusicWorkspaceComponent {
     page_rows: usize,
     album_scroll: usize,
     track_cursor: Option<usize>,
-    initialized: bool,
-    last_mirrored_cursor: usize,
-    last_mirrored_scroll: usize,
     /// Selected-album identity from the last pushed context. When it changes
     /// (group switch, recursive-album activation, position restore), inline
     /// track focus must reset: a focused track index refers to the previous
@@ -59,9 +56,6 @@ impl MusicWorkspaceComponent {
             page_rows: 1,
             album_scroll: 0,
             track_cursor: None,
-            initialized: false,
-            last_mirrored_cursor: 0,
-            last_mirrored_scroll: 0,
             last_album_id: None,
             layout: LayoutMain::default(),
             image_paint: None,
@@ -82,30 +76,23 @@ impl MusicWorkspaceComponent {
                 .selected_album
                 .as_ref()
                 .map(|album| album.id.as_str());
-        if !self.initialized {
-            self.album_cursor = context.list.cursor();
-            self.album_scroll = context.list.scroll();
-            self.track_cursor = context.track_cursor;
-            self.last_album_id = context
-                .selected_album
-                .as_ref()
-                .map(|album| album.id.clone());
-            self.initialized = true;
-        } else {
-            if self.album_cursor == self.last_mirrored_cursor {
-                self.album_cursor = context.list.cursor();
-            }
-            if self.album_scroll == self.last_mirrored_scroll {
-                self.album_scroll = context.list.scroll();
-            }
-            // Inline track focus is owned here; the only external resets are
-            // the selected-album identity changing and narrow mode disabling
-            // the feature (both leave `track_cursor` `None`).
-            if album_changed {
-                self.track_cursor = None;
-            }
+        // Inline track focus is owned here; a selected-album identity change
+        // (group switch, recursive-album activation, position restore) is the
+        // one content-driven reset -- a focused track index refers to the
+        // previous album's track list. That is an event on content identity,
+        // not an echo test (D4).
+        if album_changed {
+            self.track_cursor = None;
         }
+        self.last_album_id = context
+            .selected_album
+            .as_ref()
+            .map(|album| album.id.clone());
         self.context = context;
+        // The component owns `album_cursor`/`album_scroll` outright; an
+        // ordinary content push never adopts the shell's cursor. A shrunk
+        // projection can still orphan the local cursor, so clamp it against
+        // the new content.
         self.album_cursor = self
             .album_cursor
             .min(self.context.list.item_count().saturating_sub(1));
@@ -115,8 +102,16 @@ impl MusicWorkspaceComponent {
                 self.track_cursor = Some(cursor.min(count - 1));
             }
         }
-        self.last_mirrored_cursor = self.context.list.cursor();
-        self.last_mirrored_scroll = self.context.list.scroll();
+    }
+
+    /// Shell-driven re-anchor of the album cursor/scroll at a navigation
+    /// event: group switch, recursive-album activation, saved-position
+    /// restore, or the first projection after mount. Unlike a content push
+    /// this adopts the shell's value unconditionally -- the outcome does not
+    /// depend on whether the user moved the cursor since the last push.
+    pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
+        self.album_cursor = cursor.min(self.context.list.item_count().saturating_sub(1));
+        self.album_scroll = scroll;
     }
 
     pub(in crate::app) fn set_album_columns(&mut self, columns: usize) {
