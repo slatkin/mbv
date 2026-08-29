@@ -21,55 +21,97 @@
 ## 2. Geometry / paint split (D2, D3)
 
 The original 2.1 was a one-shot extraction. The scout found 18 render modules
-and 110 layout assignments, so user approval widened it into the staged family
-queue below. Commit `94002d25b75e0f34df200c3def57939c6cffd156` is preparatory
-only: its helper seam exists, but it does not satisfy the paint-free geometry
-contract and is not proof that this section is complete.
+and 110 layout assignments, so this is now a dependency-first progressive
+checkpoint queue. Each row publishes geometry at its owning natural checkpoint:
+pure arrangement geometry before paint, and load/paint-coupled geometry after
+its authoritative operation. Geometry-only is checkpoint-local, not a promise
+that the whole frame is paint-free before `render_main`. Every row is bounded to
+at most six production files and preserves behaviour.
 
-- [x] 2.1-prep Preserve the preparatory seam in `root.rs` from commit 94002d25;
-      do not treat it as the completed geometry extraction.
-- [x] 2.1a Root/chrome foundation: introduce the plain-data frame
-      context/result seam and migrate only root/chrome geometry into an
-      explicitly partial typed subresult. `AppLayout` remains the aggregate
-      shared by all families; non-migrated queue/list/card/etc. fields remain
-      authoritative under their legacy computation until later rows. The seam
-      must be zero-area-safe before any mutation, and each migrated field must
-      have one authoritative computation consumed by `render_main`/painters.
-      Production boundary: `src/app/layout.rs` (shared `AppLayout` and partial-result types),
-      `src/app/render/screens/root.rs`,
-      `src/app/render/components/chrome.rs`, `chrome_player.rs`,
-      `chrome_status.rs`, and `chrome_tabs.rs`, plus focused tests only if
-      required. Verify focused root/chrome tests, `cargo check -p mbv`, and
+- [x] 2.1-prep Preserve the preparatory seam in `root.rs` from commit
+      `94002d25b75e0f34df200c3def57939c6cffd156`; do not treat it as the
+      completed geometry extraction.
+- [x] 2.1a Root/chrome foundation (landed): introduce the plain-data frame
+      context/result seam and fresh draft `AppLayout`; migrate root/chrome
+      geometry into the partial typed subresult and preserve zero-area
+      no-mutation plus atomic installation. Publish at the root/chrome natural
+      checkpoint, before its pure chrome paint. Boundary: `src/app/layout.rs`,
+      `src/app/render/screens/root.rs`, `src/app/render/components/chrome.rs`.
+      Verify focused root/chrome tests, `cargo check -p mbv`, and fmt.
+- [ ] 2.1b CARD CHECKPOINT: publish card geometry at the card owner's natural
+      checkpoint, preserving cache/`size_for`/`fetch` as one path across every
+      rendering state (loading, missing, cached, fetched, and responsive).
+      Boundary: `src/app/layout.rs`, `src/app/render/screens/root.rs`,
+      `src/app/render/components/card.rs`, `src/app/images.rs`. Depends on
+      2.1a. Verify all card rendering states, cache/image handoff tests,
+      check, and fmt.
+- [ ] 2.1c SHARED HERO ARRANGEMENT: publish pure hero arrangement geometry
+      before hero paint and retain authoritative image/load handoff timing.
+      Boundary: `src/app/layout.rs`, `src/app/render/arrangements/hero_left.rs`,
+      `src/app/render/arrangements/library.rs`,
+      `src/app/render/components/hero.rs`. Depends on 2.1b. Verify narrow and
+      wide arrangement/hero states, check, and fmt.
+- [ ] 2.1d FLAT/LETTER LIST CHECKPOINT: publish flat and letter-group list
+      geometry at the list owner's natural checkpoint without changing rows,
+      loading, empty, selection, or responsive output. Boundary:
+      `src/app/layout.rs`, `src/app/render/components/widgets.rs`,
+      `src/app/render/components/list.rs`,
+      `src/app/render/components/list_rows.rs`,
+      `src/app/render/components/list_plain.rs`,
+      `src/app/render/components/list_letter_groups.rs`. Depends on 2.1c.
+      Verify all list states and characterization tests, check, and fmt.
+- [ ] 2.1e GROUPED ALBUM CHECKPOINT: publish grouped-album and album-detail
+      geometry at each owning natural checkpoint, retaining album-art loading
+      and handoff after their authoritative operations. Boundary:
+      `src/app/layout.rs`, `src/app/render/components/album.rs`,
+      `src/app/render/components/album_inline.rs`,
+      `src/app/render/components/album_detail.rs`,
+      `src/app/render/components/album_art.rs`,
+      `src/app/render/screens/album_plan.rs`. Depends on 2.1d. Verify grouped,
+      inline, detail, loading, and responsive album states, check, and fmt.
+- [ ] 2.1f DOWNSTREAM QUEUE+PILLS: consume the card and pills checkpoints
+      without recomputation, and publish queue/pill geometry at the owning
+      natural checkpoint while preserving queue selection and responsive
+      behaviour. Boundary: `src/app/layout.rs`,
+      `src/app/render/screens/root.rs`, `src/app/render/screens/queue.rs`,
+      `src/app/render/screens/pills.rs`,
+      `src/app/render/components/widgets.rs`,
+      `src/app/render/components/music.rs`. Depends on 2.1e. Verify queue,
+      pills, card-consumption, and all rendering-state tests, check, and fmt.
+- [ ] 2.1g Feeds/home: publish feed and home geometry at their owning natural
+      checkpoints, before pure paint and after image/load operations where
+      coupled; preserve loading and image handoff. Boundary:
+      `src/app/layout.rs`, `src/app/render/components/feeds.rs`,
+      `src/app/render/components/home.rs`,
+      `src/app/render/components/home_hero.rs`,
+      `src/app/render/arrangements/home.rs`. Depends on 2.1f. Verify feeds/home
+      loading, empty, populated, image, and responsive states, check, and fmt.
+- [ ] 2.1h Music: publish ordinary, wide, browser, and track geometry at each
+      owning natural checkpoint, preserving grouped-album and image handoff
+      operations. Boundary: `src/app/layout.rs`,
+      `src/app/render/components/music.rs`,
+      `src/app/render/components/music_wide.rs`,
+      `src/app/render/components/music_wide_browser.rs`,
+      `src/app/render/components/music_wide_tracks.rs`,
+      `src/app/render/arrangements/music.rs`. Depends on 2.1g. Verify narrow,
+      wide, grouped, track, loading, and responsive states, check, and fmt.
+- [ ] 2.1i TV/widgets: publish TV-wide and shared widget geometry at their
+      owning natural checkpoints, preserving breakpoint and loading behaviour.
+      Boundary: `src/app/layout.rs`, `src/app/render/components/tv_wide.rs`,
+      `src/app/render/components/widgets.rs`,
+      `src/app/render/components/detail.rs`. Depends on 2.1h. Verify wide and
+      narrow TV/widget states, check, and fmt.
+- [ ] 2.1j Aggregate consolidation: merge the progressive checkpoint results
+      into the complete fresh `AppLayout`, retire deferred legacy computation,
+      and verify one authoritative computation for every aggregate field.
+      Publish the aggregate at its natural final checkpoint and atomically
+      install it; preserve zero-area no-mutation. Boundary:
+      `src/app/layout.rs`, `src/app/render/screens/root.rs`. Depends on 2.1a–i.
+      Verify full render characterization, aggregate zero-area tests, check, and
       fmt.
-- [ ] 2.1b Queue/pills family: move queue and pill geometry publication into the
-      paint-free seam without changing paint. Boundary:
-      `render/screens/queue.rs`, `render/screens/pills.rs`, queue/pill component
-      modules, and focused tests. Depends on 2.1a. Verify queue/pill tests and
-      check/fmt.
-- [ ] 2.1c Lists/albums family: migrate list, grouped-list, album, and inline
-      album geometry producers while retaining exact painter output. Boundary:
-      `list*.rs`, `album*.rs`, and focused characterization tests. Depends on
-      2.1b. Verify library/album tests and check/fmt.
-- [ ] 2.1d Feeds/home family: migrate Feeds and Home geometry publication and
-      preserve image handoff/loading behavior. Boundary: `feeds.rs`, `home*.rs`,
-      corresponding shell seam tests, and focused characterization tests.
-      Depends on 2.1c. Verify feeds/home tests and check/fmt.
-- [ ] 2.1e Music family: migrate ordinary, wide, browser, and track geometry
-      producers. Boundary: `music*.rs`, focused music tests, and required shell
-      seam helpers. Depends on 2.1d. Verify music/group tests and check/fmt.
-- [ ] 2.1f TV/widgets family: migrate TV-wide and shared widget geometry
-      producers, preserving breakpoint behavior. Boundary: `tv_wide.rs`,
-      `widgets.rs`, and focused TV/widget tests. Depends on 2.1e. Verify TV
-      tests and check/fmt.
-- [ ] 2.1g Final aggregate consolidation: publish the complete `AppLayout`
-      from the family results, retire deferred legacy field computation, and
-      verify one authoritative computation for every aggregate field. Boundary
-      is the union of the six family boundaries plus `layout.rs` as needed.
-      Depends on 2.1a–f. Verify full render characterization, check, fmt, and
-      the aggregate zero-area contract.
-- [ ] 2.2 After 2.1g, extract `paint_legacy_chrome` from the now
-      paint-free geometry pass, preserving all legacy painting initially.
-      Depends on 2.1f. Verify full nextest and fmt.
+- [ ] 2.2 After 2.1j, extract `paint_legacy_chrome` from the progressive
+      geometry orchestration, preserving all legacy painting initially. Depends
+      on 2.1j. Verify full nextest and fmt.
 - [ ] 2.3 Add `Model::draw_frame` in `shell_run.rs` (or `shell_draw.rs` if
       needed), preserving resize pushes and component paint order. Depends on
       2.2. Verify check and fmt.

@@ -8,33 +8,12 @@ current effect targets and current painter reachability, is authoritative**;
 where the component and legacy path would paint differently, that is a blocking
 discovery result, not license to pick the cleaner one.
 
-Current draw path:
-
-```
-startup:      terminal.draw(|f| self.app.render(f))          x2   (shell_run.rs:32, :77)
-steady state: terminal.draw(|f| {
-                  self.app.dim_backdrop_active = self.blocking_overlay_active();
-                  self.app.render(f);                    // (1) legacy: geometry + FULL surface paint
-                  ...push_*_workspace_content on resize...
-                  self.render_playback_component(f);     // (2) 11 component views paint on top
-                  self.render_home_component(f);
-                  ... 9 more ...
-                  self.render_overlay_stack(f);
-              })                                              (shell_run.rs:480-505)
-```
-
-`App::render` (`render/screens/root.rs:26`) writes a fresh local `AppLayout`,
-calls `render_main(...)` which paints tab bar + player chrome + the
-per-destination body + hero + status bar and fills `layout.main` / `layout.playback`
-/ `layout.tabs_area`, then swaps `layout` into `self.layout` atomically. Every
-`render_*_component` in step (2) then reads `self.app.layout.main.*` for its
-rect. So step (1) is doing two jobs:
-
-- **Geometry** — produce `AppLayout` (load-bearing; components depend on it).
-- **Surface paint** — draw tab bar, status bar, player chrome, and each
-  destination body. For a `migrated` destination the component in step (2)
-  redraws that body; the legacy paint is dead pixels overwritten the same
-  frame.
+The current draw path has three terminal draw sites. The steady-state site first
+runs `App::render` (which computes `AppLayout` and paints the full legacy base
+frame), then resize pushes, then mounted component views and the overlay stack.
+The two startup sites currently call `App::render` only. Components consume the
+installed layout, so layout publication is load-bearing even where legacy paint
+is redundant.
 
 ## Goals / Non-Goals
 
@@ -45,7 +24,7 @@ rect. So step (1) is doing two jobs:
 - Startup and steady-state draws go through one entry point and paint
   identically.
 - `AppLayout` and all geometry facts components read are still produced every
-  frame.
+  frame, through ordered progressive checkpoints.
 
 **Non-Goals:**
 - Migrating the narrow-TV, narrow-Music, or album-track legacy painters into
@@ -72,68 +51,51 @@ a legacy variant is, (e) the smallest compile-complete suppression units in
 dependency order. This mirrors D17's scout requirement and the
 `scout-remove-browser-cursor-scroll-mirror.md` precedent.
 
-**D2 — Stage the geometry/paint split by bounded surface family.**
+**D2 — Progressive geometry checkpoints, not one monolithic paint-free pass.**
 
-The original one-shot row 2.1 was widened by explicit user approval after the
-scout found 18 render modules and 110 layout assignments. Commit
-`94002d25b75e0f34df200c3def57939c6cffd156` is a preparatory partial extraction:
-it adds the seam but does not satisfy the geometry-only contract and must not
-be treated as completion. The remaining work is staged so each family moves
-its layout publication behind a paint-free seam, with focused compile and
-characterization gates before the next family.
+Each frame starts a fresh draft `AppLayout`. The 2.1a root/chrome work is the
+paint-free root/chrome checkpoint, not a claim that all geometry is available
+before `render_main`. The base-frame orchestrator advances ordered checkpoints:
+chrome result, progressive surface geometry checkpoints, and the sole legacy
+paint, followed by mounted component views. Pure arrangement geometry is
+published before its owning paint. Producers whose geometry is coupled to an
+authoritative load or paint operation publish immediately after that operation.
+Thus geometry-only is checkpoint-local, not a global property of the whole
+frame.
 
-The shared `AppLayout`/partial-result type dependency is `src/app/layout.rs`.
-The family boundaries are: (A) root/chrome, (B) queue/pills, (C)
-lists/albums, (D) feeds/home, (E) music surfaces, and (F) TV/widgets. `AppLayout`
-is the aggregate shared by all families, so root/chrome does not claim to
-compute or publish a complete aggregate prematurely. A family may touch only
-its named production modules and its tests; no family changes interaction,
-visual design, or later suppression behavior.
+Every checkpoint uses the existing zero-area-safe rules before mutation. A
+checkpoint's result is merged into the fresh draft, and the completed draft is
+atomically installed only after the frame's ordered work is complete. Each
+field has one authoritative computation. Until its checkpoint lands, a deferred
+field retains its existing legacy computation; no caller observes a partially
+installed layout.
 
-**D2 — Split `App::render` into `compute_frame_layout` + `paint_legacy_chrome`."},{
+The dependency-first order is: root/chrome foundation; card; shared hero
+arrangement; flat/letter lists; grouped albums; downstream queue and pills;
+feeds/home; music; TV/widgets; then aggregate consolidation. Each family owns
+only its named production modules and focused tests; it changes no interaction,
+visual design, or later suppression behaviour.
 
-`compute_frame_layout` owns a plain-data frame context/result seam and runs
-paint-free root/chrome geometry. In 2.1a it publishes only the typed
-root/chrome subresult; legacy aggregate fields for queue/list/card and other
-deferred families remain authoritative until their rows. The helper is
-zero-area-safe before every mutation. Each migrated field has one authoritative
-computation, while deferred fields retain their existing computation until
-migrated. `render_main` and chrome painters consume the migrated result rather
-than conflictingly recomputing it. Complete `AppLayout` publication and
-retirement of deferred legacy computation wait for the final family
-consolidation gate.
+**D3 — One base-frame orchestrator.**
 
-`paint_legacy_chrome(&mut self, f)` paints only what no component owns this
-frame: tab bar, status bar, player chrome (until `PlaybackComponent` is the sole
-painter — scout confirms), and each destination body whose component is **not**
-the active painter at the current breakpoint (narrow-TV / narrow-Music /
-album-track legacy variants, per-scout).
-
-Rejected alternative: keep one `render` and pass a "components own X, Y, Z this
-frame" mask. Rejected — the mask is just the breakpoint decision computed twice;
-cleaner to make `render_main`'s per-destination dispatch return early for a
-component-owned body.
-
-**D3 — One Model draw entry point.**
-
-`Model::draw_frame(&mut self, f)`:
+`Model::draw_frame(&mut self, f)` is the sole draw entry point:
 
 ```
 self.app.dim_backdrop_active = self.blocking_overlay_active();
-self.app.compute_frame_layout(f.area());   // geometry only
-self.app.paint_legacy_chrome(f);           // legacy chrome + sole-legacy bodies
+let chrome = self.app.compute_frame_layout(f.area()); // 2.1a checkpoint
+self.app.advance_geometry_checkpoints(chrome, f);     // ordered 2.1b–2.1j
+self.app.paint_legacy_chrome(f);                      // sole legacy paint
 // resize content pushes (unchanged)
 self.render_playback_component(f);
-... the existing 10 component painters ...
+... the existing mounted component views ...
 self.render_overlay_stack(f);
 ```
 
-Both startup `terminal.draw` calls and the steady-state one call
-`|f| self.draw_frame(f)`. The startup draws currently call `self.app.render(f)`
-directly (no component painters), so they paint a chrome-only first frame; after
-this change they paint the real first frame including components, which is
-strictly better (removes the startup flash where components appear on frame 2)
-and must be covered by a test.
+The exact helper names may follow the landed seam, but there is one base-frame
+orchestrator: chrome result + progressive checkpoints + sole legacy paint, then
+mounted component views. All three terminal draws use it. Startup therefore
+paints the same complete first frame and component loading affordances as the
+steady state, without the old chrome-only flash.
 
 **D4 — Per-surface suppression proves execution ownership.**
 
@@ -147,67 +109,78 @@ as a secondary check; the primary evidence is the painter never runs.
 
 **D5 — Sole-legacy-for-breakpoint surfaces are recorded, not hidden.**
 
-narrow-TV, narrow-Music, album-track: the component is not mounted / not the
-painter at that breakpoint (`keep-destination-components-mounted` keeps it
-mounted-but-inactive; it paints nothing — that change's D4). The legacy renderer
-is the only painter, which is correct. The ledger Notes cell for the row states
-"wide: component; narrow/<variant>: sole legacy renderer" so the endpoint is
-explicit and #614 can certify it.
+narrow-TV, narrow-Music, album-track: the component is not the painter at that
+breakpoint (`keep-destination-components-mounted` keeps it mounted-but-inactive;
+it paints nothing — that change's D4). The legacy renderer is the only painter,
+which is correct. The ledger Notes cell states "wide: component;
+narrow/<variant>: sole legacy renderer" so the endpoint is explicit and #614 can
+certify it.
 
 **D6 — Delete a legacy body renderer only after its last reader is re-homed.**
 
 Some legacy renderers produce `AppLayout` fields a component reads (D18's
 `movies_wide_right_area` → `is_wide_movies_active` → `set_wide_movies`). Order:
 suppress the paint → confirm the only remaining reason the renderer runs is to
-publish a geometry field → move that derivation into `compute_frame_layout` or
-the component (per D18 step 2) → delete the renderer. If the #611 browser change
-already did this for the Emby browser, this change only checks nothing regressed.
+publish a geometry field → move that derivation into the owning checkpoint or
+component (per D18 step 2) → delete the renderer. If #611 already did this for
+the Emby browser, this change only checks nothing regressed.
 
 ## Risks / Trade-offs
 
-- [Risk] A component reads an `AppLayout` field that only the *painting* half of
-  a legacy renderer sets (side-effect geometry), so moving to a paint-free
-  geometry pass drops it.
-  → Mitigation: D1 scout enumerates every `AppLayout` producer/reader before any
-  split. D2's `compute_frame_layout` is extracted by moving the geometry
-  statements, not rewriting them; a field that turns out to be set mid-paint is
-  a blocking discovery result to hoist explicitly, per D17.
-- [Risk] Image prefetch / handoff or scroll reconciliation is triggered as a
-  side effect of the legacy body paint and silently stops when suppressed.
-  → Mitigation: D1 scout item (c) targets exactly this; each suppression unit's
-  test asserts the prefetch/handoff still fires (the `keep-destination-components-mounted`
-  change already added content-refresh-on-re-point coverage to build on).
-- [Risk] Startup frame now paints components; a component not yet content-pushed
-  at startup paints an empty/placeholder body that the old chrome-only frame
-  did not show.
-  → Mitigation: startup already calls `fetch_home_at_startup` and sets
-  `home_content.loading = true` before the second draw; extend the startup test
-  to assert the first full frame shows loading affordances, not blank panes.
-- [Risk] Scope creep — "one painter per surface" invites migrating the narrow
-  variants.
-  → Mitigation: D5 is explicit; narrow variants stay legacy, recorded as sole
-  painter, out of scope.
+- **Side-effect geometry:** a load/paint-coupled producer could be moved too
+  early. The scout inventory and checkpoint-local publication rule preserve the
+  authoritative operation and its effects.
+- **Partial drafts:** a component could read a field before its checkpoint.
+  Fresh-frame drafts, dependency order, and atomic install prevent this.
+- **Startup content:** a component may initially show loading/placeholder
+  content. Startup already fetches Home and sets loading before the second draw;
+  the startup characterization must assert loading affordances rather than blank
+  panes.
+- **Scope creep:** D5 keeps narrow variants as explicit sole legacy painters.
 
 ## Migration Plan
 
 1. Land the D1 scout handoff (read-only, no code).
-2. D2/D3: extract `compute_frame_layout` + `paint_legacy_chrome`, add
-   `Model::draw_frame`, route all three draw sites through it — behaviour
-   identical (legacy still paints everything, components still overdraw).
-   Full test suite + startup test green.
-3. Per suppression unit from the scout's dependency order (D4): suppress one
-   `migrated` body painter, add the execution-ownership check, retest that
-   surface. One unit ≈ one surface × breakpoint.
-4. D6: re-home any straggler geometry reader, delete the dead legacy renderer.
-5. D5: ledger Notes updates; ADR 0022 wording checked (reconciled under #614).
-6. Final gate: `rtk cargo check/nextest/clippy/fmt`, `rtk ast-grep scan`,
-   `rtk make check-code-file-lines`.
+2. Land 2.1a's root/chrome checkpoint (complete/landed). It creates the fresh
+   draft and typed chrome result while deferred families retain their existing
+   authoritative computation.
+3. Land 2.1b through 2.1j in dependency order. Each row publishes only its
+   owning geometry at its natural checkpoint, retaining load/paint-coupled
+   publication after the authoritative operation, and has focused gates.
+4. Extract `paint_legacy_chrome` and add the sole `Model::draw_frame` entry
+   point only after progressive geometry is consolidated; preserve legacy paint
+   initially, resize pushes, and component order.
+5. Per suppression unit from the scout's order (D4), suppress one migrated body
+   painter and add the execution-ownership check. Preserve narrow sole-legacy
+   variants.
+6. D6: re-home straggler geometry readers and delete dead legacy renderers.
+7. Update ledger notes and run final gates: check/nextest/clippy/fmt,
+   ast-grep, code-file-lines, and strict OpenSpec validation.
 
 Rollback is a plain revert per unit — no persisted state touched.
 
-## Open Questions
+## Acceptance criteria
 
-- Is `PlaybackComponent` already the sole painter of the player chrome, or does
-  `render_main` still paint it underneath? Resolved by the D1 scout before any
-  split; does not change the approach (either way the chrome paint moves to
-  `paint_legacy_chrome` or is suppressed), only the unit count.
+- Every frame starts a fresh draft `AppLayout`; root/chrome is the 2.1a
+  paint-free checkpoint, later checkpoints are ordered, and installation is
+  atomic with zero-area no-mutation preserved.
+- Pure arrangement geometry is published before its owning paint; load/paint-
+  coupled producers publish after their authoritative operation; geometry-only
+  is checkpoint-local.
+- One base-frame orchestrator runs chrome result, progressive checkpoints, the
+  sole legacy paint, then mounted component views, and all three terminal draws
+  use it.
+- Each checkpoint has one authoritative computation and focused characterization
+  coverage for loading, empty, populated, responsive, image/cache, and handoff
+  states applicable to its family.
+- 2.1b specifically preserves the card image cache `cache`/`size_for`/`fetch`
+  single path across all rendering states; no state bypasses the authoritative
+  operation.
+- 2.1f consumes the card and pills checkpoints and does not recompute either
+  geometry; its queue/pills output remains behaviour-preserving.
+- Migrated surfaces have exactly one painter at their active breakpoint, with
+  execution-ownership proof; narrow TV/Music and album-track remain explicitly
+  sole legacy variants.
+- Startup and steady-state frames are equivalent in draw sequencing, and the
+  complete gate remains green: check, nextest, clippy, fmt, ast-grep,
+  code-file-lines, and strict OpenSpec validation.
