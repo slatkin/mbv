@@ -45,7 +45,7 @@ fn render_list_to_string(app: &mut App, layout: &mut LayoutMain) -> String {
     let backend = TestBackend::new(60, 8);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        app.render_list(f, Rect::new(0, 0, 60, 8), true, layout);
+        app.render_list(f, Rect::new(0, 0, 60, 8), true, layout, &mut 0);
     })
     .unwrap();
     buffer_to_string(&term)
@@ -148,7 +148,7 @@ fn render_list_term(
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        app.render_list(f, Rect::new(0, 0, width, height), true, layout);
+        app.render_list(f, Rect::new(0, 0, width, height), true, layout, &mut 0);
     })
     .unwrap();
     term

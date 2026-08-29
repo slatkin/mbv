@@ -585,7 +585,26 @@ impl App {
                         let ctx = self.wide_tv_render_ctx(lib_idx, focused);
                         ctx.publish_geometry(area, layout);
                     }
-                    self.render_list(f, area, focused, layout);
+                    // The narrow legacy render path owns the per-frame scroll
+                    // write-back (task 4.3, W): seed from the level's scroll
+                    // (the resting viewport this path persists) and let
+                    // `render_list` write the landed offset back into it.
+                    // The field write survives here, at the caller, until
+                    // 4.4/4.5 move the narrow surface's scroll onto its own
+                    // owner; the painter itself no longer reaches into
+                    // `BrowseLevel`.
+                    let mut scroll = self
+                        .libs
+                        .get(lib_idx)
+                        .and_then(|lib| lib.nav_stack.last())
+                        .map(|lvl| lvl.scroll)
+                        .unwrap_or(0);
+                    self.render_list(f, area, focused, layout, &mut scroll);
+                    if let Some(lib_idx) = self.tab.emby_library_index() {
+                        if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                            level.scroll = scroll;
+                        }
+                    }
                 }
             }
         }

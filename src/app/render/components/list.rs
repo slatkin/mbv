@@ -63,12 +63,17 @@ impl App {
 
     /// Renders the Continue/library list items into `area`.
     /// The title header is now drawn in the top-of-screen FOAM bar.
+    /// `scroll` is the narrow legacy render path's viewport write-back
+    /// target (task 4.3, W): `final_offset` is written into it so the
+    /// caller owns where the per-frame scroll lands, never a direct
+    /// `BrowseLevel.scroll` write from inside the painter.
     pub(in crate::app::render) fn render_list(
         &mut self,
         f: &mut Frame,
         area: Rect,
         focused: bool,
         layout: &mut LayoutMain,
+        scroll: &mut usize,
     ) {
         if area.height == 0 {
             return;
@@ -579,12 +584,10 @@ impl App {
         }
 
         // Persist the scroll offset so the viewport is remembered across frames.
-        // tab is always a Library here (tab == Home uses render_home_list).
-        if let Some(lib_idx) = self.tab.emby_library_index() {
-            if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                level.scroll = final_offset;
-            }
-        }
+        // tab is always a Library here (tab == Home uses render_home_list). The
+        // write-back target is owned by the caller (the narrow legacy render
+        // path); render_list never touches BrowseLevel.scroll (task 4.3, W).
+        *scroll = final_offset;
     }
 }
 

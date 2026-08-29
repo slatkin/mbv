@@ -22,7 +22,7 @@ fn render_list_term(
             Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
             Rect::new(0, 0, width, height),
         );
-        app.render_list(f, Rect::new(0, 0, width, height), true, layout);
+        app.render_list(f, Rect::new(0, 0, width, height), true, layout, &mut 0);
     })
     .unwrap();
     term
