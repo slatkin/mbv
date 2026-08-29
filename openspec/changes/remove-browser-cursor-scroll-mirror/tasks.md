@@ -65,35 +65,30 @@
 - [ ] 2.4 Run `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace
       --all-targets`, `rtk ast-grep scan` — all green.
 
-## 3. Underpaint detach (D18 step 2 / D3)
+## 3. Browser-wide input isolation (D18 step 2 / D3)
 
-- [ ] 3.1 Replace `set_wide_movies`'s `wide` input
-      (`App::layout.main.is_wide_movies_active()`, sourced from
-      `movies_wide_right_area`) with a component-owned derivation from the
-      component's own `BrowserKey` kind (Movies/HomeVideos) plus its
-      painted geometry width at the `shared_hero_presentation`/
-      `wide_library_panes` breakpoint (`src/app/components/browser.rs`,
-      `src/app/shell_browser.rs`). Verify: `rtk cargo nextest run -p mbv
-      emby_browser` passes with the wide/narrow layout selection unchanged
-      for the same terminal widths as before (parity, not improvement —
-      D17's parity-authority rule).
-- [ ] 3.2 Delete the Emby-specific legacy wide-renderer functions that
-      populated `movies_wide_right_area` for the generic/Movies/HomeVideos
-      browser, now that this component is their last reader, and remove
-      `movies_wide_right_area` production for this surface. Verify:
-      `rtk cargo check -p mbv` compiles with no remaining reader of the
-      deleted functions for this surface; `rtk ast-grep scan` clean.
-- [ ] 3.3 Confirm the shared `self.app.render(f)` legacy-underpaint call in
-      `shell_run.rs` is untouched by this unit (that call remains scoped to
-      issue #613/`resolve-migrated-surface-correctness`, sequenced after
-      this change per design.md D3). Verify: `git diff` for this unit
-      touches no code path in `shell_run.rs` beyond what units 1-2 already
-      changed.
-- [ ] 3.4 Update `docs/architecture/interactive-surface-ledger.md`'s
-      Library/Browser row to record the mirror's removal and the
-      underpaint-detach completion. Verify: row content matches the
-      landed state (no remaining per-frame or two-way interaction-state
-      sync for this surface).
-- [ ] 3.5 Run `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
-      `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan` —
-      full green as the change's final verification gate.
+- [ ] 3.1 Replace `set_wide_movies`'s `wide` input from
+      `App::layout.main.is_wide_movies_active()` with a component-owned
+      derivation from the component's own `BrowserKey` kind
+      (Movies/HomeVideos) plus painted geometry at the existing
+      `shared_hero_presentation`/`wide_library_panes` breakpoint
+      (`src/app/components/browser.rs`, `src/app/shell_browser.rs`). Verify:
+      `rtk cargo nextest run -p mbv emby_browser` preserves the current
+      wide/narrow layout selection and navigation stride at the same terminal
+      widths (parity, not improvement).
+- [ ] 3.2 Confirm the shared `movies_wide_right_area` producer/readers,
+      `is_wide_movies_active()`, and legacy-body deletion remain untouched:
+      their cross-surface geometry cleanup is scoped to issue #613's
+      `remove-migrated-surface-underpaint` change. Verify: this unit's diff
+      contains no removal of those shared symbols and no removal of
+      `self.app.render(f)` in `shell_run.rs` (the permitted teardown scroll
+      capture from unit 2 is not underpaint work).
+- [ ] 3.3 Update `docs/architecture/interactive-surface-ledger.md`'s
+      Library/Browser row to record cursor/scroll mirror removal and
+      Browser-wide input isolation without claiming shared-underpaint removal.
+      Verify: the row matches the landed component ownership boundary and
+      names #613 as the owner of remaining shared-underpaint cleanup.
+- [ ] 3.4 Run `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
+      `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`, and
+      `openspec validate remove-browser-cursor-scroll-mirror --strict`.
+      Report known baseline diagnostics separately; no new violations.

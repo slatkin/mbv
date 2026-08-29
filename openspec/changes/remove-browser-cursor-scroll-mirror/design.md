@@ -3,13 +3,13 @@
 `BrowserComponent` (`src/app/components/browser.rs`) paints the generic/
 Movies/HomeVideos Emby browser and already routes every claimed key through a
 typed `ShellRequest` — this is a D14 stage-1-and-most-of-stage-2 surface, not
-a raw-forwarding one. What remains is the last-mile interaction-state pin
-D17 exists to close: see the scout handoff at
-`openspec/handoffs/scout-remove-browser-cursor-scroll-mirror.md` for the full
-symbol-level inventory (inputs to the mirror, component-local vs. shell-owned
-state, choke points, the ~37 `nav_stack` readers, and this document's ordering
-resolution, which that handoff also records). This design summarizes the
-decisions the handoff's discovery supports; it does not repeat the inventory.
+a raw-forwarding one. The prior design cited
+`openspec/handoffs/scout-remove-browser-cursor-scroll-mirror.md`, but that
+artifact is absent. Reconciliation established the bounded contract directly:
+this change owns only removal of the Browser component's shell-projected wide
+input; the shared `movies_wide_right_area` producer/readers and any
+legacy-underpaint cleanup are cross-surface geometry work owned by
+`remove-migrated-surface-underpaint` (#613).
 
 `App::move_lib_cursor_rows` / `move_lib_cursor` / `jump_lib_cursor`
 (`src/app/lib_cursor_actions.rs`) are effectful, not setters — pagination
@@ -36,10 +36,9 @@ reader is a separate, much larger effort than this issue scopes.
 - Preserve pagination, position persistence, and navigation-marking side
   effects byte-for-byte (parity is the active production path, per D17 — not
   an opportunity to change behavior).
-- Finish D18 step 2 for this surface: the wide-Movies layout signal moves
-  from the legacy renderer's `movies_wide_right_area` output to a
-  component-owned derivation, and the Emby-specific legacy wide-renderer
-  functions this component was the last reader of are deleted.
+- Finish the Browser-local portion of D18 step 2: its wide-Movies/HomeVideos
+  input is derived from `BrowserKey` kind plus painted geometry at the existing
+  breakpoint, rather than projected from `App::layout`.
 
 **Non-Goals:**
 - Deleting `BrowseLevel.cursor`/`.scroll` as fields, or re-homing any of the
@@ -47,8 +46,12 @@ reader is a separate, much larger effort than this issue scopes.
   pills, search, music grouping, context menu/shuffle for non-Browser
   surfaces).
 - Removing the shared `self.app.render(f)` legacy-underpaint call in
-  `shell_run.rs` — that is issue #613 (`resolve-migrated-surface-correctness`)
-  item 3, out of scope here; see "Ordering resolution" below.
+  `shell_run.rs` — that is issue #613 (`remove-migrated-surface-underpaint`),
+  out of scope here; see "Ordering resolution" below.
+- Deleting `movies_wide_right_area`, `is_wide_movies_active()`, their shared
+  cross-surface readers, or a legacy wide renderer. The named Emby-specific
+  renderer is already absent; the remaining geometry field cleanup belongs to
+  #613's paint-free geometry pass.
 - Any change to mouse routing (accepted-broken for the alpha, D16) or to the
   four typed selected-item effects, context menu, shuffle, refresh/rescan,
   back navigation, or letter-pill cycling, none of which carry a cursor
@@ -121,31 +124,27 @@ exists to remove, not introduce. Keeping `BrowseLevel` as the one persisted
 copy and changing *when* it is written (choke points, not every frame) is the
 smaller, single-authority change.
 
-### D3 — Ordering resolution: this change vs. issue #613
+### D3 — Ordering resolution: Browser input isolation before #613 geometry cleanup
 
-The issue frames D17 stage 5 ("detach component geometry/content from legacy
-underpaint, then delete that surface's legacy renderer") against issue #613's
-stated sequencing ("after the relevant ownership slices of #611") as
-apparently circular. It is not, once "underpaint" is split into two
-independent layers (full reasoning in the scout handoff §6):
+D17's "detach component geometry/content from legacy underpaint" has two
+layers. The Browser-local layer is a prerequisite to #613, while the shared
+geometry and paint layer is #613 itself:
 
-1. **This change's scope**: the Browser's own dependency on
-   `movies_wide_right_area`, populated by the Emby-specific legacy
-   wide-renderer functions. D18 step 2 already commits this change to derive
-   "wide" from the component's own `BrowserKey` kind + geometry width and
-   delete those Emby-specific functions once they have no remaining reader.
-   That is a bounded, surface-local deletion this change finishes.
-2. **Issue #613's scope**: the single shared `self.app.render(f)` call in
-   `shell_run.rs` that paints the legacy surface beneath *every* migrated
-   component. It stays, because TV/Music/album-detail branches still depend
-   on it. Removing that call is #613 item 3, and #613 is correctly sequenced
-   after #611's slices (including this one) precisely because it cannot run
-   until no migrated surface — including the Browser — still depends on
-   anything the legacy base frame populates.
+1. **This change's scope**: derive the Browser's wide mode from its own
+   `BrowserKey` kind and painted geometry at the existing breakpoint, and stop
+   projecting `App::layout.main.is_wide_movies_active()` into the component.
+   This is a bounded, surface-local input-ownership change that preserves the
+   visible wide/narrow result.
+2. **Issue #613's scope**: retain or replace shared geometry facts such as
+   `movies_wide_right_area` while extracting a paint-free geometry pass, then
+   delete the shared facts/readers and a legacy body renderer only after all
+   of their readers are re-homed. It exclusively owns the shared
+   `self.app.render(f)` underpaint removal.
 
-This change performs step 1 and explicitly does not touch step 2. #613's
-"after #611" sequencing is satisfied, not contradicted, once this change
-lands.
+The earlier task's supposed Emby-specific renderer deletion is obsolete: that
+renderer is already absent. Keeping its remaining field/readers in #613 avoids
+turning a Browser-only migration into a cross-surface geometry rewrite. #613's
+"after #611" ordering is satisfied once this input isolation lands.
 
 ## Risks / Trade-offs
 
@@ -159,15 +158,12 @@ lands.
   read the component's live `scroll()` once before the app exits, matching
   the existing "final burst never lost" contract `library_position_state.rs`
   documents for cursor.
-- [D18 step 2 derivation drifting from the still-active legacy wide renderer
-  during development] → D18 already forbids computing the derivation before
-  this change's own underpaint-detach unit lands last (after D1/D2 are
-  proven stable); this design keeps that ordering.
-- [Unrelated `nav_stack` readers accidentally treated as in-scope during
-  implementation] → the scout handoff §5 enumerates them by concern
-  (pagination, other surfaces, persistence, letter pills, music grouping,
-  search) precisely so a writer unit can recognize "not this change" quickly
-  instead of re-discovering it mid-implementation.
+- [D18 step 2 derivation drifting from the existing wide/narrow result]
+  → it lands only after D1/D2 and reuses the existing component breakpoint;
+  focused wide/narrow navigation tests prove parity.
+- [Shared geometry cleanup accidentally absorbed into this change] → #613 owns
+  `movies_wide_right_area`, its cross-surface readers, and legacy-body
+  deletion; this change's unit has a zero-touch boundary for those symbols.
 
 ## Migration Plan
 
@@ -178,9 +174,9 @@ compile-complete and mergeable:
 1. Cursor effect re-homing (D1).
 2. Scroll ownership at navigation choke points (D2) — depends on 1 (reuses
    the same choke-point pattern and request shape).
-3. Underpaint detach (D18 step 2 / D3) — depends on 1 and 2 landing first,
-   per D18's explicit prohibition on computing the wide-layout derivation
-   ahead of stable ground.
+3. Browser-wide input isolation (D18 step 2 / D3) — depends on 1 and 2
+   landing first. It derives the component's wide mode locally and leaves
+   shared geometry/underpaint cleanup to #613.
 
 No rollback beyond a normal revert; no feature flag (interaction-state
 ownership is not user-configurable).

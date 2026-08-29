@@ -41,6 +41,13 @@ only at the discrete event where the visible level changes.
 - **AND** the shell Model performs the effect; the component neither calls the
   Player/Service nor mutates the canonical queue
 
+#### Scenario: A component-owned cursor drives a shell-owned effect without a round trip
+
+- **WHEN** the Settings/Services component's local cursor determines which setting or service entry the user activated
+- **THEN** the component emits `SettingsIntent::Activate` or `ServiceRequest::ActivateService` carrying that cursor as a value
+- **AND** the shell resolves the target and calls the shell-side handler with that resolved value directly
+- **AND** no `App` field stores the cursor for the handler to read back
+
 #### Scenario: A local movement that also persists carries its resolved value once
 
 - **WHEN** the user moves the cursor in a component whose movement also

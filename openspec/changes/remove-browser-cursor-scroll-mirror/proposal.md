@@ -34,17 +34,15 @@ the field cannot simply move to the component.
   (`select_item`'s folder push, `go_back`'s pop, tab switch away), preserving
   folder-in/folder-out position restoration without a per-frame paint-coupled
   write.
-- Detach the component's wide-Movies/HomeVideos layout signal from the
-  legacy wide renderer's `movies_wide_right_area` output (D18 step 2): derive
-  "wide" from the component's own `BrowserKey` kind plus its painted
-  geometry width instead of `App::layout.main.is_wide_movies_active()`, then
-  delete the now-unread Emby-specific legacy wide-renderer functions and
-  `movies_wide_right_area` production for this surface. Does **not** remove
-  the shared `self.app.render(f)` legacy-underpaint call in `shell_run.rs` —
-  that remains scoped to issue #613 (`resolve-migrated-surface-correctness`),
-  which is correctly sequenced after this change because other still-legacy
-  surfaces (TV, Music) depend on the same base frame. See `design.md` for the
-  full ordering resolution.
+- Detach the Browser component's wide-Movies/HomeVideos *input* from
+  `App::layout.main.is_wide_movies_active()` (D18 step 2): derive "wide" from
+  the component's own `BrowserKey` kind plus its painted geometry width at the
+  existing breakpoint. This change does not delete shared
+  `movies_wide_right_area` producers/readers or a legacy renderer: the named
+  Emby-specific renderer is already absent, and the remaining cross-surface
+  geometry cleanup belongs to issue #613's
+  `remove-migrated-surface-underpaint` change. That change also exclusively
+  owns removal of the shared `self.app.render(f)` legacy-underpaint call.
 - No behavior change to the four typed selected-item effects
   (`BrowserActivate`/`BrowserPlay`/`BrowserEnqueue`/`BrowserToggleWatched`),
   context menu, shuffle, refresh/rescan, back navigation, or letter-pill
@@ -76,5 +74,6 @@ the field cannot simply move to the component.
   shape are unaffected.
 - `docs/architecture/interactive-surface-ledger.md`'s Library/Browser row
   updates to record the mirror's removal.
-- Read-only scout handoff (D17) already recorded at
-  `openspec/handoffs/scout-remove-browser-cursor-scroll-mirror.md`.
+- The prior D17 handoff reference is absent from the repository; the
+  reconciled design records the bounded Browser-wide reader inventory and the
+  #613 ownership boundary directly instead of relying on that missing artifact.
