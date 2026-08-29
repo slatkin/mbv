@@ -450,7 +450,7 @@ impl App {
                 let mut order: Vec<usize> = (0..last.items.len()).collect();
                 order
                     .sort_by_key(|&i| super::render::initial_group_artist_sort_key(&last.items[i]));
-                last.cursor = order[0];
+                last.set_resting_cursor(order[0]);
             }
         }
     }

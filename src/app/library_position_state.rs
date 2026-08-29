@@ -29,7 +29,7 @@ impl App {
             .get_mut(lib_idx)
             .and_then(|lib| lib.nav_stack.last_mut())
         {
-            level.scroll = scroll;
+            level.set_resting_scroll(scroll);
             self.save_default_library_position(lib_idx);
         }
     }

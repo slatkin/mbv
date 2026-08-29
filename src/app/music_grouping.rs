@@ -281,6 +281,7 @@ impl App {
         let Some(level) = lib.nav_stack.last_mut() else {
             return;
         };
+        let resting_cursor = level.resting().cursor();
         let Some(state) = level.music_grouping.as_mut() else {
             return;
         };
@@ -293,20 +294,22 @@ impl App {
         let anchor_album_id = state
             .settled
             .is_some()
-            .then(|| level.items.get(level.cursor).map(|item| item.id.clone()));
+            .then(|| level.items.get(resting_cursor).map(|item| item.id.clone()));
         let mut catalog = build_grouped_album_catalog(&level.items, &candidate.resolved);
         catalog.revision = candidate.revision;
         catalog.parent_id = candidate.parent_id;
         state.settled = Some(catalog);
         let catalog = state.settled.as_ref().expect("catalog just inserted");
-        if let Some(Some(id)) = anchor_album_id {
-            if let Some(&pos) = catalog.id_to_entry.get(&id) {
-                level.cursor = catalog.entries[pos].album_index;
-            } else if let Some(first) = catalog.entries.first() {
-                level.cursor = first.album_index;
-            }
-        } else if let Some(first) = catalog.entries.first() {
-            level.cursor = first.album_index;
+        let anchored_cursor = match anchor_album_id {
+            Some(Some(id)) => catalog
+                .id_to_entry
+                .get(&id)
+                .map(|&pos| catalog.entries[pos].album_index)
+                .or_else(|| catalog.entries.first().map(|first| first.album_index)),
+            _ => catalog.entries.first().map(|first| first.album_index),
+        };
+        if let Some(cursor) = anchored_cursor {
+            level.set_resting_cursor(cursor);
         }
     }
 }

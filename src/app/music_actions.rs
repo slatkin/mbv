@@ -48,12 +48,12 @@ impl App {
         let cur = self.libs[lib_idx]
             .nav_stack
             .last()
-            .map(|l| l.cursor)
+            .map(|l| l.resting().cursor())
             .unwrap_or(0);
         // Wrap-around navigation (unlike seasons which clamp).
         let new_cursor = (cur as i64 + delta).rem_euclid(n as i64) as usize;
         if let Some(group_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-            group_lvl.cursor = new_cursor;
+            group_lvl.set_resting_cursor(new_cursor);
         }
 
         // Collect new group's identity.
@@ -106,7 +106,7 @@ impl App {
         }
         self.libs[lib_idx].nav_stack.pop();
         if let Some(group_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-            group_lvl.cursor = group_cursor;
+            group_lvl.set_resting_cursor(group_cursor);
         }
         let (group_id, group_name) = self.libs[lib_idx]
             .nav_stack
@@ -193,8 +193,8 @@ impl App {
         let sort_order = lvl.sort_order.clone();
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.letter_filter = Some(filter.clone());
-            last.cursor = 0;
-            last.scroll = 0;
+            last.set_resting_cursor(0);
+            last.set_resting_scroll(0);
             last.loading = true;
             last.items.clear();
             last.all_items = None;
@@ -251,7 +251,7 @@ impl App {
         if !should_push {
             return;
         }
-        let cur = self.libs[lib_idx].nav_stack[0].cursor;
+        let cur = self.libs[lib_idx].nav_stack[0].resting().cursor();
         let n = self.libs[lib_idx].nav_stack[0].items.len();
         if cur >= n {
             return;
@@ -325,7 +325,7 @@ impl App {
                 .libs
                 .get(lib_idx)
                 .and_then(|lib| lib.nav_stack.last())
-                .and_then(|l| l.items.get(l.cursor))
+                .and_then(|l| l.items.get(l.resting().cursor()))
                 .map(|g| (g.id.clone(), g.name.clone()))
                 .unwrap_or_default();
             if !group_id.is_empty() {

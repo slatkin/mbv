@@ -241,7 +241,7 @@ impl App {
                 if let (Some(folder_id), Some(parent)) = (child_folder_id, lib.nav_stack.last_mut())
                 {
                     if let Some(idx) = parent.items.iter().position(|i| i.id == folder_id) {
-                        parent.cursor = idx;
+                        parent.set_resting_cursor(idx);
                     }
                 }
                 true
@@ -275,7 +275,7 @@ impl App {
                     (child_id2, self.libs[lib_idx].nav_stack.last_mut())
                 {
                     if let Some(idx) = parent.items.iter().position(|i| i.id == fid) {
-                        parent.cursor = idx;
+                        parent.set_resting_cursor(idx);
                     }
                 }
             }

@@ -53,7 +53,7 @@
       `go_back`'s parent-cursor re-anchor (`actions_navigation.rs:239-278`),
       and prefetch triggering at the cursor threshold
       (`library_search_actions.rs:240`). Verify: passes pre-change.
-- [ ] 4.2 Introduce the resting-position type and move `BrowseLevel`'s
+- [x] 4.2 Introduce the resting-position type and move `BrowseLevel`'s
       persistence-facing uses onto it, leaving `cursor`/`scroll` in place for
       now. Verify: `rtk cargo check -p mbv`; 4.1's tests still pass.
 - [ ] 4.3 Re-point every outcome-1 reader from 1.1 to take the resolved value as

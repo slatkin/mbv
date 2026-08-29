@@ -82,7 +82,7 @@ impl App {
                 .libs
                 .get(lib_idx)
                 .and_then(|lib| lib.nav_stack.last())
-                .and_then(|l| l.items.get(l.cursor))
+                .and_then(|l| l.items.get(l.resting().cursor()))
                 .map(|s| (s.id.clone(), s.name.clone()))
                 .unwrap_or_default();
             if !season_id.is_empty() {
