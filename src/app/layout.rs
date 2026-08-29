@@ -84,7 +84,11 @@ pub(crate) struct LayoutMain {
     /// layout). The mouse handler adds this (instead of `lvl.scroll`) to
     /// `click_y` to index into `left_item_rows`.
     pub left_screen_offset: usize,
+    /// Grouped-album row targets for visible packed screen rows. The grouped
+    /// display plan publishes these before any row or detail painter.
     pub left_row_targets: Vec<Option<LibraryRowTarget>>,
+    /// Source-item order published by the authoritative grouped display plan
+    /// (and identity order for ungrouped lists).
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
     /// The full area `App::render_home_list` was given (hero + pills + list,
