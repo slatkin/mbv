@@ -146,7 +146,11 @@ fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
     app.libs.push(LibraryTab::new(movies_item));
     app.tab = TabSelection::EmbyLibrary(0);
 
-    app.enqueue_selected(Some(0));
+    // `enqueue_selected` was deleted in task 4.3, R1 (item is resolved at
+    // the caller); the empty nav stack resolves to the library root, exactly
+    // what the context-menu Enqueue arm now does.
+    let item = app.libs[0].library.clone();
+    app.enqueue_lib_item(0, item);
 
     // `PlayerTab`/`PlaybackQueue`/`EmbyItem` implement neither
     // `PartialEq` nor `Debug` in this codebase (confirmed: `EmbyItem`

@@ -101,7 +101,10 @@ fn rejected_route_enqueue_leaves_tracking_active() {
     app.tab = TabSelection::EmbyLibrary(0);
     app.remote_tracker = Some(tracking_stub());
 
-    app.enqueue_selected(Some(0));
+    // `enqueue_selected` was deleted in task 4.3, R1; resolve the library
+    // root exactly as the context-menu Enqueue arm does.
+    let item = app.libs[0].library.clone();
+    app.enqueue_lib_item(0, item);
 
     assert!(app.remote_tracker.is_some());
     assert!(app.status.contains("Can't mix libraries in a routed queue"));

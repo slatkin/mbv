@@ -127,7 +127,11 @@ impl App {
         self.layout.main.queue_area.height.saturating_sub(1).max(1) as usize
     }
 
-    pub(super) fn current_lib_item(&self, lib_idx: usize) -> Option<EmbyItem> {
+    /// Resolve the item the library panel currently selects. `cursor` is the
+    /// resolved index the caller owns (component-resolved for the generic
+    /// browser, or the App nav-level cursor on the legacy context-menu/mouse
+    /// paths) — never re-read from `BrowseLevel` (task 4.3, R1).
+    pub(super) fn current_lib_item(&self, lib_idx: usize, cursor: usize) -> Option<EmbyItem> {
         let lib = self.libs.get(lib_idx)?;
         if lib.nav_stack.is_empty() {
             Some(lib.library.clone())
@@ -136,7 +140,7 @@ impl App {
                 return self.selected_feed_home_video_item(lib_idx);
             }
             let lvl = lib.nav_stack.last()?;
-            lvl.items.get(lvl.cursor).cloned()
+            lvl.items.get(cursor).cloned()
         }
     }
 

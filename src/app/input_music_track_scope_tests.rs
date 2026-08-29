@@ -53,7 +53,9 @@ fn current_lib_item_in_list_mode_returns_album_folder_not_a_track() {
     let mut app = make_music_album_app();
     push_tracks(&mut app, "album-1", 3);
 
-    let item = app.current_lib_item(0);
+    // `current_lib_item` takes the resolved cursor (task 4.3, R1); the
+    // fixture sits at album-level cursor 0.
+    let item = app.current_lib_item(0, 0);
 
     let item = item.expect("current_lib_item should resolve the selected album");
     assert_eq!(item.id, "album-1");

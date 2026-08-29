@@ -36,7 +36,15 @@ impl App {
                     let index = self.displayed_queue().queue_cursor;
                     self.dispatch(super::action::Command::QueuePlayCursor(index));
                 } else if let Some(lib_idx) = lib_idx {
-                    self.select(lib_idx);
+                    let cursor = self
+                        .libs
+                        .get(lib_idx)
+                        .and_then(|lib| lib.nav_stack.last())
+                        .map(|l| l.cursor)
+                        .unwrap_or(0);
+                    if let Some(item) = self.current_lib_item(lib_idx, cursor) {
+                        self.select_item(lib_idx, item);
+                    }
                 }
             }
             Some(ContextAction::PlayQueue(index)) => {
@@ -65,8 +73,16 @@ impl App {
                     if let Some(item) = cw_item {
                         self.cw_enqueue(item);
                     }
-                } else {
-                    self.enqueue_selected(lib_idx);
+                } else if let Some(lib_idx) = lib_idx {
+                    let cursor = self
+                        .libs
+                        .get(lib_idx)
+                        .and_then(|lib| lib.nav_stack.last())
+                        .map(|l| l.cursor)
+                        .unwrap_or(0);
+                    if let Some(item) = self.current_lib_item(lib_idx, cursor) {
+                        self.enqueue_lib_item(lib_idx, item);
+                    }
                 }
             }
             Some(ContextAction::EnqueueFolder(item)) => self.do_enqueue_folder((*item).clone()),
@@ -286,22 +302,12 @@ impl App {
         }
     }
 
-    pub(super) fn toggle_watched(&mut self, lib_idx: usize) {
-        let Some(item) = self.current_lib_item(lib_idx) else {
-            return;
-        };
-        self.toggle_watched_item(lib_idx, item);
-    }
-
-    /// Ctrl+W / context-menu watched toggle for an explicitly supplied
-    /// library item (task 5.3d, Emby browser effect decoupling): the shared
-    /// tail behind the legacy `toggle_watched` (which resolves
-    /// `current_lib_item` and delegates here) and the `BrowserComponent`
-    /// Ctrl+W route (which supplies its own selected item), so the effect
-    /// acts on the supplied item directly, never on a re-read App cursor.
-    /// Folder/audio guards, mark played/unplayed API behavior,
-    /// unplayed-only/feed-home-video removal, refresh, and
-    /// unavailable-Service/error toasts are preserved exactly. The
+    /// `toggle_watched`'s cursor-resolving wrapper has been deleted (task
+    /// 4.3, R1): the live path is the item-taking
+    /// `toggle_watched_item(lib_idx, item)` the shell routes
+    /// `BrowserToggleWatched` through. Folder/audio guards, mark played/
+    /// unplayed API behavior, unplayed-only/feed-home-video removal, refresh,
+    /// and unavailable-Service/error toasts are preserved exactly. The
     /// unplayed-only removal previously used `lvl.cursor` (the App cursor,
     /// which the legacy call always resolves to the toggled item); it now
     /// targets the supplied item's identity — identical in the legacy flow,
@@ -443,7 +449,15 @@ impl App {
         let current_item = match (self.effective_panel_focus(), self.tab) {
             (crate::app::PanelFocus::Library, crate::app::TabSelection::Home) => cw_item,
             (crate::app::PanelFocus::Library, crate::app::TabSelection::EmbyLibrary(lib_idx)) => {
-                tracked_item.or_else(|| self.current_lib_item(lib_idx))
+                tracked_item.or_else(|| {
+                    let cursor = self
+                        .libs
+                        .get(lib_idx)
+                        .and_then(|lib| lib.nav_stack.last())
+                        .map(|l| l.cursor)
+                        .unwrap_or(0);
+                    self.current_lib_item(lib_idx, cursor)
+                })
             }
             (
                 crate::app::PanelFocus::Library,

@@ -226,7 +226,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     });
 
     assert_eq!(
-        app.current_lib_item(0).as_ref().map(|i| i.id.as_str()),
+        app.current_lib_item(0, 0).as_ref().map(|i| i.id.as_str()),
         Some("movie-2")
     );
 

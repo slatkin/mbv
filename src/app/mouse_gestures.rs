@@ -161,7 +161,12 @@ impl App {
         if self.is_viewing_album_folders(lib_idx) {
             self.activate_album_folder_row(lib_idx);
         } else if !self.activate_selected_series(lib_idx) {
-            self.select(lib_idx);
+            // The double-click already landed `target` as the level cursor;
+            // resolve the item at it and activate via the item-taking tail
+            // (task 4.3, R1: `select`'s cursor read is gone).
+            if let Some(item) = self.current_lib_item(lib_idx, target) {
+                self.select_item(lib_idx, item);
+            }
         }
     }
 

@@ -394,22 +394,10 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn enqueue_selected(&mut self, lib_idx: Option<usize>) {
-        // The Emby branch receives the explicitly matched library index
-        // from the dispatch (Some) or no index at all (None) -- never a
-        // library-zero default.
-        let Some(lib_idx) = lib_idx else {
-            return;
-        };
-        let Some(item) = self.current_lib_item(lib_idx) else {
-            return;
-        };
-        self.enqueue_lib_item(lib_idx, item);
-    }
-
     /// Enqueue an explicitly resolved Home Continue Watching item (task 5.3d,
     /// Home effect decoupling): the shared Home branch of the former
-    /// `enqueue_selected`, extracted so the CW effects pass the already-
+    /// `enqueue_selected` (deleted in task 4.3, R1 — the item is now
+    /// resolved at the caller), extracted so the CW effects pass the already-
     /// resolved item directly instead of temporarily pointing `home.section`
     /// at section 0 and re-reading `current_home_item`. Folder/non-playable
     /// guards and the ancestor-route resolution match the legacy Home branch
@@ -431,10 +419,10 @@ impl App {
     }
 
     /// Enqueue an explicitly resolved library-view item (task 5.3d, Album
-    /// track focus): the shared Emby branch of `enqueue_selected`, extracted
-    /// so the shell can enqueue a focused album track whose item resolution
-    /// lives at the shell/component boundary rather than in
-    /// `current_lib_item`.
+    /// track focus): the shared Emby branch of `enqueue_selected` (deleted in
+    /// task 4.3, R1), extracted so the shell can enqueue a focused album
+    /// track whose item resolution lives at the shell/component boundary
+    /// rather than in `current_lib_item`.
     pub(in crate::app) fn enqueue_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             self.do_enqueue_folder(item);
@@ -453,7 +441,8 @@ impl App {
 
     /// Shared append/sync/rollback tail for a single-item enqueue
     /// (extracted from `enqueue_selected`'s two branches, which had
-    /// duplicated this verbatim): appends `item` to the visible queue,
+    /// duplicated this verbatim before the wrapper was deleted in task
+    /// 4.3, R1): appends `item` to the visible queue,
     /// marks local queue metadata dirty when applicable, and syncs the
     /// append to the direct-remote queue / local persistence -- rolling
     /// the whole append back if the sync fails.  The visible queue

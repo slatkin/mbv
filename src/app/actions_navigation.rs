@@ -5,13 +5,6 @@ use mbv_core::api::EmbyItem;
 use super::notify_actions::ToastSeverity;
 
 impl App {
-    pub(super) fn select(&mut self, lib_idx: usize) {
-        let Some(item) = self.current_lib_item(lib_idx) else {
-            return;
-        };
-        self.select_item(lib_idx, item);
-    }
-
     /// Ctrl+P activation tail for an explicitly supplied library item (task
     /// 5.3d, Emby browser effect decoupling): folder items play the folder
     /// through the collection queue source and save the queue, non-folder
