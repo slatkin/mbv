@@ -1,6 +1,6 @@
 ## 1. Scout handoff (D1 — blocking, read-only)
 
-- [ ] 1.1 Write `openspec/handoffs/scout-remove-migrated-surface-underpaint.md`.
+- [x] 1.1 Write `openspec/handoffs/scout-remove-migrated-surface-underpaint.md`.
       Per surface that `App::render` / `render_main` paints (tab bar, status
       bar, player chrome, Home, Emby generic/Movies/HomeVideo browser, wide TV
       workspace, narrow TV, wide Music workspace, narrow Music, album-track,
