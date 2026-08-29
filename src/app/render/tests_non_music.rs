@@ -93,6 +93,41 @@ fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
     }
 }
 
+/// `remove-migrated-surface-underpaint` 3.8 (D4): while the mounted
+/// `InlineSearchComponent` overlays `left_area`, the legacy `render_list`
+/// must not underpaint the ordinary browse list. The shell projects
+/// `App::inline_search_active` from TuiRealm mount state; `render_list`
+/// returns after publishing `left_area` (`src/app/render/components/list.rs`,
+/// just before the `n == 0` branch) without painting a row or hero. Mirrors
+/// `wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows`.
+#[test]
+fn inline_search_active_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
+    let mut app = make_movie_app();
+    app.inline_search_active = true;
+    let mut layout = LayoutMain::default();
+    let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(70, 30)).unwrap();
+    term.draw(|f| {
+        app.render_library(
+            f,
+            ratatui::layout::Rect::new(0, 0, 70, 30),
+            true,
+            &mut layout,
+        );
+    })
+    .unwrap();
+
+    assert!(
+        layout.left_area.width > 0 && layout.left_area.height > 0,
+        "left_area must still be reserved for the inline-search overlay: {:?}",
+        layout.left_area
+    );
+    let output = buffer_to_string(&term);
+    assert!(
+        !output.contains("Focused Movie"),
+        "legacy base frame must not paint browse rows while inline search is active: {output:?}"
+    );
+}
+
 #[test]
 fn wide_emby_podcast_uses_the_series_workspace_and_right_rail() {
     let mut app = make_movie_app();

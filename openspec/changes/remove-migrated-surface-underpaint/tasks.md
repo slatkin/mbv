@@ -258,8 +258,43 @@ six production files and preserves behaviour.
       Characterized by
       `tests_conformance_matrix.rs::feeds_legacy_base_frame_publishes_geometry_but_paints_no_entries`
       (narrow 60x20 and wide 140x30).
-- [ ] 3.8 Inline search body — suppress when an `InlineSearchComponent` is
+- [x] 3.8 Inline search body — suppress when an `InlineSearchComponent` is
       active.
+      Real writer: the recon's `if search_active { return; }` was a no-op —
+      `render_list`'s `search_active` (`list.rs:141`) has been permanently
+      `false` since commit `d006e3fa` removed `LibraryTab.search`, so
+      `library_list_render_ctx` hard-codes `search_query: None` and every
+      `search_active` block in `render_list` (incl. the `render_search_box`
+      call) is dead. The real underpaint: while the mounted
+      `InlineSearchComponent` overlays `left_area`, legacy `render_list` still
+      paints the ordinary browse list into the same rect. Mount state is the
+      only source of truth (no `App` search state remains), so — mirroring
+      `dim_backdrop_active` — added transient `App::inline_search_active`
+      (`app_struct.rs:211`), projected once per frame in `Model::draw_frame`
+      (`shell_run.rs:46`) from
+      `matches!(self.app.tab, EmbyLibrary(i) if self.inline_search_component_id(i).is_some())`,
+      and gate `if self.inline_search_active { return; }` in `render_list`
+      immediately after `layout.left_area = list_area;` (just before the
+      `n == 0` branch). Wide Movies/home-video already returns earlier
+      (3.2 gate, `list.rs:98`), so this only gates the narrow breakpoint.
+      Layout-field audit: clean. `left_area` is the only `App.layout.main`
+      field any inline-search reader needs — `shell_inline_search.rs`
+      `inline_search_area()` reads `left_area` (then wide fallbacks) and
+      `shell_browser.rs:235` reads `left_area`/`movies_wide_area`; both are
+      published before the gate. `router.rs`/`key_policy.rs` read no layout.
+      `hero_area`/`inline_hero_area`/`selected_item_rect`/row maps have no
+      non-render `App.layout.main` reader for the Emby-browser surface
+      (`browser.rs` mouse hit-tests its own component `LayoutMain`, not
+      `App`'s; the ABS-book/podcast `hero_area` readers are a different
+      destination), and per-frame `AppLayout::default()` keeps them zeroed.
+      Tests: added D4 proof
+      `inline_search_active_legacy_base_frame_publishes_geometry_but_paints_no_rows`
+      (`tests_non_music.rs`); no existing test asserted the narrow
+      inline-search underpaint, and
+      `inline_library_search_renders_plain_candidates_without_app` renders the
+      component directly and is unaffected. The dead `search_active` blocks
+      in `render_list` are left in place — possible follow-up cleanup, out of
+      scope for 3.8.
 - [ ] 3.9 Player chrome — suppress the legacy player-chrome paint if the scout
       confirms `PlaybackComponent` is the sole painter; otherwise move the
       chrome paint into `paint_legacy_chrome` and record it as sole-legacy.

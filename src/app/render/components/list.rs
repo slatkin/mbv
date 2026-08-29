@@ -423,6 +423,17 @@ impl App {
 
         layout.left_area = list_area;
 
+        // Inline search: the mounted `InlineSearchComponent` is the sole
+        // result-row painter and overlays `left_area` (published just above,
+        // the only field `inline_search_area()` reads). Suppress the legacy
+        // browse-list body so it does not underpaint the component. Wide
+        // Movies/home-video already returned earlier, so this only gates the
+        // narrow breakpoint. The shell projects this flag from TuiRealm mount
+        // state once per frame (task 3.8).
+        if self.inline_search_active {
+            return;
+        }
+
         if n == 0 {
             layout.hero_area = Rect::default();
             let msg = if self.tab.emby_library_index().is_some() {

@@ -150,6 +150,7 @@ impl App {
             image_picker: None,
             halfblock_picker: None,
             dim_backdrop_active: false,
+            inline_search_active: false,
             image_cache_size_total: init.image_cache_size.saturating_mul(2),
             settings_destination: super::types_settings::SettingsDestination::Main,
             settings_save_at: None,

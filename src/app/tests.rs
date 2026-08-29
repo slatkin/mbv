@@ -240,6 +240,7 @@ pub(crate) fn make_app_stub() -> App {
         image_picker: None,
         halfblock_picker: None,
         dim_backdrop_active: false,
+        inline_search_active: false,
         image_cache_size_total: 50,
         settings_destination: SettingsDestination::Main,
         settings_save_at: None,

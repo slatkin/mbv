@@ -43,6 +43,16 @@ impl Model {
         // mount state, so the shell computes it once per frame (the deleted
         // App-level `blocking_overlay_active` adapter, task 5.3d).
         self.app.dim_backdrop_active = self.blocking_overlay_active();
+        // Same projection for the inline search: while a mounted
+        // `InlineSearchComponent` overlays `left_area`, the legacy
+        // `render_list` must not underpaint the ordinary browse list there.
+        // Mount state is the only source of truth (the `App` library-search
+        // state was removed), so compute it once per frame.
+        self.app.inline_search_active = matches!(
+            self.app.tab,
+            crate::app::TabSelection::EmbyLibrary(index)
+                if self.inline_search_component_id(index).is_some()
+        );
         self.app.render(f);
         if music_resize {
             self.push_music_workspace_content();

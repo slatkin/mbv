@@ -208,6 +208,12 @@ pub struct App {
     pub(super) image_picker: Option<Picker>,
     pub(super) halfblock_picker: Option<Picker>,
     pub(super) dim_backdrop_active: bool,
+    /// Whether the mounted `InlineSearchComponent` is the active painter for
+    /// the current Emby library this frame. That fact lives in TuiRealm mount
+    /// state (the `App`-level library-search state was removed); `draw_frame`
+    /// projects it here once per frame so the legacy `render_list` suppresses
+    /// its browse-list underpaint of `left_area` (task 3.8).
+    pub(super) inline_search_active: bool,
     pub(super) image_cache_size_total: usize,
     pub(super) settings_destination: SettingsDestination,
     pub(super) settings_save_at: Option<Instant>,
