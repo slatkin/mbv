@@ -40,20 +40,24 @@ six production files and preserves behaviour.
       checkpoint, before its pure chrome paint. Boundary: `src/app/layout.rs`,
       `src/app/render/screens/root.rs`, `src/app/render/components/chrome.rs`.
       Verify focused root/chrome tests, `cargo check -p mbv`, and fmt.
-- [ ] 2.1b CARD CHECKPOINT: publish card geometry at the card owner's natural
+- [x] 2.1b CARD CHECKPOINT: publish card geometry at the card owner's natural
       checkpoint, preserving cache/`size_for`/`fetch` as one path across every
       rendering state (loading, missing, cached, fetched, and responsive).
       Boundary: `src/app/layout.rs`, `src/app/render/screens/root.rs`,
       `src/app/render/components/card.rs`, `src/app/images.rs`. Depends on
       2.1a. Verify all card rendering states, cache/image handoff tests,
       check, and fmt.
-- [ ] 2.1c SHARED HERO ARRANGEMENT: publish pure hero arrangement geometry
+      Existing implementation already fulfilled this checkpoint; this docs-only
+      commit records it (`60342cd8`).
+- [x] 2.1c SHARED HERO ARRANGEMENT: publish pure hero arrangement geometry
       before hero paint and retain authoritative image/load handoff timing.
       Boundary: `src/app/layout.rs`, `src/app/render/arrangements/hero_left.rs`,
       `src/app/render/arrangements/library.rs`,
       `src/app/render/components/hero.rs`. Depends on 2.1b. Verify narrow and
       wide arrangement/hero states, check, and fmt.
-- [ ] 2.1d FLAT/LETTER LIST CHECKPOINT: publish flat and letter-group list
+      Existing implementation already fulfilled this checkpoint; this docs-only
+      commit records it (`136c5388`).
+- [x] 2.1d FLAT/LETTER LIST CHECKPOINT: publish flat and letter-group list
       geometry at the list owner's natural checkpoint without changing rows,
       loading, empty, selection, or responsive output. Boundary:
       `src/app/layout.rs`, `src/app/render/components/widgets.rs`,
@@ -62,7 +66,9 @@ six production files and preserves behaviour.
       `src/app/render/components/list_plain.rs`,
       `src/app/render/components/list_letter_groups.rs`. Depends on 2.1c.
       Verify all list states and characterization tests, check, and fmt.
-- [ ] 2.1e GROUPED ALBUM CHECKPOINT: publish grouped-album and album-detail
+      Existing implementation already fulfilled this checkpoint; this docs-only
+      commit records it (`9050d832`).
+- [x] 2.1e GROUPED ALBUM CHECKPOINT: publish grouped-album and album-detail
       geometry at each owning natural checkpoint, retaining album-art loading
       and handoff after their authoritative operations. Boundary:
       `src/app/layout.rs`, `src/app/render/components/album.rs`,
@@ -71,7 +77,9 @@ six production files and preserves behaviour.
       `src/app/render/components/album_art.rs`,
       `src/app/render/screens/album_plan.rs`. Depends on 2.1d. Verify grouped,
       inline, detail, loading, and responsive album states, check, and fmt.
-- [ ] 2.1f DOWNSTREAM QUEUE+PILLS: consume the card and pills checkpoints
+      Existing implementation already fulfilled this checkpoint; this docs-only
+      commit records it (`0cf9e873`).
+- [x] 2.1f DOWNSTREAM QUEUE+PILLS: consume the card and pills checkpoints
       without recomputation, and publish queue/pill geometry at the owning
       natural checkpoint while preserving queue selection and responsive
       behaviour. Boundary: `src/app/layout.rs`,
@@ -80,6 +88,8 @@ six production files and preserves behaviour.
       `src/app/render/components/widgets.rs`,
       `src/app/render/components/music.rs`. Depends on 2.1e. Verify queue,
       pills, card-consumption, and all rendering-state tests, check, and fmt.
+      Existing implementation already fulfilled this checkpoint; this docs-only
+      commit records it (`dd46fc6c`).
 - [ ] 2.1g Feeds/home: publish feed and home geometry at their owning natural
       checkpoints, before pure paint and after image/load operations where
       coupled; preserve loading and image handoff. Boundary:
