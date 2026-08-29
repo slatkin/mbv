@@ -39,6 +39,41 @@ so they can't."* The tree currently has several such comments.
 There is no user-visible payoff. This is tech debt paid off while the migration
 context is still live, and the last item standing between #611 and closure.
 
+### Addendum (2026-08-29) — the narrow breakpoint, and three live regressions
+
+Task 4.4's R14 constraint fired as designed: `library_list_render_ctx` cannot
+read the live cursor from a component, because for narrow TV **no component is
+mounted at all**. Tracing that gap found it is also the cause of three
+regressions already visible in the app, all one root cause — the migration
+gated legacy `render_list` off for each *wide* surface as it landed and never
+addressed the narrow breakpoint:
+
+1. **Narrow Movies double-paints.** Legacy `render_list` and
+   `BrowserComponent::view` both paint `layout.main.left_area`. Latent until
+   `6cf469e1` (#618) removed the cursor mirror that kept the two in step; now
+   the cursors diverge, giving doubled rows and a stale-cursor inline hero.
+2. **Narrow TV navigation is dead.** No component owns the surface, and legacy
+   browse key handling was deleted in `51bb3a16`, so keys reach the router,
+   find no focused component, and fall through to nothing.
+3. **Narrow grouped Music's painted cursor is frozen.**
+   `MusicWorkspaceComponent` is mounted and owns the cursor, but paints into
+   `wide_music_area`, which is empty at narrow — so keys move a cursor the
+   legacy painter never reads.
+
+Closing that gap is user-visible work with its own payoff, so it was split out
+rather than absorbed here (maintainer decision, 2026-08-29). This change now
+**ends at task 4.4**, and the rest becomes a dependency chain:
+
+| Change | Scope |
+|---|---|
+| `migrate-narrow-browse-to-components` | mount the missing components, hoist `render_list`'s narrow composition into them, land the R14 threading. Closes the three regressions |
+| `delete-browse-level-cursor-scroll` | the old 4.5 + phases 5 and 6 — field deletion, `apply_lib_cursor_index`, the movers, the mouse paths, the ast-grep clauses |
+| `sync-interactive-surface-docs` | the old phase 7 — ledger, ADR 0022, spec, and #607's acceptance check |
+
+The scope statement above stands as written; only the *ending* moves. What this
+change delivers is the two Audiobookshelf struct splits, the resting-position
+type, and every outcome-1/2/3 re-point except R14.
+
 ## What Changes
 
 - Separate content from interaction state in all three structs. Content is what
@@ -60,6 +95,9 @@ context is still live, and the last item standing between #611 and closure.
   `move_lib_cursor_rows` and `jump_lib_cursor` already have no live caller, and
   `move_lib_cursor` is reachable only from `mouse_gestures.rs`, which is
   accepted-broken under D16.
+- Give every narrow browse surface a mounted component that owns its cursor,
+  scroll, and keys (Phase 4A) — the precondition for deleting
+  `BrowseLevel::cursor`, and the fix for the three regressions above.
 - Remove the ast-grep rule clauses that policed by convention what the types
   now make unrepresentable, keeping the ones that still guard a real boundary.
 
@@ -71,8 +109,12 @@ context is still live, and the last item standing between #611 and closure.
 - No repair of mouse routing (D16). Where `mouse_gestures.rs` is the sole
   caller of something being deleted, delete the caller with it rather than
   keeping the function alive to serve it.
-- No behavioural change to browsing, playback, persistence, or restore. Every
-  task carries a characterization test taken before the change.
+- No behavioural change to browsing, playback, persistence, or restore, beyond
+  closing the three regressions named in the addendum. Every task carries a
+  characterization test taken before the change.
+- No migration of the narrow painters into components (design.md D7). Legacy
+  `render_list` stays the narrow painter; only ownership of cursor, scroll,
+  and keys moves.
 
 ## Capabilities
 

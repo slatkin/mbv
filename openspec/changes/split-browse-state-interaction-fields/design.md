@@ -95,6 +95,50 @@ transitional accessor is left behind returning the old value; that would
 recreate the mirror at one remove and it would survive, because nothing forces
 its removal later.
 
+### D6 — The narrow breakpoint has no cursor owner; that is what blocks 4.5
+
+Task 4.4's R14 constraint ("verify the mounted component is reachable at the
+`library_list_render_ctx` call site; if it is not, stop and report") fired.
+Verified against HEAD `b34ee375`:
+
+`library_list_render_ctx` (`render/components/list_context.rs:5`, `impl App`,
+reads `nav_stack.last().cursor/.scroll`) has 9 non-test call sites in two
+groups:
+
+| Group | Sites | Component reachable? |
+|---|---|---|
+| A — shell | `shell_browser.rs:204`, `shell_tv_workspace.rs:109`, `shell_music_workspace.rs:108` | yes |
+| B — legacy render tree | `list.rs:145` (`render_list`), `detail.rs:106`/`:138` (`selected_movie_item`/`selected_series_item`), `detail.rs:358` (`render_compact_detail`), `music_wide.rs:140` (`wide_music_render_ctx`), `tv_wide.rs:100` (`wide_tv_render_ctx`) | no — these run under `App::compose_base_frame(f)`, and `App` holds no handle to the TuiRealm `Application` |
+
+Group B is *not* a design blocker by itself: a cursor/scroll pair threaded
+down as a render parameter is D2 outcome 1, the same shape task 4.3 already
+landed for `render_list`'s `&mut usize` scroll write-back. The blocker is
+upstream of it — for two narrow surfaces there is **no component to read
+from**:
+
+| Narrow surface | Component mounted? | Painted by | Actual state at HEAD |
+|---|---|---|---|
+| generic / Movies / home video | `BrowserComponent`, yes | **both** legacy `render_list` *and* `BrowserComponent::view` into the same `layout.main.left_area` | double paint; cursors diverged once `6cf469e1` removed the mirror |
+| grouped Music | `MusicWorkspaceComponent`, yes (`music_workspace_component_id` has no width gate) | legacy only — `render_music_workspace_component` reads `layout.main.wide_music_area`, which is empty at narrow, so the component paints nothing | keys move the component's cursor; the painted cursor never moves |
+| TV | **no** — `tv_workspace_component_id` requires `is_wide_tv_active()`; `emby_browser_component_id` rejects `BrowserKind::TvShows` | legacy only | nothing owns the surface; keys reach the router, no focused component, `FallThrough`, and legacy browse key handling was deleted in `51bb3a16`. Navigation is dead |
+| Emby podcast library (`is_podcast_library`) | **no** at either width — `emby_browser_component_id` rejects it and `tv_workspace_component_id` requires `collection_type == "tvshows"` | legacy narrow only; at wide, `render_list` early-returns on the podcast gate and no component paints | narrow: dead nav, as TV. Wide: blank body. Maintainer confirmed 2026-08-29 that these libraries occur in practice |
+
+`docs/architecture/interactive-surface-ledger.md:66,68,69` claims "narrow =
+sole legacy renderer (D5)" for all three. That claim is true for TV and Music
+and false for Movies. The three live regressions are all this one gap.
+
+The feed/home-video group view (`render_feed_home_video_group_view`) reads its
+own `feed_home_video.video_cursor`, not `BrowseLevel`, so it does not block
+4.5 and is out of scope.
+
+**Resolution: `migrate-narrow-browse-to-components`.** Closing this gap is a
+user-visible fix with its own payoff, so it was split out rather than absorbed
+here (maintainer decision, 2026-08-29). That change mounts the missing
+components, hoists the narrow composition out of `render_list`, and lands the
+R14 threading, which cannot be written before the mounts it reads from exist.
+This change therefore ends at task 4.4; **task 4.5 and everything after it move
+to `delete-browse-level-cursor-scroll`**, which depends on it.
+
 ## Risks
 
 - **File-size cap.** Splitting structs and threading parameters will push
@@ -185,7 +229,7 @@ Reads:
 
 | # | Site | Function | Value | Outcome |
 |---|---|---|---|---|
-| R14 | `list_context.rs:14,15` | `library_list_render_ctx` — builds `LibraryListRenderCtx` (items, cursor, scroll, total_count) from `nav_stack.last()` | live | **3** — the shell supplies cursor/scroll from the mounted component: `BrowserComponent::cursor()`/`scroll()` (both already exist) for generic/Movies/home-video, `MusicWorkspaceComponent::album_cursor()` (exists, #620) for grouped Music. `LibraryListRenderCtx` stays a plain-data struct, so every downstream reader of its cursor/scroll re-points transitively with no direct change: `list.rs`, `tv_wide.rs`, `detail_series_view.rs`, `music_wide_browser.rs`, and the renderers in R19/R20 |
+| R14 | `list_context.rs:14,15` | `library_list_render_ctx` — builds `LibraryListRenderCtx` (items, cursor, scroll, total_count) from `nav_stack.last()` | live | **3 at the shell, 1 in the render tree** — see D6/D7. `library_list_render_ctx` takes cursor/scroll as parameters. The three Group A shell call sites pass the mounted component's value (`BrowserComponent::cursor()`/`scroll()`, `MusicWorkspaceComponent::album_cursor()`, both already exist). The six Group B legacy render-tree sites cannot reach a component, so the value is threaded down from `Model::draw_frame` → `compose_base_frame` → `render_library` → `render_list` / the wide ctx builders, mirroring 4.3's `&mut usize` scroll parameter. `LibraryListRenderCtx` stays plain data, so `list.rs`, `tv_wide.rs`, `detail_series_view.rs`, `music_wide_browser.rs` and R19/R20 re-point transitively. **Blocked until Phase 4A gives narrow TV a mounted component to read from.** |
 | R15 | `music.rs:19` | `music_group_state` — `nav_stack[-2].cursor` for the group-pill highlight | resting (level below top) | **2** — `resting().cursor()`, the same classification the shell's group-level writes already received (`music_actions.rs:56,109,196`, re-pointed in 4.2) |
 | R16 | `music_wide.rs:144` | `wide_music_render_ctx` — `selected_album = level.items.get(level.cursor)` on the top album level | live | **3** — `MusicWorkspaceComponent::selected_item()`; 4.4 adds this accessor mirroring `TvWorkspaceComponent::selected_item()`, with a first-mount fallback to the App-derived item like `push_tv_workspace_content` |
 | R17 | `music_wide.rs:152` | `wide_music_render_ctx` — `group_cursor` from `nav_stack[-2].cursor` | resting | **2** — same as R15 |
@@ -254,7 +298,14 @@ component's filter pill (the open modal); no `App` field holds it.
 
 ### 1.3 — Flagged readers (fit none of D2's three outcomes)
 
-**None.** R2 / R10 / R11 initially looked like a fourth path (shell reads the
+**One, raised 2026-08-29 by task 4.4's R14 constraint: `library_list_render_ctx`.**
+It is outcome 3 in principle, but two of the narrow surfaces it serves have no
+component to be the source. Reported rather than worked around per the rule;
+resolved by D6–D10 and Phase 4A, which is a scope expansion of this change
+rather than a fourth D2 outcome. The pre-existing 1.1/1.1b classification
+below stands unchanged.
+
+**Otherwise none.** R2 / R10 / R11 initially looked like a fourth path (shell reads the
 *visible* level's live cursor at a content-loaded / grouping-settled event).
 They resolve to outcome 2: `handle_loaded_level` replaces the `BrowseLevel`
 wholesale (`*last = level.take()`) and then runs the auto-push / snap / settle

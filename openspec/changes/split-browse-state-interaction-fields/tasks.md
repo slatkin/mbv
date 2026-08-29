@@ -72,47 +72,19 @@
       component is reachable at the `library_list_render_ctx` call site; if it
       is not, stop and report the concrete design blocker per task 1.3 — do
       not add an App-side mirror or invent a fourth D2 outcome.
-- [ ] 4.5 Delete `BrowseLevel::cursor` and `BrowseLevel::scroll`. Verify:
-      `rtk cargo check -p mbv` is clean with no transitional accessor left
-      behind (D5).
+      **R14 moved out.** It stopped here per its own constraint: narrow TV and
+      Emby podcast have no mounted component to read from. The blocker is
+      recorded in design.md D6 and 1.3, and the threading lands in
+      `migrate-narrow-browse-to-components` alongside the mounts it depends on.
+      R16/R18 are done, so this task is complete as far as it can go here.
 
-## 5. Retire what the split makes unreachable
+## 5. Hand-off
 
-- [ ] 5.1 Delete `App::apply_lib_cursor_index` (`lib_cursor_actions.rs:241`) and
-      route `ShellRequest::BrowserCursorIndex` to the resting-position writer
-      and effect tail directly. Verify: `rtk cargo check -p mbv`.
-- [ ] 5.2 Delete `App::move_lib_cursor_rows` and `App::jump_lib_cursor` — both
-      already have no live caller — and `App::move_lib_cursor`, whose only
-      non-test caller is `mouse_gestures.rs:83`. Delete the mouse call sites
-      with them; do not repair mouse behaviour (D16). Verify:
-      `rtk cargo clippy --workspace --all-targets` reports no dead code.
-- [ ] 5.3 Re-check `mouse_gestures.rs` for remaining writes to the deleted
-      fields (`:122`, `:219`, `:231`) and delete those paths. Verify:
-      `rtk cargo check -p mbv`.
-
-## 6. Retire the conventions the types now enforce
-
-- [ ] 6.1 Review `rules/interactive-component-boundary/` and remove only the
-      clauses the types now make unrepresentable; keep every clause still
-      guarding a real boundary. Verify: `rtk ast-grep test` fixtures pass and
-      `rtk ast-grep scan` is clean.
-- [ ] 6.2 Delete the warning comments that documented the old rule (for example
-      `input_browse_dispatch.rs:22`, `context_menu_actions.rs:305`), since the
-      thing they warned about no longer compiles. Verify: `rtk grep -n
-      "mirror" src/app/` returns only historical references in archived docs.
-
-## 7. Close out
-
-- [ ] 7.1 Update `docs/architecture/interactive-surface-ledger.md`, ADR 0022,
-      and `openspec/specs/interactive-component-framework/spec.md` so all three
-      describe the same completion state (#614's criterion).
-- [ ] 7.2 Split any file pushed over 800 lines by this change. Verify:
-      `rtk make check-code-file-lines` passes.
-- [ ] 7.3 Verify the full gate: `rtk cargo check -p mbv`,
+- [ ] 5.1 Confirm this change's remaining scope is closed: phases 1–4 done,
+      R14 handed to `migrate-narrow-browse-to-components`, field deletion and
+      retirement handed to `delete-browse-level-cursor-scroll`, doc sync handed
+      to `sync-interactive-surface-docs`. Verify: `rtk cargo check -p mbv`,
       `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace
-      --all-targets`, `rtk ast-grep scan`, `rtk cargo fmt`,
+      --all-targets`, `rtk ast-grep scan`, `rtk cargo fmt --check`,
       `rtk make check-code-file-lines`.
-- [ ] 7.4 Confirm #607's acceptance criterion "component-local interaction state
-      has one owner" now holds literally: no `App` field stores a live cursor,
-      scroll, or selection for a mounted component. Verify: stated against the
-      task 1 inventory, every row resolved.
+
