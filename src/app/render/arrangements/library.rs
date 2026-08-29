@@ -31,6 +31,55 @@ pub(in crate::app) fn wide_library_panes(
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::render::arrangements::hero_left::HERO_ON_LEFT_MIN_AREA_HEIGHT;
+
+    #[test]
+    fn wide_library_preserves_breakpoint_and_padding() {
+        let area = Rect {
+            x: 2,
+            y: 3,
+            width: crate::app::TWO_COLUMN_THRESHOLD,
+            height: HERO_ON_LEFT_MIN_AREA_HEIGHT + 1,
+        };
+        let panes = wide_library_panes(area, 2, 1).expect("wide area");
+        assert_eq!(panes.left_area.x, panes.left_panel.x + 2);
+        assert_eq!(panes.right_area.y, panes.right_panel.y + 1);
+        assert!(wide_library_panes(
+            Rect {
+                height: HERO_ON_LEFT_MIN_AREA_HEIGHT,
+                ..area
+            },
+            2,
+            1,
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn selected_detail_content_saturates_zero_area() {
+        assert_eq!(
+            selected_detail_content_area(
+                Rect {
+                    width: 3,
+                    height: 1,
+                    ..Rect::default()
+                },
+                2,
+                4
+            ),
+            Rect {
+                x: 2,
+                y: 2,
+                width: 0,
+                height: 0
+            },
+        );
+    }
+}
+
 pub(in crate::app::render) fn selected_detail_content_area(
     hero_area: Rect,
     side_padding: u16,

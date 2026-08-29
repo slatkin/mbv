@@ -75,6 +75,36 @@ mod tests {
         })
         .is_none());
     }
+
+    #[test]
+    fn pill_and_right_pane_geometry_saturate_short_areas() {
+        let areas = pill_bar_areas(Rect {
+            x: 4,
+            y: 7,
+            width: 10,
+            height: 1,
+        });
+        assert_eq!(areas.pills_area.height, 1);
+        assert_eq!(areas.spacer_area.height, 0);
+        assert_eq!(areas.content_area.height, 0);
+
+        let right = hero_on_left_right_pane(
+            Rect {
+                x: 20,
+                y: 3,
+                width: 10,
+                height: 1,
+            },
+            Rect {
+                x: 20,
+                y: 3,
+                width: 10,
+                height: 1,
+            },
+            4,
+        );
+        assert_eq!(right.list_panel.height, 0);
+    }
 }
 
 /// Returns `(left_pane, right_pane)` for the hero-on-left arrangement's
@@ -117,12 +147,14 @@ pub(in crate::app::render) fn hero_on_left_panes(content_area: Rect) -> (Rect, R
 /// x/width. `bottom_pad` is the caller's own trailing padding reserve
 /// (grouped Music's `PANE_PAD_Y`), kept as a parameter rather than a second
 /// constant here so the two files do not each own a copy of the same value.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) struct HeroOnLeftRightPane {
     pub pills_area: Rect,
     pub spacer_area: Rect,
     pub list_panel: Rect,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app::render) struct PillBarAreas {
     pub pills_area: Rect,
     pub spacer_area: Rect,
