@@ -81,11 +81,10 @@ impl Model {
                 }
             }
             QueueRequest::Cursor { scope, slot_id } => {
-                if self.select_queue_slot(scope, slot_id).is_some() {
-                    // Plain navigation: only scope/focus/hold-window side
-                    // effects apply; there is no effect to drive with the
-                    // resolved index (D2).
-                }
+                // Plain navigation: select_queue_slot applies the scope/focus/
+                // hold-window side effects; there is no effect to drive with
+                // the resolved index (D2), so it is discarded.
+                let _ = self.select_queue_slot(scope, slot_id);
             }
             QueueRequest::Play { scope, slot_id } => {
                 if let Some(index) = self.select_queue_slot(scope, slot_id) {

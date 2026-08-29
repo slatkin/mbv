@@ -495,19 +495,15 @@ impl App {
             } else {
                 // Queue menus carry the resolved index in the action itself
                 // (ContextAction::PlayQueue, D2); Home/library menus keep the
-                // bare Play that the execution arm routes by focus.
-                if matches!(self.effective_panel_focus(), crate::app::PanelFocus::Queue) {
-                    if let Some(pos) = queue_cursor {
-                        Self::push_context_action(
-                            &mut entries,
-                            "Play",
-                            ContextAction::PlayQueue(pos),
-                        );
-                    } else {
-                        Self::push_context_action(&mut entries, "Play", ContextAction::Play);
-                    }
-                } else {
-                    Self::push_context_action(&mut entries, "Play", ContextAction::Play);
+                // bare Play that the execution arm routes by focus. `queue_cursor`
+                // is Some exactly when the target was resolved on the queue.
+                match queue_cursor {
+                    Some(pos) => Self::push_context_action(
+                        &mut entries,
+                        "Play",
+                        ContextAction::PlayQueue(pos),
+                    ),
+                    None => Self::push_context_action(&mut entries, "Play", ContextAction::Play),
                 }
                 if cw_focused
                     || lib_idx.is_some()
