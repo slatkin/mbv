@@ -148,7 +148,16 @@ pub(in crate::app) fn render_feeds_content(
     // there's no hero to be below.
     let will_show_hero = has_subs && !model.visible_entries.is_empty();
 
-    let (selector_tabs, list_area) = render_selector_content(f, area);
+    // When a hero will show, the selector rows move below it and are
+    // painted by the post-hero `render_selector_content` call further down
+    // (design decision 6, unified with the Movies/TV inline arrangement).
+    // Painting them here too would double the pill bar (regressed in
+    // 1a4fb6cf, restored to the 45907507 behaviour).
+    let (selector_tabs, list_area) = if will_show_hero {
+        (Vec::new(), area)
+    } else {
+        render_selector_content(f, area)
+    };
     layout.selector_tabs = selector_tabs;
     layout.left_area = list_area;
     if list_area.height == 0 {
