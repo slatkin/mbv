@@ -1,4 +1,5 @@
 use super::browser::BrowserComponent;
+use super::component_id::BrowserKind;
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::render::LibraryListRenderCtx;
@@ -61,7 +62,7 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
         );
         assert_eq!(
             message,
-            Some(Msg::Shell(expected_movement_request(key))),
+            Some(Msg::Shell(expected_movement_request(key, expected))),
             "{key:?} must return the typed movement request in place of the raw legacy key"
         );
     }
@@ -111,18 +112,8 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
 /// The page payload is the painted display-row stride `(height - 1) = 9`
 /// the 100-wide, 10-tall test list reports via `page_rows()` — the App
 /// applies its own column count to that stride, exactly like the legacy arm.
-fn expected_movement_request(key: Key) -> ShellRequest {
-    match key {
-        Key::Up | Key::Char('k') => ShellRequest::BrowserMoveRows { rows: -1 },
-        Key::Down | Key::Char('j') => ShellRequest::BrowserMoveRows { rows: 1 },
-        Key::PageUp => ShellRequest::BrowserMoveRows { rows: -9 },
-        Key::PageDown => ShellRequest::BrowserMoveRows { rows: 9 },
-        Key::Home => ShellRequest::BrowserJumpCursor { to_end: false },
-        Key::End => ShellRequest::BrowserJumpCursor { to_end: true },
-        Key::Left | Key::Char('h') => ShellRequest::BrowserMoveColumn { delta: -1 },
-        Key::Right | Key::Char('l') => ShellRequest::BrowserMoveColumn { delta: 1 },
-        _ => unreachable!("{key:?} must be a browsed navigation key"),
-    }
+fn expected_movement_request(_key: Key, index: usize) -> ShellRequest {
+    ShellRequest::BrowserCursorIndex { index }
 }
 
 /// Letter-grouped lists (60 items render bucketed rows with a header row
@@ -192,16 +183,16 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
     }
 }
 
-/// Wide-Movies exact parity (task 5.3d prep): with the shell's
-/// `set_wide_movies` projection set on a >=82-wide rendered list, the right
+/// Wide-Movies exact parity: a Movies-keyed component on a >=82-wide
+/// rendered list uses its own kind and painted geometry, and the right
 /// rail strides ONE item per row — exactly the legacy
 /// `current_library_columns` result. Down from 0 lands at 1, not 2, and
 /// returns the typed rows request; Left/Right/h/l stay unbound locally.
 #[test]
 fn browser_local_navigation_strides_one_column_for_wide_movies() {
-    let mut browser = BrowserComponent::new();
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
     browser.set_content(LibraryListRenderCtx::from_items(make_items(12), 0, 0), true);
-    browser.set_wide_movies(true, false, false);
+    browser.set_wide_movies(false, false);
     let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
     terminal
         .draw(|frame| browser.view(frame, frame.area()))
@@ -218,7 +209,7 @@ fn browser_local_navigation_strides_one_column_for_wide_movies() {
     );
     assert_eq!(
         message,
-        Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows: 1 })),
+        Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 })),
         "wide-Movies Down must return the typed rows request"
     );
 

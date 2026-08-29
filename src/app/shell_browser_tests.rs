@@ -37,7 +37,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // navigation) — the component cursor still advances in place.
     assert!(matches!(
         drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE),
-        Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows: 1 }))
+        Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
     ));
 
     // Enter: the component emits BrowserActivate for its own selected
@@ -398,11 +398,11 @@ fn shell_mounts_and_syncs_the_generic_emby_browser() {
     // request (task 5.3d, Emby browser local navigation) instead of
     // forwarding the raw legacy key; the shell arm moves the App cursor
     // through `App::move_lib_cursor_rows` the way `handle_lib_key` did.
-    let Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows })) = message else {
-        panic!("browser movement should emit the typed rows request");
+    let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) = message else {
+        panic!("browser movement should emit the typed index request");
     };
-    assert_eq!(rows, 1, "Down must carry one display row");
-    model.handle_browser_request(ShellRequest::BrowserMoveRows { rows });
+    assert_eq!(index, 1, "Down must resolve to item 1");
+    model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     model.sync_emby_browser();
     assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
     assert!(model
@@ -450,56 +450,82 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     // (one display row, in place of the raw key), and the shell runs
     // `App::move_lib_cursor_rows` — its own painted two-column stride
     // lands the App cursor on item 2, exactly like the legacy arm.
-    let Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows })) =
+    let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
         drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE)
     else {
-        panic!("focused browser Down must emit BrowserMoveRows, got no typed request");
+        panic!("focused browser Down must emit BrowserCursorIndex, got no typed request");
     };
-    assert_eq!(rows, 1, "Down must carry one display row");
-    model.handle_browser_request(ShellRequest::BrowserMoveRows { rows });
+    assert_eq!(index, 2, "Down must resolve to item 2");
+    let navigation_before = model.app.last_nav_at;
+    model.app.library_position_dirty = false;
+    model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     assert_eq!(
         model.app.libs[0].nav_stack[0].cursor, 2,
-        "two-column Down must move the App cursor two items via move_lib_cursor_rows"
+        "two-column Down must apply the component-resolved index"
+    );
+    assert!(
+        model.app.library_position_dirty,
+        "cursor application must persist the library position"
+    );
+    assert!(
+        model.app.last_nav_at > navigation_before,
+        "cursor application must mark library navigation"
+    );
+    assert_eq!(
+        model.app.library_position_state.libraries["lib-films"].levels[0].cursor_index, 2,
+        "the single cursor application must persist the resolved index"
+    );
+    let component_cursor = model
+        .application
+        .get_component(&id)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<BrowserComponent>()
+        .unwrap()
+        .cursor();
+    assert_eq!(
+        component_cursor, 2,
+        "component cursor remains locally resolved"
     );
 
     // End/Home jump the App cursor to the last/first item through
     // `App::jump_lib_cursor`.
-    let Some(Msg::Shell(ShellRequest::BrowserJumpCursor { to_end })) =
+    let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
         drive_browser_key(&mut model, &id, Key::End, KeyModifiers::NONE)
     else {
-        panic!("focused browser End must emit BrowserJumpCursor, got no typed request");
+        panic!("focused browser End must emit BrowserCursorIndex, got no typed request");
     };
-    assert!(to_end, "End must carry to_end: true");
-    model.handle_browser_request(ShellRequest::BrowserJumpCursor { to_end });
+    assert_eq!(index, 9, "End must resolve to the last item");
+    model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     assert_eq!(model.app.libs[0].nav_stack[0].cursor, 9);
-    let Some(Msg::Shell(ShellRequest::BrowserJumpCursor { to_end })) =
+    let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
         drive_browser_key(&mut model, &id, Key::Home, KeyModifiers::NONE)
     else {
-        panic!("focused browser Home must emit BrowserJumpCursor, got no typed request");
+        panic!("focused browser Home must emit BrowserCursorIndex, got no typed request");
     };
-    assert!(!to_end, "Home must carry to_end: false");
-    model.handle_browser_request(ShellRequest::BrowserJumpCursor { to_end });
+    assert_eq!(index, 0, "Home must resolve to the first item");
+    model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
 
     // Right/Left move the App cursor within the row via
     // `App::move_lib_cursor` (the two-column list claims them).
-    let Some(Msg::Shell(ShellRequest::BrowserMoveColumn { delta })) =
+    let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
         drive_browser_key(&mut model, &id, Key::Right, KeyModifiers::NONE)
     else {
         panic!(
-            "focused two-column browser Right must emit BrowserMoveColumn, got no typed request"
+            "focused two-column browser Right must emit BrowserCursorIndex, got no typed request"
         );
     };
-    assert_eq!(delta, 1, "Right must carry +1");
-    model.handle_browser_request(ShellRequest::BrowserMoveColumn { delta });
+    assert_eq!(index, 1, "Right must resolve to item 1");
+    model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
-    let Some(Msg::Shell(ShellRequest::BrowserMoveColumn { delta })) =
+    let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
         drive_browser_key(&mut model, &id, Key::Char('h'), KeyModifiers::NONE)
     else {
-        panic!("focused two-column browser h must emit BrowserMoveColumn, got no typed request");
+        panic!("focused two-column browser h must emit BrowserCursorIndex, got no typed request");
     };
-    assert_eq!(delta, -1, "h must carry -1");
-    model.handle_browser_request(ShellRequest::BrowserMoveColumn { delta });
+    assert_eq!(index, 0, "h must resolve to item 0");
+    model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
 
     // One-column list: Left/Right/h/l stay unbound locally with no movement
@@ -530,19 +556,59 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
         model.app.libs[0].nav_stack[0].cursor, 0,
         "one-column Left/Right/h/l must not move the App cursor"
     );
-    let Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows })) =
+    let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
         drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE)
     else {
         panic!(
-            "focused one-column browser Down must still emit BrowserMoveRows, got no typed request"
+            "focused one-column browser Down must still emit BrowserCursorIndex, got no typed request"
         );
     };
-    assert_eq!(rows, 1);
-    model.handle_browser_request(ShellRequest::BrowserMoveRows { rows });
+    assert_eq!(index, 1);
+    model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     assert_eq!(
         model.app.libs[0].nav_stack[0].cursor, 1,
         "one-column Down must stride the App cursor one item"
     );
+}
+
+#[test]
+fn browser_navigation_persists_live_scroll_at_level_boundaries() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut model = Model::new(browser_app_with_folder_and_movie());
+    model.app.libs[0].nav_stack[0].scroll = 7;
+    model.sync_emby_browser();
+    let mut folder = make_item("Folder A", "CollectionFolder");
+    folder.id = "folder-a".into();
+    folder.is_folder = true;
+
+    model.handle_browser_request(ShellRequest::BrowserActivate { item: folder });
+    assert_eq!(model.app.libs[0].nav_stack.len(), 2);
+    assert_eq!(model.app.libs[0].nav_stack[0].scroll, 7);
+    assert_eq!(
+        model.app.library_position_state.libraries["lib-movies"].levels[0].cursor_index,
+        0
+    );
+
+    model.app.libs[0].nav_stack[1].scroll = 3;
+    model.sync_emby_browser();
+    model.handle_browser_request(ShellRequest::BrowserBack);
+    assert_eq!(model.app.libs[0].nav_stack.len(), 1);
+    assert_eq!(model.app.libs[0].nav_stack[0].scroll, 7);
+}
+
+#[test]
+fn teardown_flush_captures_live_browser_scroll_without_navigation() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut model = Model::new(browser_app_with_folder_and_movie());
+    model.app.libs[0].nav_stack[0].scroll = 6;
+    model.sync_emby_browser();
+    model.app.libs[0].nav_stack[0].scroll = 0;
+
+    model.persist_emby_browser_scroll_for_active_library();
+    model.app.flush_library_position_now();
+
+    assert_eq!(model.app.libs[0].nav_stack[0].scroll, 6);
+    assert!(!model.app.library_position_dirty);
 }
 
 /// Paint the App base frame and then the mounted Emby browser into a

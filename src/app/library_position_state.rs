@@ -23,6 +23,17 @@ impl App {
     /// `flush_library_position_if_idle` (called from the run loop) and
     /// `flush_library_position_now` (called at teardown so a final burst is
     /// never lost).
+    pub(super) fn persist_library_scroll(&mut self, lib_idx: usize, scroll: usize) {
+        if let Some(level) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.nav_stack.last_mut())
+        {
+            level.scroll = scroll;
+            self.save_default_library_position(lib_idx);
+        }
+    }
+
     pub(super) fn save_default_library_position(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;

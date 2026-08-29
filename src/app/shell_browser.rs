@@ -19,7 +19,12 @@ impl Model {
             return;
         };
         match request {
-            ShellRequest::BrowserActivate { item } => self.app.select_item(lib_idx, item),
+            ShellRequest::BrowserActivate { item } => {
+                if item.is_folder {
+                    self.persist_emby_browser_scroll(lib_idx);
+                }
+                self.app.select_item(lib_idx, item);
+            }
             ShellRequest::BrowserPlay { item } => self.app.play_or_activate_lib_item(lib_idx, item),
             ShellRequest::BrowserEnqueue { item } => self.app.enqueue_lib_item(lib_idx, item),
             ShellRequest::BrowserToggleWatched { item } => {
@@ -64,7 +69,12 @@ impl Model {
             // made — preserving synthetic-group/root guards, parent-cursor
             // restoration, season-level skip, persistence, and stale-index
             // behavior.
-            ShellRequest::BrowserBack => self.app.go_back(lib_idx),
+            ShellRequest::BrowserBack => {
+                if self.app.libs[lib_idx].nav_stack.len() > 1 {
+                    self.persist_emby_browser_scroll(lib_idx);
+                }
+                self.app.go_back(lib_idx);
+            }
             // `[`/`]` cycle the letter-range pill row (task 5.3d, Emby
             // browser selector cycling): the shell derives the active Emby
             // library index from its own tab state and runs
@@ -76,37 +86,42 @@ impl Model {
             ShellRequest::BrowserCycleLetterPill { delta } => {
                 self.app.cycle_letter_pill(lib_idx, delta)
             }
-            // Up/Down/k/j/PageUp/PageDown move the App cursor by display
-            // rows (task 5.3d, Emby browser local navigation): the component
-            // reports the row deltas it already applied to its own cursor
-            // (Up/k -1, Down/j 1, PageUp/PageDown ±page_rows), and the
-            // shell derives the active Emby library index from its own tab
-            // state and runs `App::move_lib_cursor_rows` — the same call
-            // the legacy `handle_lib_key` movement arms made — applying the
-            // App's own painted column stride. Calling the App method, never
-            // a raw cursor-field write, preserves `save_default_library_position` /
+            // Every local browser cursor key (arrows/hjkl, Page keys,
+            // Home/End) resolves to an item index inside the component and
+            // arrives here already resolved (task 5.3d, Emby browser local
+            // navigation). `apply_lib_cursor_index` writes it through the App
+            // nav level so `save_default_library_position` /
             // `mark_library_navigation` / `maybe_fetch_next_page` /
-            // `last_nav_at` idle side effects byte-for-byte. The legacy
-            // season-grid branch is unreachable here (the Browser mount
-            // gate excludes TV).
-            ShellRequest::BrowserMoveRows { rows } => self.app.move_lib_cursor_rows(lib_idx, rows),
-            // Left/Right/h/l move the App cursor within a row on a
-            // multi-column list (task 5.3d, Emby browser local navigation):
-            // the component reports the column delta it already applied, and
-            // the shell runs `App::move_lib_cursor` — the same call the
-            // legacy `handle_lib_key` column arms made, with the same
-            // navigation side effects as `BrowserMoveRows`.
-            ShellRequest::BrowserMoveColumn { delta } => self.app.move_lib_cursor(lib_idx, delta),
-            // Home/End jump the App cursor to the first/last item (task
-            // 5.3d, Emby browser local navigation): the component reports
-            // the jump direction it already applied, and the shell runs
-            // `App::jump_lib_cursor` — the same call the legacy
-            // `handle_lib_key` Home/End arms made, with the same navigation
-            // side effects as `BrowserMoveRows`.
-            ShellRequest::BrowserJumpCursor { to_end } => self.app.jump_lib_cursor(lib_idx, to_end),
+            // `last_nav_at` idle side effects stay byte-for-byte identical to
+            // the legacy `handle_lib_key` arms.
+            ShellRequest::BrowserCursorIndex { index } => {
+                self.app.apply_lib_cursor_index(lib_idx, index)
+            }
             _ => {}
         }
     }
+
+    pub(super) fn persist_emby_browser_scroll_for_active_library(&mut self) {
+        let TabSelection::EmbyLibrary(lib_idx) = self.app.tab else {
+            return;
+        };
+        self.persist_emby_browser_scroll(lib_idx);
+    }
+
+    fn persist_emby_browser_scroll(&mut self, lib_idx: usize) {
+        let Some(id) = self.emby_browser_id.as_ref() else {
+            return;
+        };
+        let scroll = self
+            .application
+            .get_component(id)
+            .and_then(|comp| comp.as_any().downcast_ref::<BrowserComponent>())
+            .map(BrowserComponent::scroll);
+        if let Some(scroll) = scroll {
+            self.app.persist_library_scroll(lib_idx, scroll);
+        }
+    }
+
     fn emby_browser_component_id(&self) -> Option<ComponentId> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
@@ -143,8 +158,16 @@ impl Model {
             let _ = self.application.umount(&id);
         }
         if let Some(id) = next_id.clone() {
+            let kind = match &id {
+                ComponentId::Browser(key) => key.kind,
+                _ => unreachable!("Emby browser id must be Browser"),
+            };
             self.application
-                .mount(id.clone(), Box::new(BrowserComponent::new()), vec![])
+                .mount(
+                    id.clone(),
+                    Box::new(BrowserComponent::new_for_kind(kind)),
+                    vec![],
+                )
                 .expect("mount Emby browser");
             self.application.active(&id).expect("activate Emby browser");
             self.emby_browser_id = Some(id);
@@ -192,9 +215,10 @@ impl Model {
         // the component paints the full hero-on-left rect, so hand it the full
         // library area (`movies_wide_area`, published by the App render path
         // this frame); otherwise hand it the narrow inner list area.
-        let wide = self.app.layout.main.is_wide_movies_active();
+        let wide_area = self.app.layout.main.movies_wide_area;
+        let wide = wide_area.width > 0 && wide_area.height > 0;
         let area = if wide {
-            self.app.layout.main.movies_wide_area
+            wide_area
         } else {
             self.app.layout.main.left_area
         };
@@ -220,7 +244,7 @@ impl Model {
         };
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {
-                browser.set_wide_movies(wide, home_video, letter_pills);
+                browser.set_wide_movies(home_video, letter_pills);
                 browser.set_use_nerd_fonts(self.app.use_nerd_fonts);
             }
         }
@@ -229,23 +253,12 @@ impl Model {
         // paint itself (no image-cache authority), mirroring HomeComponent.
         // Also read back the scroll the component painted at, so it can be
         // persisted into the App nav level (task 5.3d.17b).
-        let (image_paint, painted_scroll) = self
+        let image_paint = self
             .application
             .get_component_mut(id)
             .and_then(|comp| comp.as_any_mut().downcast_mut::<BrowserComponent>())
-            .map(|browser| (browser.take_image_paint(), browser.scroll()))
-            .unwrap_or((None, 0));
+            .and_then(BrowserComponent::take_image_paint);
         self.app.paint_home_image(frame, image_paint);
-        // Preserve the legacy wide-renderer scroll write-back: the component
-        // owns its cursor/scroll and `view()` returns the rendered scroll to
-        // `self.scroll`, but `set_content` overwrites that next frame from
-        // the App nav level — so without this write-back the rendered scroll
-        // would be lost on resize / first paint.
-        if let Some(lib_idx) = self.app.tab.emby_library_index() {
-            if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
-                level.scroll = painted_scroll;
-            }
-        }
     }
 }
 

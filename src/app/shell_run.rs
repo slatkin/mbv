@@ -514,6 +514,7 @@ impl Model {
             }
         }
 
+        self.persist_emby_browser_scroll_for_active_library();
         self.app.teardown(quit_timeout);
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
                                             // Printed only after the terminal is restored (task 7.2): anything

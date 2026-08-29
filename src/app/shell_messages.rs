@@ -292,14 +292,17 @@ impl Model {
                 | ShellRequest::BrowserRefresh
                 | ShellRequest::BrowserRescan
                 | ShellRequest::BrowserBack
-                | ShellRequest::BrowserCycleLetterPill { .. }
-                | ShellRequest::BrowserMoveRows { .. }
-                | ShellRequest::BrowserMoveColumn { .. }
-                | ShellRequest::BrowserJumpCursor { .. }),
+                | ShellRequest::BrowserCycleLetterPill { .. }),
             ) => {
                 self.handle_browser_request(request);
                 // Browser navigation/effects change library content; re-project (5.3d.15/M2).
                 self.push_emby_browser_content();
+            }
+            // Pure cursor movement: the component already resolved its own
+            // index, so apply the App-side nav effects but skip the content
+            // re-projection the effect requests above need.
+            Msg::Shell(request @ ShellRequest::BrowserCursorIndex { .. }) => {
+                self.handle_browser_request(request);
             }
             Msg::Shell(ShellRequest::BrowserClick { region, col, row }) => {
                 match region {

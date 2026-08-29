@@ -363,6 +363,42 @@ fn move_lib_cursor_persists_default_library_position() {
 }
 
 #[test]
+fn flush_library_position_persists_session_scroll_without_navigation() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let mut library = make_item("Movies", "CollectionFolder");
+    library.id = "lib-movies".into();
+    app.libs.push(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            parent_id: "lib-movies".into(),
+            title: "Movies".into(),
+            items: make_items(3),
+            total_count: 3,
+            cursor: 0,
+            scroll: 6,
+            item_types: Some("Movie".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        }],
+        ..LibraryTab::new(library)
+    });
+
+    app.save_default_library_position(0);
+    app.flush_library_position_now();
+
+    assert!(!app.library_position_dirty);
+    assert_eq!(
+        app.library_position_state.libraries["lib-movies"].levels[0].cursor_index,
+        0
+    );
+}
+
+#[test]
 fn saving_visible_library_position_keeps_hidden_library_state_entries() {
     let mut app = make_app_stub();
     let mut library = make_item("Movies", "CollectionFolder");

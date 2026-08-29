@@ -238,6 +238,35 @@ impl App {
         }
     }
 
+    pub(super) fn apply_lib_cursor_index(&mut self, lib_idx: usize, index: usize) {
+        if lib_idx >= self.libs.len() {
+            return;
+        }
+
+        let now = Instant::now();
+        let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
+        self.last_nav_at = now;
+        self.mark_library_navigation(now);
+
+        if self.is_feed_home_video_group_view(lib_idx) {
+            if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+                if state.selected_len() > 0 {
+                    state.video_cursor = index;
+                    self.save_default_library_position(lib_idx);
+                }
+            }
+            return;
+        }
+
+        if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+            level.cursor = index;
+            self.save_default_library_position(lib_idx);
+        }
+        if idle {
+            self.maybe_fetch_next_page(lib_idx);
+        }
+    }
+
     pub(super) fn jump_lib_cursor(&mut self, lib_idx: usize, to_end: bool) {
         // Defensive bounds check; see `move_lib_cursor_rows` for the stale
         // index contract. Never substitute library zero on a miss.

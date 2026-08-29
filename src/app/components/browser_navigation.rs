@@ -28,25 +28,25 @@ impl BrowserComponent {
     /// by the painted column count. The legacy stale-layout fallback
     /// (sorted present but cursor unpainted) moves in sorted order by the
     /// multiplied delta, exactly like `App`.
-    pub(super) fn move_rows(&mut self, item_rows: i64) {
+    pub(super) fn move_rows(&mut self, item_rows: i64) -> usize {
         if !self.layout.left_sorted_indices.is_empty() {
             if let Some(delta) = self.letter_vertical_delta(item_rows) {
-                self.move_cursor_delta(delta);
-                return;
+                return self.move_cursor_delta(delta);
             }
         }
-        self.move_cursor_delta(item_rows * self.columns() as i64);
+        self.move_cursor_delta(item_rows * self.columns() as i64)
     }
 
     /// Move the component-local cursor by `delta` items, mirroring
     /// `App::move_lib_cursor`: sorted display order when the last painted
     /// list is letter-grouped, raw item order otherwise.
-    pub(super) fn move_cursor_delta(&mut self, delta: i64) {
+    pub(super) fn move_cursor_delta(&mut self, delta: i64) -> usize {
         if !self.layout.left_sorted_indices.is_empty() {
             self.move_sorted_cursor(delta);
         } else {
             self.move_raw_cursor(delta);
         }
+        self.cursor
     }
 
     /// Move in the letter-grouped display order: the cursor's position in
@@ -132,7 +132,7 @@ impl BrowserComponent {
     /// the last painted list is letter-grouped, else the raw first/last —
     /// mirroring `App::jump_lib_cursor` minus the feed-home-video-group
     /// branch the Browser mount gate excludes.
-    pub(super) fn jump_cursor(&mut self, to_end: bool) {
+    pub(super) fn jump_cursor(&mut self, to_end: bool) -> usize {
         if !self.layout.left_sorted_indices.is_empty() {
             let n = self.layout.left_sorted_indices.len();
             self.cursor = self.layout.left_sorted_indices[if to_end { n - 1 } else { 0 }];
@@ -142,5 +142,6 @@ impl BrowserComponent {
                 self.cursor = if to_end { count - 1 } else { 0 };
             }
         }
+        self.cursor
     }
 }

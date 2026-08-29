@@ -17,6 +17,7 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::component_id::BrowserKind;
 use super::msg::{BrowserHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
@@ -34,23 +35,18 @@ use crate::app::render::{
 mod browser_navigation;
 
 pub struct BrowserComponent {
+    kind: BrowserKind,
     context: LibraryListRenderCtx,
     cursor: usize,
     scroll: usize,
     focused: bool,
     layout: LayoutMain,
-    /// Shell projection (task 5.3d prep, D14 temporary adapter): whether the
-    /// current App layout rendered the dedicated Movies/home-videos
-    /// hero-on-left right rail. The component's own `LayoutMain` does not
-    /// publish `movies_wide_right_area` (the render seam is given only the
-    /// list rect), so the shell mirrors `App::layout.main`
-    /// `.is_wide_movies_active()` here each sync — the same signal legacy
-    /// `App::current_library_columns` reads to force the right rail to one
-    /// column for both the wide Movies library and the wide home-videos
-    /// presentation (both populate `movies_wide_right_area`).
+    /// Whether the component's own BrowserKey kind and painted geometry select
+    /// the hero-on-left layout. The value is derived in `view()` rather than
+    /// projected from the App layout.
     wide_movies: bool,
     /// Whether the wide layout's pill row is a home-video count label (vs. a
-    /// letter-range pill row). Fed by the shell each draw (task 5.3d.17a).
+    /// letter-range pill row). Fed by the shell from validated content.
     wide_movies_home_video: bool,
     /// Whether the wide layout shows the letter-range pill row. Fed by the
     /// shell each draw (task 5.3d.17a).
@@ -67,7 +63,12 @@ pub struct BrowserComponent {
 
 impl BrowserComponent {
     pub fn new() -> Self {
+        Self::new_for_kind(BrowserKind::Generic)
+    }
+
+    pub fn new_for_kind(kind: BrowserKind) -> Self {
         Self {
+            kind,
             context: LibraryListRenderCtx::from_items(Vec::new(), 0, 0),
             cursor: 0,
             scroll: 0,
@@ -110,24 +111,9 @@ impl BrowserComponent {
         self.scroll
     }
 
-    /// Shell projection (task 5.3d prep, D14 temporary adapter): record
-    /// whether the current App layout is the wide Movies/home-videos
-    /// hero-on-left presentation (`App::layout.main.is_wide_movies_active()`
-    /// — `movies_wide_right_area` is set by the wide renderer for both
-    /// dedicated Movies and home-videos libraries), so `columns()` returns
-    /// one exactly like the legacy `App::current_library_columns` does. The
-    /// component cannot read this from its own `LayoutMain`: the render seam
-    /// is given only the list rect and never publishes the rail geometry —
-    /// the same reason `MusicWorkspaceComponent` has its page size pushed in
-    /// (`set_page_rows`). `home_video`/`letter_pills` tell the component which
-    /// pill row to paint in the wide right rail (task 5.3d.17a).
-    pub(in crate::app) fn set_wide_movies(
-        &mut self,
-        wide: bool,
-        home_video: bool,
-        letter_pills: bool,
-    ) {
-        self.wide_movies = wide;
+    /// Records the wide layout's pill-row presentation from validated shell
+    /// content; whether the layout is wide is derived locally in `view()`.
+    pub(in crate::app) fn set_wide_movies(&mut self, home_video: bool, letter_pills: bool) {
         self.wide_movies_home_video = home_video;
         self.wide_movies_letter_pills = letter_pills;
     }
@@ -313,32 +299,30 @@ impl BrowserComponent {
         if self.focused {
             match key.code {
                 Key::Up | Key::Char('k') => {
-                    self.move_rows(-1);
-                    return Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows: -1 }));
+                    let index = self.move_rows(-1);
+                    return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 Key::Down | Key::Char('j') => {
-                    self.move_rows(1);
-                    return Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows: 1 }));
+                    let index = self.move_rows(1);
+                    return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 Key::PageUp => {
                     let rows = -self.page_rows();
-                    self.move_rows(rows);
-                    return Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows }));
+                    let index = self.move_rows(rows);
+                    return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 Key::PageDown => {
                     let rows = self.page_rows();
-                    self.move_rows(rows);
-                    return Some(Msg::Shell(ShellRequest::BrowserMoveRows { rows }));
+                    let index = self.move_rows(rows);
+                    return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 Key::Home => {
-                    self.jump_cursor(false);
-                    return Some(Msg::Shell(ShellRequest::BrowserJumpCursor {
-                        to_end: false,
-                    }));
+                    let index = self.jump_cursor(false);
+                    return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 Key::End => {
-                    self.jump_cursor(true);
-                    return Some(Msg::Shell(ShellRequest::BrowserJumpCursor { to_end: true }));
+                    let index = self.jump_cursor(true);
+                    return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 // Column navigation applies only to a painted list with
                 // more than one column (the legacy
@@ -346,12 +330,12 @@ impl BrowserComponent {
                 // one-column list leaves Left/Right/h/l unbound locally,
                 // matching `handle_lib_key`'s one-column behavior.
                 Key::Left | Key::Char('h') if self.columns() > 1 => {
-                    self.move_cursor_delta(-1);
-                    return Some(Msg::Shell(ShellRequest::BrowserMoveColumn { delta: -1 }));
+                    let index = self.move_cursor_delta(-1);
+                    return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 Key::Right | Key::Char('l') if self.columns() > 1 => {
-                    self.move_cursor_delta(1);
-                    return Some(Msg::Shell(ShellRequest::BrowserMoveColumn { delta: 1 }));
+                    let index = self.move_cursor_delta(1);
+                    return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 _ => {}
             }
@@ -437,9 +421,9 @@ impl BrowserComponent {
     /// Columns the last painted list packs per row for cursor movement
     /// (task 5.3d prep): the wide Movies/home-videos hero-on-left right
     /// rail is always one column (mirroring `App::current_library_columns`,
-    /// fed in by the shell via `set_wide_movies` — the component's own
-    /// layout does not publish `movies_wide_right_area`), otherwise the
-    /// pane-derived `library_column_count` of the painted list area. The
+    /// selected by this component's own `kind` and painted geometry in
+    /// `view()`), otherwise the pane-derived `library_column_count` of the
+    /// painted list area. The
     /// Browser mount gate excludes the TV (wide TV, season grids) and feed
     /// home-video-group special cases, so no other legacy branch applies to
     /// this component.
@@ -591,11 +575,13 @@ impl Component for BrowserComponent {
             .clone()
             .with_cursor_scroll(self.cursor, self.scroll);
         // Task 5.3d.17a: when the wide Movies/home-video hero-on-left layout
-        // is active (shell projection `wide_movies` AND the area is wide
-        // enough for the shared split), paint the full hero + pills + list
-        // layout itself instead of just the inner list rows; otherwise keep
-        // the narrow list-row behavior.
-        let wide = self.wide_movies && shared_hero_presentation(area).is_some();
+        // is active (this component's own `kind` AND the area is wide enough
+        // for the shared split), paint the full hero + pills + list layout
+        // itself instead of just the inner list rows; otherwise keep the
+        // narrow list-row behavior.
+        let wide = matches!(self.kind, BrowserKind::Movies | BrowserKind::HomeVideos)
+            && shared_hero_presentation(area).is_some();
+        self.wide_movies = wide;
         self.scroll = if wide {
             self.render_wide_movies(frame, area, &context)
         } else {
