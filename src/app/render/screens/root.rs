@@ -1,9 +1,9 @@
-use crate::app::layout::{AppLayout, LayoutMain, LayoutPlayback};
+use crate::app::layout::{AppLayout, FrameChromeGeometry, LayoutMain, LayoutPlayback};
 use crate::app::render::components::chrome;
 use crate::app::render::components::widgets::{
     render_queue_panel_frame, right_panel_content_area, COLUMN_GAP,
 };
-use crate::app::{palette, App, PanelFocus, PanelMode, TabSelection};
+use crate::app::{palette, App, PanelFocus, PanelMode, TabSelection, TABBAR_LEFT_RESERVE};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
@@ -14,6 +14,12 @@ use std::time::Instant;
 /// Height of the tab-bar box: 1 row padding + 1 row tab + 1 row spacer.
 const TAB_BAR_BOX_HEIGHT: u16 = 3;
 
+/// Height of the player panel box below the tab bar (seekbar + title +
+/// controls rows). Must stay in sync with `render`'s local player_h
+/// computation (seek 1 + title 1 + controls 2); it is what
+/// `compute_frame_layout` uses to place the right-column player area.
+const PLAYER_BOX_HEIGHT: u16 = 4;
+
 impl App {
     pub(in crate::app) fn now_playing_throbber_span(&self) -> Span<'static> {
         const FRAMES: [&str; 9] = [" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"];
@@ -23,13 +29,23 @@ impl App {
         )
     }
 
-    /// Updates the frame-dependent geometry inputs before the render pass.
-    ///
-    /// The zero-area guard deliberately remains in `render`: an incomplete
-    /// frame must leave the previously installed layout untouched. The full
-    /// `AppLayout` swap remains at the end of `render` until the paint pass is
-    /// extracted in the following task.
-    pub(in crate::app) fn compute_frame_layout(&mut self, area: Rect) {
+    /// Paint-free geometry seam entry (D2). Returns `None` on a zero-dimension
+    /// frame before ANY mutation, so `self.layout` keeps reflecting the last
+    /// frame that rendered in full. Otherwise updates the frame-dependent
+    /// inputs (terminal size, mini-view focus, queue column width) and then
+    /// computes the root/chrome geometry into the typed partial subresult
+    /// `FrameChromeGeometry`. `render` publishes the migrated chrome fields
+    /// into the fresh `AppLayout` and `render_main` consumes this subresult
+    /// instead of recomputing root/chrome geometry inline.
+    pub(in crate::app) fn compute_frame_layout(
+        &mut self,
+        area: Rect,
+    ) -> Option<FrameChromeGeometry> {
+        // Guard against zero-dimension terminal (e.g. minimized or piped)
+        // before any state mutation or geometry computation.
+        if area.width == 0 || area.height == 0 {
+            return None;
+        }
         if area.width != self.terminal_width || area.height != self.terminal_height {
             self.card_image_states.clear();
             self.card_image_loading.clear();
@@ -44,24 +60,157 @@ impl App {
         if self.clamp_queue_column_width() {
             self.save_prefs();
         }
+        Some(self.compute_chrome_geometry(area))
+    }
+
+    /// Compute the root/chrome geometry for one frame, paint-free. Pure reads
+    /// of `self` state; the single production caller is `compute_frame_layout`
+    /// (the only seam entry), and `render_main` consumes the result rather
+    /// than recomputing it. `pub(in crate::app::render)` so the render test
+    /// helpers can render a view through `render_main` with the same
+    /// authoritative geometry without pulling in `compute_frame_layout`'s
+    /// terminal-normalization side effects.
+    pub(in crate::app::render) fn compute_chrome_geometry(
+        &self,
+        area: Rect,
+    ) -> FrameChromeGeometry {
+        // Left panel (card + queue) | Right panel (library, remaining).
+        let left_w = match self.effective_panel_mode() {
+            PanelMode::Both => self.queue_column_width,
+            PanelMode::LibraryOnly => 0,
+            PanelMode::QueueOnly => area.width,
+        };
+        let right_w = area.width.saturating_sub(left_w);
+        let right_visible = self.effective_panel_mode() != PanelMode::QueueOnly;
+
+        let content_h = area.height;
+        let left_area = if self.effective_panel_mode() == PanelMode::LibraryOnly {
+            Rect::default()
+        } else {
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: left_w,
+                height: content_h,
+            }
+        };
+        let panel_area = if self.terminal_width < crate::app::MINI_VIEW_THRESHOLD
+            && self.effective_panel_mode() == PanelMode::LibraryOnly
+        {
+            area
+        } else {
+            left_area
+        };
+        let panel_content_area = chrome::left_panel_content_area(panel_area);
+        let queue_focused = matches!(self.effective_panel_focus(), PanelFocus::Queue);
+
+        // Full-column background behind the card image and queue list.
+        let right_full_area = Rect {
+            x: area.x + left_w + COLUMN_GAP,
+            y: area.y,
+            width: right_w.saturating_sub(COLUMN_GAP),
+            height: area.height,
+        };
+
+        // Inner content area with padding inside the colored box (queue uses this).
+        let left_content = Rect {
+            x: left_area.x + 2,
+            y: left_area.y + 1,
+            width: left_area.width.saturating_sub(4),
+            height: left_area.height.saturating_sub(2),
+        };
+
+        let tab_h: u16 = TAB_BAR_BOX_HEIGHT;
+        let right_area = Rect {
+            x: area.x + left_w + COLUMN_GAP,
+            y: area.y + tab_h + PLAYER_BOX_HEIGHT,
+            width: right_w.saturating_sub(COLUMN_GAP),
+            height: content_h
+                .saturating_sub(1)
+                .saturating_sub(tab_h)
+                .saturating_sub(PLAYER_BOX_HEIGHT),
+        };
+
+        // Tab bar at the very top of the right column.
+        let tab_bar_area = Rect {
+            x: right_area.x,
+            y: area.y,
+            width: right_area.width,
+            height: tab_h,
+        };
+
+        // Player panel below the tab bar (right column only).
+        let player_area = if right_visible {
+            Rect {
+                x: right_area.x,
+                y: area.y + tab_h,
+                width: right_area.width,
+                height: PLAYER_BOX_HEIGHT,
+            }
+        } else {
+            Rect::default()
+        };
+
+        // Status bar sits at the bottom of the right panel only.
+        let status_area = Rect {
+            x: right_area.x,
+            y: right_area.y + right_area.height,
+            width: right_area.width,
+            height: 1,
+        };
+
+        // Tab-bar hit targets; only published when the tab bar actually paints.
+        let tabs_area = if right_visible {
+            let tab_row = Rect {
+                y: tab_bar_area.y + 1,
+                height: 1,
+                ..tab_bar_area
+            };
+            let pb_h: u16 = 2; // 2-col padding inside the coloured box
+            let tabs_x = tab_bar_area.x + 1;
+            let tabs_w = tab_bar_area
+                .width
+                .saturating_sub(2 * pb_h + TABBAR_LEFT_RESERVE);
+            Rect {
+                x: tabs_x,
+                width: tabs_w,
+                ..tab_row
+            }
+        } else {
+            Rect::default()
+        };
+
+        FrameChromeGeometry {
+            panel_area,
+            panel_content_area,
+            left_area,
+            right_area,
+            right_full_area,
+            left_content,
+            tab_bar_area,
+            tabs_area,
+            player_area,
+            status_area,
+            right_visible,
+            queue_focused,
+            left_w,
+            right_w,
+        }
     }
 
     pub fn render(&mut self, f: &mut Frame) {
         let area = f.area();
-        // Guard against zero-dimension terminal (e.g. minimized or piped).
-        // `self.layout` is left untouched here -- it still reflects the last
-        // frame that rendered in full.
-        if area.width == 0 || area.height == 0 {
+        let Some(chrome) = self.compute_frame_layout(area) else {
+            // Zero-dimension terminal: `self.layout` is left untouched here --
+            // it still reflects the last frame that rendered in full.
             return;
-        }
-        self.compute_frame_layout(area);
+        };
 
         // Every render sub-call below writes into this fresh, local value
         // instead of `self.layout` directly. It's swapped into `self.layout`
         // in one atomic assignment only once this pass completes in full, so
-        // an early return partway through (like the guard above) can never
-        // leave `self.layout` holding a mix of fields from two different
-        // frames.
+        // an early return partway through can never leave `self.layout`
+        // holding a mix of fields from two different frames.
         let mut layout = AppLayout::default();
 
         let active = self.player.status.lock().unwrap().active;
@@ -70,14 +219,21 @@ impl App {
         let playing_panel = show_controls;
         // Always reserve the player rows (title + controls) so
         // that content doesn't shift when the player appears or disappears.
-        let (seek_h, _gap_h, title_h, controls_h): (u16, u16, u16, u16) = (1, 0, 1, 2);
-        let player_h = seek_h + title_h + controls_h;
+        let player_h = PLAYER_BOX_HEIGHT;
         let [main_area] = Layout::vertical([Constraint::Min(0)]).areas(area);
 
-        layout.playback.ind_mu = Rect::default();
-        layout.playback.ind_rc = Rect::default();
-        layout.playback.ind_vol = Rect::default();
-        layout.tabs_area = Rect::default();
+        // Migrated root/chrome fields are published here from the subresult
+        // (one authoritative computation). `render_main` bails on a frame too
+        // short to draw (height < 4) without writing anything; publishing is
+        // gated identically so a degenerate frame still installs the
+        // all-default layout, matching the pre-split behavior.
+        if area.height >= 4 {
+            layout.main.panel_area = chrome.panel_area;
+            layout.main.panel_content_area = chrome.panel_content_area;
+            layout.playback.player_area = chrome.player_area;
+            layout.playback.status_area = chrome.status_area;
+            layout.tabs_area = chrome.tabs_area;
+        }
 
         // Clear expired toast before any rendering so the status bar sees the latest state.
         if self.status_expires.is_some_and(|t| t <= Instant::now()) {
@@ -114,9 +270,9 @@ impl App {
         self.render_main(
             f,
             main_area,
+            &chrome,
             &mut layout.main,
             &mut layout.playback,
-            &mut layout.tabs_area,
             player_h,
             show_controls,
             &now_playing_title,
@@ -148,9 +304,9 @@ impl App {
         &mut self,
         f: &mut Frame,
         area: Rect,
+        chrome: &FrameChromeGeometry,
         layout: &mut LayoutMain,
         playback: &mut LayoutPlayback,
-        tabs_area_out: &mut Rect,
         player_h: u16,
         show_controls: bool,
         now_playing_title: &Option<(String, Color)>,
@@ -177,44 +333,33 @@ impl App {
         // the completed frame installs a full Home layout tagged Home below.
         self.normalize_stale_browse_destination();
 
-        // Left panel (card + queue) | Right panel (library, remaining).
-        let left_w = match self.effective_panel_mode() {
-            PanelMode::Both => self.queue_column_width,
-            PanelMode::LibraryOnly => 0,
-            PanelMode::QueueOnly => area.width,
-        };
-        let right_w = area.width.saturating_sub(left_w);
-        let right_visible = self.effective_panel_mode() != PanelMode::QueueOnly;
+        // Root/chrome geometry (left/right columns, tabs/player/status
+        // placement, focus facts) comes from the paint-free subresult
+        // computed by `compute_frame_layout`; it is consumed here, never
+        // recomputed.
+        let FrameChromeGeometry {
+            panel_area: _,
+            panel_content_area: _,
+            left_area,
+            right_area,
+            right_full_area,
+            left_content,
+            tab_bar_area,
+            tabs_area,
+            player_area,
+            status_area,
+            right_visible,
+            queue_focused,
+            // Widths are carried by the precomputed areas; kept for the typed
+            // subresult contract but not consumed by the paint body.
+            left_w: _,
+            right_w: _,
+        } = *chrome;
+        let left_focused = !queue_focused;
 
         // Header row removed — the tab bar above indicates current location.
         layout.breadcrumbs = Vec::new();
         layout.selector_tabs = Vec::new();
-        let content_h = area.height;
-        let left_area = if self.effective_panel_mode() == PanelMode::LibraryOnly {
-            Rect::default()
-        } else {
-            Rect {
-                x: area.x,
-                y: area.y,
-                width: left_w,
-                height: content_h,
-            }
-        };
-        layout.panel_area = if self.terminal_width < crate::app::MINI_VIEW_THRESHOLD
-            && self.effective_panel_mode() == PanelMode::LibraryOnly
-        {
-            area
-        } else {
-            left_area
-        };
-        layout.panel_content_area = chrome::left_panel_content_area(layout.panel_area);
-
-        // The queue panel always renders with focused styling whenever it
-        // holds real panel focus — including queue-only mode and mini view.
-        // (Previously queue-only forced unfocused styling, which at narrow
-        // widths made the sole visible panel look unresponsive.)
-        let queue_focused = matches!(self.effective_panel_focus(), PanelFocus::Queue);
-        let left_focused = !queue_focused;
 
         // Full-column background behind the card image and queue list.
         if self.effective_panel_mode() != PanelMode::LibraryOnly {
@@ -226,12 +371,6 @@ impl App {
         }
 
         // Full-column background for the right panel (tabs, player, library, queue, status).
-        let right_full_area = Rect {
-            x: area.x + left_w + COLUMN_GAP,
-            y: area.y,
-            width: right_w.saturating_sub(COLUMN_GAP),
-            height: area.height,
-        };
         if right_visible {
             f.render_widget(
                 Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
@@ -239,50 +378,13 @@ impl App {
             );
         }
 
-        // Inner content area with padding inside the colored box (queue uses this).
-        let left_content = Rect {
-            x: left_area.x + 2,
-            y: left_area.y + 1,
-            width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(2),
-        };
-        let card_area = Rect {
-            x: left_area.x + 2,
-            y: left_area.y + 1,
-            width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(2),
-        };
-
-        let tab_h: u16 = TAB_BAR_BOX_HEIGHT;
-        let right_area = Rect {
-            x: area.x + left_w + COLUMN_GAP,
-            y: area.y + tab_h + player_h,
-            width: right_w.saturating_sub(COLUMN_GAP),
-            height: content_h
-                .saturating_sub(1)
-                .saturating_sub(tab_h)
-                .saturating_sub(player_h),
-        };
-
         // Tab bar at the very top of the right column.
-        let tab_area = Rect {
-            x: right_area.x,
-            y: area.y,
-            width: right_area.width,
-            height: tab_h,
-        };
         if right_visible {
-            self.render_tabs(f, tab_area, tabs_area_out);
+            self.render_tabs(f, tab_bar_area, tabs_area);
         }
 
         // Player panel below the tab bar.
         if right_visible && player_h > 0 {
-            let player_area = Rect {
-                x: right_area.x,
-                y: area.y + tab_h,
-                width: right_area.width,
-                height: player_h,
-            };
             let playback_panel_bg = if queue_focused {
                 palette::SURFACE_FOCUSED
             } else {
@@ -299,17 +401,7 @@ impl App {
                     playback_panel_bg,
                 ),
             );
-            playback.player_area = player_area;
         }
-
-        // Status bar sits at the bottom of the right panel only.
-        let status_area = Rect {
-            x: right_area.x,
-            y: right_area.y + right_area.height,
-            width: right_area.width,
-            height: 1,
-        };
-        playback.status_area = status_area;
 
         let (lib_area, queue_area) = if self.effective_panel_mode() == PanelMode::LibraryOnly {
             (right_area, Rect::default())
@@ -318,7 +410,7 @@ impl App {
             // the rows below it. Short terminals keep that same structure.
             let is_queue_only = self.effective_panel_mode() == PanelMode::QueueOnly;
             let is_wide = is_queue_only && left_area.width >= 100;
-            let (card_h, card_w, _) = self.render_card(f, card_area, is_wide);
+            let (card_h, card_w, _) = self.render_card(f, left_content, is_wide);
             let mut left_remaining = left_content.height.saturating_sub(card_h);
 
             // Queue-only mode has no right column, so the playback panel
@@ -328,8 +420,8 @@ impl App {
             if is_queue_only {
                 if is_wide {
                     let panel_area = Rect {
-                        x: card_area.x + card_w + 2,
-                        y: card_area.y,
+                        x: left_content.x + card_w + 2,
+                        y: left_content.y,
                         width: left_content.width.saturating_sub(card_w + 2),
                         height: card_h,
                     };

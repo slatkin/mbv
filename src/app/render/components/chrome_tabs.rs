@@ -26,13 +26,16 @@ impl App {
         ))
     }
 
-    /// Renders the tab bar within the given 1-row `area` and populates
+    /// Renders the tab bar within the given 1-row `area` and publishes
     /// `layout.tabs_area` for mouse hit testing.
+    ///
+    /// `tabs_area` is the precomputed hit-target rect (root/chrome geometry,
+    /// task 2.1a) and is painted around, never recomputed here.
     pub(in crate::app::render) fn render_tabs(
         &mut self,
         f: &mut Frame,
         area: Rect,
-        tabs_area_out: &mut Rect,
+        tabs_area: Rect,
     ) {
         // Fill the tab bar area with the tab box's own background.
         f.render_widget(
@@ -47,15 +50,11 @@ impl App {
             ..area
         };
 
-        let pb_h: u16 = 2; // 2-col padding inside the coloured box
-        let tabs_x = area.x + 1;
-        let tabs_w = area.width.saturating_sub(2 * pb_h + TABBAR_LEFT_RESERVE);
-        let tabs_area = Rect {
-            x: tabs_x,
-            width: tabs_w,
-            ..tab_row
-        };
-        *tabs_area_out = tabs_area;
+        // Hit-target geometry was precomputed paint-free by
+        // `compute_frame_layout`; recover the paint-side inputs from it so
+        // the published rect and the painted bar cannot diverge.
+        let tabs_x = tabs_area.x;
+        let tabs_w = tabs_area.width;
 
         let (vis_start, vis_end) = self.visible_tab_range(tabs_w);
         let has_left = vis_start > 0;

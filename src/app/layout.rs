@@ -211,6 +211,48 @@ pub(crate) enum LibraryRowTarget {
     Album(usize),
 }
 
+/// Root/chrome frame geometry computed paint-free by
+/// `App::compute_frame_layout` and consumed by `App::render_main` and the
+/// chrome painters. This is the partial typed subresult of the staged
+/// geometry/paint split (D2, task 2.1a): it owns the root/chrome fields only.
+/// The full `AppLayout` remains the aggregate shared by every surface family;
+/// non-migrated fields (queue/list/card/etc.) keep their legacy computation
+/// until their own family rows migrate them.
+#[derive(Default)]
+pub(crate) struct FrameChromeGeometry {
+    /// Full expanded sidebar covered by an F1-F4 panel, when present
+    /// (`LayoutMain::panel_area`).
+    pub panel_area: Rect,
+    /// Content bounds inside `panel_area` (`LayoutMain::panel_content_area`).
+    pub panel_content_area: Rect,
+    /// Left panel (card + queue) column rect.
+    pub left_area: Rect,
+    /// Right panel (tabs, player, library, status) rect.
+    pub right_area: Rect,
+    /// Full-column right-panel background rect (tabs/player/library/status).
+    pub right_full_area: Rect,
+    /// Inner left-column content rect with the shared horizontal padding
+    /// applied (queue and card paint areas are derived from this).
+    pub left_content: Rect,
+    /// Tab-bar box rect at the top of the right column.
+    pub tab_bar_area: Rect,
+    /// Tab-bar hit targets (`AppLayout::tabs_area`), published only when the
+    /// right panel is visible; `Rect::default()` otherwise.
+    pub tabs_area: Rect,
+    /// Player-panel rect directly below the tab bar (right column only).
+    pub player_area: Rect,
+    /// Status-bar rect at the bottom of the right panel.
+    pub status_area: Rect,
+    /// Whether the right panel is visible this frame (`panel_mode != QueueOnly`).
+    pub right_visible: bool,
+    /// Whether the queue panel holds panel focus this frame.
+    pub queue_focused: bool,
+    /// Left column width in columns (queue panel width in `Both` mode).
+    pub left_w: u16,
+    /// Right column width in columns.
+    pub right_w: u16,
+}
+
 /// All per-frame layout geometry, grouped by the view that produces it.
 /// `App` stores exactly one of these (`app.layout`); render writes into it,
 /// input reads from it. See module docs for the rationale.

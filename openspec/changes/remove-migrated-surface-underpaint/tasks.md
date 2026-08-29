@@ -28,7 +28,7 @@ contract and is not proof that this section is complete.
 
 - [x] 2.1-prep Preserve the preparatory seam in `root.rs` from commit 94002d25;
       do not treat it as the completed geometry extraction.
-- [ ] 2.1a Root/chrome foundation: introduce the plain-data frame
+- [x] 2.1a Root/chrome foundation: introduce the plain-data frame
       context/result seam and migrate only root/chrome geometry into an
       explicitly partial typed subresult. `AppLayout` remains the aggregate
       shared by all families; non-migrated queue/list/card/etc. fields remain

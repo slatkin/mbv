@@ -269,18 +269,28 @@ pub fn render_view_to_terminal(
     // Mirror App::render(), which syncs terminal_width from the drawn Rect
     // before render_main runs -- without this, effective_panel_mode()/
     // effective_panel_focus() see whatever width the app was constructed
-    // with instead of the width this call is actually rendering at.
+    // with instead of the width this call is actually rendering at. Only
+    // terminal_width is touched here (the historical helper contract): the
+    // terminal-normalization side effects of `compute_frame_layout` (image
+    // cache clears, mini-view focus, queue-column clamping, terminal_height)
+    // would change card reservation geometry for tests that render a view
+    // at a different height than the stub default.
     app.terminal_width = width;
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     let mut layout = LayoutMain::default();
     term.draw(|f| {
+        // Root/chrome geometry comes from the same authoritative paint-free
+        // computation the live seam uses (task 2.1a).
+        let chrome = app.compute_chrome_geometry(Rect::new(0, 0, width, height));
+        layout.panel_area = chrome.panel_area;
+        layout.panel_content_area = chrome.panel_content_area;
         app.render_main(
             f,
             Rect::new(0, 0, width, height),
+            &chrome,
             &mut layout,
             &mut LayoutPlayback::default(),
-            &mut Rect::default(),
             0,
             false,
             &None,
