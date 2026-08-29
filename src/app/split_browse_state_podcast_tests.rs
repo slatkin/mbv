@@ -9,7 +9,9 @@
 //! The reset-on-vanish direction is already covered by
 //! `abs_podcast_component_drops_stale_episode_state_when_selection_vanishes`.
 
-use super::super::types_audiobookshelf_browse::{AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter};
+use super::super::types_audiobookshelf_browse::{
+    AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
+};
 use super::super::types_tab_selection::TabSelection;
 use crate::app::components::AudiobookshelfPodcastComponent;
 use crate::app::tests::make_app_stub;

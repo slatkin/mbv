@@ -148,19 +148,13 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
 fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
     let mut app = audiobookshelf_app();
     add_emby_movie_library(&mut app);
-    app.audiobookshelf_browse[0].episode_selection = Some(0);
-    let before_selection = app.audiobookshelf_browse[0].episode_selection;
     let before_queue = app.player_tab.total_queue_len();
     let before_nav = app.libs[0].nav_stack.len();
     let before_active = app.player.status.lock().unwrap().active;
 
-    app.activate_audiobookshelf_episode(0);
-    app.enqueue_audiobookshelf_episode(0);
+    app.activate_audiobookshelf_episode(0, 0);
+    app.enqueue_audiobookshelf_episode(0, 0);
 
-    assert_eq!(
-        app.audiobookshelf_browse[0].episode_selection, before_selection,
-        "activation seams must preserve the selected episode"
-    );
     assert_eq!(
         app.player_tab.total_queue_len(),
         before_queue,
@@ -202,10 +196,8 @@ fn audiobookshelf_episode_handlers_build_native_item_from_read_only_snapshot() {
             is_finished: false,
         },
     );
-    state.episode_selection = Some(0);
-
     let item = app
-        .activate_audiobookshelf_episode(0)
+        .activate_audiobookshelf_episode(0, 0)
         .expect("selected downloaded episode");
     let queued = item.as_audiobookshelf().expect("Audiobookshelf QueueItem");
     assert_eq!(queued.library_item_id, "show-a");
@@ -230,7 +222,7 @@ fn audiobookshelf_episode_handlers_build_native_item_from_read_only_snapshot() {
     assert_eq!(app.player_tab.total_queue_len(), 0);
 
     let enqueued = app
-        .enqueue_audiobookshelf_episode(0)
+        .enqueue_audiobookshelf_episode(0, 0)
         .expect("selected downloaded episode");
     assert_eq!(
         enqueued.as_audiobookshelf().unwrap().content_id(),
@@ -242,19 +234,15 @@ fn audiobookshelf_episode_handlers_build_native_item_from_read_only_snapshot() {
 #[test]
 fn audiobookshelf_episode_handlers_leave_unselected_rows_without_queue_items() {
     let mut app = audiobookshelf_app();
-    assert!(app.activate_audiobookshelf_episode(0).is_none());
-    assert!(app.enqueue_audiobookshelf_episode(0).is_none());
-
-    app.audiobookshelf_browse[0].episode_selection = Some(0);
-    app.audiobookshelf_browse[0].episode_selection = Some(99);
-    assert!(app.activate_audiobookshelf_episode(0).is_none());
-    assert!(app.enqueue_audiobookshelf_episode(0).is_none());
+    // Out-of-range index against the loaded list.
+    assert!(app.activate_audiobookshelf_episode(0, 99).is_none());
+    assert!(app.enqueue_audiobookshelf_episode(0, 99).is_none());
     assert_eq!(app.player_tab.total_queue_len(), 0);
 
+    // Empty visible list.
     app.audiobookshelf_browse[0].episodes = Some(Vec::new());
-    app.audiobookshelf_browse[0].episode_selection = Some(0);
-    assert!(app.activate_audiobookshelf_episode(0).is_none());
-    assert!(app.enqueue_audiobookshelf_episode(0).is_none());
+    assert!(app.activate_audiobookshelf_episode(0, 0).is_none());
+    assert!(app.enqueue_audiobookshelf_episode(0, 0).is_none());
     assert_eq!(app.player_tab.total_queue_len(), 0);
 }
 
@@ -262,8 +250,8 @@ fn audiobookshelf_episode_handlers_leave_unselected_rows_without_queue_items() {
 #[test]
 fn audiobookshelf_episode_seams_noop_on_absent_index() {
     let mut app = audiobookshelf_app();
-    app.activate_audiobookshelf_episode(1);
-    app.enqueue_audiobookshelf_episode(1);
+    app.activate_audiobookshelf_episode(1, 0);
+    app.enqueue_audiobookshelf_episode(1, 0);
     assert_eq!(app.player_tab.total_queue_len(), 0);
     assert_eq!(app.audiobookshelf_browse.len(), 1);
     assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(0)));

@@ -20,6 +20,21 @@ fn render_podcast_shell(
     height: u16,
     focused: bool,
 ) -> (Model, Terminal<TestBackend>) {
+    render_podcast_shell_with(app, width, height, focused, |_| {})
+}
+
+/// Like `render_podcast_shell`, but runs `configure` on the model after
+/// `sync_audiobookshelf_podcast` mounts the component and before the draw --
+/// the seam a test uses to set the mounted component's own interaction state
+/// (episode selection / filter), now that those no longer project from `App`
+/// (split-browse-state-interaction-fields task 3.2).
+fn render_podcast_shell_with(
+    app: crate::app::App,
+    width: u16,
+    height: u16,
+    focused: bool,
+    configure: impl FnOnce(&mut Model),
+) -> (Model, Terminal<TestBackend>) {
     let mut app = app;
     app.terminal_width = width;
     app.terminal_height = height;
@@ -35,6 +50,7 @@ fn render_podcast_shell(
 
     let mut model = Model::new(app);
     model.sync_audiobookshelf_podcast();
+    configure(&mut model);
 
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
@@ -319,8 +335,11 @@ fn narrow_podcast_detail_shows_author_description_no_pills_or_table() {
     let state = &mut app.audiobookshelf_browse[0];
     state.shows[0].author = Some("Author A".into());
     state.shows[0].description = Some("A description of the show.".into());
-    state.episode_selection = Some(0);
-    let (model, terminal) = render_podcast_shell(app, 60, 20, true);
+    let (model, terminal) = render_podcast_shell_with(app, 60, 20, true, |model| {
+        if let Some(component) = model.abs_podcast_component_mut(0) {
+            component.set_episode_selection(Some(0));
+        }
+    });
     let layout = &model.app.layout.main;
     let output = buffer_to_string(&terminal);
 
@@ -361,8 +380,6 @@ fn narrow_podcast_detail_shows_author_description_no_pills_or_table() {
 fn wide_podcast_detail_preserves_episode_rows_and_played_filtering() {
     let mut app = audiobookshelf_app();
     let state = &mut app.audiobookshelf_browse[0];
-    state.episode_selection = Some(0);
-    state.episode_filter = AudiobookshelfEpisodeFilter::Played;
     state.progress.insert(
         ("show-a".into(), "episode-a".into()),
         AudiobookshelfProgress {
@@ -372,7 +389,12 @@ fn wide_podcast_detail_preserves_episode_rows_and_played_filtering() {
             is_finished: true,
         },
     );
-    let (mut model, terminal) = render_podcast_shell(app, 100, 30, true);
+    let (mut model, terminal) = render_podcast_shell_with(app, 100, 30, true, |model| {
+        if let Some(component) = model.abs_podcast_component_mut(0) {
+            component.set_episode_selection(Some(0));
+            component.set_episode_filter(AudiobookshelfEpisodeFilter::Played);
+        }
+    });
     let layout = &model.app.layout.main;
     let out = buffer_to_string(&terminal);
 

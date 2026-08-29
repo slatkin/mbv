@@ -1,5 +1,5 @@
 use super::notify_actions::ToastSeverity;
-use super::types_audiobookshelf_browse::BookRow;
+use super::types_audiobookshelf_browse::{AudiobookshelfEpisodeFilter, BookRow};
 use super::App;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, QueueItem};
@@ -127,8 +127,10 @@ impl App {
             state.error = None;
             state.detail_cache.clear();
             state.episodes = None;
-            state.episode_selection = None;
-            state.scroll = 0;
+            // `episode_selection` / `scroll` are component-owned now
+            // (split-browse-state-interaction-fields task 3.2); the content
+            // push after this reset drops the selected show, which resets the
+            // component's own interaction state.
             state.loading_pages.clear();
             // Mark page 0 pending before re-issuing it so the catalog reloads
             // from the first page (the renderer shows a Loading placeholder
@@ -168,37 +170,40 @@ impl App {
         }
     }
 
-    /// Resolve the selected downloaded episode at the Audiobookshelf playback
-    /// boundary. Queue submission remains the responsibility of the later
-    /// action stage; browse state never sees credentials or playback state.
-    /// Kept as a 1-arg read-only activation seam (reads the App mirror) for
-    /// the pre-U5 App-level tests; the shell play/enqueue path threads an
-    /// explicit component-resolved episode index directly (task 5.3d.11 U5).
+    /// Resolve the downloaded episode at `episode_index` at the Audiobookshelf
+    /// playback boundary. Queue submission remains the responsibility of the
+    /// later action stage; browse state never sees credentials or playback
+    /// state. Read-only resolver seam for the pre-U5 App-level tests; the
+    /// shell play/enqueue path threads the component-resolved episode index
+    /// and filter directly (task 5.3d.11 U5). The episode filter is
+    /// component-owned (split-browse-state-interaction-fields task 3.2), so
+    /// this seam resolves against the unfiltered (`All`) view.
     #[cfg(test)]
     pub(super) fn activate_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
+        episode_index: usize,
     ) -> Option<QueueItem> {
-        let state = self
-            .audiobookshelf_browse
-            .get(audiobookshelf_library_index)?;
-        let episode_index = state.episode_selection?;
-        self.selected_audiobookshelf_queue_item(audiobookshelf_library_index, episode_index)
+        self.selected_audiobookshelf_queue_item(
+            audiobookshelf_library_index,
+            episode_index,
+            AudiobookshelfEpisodeFilter::All,
+        )
     }
 
-    /// Resolve the selected episode for enqueue without mutating any queue or
-    /// opening a playback lifecycle. Kept as a 1-arg read-only activation seam
-    /// for the pre-U5 App-selection (see `activate_audiobookshelf_episode`).
+    /// Resolve the episode at `episode_index` for enqueue without mutating any
+    /// queue or opening a playback lifecycle (see `activate_audiobookshelf_episode`).
     #[cfg(test)]
     pub(super) fn enqueue_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
+        episode_index: usize,
     ) -> Option<QueueItem> {
-        let state = self
-            .audiobookshelf_browse
-            .get(audiobookshelf_library_index)?;
-        let episode_index = state.episode_selection?;
-        self.selected_audiobookshelf_queue_item(audiobookshelf_library_index, episode_index)
+        self.selected_audiobookshelf_queue_item(
+            audiobookshelf_library_index,
+            episode_index,
+            AudiobookshelfEpisodeFilter::All,
+        )
     }
 
     /// Ordinary play for the downloaded episode at `episode_index`. The shell
@@ -210,8 +215,10 @@ impl App {
         &mut self,
         index: usize,
         episode_index: usize,
+        filter: AudiobookshelfEpisodeFilter,
     ) {
-        let Some(item) = self.selected_audiobookshelf_queue_item(index, episode_index) else {
+        let Some(item) = self.selected_audiobookshelf_queue_item(index, episode_index, filter)
+        else {
             return;
         };
         if !self.player.can_admit_audiobookshelf() {
@@ -232,8 +239,10 @@ impl App {
         &mut self,
         index: usize,
         episode_index: usize,
+        filter: AudiobookshelfEpisodeFilter,
     ) {
-        let Some(item) = self.selected_audiobookshelf_queue_item(index, episode_index) else {
+        let Some(item) = self.selected_audiobookshelf_queue_item(index, episode_index, filter)
+        else {
             return;
         };
         let scope = self.visible_queue_scope();
@@ -253,11 +262,15 @@ impl App {
         &self,
         audiobookshelf_library_index: usize,
         episode_index: usize,
+        filter: AudiobookshelfEpisodeFilter,
     ) -> Option<QueueItem> {
         let state = self
             .audiobookshelf_browse
             .get(audiobookshelf_library_index)?;
-        let episode = state.visible_episodes().get(episode_index)?.to_owned();
+        let episode = state
+            .visible_episodes(filter)
+            .get(episode_index)?
+            .to_owned();
         if episode.library_item_id.trim().is_empty() || episode.episode_id.trim().is_empty() {
             return None;
         }

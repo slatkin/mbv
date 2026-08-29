@@ -6,7 +6,7 @@ mod selection_modal_tests {
     use super::super::shell::Model;
     use super::super::tests::make_app_stub;
     use super::super::types_audiobookshelf_browse::{
-        AudiobookshelfBookBrowseState, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
+        AudiobookshelfBookBrowseState, AudiobookshelfBrowseState,
     };
     use super::super::types_overlay::OverlayRequest;
     use super::super::types_selection_modal::{
@@ -479,7 +479,7 @@ mod selection_modal_tests {
                     duration_seconds: Some(60.0),
                 }]),
             });
-        model.sync_modal_requests();
+        sync_series_refresh(&mut model);
 
         assert_eq!(selection_modal(&model).selected_id(), Some("episode-1"));
     }
@@ -515,7 +515,7 @@ mod selection_modal_tests {
                     duration_seconds: Some(60.0),
                 }]),
             });
-        model.sync_modal_requests();
+        sync_series_refresh(&mut model);
 
         assert_eq!(selection_modal(&model).selected_id(), Some("event-episode"));
     }
@@ -702,11 +702,6 @@ mod selection_modal_tests {
         model.handle_selection_modal_request(ShellRequest::SelectionModalFilterSelected);
         model.sync_modal_requests();
 
-        // D14 stage-1 App mirror stays in sync with the chosen filter.
-        assert_eq!(
-            model.app.audiobookshelf_browse[0].episode_filter,
-            AudiobookshelfEpisodeFilter::Played
-        );
         // The component's filter pill reflects the chosen filter (Played = 1).
         assert_eq!(selection_modal(&model).filter_selected(), Some(1));
         // Rebuilt modal rows reflect the filtered episode subset.

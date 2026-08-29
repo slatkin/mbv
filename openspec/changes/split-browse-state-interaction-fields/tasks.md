@@ -37,15 +37,15 @@
 - [x] 3.1 Characterization tests for show position save/restore, episode-mode
       entry and exit, and episode filter surviving a refresh. Verify: passes
       pre-change.
-- [ ] 3.2 Split `AudiobookshelfBrowseState` the same way, applying whatever the
+- [x] 3.2 Split `AudiobookshelfBrowseState` the same way, applying whatever the
       book split taught. Preserve `select()`'s existing side effects — the
       `episode_selection = None` reset and the filter reset on identity change
       (`types_audiobookshelf_browse.rs:108-116`) — on the interaction struct.
       Verify: `rtk cargo check -p mbv`.
-- [ ] 3.3 Re-point each reader from 1.2. Verify: `rtk cargo check -p mbv`.
-- [ ] 3.4 Delete the podcast `set_content` restore block
+- [x] 3.3 Re-point each reader from 1.2. Verify: `rtk cargo check -p mbv`.
+- [x] 3.4 Delete the podcast `set_content` restore block
       (`audiobookshelf_podcast.rs:61-85`). Verify: 3.1's tests still pass.
-- [ ] 3.5 Verify: full gate as in 2.5.
+- [x] 3.5 Verify: full gate as in 2.5.
 
 ## 4. Split live cursor from resting position in `BrowseLevel` (D1)
 

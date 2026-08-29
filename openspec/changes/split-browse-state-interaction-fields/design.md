@@ -170,7 +170,8 @@ Reads:
 The sibling change `split-audiobookshelf-cursor-ownership` already moved the
 live paths onto the components. Remaining App-struct interaction reads:
 
-`AudiobookshelfBrowseState` — `selected_id`, `episode_selection`, `scroll`:
+`AudiobookshelfBrowseState` — `selected_id`, `episode_selection`, `scroll`,
+`episode_filter`:
 
 | Site | Field | Outcome |
 |---|---|---|
@@ -178,12 +179,21 @@ live paths onto the components. Remaining App-struct interaction reads:
 | `lib_event_actions.rs:221,262,281,319,371,740` (detail-fetched routing "is this detail for the current selection?") | `selected_id` | **2** — compare against the resting `selected_id`; the fetch was dispatched for that id |
 | `audiobookshelf_browse_actions.rs:82,164` (post-`select` readback) | `selected_id` | **1** — resolve id from `cursor` against `state.shows` locally, thread it |
 | `audiobookshelf_browse_actions.rs:264` (`selected_show()`) | `selected_id` | folds into the queue-item resolution, outcome **1** |
-| `audiobookshelf_browse_actions.rs:185,200` | `episode_selection` | `#[cfg(test)]` only — dropped with the App-selection test seams |
+| `audiobookshelf_browse_actions.rs:185,200` | `episode_selection` | `#[cfg(test)]` only — the test seams now take an explicit `episode_index` |
 | `shell_audiobookshelf_podcast.rs:25` | `episode_selection` | already component-owned (`component.episode_selection()`) |
-| `audiobookshelf_browse_actions.rs:130,131` | `episode_selection`, `scroll` | refresh reset only — move onto the interaction struct / component |
+| `audiobookshelf_browse_actions.rs:130,131` | `episode_selection`, `scroll` | refresh reset only — moved onto the component |
+| `audiobookshelf_browse_actions.rs:260` (`visible_episodes()` in `selected_audiobookshelf_queue_item`) | `episode_filter` | **1** — the episode index resolves *within the filtered list*, so the shell threads `component.episode_filter()` through `play/enqueue_selected_audiobookshelf_episode` |
+| `audiobookshelf_podcast_modal_actions.rs` (`open_podcast_selection_modal`, `select_podcast_selection_modal_filter`) | `episode_filter` | **1**/**3** — `open` reads `component.episode_filter()`; the shell filter-cycle path already owned it; the D14 App mirror write is deleted |
+| `lib_event_actions.rs:322,733,738` (detail-fetched / progress modal refresh) | `episode_filter` (was via the App mirror) | the modal now rebuilds via `RefreshSelectionModalAtSelectedFilter`, reading the **`SelectionModal` component's own** filter-pill selection — no App-side filter needed |
+| `types_audiobookshelf_browse.rs:108` (`select()` identity-change filter reset) | `episode_filter` | moved to the component's `select_show`; content `select()` exposes `select_changed_identity()` |
 
-`scroll` has **no** non-test reader — it is written by `refresh` and never read.
-It moves to the component (or is dropped) outright.
+`scroll` has **no** non-test reader — it is written by the renderer's inline
+flow and read back the next frame; it moves to the component as a
+`&mut usize` render parameter (the book-struct pattern from Task 2).
+Task 1.2 originally omitted `episode_filter`; it was inventoried during Task
+3.2 (rows above). `episode_filter`'s single source of truth is now the
+`AudiobookshelfPodcastComponent` (live browsing) and the `SelectionModal`
+component's filter pill (the open modal); no `App` field holds it.
 
 `AudiobookshelfBookBrowseState` — `selected_id`, `chapter_selection`, `selected_bucket`:
 

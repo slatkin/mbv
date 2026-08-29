@@ -20,14 +20,18 @@ impl Model {
         // (task 5.3d.11 U5), read through the U0 accessor. The App mirror is
         // neither read nor written here: a later FocusOrPlay/Space resolves the
         // explicit target instead of re-entering selection.
-        let episode = self
+        // The episode index is an index into the component's *filtered* view,
+        // so the resolver needs the component-owned filter too
+        // (split-browse-state-interaction-fields task 3.2).
+        let (episode, filter) = self
             .abs_podcast_component_mut(index)
-            .and_then(|component| component.episode_selection());
+            .map(|component| (component.episode_selection(), component.episode_filter()))
+            .unwrap_or((None, Default::default()));
         match intent {
             super::components::msg::PodcastEpisodeIntent::FocusOrPlay => {
                 if let Some(episode_index) = episode {
                     self.app
-                        .play_selected_audiobookshelf_episode(index, episode_index);
+                        .play_selected_audiobookshelf_episode(index, episode_index, filter);
                 } else if let Some(component) = self.abs_podcast_component_mut(index) {
                     // Entering episode selection is re-homed onto the mounted
                     // component (task 5.3d.11 U2); the post-request projection
@@ -38,7 +42,7 @@ impl Model {
             super::components::msg::PodcastEpisodeIntent::OpenOrPlay => {
                 if let Some(episode_index) = episode {
                     self.app
-                        .play_selected_audiobookshelf_episode(index, episode_index);
+                        .play_selected_audiobookshelf_episode(index, episode_index, filter);
                 } else if self.app.layout.main.is_wide_podcast_active() {
                     if let Some(component) = self.abs_podcast_component_mut(index) {
                         // Re-homed onto the mounted component (task 5.3d.11 U2),
@@ -52,7 +56,7 @@ impl Model {
             super::components::msg::PodcastEpisodeIntent::Enqueue => {
                 if let Some(episode_index) = episode {
                     self.app
-                        .enqueue_selected_audiobookshelf_episode(index, episode_index);
+                        .enqueue_selected_audiobookshelf_episode(index, episode_index, filter);
                 }
             }
         }

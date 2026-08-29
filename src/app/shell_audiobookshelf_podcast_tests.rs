@@ -83,12 +83,10 @@ fn abs_podcast_shell_push_drops_stale_component_episode_state() {
         .expect("podcast component mounted")
         .set_episode_selection(Some(0));
 
-    // App content changes: show-a is removed and the App snapshot carries a
-    // stale episode selection.
+    // App content changes: show-a (the component's selected show) is removed.
     let state = &mut model.app.audiobookshelf_browse[0];
     state.shows.retain(|show| show.library_item_id != "show-a");
     state.selected_id = Some("show-b".into());
-    state.episode_selection = Some(9);
     model.push_audiobookshelf_podcast_content();
 
     assert_eq!(
@@ -97,7 +95,7 @@ fn abs_podcast_shell_push_drops_stale_component_episode_state() {
             .expect("podcast component mounted")
             .episode_selection(),
         None,
-        "the content push must not adopt App's stale episode selection"
+        "the content push must drop the component's stale episode selection"
     );
 }
 
@@ -121,12 +119,15 @@ fn abs_podcast_shell_routes_episode_transition_to_app() {
             duration_seconds: None,
         },
     ]);
-    model.app.audiobookshelf_browse[0].episode_selection = Some(0);
     model.sync_audiobookshelf_podcast();
     let id = model
         .abs_podcast_id
         .clone()
         .expect("podcast component mounted");
+    model
+        .abs_podcast_component_mut(0)
+        .expect("podcast component mounted")
+        .set_episode_selection(Some(0));
     let message = model
         .application
         .get_component_mut(&id)
@@ -168,13 +169,10 @@ fn abs_podcast_shell_routes_action_intent_to_app() {
         Some(0)
     );
 
-    // With episode selection active, the enqueue intent reaches the App
-    // enqueue seam (the default fixture has one downloaded episode) while
-    // leaving the App episode selection untouched.
-    model.app.audiobookshelf_browse[0].episode_selection = Some(0);
-    let before = model.app.audiobookshelf_browse[0].episode_selection;
+    // With episode selection active on the component, the enqueue intent
+    // reaches the App enqueue seam (the default fixture has one downloaded
+    // episode).
     model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::Enqueue);
-    assert_eq!(model.app.audiobookshelf_browse[0].episode_selection, before);
     assert_eq!(model.app.player_tab.total_queue_len(), 1);
 }
 
@@ -189,19 +187,12 @@ fn abs_podcast_shell_routes_action_intent_to_app() {
 fn abs_podcast_focus_play_uses_component_selection_not_stale_app_mirror() {
     let mut model = Model::new(audiobookshelf_app());
     crate::app::tests_podcast::add_emby_movie_library(&mut model.app);
-    // Project a selection into the mounted component, then stale the mirror
-    // to None so only the component owns the resolved target.
-    model.app.audiobookshelf_browse[0].episode_selection = Some(0);
+    // Only the component owns the resolved episode target.
     model.sync_audiobookshelf_podcast();
-    model.app.audiobookshelf_browse[0].episode_selection = None;
-    let id = model
-        .abs_podcast_id
-        .clone()
-        .expect("podcast component mounted");
     model
-        .application
-        .get_component_mut(&id)
-        .expect("podcast component");
+        .abs_podcast_component_mut(0)
+        .expect("podcast component mounted")
+        .set_episode_selection(Some(0));
 
     // A real FocusOrPlay through the Model handler must not re-enter
     // selection: the component's owned selection resolves the play target,
@@ -227,10 +218,6 @@ fn abs_podcast_focus_play_uses_component_selection_not_stale_app_mirror() {
         0,
         "inert play attempt must not enqueue"
     );
-    assert_eq!(
-        model.app.audiobookshelf_browse[0].episode_selection, None,
-        "the stale App mirror must not be written or read for the target"
-    );
 }
 
 /// U5 regression: Enqueue resolves the component-owned episode index the
@@ -238,19 +225,17 @@ fn abs_podcast_focus_play_uses_component_selection_not_stale_app_mirror() {
 #[test]
 fn abs_podcast_enqueue_uses_component_selection_over_stale_app_mirror() {
     let mut model = Model::new(audiobookshelf_app());
-    model.app.audiobookshelf_browse[0].episode_selection = Some(0);
     model.sync_audiobookshelf_podcast();
-    model.app.audiobookshelf_browse[0].episode_selection = None;
+    model
+        .abs_podcast_component_mut(0)
+        .expect("podcast component mounted")
+        .set_episode_selection(Some(0));
 
     model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::Enqueue);
     assert_eq!(
         model.app.player_tab.total_queue_len(),
         1,
         "Enqueue must resolve the component-owned episode target"
-    );
-    assert_eq!(
-        model.app.audiobookshelf_browse[0].episode_selection, None,
-        "Enqueue must not read or write the stale App mirror"
     );
     let component = model
         .abs_podcast_component_mut(0)
@@ -270,13 +255,16 @@ fn abs_podcast_enqueue_uses_component_selection_over_stale_app_mirror() {
 fn abs_podcast_shell_space_and_ctrla_are_inert_without_owner() {
     let mut model = Model::new(audiobookshelf_app());
     crate::app::tests_podcast::add_emby_movie_library(&mut model.app);
-    model.app.audiobookshelf_browse[0].episode_selection = Some(0);
     let nav_len = model.app.libs[0].nav_stack.len();
     model.sync_audiobookshelf_podcast();
     let id = model
         .abs_podcast_id
         .clone()
         .expect("podcast component mounted");
+    model
+        .abs_podcast_component_mut(0)
+        .expect("podcast component mounted")
+        .set_episode_selection(Some(0));
 
     // Space -> FocusOrPlay: reported with selection, resolved inert at the
     // App boundary without an eligible owner.
@@ -297,7 +285,10 @@ fn abs_podcast_shell_space_and_ctrla_are_inert_without_owner() {
     // status without enqueuing.
     model.handle_audiobookshelf_podcast_episode_intent(intent);
     assert_eq!(
-        model.app.audiobookshelf_browse[0].episode_selection,
+        model
+            .abs_podcast_component_mut(0)
+            .expect("podcast component mounted")
+            .episode_selection(),
         Some(0)
     );
     assert_eq!(
@@ -330,7 +321,10 @@ fn abs_podcast_shell_space_and_ctrla_are_inert_without_owner() {
     // queue is edited; the component only reports, it does not enqueue.
     model.handle_audiobookshelf_podcast_episode_intent(intent);
     assert_eq!(
-        model.app.audiobookshelf_browse[0].episode_selection,
+        model
+            .abs_podcast_component_mut(0)
+            .expect("podcast component mounted")
+            .episode_selection(),
         Some(0),
         "enqueue intent must preserve the selected episode"
     );
@@ -535,9 +529,9 @@ fn abs_podcast_stays_mounted_and_preserves_selection_across_switch() {
             })
             .and_then(AudiobookshelfPodcastComponent::selected_id)
     };
-    // Drive the component-local selection to a non-default value: add a
-    // second show, move Down (which selects it), and keep the request
-    // unapplied to App so the component selection diverges.
+    // Drive the selection to a non-default value: add a second show, move
+    // Down (which selects it), and apply the resulting request to App so
+    // content and interaction agree on the second show before the switch.
     model.app.audiobookshelf_browse[0].append_page(
         1,
         20,
@@ -565,6 +559,8 @@ fn abs_podcast_stays_mounted_and_preserves_selection_across_switch() {
             index: 1
         }))
     ));
+    model.app.select_audiobookshelf_show(1);
+    model.push_audiobookshelf_podcast_content();
     assert_eq!(
         selected_id(&model),
         Some("show-b".into()),

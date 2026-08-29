@@ -27,8 +27,9 @@ impl AudiobookshelfBrowseKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(super) enum AudiobookshelfEpisodeFilter {
+    #[default]
     All,
     Played,
     Unplayed,
@@ -61,9 +62,6 @@ pub(super) struct AudiobookshelfBrowseState {
     pub detail_cache: HashMap<String, Vec<AudiobookshelfDownloadedEpisode>>,
     pub detail_loading: bool,
     pub progress: HashMap<(String, String), AudiobookshelfProgress>,
-    pub episode_filter: AudiobookshelfEpisodeFilter,
-    pub episode_selection: Option<usize>,
-    pub scroll: usize,
 }
 
 impl AudiobookshelfBrowseState {
@@ -80,9 +78,6 @@ impl AudiobookshelfBrowseState {
             detail_cache: HashMap::new(),
             detail_loading: false,
             progress: HashMap::new(),
-            episode_filter: AudiobookshelfEpisodeFilter::All,
-            episode_selection: None,
-            scroll: 0,
         }
     }
 
@@ -99,21 +94,24 @@ impl AudiobookshelfBrowseState {
             .unwrap_or(0)
     }
 
+    /// Whether the last `select()` changed the selected show. The component
+    /// owns the episode filter / episode-mode selection and consults this to
+    /// reset them on an identity change (the reset moved off this content
+    /// struct in split-browse-state-interaction-fields task 3.2).
+    pub fn select_changed_identity(&self, cursor: usize) -> bool {
+        self.shows.get(cursor).map(|show| &show.library_item_id) != self.selected_id.as_ref()
+    }
+
     pub fn select(&mut self, cursor: usize) {
-        let previous_id = self.selected_id.clone();
         self.selected_id = self
             .shows
             .get(cursor)
             .map(|show| show.library_item_id.clone());
-        if self.selected_id != previous_id {
-            self.episode_filter = AudiobookshelfEpisodeFilter::All;
-        }
         self.episodes = self
             .selected_id
             .as_ref()
             .and_then(|id| self.detail_cache.get(id).cloned());
         self.detail_loading = false;
-        self.episode_selection = None;
     }
 
     pub fn cache_detail(&mut self, id: String, episodes: Vec<AudiobookshelfDownloadedEpisode>) {
@@ -125,17 +123,21 @@ impl AudiobookshelfBrowseState {
         self.shows.iter().find(|show| show.library_item_id == id)
     }
 
-    pub fn visible_episodes(&self) -> Vec<&AudiobookshelfDownloadedEpisode> {
-        self.visible_episodes_from(self.episodes.as_deref().unwrap_or_default())
+    pub fn visible_episodes(
+        &self,
+        filter: AudiobookshelfEpisodeFilter,
+    ) -> Vec<&AudiobookshelfDownloadedEpisode> {
+        self.visible_episodes_from(self.episodes.as_deref().unwrap_or_default(), filter)
     }
 
     pub fn visible_episodes_from<'a>(
         &self,
         source: &'a [AudiobookshelfDownloadedEpisode],
+        filter: AudiobookshelfEpisodeFilter,
     ) -> Vec<&'a AudiobookshelfDownloadedEpisode> {
         let mut episodes = source
             .iter()
-            .filter(|episode| match self.episode_filter {
+            .filter(|episode| match filter {
                 AudiobookshelfEpisodeFilter::All => true,
                 AudiobookshelfEpisodeFilter::Played => self
                     .progress
@@ -151,13 +153,6 @@ impl AudiobookshelfBrowseState {
             compare_publication_dates(left.published_at.as_deref(), right.published_at.as_deref())
         });
         episodes
-    }
-
-    pub fn set_episode_filter(&mut self, filter: AudiobookshelfEpisodeFilter) {
-        self.episode_filter = filter;
-        if self.episode_selection.is_some() {
-            self.episode_selection = Some(0);
-        }
     }
 
     pub fn append_page(
@@ -516,15 +511,14 @@ mod tests {
     }
 
     #[test]
-    fn rows_move_between_show_and_episode_identity() {
+    fn select_drops_the_prior_shows_episodes_and_reports_identity_change() {
         let mut state = AudiobookshelfBrowseState::new(library());
         state.append_page(1, 20, 2, vec![show("a", "A"), show("b", "B")]);
+        state.select(0);
         state.episodes = Some(vec![episode("a", "shared"), episode("a", "two")]);
-        state.episode_selection = Some(0);
+        assert!(state.select_changed_identity(1));
         state.select(1);
         assert_eq!(state.episodes, None);
-        assert_eq!(state.episode_selection, None);
-        assert_eq!(state.episode_filter, AudiobookshelfEpisodeFilter::All);
     }
 
     #[test]
@@ -581,12 +575,13 @@ mod tests {
             },
         );
 
-        state.set_episode_filter(AudiobookshelfEpisodeFilter::Played);
-        assert_eq!(state.visible_episodes()[0].episode_id, "finished");
-        state.set_episode_filter(AudiobookshelfEpisodeFilter::Unplayed);
+        assert_eq!(
+            state.visible_episodes(AudiobookshelfEpisodeFilter::Played)[0].episode_id,
+            "finished"
+        );
         assert_eq!(
             state
-                .visible_episodes()
+                .visible_episodes(AudiobookshelfEpisodeFilter::Unplayed)
                 .into_iter()
                 .map(|episode| episode.episode_id.as_str())
                 .collect::<Vec<_>>(),
@@ -606,7 +601,7 @@ mod tests {
 
         assert_eq!(
             state
-                .visible_episodes()
+                .visible_episodes(AudiobookshelfEpisodeFilter::All)
                 .into_iter()
                 .map(|episode| episode.episode_id.as_str())
                 .collect::<Vec<_>>(),

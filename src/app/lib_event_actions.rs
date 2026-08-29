@@ -305,44 +305,41 @@ impl App {
             if !self.audiobookshelf_runtime.accepts(generation) {
                 return;
             }
-            let modal_state = match result {
+            let state = self.audiobookshelf_browse.iter_mut().find(|state| {
+                state
+                    .shows
+                    .iter()
+                    .any(|show| show.library_item_id == library_item_id)
+            });
+            match result {
                 Ok(episodes) => {
-                    let state = self.audiobookshelf_browse.iter_mut().find(|state| {
-                        state
-                            .shows
-                            .iter()
-                            .any(|show| show.library_item_id == library_item_id)
-                    });
-                    state.map(|state| {
+                    if let Some(state) = state {
                         state.detail_loading = false;
                         state.cache_detail(library_item_id.clone(), episodes.clone());
                         if state.selected_id.as_deref() == Some(&library_item_id) {
                             state.episodes = Some(episodes);
                         }
-                        super::audiobookshelf_podcast_modal_actions::podcast_modal_state_for_detail(
-                            state,
-                            &library_item_id,
-                        )
-                    })
+                    }
+                    // Rebuild the modal at its own selected filter (the filter
+                    // is component-owned now,
+                    // split-browse-state-interaction-fields task 3.2); no-op
+                    // when the modal is showing a different show or is closed.
+                    self.pending_overlay = Some(
+                        super::types_overlay::OverlayRequest::RefreshSelectionModalAtSelectedFilter {
+                            source: SelectionModalSource::Podcast { library_item_id },
+                        },
+                    );
                 }
                 Err(_error) => {
-                    if let Some(state) = self.audiobookshelf_browse.iter_mut().find(|state| {
-                        state
-                            .shows
-                            .iter()
-                            .any(|show| show.library_item_id == library_item_id)
-                    }) {
+                    if let Some(state) = state {
                         state.detail_loading = false;
                     }
-                    Some(SelectionModalListState::Empty)
+                    self.refresh_selection_modal(
+                        SelectionModalSource::Podcast { library_item_id },
+                        SelectionModalListState::Empty,
+                        None,
+                    );
                 }
-            };
-            if let Some(modal_state) = modal_state {
-                self.refresh_selection_modal(
-                    SelectionModalSource::Podcast { library_item_id },
-                    modal_state,
-                    None,
-                );
             }
             return;
         }
@@ -725,29 +722,21 @@ impl App {
             );
         }
         // Refresh the mounted podcast modal if this progress update belongs to
-        // its show. The shell ignores this request when the modal is unmounted.
-        if let Some(state) = self.audiobookshelf_browse.iter().find(|state| {
+        // its show, rebuilding it at its own component-owned selected filter
+        // (split-browse-state-interaction-fields task 3.2). The shell ignores
+        // this request when the modal is closed or showing another show.
+        if self.audiobookshelf_browse.iter().any(|state| {
             state
                 .shows
                 .iter()
                 .any(|show| show.library_item_id == library_item_id)
         }) {
-            let modal_state = if state.detail_cache.contains_key(library_item_id) {
-                super::audiobookshelf_podcast_modal_actions::podcast_modal_state_for_detail(
-                    state,
-                    library_item_id,
-                )
-            } else if state.selected_id.as_deref() == Some(library_item_id) {
-                super::audiobookshelf_podcast_modal_actions::podcast_modal_state(state)
-            } else {
-                return;
-            };
-            self.refresh_selection_modal(
-                SelectionModalSource::Podcast {
-                    library_item_id: library_item_id.to_owned(),
+            self.pending_overlay = Some(
+                super::types_overlay::OverlayRequest::RefreshSelectionModalAtSelectedFilter {
+                    source: SelectionModalSource::Podcast {
+                        library_item_id: library_item_id.to_owned(),
+                    },
                 },
-                modal_state,
-                None,
             );
         }
         if !matching_slot_ids.is_empty() {

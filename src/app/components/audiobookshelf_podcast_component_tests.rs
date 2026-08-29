@@ -48,13 +48,11 @@ fn abs_podcast_component_drops_stale_episode_state_when_selection_vanishes() {
     component.set_episode_selection(Some(1));
     component.set_episode_filter(AudiobookshelfEpisodeFilter::Unplayed);
 
-    // New content: show-a is gone, and the snapshot carries interaction
-    // values `App` has no business owning.
+    // New content: show-a is gone. The projected content type no longer
+    // carries episode filter / selection / scroll, so the component's own
+    // interaction state is all there is -- and it must reset.
     let mut second = AudiobookshelfBrowseState::new(library);
     second.append_page(0, 20, 1, vec![show("show-b", "Show B")]);
-    second.episode_selection = Some(5);
-    second.episode_filter = AudiobookshelfEpisodeFilter::Played;
-    second.scroll = 7;
 
     component.set_content(&second, true, false);
 
@@ -103,11 +101,11 @@ fn abs_podcast_component_keeps_local_show_cursor_and_renders_without_app_state()
 
 #[test]
 fn abs_podcast_component_emits_typed_episode_transitions_in_episode_mode() {
-    let mut app = crate::app::tests_podcast::audiobookshelf_app();
-    app.audiobookshelf_browse[0].episode_selection = Some(0);
+    let app = crate::app::tests_podcast::audiobookshelf_app();
     let state = &app.audiobookshelf_browse[0];
     let mut component = AudiobookshelfPodcastComponent::new();
     component.set_content(state, true, false);
+    component.set_episode_selection(Some(0));
 
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Down,

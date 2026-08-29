@@ -25,6 +25,7 @@ use crate::app::types_audiobookshelf_browse::{
 /// image-height minimum when images are enabled.
 pub(in crate::app::render) fn podcast_hero_content_rows(
     state: &AudiobookshelfBrowseState,
+    interaction: PodcastInteraction,
     show_title: bool,
     width: u16,
     images_enabled: bool,
@@ -54,12 +55,12 @@ pub(in crate::app::render) fn podcast_hero_content_rows(
         .len()
         .min(4) as u16;
     }
-    if state.episode_selection.is_some() {
+    if interaction.episode_selection.is_some() {
         rows += 1 + SERIES_DETAIL_DIVIDER_ROWS as u16;
         rows += state
             .episodes
             .as_ref()
-            .map(|_| state.visible_episodes().len())
+            .map(|_| state.visible_episodes(interaction.episode_filter).len())
             .unwrap_or(SERIES_DETAIL_EPISODE_ROWS_ESTIMATE) as u16;
     }
     rows += SERIES_DETAIL_TRAILING_BLANK_ROWS as u16;
@@ -74,6 +75,15 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, Paragraph};
 use ratatui::Frame;
+
+/// The component-owned interaction values the podcast renderer needs, passed
+/// in rather than read off the projected content type
+/// (split-browse-state-interaction-fields task 3.2).
+#[derive(Clone, Copy)]
+pub(in crate::app) struct PodcastInteraction {
+    pub episode_filter: AudiobookshelfEpisodeFilter,
+    pub episode_selection: Option<usize>,
+}
 
 /// Geometry painted by the podcast component. Input uses this same geometry,
 /// so selector and show targets cannot drift from the rendered surface.
@@ -108,11 +118,22 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     focused: bool,
     images_enabled: bool,
     state: &mut AudiobookshelfBrowseState,
+    interaction: PodcastInteraction,
+    scroll: &mut usize,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
     *geometry = AudiobookshelfPodcastGeometry::default();
     let Some((hero_panel, right_panel)) = hero_left::shared_hero_presentation(area) else {
-        return render_narrow_podcast(frame, area, focused, images_enabled, state, geometry);
+        return render_narrow_podcast(
+            frame,
+            area,
+            focused,
+            images_enabled,
+            state,
+            interaction,
+            scroll,
+            geometry,
+        );
     };
 
     // Wide hero: title lives in the right show-list panel, so the hero
@@ -124,6 +145,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         frame,
         hero_panel,
         state,
+        interaction,
         focused,
         false,
         images_enabled,
@@ -142,16 +164,19 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     if state.selected_show().is_some() {
         geometry.hero_area = hero_panel;
     }
-    render_show_rows(frame, right_panel, focused, state, 1, 0, geometry);
+    render_show_rows(frame, right_panel, focused, state, 1, 0, *scroll, geometry);
     image_paint
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_narrow_podcast(
     frame: &mut Frame,
     area: Rect,
     focused: bool,
     images_enabled: bool,
     state: &mut AudiobookshelfBrowseState,
+    interaction: PodcastInteraction,
+    scroll: &mut usize,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
     if state.shows.is_empty() {
@@ -189,8 +214,9 @@ fn render_narrow_podcast(
     let hero_content_width = list_area
         .width
         .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
-    let desired_rows = podcast_hero_content_rows(state, true, hero_content_width, images_enabled)
-        + HERO_BLOCK_EXTRA_ROWS;
+    let desired_rows =
+        podcast_hero_content_rows(state, interaction, true, hero_content_width, images_enabled)
+            + HERO_BLOCK_EXTRA_ROWS;
     let hero_rows = if desired_rows >= HERO_BLOCK_EXTRA_ROWS && desired_rows < list_area.height {
         desired_rows
     } else {
@@ -203,6 +229,7 @@ fn render_narrow_podcast(
         state,
         library_column_width::library_column_count(list_area.width),
         hero_rows,
+        *scroll,
         geometry,
     );
     if hero_rows == 0 {
@@ -210,11 +237,10 @@ fn render_narrow_podcast(
     }
     let cursor_row =
         state.cursor() / library_column_width::library_column_count(list_area.width).max(1);
-    let Some(flow) = inline_detail_flow(cursor_row, hero_rows, list_area.height, state.scroll)
-    else {
+    let Some(flow) = inline_detail_flow(cursor_row, hero_rows, list_area.height, *scroll) else {
         return None;
     };
-    state.scroll = flow.offset;
+    *scroll = flow.offset;
     let hero_area = Rect {
         x: list_area.x,
         y: list_area.y + flow.detail_screen_row as u16,
@@ -236,6 +262,7 @@ fn render_narrow_podcast(
         frame,
         hero_area,
         state,
+        interaction,
         focused,
         true,
         images_enabled,
@@ -244,10 +271,12 @@ fn render_narrow_podcast(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_podcast_hero(
     frame: &mut Frame,
     area: Rect,
     state: &AudiobookshelfBrowseState,
+    interaction: PodcastInteraction,
     focused: bool,
     show_title: bool,
     images_enabled: bool,
@@ -291,8 +320,8 @@ fn render_podcast_hero(
     // Episode filter pills + table are wide-only (`persistent` legacy
     // gate); narrow routes Enter to the selection modal instead, so
     // `episode_selection` is never set in narrow in practice.
-    if wide && state.episode_selection.is_some() && result.next_row < area.bottom() {
-        let filter = state.episode_filter;
+    if wide && interaction.episode_selection.is_some() && result.next_row < area.bottom() {
+        let filter = interaction.episode_filter;
         let labels: Vec<String> = AudiobookshelfEpisodeFilter::ALL
             .iter()
             .map(|filter| filter.label().into())
@@ -318,7 +347,7 @@ fn render_podcast_hero(
         );
         geometry.selector_tabs.extend(tabs);
         let row_y = result.next_row + 1;
-        for (index, episode) in state.visible_episodes().iter().enumerate() {
+        for (index, episode) in state.visible_episodes(filter).iter().enumerate() {
             if row_y + index as u16 >= area.bottom() {
                 break;
             }
@@ -328,7 +357,7 @@ fn render_podcast_hero(
                 width: area.width,
                 height: 1,
             };
-            let marker = if state.episode_selection == Some(index) {
+            let marker = if interaction.episode_selection == Some(index) {
                 "> "
             } else {
                 "  "
@@ -357,6 +386,7 @@ fn render_show_rows(
     state: &AudiobookshelfBrowseState,
     cols: usize,
     hero_rows: u16,
+    scroll: usize,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) {
     let cols = cols.max(1);
@@ -374,13 +404,11 @@ fn render_show_rows(
         .unwrap_or(0);
     let total_display = inline_display_row_count(rows.len(), cursor_row, hero_rows);
     let scroll = if hero_rows > 0 {
-        inline_detail_flow(cursor_row, hero_rows, area.height, state.scroll)
+        inline_detail_flow(cursor_row, hero_rows, area.height, scroll)
             .map(|flow| flow.offset)
             .unwrap_or(0)
     } else {
-        state
-            .scroll
-            .min(total_display.saturating_sub(area.height as usize))
+        scroll.min(total_display.saturating_sub(area.height as usize))
     };
     let items: Vec<ListItem> = (scroll..total_display)
         .take(area.height as usize)
@@ -434,7 +462,7 @@ fn render_show_rows(
 
 #[cfg(test)]
 mod tests {
-    use super::podcast_hero_content_rows;
+    use super::{podcast_hero_content_rows, PodcastInteraction};
     use crate::app::render::components::detail_series_view::{
         SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
         SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS,
@@ -442,10 +470,19 @@ mod tests {
     use crate::app::render::components::hero::{
         inline_hero_text_width, wrap_overview_lines, HERO_TITLE_ROWS,
     };
-    use crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState;
+    use crate::app::types_audiobookshelf_browse::{
+        AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
+    };
     use mbv_core::audiobookshelf::{
         AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfShow,
     };
+
+    fn interaction(episode_selection: Option<usize>) -> PodcastInteraction {
+        PodcastInteraction {
+            episode_filter: AudiobookshelfEpisodeFilter::All,
+            episode_selection,
+        }
+    }
 
     fn make_state(show: AudiobookshelfShow) -> AudiobookshelfBrowseState {
         let library = AudiobookshelfLibrary {
@@ -466,6 +503,7 @@ mod tests {
     /// before).
     fn legacy_hero_content_rows(
         state: &AudiobookshelfBrowseState,
+        interaction: PodcastInteraction,
         show_title: bool,
         width: u16,
         images_enabled: bool,
@@ -495,12 +533,12 @@ mod tests {
             .len()
             .min(4) as u16;
         }
-        if state.episode_selection.is_some() {
+        if interaction.episode_selection.is_some() {
             rows += 1 + SERIES_DETAIL_DIVIDER_ROWS as u16;
             rows += state
                 .episodes
                 .as_ref()
-                .map(|_| state.visible_episodes().len())
+                .map(|_| state.visible_episodes(interaction.episode_filter).len())
                 .unwrap_or(SERIES_DETAIL_EPISODE_ROWS_ESTIMATE) as u16;
         }
         rows += SERIES_DETAIL_TRAILING_BLANK_ROWS as u16;
@@ -510,9 +548,14 @@ mod tests {
         rows
     }
 
-    fn assert_matches_legacy(state: &AudiobookshelfBrowseState, width: u16, images_enabled: bool) {
-        let got = podcast_hero_content_rows(state, true, width, images_enabled);
-        let expected = legacy_hero_content_rows(state, true, width, images_enabled);
+    fn assert_matches_legacy(
+        state: &AudiobookshelfBrowseState,
+        interaction: PodcastInteraction,
+        width: u16,
+        images_enabled: bool,
+    ) {
+        let got = podcast_hero_content_rows(state, interaction, true, width, images_enabled);
+        let expected = legacy_hero_content_rows(state, interaction, true, width, images_enabled);
         assert_eq!(got, expected, "shared helper must match legacy rule");
     }
 
@@ -526,8 +569,11 @@ mod tests {
             cover_path: None,
         });
         // title(1) + author(1) + trailing(1) = 3; no image minimum.
-        assert_eq!(podcast_hero_content_rows(&state, true, 40, false), 3);
-        assert_matches_legacy(&state, 40, false);
+        assert_eq!(
+            podcast_hero_content_rows(&state, interaction(None), true, 40, false),
+            3
+        );
+        assert_matches_legacy(&state, interaction(None), 40, false);
     }
 
     #[test]
@@ -539,7 +585,7 @@ mod tests {
             description: Some("word ".repeat(80)),
             cover_path: None,
         });
-        assert_matches_legacy(&state, 40, false);
+        assert_matches_legacy(&state, interaction(None), 40, false);
     }
 
     #[test]
@@ -551,7 +597,6 @@ mod tests {
             description: None,
             cover_path: None,
         });
-        state.episode_selection = Some(0);
         state.episodes = Some(vec![
             AudiobookshelfDownloadedEpisode {
                 library_item_id: "s".into(),
@@ -575,7 +620,7 @@ mod tests {
                 duration_seconds: None,
             },
         ]);
-        assert_matches_legacy(&state, 40, false);
+        assert_matches_legacy(&state, interaction(Some(0)), 40, false);
     }
 
     #[test]
@@ -589,9 +634,9 @@ mod tests {
         });
         // Images enabled lifts even a title-only budget to SERIES_IMAGE_ROWS+1.
         assert_eq!(
-            podcast_hero_content_rows(&state, true, 40, true),
+            podcast_hero_content_rows(&state, interaction(None), true, 40, true),
             SERIES_IMAGE_ROWS + 1
         );
-        assert_matches_legacy(&state, 40, true);
+        assert_matches_legacy(&state, interaction(None), 40, true);
     }
 }

@@ -18,6 +18,7 @@ use super::msg::{Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, ShellReque
 use super::user_event::UserEvent;
 use crate::app::render::{
     render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry, HomeImagePaint,
+    PodcastInteraction,
 };
 use crate::app::types_audiobookshelf_browse::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
@@ -25,6 +26,11 @@ use crate::app::types_audiobookshelf_browse::{
 
 pub struct AudiobookshelfPodcastComponent {
     state: AudiobookshelfBrowseState,
+    /// Component-owned interaction state, never present on the projected
+    /// content type (split-browse-state-interaction-fields task 3.2).
+    episode_filter: AudiobookshelfEpisodeFilter,
+    episode_selection: Option<usize>,
+    scroll: usize,
     initialized: bool,
     focused: bool,
     images_enabled: bool,
@@ -42,6 +48,9 @@ impl AudiobookshelfPodcastComponent {
                     media_type: "podcast".into(),
                 },
             ),
+            episode_filter: AudiobookshelfEpisodeFilter::All,
+            episode_selection: None,
+            scroll: 0,
             initialized: false,
             focused: false,
             images_enabled: false,
@@ -56,46 +65,26 @@ impl AudiobookshelfPodcastComponent {
         focused: bool,
         images_enabled: bool,
     ) {
-        // The component's own interaction values win over the incoming
-        // snapshot unconditionally (split-audiobookshelf-cursor-ownership D4).
-        // When the show the component had selected is gone from the new
-        // content, its own `episode_filter` / `episode_selection` / `scroll`
-        // reset to their defaults rather than adopting the snapshot's copies
-        // (`App` has no business owning those). The resting cursor
-        // (`selected_id`) is sanctioned shell-owned navigation state and is
-        // taken from the snapshot in that case.
-        let carried = self.initialized.then(|| {
-            (
-                self.state.selected_id.clone(),
-                self.state.episode_filter,
-                self.state.episode_selection,
-                self.state.scroll,
-            )
-        });
-        self.state = snapshot.clone();
-        let survivor = carried.filter(|(id, ..)| {
-            id.as_ref().is_some_and(|id| {
-                self.state
+        // Content and interaction are separate types now: the projected
+        // snapshot carries no `episode_filter` / `episode_selection` /
+        // `scroll`, so adopting it wholesale cannot clobber them and there is
+        // nothing to save and restore (split-browse-state-interaction-fields
+        // task 3.4). Whether the show the component had selected survived the
+        // new content decides if its derived local state still means anything.
+        let survived = self.initialized
+            && self.state.selected_id.as_ref().is_some_and(|prior| {
+                snapshot
                     .shows
                     .iter()
-                    .any(|show| &show.library_item_id == id)
-            })
-        });
-        if let Some((id, episode_filter, episode_selection, scroll)) = survivor {
-            self.state.selected_id = id;
-            self.state.episodes = self
-                .state
-                .selected_id
-                .as_ref()
-                .and_then(|id| self.state.detail_cache.get(id).cloned())
-                .or_else(|| snapshot.episodes.clone());
-            self.state.episode_filter = episode_filter;
-            self.state.episode_selection = episode_selection;
-            self.state.scroll = scroll.min(self.state.shows.len().saturating_sub(1));
-        } else if self.initialized {
-            self.state.episode_filter = AudiobookshelfEpisodeFilter::All;
-            self.state.episode_selection = None;
-            self.state.scroll = 0;
+                    .any(|show| &show.library_item_id == prior)
+            });
+        self.state = snapshot.clone();
+        if self.initialized && !survived {
+            // The selected show dropped out of the new content: reset the
+            // component-owned interaction state rather than carrying it.
+            self.episode_filter = AudiobookshelfEpisodeFilter::All;
+            self.episode_selection = None;
+            self.scroll = 0;
         }
         self.initialized = true;
         self.focused = focused;
@@ -116,23 +105,38 @@ impl AudiobookshelfPodcastComponent {
     }
 
     pub(in crate::app) fn episode_selection(&self) -> Option<usize> {
-        self.state.episode_selection
+        self.episode_selection
     }
 
     pub(in crate::app) fn episode_filter(&self) -> AudiobookshelfEpisodeFilter {
-        self.state.episode_filter
+        self.episode_filter
     }
 
-    /// Re-home mutators (task 5.3d.11 U0): write the shared browse state the
-    /// legacy handlers currently touch via `App.audiobookshelf_browse`.
-    /// `set_episode_filter` delegates to the state's existing reset semantics
-    /// (drops any in-progress episode selection to `0`).
+    /// Sets the component-owned episode filter, keeping the in-progress
+    /// episode selection (if any) valid by re-homing it to row `0` -- the
+    /// reset semantics `AudiobookshelfBrowseState::set_episode_filter` used to
+    /// carry (split-browse-state-interaction-fields task 3.2).
     pub(in crate::app) fn set_episode_filter(&mut self, filter: AudiobookshelfEpisodeFilter) {
-        self.state.set_episode_filter(filter);
+        self.episode_filter = filter;
+        if self.episode_selection.is_some() {
+            self.episode_selection = Some(0);
+        }
     }
 
     pub(in crate::app) fn set_episode_selection(&mut self, selection: Option<usize>) {
-        self.state.episode_selection = selection;
+        self.episode_selection = selection;
+    }
+
+    /// Moves the show cursor to `cursor`, resetting the component-owned
+    /// episode filter / episode-mode selection when that changes the selected
+    /// show -- the identity-change reset that lived in
+    /// `AudiobookshelfBrowseState::select` before task 3.2.
+    fn select_show(&mut self, cursor: usize) {
+        if self.state.select_changed_identity(cursor) {
+            self.episode_filter = AudiobookshelfEpisodeFilter::All;
+        }
+        self.episode_selection = None;
+        self.state.select(cursor);
     }
 
     /// The image-paint plan this component computed during its last `view`
@@ -158,7 +162,7 @@ impl AudiobookshelfPodcastComponent {
             return;
         }
         let next = crate::app::ui_util::move_cursor(cursor, delta, count);
-        self.state.select(next);
+        self.select_show(next);
     }
 
     /// The resolved-index show-move request for the cursor the component just
@@ -175,36 +179,36 @@ impl AudiobookshelfPodcastComponent {
             return None;
         }
         match key.code {
-            Key::Up | Key::Char('k') if self.state.episode_selection.is_none() => {
+            Key::Up | Key::Char('k') if self.episode_selection.is_none() => {
                 self.move_cursor(-1);
                 return Some(self.show_move_request());
             }
-            Key::Down | Key::Char('j') if self.state.episode_selection.is_none() => {
+            Key::Down | Key::Char('j') if self.episode_selection.is_none() => {
                 self.move_cursor(1);
                 return Some(self.show_move_request());
             }
-            Key::Left | Key::Char('h') if self.state.episode_selection.is_none() => {
+            Key::Left | Key::Char('h') if self.episode_selection.is_none() => {
                 self.move_cursor(-1);
                 return Some(self.show_move_request());
             }
-            Key::Right | Key::Char('l') if self.state.episode_selection.is_none() => {
+            Key::Right | Key::Char('l') if self.episode_selection.is_none() => {
                 self.move_cursor(1);
                 return Some(self.show_move_request());
             }
-            Key::PageUp if self.state.episode_selection.is_none() => {
+            Key::PageUp if self.episode_selection.is_none() => {
                 self.move_cursor(-(self.page_size() as i64));
                 return Some(self.show_move_request());
             }
-            Key::PageDown if self.state.episode_selection.is_none() => {
+            Key::PageDown if self.episode_selection.is_none() => {
                 self.move_cursor(self.page_size() as i64);
                 return Some(self.show_move_request());
             }
-            Key::Home if self.state.episode_selection.is_none() => {
-                self.state.select(0);
+            Key::Home if self.episode_selection.is_none() => {
+                self.select_show(0);
                 return Some(self.show_move_request());
             }
-            Key::End if self.state.episode_selection.is_none() => {
-                self.state.select(self.state.shows.len().saturating_sub(1));
+            Key::End if self.episode_selection.is_none() => {
+                self.select_show(self.state.shows.len().saturating_sub(1));
                 return Some(self.show_move_request());
             }
             Key::Up | Key::Char('k') => {
@@ -223,7 +227,7 @@ impl AudiobookshelfPodcastComponent {
                     ),
                 ));
             }
-            Key::Char('[') if self.state.episode_selection.is_some() => {
+            Key::Char('[') if self.episode_selection.is_some() => {
                 self.cycle_filter(-1);
                 return Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
@@ -231,7 +235,7 @@ impl AudiobookshelfPodcastComponent {
                     ),
                 ));
             }
-            Key::Char(']') if self.state.episode_selection.is_some() => {
+            Key::Char(']') if self.episode_selection.is_some() => {
                 self.cycle_filter(1);
                 return Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
@@ -239,8 +243,8 @@ impl AudiobookshelfPodcastComponent {
                     ),
                 ));
             }
-            Key::Esc | Key::Backspace if self.state.episode_selection.is_some() => {
-                self.state.episode_selection = None;
+            Key::Esc | Key::Backspace if self.episode_selection.is_some() => {
+                self.episode_selection = None;
                 return Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
                         PodcastEpisodeTransition::Exit,
@@ -279,27 +283,25 @@ impl AudiobookshelfPodcastComponent {
     }
 
     fn move_episode(&mut self, delta: i64) {
-        let count = self.state.visible_episodes().len();
+        let count = self.state.visible_episodes(self.episode_filter).len();
         if count == 0 {
             return;
         }
-        let current = self.state.episode_selection.unwrap_or(0);
-        self.state.episode_selection =
-            Some(crate::app::ui_util::move_cursor(current, delta, count));
+        let current = self.episode_selection.unwrap_or(0);
+        self.episode_selection = Some(crate::app::ui_util::move_cursor(current, delta, count));
     }
 
     fn cycle_filter(&mut self, delta: i64) {
         let current = AudiobookshelfEpisodeFilter::ALL
             .iter()
-            .position(|filter| *filter == self.state.episode_filter)
+            .position(|filter| *filter == self.episode_filter)
             .unwrap_or(0);
         let next = crate::app::ui_util::move_cursor(
             current,
             delta,
             AudiobookshelfEpisodeFilter::ALL.len(),
         );
-        self.state
-            .set_episode_filter(AudiobookshelfEpisodeFilter::ALL[next]);
+        self.set_episode_filter(AudiobookshelfEpisodeFilter::ALL[next]);
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
@@ -311,7 +313,7 @@ impl AudiobookshelfPodcastComponent {
                 .iter()
                 .find(|(rect, _)| rect.contains(pos))
             {
-                self.state.select(*index);
+                self.select_show(*index);
             }
             if let Some((_, bucket)) = self
                 .geometry
@@ -325,7 +327,7 @@ impl AudiobookshelfPodcastComponent {
                     )
                     .get(*bucket)
                 {
-                    self.state.select(range.start);
+                    self.select_show(range.start);
                 }
             }
         }
@@ -347,6 +349,11 @@ impl Component for AudiobookshelfPodcastComponent {
             self.focused,
             self.images_enabled,
             &mut self.state,
+            PodcastInteraction {
+                episode_filter: self.episode_filter,
+                episode_selection: self.episode_selection,
+            },
+            &mut self.scroll,
             &mut self.geometry,
         );
     }

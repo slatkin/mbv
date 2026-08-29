@@ -314,7 +314,6 @@ fn audiobookshelf_f5_restarts_catalog_after_clear() {
     assert!(state.shows.is_empty(), "catalog must be cleared on refresh");
     assert_eq!(state.total, 0);
     assert!(state.episodes.is_none());
-    assert_eq!(state.episode_selection, None);
     assert!(
         state.loading_pages.contains(&0),
         "page 0 must be marked pending so the catalog request restarts"

@@ -402,13 +402,11 @@ fn fetch_home_refreshes_audiobookshelf_pill_from_cache() {
 /// Model boundary (`home_flat_target`) and passed into the App effect.
 #[test]
 fn home_play_and_enqueue_leave_audiobookshelf_tab_state_untouched() {
-    use crate::app::types_audiobookshelf_browse::{
-        AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
-    };
+    use crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState;
 
     let mut app = make_app_stub();
 
-    // A populated ABS browse tab with a non-default filter, selection, scroll.
+    // A populated ABS browse tab.
     let library = abs_library("abs-pod", "podcast");
     let mut browse = AudiobookshelfBrowseState::new(library.clone());
     browse.episodes = Some(vec![
@@ -420,9 +418,7 @@ fn home_play_and_enqueue_leave_audiobookshelf_tab_state_untouched() {
             duration_seconds: Some(120.0),
         },
     ]);
-    browse.episode_filter = AudiobookshelfEpisodeFilter::Unplayed;
-    browse.episode_selection = Some(0);
-    browse.scroll = 3;
+    browse.selected_id = Some("show-1".into());
     app.audiobookshelf_libraries.push(library);
     app.audiobookshelf_browse.push(browse);
 
@@ -443,18 +439,9 @@ fn home_play_and_enqueue_leave_audiobookshelf_tab_state_untouched() {
 
     let state = &model.app.audiobookshelf_browse[0];
     assert_eq!(
-        state.episode_filter,
-        AudiobookshelfEpisodeFilter::Unplayed,
-        "enqueue/play from Home must not touch the ABS tab's filter"
-    );
-    assert_eq!(
-        state.episode_selection,
-        Some(0),
-        "enqueue/play from Home must not touch the ABS tab's selection"
-    );
-    assert_eq!(
-        state.scroll, 3,
-        "enqueue/play from Home must not touch the ABS tab's scroll"
+        state.selected_id.as_deref(),
+        Some("show-1"),
+        "enqueue/play from Home must not touch the ABS tab's resting selection"
     );
 }
 
