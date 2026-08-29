@@ -149,9 +149,14 @@ six production files and preserves behaviour.
       and is called from `render_main` at the root/chrome checkpoint; `render_tabs`
       reads the mid-`render_main` `self.tab` normalization, so 2.3's `draw_frame`
       hoists the call out. Output byte-identical (no new test failures).
-- [ ] 2.3 Add `Model::draw_frame` in `shell_run.rs` (or `shell_draw.rs` if
+- [x] 2.3 Add `Model::draw_frame` in `shell_run.rs` (or `shell_draw.rs` if
       needed), preserving resize pushes and component paint order. Depends on
       2.2. Verify check and fmt.
+      Real writer: `Model::draw_frame(&mut self, f, music_resize, tv_resize)`
+      holds the verbatim steady-state closure body (dim-backdrop, `App::render`,
+      resize pushes, component views, overlay stack) and the one steady-state
+      `terminal.draw` site now calls it; the two startup sites are unchanged
+      (2.4). `shell_run.rs` stays at 546 lines, so no `shell_draw.rs` needed.
 - [ ] 2.4 Route all three terminal draws through `draw_frame`, then add the
       startup-frame characterization. Depends on 2.3. Verify focused startup,
       full nextest, and fmt.

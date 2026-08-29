@@ -26,6 +26,41 @@ impl Model {
         self.sync_active_destination();
     }
 
+    /// The steady-state base-frame orchestrator: legacy base paint, resize
+    /// content pushes, then the mounted component views and overlay stack, in
+    /// that order. `music_resize` / `tv_resize` are the per-tick locals mutated
+    /// by `handle_terminal_message`.
+    pub(in crate::app) fn draw_frame(
+        &mut self,
+        f: &mut ratatui::Frame,
+        music_resize: bool,
+        tv_resize: bool,
+    ) {
+        // The legacy base frame reads the blocking-overlay state for its dim
+        // backdrop and stay-alive indicator; that fact now lives in TuiRealm
+        // mount state, so the shell computes it once per frame (the deleted
+        // App-level `blocking_overlay_active` adapter, task 5.3d).
+        self.app.dim_backdrop_active = self.blocking_overlay_active();
+        self.app.render(f);
+        if music_resize {
+            self.push_music_workspace_content();
+        }
+        if tv_resize {
+            self.push_tv_workspace_content();
+        }
+        self.render_playback_component(f);
+        self.render_home_component(f);
+        self.render_feeds_component(f);
+        self.render_audiobookshelf_podcast_component(f);
+        self.render_audiobookshelf_book_component(f);
+        self.render_emby_browser_component(f);
+        self.render_tv_workspace_component(f);
+        self.render_music_workspace_component(f);
+        self.render_inline_search_component(f);
+        self.render_queue_component(f);
+        self.render_overlay_stack(f);
+    }
+
     /// The run loop — the moved body of the former `App::run`.
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let mut terminal = init_terminal()?;
@@ -486,32 +521,7 @@ impl Model {
                 if self.app.visualizer.is_some() {
                     self.app.sync_visualizer();
                 }
-                if let Err(e) = terminal.draw(|f| {
-                    // The legacy base frame reads the blocking-overlay state
-                    // for its dim backdrop and stay-alive indicator; that
-                    // fact now lives in TuiRealm mount state, so the shell
-                    // computes it once per frame (the deleted App-level
-                    // `blocking_overlay_active` adapter, task 5.3d).
-                    self.app.dim_backdrop_active = self.blocking_overlay_active();
-                    self.app.render(f);
-                    if music_resize {
-                        self.push_music_workspace_content();
-                    }
-                    if tv_resize {
-                        self.push_tv_workspace_content();
-                    }
-                    self.render_playback_component(f);
-                    self.render_home_component(f);
-                    self.render_feeds_component(f);
-                    self.render_audiobookshelf_podcast_component(f);
-                    self.render_audiobookshelf_book_component(f);
-                    self.render_emby_browser_component(f);
-                    self.render_tv_workspace_component(f);
-                    self.render_music_workspace_component(f);
-                    self.render_inline_search_component(f);
-                    self.render_queue_component(f);
-                    self.render_overlay_stack(f);
-                }) {
+                if let Err(e) = terminal.draw(|f| self.draw_frame(f, music_resize, tv_resize)) {
                     log::error!(
                         target: "run_loop",
                         "terminal.draw() failed: {e:?} (kind={:?})",
