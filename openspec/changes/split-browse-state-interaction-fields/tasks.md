@@ -56,10 +56,14 @@
 - [x] 4.2 Introduce the resting-position type and move `BrowseLevel`'s
       persistence-facing uses onto it, leaving `cursor`/`scroll` in place for
       now. Verify: `rtk cargo check -p mbv`; 4.1's tests still pass.
-- [ ] 4.3 Re-point every outcome-1 reader from 1.1 to take the resolved value as
-      a parameter. Verify: `rtk cargo check -p mbv` after each group; commit in
+- [ ] 4.3 Re-point every outcome-1 reader from 1.1 (and 1.1b) to take the resolved
+      value as a parameter, including `render_list`'s per-frame scroll
+      write-back as a `&mut usize` render parameter. Verify:
+      `rtk cargo check -p mbv` after each group; commit in
       reviewable units rather than one sweep.
-- [ ] 4.4 Re-point every outcome-3 reader to the component accessor. Verify:
+- [ ] 4.4 Re-point every outcome-3 reader from 1.1 (and 1.1b) to the component
+      accessor, adding the accessors 1.1b names where they do not exist yet
+      (`MusicWorkspaceComponent::selected_item`). Verify:
       `rtk cargo check -p mbv`.
 - [ ] 4.5 Delete `BrowseLevel::cursor` and `BrowseLevel::scroll`. Verify:
       `rtk cargo check -p mbv` is clean with no transitional accessor left

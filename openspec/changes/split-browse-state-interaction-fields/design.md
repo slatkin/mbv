@@ -125,7 +125,9 @@ type-aware, so classification is by binding site, not by a type matcher.
 
 ### 1.1 — `BrowseLevel::cursor` / `BrowseLevel::scroll`
 
-**Count: 13 non-test read sites, 11 write clusters (~24 distinct sites).**
+**Count: 13 non-test read sites, 11 write clusters (~24 distinct sites) in the
+`impl App` action layer; the render layer adds 8 read sites and 4 write sites
+(subsection 1.1b below).**
 #618's scout figure was ~37. The divergence is downward and explained: the two
 sibling changes (`split-audiobookshelf-cursor-ownership`,
 `remove-music-workspace-cursor-mirror`) plus #615–#618 already deleted the
@@ -164,6 +166,48 @@ Reads:
 | R11 | `music_grouping.rs:296` | `settle` reads anchor album id at the grouping-settled event | cursor just set by construction / prior settle | **2** — same as R2 |
 | R12 | `types_browse.rs:97,98` | `to_position_level` serialization | resting | **2** |
 | R13 | `shuffle_folder_actions.rs:27` | `shuffle_play` (legacy `impl App` path) | live | **1** — the component path (`shuffle_play_selected`) already supplies the target; legacy path re-pointed/removed with the other legacy endpoints |
+
+### 1.1b — Render-layer sites (added 2026-08-29)
+
+The original 1.1 pass scoped only the `impl App` action layer
+(`src/app/*.rs`), which is where the compiler forces every re-point — but not
+the legacy paint path. `src/app/render/` reads and writes both fields per
+frame, the original inventory assigned no D2 outcome to any of them, and
+tasks 4.3–4.5 as written would not have compiled (`cargo check` in 4.5 would
+surface the render readers after the action-layer re-points). This subsection
+closes the gap: every render-layer reader/writer of `BrowseLevel.cursor` /
+`BrowseLevel.scroll`, verified against HEAD (`22bad7ad`) by grep for
+`.cursor` / `.scroll` / `nav_stack` under `src/app/render/` followed by
+reading each hit to confirm the receiver is a `BrowseLevel`. Line numbers may
+drift; match on the surrounding code.
+
+Reads:
+
+| # | Site | Function | Value | Outcome |
+|---|---|---|---|---|
+| R14 | `list_context.rs:14,15` | `library_list_render_ctx` — builds `LibraryListRenderCtx` (items, cursor, scroll, total_count) from `nav_stack.last()` | live | **3** — the shell supplies cursor/scroll from the mounted component: `BrowserComponent::cursor()`/`scroll()` (both already exist) for generic/Movies/home-video, `MusicWorkspaceComponent::album_cursor()` (exists, #620) for grouped Music. `LibraryListRenderCtx` stays a plain-data struct, so every downstream reader of its cursor/scroll re-points transitively with no direct change: `list.rs`, `tv_wide.rs`, `detail_series_view.rs`, `music_wide_browser.rs`, and the renderers in R19/R20 |
+| R15 | `music.rs:19` | `music_group_state` — `nav_stack[-2].cursor` for the group-pill highlight | resting (level below top) | **2** — `resting().cursor()`, the same classification the shell's group-level writes already received (`music_actions.rs:56,109,196`, re-pointed in 4.2) |
+| R16 | `music_wide.rs:144` | `wide_music_render_ctx` — `selected_album = level.items.get(level.cursor)` on the top album level | live | **3** — `MusicWorkspaceComponent::selected_item()`; 4.4 adds this accessor mirroring `TvWorkspaceComponent::selected_item()`, with a first-mount fallback to the App-derived item like `push_tv_workspace_content` |
+| R17 | `music_wide.rs:152` | `wide_music_render_ctx` — `group_cursor` from `nav_stack[-2].cursor` | resting | **2** — same as R15 |
+| R18 | `widgets.rs:606` | `selected_album_item` — `lvl.items.get(lvl.cursor)` on the top level | live | **3** — `MusicWorkspaceComponent::selected_item()` (4.4). Callers: `activate_album_folder_row` (`actions_navigation.rs:212`, narrow Enter), `focused_music_track` and the track-fetch trigger in `push_music_workspace_content` (`shell_music_workspace.rs:21,104`) |
+| R19 | `detail.rs:124` | `selected_movie_item_with_ctx` — `ctx.items.get(ctx.cursor)` | live | **3** — transitive through `LibraryListRenderCtx`: the ctx is confirmed BrowseLevel-derived (`library_list_render_ctx` → `nav_stack.last()`), so R14's re-point supplies the value from `BrowserComponent::cursor()`; no direct change in `detail.rs` |
+| R20 | `detail.rs:152` | `selected_series_item_with_ctx` — `ctx.items.get(ctx.cursor)` | live | **3** — transitive, same as R19 |
+
+Writes:
+
+| Site | Context | Disposition |
+|---|---|---|
+| `list.rs:585` | `render_list` per-frame viewport write-back `level.scroll = final_offset` | **1** — becomes a `&mut usize` render parameter owned by the narrow legacy render path (the ABS book `browser_offset` / podcast `scroll` pattern from Phases 2–3), not a component write-back. Decision: the mounted painters already record their own scrolls (`BrowserComponent::view` both breakpoints, `MusicWorkspaceComponent` wide), so the write-back's only unconsumed consumer is the narrow legacy surface — a per-frame component read-back into `App` would be exactly the mirror the `sync_*` rule forbids, and the event-driven persist seams (`persist_library_scroll`, `persist_emby_browser_scroll`) are already covered. Narrow TV, whose `TvWorkspaceComponent` is mounted only when wide, is the case that requires the parameter rather than deletion |
+| `album_cursor.rs:21` | `move_music_group_display_cursor` — `level.cursor = idx` | **2** — resting-position write at the navigation event via `set_resting_cursor(idx)`; the component already resolved and landed the target in its own `album_cursor`, so no `re_anchor` fires for a mover the component originated (`re_anchor` stays reserved for shell-driven changes, #620) |
+| `album_cursor.rs:43` | `jump_music_group_display_cursor` | **2** — same as above |
+| `album_cursor.rs:78` | `page_grouped_album_cursor` | **2** — same as above |
+
+Swept and excluded: `album.rs` / `album_inline.rs` / `album_detail.rs` /
+`music_wide_browser.rs` take cursor/scroll as plain parameters
+(`AlbumRowsCursorCtx`, `ListRenderCtx`) and re-point transitively through R14;
+`pills.rs` reads only `letter_filter`; test files (`*_tests.rs`, `tests_*.rs`,
+`test_helpers.rs`) build `BrowseLevel` literals and are excluded per the
+Task 1 method. No render-layer site fits none of D2's three outcomes.
 
 ### 1.2 — Audiobookshelf structs
 
