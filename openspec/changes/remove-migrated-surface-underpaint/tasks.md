@@ -141,9 +141,14 @@ six production files and preserves behaviour.
       driving `is_wide_book_active`), re-homed the narrow modal branch off the
       component-reported flag, and added aggregate zero-area + per-surface
       single-producer tests.
-- [ ] 2.2 After 2.1j, extract `paint_legacy_chrome` from the progressive
+- [x] 2.2 After 2.1j, extract `paint_legacy_chrome` from the progressive
       geometry orchestration, preserving all legacy painting initially. Depends
       on 2.1j. Verify full nextest and fmt.
+      Real writer: `App::paint_legacy_chrome` extracts the four pre-body chrome
+      paints (left/right column backgrounds, tab bar, right-column player panel)
+      and is called from `render_main` at the root/chrome checkpoint; `render_tabs`
+      reads the mid-`render_main` `self.tab` normalization, so 2.3's `draw_frame`
+      hoists the call out. Output byte-identical (no new test failures).
 - [ ] 2.3 Add `Model::draw_frame` in `shell_run.rs` (or `shell_draw.rs` if
       needed), preserving resize pushes and component paint order. Depends on
       2.2. Verify check and fmt.

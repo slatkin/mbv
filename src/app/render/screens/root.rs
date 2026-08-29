@@ -344,11 +344,12 @@ impl App {
             panel_content_area: _,
             left_area,
             right_area,
-            right_full_area,
+            // Consumed by `paint_legacy_chrome` (via the `chrome` ref), not the body.
+            right_full_area: _,
             left_content,
-            tab_bar_area,
-            tabs_area,
-            player_area,
+            tab_bar_area: _,
+            tabs_area: _,
+            player_area: _,
             status_area,
             right_visible,
             queue_focused,
@@ -363,47 +364,16 @@ impl App {
         layout.breadcrumbs = Vec::new();
         layout.selector_tabs = Vec::new();
 
-        // Full-column background behind the card image and queue list.
-        if self.effective_panel_mode() != PanelMode::LibraryOnly {
-            let left_bg = palette::resolve_surface_focus(queue_focused);
-            f.render_widget(
-                Block::default().style(Style::default().bg(left_bg)),
-                left_area,
-            );
-        }
-
-        // Full-column background for the right panel (tabs, player, library, queue, status).
-        if right_visible {
-            f.render_widget(
-                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
-                right_full_area,
-            );
-        }
-
-        // Tab bar at the very top of the right column.
-        if right_visible {
-            self.render_tabs(f, tab_bar_area, tabs_area);
-        }
-
-        // Player panel below the tab bar.
-        if right_visible && player_h > 0 {
-            let playback_panel_bg = if queue_focused {
-                palette::SURFACE_FOCUSED
-            } else {
-                palette::SURFACE_PLAYBACK
-            };
-            crate::app::render::render_player_panel(
-                f,
-                self.playback_panel_context(
-                    player_area,
-                    playback,
-                    player_h,
-                    show_controls,
-                    now_playing_title,
-                    playback_panel_bg,
-                ),
-            );
-        }
+        // Pre-body legacy chrome (column backgrounds, tab bar, right-column
+        // player panel) underpaints the card/queue/library body below.
+        self.paint_legacy_chrome(
+            f,
+            chrome,
+            playback,
+            player_h,
+            show_controls,
+            now_playing_title,
+        );
 
         let (lib_area, queue_area) = if self.effective_panel_mode() == PanelMode::LibraryOnly {
             (right_area, Rect::default())
@@ -575,6 +545,80 @@ impl App {
         // painted by the shell-mounted component after this legacy frame.
         if status_area.width > 0 {
             self.render_status_bar(f, status_area, playback, false);
+        }
+    }
+
+    /// Paints the pre-body legacy chrome that underpaints the card/queue/library
+    /// body: the left/right column backgrounds, the tab bar, and the
+    /// right-column player panel.
+    ///
+    /// Called from within `render_main` at the root/chrome checkpoint -- after
+    /// the `self.tab` normalization block and `normalize_stale_browse_destination`,
+    /// before any body paint -- because `render_tabs` reads the normalized
+    /// `self.tab`. Task 2.3's `Model::draw_frame` will hoist this call out of
+    /// `render_main` and settle the `self.tab` normalization ordering so it can
+    /// run after the body. Painting only pre-body chrome for now keeps output
+    /// byte-identical; later rows may fold in the remaining legacy paint.
+    pub(in crate::app::render) fn paint_legacy_chrome(
+        &mut self,
+        f: &mut Frame,
+        chrome: &FrameChromeGeometry,
+        playback: &mut LayoutPlayback,
+        player_h: u16,
+        show_controls: bool,
+        now_playing_title: &Option<(String, Color)>,
+    ) {
+        let FrameChromeGeometry {
+            left_area,
+            right_full_area,
+            tab_bar_area,
+            tabs_area,
+            player_area,
+            right_visible,
+            queue_focused,
+            ..
+        } = *chrome;
+
+        // Full-column background behind the card image and queue list.
+        if self.effective_panel_mode() != PanelMode::LibraryOnly {
+            let left_bg = palette::resolve_surface_focus(queue_focused);
+            f.render_widget(
+                Block::default().style(Style::default().bg(left_bg)),
+                left_area,
+            );
+        }
+
+        // Full-column background for the right panel (tabs, player, library, queue, status).
+        if right_visible {
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+                right_full_area,
+            );
+        }
+
+        // Tab bar at the very top of the right column.
+        if right_visible {
+            self.render_tabs(f, tab_bar_area, tabs_area);
+        }
+
+        // Player panel below the tab bar.
+        if right_visible && player_h > 0 {
+            let playback_panel_bg = if queue_focused {
+                palette::SURFACE_FOCUSED
+            } else {
+                palette::SURFACE_PLAYBACK
+            };
+            crate::app::render::render_player_panel(
+                f,
+                self.playback_panel_context(
+                    player_area,
+                    playback,
+                    player_h,
+                    show_controls,
+                    now_playing_title,
+                    playback_panel_bg,
+                ),
+            );
         }
     }
 }
