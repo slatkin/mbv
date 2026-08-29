@@ -75,6 +75,46 @@ fn home_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states
     }
 }
 
+/// `remove-migrated-surface-underpaint` D3 + the "Startup content" risk
+/// bullet: task 2.4 routes the two startup `terminal.draw` sites in
+/// `Model::run` (`src/app/shell_run.rs`) through `Model::draw_frame`, so the
+/// first frame now paints the full base frame *and* the mounted component
+/// views — not the old chrome-only flash. This characterizes that the startup
+/// Home frame shows the mounted `HomeComponent`'s loading affordances (its
+/// painted pill bar and empty-state placeholder while home_content.loading is
+/// still set and no content has arrived) rather than blank panes.
+#[test]
+fn startup_frame_paints_loading_affordances_not_blank_panes() {
+    let mut app = home_app();
+    app.terminal_width = 100;
+    app.terminal_height = 30;
+    let mut model = crate::app::shell::Model::new(app);
+    // The precondition `Model::run` sets before its first `terminal.draw`
+    // (`src/app/shell_run.rs`): the Home destination is still loading.
+    model.home_content.loading = true;
+    model.push_home_content();
+
+    let backend = ratatui::backend::TestBackend::new(100, 30);
+    let mut term = ratatui::Terminal::new(backend).unwrap();
+    term.draw(|f| model.draw_frame(f, false, false)).unwrap();
+    let output = buffer_to_string(&term);
+
+    assert!(
+        output.split_whitespace().next().is_some(),
+        "startup frame must not be an empty buffer"
+    );
+    assert!(
+        output.contains("Continue"),
+        "startup frame must paint the mounted HomeComponent's pill bar, not \
+         just legacy chrome: {output:?}"
+    );
+    assert!(
+        output.contains("(empty)"),
+        "startup Home pane must paint its empty-state placeholder, not a \
+         blank pane: {output:?}"
+    );
+}
+
 /// Task 5.3d, Home legacy underpaint removal: the pill targets are now
 /// characterized from the single painter — the mounted `HomeComponent`'s
 /// own `pill_targets` — rather than `LayoutMain.selector_tabs`, which the

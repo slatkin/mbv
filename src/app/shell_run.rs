@@ -26,10 +26,12 @@ impl Model {
         self.sync_active_destination();
     }
 
-    /// The steady-state base-frame orchestrator: legacy base paint, resize
+    /// The sole base-frame orchestrator (D3): legacy base paint, resize
     /// content pushes, then the mounted component views and overlay stack, in
-    /// that order. `music_resize` / `tv_resize` are the per-tick locals mutated
-    /// by `handle_terminal_message`.
+    /// that order. All three terminal draws route through it — the two startup
+    /// draws pass `false, false` since no resize locals exist yet, and the
+    /// steady-state draw passes the per-tick locals mutated by
+    /// `handle_terminal_message`.
     pub(in crate::app) fn draw_frame(
         &mut self,
         f: &mut ratatui::Frame,
@@ -87,7 +89,7 @@ impl Model {
                 });
         }
         self.home_content.loading = true;
-        terminal.draw(|f| self.app.render(f))?;
+        terminal.draw(|f| self.draw_frame(f, false, false))?;
 
         // Only start the configured Remote Service after the first TUI frame
         // has been rendered. The selected Player owner and UI therefore never
@@ -132,7 +134,7 @@ impl Model {
             self.app.spawn_idle_feed_fetch();
         }
 
-        terminal.draw(|f| self.app.render(f))?;
+        terminal.draw(|f| self.draw_frame(f, false, false))?;
 
         install_signal_handlers();
         let quit_timeout = Duration::from_secs(self.app.config.lock().unwrap().quit_timeout_secs);

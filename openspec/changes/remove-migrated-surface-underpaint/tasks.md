@@ -157,9 +157,24 @@ six production files and preserves behaviour.
       resize pushes, component views, overlay stack) and the one steady-state
       `terminal.draw` site now calls it; the two startup sites are unchanged
       (2.4). `shell_run.rs` stays at 546 lines, so no `shell_draw.rs` needed.
-- [ ] 2.4 Route all three terminal draws through `draw_frame`, then add the
+- [x] 2.4 Route all three terminal draws through `draw_frame`, then add the
       startup-frame characterization. Depends on 2.3. Verify focused startup,
       full nextest, and fmt.
+      Real writer: the two startup `terminal.draw` sites in `Model::run`
+      (`shell_run.rs`) now call `self.draw_frame(f, false, false)` — there are
+      no startup resize locals — so all three terminal draws route through the
+      one `draw_frame` implementation. Per D3, startup now paints the full
+      first frame (mounted component views + loading affordances) instead of
+      the old chrome-only flash. New characterization
+      `startup_frame_paints_loading_affordances_not_blank_panes`
+      (`tests_home_characterization.rs`) renders the startup frame via
+      `draw_frame` and asserts the mounted `HomeComponent` paints its pill bar
+      and empty-state placeholder rather than a blank pane. No existing test
+      expectation needed updating; the three known pre-existing failures
+      (`browser_local_navigation_mirrors_legacy_flat_movement`,
+      `feeds_pill_row_and_targets_are_characterized_end_to_end`,
+      `matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer`) still
+      fail identically and are not caused by this change.
 
 ## 3. Per-surface suppression (D4 — one unit per surface × breakpoint, scout order)
 
