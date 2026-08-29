@@ -82,6 +82,7 @@ be treated as completion. The remaining work is staged so each family moves
 its layout publication behind a paint-free seam, with focused compile and
 characterization gates before the next family.
 
+The shared `AppLayout`/partial-result type dependency is `src/app/layout.rs`.
 The family boundaries are: (A) root/chrome, (B) queue/pills, (C)
 lists/albums, (D) feeds/home, (E) music surfaces, and (F) TV/widgets. `AppLayout`
 is the aggregate shared by all families, so root/chrome does not claim to

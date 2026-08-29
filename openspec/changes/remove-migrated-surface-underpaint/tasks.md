@@ -35,7 +35,7 @@ contract and is not proof that this section is complete.
       authoritative under their legacy computation until later rows. The seam
       must be zero-area-safe before any mutation, and each migrated field must
       have one authoritative computation consumed by `render_main`/painters.
-      Production boundary: `src/app/layout.rs`,
+      Production boundary: `src/app/layout.rs` (shared `AppLayout` and partial-result types),
       `src/app/render/screens/root.rs`,
       `src/app/render/components/chrome.rs`, `chrome_player.rs`,
       `chrome_status.rs`, and `chrome_tabs.rs`, plus focused tests only if
