@@ -591,12 +591,31 @@ impl App {
             // its empty placeholder -- reserved but not painted over.
             if selected_movie_item.is_some() {
                 self.render_compact_detail(f, content_rect, lib_idx, focused, true, layout);
-            } else if selected_series_item.is_some() {
+            } else if let Some(item) = &selected_series_item {
+                let image_key = format!("{}:ser_primary", item.id);
+                if !item.id.is_empty() {
+                    self.fetch_series_detail(item.id.clone());
+                    if self.images_enabled() {
+                        self.fetch_card_image(
+                            image_key.clone(),
+                            item.id.clone(),
+                            String::new(),
+                            &["Primary"],
+                        );
+                    }
+                }
+                let images_enabled = self.images_enabled();
+                let image_loading = images_enabled && self.card_image_loading.contains(&image_key);
+                let image = self.cached_image_protocol_mut(&image_key);
                 super::detail_series_view::render_series_inline_detail(
-                    self,
+                    super::detail_series_view::SeriesInlineDetailCtx {
+                        item,
+                        images_enabled,
+                        image_loading,
+                        image,
+                    },
                     f,
                     content_rect,
-                    lib_idx,
                     focused,
                     true,
                 );

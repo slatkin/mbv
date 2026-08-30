@@ -1,8 +1,8 @@
+use crate::app::palette;
 use crate::app::render::components::hero::{
     inline_hero_text_width, wrap_overview_lines, HeroContent, HeroImage, HeroLine,
 };
 use crate::app::render::RENDER_FILTER;
-use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::widgets::*;
@@ -36,11 +36,17 @@ pub(in crate::app::render) fn series_meta_line(item: &mbv_core::api::EmbyItem) -
 /// border/background itself -- this draws only the content, mirroring
 /// how `render_compact_detail` is the movie hero's content-only
 /// counterpart).
+pub(in crate::app::render) struct SeriesInlineDetailCtx<'a> {
+    pub(in crate::app::render) item: &'a mbv_core::api::EmbyItem,
+    pub(in crate::app::render) images_enabled: bool,
+    pub(in crate::app::render) image_loading: bool,
+    pub(in crate::app::render) image: Option<&'a mut ratatui_image::thread::ThreadProtocol>,
+}
+
 pub(in crate::app::render) fn render_series_inline_detail(
-    app: &mut App,
+    mut ctx: SeriesInlineDetailCtx<'_>,
     f: &mut Frame,
     area: Rect,
-    lib_idx: usize,
     focused: bool,
     show_title: bool,
 ) {
@@ -48,33 +54,15 @@ pub(in crate::app::render) fn render_series_inline_detail(
         return;
     }
 
-    let Some(item) = app.selected_series_item(lib_idx) else {
-        return;
-    };
-    // Fetch series detail if not cached
-    if !item.id.is_empty() {
-        app.fetch_series_detail(item.id.clone());
-    }
-
+    let item = ctx.item;
     let max_y = area.y + area.height;
 
     // ── Series Primary image sizing (right-aligned, text wraps around
     //    it) -- resolved here (needs `self`'s image cache) and handed to
     //    the `Hero` component to lay text out around ───────────────────
-    let primary_cache_key = format!("{}:ser_primary", item.id);
-    if !item.id.is_empty() && app.images_enabled() {
-        app.fetch_card_image(
-            primary_cache_key.clone(),
-            item.id.clone(),
-            String::new(),
-            &["Primary"],
-        );
-    }
-    let img_loading = !item.id.is_empty()
-        && app.images_enabled()
-        && app.card_image_loading.contains(&primary_cache_key);
+    let img_loading = !item.id.is_empty() && ctx.images_enabled && ctx.image_loading;
     let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) = {
-        if let Some(state) = app.cached_image_protocol_mut(&primary_cache_key) {
+        if let Some(state) = ctx.image.as_deref_mut() {
             let avail = ratatui::layout::Size {
                 width: SERIES_IMAGE_COLS,
                 height: SERIES_IMAGE_ROWS,
@@ -149,7 +137,7 @@ pub(in crate::app::render) fn render_series_inline_detail(
                 Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
                 img_rect,
             );
-        } else if let Some(state) = app.cached_image_protocol_mut(&primary_cache_key) {
+        } else if let Some(state) = ctx.image.as_deref_mut() {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             f.render_stateful_widget(
                 SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
