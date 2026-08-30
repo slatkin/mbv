@@ -1,4 +1,7 @@
-use super::test_helpers::{buffer_to_string, make_music_group_app, render_library_to_string_sized};
+use super::test_helpers::{
+    buffer_to_string, draw_mounted_frame, make_music_group_app, mounted_model_at,
+    render_library_to_string_sized,
+};
 use super::*;
 use crate::app::layout::LayoutMain;
 use crate::app::tests::make_item;
@@ -6,7 +9,15 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 
-fn render_music(app: &mut App, width: u16, height: u16, focused: bool) -> String {
+/// Narrow grouped Music is painted by the mounted `MusicWorkspaceComponent`
+/// now (task 3.8), so route the narrow characterization renders through the
+/// real `Model::draw_frame` shell path.
+fn render_narrow_music(app: App, width: u16, height: u16) -> String {
+    let mut model = mounted_model_at(app, width, height);
+    draw_mounted_frame(&mut model, width, height)
+}
+
+fn render_music_legacy(app: &mut App, width: u16, height: u16, focused: bool) -> String {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     let mut layout = LayoutMain::default();
     terminal
@@ -31,18 +42,19 @@ fn music_buffer_characterization_covers_wide_unfocused_narrow_and_selected_state
     for (width, height, focused) in [(120, 30, true), (120, 30, false)] {
         let mut app = make_music_group_app();
         app.libs[0].nav_stack[1].cursor = 0;
-        let output = render_music(&mut app, width, height, focused);
+        let output = render_music_legacy(&mut app, width, height, focused);
         assert!(
             !output.contains("First Album"),
             "wide legacy frame must not paint music rows in {width}x{height}: {output:?}"
         );
     }
 
-    // Narrow grouped Music keeps the legacy painter as its sole painter (D5).
-    for (width, height) in [(60, 30), (60, 8)] {
+    // Narrow grouped Music is painted by the mounted `MusicWorkspaceComponent`
+    // now (task 3.8), reached through the full `Model::draw_frame` path.
+    for (width, height) in [(60, 30), (60, 20)] {
         let mut app = make_music_group_app();
         app.libs[0].nav_stack[1].cursor = 0;
-        let output = render_music(&mut app, width, height, true);
+        let output = render_narrow_music(app, width, height);
         assert!(
             output.contains("First Album"),
             "narrow music row missing in {width}x{height}: {output:?}"
@@ -68,7 +80,7 @@ fn narrow_grouped_music_hero_shows_only_title_meta_no_track_table_or_action_hint
         .collect();
     app.album_tracks_cache.insert("album-1".into(), tracks);
 
-    let output = render_music(&mut app, 60, 30, true);
+    let output = render_narrow_music(app, 60, 30);
 
     assert!(
         output.contains("First Album"),

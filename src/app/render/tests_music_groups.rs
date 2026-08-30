@@ -7,11 +7,21 @@ use super::screens::album_plan::{
 };
 use super::test_helpers::*;
 use super::*;
+use crate::app::shell::Model;
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::collections::HashMap;
+
+/// Narrow grouped Music is painted by the mounted `MusicWorkspaceComponent`
+/// now (task 3.8): drive the real `Model::draw_frame` shell path and read the
+/// component's own published `LayoutMain` via `mounted_music_layout`.
+fn narrow_music_frame(app: App, height: u16) -> (Model, String) {
+    let mut model = mounted_model_at(app, 60, height);
+    let output = draw_mounted_frame(&mut model, 60, height);
+    (model, output)
+}
 
 #[test]
 fn selectable_artist_headers_are_typed_row_targets() {
@@ -37,8 +47,8 @@ fn selectable_artist_headers_are_typed_row_targets() {
         .items
         .push(beta_album);
 
-    let mut layout = LayoutMain::default();
-    let out = render_library_to_string(&mut app, &mut layout);
+    let (model, out) = narrow_music_frame(app, 20);
+    let layout = mounted_music_layout(&model);
 
     assert!(
         out.contains("Alpha") && out.contains("Beta"),
@@ -302,8 +312,8 @@ fn narrow_grouped_music_replaces_selected_album_row_with_hero_detail() {
         })
         .collect();
     app.album_tracks_cache.insert("album-1".into(), tracks);
-    let mut layout = LayoutMain::default();
-    let output = render_library_to_string_sized(&mut app, &mut layout, 60, 30);
+    let (model, output) = narrow_music_frame(app, 30);
+    let layout = mounted_music_layout(&model);
 
     assert!(
         output.contains("First Album"),
@@ -338,9 +348,9 @@ fn narrow_grouped_music_replaces_selected_album_row_with_hero_detail() {
 
 #[test]
 fn narrow_grouped_music_does_not_repaint_album_hero_with_zero_row_shell() {
-    let mut app = make_music_group_app();
-    let mut layout = LayoutMain::default();
-    let output = render_library_to_string_sized(&mut app, &mut layout, 60, 30);
+    let app = make_music_group_app();
+    let (model, output) = narrow_music_frame(app, 30);
+    let layout = mounted_music_layout(&model);
 
     let top_row = output
         .lines()
@@ -374,12 +384,15 @@ fn narrow_grouped_music_keeps_bottom_hero_fully_visible() {
     let cursor = albums.len() - 1;
     app.libs[0].nav_stack.last_mut().unwrap().cursor = cursor;
     let expected_height = album_hero_detail_rows(true) + HERO_BLOCK_EXTRA_ROWS as usize;
-    let mut layout = LayoutMain::default();
-    let output = render_library_to_string_sized(&mut app, &mut layout, 60, 26);
+    let (model, output) = narrow_music_frame(app, 30);
+    let layout = mounted_music_layout(&model);
+    // The mounted component paints into `app.layout.main.left_area`; its own
+    // `layout()` publishes hero/target geometry in the same screen space.
+    let list_area = model.app.layout.main.left_area;
 
     assert_eq!(layout.hero_area.height as usize, expected_height);
-    assert!(layout.hero_area.y > layout.left_area.y);
-    assert_eq!(layout.hero_area.bottom(), layout.left_area.bottom());
+    assert!(layout.hero_area.y > list_area.y);
+    assert_eq!(layout.hero_area.bottom(), list_area.bottom());
     assert_eq!(layout.selected_item_rect, Some(layout.hero_area));
     let selected_row = layout
         .left_item_rows
@@ -402,14 +415,14 @@ fn narrow_grouped_music_keeps_bottom_hero_fully_visible() {
     assert!(layout.left_item_rows[selected_row + 1..continuation_end]
         .iter()
         .all(Vec::is_empty));
-    let selected_screen_row = layout.hero_area.y.saturating_sub(layout.left_area.y) as usize;
+    let selected_screen_row = layout.hero_area.y.saturating_sub(list_area.y) as usize;
     let target_end = selected_screen_row + expected_height;
     assert!(layout.left_row_targets.len() >= target_end);
     assert!(layout.left_row_targets[selected_screen_row + 1..target_end]
         .iter()
         .all(Option::is_none));
 
-    let marker_col = layout.left_area.x.saturating_sub(2) as usize;
+    let marker_col = list_area.x.saturating_sub(2) as usize;
     for y in layout.hero_area.y..layout.hero_area.bottom() {
         let marker = output
             .lines()
@@ -435,17 +448,21 @@ fn narrow_grouped_music_persists_bottom_hero_scroll() {
     app.image_protocol_enabled = true;
     let cursor = app.libs[0].nav_stack.last().unwrap().items.len() - 1;
     app.libs[0].nav_stack.last_mut().unwrap().cursor = cursor;
-    let mut layout = LayoutMain::default();
-    render_library_to_string_sized(&mut app, &mut layout, 60, 26);
+    let mut model = mounted_model_at(app, 60, 30);
+    let _ = draw_mounted_frame(&mut model, 60, 30);
 
-    let stored_scroll = app.libs[0].nav_stack.last().unwrap().scroll;
+    let stored_scroll = mounted_music_scroll(&model);
     assert!(stored_scroll > 0, "the admitted hero offset must persist");
-    assert_eq!(layout.selected_item_rect, Some(layout.hero_area));
-    assert!(layout.hero_area.bottom() <= layout.left_area.bottom());
+    {
+        let list_area = model.app.layout.main.left_area;
+        let layout = mounted_music_layout(&model);
+        assert_eq!(layout.selected_item_rect, Some(layout.hero_area));
+        assert!(layout.hero_area.bottom() <= list_area.bottom());
+    }
 
-    render_library_to_string_sized(&mut app, &mut layout, 60, 26);
+    let _ = draw_mounted_frame(&mut model, 60, 30);
     assert_eq!(
-        app.libs[0].nav_stack.last().unwrap().scroll,
+        mounted_music_scroll(&model),
         stored_scroll,
         "the computed hero scroll remains persisted on the next render"
     );
@@ -456,13 +473,11 @@ fn short_grouped_music_restores_the_ordinary_selected_album_row() {
     let mut app = make_music_group_app();
     app.image_protocol_enabled = true;
     let expected_height = album_hero_detail_rows(true) + HERO_BLOCK_EXTRA_ROWS as usize;
-    let mut layout = LayoutMain::default();
-    let output = render_library_to_string_sized(
-        &mut app,
-        &mut layout,
-        60,
-        expected_height.saturating_sub(1) as u16,
-    );
+    // Terminal height == the hero's own row count: after chrome reservation the
+    // list area is strictly shorter than the hero needs, so the ordinary
+    // selected row must be restored.
+    let (model, output) = narrow_music_frame(app, expected_height as u16);
+    let layout = mounted_music_layout(&model);
 
     assert!(output.contains("First Album"));
     assert_eq!(layout.hero_area, Rect::default());
@@ -490,19 +505,18 @@ fn grouped_hero_art_follows_album_focus() {
         .push(second);
     album_app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
     album_app.image_protocol_enabled = true;
-    let mut layout = LayoutMain::default();
     // 60x30 so the list below the album hero still shows both albums.
-    let out = render_library_to_string_sized(&mut album_app, &mut layout, 60, 30);
+    let (model, out) = narrow_music_frame(album_app, 30);
     assert!(out.contains("First Album"));
     // The hero renders the *selected* album's art (portrait `:P`), never a
     // square collage tile (`:sq`).
-    assert!(album_app.card_image_loading.contains("album-2:P"));
+    assert!(model.app.card_image_loading.contains("album-2:P"));
     // Music-group view's album rows now render through the same
     // `render_wide_right_album_browser` the wide hero-on-left layout uses
     // for its right pane, which does not pre-warm neighbouring albums'
     // art (only the selected album's hero art loads) -- matching wide's
     // existing behaviour rather than narrow's former bespoke prefetch.
-    assert!(!album_app.card_image_loading.contains("album-2:sq"));
+    assert!(!model.app.card_image_loading.contains("album-2:sq"));
 }
 
 #[test]
@@ -662,8 +676,8 @@ fn grouped_music_maps_reordered_non_contiguous_album_source() {
         .extend([beta, alpha_other, selected]);
     let cursor = 3;
     app.libs[0].nav_stack.last_mut().unwrap().cursor = cursor;
-    let mut layout = LayoutMain::default();
-    let rendered = render_library_to_string_sized(&mut app, &mut layout, 60, 20);
+    let (model, rendered) = narrow_music_frame(app, 30);
+    let layout = mounted_music_layout(&model);
 
     assert!(rendered.contains("Selected Album"));
     assert_eq!(layout.selected_item_rect, Some(layout.hero_area));

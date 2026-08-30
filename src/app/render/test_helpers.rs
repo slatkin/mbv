@@ -350,6 +350,22 @@ pub fn mounted_music_layout(model: &Model) -> &LayoutMain {
         .layout()
 }
 
+/// The album-scroll offset the mounted `MusicWorkspaceComponent` settled on.
+pub fn mounted_music_scroll(model: &Model) -> usize {
+    let id = model
+        .music_workspace_id
+        .as_ref()
+        .expect("music workspace component mounted");
+    model
+        .application
+        .get_component(id)
+        .expect("music workspace mounted")
+        .as_any()
+        .downcast_ref::<MusicWorkspaceComponent>()
+        .expect("MusicWorkspaceComponent")
+        .album_scroll()
+}
+
 /// The mounted `TvWorkspaceComponent`'s own painted geometry.
 pub fn mounted_tv_layout(model: &Model) -> &LayoutMain {
     let id = model
