@@ -1,5 +1,7 @@
 use super::*;
-use crate::app::components::{Msg, ShellRequest, TvWorkspaceComponent};
+use crate::app::components::{
+    browser_narrow::NarrowInlineHero, Msg, ShellRequest, TvWorkspaceComponent,
+};
 use crate::app::render::make_movie_app;
 use ratatui::layout::Rect;
 use tuirealm::component::AppComponent;
@@ -640,30 +642,43 @@ fn tv_season_skip_model() -> Model {
 #[test]
 fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     let mut model = mounted_tv_model();
+    model.app.layout.main.tv_wide_right_area = Rect::default();
+    model.sync_tv_workspace();
+    model.sync_emby_browser();
 
-    // Divergence: park App's cursor on "movie-second" (index 1) while the
-    // mounted component still selects "movie-focused". Without the mirror
-    // the resolution follows the stale App cursor; writing the cursor
-    // back to 0 (the mirror's former effect) realigns it to the
-    // component's selection.
+    // Divergence: the mounted BrowserComponent selects index 0 while App's
+    // mirrored BrowseLevel cursor is stale at index 1. Resolve narrow extras
+    // using the component-owned cursor, as the production seam does.
     model.app.libs[0].nav_stack[0].cursor = 1;
-    assert_eq!(
-        model
-            .app
-            .selected_series_item(0, model.app.libs[0].nav_stack[0].cursor)
-            .map(|i| i.id),
-        Some("movie-second".into()),
-        "stale App cursor resolves a different Series before realignment"
-    );
-    model.app.libs[0].nav_stack[0].cursor = 0;
-    assert_eq!(
-        model
-            .app
-            .selected_series_item(0, model.app.libs[0].nav_stack[0].cursor)
-            .map(|i| i.id),
-        Some("movie-focused".into()),
-        "realigned cursor resolves the component's selected Series"
-    );
+    let component_cursor = model
+        .application
+        .get_component(&model.emby_browser_id.clone().expect("browser mounted"))
+        .expect("browser mounted")
+        .as_any()
+        .downcast_ref::<crate::app::components::BrowserComponent>()
+        .expect("browser component")
+        .cursor();
+    assert_eq!(component_cursor, 0);
+    assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
+
+    let component_extras = model.app.narrow_browse_extras(0, component_cursor);
+    match component_extras.inline_hero {
+        Some(NarrowInlineHero::Series { item, .. }) => {
+            assert_eq!(item.id, "movie-focused");
+        }
+        _ => panic!("component cursor must resolve the focused Series"),
+    }
+    let stale_extras = model
+        .app
+        .narrow_browse_extras(0, model.app.libs[0].nav_stack[0].cursor);
+    match stale_extras.inline_hero {
+        Some(NarrowInlineHero::Series { item, .. }) => {
+            assert_eq!(item.id, "movie-second");
+        }
+        _ => panic!("stale App cursor must resolve the other Series"),
+    }
+
+    model.app.libs[0].nav_stack[0].cursor = component_cursor;
 
     // Wide TV layout => enter_series_selection targets the component's
     // Series (asserted by the resolved target, not merely the bool).
