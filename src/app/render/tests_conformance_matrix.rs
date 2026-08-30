@@ -408,10 +408,10 @@ fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
     items.extend((0..6).map(|index| make_item(&format!("Movie {index}"), "Movie")));
     let selected = items.len() - 1;
     items[selected].overview = "The selected movie overview.".into();
-    movies.libs[0].nav_stack[0].cursor = selected;
-    movies.libs[0].nav_stack[0].scroll = 1;
+    movies.libs[0].nav_stack[0].set_resting_cursor(selected);
+    movies.libs[0].nav_stack[0].set_resting_scroll(1);
     let mut music = make_music_group_app();
-    music.libs[0].nav_stack[1].cursor = 0;
+    music.libs[0].nav_stack[1].set_resting_cursor(0);
     let cases = [
         ("Movies", movies, "Movie 5"),
         ("Music", music, "First Album"),

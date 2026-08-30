@@ -85,7 +85,7 @@ fn narrow_tv_library_restores_saved_series_position() {
     });
 
     assert_eq!(
-        app.libs[0].nav_stack[0].cursor, 3,
+        app.libs[0].nav_stack[0].resting().cursor(), 3,
         "entering the narrow TV library must restore the saved series (Series-3 at index 3)"
     );
 }
@@ -136,7 +136,7 @@ fn narrow_grouped_music_library_restores_saved_album_position() {
 
     assert_eq!(app.libs[0].nav_stack.len(), 2, "grouped path must survive restore");
     assert_eq!(
-        app.libs[0].nav_stack[1].cursor, 2,
+        app.libs[0].nav_stack[1].resting().cursor(), 2,
         "entering the narrow grouped Music library must restore the saved album (album-2 at index 2)"
     );
 }
@@ -207,8 +207,7 @@ fn tv_shows_app() -> App {
             title: "Shows".into(),
             items: folder_items("Series", "Series", 5),
             total_count: 5,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Series".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -394,8 +393,7 @@ fn podcast_app() -> App {
             title: "Podcasts".into(),
             items: folder_items("Show", "Series", 5),
             total_count: 5,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -479,7 +477,8 @@ fn feed_home_video_group_app() -> App {
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(), title: "YouTube".into(),
-            items: vec![folder.clone()], total_count: 1, cursor: 0, scroll: 0,
+            items: vec![folder.clone()], total_count: 1,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: None, unplayed_only: false, sort_by: "SortName".into(),
             sort_order: "Ascending".into(), loading: false, all_items: None,
             letter_filter: None, music_grouping: None,

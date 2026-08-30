@@ -382,7 +382,11 @@ fn narrow_grouped_music_keeps_bottom_hero_fully_visible() {
     app.image_protocol_enabled = true;
     let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
     let cursor = albums.len() - 1;
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = cursor;
+    app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .set_resting_cursor(cursor);
     let expected_height = album_hero_detail_rows(true) + HERO_BLOCK_EXTRA_ROWS as usize;
     let (model, output) = narrow_music_frame(app, 30);
     let layout = mounted_music_layout(&model);
@@ -453,7 +457,11 @@ fn narrow_grouped_music_persists_bottom_hero_scroll() {
     }
     app.image_protocol_enabled = true;
     let cursor = app.libs[0].nav_stack.last().unwrap().items.len() - 1;
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = cursor;
+    app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .set_resting_cursor(cursor);
     let mut model = mounted_model_at(app, 60, 30);
     let _ = draw_mounted_frame(&mut model, 60, 30);
 
@@ -509,7 +517,11 @@ fn grouped_hero_art_follows_album_focus() {
         .unwrap()
         .items
         .push(second);
-    album_app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    album_app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .set_resting_cursor(1);
     album_app.image_protocol_enabled = true;
     // 60x30 so the list below the album hero still shows both albums.
     let (model, out) = narrow_music_frame(album_app, 30);
@@ -589,7 +601,11 @@ fn grouped_music_shared_plan_keeps_one_parent_target() {
         album.is_folder = true;
         app.libs[0].nav_stack.last_mut().unwrap().items.push(album);
     }
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = 2;
+    app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .set_resting_cursor(2);
     let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
     let mut layout = LayoutMain::default();
     let mut terminal = Terminal::new(TestBackend::new(82, 30)).unwrap();
@@ -681,7 +697,11 @@ fn grouped_music_maps_reordered_non_contiguous_album_source() {
         .items
         .extend([beta, alpha_other, selected]);
     let cursor = 3;
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = cursor;
+    app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .set_resting_cursor(cursor);
     let (model, rendered) = narrow_music_frame(app, 30);
     let layout = mounted_music_layout(&model);
 

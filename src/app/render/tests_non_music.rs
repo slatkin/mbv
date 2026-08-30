@@ -31,7 +31,7 @@ fn home_video_library_is_never_album_folders_and_renders_via_original_list_path(
 fn narrow_home_video_selected_item_retains_inline_detail() {
     let mut app = make_home_video_app();
     app.libs[0].nav_stack[0].items[1].overview = "The selected home video overview.".into();
-    app.libs[0].nav_stack[0].cursor = 1;
+    app.libs[0].nav_stack[0].set_resting_cursor(1);
     let mut model = mounted_model_at(app, 70, 30);
     let output = draw_mounted_frame(&mut model, 70, 30);
     let layout = mounted_browser_layout(&model);
@@ -216,8 +216,7 @@ fn letter_grouped_series_app() -> App {
             title: "Shows".into(),
             items: series,
             total_count: 55,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Series".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -325,8 +324,7 @@ fn narrow_series_inline_hero_shows_only_hero_content_no_season_or_episode_list()
             title: "Shows".into(),
             items: vec![series],
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Series".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),

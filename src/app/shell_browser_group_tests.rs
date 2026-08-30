@@ -27,8 +27,7 @@ fn two_library_app() -> App {
             title: "Series".into(),
             items: make_items(4),
             total_count: 4,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -110,7 +109,7 @@ fn emby_browser_stays_mounted_and_preserves_cursor_across_switch() {
         panic!("A Down must emit BrowserCursorIndex, got no typed request");
     };
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
-    assert_eq!(model.app.libs[0].nav_stack[0].cursor, index);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), index);
     assert_eq!(browser_component_cursor(&model, &a_id), index);
 
     // Switch to library B: A's component must stay mounted (keep-mounted).
@@ -217,8 +216,7 @@ fn feed_group_picker_app() -> App {
             title: "Podcast".into(),
             items: vec![folder.clone()],
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),

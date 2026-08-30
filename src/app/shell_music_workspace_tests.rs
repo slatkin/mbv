@@ -110,7 +110,7 @@ fn grouped_music_cursor_no_fallthrough_when_left_sorted_indices_empty() {
     // The shell arm applies the target via the display-order cursor setter,
     // which must not fall through to raw-index navigation.
     assert!(model.app.move_music_group_display_cursor(0, target));
-    assert_eq!(model.app.libs[0].nav_stack[1].cursor, order[1]);
+    assert_eq!(model.app.libs[0].nav_stack[1].resting().cursor(), order[1]);
 }
 
 #[test]
@@ -441,8 +441,7 @@ fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
                 title: "Music".into(),
                 items: vec![group],
                 total_count: 1,
-                cursor: 0,
-                scroll: 0,
+                resting: crate::app::types_browse::BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -457,8 +456,7 @@ fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
                 title: "Alpha".into(),
                 items: albums,
                 total_count: 3,
-                cursor: 0,
-                scroll: 0,
+                resting: crate::app::types_browse::BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -493,7 +491,7 @@ fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
             .expect("album cursor")
     };
     // App and component cursors both start at 0.
-    assert_eq!(model.app.libs[0].nav_stack[1].cursor, 0);
+    assert_eq!(model.app.libs[0].nav_stack[1].resting().cursor(), 0);
     assert_eq!(album_cursor(&model), 0);
 
     // Move ONLY the component-local cursor to a divergent value (1): the
@@ -517,7 +515,8 @@ fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
     ));
     assert_eq!(album_cursor(&model), 1, "component cursor must diverge");
     assert_eq!(
-        model.app.libs[0].nav_stack[1].cursor, 0,
+        model.app.libs[0].nav_stack[1].resting().cursor(),
+        0,
         "App cursor must stay put"
     );
 
@@ -532,8 +531,7 @@ fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
         title: "Tracks".into(),
         items: vec![track],
         total_count: 1,
-        cursor: 0,
-        scroll: 0,
+        resting: crate::app::types_browse::BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -569,7 +567,8 @@ fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
         "the divergent component-local album cursor must survive the drill-and-return round trip"
     );
     assert_eq!(
-        model.app.libs[0].nav_stack[1].cursor, 0,
+        model.app.libs[0].nav_stack[1].resting().cursor(),
+        0,
         "App cursor stays at its own value throughout"
     );
 }
@@ -653,7 +652,7 @@ fn music_workspace_first_mount_adopts_restored_album_cursor() {
     // mounts: the first projection re-anchors the component to it (D1's
     // third re-anchor site), rather than starting at 0.
     let mut model = Model::new(music_group_app_two_albums());
-    model.app.libs[0].nav_stack[1].cursor = 1;
+    model.app.libs[0].nav_stack[1].set_resting_cursor(1);
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
     model.sync_music_workspace();

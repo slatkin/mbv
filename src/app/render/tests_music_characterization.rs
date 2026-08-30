@@ -41,7 +41,7 @@ fn music_buffer_characterization_covers_wide_unfocused_narrow_and_selected_state
     // `render_library` paints no grouped-album rows at the wide breakpoint.
     for (width, height, focused) in [(120, 30, true), (120, 30, false)] {
         let mut app = make_music_group_app();
-        app.libs[0].nav_stack[1].cursor = 0;
+        app.libs[0].nav_stack[1].set_resting_cursor(0);
         let output = render_music_legacy(&mut app, width, height, focused);
         assert!(
             !output.contains("First Album"),
@@ -53,7 +53,7 @@ fn music_buffer_characterization_covers_wide_unfocused_narrow_and_selected_state
     // now (task 3.8), reached through the full `Model::draw_frame` path.
     for (width, height) in [(60, 30), (60, 20)] {
         let mut app = make_music_group_app();
-        app.libs[0].nav_stack[1].cursor = 0;
+        app.libs[0].nav_stack[1].set_resting_cursor(0);
         let output = render_narrow_music(app, width, height);
         assert!(
             output.contains("First Album"),
@@ -116,7 +116,7 @@ fn wide_grouped_music_publishes_same_frame_layout_geometry() {
 #[test]
 fn wide_music_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
     let mut app = make_music_group_app();
-    app.libs[0].nav_stack[1].cursor = 0;
+    app.libs[0].nav_stack[1].set_resting_cursor(0);
     let mut layout = LayoutMain::default();
     let mut term = Terminal::new(TestBackend::new(120, 40)).unwrap();
     term.draw(|f| {
