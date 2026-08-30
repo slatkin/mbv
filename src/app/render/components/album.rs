@@ -4,7 +4,9 @@ use crate::app::render::components::album_rows::AlbumRowCtx;
 use crate::app::render::components::list_rows::{
     draw_column_selection_markers, selected_cell_rect,
 };
-use crate::app::render::screens::album_plan::{GroupedAlbumDisplayRow, HeaderFocusCtx};
+use crate::app::render::screens::album_plan::{
+    group_album_info, GroupedAlbumDisplayRow, HeaderFocusCtx,
+};
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -56,7 +58,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
             .and_then(|s| s.settled.as_ref());
         match catalog {
             Some(cat) => {
-                let info = app.group_album_info(albums, Some(cat));
+                let info = group_album_info(&app.album_artist_cache, albums, Some(cat));
                 let order: Vec<usize> = cat
                     .entries
                     .iter()
@@ -66,7 +68,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
                 (info, order)
             }
             None => {
-                let info = app.group_album_info(albums, None);
+                let info = group_album_info(&app.album_artist_cache, albums, None);
                 let order = crate::app::render::sorted_group_album_order(&info);
                 (info, order)
             }

@@ -2,7 +2,6 @@ use crate::app::layout::LibraryRowTarget;
 use crate::app::music_grouping::{derive_album_display_name, GroupedAlbumCatalog};
 use crate::app::render::components::album_art::INLINE_ALBUM_ART_ROWS;
 use crate::app::render::{natural_sort_key, strip_article};
-use crate::app::App;
 use std::collections::HashMap;
 use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
@@ -78,76 +77,43 @@ pub(in crate::app::render) struct GroupedAlbumDisplayPlanCtx<'a> {
     pub(in crate::app::render) album_tracks: &'a HashMap<String, Vec<mbv_core::api::EmbyItem>>,
 }
 
-impl App {
-    /// Builds the `(artist, year, album_name)` display info for every album,
-    /// consuming the settled catalog when available (no artist derivation) and
-    /// falling back to a synchronous best-effort chain otherwise.
-    pub(in crate::app::render) fn group_album_info(
-        &self,
-        albums: &[mbv_core::api::EmbyItem],
-        catalog: Option<&GroupedAlbumCatalog>,
-    ) -> Vec<(String, String, String)> {
-        match catalog {
-            Some(cat) => (0..albums.len())
-                .map(|i| {
-                    let pos = cat.index_to_entry.get(&i).copied().unwrap_or(0);
-                    let entry = &cat.entries[pos];
-                    (entry.artist.clone(), entry.year.clone(), entry.name.clone())
-                })
-                .collect(),
-            None => albums
-                .iter()
-                .map(|item| {
-                    let artist = self.resolve_group_album_artist(item);
-                    let (year, name) = derive_album_display_name(item);
-                    (artist, year, name)
-                })
-                .collect(),
-        }
-    }
+/// Resolves the display artist for an album item in the grouped music views
+/// synchronously, given the album-artist cache. Mirrors
+/// `App::resolve_group_album_artist` without borrowing `App`.
+pub(in crate::app::render) fn resolve_group_album_artist(
+    album_artist_cache: &HashMap<String, String>,
+    item: &mbv_core::api::EmbyItem,
+) -> String {
+    crate::app::music_grouping::derive_album_artist(
+        item,
+        album_artist_cache.get(&item.id).map(String::as_str),
+    )
+}
 
-    pub(in crate::app::render) fn build_grouped_album_display_plan(
-        &mut self,
-        albums: &[mbv_core::api::EmbyItem],
-        album_info: &[(String, String, String)],
-        order: &[usize],
-        cursor: usize,
-        fetch_missing_tracks: bool,
-        header_focus: HeaderFocusCtx,
-        wrap_widths: Option<(u16, u16)>,
-        hero_handles_detail: bool,
-    ) -> GroupedAlbumDisplayPlan {
-        if fetch_missing_tracks {
-            for album in albums {
-                if !self.album_tracks_cache.contains_key(&album.id) {
-                    self.fetch_album_tracks(album.id.clone());
-                }
-            }
-        }
-        let playing_track_id = {
-            let playback = self.effective_playback_state();
-            playback.active.then(|| {
-                self.playback_queue()
-                    .emby_item_at(playback.active_idx)
-                    .map(|item| item.id.clone())
+/// Builds the `(artist, year, album_name)` display info for every album,
+/// consuming the settled catalog when available (no artist derivation) and
+/// falling back to a synchronous best-effort chain otherwise.
+pub(in crate::app::render) fn group_album_info(
+    album_artist_cache: &HashMap<String, String>,
+    albums: &[mbv_core::api::EmbyItem],
+    catalog: Option<&GroupedAlbumCatalog>,
+) -> Vec<(String, String, String)> {
+    match catalog {
+        Some(cat) => (0..albums.len())
+            .map(|i| {
+                let pos = cat.index_to_entry.get(&i).copied().unwrap_or(0);
+                let entry = &cat.entries[pos];
+                (entry.artist.clone(), entry.year.clone(), entry.name.clone())
             })
-        }
-        .flatten();
-        build_grouped_album_display_plan_with_ctx(
-            albums,
-            album_info,
-            order,
-            cursor,
-            fetch_missing_tracks,
-            header_focus,
-            wrap_widths,
-            hero_handles_detail,
-            GroupedAlbumDisplayPlanCtx {
-                images_enabled: self.images_enabled(),
-                playing_track_id,
-                album_tracks: &self.album_tracks_cache,
-            },
-        )
+            .collect(),
+        None => albums
+            .iter()
+            .map(|item| {
+                let artist = resolve_group_album_artist(album_artist_cache, item);
+                let (year, name) = derive_album_display_name(item);
+                (artist, year, name)
+            })
+            .collect(),
     }
 }
 

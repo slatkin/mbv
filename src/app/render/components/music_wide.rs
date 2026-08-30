@@ -176,7 +176,11 @@ impl App {
         let catalog = level
             .and_then(|level| level.music_grouping.as_ref())
             .and_then(|state| state.settled.clone());
-        let album_info = self.group_album_info(&albums, catalog.as_ref());
+        let album_info = crate::app::render::screens::album_plan::group_album_info(
+            &self.album_artist_cache,
+            &albums,
+            catalog.as_ref(),
+        );
         let album_order = catalog
             .as_ref()
             .map(|catalog| {

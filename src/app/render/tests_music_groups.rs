@@ -2,7 +2,8 @@ use super::components::album::AlbumRowsCursorCtx;
 use super::components::album_detail::album_hero_detail_rows;
 use super::components::hero::HERO_BLOCK_EXTRA_ROWS;
 use super::screens::album_plan::{
-    sorted_group_album_order, GroupedAlbumDisplayRow, HeaderFocusCtx,
+    build_grouped_album_display_plan_with_ctx, group_album_info, sorted_group_album_order,
+    GroupedAlbumDisplayPlanCtx, GroupedAlbumDisplayRow, HeaderFocusCtx,
 };
 use super::test_helpers::*;
 use super::*;
@@ -10,6 +11,7 @@ use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
+use std::collections::HashMap;
 
 #[test]
 fn selectable_artist_headers_are_typed_row_targets() {
@@ -65,9 +67,11 @@ fn selected_group_has_block_bounds() {
     let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
 
     let plan = {
-        let album_info = app.group_album_info(&albums, None);
+        let album_artist_cache = HashMap::new();
+        let album_tracks = HashMap::new();
+        let album_info = group_album_info(&album_artist_cache, &albums, None);
         let order = sorted_group_album_order(&album_info);
-        app.build_grouped_album_display_plan(
+        build_grouped_album_display_plan_with_ctx(
             &albums,
             &album_info,
             &order,
@@ -79,6 +83,11 @@ fn selected_group_has_block_bounds() {
             },
             Some((120, 0)),
             false, // hero_handles_detail
+            GroupedAlbumDisplayPlanCtx {
+                images_enabled: false,
+                playing_track_id: None,
+                album_tracks: &album_tracks,
+            },
         )
     };
 
@@ -104,11 +113,13 @@ fn selected_group_has_block_bounds() {
 
 #[test]
 fn focused_group_header_has_no_internal_spacer_when_hero_handles_detail() {
-    let mut app = make_music_group_app();
+    let app = make_music_group_app();
     let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
-    let album_info = app.group_album_info(&albums, None);
+    let album_artist_cache = HashMap::new();
+    let album_tracks = HashMap::new();
+    let album_info = group_album_info(&album_artist_cache, &albums, None);
     let order = sorted_group_album_order(&album_info);
-    let plan = app.build_grouped_album_display_plan(
+    let plan = build_grouped_album_display_plan_with_ctx(
         &albums,
         &album_info,
         &order,
@@ -120,6 +131,11 @@ fn focused_group_header_has_no_internal_spacer_when_hero_handles_detail() {
         },
         Some((120, 0)),
         true,
+        GroupedAlbumDisplayPlanCtx {
+            images_enabled: false,
+            playing_track_id: None,
+            album_tracks: &album_tracks,
+        },
     );
 
     let header_row = plan
@@ -137,7 +153,7 @@ fn focused_group_header_has_no_internal_spacer_when_hero_handles_detail() {
 
 #[test]
 fn hero_handles_detail_suppresses_all_inline_detail_rows() {
-    let mut app = make_music_group_app();
+    let app = make_music_group_app();
     // Add tracks to the album so the plan would normally include detail rows.
     let tracks: Vec<mbv_core::api::EmbyItem> = (0..5)
         .map(|i| {
@@ -147,14 +163,20 @@ fn hero_handles_detail_suppresses_all_inline_detail_rows() {
             t
         })
         .collect();
-    app.album_tracks_cache.insert("album-1".into(), tracks);
-
     let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
-    let album_info = app.group_album_info(&albums, None);
+    let mut album_tracks = HashMap::new();
+    album_tracks.insert(albums[0].id.clone(), tracks);
+    let album_artist_cache = HashMap::new();
+    let album_info = group_album_info(&album_artist_cache, &albums, None);
     let order = sorted_group_album_order(&album_info);
+    let ctx = || GroupedAlbumDisplayPlanCtx {
+        images_enabled: false,
+        playing_track_id: None,
+        album_tracks: &album_tracks,
+    };
 
     // Without hero_handles_detail, detail rows should appear.
-    let plan_without = app.build_grouped_album_display_plan(
+    let plan_without = build_grouped_album_display_plan_with_ctx(
         &albums,
         &album_info,
         &order,
@@ -166,6 +188,7 @@ fn hero_handles_detail_suppresses_all_inline_detail_rows() {
         },
         Some((120, 0)),
         false,
+        ctx(),
     );
     let has_detail = plan_without.rows.iter().any(|row| {
         matches!(
@@ -183,7 +206,7 @@ fn hero_handles_detail_suppresses_all_inline_detail_rows() {
     );
 
     // With hero_handles_detail, no detail rows should appear.
-    let plan_with = app.build_grouped_album_display_plan(
+    let plan_with = build_grouped_album_display_plan_with_ctx(
         &albums,
         &album_info,
         &order,
@@ -195,6 +218,7 @@ fn hero_handles_detail_suppresses_all_inline_detail_rows() {
         },
         Some((120, 0)),
         true,
+        ctx(),
     );
     let has_detail = plan_with.rows.iter().any(|row| {
         matches!(
@@ -222,12 +246,14 @@ fn hero_handles_detail_suppresses_all_inline_detail_rows() {
 
 #[test]
 fn hero_handling_drops_hint_wrap_rows_but_keeps_album_title_rows() {
-    let mut app = make_music_group_app();
+    let app = make_music_group_app();
     let mut albums = app.libs[0].nav_stack.last().unwrap().items.clone();
     albums[0].name = "A deliberately long album title that wraps".into();
-    let album_info = app.group_album_info(&albums, None);
+    let album_artist_cache = HashMap::new();
+    let album_tracks = HashMap::new();
+    let album_info = group_album_info(&album_artist_cache, &albums, None);
     let order = sorted_group_album_order(&album_info);
-    let plan = app.build_grouped_album_display_plan(
+    let plan = build_grouped_album_display_plan_with_ctx(
         &albums,
         &album_info,
         &order,
@@ -239,6 +265,11 @@ fn hero_handling_drops_hint_wrap_rows_but_keeps_album_title_rows() {
         },
         Some((30, 0)),
         true,
+        GroupedAlbumDisplayPlanCtx {
+            images_enabled: false,
+            playing_track_id: None,
+            album_tracks: &album_tracks,
+        },
     );
 
     assert_eq!(
