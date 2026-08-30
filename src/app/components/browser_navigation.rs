@@ -60,7 +60,7 @@ impl BrowserComponent {
         self.cursor = sorted[new_pos];
     }
 
-    /// Move in raw item order, using raw item order; a zero-count list stays put.
+    /// Move the component cursor by `delta` in raw item order, clamped to the item count.
     pub(super) fn move_raw_cursor(&mut self, delta: i64) {
         let count = self.context.item_count();
         if count > 0 {
@@ -68,16 +68,10 @@ impl BrowserComponent {
         }
     }
 
-    /// Flat (sorted-order) delta that lands the component cursor on the
-    /// item `item_rows` rows up/down from its current display row, per the
-    /// last painted item rows — the component-local mirror of
-    /// `App::letter_vertical_delta` (which reads the App nav cursor; this
-    /// reads the component's own `self.cursor`). Headers/spacers/fillers do
-    /// not participate: the target is the `item_rows`-th *item row* away,
-    /// keeping the cursor's column (a ragged target row falls back to its
-    /// last item; moving past the end clamps to the last item). `None` when
-    /// the layout is stale (cursor not found), letting the caller fall back
-    /// to flat arithmetic.
+    /// Flat (sorted-order) delta to the item `item_rows` rows up/down from
+    /// the component cursor in the last painted item rows. Headers/spacers/
+    /// fillers do not participate; ragged rows fall back to their last item.
+    /// Returns `None` when the layout is stale, so callers use flat arithmetic.
     pub(super) fn letter_vertical_delta(&self, item_rows: i64) -> Option<i64> {
         let all_rows = &self.layout.left_item_rows;
         if all_rows.is_empty() || self.layout.left_sorted_indices.is_empty() {
@@ -126,9 +120,7 @@ impl BrowserComponent {
     }
 
     /// Home/End jump to the first/last item in sorted display order when
-    /// the last painted list is letter-grouped, else the raw first/last —
-    /// mirroring `App::jump_lib_cursor` minus the feed-home-video-group
-    /// branch the Browser mount gate excludes.
+    /// the last painted list is letter-grouped, else the raw first/last.
     pub(super) fn jump_cursor(&mut self, to_end: bool) -> usize {
         if !self.layout.left_sorted_indices.is_empty() {
             let n = self.layout.left_sorted_indices.len();

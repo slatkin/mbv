@@ -118,7 +118,7 @@ fn expected_movement_request(_key: Key, index: usize) -> ShellRequest {
 
 /// Letter-grouped lists (60 items render bucketed rows with a header row
 /// between buckets and a ragged trailing row per bucket) striding one
-/// PAINTED item row per Up/Down, exactly like `App::letter_vertical_delta`:
+/// PAINTED item row per Up/Down, using the component's `letter_vertical_delta`:
 /// headers do not participate and a ragged target row falls back to its
 /// last item. The painted (2-column) item rows are
 ///   A\u{2013}C: [0,1]..[26,27],[28]   (ragged: item 28 alone)

@@ -81,62 +81,6 @@ impl App {
         library_column_count(self.layout.main.left_area.width)
     }
 
-    /// Computes the flat (sorted-order) delta that lands the cursor on the
-    /// item `item_rows` rows up (negative) or down (positive) from its
-    /// current display row, per the last frame's laid-out item rows.
-    /// Headers/spacers/fillers do not participate: the target is the
-    /// `item_rows`-th *item row* away, keeping the cursor's column (a
-    /// ragged target row falls back to its last item; moving past the end
-    /// clamps to the last item). Returns `None` when the layout is stale
-    /// (cursor not found), letting the caller fall back to flat arithmetic.
-    fn letter_vertical_delta(&self, lib_idx: usize, item_rows: i64) -> Option<i64> {
-        let sorted = &self.layout.main.left_sorted_indices;
-        let all_rows = &self.layout.main.left_item_rows;
-        if all_rows.is_empty() || sorted.is_empty() {
-            return None;
-        }
-        let item_row_list: Vec<&Vec<usize>> = all_rows.iter().filter(|r| !r.is_empty()).collect();
-        if item_row_list.is_empty() {
-            return None;
-        }
-        let cursor = self.libs[lib_idx].nav_stack.last()?.resting().cursor();
-        let (cur_row, cur_col) = item_row_list
-            .iter()
-            .enumerate()
-            .find_map(|(r, row)| row.iter().position(|&i| i == cursor).map(|col| (r, col)))?;
-        let row_count = item_row_list.len();
-        let target_row = if item_rows < 0 {
-            cur_row.saturating_sub(item_rows.unsigned_abs() as usize)
-        } else {
-            cur_row
-                .saturating_add(item_rows as usize)
-                .min(row_count.saturating_sub(1))
-        };
-        let target = item_row_list[target_row]
-            .get(cur_col)
-            .copied()
-            .or_else(|| item_row_list[target_row].last().copied())?;
-
-        // Single pass over `sorted` for both positions instead of two
-        // separate `.position()` scans -- this runs on every j/k/Up/Down
-        // keypress in letter-grouped view, so halving the work (and
-        // early-exiting once both are found) matters on large libraries.
-        let mut cur_pos = None;
-        let mut target_pos = None;
-        for (pos, &idx) in sorted.iter().enumerate() {
-            if idx == cursor {
-                cur_pos = Some(pos);
-            }
-            if idx == target {
-                target_pos = Some(pos);
-            }
-            if cur_pos.is_some() && target_pos.is_some() {
-                break;
-            }
-        }
-        Some(target_pos? as i64 - cur_pos? as i64)
-    }
-
     pub(super) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
         if lib.library.collection_type != "music" {
