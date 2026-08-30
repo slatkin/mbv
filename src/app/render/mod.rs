@@ -23,7 +23,9 @@ pub(in crate::app) use components::confirm_modal::render_confirm_modal_content;
 pub(in crate::app) use components::context_menu::render_context_menu_content;
 pub(in crate::app) use components::daemon_lost_modal::render_daemon_lost_modal_content;
 #[allow(unused_imports)]
-pub(in crate::app) use components::detail::{compact_banner_layout, CompactBannerLayout};
+pub(in crate::app) use components::detail::{
+    compact_banner_layout, render_compact_detail_with_ctx, CompactBannerLayout, CompactDetailCtx,
+};
 pub(in crate::app) use components::feeds::{render_feeds_content, FeedsRenderModel};
 pub(in crate::app) use components::feeds_manage::{
     render_feeds_manage_content, FeedsManageRenderModel,
@@ -99,8 +101,12 @@ use components::list_rows::{selection_marker, MarkerEdge};
 use components::widgets::{
     content_width, render_placeholder, render_right_scrollbar,
     render_right_scrollbar_with_viewport, render_selected_block_background,
-    render_selected_block_borders, SelectedBlockBorderStyle, MUSIC_ALBUM_IMAGE_TYPES,
+    render_selected_block_borders as render_selected_block_borders_internal,
+    SelectedBlockBorderStyle as SelectedBlockBorderStyleInternal, MUSIC_ALBUM_IMAGE_TYPES,
     RENDER_FILTER,
+};
+pub(in crate::app) use components::widgets::{
+    render_selected_block_borders, SelectedBlockBorderStyle,
 };
 pub(super) use screens::album_plan::sorted_group_album_order;
 pub(super) use screens::sort_filter::{

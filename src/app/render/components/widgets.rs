@@ -161,7 +161,7 @@ pub(in crate::app::render) fn render_selected_block_background(
 
 /// The declared framing variants for [`render_selected_block_borders`].
 /// Differences stay in one painter rather than being forked by callers.
-pub(in crate::app::render) enum SelectedBlockBorderStyle {
+pub(in crate::app) enum SelectedBlockBorderStyle {
     Framed,
     FocusedRail { focused: bool },
 }
@@ -170,7 +170,7 @@ pub(in crate::app::render) enum SelectedBlockBorderStyle {
 /// the colored block's padding rows `[top_pad_abs, bottom_pad_abs]`.
 /// The padding rows are inserted with extra detail rule rows for border space.
 /// Call *after* the block's own content and scrollbar render, so borders paint on top.
-pub(in crate::app::render) fn render_selected_block_borders(
+pub(in crate::app) fn render_selected_block_borders(
     f: &mut Frame,
     area: Rect,
     offset: usize,

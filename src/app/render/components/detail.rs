@@ -405,16 +405,16 @@ impl App {
 /// selected item plus its already-computed [`CompactBannerLayout`] (so this
 /// path never re-enters `compact_banner_layout_with_overview` or the image
 /// cache).
-pub(in crate::app::render) struct CompactDetailCtx<'a> {
-    pub(in crate::app::render) item: &'a mbv_core::api::EmbyItem,
-    pub(in crate::app::render) layout: CompactBannerLayout,
+pub(in crate::app) struct CompactDetailCtx<'a> {
+    pub(in crate::app) item: &'a mbv_core::api::EmbyItem,
+    pub(in crate::app) layout: CompactBannerLayout,
 }
 
 /// Pure compact movie/Series banner painter: builds the [`HeroContent`],
 /// paints it, and returns the poster image still needing paint as a
 /// [`HomeImagePaint::CompactBanner`] request (executed by
 /// [`App::paint_home_image`]). No `App`, no image-cache access, no fetch.
-pub(in crate::app::render) fn render_compact_detail_with_ctx(
+pub(in crate::app) fn render_compact_detail_with_ctx(
     ctx: CompactDetailCtx<'_>,
     f: &mut Frame,
     area: Rect,

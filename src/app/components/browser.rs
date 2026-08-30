@@ -17,7 +17,7 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::browser_narrow::NarrowBrowseExtras;
+use super::browser_narrow::{NarrowBrowseExtras, NarrowInlineHero};
 use super::component_id::BrowserKind;
 use super::msg::{BrowserHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
@@ -158,16 +158,7 @@ impl BrowserComponent {
         ctx: &LibraryListRenderCtx,
     ) -> usize {
         if self.narrow_extras.feed_items.is_some() {
-            let (scroll, image_paint) = crate::app::render::render_narrow_browse_with_ctx(
-                f,
-                area,
-                ctx,
-                &self.narrow_extras,
-                self.focused,
-                &mut self.layout,
-            );
-            self.image_paint = image_paint;
-            return scroll;
+            return self.render_wide_feed_group(f, area, ctx);
         }
 
         let left_content_area = Rect {
@@ -278,6 +269,95 @@ impl BrowserComponent {
     /// `App::render_letter_pills_row` (screens/pills.rs) using the component's
     /// own `letter_filter`, so the wide right rail's pills no longer depend on
     /// the legacy renderer.
+    /// Wide feed groups keep the generic component's left list geometry, while
+    /// placing the selected feed detail in the right pane. This is deliberately
+    /// a component-only composition; App/image-cache work arrives in extras.
+    fn render_wide_feed_group(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        ctx: &LibraryListRenderCtx,
+    ) -> usize {
+        let Some(panes) = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y) else {
+            return render_generic_movies_home_video_rows_with_ctx(
+                f,
+                area,
+                ctx,
+                self.focused,
+                &mut self.layout,
+            );
+        };
+        self.layout.movies_wide_right_area = panes.right_area;
+        let pills = panes.left_area;
+        let labels: Vec<String> = std::iter::once("All".into())
+            .chain(self.narrow_extras.feed_groups.iter().cloned())
+            .collect();
+        let ids: Vec<usize> = (0..labels.len()).collect();
+        self.layout.selector_tabs = render_pill_bar(
+            f,
+            Rect {
+                y: pills.y.saturating_sub(1),
+                height: 1,
+                ..pills
+            },
+            PillBar {
+                labels: &labels,
+                ids: &ids,
+                selected_pos: self.narrow_extras.feed_group_cursor,
+                prefix: Some(" ⌘ "),
+            },
+        );
+        let list_area = Rect {
+            y: pills.y + 3,
+            height: panes.left_area.height.saturating_sub(3),
+            ..panes.left_area
+        };
+        self.layout.left_area = list_area;
+        let scroll = render_generic_movies_home_video_rows_with_ctx(
+            f,
+            list_area,
+            ctx,
+            self.focused,
+            &mut self.layout,
+        );
+        if let Some(NarrowInlineHero::Movie { item, layout }) =
+            self.narrow_extras.inline_hero.as_ref()
+        {
+            let detail = Rect {
+                x: panes.right_area.x + 1,
+                y: panes.right_area.y + 4,
+                width: panes.right_area.width.saturating_sub(2),
+                height: panes.right_area.height.saturating_sub(5),
+            };
+            self.image_paint = crate::app::render::render_compact_detail_with_ctx(
+                crate::app::render::CompactDetailCtx {
+                    item,
+                    layout: layout.clone(),
+                },
+                f,
+                detail,
+                self.focused,
+                true,
+            );
+            crate::app::render::render_selected_block_borders(
+                f,
+                Rect {
+                    y: panes.right_area.y + 3,
+                    height: panes.right_area.height.saturating_sub(3),
+                    ..panes.right_area
+                },
+                0,
+                panes.right_area.height as usize,
+                1,
+                panes.right_area.height.saturating_sub(2) as usize,
+                crate::app::render::SelectedBlockBorderStyle::Framed,
+            );
+        } else {
+            self.image_paint = None;
+        }
+        scroll
+    }
+
     fn render_letter_pills_row(
         &mut self,
         f: &mut Frame,
