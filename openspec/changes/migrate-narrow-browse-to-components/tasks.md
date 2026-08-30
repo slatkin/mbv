@@ -233,7 +233,7 @@ findings become added rows; the template does not change.
 - [x] 3.6 Surface: Emby grouped Music, narrow (D6 second half).
       `MusicWorkspaceComponent::view` gains a narrow branch: grouped-album rows
       plus the Model A hero, **not** the wide right-rail track table.
-- [ ] 3.6a Correction (manual 5.3 regression, 2026-08-30): the narrow branch
+- [x] 3.6a Correction (manual 5.3 regression, 2026-08-30): the narrow branch
       (`render_narrow_music_group_with_ctx`, `music_wide.rs:233`) shipped without
       the group pill bar and with a malformed inline hero. Fix:
       - **Pill bar:** reserve a pills row above the album rows via
