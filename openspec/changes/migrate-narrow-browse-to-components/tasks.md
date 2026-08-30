@@ -217,7 +217,7 @@ findings become added rows; the template does not change.
 - [x] 3.6 Surface: Emby grouped Music, narrow (D6 second half).
       `MusicWorkspaceComponent::view` gains a narrow branch: grouped-album rows
       plus the Model A hero, **not** the wide right-rail track table.
-- [ ] 3.7 Relocate `render_list`'s poster-prefetch window
+- [x] 3.7 Relocate `render_list`'s poster-prefetch window
       (`fetch_list_card_image_when_idle`) to the shell beside
       `paint_home_image`, keyed off the component's selection. Verify: prefetch
       still fires as the cursor moves (test asserting the fetch call, since this
