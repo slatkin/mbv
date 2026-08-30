@@ -98,7 +98,7 @@
       than a field read — leaving the `Option` signature untouched (zero
       test-call churn). Verify: `rtk cargo check -p mbv`; `rtk cargo nextest run
       -p mbv --no-fail-fast` (baseline as 1.1d).
-- [ ] 1.1f Two single-line re-points the deletion forces:
+- [x] 1.1f Two single-line re-points the deletion forces:
       - **C** `shell_browser.rs:380` (`render_emby_browser_component` poster
         prefetch): the ctx is built with `browser.cursor()` for cursor but
         `nav_stack.last().map_or(0, |level| level.scroll)` for scroll. Replace
