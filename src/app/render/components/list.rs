@@ -104,13 +104,18 @@ impl App {
             }
         }
 
-        // Wide TV / podcast: the mounted `TvWorkspaceComponent` paints the
-        // workspace itself (task 5.3d.18d). The legacy underpaint branch and
-        // its `level.scroll` write-back are gone; `render_library` publishes
-        // the `tv_wide_*` hand-off rects before this call, so nothing else
-        // is needed here — just avoid painting narrow rows the component owns.
+        // Wide TV: the mounted `TvWorkspaceComponent` paints the workspace
+        // itself (task 5.3d.18d). The legacy underpaint branch and its
+        // `level.scroll` write-back are gone; `render_library` publishes the
+        // `tv_wide_*` hand-off rects before this call, so nothing else is
+        // needed here — just avoid painting narrow rows the component owns.
+        // Wide podcast is NOT suppressed here: no `TvWorkspaceComponent`
+        // mounts for `collection_type == "podcasts"`, so it falls through to
+        // the `component_owned` block below and its mounted `BrowserComponent`
+        // (kind `Generic`) composes the browse body across the wide area, the
+        // same way wide generic does (migrate-narrow-browse task 3.5b).
         if let Some(lib_idx) = self.tab.emby_library_index() {
-            if (self.is_wide_tv_library(lib_idx) || self.is_podcast_library(lib_idx))
+            if self.is_wide_tv_library(lib_idx)
                 && crate::app::render::arrangements::hero_left::shared_hero_presentation(area)
                     .is_some()
             {
@@ -139,9 +144,11 @@ impl App {
         // migrate-narrow-browse tasks 3.3/3.4/3.5a, closing regression 1).
         // Publish the list area for input routing, keep the poster-prefetch
         // window here (task 3.7 relocates it), and paint nothing — the
-        // component owns the picture. Wide podcast is excluded by the
-        // hero-presentation early return above; the grouped-Music narrow
-        // branch below is untouched (task 3.6 converts it).
+        // component owns the picture. Wide podcast reaches here too (no
+        // podcast wide-workspace component exists), so its mounted
+        // `BrowserComponent` paints the generic browse body across the wide
+        // area (task 3.5b). The grouped-Music narrow branch below is untouched
+        // (task 3.6 converts it).
         if let Some(lib_idx) = self.tab.emby_library_index() {
             let coll = self.libs[lib_idx].library.collection_type.as_str();
             let component_owned = self.emby_browser_active
