@@ -150,6 +150,93 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     );
 }
 
+/// migrate-narrow-browse task 2.3 (D5): resizing across the wide TV
+/// breakpoint and back keeps the visually-selected series. The
+/// active-destination pointer flips between `TvWorkspaceComponent` (wide)
+/// and the narrow `BrowserComponent`, each owning its own cursor; the
+/// breakpoint hand-off carries the selection across both flips.
+#[test]
+fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
+    use crate::app::components::{BrowserComponent, Msg, ShellRequest};
+    use crate::app::{PanelFocus, PanelMode};
+
+    let mut app = make_movie_app();
+    app.libs[0].library.collection_type = "tvshows".into();
+    for item in &mut app.libs[0].nav_stack[0].items {
+        item.item_type = "Series".into();
+    }
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::Both;
+    let wide = Rect::new(40, 0, 60, 20);
+    app.layout.main.tv_wide_right_area = wide;
+    let mut model = Model::new(app);
+
+    // Wide: move the TV workspace selection to row 1 (movie-second).
+    model.sync_mounted_surfaces();
+    let tv_id = model.tv_workspace_id.clone().expect("wide TV workspace id");
+    let moved = model
+        .application
+        .get_component_mut(&tv_id)
+        .expect("TV workspace mounted")
+        .on(&Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+    assert!(matches!(
+        moved,
+        Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
+    ));
+
+    // Flip to narrow: the pointer moves to the BrowserComponent, which must
+    // adopt the series the wide workspace had selected (row 1).
+    model.app.layout.main.tv_wide_right_area = Rect::default();
+    model.sync_mounted_surfaces();
+    let browser_id = model.emby_browser_id.clone().expect("narrow TV browser id");
+    let browser_cursor = model
+        .application
+        .get_component(&browser_id)
+        .and_then(|comp| comp.as_any().downcast_ref::<BrowserComponent>())
+        .map(BrowserComponent::cursor);
+    assert_eq!(
+        browser_cursor,
+        Some(1),
+        "narrow browser must adopt the series selected in the wide workspace"
+    );
+
+    // Narrow: move the browser selection back to row 0 (movie-focused).
+    let up = model
+        .application
+        .get_component_mut(&browser_id)
+        .expect("narrow browser mounted")
+        .on(&Event::Keyboard(KeyEvent {
+            code: Key::Up,
+            modifiers: KeyModifiers::NONE,
+        }));
+    let Some(Msg::Shell(request)) = up else {
+        panic!("browser Up must emit a typed shell request");
+    };
+    model.handle_browser_request(request);
+    assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
+
+    // Flip back to wide: the kept-mounted workspace must re-anchor to the
+    // resting position the narrow browser left (row 0), not its stale
+    // local cursor (row 1).
+    model.app.layout.main.tv_wide_right_area = wide;
+    model.sync_mounted_surfaces();
+    assert_eq!(model.tv_workspace_id.as_ref(), Some(&tv_id));
+    let tv_cursor = model
+        .application
+        .get_component(&tv_id)
+        .and_then(|comp| comp.as_any().downcast_ref::<TvWorkspaceComponent>())
+        .map(TvWorkspaceComponent::cursor);
+    assert_eq!(
+        tv_cursor,
+        Some(0),
+        "wide workspace must re-anchor to the series selected while narrow"
+    );
+}
+
 #[test]
 fn typed_tv_requests_keep_component_cursor_authoritative() {
     // Each cursor-moving request is driven from a *fresh* mount so no

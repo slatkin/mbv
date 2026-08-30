@@ -70,6 +70,15 @@ pub struct Model {
     /// content push never adopts the shell cursor; this is the explicit
     /// re-anchor that replaced the deleted echo-suppression test.
     pub(super) music_workspace_reanchor: bool,
+    /// One-shot shell→component re-anchor trigger for the mounted wide TV
+    /// workspace's series cursor/scroll, consumed at the next
+    /// `push_tv_workspace_content`. Set by the breakpoint hand-off
+    /// (`hand_off_tv_breakpoint`, migrate-narrow-browse task 2.3 / D5) when
+    /// the active-destination pointer flips from the narrow `BrowserComponent`
+    /// to `TvWorkspaceComponent`, so the kept-mounted workspace adopts the
+    /// resting position the narrow browser left behind instead of its stale
+    /// local cursor.
+    pub(super) tv_workspace_reanchor: bool,
     /// Shell-owned mirror of the feeds-management popup's interaction state
     /// plus its background add-feed channel (task 5.3c). The
     /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
@@ -279,6 +288,7 @@ impl Model {
             mounted_destinations: std::collections::HashSet::new(),
             music_track_focus_request: None,
             music_workspace_reanchor: false,
+            tv_workspace_reanchor: false,
             feeds_manage: None,
             home_content: HomeContent::new(),
             home_section_pref_semantic: home_section.clone(),

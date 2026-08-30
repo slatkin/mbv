@@ -102,6 +102,24 @@ impl TvWorkspaceComponent {
         self.cursor
     }
 
+    /// The scroll offset the component tracks for its series list. Read by
+    /// the breakpoint hand-off so the resting `BrowseLevel` scroll matches
+    /// the wide workspace before the narrow `BrowserComponent` adopts it.
+    pub(in crate::app) fn scroll(&self) -> usize {
+        self.scroll
+    }
+
+    /// One-shot re-anchor of the series cursor/scroll to a shell-owned
+    /// resting position (breakpoint hand-off, migrate-narrow-browse task 2.3
+    /// / D5). Mirrors `MusicWorkspaceComponent::re_anchor`: an ordinary
+    /// `set_content` keeps the component's divergent local cursor, so the
+    /// shell re-anchors explicitly when the active-destination pointer flips
+    /// back to this kept-mounted component.
+    pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
+        self.cursor = cursor.min(self.context.list.item_count().saturating_sub(1));
+        self.scroll = scroll;
+    }
+
     pub(in crate::app) fn selected_item_id(&self) -> Option<String> {
         self.context
             .list

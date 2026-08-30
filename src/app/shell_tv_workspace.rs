@@ -1,4 +1,6 @@
-use super::components::{BrowserKey, BrowserKind, ComponentId, ShellRequest, TvWorkspaceComponent};
+use super::components::{
+    BrowserComponent, BrowserKey, BrowserKind, ComponentId, ShellRequest, TvWorkspaceComponent,
+};
 use super::render::TvWideRenderCtx;
 use super::shell::Model;
 use super::{PanelFocus, TabSelection};
@@ -97,6 +99,75 @@ impl Model {
                 }
             }
         }
+
+        if self.tv_workspace_id.is_none() {
+            // No wide TV workspace mounted: a pending breakpoint-hand-off
+            // re-anchor cannot be delivered and must not fire later.
+            self.tv_workspace_reanchor = false;
+        }
+    }
+
+    /// Breakpoint hand-off (migrate-narrow-browse task 2.3 / D5): when the
+    /// wide TV breakpoint flips while a TV library is active, the
+    /// active-destination pointer moves between `TvWorkspaceComponent` and
+    /// the narrow `BrowserComponent`, each owning its own selection cursor.
+    /// Carry the outgoing component's live cursor into the resting
+    /// `BrowseLevel` (the `persist_emby_browser_scroll` write-back shape) and
+    /// arm the incoming component's one-shot re-anchor (the
+    /// `music_workspace_reanchor` shape) so the selected series survives the
+    /// flip. Runs once per tick before `sync_emby_browser` / `sync_tv_workspace`
+    /// repoint the pointers.
+    pub(super) fn hand_off_tv_breakpoint(&mut self) {
+        let TabSelection::EmbyLibrary(lib_idx) = self.app.tab else {
+            return;
+        };
+        let Some(library) = self.app.libs.get(lib_idx) else {
+            return;
+        };
+        if library.library.collection_type != "tvshows" {
+            return;
+        }
+        let wide = self.app.layout.main.is_wide_tv_active();
+        match (
+            wide,
+            self.tv_workspace_id.clone(),
+            self.emby_browser_id.clone(),
+        ) {
+            // wide -> narrow: persist the wide workspace's live cursor/scroll
+            // to the resting level so the narrow browser's `set_content`
+            // adopts it on the same tick.
+            (false, Some(id), _) => {
+                let Some((cursor, scroll)) = self
+                    .application
+                    .get_component(&id)
+                    .and_then(|comp| comp.as_any().downcast_ref::<TvWorkspaceComponent>())
+                    .map(|tv| (tv.cursor(), tv.scroll()))
+                else {
+                    return;
+                };
+                if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
+                    level.cursor = cursor;
+                    level.set_resting_scroll(scroll);
+                }
+                self.app.save_default_library_position(lib_idx);
+            }
+            // narrow -> wide: the narrow browser already writes `level.cursor`
+            // on every move; persist its painted scroll too, then arm the
+            // kept-mounted wide workspace's one-shot re-anchor to that
+            // resting position.
+            (true, _, Some(id)) => {
+                if let Some(scroll) = self
+                    .application
+                    .get_component(&id)
+                    .and_then(|comp| comp.as_any().downcast_ref::<BrowserComponent>())
+                    .map(BrowserComponent::scroll)
+                {
+                    self.app.persist_library_scroll(lib_idx, scroll);
+                }
+                self.tv_workspace_reanchor = true;
+            }
+            _ => {}
+        }
     }
 
     pub(super) fn push_tv_workspace_content(&mut self) {
@@ -114,6 +185,12 @@ impl Model {
             return;
         }
         let list = self.app.library_list_render_ctx(index, false);
+        // Consume the one-shot breakpoint hand-off re-anchor (task 2.3 / D5):
+        // when the active-destination pointer just flipped from the narrow
+        // BrowserComponent, adopt the resting cursor/scroll it left behind
+        // instead of this kept-mounted component's stale local cursor.
+        let reanchor =
+            std::mem::take(&mut self.tv_workspace_reanchor).then(|| (list.cursor(), list.scroll()));
         // The TV component owns the selection cursor. Derive the pushed Series
         // snapshot from the component's authoritative selection (its own cursor
         // over its cached list), not the App browse cursor (which the removed
@@ -145,6 +222,9 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(tv) = comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>() {
                 tv.set_content(context);
+                if let Some((cursor, scroll)) = reanchor {
+                    tv.re_anchor(cursor, scroll);
+                }
             }
         }
     }
