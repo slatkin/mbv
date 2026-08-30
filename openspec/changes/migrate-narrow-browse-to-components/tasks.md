@@ -167,7 +167,7 @@ findings become added rows; the template does not change.
       context functions. Shell-side series detail/image/cache effects become
       typed outputs consumed by the shell. Verify: targeted series-detail tests
       execute; the component-callable path has no `App` parameter or access.
-- [ ] 3.2b Prerequisite — grouped Music image seam: add the narrow typed
+- [x] 3.2b Prerequisite — grouped Music image seam: add the narrow typed
       `MusicImagePaint` → shell executor seam, mirroring `HomeImagePaint`.
       Album-art helpers consume only context/cache state and emit an instruction;
       they do not fetch or access cache. Verify: a targeted shell-execution test.
