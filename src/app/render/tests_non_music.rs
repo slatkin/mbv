@@ -6,25 +6,23 @@ use tuirealm::component::Component;
 
 #[test]
 fn home_video_library_is_never_album_folders_and_renders_via_original_list_path() {
-    let mut app = make_home_video_app();
+    let mut model = mounted_model_at(make_home_video_app(), 60, 20);
     let lib_idx = 0;
 
     assert!(
-        !app.is_viewing_album_folders(lib_idx),
+        !model.app.is_viewing_album_folders(lib_idx),
         "a homevideos library must never satisfy is_viewing_album_folders"
     );
-    assert!(app.is_home_video_view(lib_idx));
+    assert!(model.app.is_home_video_view(lib_idx));
 
-    let mut layout = LayoutMain::default();
-    let out = render_library_to_string(&mut app, &mut layout);
+    let out = draw_mounted_frame(&mut model, 60, 20);
 
     assert!(
         out.contains("Birthday Clip"),
-        "expected the original single-pane home-video list renderer to fire \
-         unchanged:\n{out}"
+        "expected the mounted BrowserComponent to paint the home-video list:\n{out}"
     );
     assert!(
-        app.album_tracks_cache.is_empty(),
+        model.app.album_tracks_cache.is_empty(),
         "home-video rendering must never touch the album-tracks cache added by #145"
     );
 }
@@ -34,8 +32,9 @@ fn narrow_home_video_selected_item_retains_inline_detail() {
     let mut app = make_home_video_app();
     app.libs[0].nav_stack[0].items[1].overview = "The selected home video overview.".into();
     app.libs[0].nav_stack[0].cursor = 1;
-    let mut layout = LayoutMain::default();
-    let output = render_library_to_string_sized(&mut app, &mut layout, 70, 30);
+    let mut model = mounted_model_at(app, 70, 30);
+    let output = draw_mounted_frame(&mut model, 70, 30);
+    let layout = mounted_browser_layout(&model);
 
     assert!(
         layout.hero_area.height > 0,
@@ -49,8 +48,12 @@ fn narrow_home_video_selected_item_retains_inline_detail() {
 
 #[test]
 fn wide_home_video_uses_a_left_detail_and_right_rail() {
-    let mut app = make_home_video_app();
-    let layout = render_view(&mut app, 200, 40);
+    // Wide Movies / home-video geometry is published by the mounted
+    // `BrowserComponent` now (task 3.8): the legacy base frame only reserves
+    // `left_area`. Read the right rail off the component's own painted layout.
+    let mut model = mounted_model_at(make_home_video_app(), 200, 40);
+    let _ = draw_mounted_frame(&mut model, 200, 40);
+    let layout = mounted_browser_layout(&model);
 
     assert!(layout.movies_wide_right_area.width > 0);
     assert!(layout.movies_wide_right_area.height > 0);
@@ -58,9 +61,10 @@ fn wide_home_video_uses_a_left_detail_and_right_rail() {
 
 /// `remove-migrated-surface-underpaint` 3.2 (D4): at the wide hero-on-left
 /// breakpoint the mounted `BrowserComponent` owns the Movies / home-video
-/// picture. `render_list` returns after publishing the `movies_wide_*`
-/// geometry hand-off (`src/app/render/components/list.rs:98`) without
-/// painting any row, banner, or hero. Mirrors the Home precedent
+/// picture. Post task 3.8 the legacy `render_library` `EmbyLibrary` arm only
+/// reserves the destination `left_area` and paints no row, banner, or hero —
+/// the `movies_wide_*` split geometry hand-off is now published by the
+/// component itself. Mirrors the Home precedent
 /// `legacy_base_frame_does_not_paint_home_content_before_the_component`.
 #[test]
 fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
@@ -82,9 +86,9 @@ fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
         .unwrap();
 
         assert!(
-            layout.movies_wide_right_area.width > 0 && layout.movies_wide_right_area.height > 0,
-            "wide movies geometry hand-off must still be reserved: {:?}",
-            layout.movies_wide_right_area
+            layout.left_area.width > 0 && layout.left_area.height > 0,
+            "wide movies destination area hand-off must still be reserved: {:?}",
+            layout.left_area
         );
         let output = buffer_to_string(&term);
         assert!(
@@ -187,8 +191,7 @@ fn letter_filter_default_is_the_first_bucket() {
     );
 }
 
-#[test]
-fn tv_series_list_computes_sorted_indices_when_above_threshold() {
+fn letter_grouped_series_app() -> App {
     let mut app = make_app_stub();
     app.tab = TabSelection::EmbyLibrary(0);
 
@@ -227,24 +230,33 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
         library_total: Some(55),
         ..LibraryTab::new(library)
     });
+    app
+}
 
-    let mut layout = LayoutMain::default();
-    let _ = render_library_to_terminal(&mut app, &mut layout);
+#[test]
+fn tv_series_list_computes_sorted_indices_when_above_threshold() {
+    // Narrow letter-grouped TV is painted by the mounted `BrowserComponent`
+    // (task 3.8), which computes and publishes the sorted display order into
+    // its own `LayoutMain`.
+    let mut narrow_model = mounted_model_at(letter_grouped_series_app(), 60, 20);
+    let _ = draw_mounted_frame(&mut narrow_model, 60, 20);
+    let narrow_layout = mounted_browser_layout(&narrow_model);
 
     assert!(
-        !layout.left_sorted_indices.is_empty(),
+        !narrow_layout.left_sorted_indices.is_empty(),
         "sorted indices should be computed for letter-grouped TV list"
     );
     // The first sorted index should map to the alphabetically-first A-series item
-    let first_idx = layout.left_sorted_indices[0];
+    let first_idx = narrow_layout.left_sorted_indices[0];
     assert!(
-        app.libs[0].nav_stack[0].items[first_idx]
+        narrow_model.app.libs[0].nav_stack[0].items[first_idx]
             .name
             .starts_with('A'),
         "first sorted item should start with A, got: {}",
-        app.libs[0].nav_stack[0].items[first_idx].name,
+        narrow_model.app.libs[0].nav_stack[0].items[first_idx].name,
     );
 
+    let mut app = letter_grouped_series_app();
     let mut layout = LayoutMain::default();
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 20)).unwrap();
     // Wide TV is component-owned (task 5.3d.18d): the App frame only
@@ -337,10 +349,11 @@ fn narrow_series_inline_hero_shows_only_hero_content_no_season_or_episode_list()
         },
     );
 
-    let mut layout = LayoutMain::default();
     // Below `TWO_COLUMN_THRESHOLD` so the narrow single-column presentation
-    // renders instead of `render_wide_tv`.
-    let output = render_library_to_string_sized(&mut app, &mut layout, 70, 30);
+    // renders instead of `render_wide_tv`. Painted by the mounted
+    // `BrowserComponent` (task 3.8).
+    let mut model = mounted_model_at(app, 70, 30);
+    let output = draw_mounted_frame(&mut model, 70, 30);
 
     assert!(output.contains("The Series"), "{output}");
     assert!(output.contains("An overview"), "{output}");

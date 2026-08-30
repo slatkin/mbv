@@ -1,38 +1,23 @@
-use super::test_helpers::{buffer_to_string, make_movie_app, render_library_to_string_sized};
+use super::test_helpers::{
+    draw_mounted_frame, make_movie_app, mounted_browser_layout, mounted_browser_scroll,
+    mounted_model_at,
+};
 use super::*;
-use crate::app::layout::LayoutMain;
 use crate::app::tests::make_item;
 use crate::app::TabSelection;
-use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
-use ratatui::Terminal;
-
-fn render_library(app: &mut App, width: u16, height: u16, focused: bool) -> String {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    let mut layout = LayoutMain::default();
-    terminal
-        .draw(|f| {
-            app.render_library(
-                f,
-                Rect::new(0, 0, width, height),
-                focused,
-                &mut layout,
-                None,
-            );
-        })
-        .unwrap();
-    buffer_to_string(&terminal)
-}
 
 #[test]
 fn library_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states() {
     // Note: width 120 triggers wide Movies layout, which is now handled by
-    // BrowserComponent (5.3d.17a). Use narrow widths to test the legacy path.
-    let states = [(60, 20, true, 0), (60, 20, false, 0), (60, 20, true, 1)];
-    for (width, height, focused, cursor) in states {
+    // BrowserComponent (5.3d.17a). Narrow Movies is likewise painted by the
+    // mounted `BrowserComponent` now (task 3.8), so route through the real
+    // `Model::draw_frame` path.
+    let states = [(60, 20, 0), (60, 20, 1)];
+    for (width, height, cursor) in states {
         let mut app = make_movie_app();
         app.libs[0].nav_stack[0].cursor = cursor;
-        let output = render_library(&mut app, width, height, focused);
+        let mut model = mounted_model_at(app, width, height);
+        let output = draw_mounted_frame(&mut model, width, height);
         assert!(
             output.contains("Movie"),
             "library rows missing in {width}x{height}: {output:?}"
@@ -50,8 +35,9 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
     app.libs[0].nav_stack[0].items[1].overview = "The selected movie overview.".into();
     app.libs[0].nav_stack[0].cursor = 1;
     app.libs[0].nav_stack[0].scroll = 1;
-    let mut layout = LayoutMain::default();
-    let output = render_library_to_string_sized(&mut app, &mut layout, 70, 30);
+    let mut model = mounted_model_at(app, 70, 30);
+    let output = draw_mounted_frame(&mut model, 70, 30);
+    let layout = mounted_browser_layout(&model);
 
     assert!(
         output.contains("Second Movie"),
@@ -88,15 +74,16 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
         "continuation rows must not have ordinary item targets"
     );
     assert_eq!(
-        app.libs[0].nav_stack[0].scroll, 1,
+        model.app.libs[0].nav_stack[0].scroll, 1,
         "persisted scroll is retained"
     );
 
     let mut cannot_fit = make_movie_app();
     cannot_fit.libs[0].nav_stack[0].items[1].overview = "The selected movie overview.".into();
     cannot_fit.libs[0].nav_stack[0].cursor = 1;
-    let mut fallback_layout = LayoutMain::default();
-    let fallback = render_library_to_string_sized(&mut cannot_fit, &mut fallback_layout, 70, 4);
+    let mut fallback_model = mounted_model_at(cannot_fit, 70, 12);
+    let fallback = draw_mounted_frame(&mut fallback_model, 70, 12);
+    let fallback_layout = mounted_browser_layout(&fallback_model);
     assert!(
         fallback.contains("Second Movie"),
         "ordinary fallback loses the row:\n{fallback}"
@@ -111,8 +98,7 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
     );
 }
 
-#[test]
-fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_suppression() {
+fn tv_letter_grouped_app(scroll: usize) -> App {
     let mut app = make_movie_app();
     app.tab = TabSelection::EmbyLibrary(0);
     app.libs[0].library.collection_type = "tvshows".into();
@@ -131,11 +117,16 @@ fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_s
     app.libs[0].nav_stack[0].items = items;
     app.libs[0].nav_stack[0].total_count = 55;
     app.libs[0].nav_stack[0].cursor = 54;
-    app.libs[0].nav_stack[0].scroll = 12;
+    app.libs[0].nav_stack[0].scroll = scroll;
     app.libs[0].library_total = Some(55);
+    app
+}
 
-    let mut layout = LayoutMain::default();
-    let output = render_library_to_string_sized(&mut app, &mut layout, 70, 20);
+#[test]
+fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_suppression() {
+    let mut model = mounted_model_at(tv_letter_grouped_app(12), 70, 20);
+    let output = draw_mounted_frame(&mut model, 70, 20);
+    let layout = mounted_browser_layout(&model);
 
     assert!(
         output.contains("Series 54"),
@@ -169,7 +160,7 @@ fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_s
         .expect("selected grouped row should be present in the physical flow");
     let detail_screen_row = layout.hero_area.y.saturating_sub(layout.left_area.y) as usize;
     assert_eq!(
-        app.libs[0].nav_stack[0].scroll,
+        mounted_browser_scroll(&model),
         selected_display_row - detail_screen_row,
         "first render must persist the shared flow offset"
     );
@@ -183,11 +174,9 @@ fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_s
         "ordinary marker leaked into the grouped hero"
     );
 
-    let mut boundary = app;
-    boundary.libs[0].nav_stack[0].scroll = 1;
-    let mut boundary_layout = LayoutMain::default();
-    let boundary_output =
-        render_library_to_string_sized(&mut boundary, &mut boundary_layout, 70, 8);
+    let mut boundary_model = mounted_model_at(tv_letter_grouped_app(1), 70, 14);
+    let boundary_output = draw_mounted_frame(&mut boundary_model, 70, 14);
+    let boundary_layout = mounted_browser_layout(&boundary_model);
     assert!(
         boundary_output.contains("Series 54"),
         "header fit boundary hides selected row: hero={:?} map={:?}\n{boundary_output}",
