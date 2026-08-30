@@ -95,7 +95,7 @@ Ends with every surface owned; legacy still paints. This is the state
       back to `layout.main.left_area` when `wide_music_area` is empty. Verify:
       the component's `view` is reached at narrow (it still paints nothing until
       3.x gives it a narrow branch — assert the call, not the pixels).
-- [ ] 2.5 R14 threading (handed over from
+- [x] 2.5 R14 threading (handed over from
       `split-browse-state-interaction-fields` 4.4). Give
       `library_list_render_ctx` explicit cursor/scroll parameters, then:
       - Group A (`shell_browser.rs:204`, `shell_tv_workspace.rs:109`,
