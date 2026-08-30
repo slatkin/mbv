@@ -134,7 +134,7 @@
         `render_compact_detail_with_ctx` stays.
       Verify: `rtk cargo clippy --workspace --all-targets` reports no new dead
       code; `rtk cargo nextest run -p mbv --no-fail-fast` (baseline as 1.1d).
-- [ ] 1.2a Delete `BrowseLevel::cursor` and `BrowseLevel::scroll` from the type
+- [x] 1.2a Delete `BrowseLevel::cursor` and `BrowseLevel::scroll` from the type
       and land every **production** consequence in one commit, so the crate
       compiles (`rtk cargo check -p mbv`) with no transitional accessor left
       behind. Tests do not gate this row — `BrowseLevel`'s fields are
