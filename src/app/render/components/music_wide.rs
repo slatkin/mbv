@@ -155,8 +155,12 @@ impl App {
         );
         let lib = &self.libs[lib_idx];
         let level = lib.nav_stack.last();
+        let selected_cursor = cursor_scroll
+            .map(|(cursor, _)| cursor)
+            .or_else(|| level.map(|level| level.cursor))
+            .unwrap_or(0);
         let selected_album = level
-            .and_then(|level| level.items.get(level.cursor))
+            .and_then(|level| level.items.get(selected_cursor))
             .cloned();
         let album_artist = selected_album
             .as_ref()
