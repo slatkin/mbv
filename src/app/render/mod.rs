@@ -35,6 +35,7 @@ pub(in crate::app) use components::library_routes::{
     render_library_routes_content, save_route_config, LibraryRoutesRenderModel,
 };
 pub(in crate::app) use components::list::render_generic_movies_home_video_rows_with_ctx;
+pub(in crate::app) use components::list_narrow::render_narrow_browse_with_ctx;
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
 // Task 5.3d.17a: BrowserComponent paints the wide Movies/home-video
 // hero-on-left layout itself (mirroring HomeComponent's image-deferral),

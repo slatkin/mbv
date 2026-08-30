@@ -214,6 +214,14 @@ pub struct App {
     /// projects it here once per frame so the legacy `render_list` suppresses
     /// its browse-list underpaint of `left_area` (task 3.8).
     pub(super) inline_search_active: bool,
+    /// Whether the mounted `BrowserComponent` is the active painter for the
+    /// current Emby library this frame (`migrate-narrow-browse` task 3.3).
+    /// `draw_frame` projects it from TuiRealm mount state once per frame so
+    /// the legacy narrow `render_list` branch suppresses its now-duplicate
+    /// paint of the generic/Movies/home-video surface. Defaults false, so
+    /// direct `render_list` unit tests keep exercising the legacy path until
+    /// task 3.8 deletes it.
+    pub(super) emby_browser_active: bool,
     pub(super) image_cache_size_total: usize,
     pub(super) settings_destination: SettingsDestination,
     pub(super) settings_save_at: Option<Instant>,

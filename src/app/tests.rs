@@ -241,6 +241,7 @@ pub(crate) fn make_app_stub() -> App {
         halfblock_picker: None,
         dim_backdrop_active: false,
         inline_search_active: false,
+        emby_browser_active: false,
         image_cache_size_total: 50,
         settings_destination: SettingsDestination::Main,
         settings_save_at: None,

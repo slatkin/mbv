@@ -1,0 +1,46 @@
+//! Narrow generic/Movies/home-video browse composer inputs
+//! (`migrate-narrow-browse-to-components` task 3.3).
+//!
+//! `BrowserComponent` owns the narrow generic/Movies/home-video surface's
+//! paint. The shell resolves everything that needs `App`/image-cache
+//! authority into this plain [`NarrowBrowseExtras`] bundle (count label,
+//! letter-pill row, inline movie/series hero sizing) and pushes it to the
+//! component each frame; the component's `view` then hands it, plus the
+//! mirrored [`LibraryListRenderCtx`], to the pure composition helper
+//! [`crate::app::render::render_narrow_browse_with_ctx`] and forwards the
+//! returned [`HomeImagePaint`] to the shell (mirrors `HomeComponent`).
+
+use crate::app::render::CompactBannerLayout;
+
+/// The selected item's inline hero, already resolved by the shell.
+pub(in crate::app) enum NarrowInlineHero {
+    /// A leaf movie/home-video/podcast item: its compact banner layout was
+    /// computed shell-side (the only image-cache-touching step).
+    Movie {
+        item: mbv_core::api::EmbyItem,
+        layout: CompactBannerLayout,
+    },
+    /// A selected Series on a `tvshows` library.
+    Series {
+        item: mbv_core::api::EmbyItem,
+        images_enabled: bool,
+        image_loading: bool,
+    },
+}
+
+/// Shell-resolved extras the narrow composer needs beyond the mirrored
+/// [`LibraryListRenderCtx`]. Built by `App::narrow_browse_extras`.
+#[derive(Default)]
+pub(in crate::app) struct NarrowBrowseExtras {
+    /// Render the " N items" count label above the list (home-video tab).
+    pub(in crate::app) home_video: bool,
+    /// Render the letter-range pill row above the list.
+    pub(in crate::app) show_letter_pills: bool,
+    /// `collection_type` is `movies`/`tvshows`: the inline-hero rows are
+    /// always reserved rather than dropped when they don't fit the flow.
+    pub(in crate::app) use_shared_replacement_plan: bool,
+    /// No hero item is selected but the surface is a hero-capable collection
+    /// at its top browse level: keep the fixed placeholder panel reserved.
+    pub(in crate::app) hero_placeholder: bool,
+    pub(in crate::app) inline_hero: Option<NarrowInlineHero>,
+}

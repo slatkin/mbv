@@ -1,6 +1,7 @@
 use super::*;
 use crate::app::palette;
 use crate::app::render::compact_banner_layout;
+use crate::app::render::components::detail::compact_banner_image_cache_key;
 // Characterization coverage stays beside the moved library component.
 use crate::app::layout::LayoutMain;
 use crate::app::render::components::list_rows::{

@@ -1,4 +1,3 @@
-use super::detail::compact_banner_image_cache_key;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::library_column_count;
 use crate::app::render::arrangements::hero_left;
@@ -131,6 +130,39 @@ impl App {
                 && self.is_viewing_album_folders(lib_idx)
                 && hero_left::shared_hero_presentation(area).is_some()
             {
+                return;
+            }
+        }
+
+        // Narrow generic/Movies/home-video: the mounted `BrowserComponent`
+        // composes this surface itself (`browser_narrow.rs`,
+        // migrate-narrow-browse task 3.3, closing regression 1). Publish the
+        // list area for input routing, keep the poster-prefetch window here
+        // (task 3.7 relocates it), and paint nothing — the component owns the
+        // picture. The TV/podcast/grouped-Music narrow branches below are
+        // untouched; their own tasks (3.4/3.5/3.6) convert them.
+        if let Some(lib_idx) = self.tab.emby_library_index() {
+            let coll = self.libs[lib_idx].library.collection_type.as_str();
+            let component_owned = self.emby_browser_active
+                && coll != "tvshows"
+                && coll != "music"
+                && !self.is_podcast_library(lib_idx)
+                && !self.is_feed_home_video_group_view(lib_idx)
+                && !self.inline_search_active;
+            if component_owned {
+                layout.left_area = area;
+                if self.selected_movie_item(lib_idx).is_some() {
+                    let ctx = self.library_list_render_ctx(
+                        lib_idx,
+                        true,
+                        cursor.unwrap_or_else(|| {
+                            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor)
+                        }),
+                        *scroll,
+                    );
+                    let items = ctx.items.clone();
+                    self.fetch_nearby_movie_posters(&items, ctx.cursor);
+                }
                 return;
             }
         }
@@ -368,34 +400,7 @@ impl App {
         // (i.e. this is a movies library with a leaf Movie selected); if
         // there's no banner, there's nothing to prefetch for.
         if selected_movie_item.is_some() {
-            const PREFETCH_AHEAD: usize = 3;
-            const PREFETCH_BEHIND: usize = 1;
-            let start = cursor.saturating_sub(PREFETCH_BEHIND);
-            let end = (cursor + PREFETCH_AHEAD + 1).min(items.len());
-            let prefetch: Vec<(String, String, String)> = items[start..end]
-                .iter()
-                .enumerate()
-                .filter(|(i, item)| {
-                    start + i != cursor && item.item_type == "Movie" && !item.is_folder
-                })
-                .map(|(_, item)| {
-                    (
-                        compact_banner_image_cache_key(&item.id),
-                        item.id.clone(),
-                        item.series_id.clone(),
-                    )
-                })
-                .collect();
-            if self.images_enabled() {
-                for (cache_key, item_id, series_id) in prefetch {
-                    self.fetch_list_card_image_when_idle(
-                        cache_key,
-                        item_id,
-                        series_id,
-                        &["Primary"],
-                    );
-                }
-            }
+            self.fetch_nearby_movie_posters(&items, cursor);
         }
 
         // When at the album level of a music library, group albums under artist headers.

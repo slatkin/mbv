@@ -11,6 +11,7 @@
 pub mod audiobookshelf_book;
 pub mod audiobookshelf_podcast;
 pub mod browser;
+pub mod browser_narrow;
 pub mod component_id;
 pub mod confirm;
 pub mod context_menu;

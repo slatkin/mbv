@@ -17,6 +17,7 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::browser_narrow::NarrowBrowseExtras;
 use super::component_id::BrowserKind;
 use super::msg::{BrowserHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
@@ -59,6 +60,10 @@ pub struct BrowserComponent {
     /// `application.view()` and paints it via `App::paint_home_image`
     /// (mirrors `HomeComponent`, task 5.3d.17a).
     image_paint: Option<HomeImagePaint>,
+    /// Shell-resolved narrow-browse extras (count label, letter pills, inline
+    /// movie/series hero) for the `browser_narrow` composer, pushed each frame
+    /// by `render_emby_browser_component` (task 3.3).
+    narrow_extras: NarrowBrowseExtras,
 }
 
 impl BrowserComponent {
@@ -79,7 +84,14 @@ impl BrowserComponent {
             wide_movies_letter_pills: false,
             use_nerd_fonts: false,
             image_paint: None,
+            narrow_extras: NarrowBrowseExtras::default(),
         }
+    }
+
+    /// Records the shell-resolved narrow-browse extras for the next `view()`
+    /// (task 3.3). Pushed each frame by `render_emby_browser_component`.
+    pub(in crate::app) fn set_narrow_extras(&mut self, extras: NarrowBrowseExtras) {
+        self.narrow_extras = extras;
     }
 
     pub(in crate::app) fn set_content(&mut self, context: LibraryListRenderCtx, focused: bool) {
@@ -594,17 +606,21 @@ impl Component for BrowserComponent {
         self.scroll = if wide {
             self.render_wide_movies(frame, area, &context)
         } else {
-            // Reset image_paint to None in narrow layout to prevent stale
-            // hero images from being painted after a wide→narrow resize
-            // (reviewer P1 finding).
-            self.image_paint = None;
-            render_generic_movies_home_video_rows_with_ctx(
+            // Narrow generic/Movies/home-video: the component owns the full
+            // surface via the `browser_narrow` composer (task 3.3). It returns
+            // the landed scroll and the poster image still needing paint (the
+            // shell executes it via `App::paint_home_image`, mirroring the
+            // wide path and `HomeComponent`).
+            let (scroll, image_paint) = crate::app::render::render_narrow_browse_with_ctx(
                 frame,
                 area,
                 &context,
+                &self.narrow_extras,
                 self.focused,
                 &mut self.layout,
-            )
+            );
+            self.image_paint = image_paint;
+            scroll
         };
     }
 

@@ -57,7 +57,7 @@ fn poster_placeholder_size(font_size: ratatui_image::FontSize, img_cols: u16) ->
 /// `App::compact_banner_layout_with_overview` and consumed by
 /// `render_compact_detail` to actually render the banner, so the
 /// row-count estimate and the render never duplicate the wrapping logic.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::app) struct CompactBannerLayout {
     meta_line: Option<String>,
     show_playing: bool,
