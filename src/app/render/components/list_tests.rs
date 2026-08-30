@@ -172,6 +172,33 @@ fn make_no_banner_list_app(titles: Vec<&str>) -> App {
     app
 }
 
+#[test]
+fn selected_series_without_cached_art_requests_loading_placeholder() {
+    let mut app = make_movie_list_app(vec!["Series"]);
+    app.libs[0].library.collection_type = "tvshows".into();
+    let series = &mut app.libs[0].nav_stack[0].items[0];
+    series.item_type = "Series".into();
+    series.is_folder = false;
+    app.image_protocol_enabled = true;
+
+    let mut layout = LayoutMain::default();
+    let mut terminal = Terminal::new(TestBackend::new(40, 20)).unwrap();
+    terminal
+        .draw(|frame| {
+            app.render_list(
+                frame,
+                Rect::new(0, 0, 40, 20),
+                true,
+                &mut layout,
+                None,
+                &mut 0,
+            );
+        })
+        .unwrap();
+
+    assert!(app.card_image_loading.contains("movie-0:ser_primary"));
+}
+
 /// Item rows (non-empty entries of `left_item_rows`): the packed rows of a
 /// two-column list, independent of banner/header filler rows.
 fn item_rows(layout: &LayoutMain) -> Vec<Vec<usize>> {
