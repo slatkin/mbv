@@ -90,7 +90,7 @@ Ends with every surface owned; legacy still paints. This is the state
       component's one-shot re-anchor, reusing `persist_emby_browser_scroll` and
       the `music_workspace_reanchor` shapes. Verify: resize across the wide TV
       breakpoint and back keeps the selected series.
-- [ ] 2.4 Narrow Music placement (D6, first half):
+- [x] 2.4 Narrow Music placement (D6, first half):
       `render_music_workspace_component` (`shell_music_workspace.rs:157`) falls
       back to `layout.main.left_area` when `wide_music_area` is empty. Verify:
       the component's `view` is reached at narrow (it still paints nothing until
