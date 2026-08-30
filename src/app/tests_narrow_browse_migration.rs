@@ -458,6 +458,75 @@ fn wide_backend() -> Terminal<TestBackend> {
     Terminal::new(TestBackend::new(140, 40)).unwrap()
 }
 
+fn feed_home_video_group_app() -> App {
+    let mut app = make_app_stub();
+    app.terminal_width = 60;
+    app.terminal_height = 20;
+    app.mini_view_focus = PanelFocus::Library;
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
+    let mut library = make_item("YouTube", "CollectionFolder");
+    library.id = "lib-youtube".into();
+    library.collection_type = "homevideos".into();
+    library.is_folder = true;
+    let mut folder = make_item("Channel A", "Folder");
+    folder.id = "folder-a".into();
+    folder.is_folder = true;
+    let mut first = make_item("Video One", "Movie");
+    first.id = "video-one".into();
+    let mut second = make_item("Video Two", "Movie");
+    second.id = "video-two".into();
+    app.libs.push(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            parent_id: "lib-youtube".into(), title: "YouTube".into(),
+            items: vec![folder.clone()], total_count: 1, cursor: 0, scroll: 0,
+            item_types: None, unplayed_only: false, sort_by: "SortName".into(),
+            sort_order: "Ascending".into(), loading: false, all_items: None,
+            letter_filter: None, music_grouping: None,
+        }],
+        feed_home_video: Some(FeedHomeVideoState {
+            all_items: vec![first.clone(), second.clone()],
+            groups: vec![FeedHomeVideoGroup { folder, items: vec![first, second] }],
+            loading: false, ..FeedHomeVideoState::default()
+        }),
+        ..LibraryTab::new(library)
+    });
+    app
+}
+
+fn feed_snapshot(width: u16, height: u16) -> String {
+    let mut app = feed_home_video_group_app();
+    app.terminal_width = width;
+    app.terminal_height = height;
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+    let mut term = Terminal::new(TestBackend::new(width, height)).unwrap();
+    draw(&mut model, &mut term)
+}
+
+#[test]
+fn feed_home_video_group_narrow_snapshot_matches_fbc6888e_baseline() {
+    let output = feed_snapshot(60, 20);
+    assert_eq!(output, FEED_NARROW_BASELINE, "feed narrow drifted");
+}
+
+#[test]
+fn feed_home_video_group_wide_snapshot_matches_fbc6888e_baseline() {
+    let output = feed_snapshot(140, 40);
+    assert_eq!(output, FEED_WIDE_BASELINE, "feed wide drifted");
+}
+
+#[test]
+fn feed_home_video_group_paints_each_row_once() {
+    let output = feed_snapshot(60, 20);
+    for row in ["Video One", "Video Two"] {
+        assert_eq!(output.matches(row).count(), 1, "feed row {row:?}: {output}");
+    }
+}
+
+const FEED_NARROW_BASELINE: &str = "                                                            \n   HOME  ▐ YOUTUBE                                          \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n  ⌘ ◢ All ◤◢ Channel A ◤                                    \n                                                            \n▎ Video One                                                 \n  Video Two                                                 \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n 🔊  100                                             \u{f06b4} \u{ede2} ♥ \u{f1c0} ";
+const FEED_WIDE_BASELINE: &str = "                                                                                                                                            \n                                           HOME  ▐ YOUTUBE                                                                                  \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                    ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  \n                                                                                    ▎  Video One                                            \n                                                                                       Video Two                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                              Video One ○                                                                                   \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n     🖧  WOIMS                                                                                                                               \n                                                                                                                                            \n    Add items with p from Home or libr                                                                                                      \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n     🖭  none                                                                        ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  \n                                                                                                                                            \n                                         🔊  100                                                                                     \u{f06b4} \u{ede2} ♥ \u{f1c0} ";
+
 /// Characterization (task 3.5b template step a): pins the painted WIDE Emby
 /// podcast browse surface through the full `Model::draw_frame` path, at a
 /// wide+tall size where `shared_hero_presentation` returns `Some`. The

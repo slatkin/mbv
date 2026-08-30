@@ -163,7 +163,17 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         crate::app::render::render_placeholder(
             f,
             list_area,
-            if ctx.loading { "Loading..." } else { "(empty)" },
+            if extras.feed_items.is_some() {
+                if ctx.loading {
+                    " Loading…"
+                } else {
+                    " (empty)"
+                }
+            } else if ctx.loading {
+                "Loading..."
+            } else {
+                "(empty)"
+            },
         );
         return (0, None);
     }
