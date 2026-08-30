@@ -62,7 +62,7 @@ impl Model {
             .and_then(TvWorkspaceComponent::episode_activation_selection)
     }
 
-    fn tv_workspace_component_id(&self) -> Option<ComponentId> {
+    pub(super) fn tv_workspace_component_id(&self) -> Option<ComponentId> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
         };

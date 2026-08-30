@@ -60,7 +60,9 @@ impl Model {
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
         let mounted_surface = match kind {
             BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos => true,
-            BrowserKind::TvShows => self.app.layout.main.is_wide_tv_active(),
+            // Wide TV focuses TvWorkspaceComponent; narrow TV focuses the
+            // mounted BrowserComponent (D4), matching `emby_browser_component_id`.
+            BrowserKind::TvShows => true,
             BrowserKind::Music => {
                 self.app.is_music_group_view(index)
                     && self.app.is_viewing_album_folders(index)
@@ -138,6 +140,61 @@ mod tests {
             .unwrap()
             .as_any()
             .downcast_ref::<BrowserComponent>()
+            .is_some());
+    }
+
+    /// migrate-narrow-browse-to-components task 2.2 (D4): a narrow Emby TV
+    /// library routes to the mounted `BrowserComponent` (flat series list);
+    /// a wide one still routes to `TvWorkspaceComponent`. The two are never
+    /// both `Some` for the same library at any width.
+    #[test]
+    fn narrow_tv_library_routes_to_browser_component_wide_to_tv_workspace() {
+        use crate::app::components::TvWorkspaceComponent;
+        use ratatui::layout::Rect;
+
+        let build = |wide: bool| {
+            let mut app = make_movie_app();
+            app.libs[0].library.collection_type = "tvshows".into();
+            app.tab = TabSelection::EmbyLibrary(0);
+            app.panel_focus = PanelFocus::Library;
+            app.panel_mode = PanelMode::Both;
+            app.layout.main.tv_wide_right_area = if wide {
+                Rect::new(40, 0, 60, 20)
+            } else {
+                Rect::default()
+            };
+            let mut model = Model::new(app);
+            model.sync_tv_workspace();
+            model.sync_emby_browser();
+            model.sync_active_destination();
+            model
+        };
+
+        // Narrow: BrowserComponent owns the surface and focus.
+        let narrow = build(false);
+        assert_eq!(narrow.tv_workspace_id, None);
+        let browser_id = narrow.emby_browser_id.clone().expect("narrow TV browser");
+        assert!(matches!(browser_id, ComponentId::Browser(_)));
+        assert_eq!(narrow.application.focus(), Some(&browser_id));
+        assert!(narrow
+            .application
+            .get_component(&browser_id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<BrowserComponent>()
+            .is_some());
+
+        // Wide: TvWorkspaceComponent owns the surface and focus.
+        let wide = build(true);
+        assert_eq!(wide.emby_browser_id, None);
+        let tv_id = wide.tv_workspace_id.clone().expect("wide TV workspace");
+        assert_eq!(wide.application.focus(), Some(&tv_id));
+        assert!(wide
+            .application
+            .get_component(&tv_id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<TvWorkspaceComponent>()
             .is_some());
     }
 

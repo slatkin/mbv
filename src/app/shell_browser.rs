@@ -136,17 +136,28 @@ impl Model {
             return None;
         }
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
-        if !matches!(
-            kind,
-            BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos
-        ) {
+        let owns = match kind {
+            BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos => true,
+            // Narrow TV is a flat series list this component already handles
+            // (D4). Wide TV routes to TvWorkspaceComponent instead; the two
+            // gates share `is_wide_tv_active()` so they are mutually exclusive
+            // for a TV library at every width.
+            BrowserKind::TvShows => !self.app.layout.main.is_wide_tv_active(),
+            _ => false,
+        };
+        if !owns {
             return None;
         }
-        Some(ComponentId::Browser(BrowserKey {
+        let id = ComponentId::Browser(BrowserKey {
             service: ServiceKind::Emby,
             library_id: library.library.id.clone(),
             kind,
-        }))
+        });
+        debug_assert!(
+            self.tv_workspace_component_id().is_none(),
+            "narrow BrowserComponent and wide TvWorkspaceComponent must be mutually exclusive"
+        );
+        Some(id)
     }
 
     /// Reconcile the mounted Emby browser against the currently-active Emby
