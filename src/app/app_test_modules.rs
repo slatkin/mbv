@@ -146,3 +146,7 @@ pub(crate) mod tests_tick_harness;
 #[cfg(test)]
 #[path = "tests_tick_integration.rs"]
 mod tests_tick_integration;
+
+#[cfg(test)]
+#[path = "tests_narrow_browse_migration.rs"]
+mod tests_narrow_browse_migration;
