@@ -277,7 +277,7 @@ Their line references predate 1.2a and that re-spelling shifts none of them.
 - [x] 2.1 Delete `App::apply_lib_cursor_index` (`lib_cursor_actions.rs:241`)
       and route `ShellRequest::BrowserCursorIndex` to the resting-position
       writer and effect tail directly. Verify: `rtk cargo check -p mbv`.
-- [ ] 2.2 Delete `App::move_lib_cursor_rows` and `App::jump_lib_cursor` — both
+- [x] 2.2 Delete `App::move_lib_cursor_rows` and `App::jump_lib_cursor` — both
       already have no live caller — and `App::move_lib_cursor`, whose only
       non-test caller is `mouse_gestures.rs:83`. Delete the mouse call sites
       with them; do not repair mouse behaviour (D16). Verify:
