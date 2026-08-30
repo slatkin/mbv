@@ -36,6 +36,47 @@ fn render_library(app: &mut App, width: u16, height: u16) -> (Terminal<TestBacke
     (terminal, layout)
 }
 
+/// Render an Emby browse surface (Movies / TV / grouped Music) through the real
+/// `Model::draw_frame` shell path — the mounted `BrowserComponent` /
+/// `MusicWorkspaceComponent` is the sole painter after task 3.8 — and surface
+/// the active component's own painted geometry as a `LayoutMain` so the shared
+/// conformance assertions still hold (mirrors `render_music_component`).
+fn render_browse_component(
+    mut app: App,
+    width: u16,
+    height: u16,
+) -> (Terminal<TestBackend>, LayoutMain) {
+    app.terminal_width = width;
+    app.terminal_height = height;
+    app.mini_view_focus = PanelFocus::Library;
+    let mut model = crate::app::shell::Model::new(app);
+    model.sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| model.draw_frame(frame, false, false))
+        .unwrap();
+    let list_area = model.app.layout.main.left_area;
+    let painted = if model.music_workspace_id.is_some() {
+        super::test_helpers::mounted_music_layout(&model)
+    } else if model.tv_workspace_id.is_some() {
+        super::test_helpers::mounted_tv_layout(&model)
+    } else {
+        super::test_helpers::mounted_browser_layout(&model)
+    };
+    let layout = LayoutMain {
+        left_area: if painted.left_area.width > 0 {
+            painted.left_area
+        } else {
+            list_area
+        },
+        hero_area: painted.hero_area,
+        selected_item_rect: painted.selected_item_rect,
+        selector_tabs: painted.selector_tabs.clone(),
+        ..Default::default()
+    };
+    (terminal, layout)
+}
+
 /// Render the Book surface through its mounted `AudiobookshelfBookComponent`
 /// (task 5.3d.13, render ownership) instead of the legacy `render_library`, and
 /// surface the component's geometry as a `LayoutMain` so the shared conformance
@@ -334,13 +375,17 @@ fn matrix_cannot_fit_preserves_an_ordinary_selected_row() {
         ("Books", make_audiobookshelf_book_app(), "Alpha Tales"),
     ];
 
-    for (surface, mut app, title) in cases {
+    for (surface, app, title) in cases {
+        // Books/Podcasts drive their component directly with the full rect;
+        // Movies/TV/Music route through `Model::draw_frame`, which reserves
+        // chrome, so give them a slightly taller terminal whose *content* area
+        // is still far shorter than any hero needs.
         let (terminal, layout) = if surface == "Books" {
             render_book_component(&app, 60, 4)
         } else if surface == "Podcasts" {
             render_podcast_component(&app, 60, 4)
         } else {
-            render_library(&mut app, 60, 4)
+            render_browse_component(app, 60, 12)
         };
         let output = buffer_to_string(&terminal);
         assert_eq!(
@@ -389,13 +434,13 @@ fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
         ),
     ];
 
-    for (surface, mut app, title) in cases {
+    for (surface, app, title) in cases {
         let (terminal, layout) = if surface == "Books" {
             render_book_component(&app, 70, 30)
         } else if surface == "Podcasts" {
             render_podcast_component(&app, 70, 30)
         } else {
-            render_library(&mut app, 70, 30)
+            render_browse_component(app, 70, 30)
         };
         let output = buffer_to_string(&terminal);
         assert!(
@@ -487,7 +532,7 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
         ("Books", make_audiobookshelf_book_app(), 60),
     ];
 
-    for (surface, mut app, width) in cases {
+    for (surface, app, width) in cases {
         let (terminal, layout) = if surface == "Books" {
             render_book_component(&app, width, 30)
         } else if surface == "Podcasts" {
@@ -495,7 +540,7 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
         } else if surface == "Music" {
             render_music_component(&app, width, 30)
         } else {
-            render_library(&mut app, width, 30)
+            render_browse_component(app, width, 30)
         };
         assert_one_pill_row_and_spacer(surface, &terminal, &layout);
         assert!(
