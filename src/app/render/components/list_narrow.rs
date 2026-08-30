@@ -6,6 +6,7 @@
 //! resolves the `App`/image-cache-backed inputs the shell pushes each frame.
 
 use super::detail::compact_banner_image_cache_key;
+use super::home_video::render_home_video_item;
 use crate::app::components::browser_narrow::{NarrowBrowseExtras, NarrowInlineHero};
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::library_column_count;
@@ -109,6 +110,12 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             } else {
                 0
             };
+    }
+
+    // Feed group pickers retain their dedicated legacy geometry: two rows after
+    // the pills hold the count/divider, then the selected video expands inline.
+    if let Some(items) = extras.feed_items.as_ref() {
+        return render_feed_group_picker(f, content_area, ctx, extras, focused, layout, items);
     }
 
     let (pills_area, list_area) = if extras.feed_items.is_some() {
@@ -237,6 +244,123 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     (final_offset, image_paint)
 }
 
+fn render_feed_group_picker(
+    f: &mut Frame,
+    area: Rect,
+    ctx: &LibraryListRenderCtx,
+    extras: &NarrowBrowseExtras,
+    focused: bool,
+    layout: &mut LayoutMain,
+    items: &[mbv_core::api::EmbyItem],
+) -> (usize, Option<HomeImagePaint>) {
+    let pills = crate::app::render::arrangements::hero_left::pill_bar_areas(area);
+    let labels: Vec<String> = std::iter::once("All".into())
+        .chain(
+            extras
+                .feed_groups
+                .iter()
+                .map(|s| crate::app::ui_util::trunc_str(s, 12).into()),
+        )
+        .collect();
+    let ids: Vec<usize> = (0..labels.len()).collect();
+    layout.selector_tabs = crate::app::render::render_pill_bar(
+        f,
+        pills.pills_area,
+        crate::app::render::PillBar {
+            labels: &labels,
+            ids: &ids,
+            selected_pos: extras.feed_group_cursor,
+            prefix: Some(" ⌘ "),
+        },
+    );
+    let mut list_area = pills.content_area;
+    if list_area.height > 0 {
+        crate::app::render::render_count_label(
+            f,
+            Rect {
+                height: 1,
+                ..list_area
+            },
+            items.len(),
+        );
+        list_area.y += 2;
+        list_area.height = list_area.height.saturating_sub(2);
+    }
+    layout.left_area = list_area;
+    if items.is_empty() {
+        return (0, None);
+    }
+    let selected = extras
+        .inline_hero
+        .as_ref()
+        .and_then(|hero| match hero {
+            NarrowInlineHero::Movie { item, .. } | NarrowInlineHero::Series { item, .. } => {
+                items.iter().position(|candidate| candidate.id == item.id)
+            }
+        })
+        .unwrap_or(extras.feed_video_cursor.min(items.len() - 1));
+    let text_w =
+        crate::app::render::content_width(list_area.width, items.len() > list_area.height as usize);
+    let panel_w = (text_w as usize).saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING as usize) as u16;
+    let selected_h = extras
+        .inline_hero
+        .as_ref()
+        .map(|hero| match hero {
+            NarrowInlineHero::Movie { layout, .. } => {
+                layout.content_rows().saturating_add(5) as u16
+            }
+            _ => 1,
+        })
+        .unwrap_or(1);
+    let mut row = list_area.y;
+    let mut offset = ctx.scroll.min(selected);
+    if selected < offset {
+        offset = selected;
+    }
+    if selected_h > list_area.height {
+        offset = selected;
+    }
+    let mut image = None;
+    for (idx, item) in items.iter().enumerate().skip(offset) {
+        if row >= list_area.bottom() {
+            break;
+        }
+        let h = if idx == selected { selected_h } else { 1 };
+        render_home_video_item(f, item, row, h, list_area, text_w, idx == selected, focused);
+        if idx == selected {
+            layout.selected_item_rect = Some(Rect {
+                x: list_area.x,
+                y: row,
+                width: text_w as u16,
+                height: h,
+            });
+            if let Some(NarrowInlineHero::Movie {
+                item,
+                layout: banner,
+            }) = extras.inline_hero.as_ref()
+            {
+                image = super::detail::render_compact_detail_with_ctx(
+                    super::detail::CompactDetailCtx {
+                        item,
+                        layout: banner.clone(),
+                    },
+                    f,
+                    Rect {
+                        x: list_area.x + SELECTED_BLOCK_SIDE_PADDING,
+                        y: row + 3,
+                        width: panel_w,
+                        height: h.saturating_sub(5),
+                    },
+                    focused,
+                    false,
+                );
+            }
+        }
+        row = row.saturating_add(h);
+    }
+    (offset, image)
+}
+
 fn paint_letter_pills_row(
     f: &mut Frame,
     row_area: Rect,
@@ -305,7 +429,7 @@ impl App {
         let feed_group_view = self.is_feed_home_video_group_view(lib_idx);
         let home_video = self.is_home_video_view(lib_idx) && !feed_group_view;
         let show_letter_pills = self.should_show_letter_pills(lib_idx);
-        let (feed_items, feed_groups, feed_group_cursor) = if feed_group_view {
+        let (feed_items, feed_groups, feed_group_cursor, feed_video_cursor) = if feed_group_view {
             let items = self.feed_home_video_selected_items(lib_idx);
             let groups = self.libs[lib_idx]
                 .feed_home_video
@@ -313,9 +437,13 @@ impl App {
                 .map(|s| s.groups.iter().map(|g| g.folder.name.clone()).collect())
                 .unwrap_or_default();
             let cursor = self.feed_home_video_selected_group_index(lib_idx);
-            (Some(items), groups, cursor)
+            let video_cursor = self.libs[lib_idx]
+                .feed_home_video
+                .as_ref()
+                .map_or(0, |s| s.video_cursor);
+            (Some(items), groups, cursor, video_cursor)
         } else {
-            (None, Vec::new(), 0)
+            (None, Vec::new(), 0, 0)
         };
         let use_shared_replacement_plan = matches!(coll.as_str(), "movies" | "tvshows");
         let season_grid = self.is_viewing_season_grid(lib_idx);
@@ -380,6 +508,7 @@ impl App {
             feed_items,
             feed_groups,
             feed_group_cursor,
+            feed_video_cursor,
             inline_hero,
         }
     }

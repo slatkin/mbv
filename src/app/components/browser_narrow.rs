@@ -49,5 +49,6 @@ pub(in crate::app) struct NarrowBrowseExtras {
     pub(in crate::app) feed_items: Option<Vec<mbv_core::api::EmbyItem>>,
     pub(in crate::app) feed_groups: Vec<String>,
     pub(in crate::app) feed_group_cursor: usize,
+    pub(in crate::app) feed_video_cursor: usize,
     pub(in crate::app) inline_hero: Option<NarrowInlineHero>,
 }
