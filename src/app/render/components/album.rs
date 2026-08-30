@@ -490,7 +490,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
                     if let Some(tracks) = app.album_tracks_cache.get(&albums[*idx].id).cloned() {
                         // Narrow keeps inline track focus explicitly off:
                         // no focused track cursor and no focus highlight.
-                        app.render_album_detail(
+                        super::album_detail::render_album_detail(
                             f,
                             Rect {
                                 y: row_area.y + 1,
@@ -511,7 +511,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
                 }
             }
             GroupedAlbumDisplayRow::AlbumActionHint => {
-                app.render_album_action_hint(
+                super::album_rows::render_album_action_hint(
                     f,
                     row_area,
                     in_music_group_view,
@@ -562,7 +562,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
                             },
                         );
                     }
-                    app.render_album_detail(
+                    super::album_detail::render_album_detail(
                         f,
                         track_area,
                         &tracks,

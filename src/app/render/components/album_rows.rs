@@ -1,7 +1,7 @@
 use super::list_rows::{focused_or_muted, focused_or_muted_soft_white, focused_or_subtle};
+use crate::app::palette;
 use crate::app::render::screens::album_plan::ArtistGroupHeader;
 use crate::app::ui_util::trunc_str;
-use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -292,53 +292,50 @@ pub(in crate::app::render) fn render_wide_selected_album_row(
     f.render_widget(Paragraph::new(Line::from(spans)), row_area);
 }
 
-impl App {
-    pub(in crate::app::render) fn render_album_action_hint(
-        &self,
-        f: &mut Frame,
-        row_area: Rect,
-        in_music_group_view: bool,
-        selected_block_bounds: Option<(usize, usize)>,
-        abs_row_idx: usize,
-        selected_art_reserved_w: u16,
-        focused: bool,
-    ) {
-        let in_selected_block = selected_block_bounds
-            .is_some_and(|(top, bottom)| abs_row_idx > top && abs_row_idx < bottom);
-        // Narrow never holds inline track focus, so the hint is always the
-        // "show tracks" affordance (the track-focus "BACK: Exit" variant was
-        // tied to the deleted inline track-focus field, which narrow could no
-        // longer reach once the component owned narrow's focus).
-        let hint = "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks";
-        let gutter_w = if in_music_group_view && in_selected_block {
-            2
-        } else {
-            1
-        };
-        let hint_width = row_area
-            .width
-            .saturating_sub(selected_art_reserved_w)
-            .saturating_sub(gutter_w)
-            .max(1) as usize;
-        let hint_lines: Vec<Line> = wrap(hint, hint_width)
-            .into_iter()
-            .map(|line| {
-                Line::from(vec![
-                    Span::raw(" ".repeat(gutter_w as usize)),
-                    Span::styled(
-                        line.into_owned(),
-                        Style::default().fg(focused_or_muted_soft_white(focused)),
-                    ),
-                ])
-            })
-            .collect();
-        f.render_widget(
-            Paragraph::new(hint_lines.clone()),
-            Rect {
-                width: row_area.width.saturating_sub(selected_art_reserved_w),
-                height: hint_lines.len() as u16,
-                ..row_area
-            },
-        );
-    }
+pub(in crate::app::render) fn render_album_action_hint(
+    f: &mut Frame,
+    row_area: Rect,
+    in_music_group_view: bool,
+    selected_block_bounds: Option<(usize, usize)>,
+    abs_row_idx: usize,
+    selected_art_reserved_w: u16,
+    focused: bool,
+) {
+    let in_selected_block = selected_block_bounds
+        .is_some_and(|(top, bottom)| abs_row_idx > top && abs_row_idx < bottom);
+    // Narrow never holds inline track focus, so the hint is always the
+    // "show tracks" affordance (the track-focus "BACK: Exit" variant was
+    // tied to the deleted inline track-focus field, which narrow could no
+    // longer reach once the component owned narrow's focus).
+    let hint = "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks";
+    let gutter_w = if in_music_group_view && in_selected_block {
+        2
+    } else {
+        1
+    };
+    let hint_width = row_area
+        .width
+        .saturating_sub(selected_art_reserved_w)
+        .saturating_sub(gutter_w)
+        .max(1) as usize;
+    let hint_lines: Vec<Line> = wrap(hint, hint_width)
+        .into_iter()
+        .map(|line| {
+            Line::from(vec![
+                Span::raw(" ".repeat(gutter_w as usize)),
+                Span::styled(
+                    line.into_owned(),
+                    Style::default().fg(focused_or_muted_soft_white(focused)),
+                ),
+            ])
+        })
+        .collect();
+    f.render_widget(
+        Paragraph::new(hint_lines.clone()),
+        Rect {
+            width: row_area.width.saturating_sub(selected_art_reserved_w),
+            height: hint_lines.len() as u16,
+            ..row_area
+        },
+    );
 }
