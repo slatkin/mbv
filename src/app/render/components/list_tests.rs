@@ -464,6 +464,20 @@ fn hero_sizes_to_content_when_a_movie_is_selected() {
 }
 
 #[test]
+fn pure_compact_banner_sizing_is_deterministic() {
+    let app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+    let item = app.libs[0].nav_stack.last().unwrap().items[0].clone();
+    let inputs = (81, false, true, true, false, Some((12, 18)), (8, 12));
+    let first = super::App::compact_banner_layout(
+        &item, inputs.0, inputs.1, inputs.2, inputs.3, inputs.4, inputs.5, inputs.6, false,
+    );
+    let second = super::App::compact_banner_layout(
+        &item, inputs.0, inputs.1, inputs.2, inputs.3, inputs.4, inputs.5, inputs.6, false,
+    );
+    assert_eq!(first, second);
+}
+
+#[test]
 fn hero_stays_reserved_while_the_slice_is_loading() {
     // No active media row means there is no inline hero to reserve.
     let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
