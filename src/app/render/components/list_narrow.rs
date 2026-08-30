@@ -282,31 +282,52 @@ pub(in crate::app) fn render_wide_feed_layer(
         },
     );
     let divider = Rect {
+        x: area.x,
         y: pills.content_area.y,
+        width: area.width,
         height: 1,
-        ..pills.content_area
     };
     f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::raw(" "),
-            Span::raw("▁".repeat(divider.width.saturating_sub(1) as usize)),
-        ])),
+        Paragraph::new(Line::from(vec![Span::raw(
+            "▁".repeat(divider.width as usize),
+        )])),
         divider,
     );
     layout.left_area = divider;
-    if let (Some(items), Some(panes)) = (
-        extras.feed_items.as_ref(),
-        crate::app::render::arrangements::library::wide_library_panes(area, 2, 1),
-    ) {
-        let row_area = panes.left_area;
-        let text_w = crate::app::render::content_width(row_area.width, false);
-        let mut y = row_area.y + 2;
-        for item in items {
-            if y >= row_area.bottom() {
+    if let Some(items) = extras.feed_items.as_ref() {
+        let content_area = Rect {
+            y: divider.y,
+            height: area.bottom().saturating_sub(divider.y),
+            ..area
+        };
+        let text_w = crate::app::render::content_width(content_area.width, false);
+        let selected = extras.feed_video_cursor.min(items.len().saturating_sub(1));
+        let mut y = content_area.y;
+        for (idx, item) in items.iter().enumerate() {
+            if y >= content_area.bottom() {
                 break;
             }
-            render_home_video_item(f, item, y, 1, row_area, text_w, false, true);
-            y = y.saturating_add(2);
+            let selected_row = idx == selected;
+            let row_height = if selected_row { 5 } else { 1 };
+            render_home_video_item(
+                f,
+                item,
+                y,
+                row_height,
+                content_area,
+                text_w,
+                selected_row,
+                true,
+            );
+            if selected_row {
+                layout.selected_item_rect = Some(Rect {
+                    x: content_area.x,
+                    y,
+                    width: text_w as u16,
+                    height: row_height,
+                });
+            }
+            y = y.saturating_add(if selected_row { row_height } else { 2 });
         }
     }
 }
