@@ -224,7 +224,6 @@ fn tv_shows_app() -> App {
 
 /// Regression 3: narrow TV `j` moves the painted selection.
 #[test]
-#[ignore = "red until migrate-narrow-browse-to-components task 2.2 — narrow TV browse has no owning component, so j/k navigation is dead"]
 fn narrow_tv_browse_j_moves_painted_selection() {
     let mut model = Model::new(tv_shows_app());
     model.sync_mounted_surfaces();
@@ -246,7 +245,6 @@ fn narrow_tv_browse_j_moves_painted_selection() {
 
 /// Regression 4: narrow grouped Music `j` moves the painted selection.
 #[test]
-#[ignore = "red until migrate-narrow-browse-to-components tasks 2.2 + 2.4 + 2.5 — narrow grouped Music workspace is mounted but never focused/threaded, so j/k navigation is dead"]
 fn narrow_grouped_music_j_moves_painted_selection() {
     let mut app = crate::app::render::make_music_group_app();
     app.terminal_width = 60;
