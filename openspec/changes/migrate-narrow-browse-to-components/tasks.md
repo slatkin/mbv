@@ -253,7 +253,7 @@ findings become added rows; the template does not change.
 
 ## 5. Close out
 
-- [ ] 5.1 Split any file over 800 lines (D3's table anticipates
+- [x] 5.1 Split any file over 800 lines (D3's table anticipates
       `browser.rs`). Verify: `rtk make check-code-file-lines`.
 - [ ] 5.2 Full gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
       `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`,
