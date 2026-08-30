@@ -376,6 +376,78 @@ fn narrow_tv_paints_each_browse_row_once() {
     }
 }
 
+fn podcast_app() -> App {
+    let mut app = make_app_stub();
+    app.terminal_width = 60;
+    app.terminal_height = 20;
+    app.mini_view_focus = PanelFocus::Library;
+    app.tab = TabSelection::EmbyLibrary(0);
+
+    let mut library = make_item("Podcasts", "CollectionFolder");
+    library.id = "lib-podcasts".into();
+    library.collection_type = "podcasts".into();
+    library.is_folder = true;
+
+    app.libs.push(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            parent_id: "lib-podcasts".into(),
+            title: "Podcasts".into(),
+            items: folder_items("Show", "Series", 5),
+            total_count: 5,
+            cursor: 0,
+            scroll: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        }],
+        ..LibraryTab::new(library)
+    });
+    app
+}
+
+/// Characterization (task 3.5a template step a): pins the painted narrow Emby
+/// podcast browse surface through the full `Model::draw_frame` path. Narrow
+/// podcast renders as generic list rows (`truncate_overview = true`), with no
+/// podcast-specific layout.
+#[test]
+fn narrow_podcast_surface_snapshot() {
+    let mut model = Model::new(podcast_app());
+    model.sync_mounted_surfaces();
+    let mut term = narrow_backend();
+
+    let output = draw(&mut model, &mut term);
+
+    let expected = "                                                            \n   HOME  ▐ PODCASTS                                         \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n▎ Show 0                                                    \n  Show 1                                                    \n  Show 2                                                    \n  Show 3                                                    \n  Show 4                                                    \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n 🔊  100                                             \u{f06b4} \u{ede2} ♥ \u{f1c0} ";
+    assert_eq!(output, expected, "narrow podcast surface drifted:\n{output}");
+}
+
+/// Regression (task 3.5a template step d): narrow Emby podcast paints each
+/// visible show row exactly once — the mounted `BrowserComponent` is the sole
+/// painter now that the legacy `render_list` narrow branch early-returns for
+/// podcast libraries too.
+#[test]
+#[ignore = "task 3.5a b/c: BrowserComponent does not yet own the narrow podcast surface"]
+fn narrow_podcast_paints_each_browse_row_once() {
+    let mut model = Model::new(podcast_app());
+    model.sync_mounted_surfaces();
+    let mut term = narrow_backend();
+
+    let output = draw(&mut model, &mut term);
+
+    for row in ["Show 0", "Show 1", "Show 2", "Show 3", "Show 4"] {
+        assert_eq!(
+            output.matches(row).count(),
+            1,
+            "narrow podcast browse row {row:?} must be painted exactly once:\n{output}"
+        );
+    }
+}
+
 /// Regression 5: narrow Movies paints each browse row exactly once (currently
 /// double-painted by legacy `render_list` + `BrowserComponent::view`).
 #[test]
