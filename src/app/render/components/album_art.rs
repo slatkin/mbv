@@ -79,6 +79,15 @@ impl App {
         else {
             return;
         };
+        if !self.images_enabled() || area.width < 4 || area.height < 2 {
+            return;
+        }
+        self.fetch_card_image(
+            inline_album_art_cache_key(&album.id),
+            album.id.clone(),
+            album.series_id.clone(),
+            crate::app::render::MUSIC_ALBUM_IMAGE_TYPES,
+        );
         if centered {
             self.render_inline_album_art_centered(f, area, &album, &mut LayoutMain::default());
         } else {
@@ -105,7 +114,6 @@ impl App {
             album,
             inline_album_art_cache_key(&album.id),
             nav_gate_open,
-            false,
             (ArtAnchorX::Right, ArtAnchorY::Top),
         );
     }
@@ -117,7 +125,7 @@ impl App {
         album: &mbv_core::api::EmbyItem,
         _layout: &mut LayoutMain,
     ) {
-        if !self.images_enabled() || area.width < 4 || area.height < 2 {
+        if area.width < 4 || area.height < 2 {
             return;
         }
 
@@ -138,7 +146,6 @@ impl App {
             album,
             inline_album_art_cache_key(&album.id),
             nav_gate_open,
-            false,
             (ArtAnchorX::Center, ArtAnchorY::Top),
         );
     }
@@ -147,39 +154,20 @@ impl App {
     /// `OVERLAY` loading placeholder while the image isn't yet decoded/gated.
     /// Returns the rect actually painted (image or placeholder).
     ///
-    /// When `square` is set, the cover is fetched center-cropped to a square
-    /// (via `fetch_card_image_square`) — the collage mode, giving uniform grid
-    /// tiles; otherwise the natural-aspect cover is fetched. Placement within
+    /// Placement within
     /// `cell` follows `anchor` (the standalone path uses `(Right, Top)`;
     /// collage tiles anchor toward the box center so they abut).
     fn render_inline_art_cell(
         &mut self,
         f: &mut Frame,
         cell: Rect,
-        album: &mbv_core::api::EmbyItem,
+        _album: &mbv_core::api::EmbyItem,
         cache_key: String,
         nav_gate_open: bool,
-        square: bool,
         anchor: (ArtAnchorX, ArtAnchorY),
     ) -> Rect {
         if cell.width == 0 || cell.height == 0 {
             return cell;
-        }
-
-        if square {
-            self.fetch_card_image_square(
-                cache_key.clone(),
-                album.id.clone(),
-                album.series_id.clone(),
-                crate::app::render::MUSIC_ALBUM_IMAGE_TYPES,
-            );
-        } else {
-            self.fetch_card_image(
-                cache_key.clone(),
-                album.id.clone(),
-                album.series_id.clone(),
-                crate::app::render::MUSIC_ALBUM_IMAGE_TYPES,
-            );
         }
 
         let mut img_rect = cell;
