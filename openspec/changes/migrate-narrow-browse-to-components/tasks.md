@@ -199,7 +199,7 @@ findings become added rows; the template does not change.
 - [x] 3.4 Surface: Emby TV, narrow. Template above, same composer as 3.3 —
       series inline hero, season grid, letter pills. Record any TV-specific
       chord that is still dead as a Change D finding; do not fix it here.
-- [ ] 3.5 Surface: Emby podcast **and feed/home-video group picker**, narrow
+- [x] 3.5 Surface: Emby podcast **and feed/home-video group picker**, narrow
       **and** wide. One surface (`is_feed_home_video_group_view`; audit-results
       table). Template above. Wide podcast is currently blank, so (a)'s snapshot
       is the empty baseline and the acceptance is "paints the browse body", not
