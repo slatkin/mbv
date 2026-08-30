@@ -10,31 +10,6 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::io::{Read, Write};
 
-#[cfg(test)]
-pub(super) fn browse_level(
-    parent_id: &str,
-    title: &str,
-    items: Vec<EmbyItem>,
-    cursor: usize,
-    scroll: usize,
-) -> BrowseLevel {
-    BrowseLevel {
-        parent_id: parent_id.into(),
-        title: title.into(),
-        total_count: items.len(),
-        items,
-        resting: BrowseResting::new(cursor, scroll),
-        item_types: None,
-        unplayed_only: false,
-        sort_by: "SortName".into(),
-        sort_order: "Ascending".into(),
-        loading: false,
-        all_items: None,
-        letter_filter: None,
-        music_grouping: None,
-    }
-}
-
 /// Music library sitting on the album-folder-listing nav
 /// level (`is_viewing_album_folders` holds): a grouped `["group",
 /// "album"]` config, mirroring `render_library`'s inline-detail

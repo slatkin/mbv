@@ -20,31 +20,6 @@ use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 use ratatui::Terminal;
 
-#[cfg(test)]
-pub fn browse_level(
-    parent_id: &str,
-    title: &str,
-    items: Vec<EmbyItem>,
-    cursor: usize,
-    scroll: usize,
-) -> BrowseLevel {
-    BrowseLevel {
-        parent_id: parent_id.into(),
-        title: title.into(),
-        total_count: items.len(),
-        items,
-        resting: BrowseResting::new(cursor, scroll),
-        item_types: None,
-        unplayed_only: false,
-        sort_by: "SortName".into(),
-        sort_order: "Ascending".into(),
-        loading: false,
-        all_items: None,
-        letter_filter: None,
-        music_grouping: None,
-    }
-}
-
 pub fn make_movie_app() -> App {
     let mut app = make_app_stub();
     app.tab = TabSelection::EmbyLibrary(0);
