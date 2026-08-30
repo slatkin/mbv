@@ -555,10 +555,11 @@ impl App {
             TabSelection::EmbyLibrary(lib_idx) => {
                 self.ensure_music_group_album_level(lib_idx);
                 self.ensure_feed_home_video_group_level(lib_idx);
-                let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
-                if is_feed_group {
-                    self.render_feed_home_video_group_view(f, area, lib_idx, focused, layout);
-                } else {
+                if self.is_feed_home_video_group_view(lib_idx) {
+                    layout.left_area = area;
+                    return;
+                }
+                {
                     // Music's mounted workspace needs the same-frame geometry
                     // before its view replaces this legacy frame.
                     if self.is_music_group_view(lib_idx)

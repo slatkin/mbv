@@ -39,6 +39,25 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
 ) -> (usize, Option<HomeImagePaint>) {
     let mut content_area = area;
 
+    // Feed/home-video group pickers share the browser composer, but their
+    // cursor and rows live in FeedHomeVideoState rather than BrowseLevel.
+    let feed_ctx = extras
+        .feed_items
+        .as_ref()
+        .map(|items| LibraryListRenderCtx {
+            items: items.clone(),
+            cursor: ctx.cursor.min(items.len().saturating_sub(1)),
+            scroll: ctx.scroll,
+            total_count: items.len(),
+            library_total: Some(items.len()),
+            letter_filter: None,
+            loading: ctx.loading,
+            search_query: None,
+            search_loading: false,
+            group_pills: false,
+        });
+    let ctx = feed_ctx.as_ref().unwrap_or(ctx);
+
     if extras.home_video && content_area.height > 0 {
         content_area = crate::app::render::render_count_label(f, content_area, ctx.total_count);
         content_area = Rect {
@@ -92,7 +111,10 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             };
     }
 
-    let (pills_area, list_area) = if extras.show_letter_pills {
+    let (pills_area, list_area) = if !extras.feed_groups.is_empty() {
+        let areas = hero_left::pill_bar_areas(content_area);
+        (areas.pills_area, areas.content_area)
+    } else if extras.show_letter_pills {
         let areas = hero_left::pill_bar_areas(content_area);
         (areas.pills_area, areas.content_area)
     } else {
@@ -106,7 +128,24 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
                 0
             };
     }
-    if extras.show_letter_pills {
+    if !extras.feed_groups.is_empty() {
+        let ids: Vec<usize> = (0..extras.feed_groups.len()).collect();
+        let labels: Vec<String> = extras
+            .feed_groups
+            .iter()
+            .map(|s| crate::app::ui_util::trunc_str(s, 12).to_string())
+            .collect();
+        layout.selector_tabs = crate::app::render::render_pill_bar(
+            f,
+            pills_area,
+            crate::app::render::PillBar {
+                labels: &labels,
+                ids: &ids,
+                selected_pos: extras.feed_group_cursor,
+                prefix: Some(" ⌘ "),
+            },
+        );
+    } else if extras.show_letter_pills {
         paint_letter_pills_row(
             f,
             pills_area,
@@ -251,12 +290,33 @@ impl App {
     /// `BrowserComponent` each frame.
     pub(in crate::app) fn narrow_browse_extras(&mut self, lib_idx: usize) -> NarrowBrowseExtras {
         let coll = self.libs[lib_idx].library.collection_type.clone();
-        let home_video = self.is_home_video_view(lib_idx);
+        let feed_group_view = self.is_feed_home_video_group_view(lib_idx);
+        let home_video = self.is_home_video_view(lib_idx) || feed_group_view;
         let show_letter_pills = self.should_show_letter_pills(lib_idx);
+        let (feed_items, feed_groups, feed_group_cursor) = if feed_group_view {
+            let items = self.feed_home_video_selected_items(lib_idx);
+            let groups = self.libs[lib_idx]
+                .feed_home_video
+                .as_ref()
+                .map(|s| s.groups.iter().map(|g| g.folder.name.clone()).collect())
+                .unwrap_or_default();
+            let cursor = self.feed_home_video_selected_group_index(lib_idx);
+            (Some(items), groups, cursor)
+        } else {
+            (None, Vec::new(), 0)
+        };
         let use_shared_replacement_plan = matches!(coll.as_str(), "movies" | "tvshows");
         let season_grid = self.is_viewing_season_grid(lib_idx);
 
-        let selected_movie = self.selected_movie_item(lib_idx);
+        let selected_movie = self.selected_movie_item(lib_idx).or_else(|| {
+            feed_items.as_ref().and_then(|items| {
+                let cursor = self.libs[lib_idx]
+                    .feed_home_video
+                    .as_ref()
+                    .map_or(0, |s| s.video_cursor);
+                items.get(cursor).cloned()
+            })
+        });
         let selected_series = if selected_movie.is_none() {
             self.selected_series_item(lib_idx)
         } else {
@@ -305,6 +365,9 @@ impl App {
             use_shared_replacement_plan,
             hero_placeholder,
             season_grid,
+            feed_items,
+            feed_groups,
+            feed_group_cursor,
             inline_hero,
         }
     }
