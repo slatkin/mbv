@@ -183,7 +183,7 @@ findings become added rows; the template does not change.
       existing hero/detail/art behavior. Verify: targeted grouped-Music hero,
       art, and row tests execute; no component-callable grouped-album renderer
       accepts or reaches `App`.
-- [ ] 3.2e Gate: the three named legacy painters and every helper reachable by
+- [x] 3.2e Gate: the three named legacy painters and every helper reachable by
       their component-callable paths are context/pure functions; no App-backed
       original or parallel component-callable path remains. Verify:
       `rtk cargo check -p mbv --all-targets`, targeted series and grouped-Music
