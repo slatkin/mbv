@@ -117,7 +117,7 @@ Ends with every surface owned; legacy still paints. This is the state
       `feed_home_video.video_cursor`/`video_scroll` directly. Its
       component-cursor→state threading is the `apply_lib_cursor_index` branch,
       handled in 2.2, not here.
-- [ ] 2.6 Gate: every surface from task 1 has exactly one owner at every
+- [x] 2.6 Gate: every surface from task 1 has exactly one owner at every
       breakpoint. Verify: `rtk cargo nextest run -p mbv`, `rtk cargo clippy
       --workspace --all-targets`, `rtk ast-grep scan`, plus a stated
       surface → owner table. **Narrow Movies' single-paint test is still red
