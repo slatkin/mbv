@@ -5,8 +5,8 @@ use crate::app::components::{BrowserComponent, Msg};
 use crate::app::render::make_movie_app;
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::{
-    App, BrowseLevel, ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibraryTab,
-    PanelFocus, PanelMode, TabSelection,
+    App, BrowseLevel, BrowseResting, ContextAction, FeedHomeVideoGroup, FeedHomeVideoState,
+    LibraryTab, PanelFocus, PanelMode, TabSelection,
 };
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -63,8 +63,7 @@ pub(super) fn browser_app_with_flat_movies(n: usize) -> App {
             title: "Films".into(),
             items: make_items(n),
             total_count: n,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),

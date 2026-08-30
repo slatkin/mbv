@@ -2,12 +2,37 @@
 
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
+use crate::app::{BrowseLevel, BrowseResting, LibraryTab, PanelFocus, TabSelection};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::io::{Read, Write};
+
+#[cfg(test)]
+pub(super) fn browse_level(
+    parent_id: &str,
+    title: &str,
+    items: Vec<EmbyItem>,
+    cursor: usize,
+    scroll: usize,
+) -> BrowseLevel {
+    BrowseLevel {
+        parent_id: parent_id.into(),
+        title: title.into(),
+        total_count: items.len(),
+        items,
+        resting: BrowseResting::new(cursor, scroll),
+        item_types: None,
+        unplayed_only: false,
+        sort_by: "SortName".into(),
+        sort_order: "Ascending".into(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        music_grouping: None,
+    }
+}
 
 /// Music library sitting on the album-folder-listing nav
 /// level (`is_viewing_album_folders` holds): a grouped `["group",
@@ -42,8 +67,7 @@ pub(super) fn make_music_album_app() -> App {
                 title: "Music".into(),
                 items: vec![group],
                 total_count: 1,
-                cursor: 0,
-                scroll: 0,
+                resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -58,8 +82,7 @@ pub(super) fn make_music_album_app() -> App {
                 title: "Alpha".into(),
                 items: vec![album1, album2],
                 total_count: 2,
-                cursor: 0,
-                scroll: 0,
+                resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -135,8 +158,7 @@ pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> Ap
                 title: "Music".into(),
                 items: vec![group],
                 total_count: 1,
-                cursor: 0,
-                scroll: 0,
+                resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -151,8 +173,7 @@ pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> Ap
                 title: "Alpha".into(),
                 items: albums,
                 total_count: album_count,
-                cursor,
-                scroll: 0,
+                resting: BrowseResting::new(cursor, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),

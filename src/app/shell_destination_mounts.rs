@@ -110,7 +110,7 @@ mod tests {
     use crate::app::components::{BrowserKey, BrowserKind};
     use crate::app::render::make_movie_app;
     use crate::app::tests::make_item;
-    use crate::app::{LibraryTab, TabSelection};
+    use crate::app::{BrowseResting, LibraryTab, TabSelection};
     use mbv_core::config::ServiceKind;
 
     fn browser_id(library_id: &str, kind: BrowserKind) -> ComponentId {
@@ -335,8 +335,7 @@ mod tests {
                     title: "Music".into(),
                     items: vec![group],
                     total_count: 1,
-                    cursor: 0,
-                    scroll: 0,
+                    resting: BrowseResting::new(0, 0),
                     item_types: None,
                     unplayed_only: false,
                     sort_by: "SortName".into(),
@@ -351,8 +350,7 @@ mod tests {
                     title: "Alpha".into(),
                     items: vec![album],
                     total_count: 1,
-                    cursor: 0,
-                    scroll: 0,
+                    resting: BrowseResting::new(0, 0),
                     item_types: None,
                     unplayed_only: false,
                     sort_by: "SortName".into(),

@@ -10,7 +10,9 @@ use crate::app::types_audiobookshelf_browse::{
     build_surname_buckets, AudiobookshelfBookBrowseState,
 };
 use crate::app::{App, PanelFocus};
-use crate::app::{BrowseLevel, LibraryTab, QueueScope, RemoteSlotState, TabSelection};
+use crate::app::{
+    BrowseLevel, BrowseResting, LibraryTab, QueueScope, RemoteSlotState, TabSelection,
+};
 use crate::config::Config;
 use mbv_core::api::EmbyClient;
 use mbv_core::api::EmbyItem;
@@ -18,6 +20,31 @@ use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfChapter, Audiob
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 use ratatui::Terminal;
+
+#[cfg(test)]
+pub fn browse_level(
+    parent_id: &str,
+    title: &str,
+    items: Vec<EmbyItem>,
+    cursor: usize,
+    scroll: usize,
+) -> BrowseLevel {
+    BrowseLevel {
+        parent_id: parent_id.into(),
+        title: title.into(),
+        total_count: items.len(),
+        items,
+        resting: BrowseResting::new(cursor, scroll),
+        item_types: None,
+        unplayed_only: false,
+        sort_by: "SortName".into(),
+        sort_order: "Ascending".into(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        music_grouping: None,
+    }
+}
 
 pub fn make_movie_app() -> App {
     let mut app = make_app_stub();
@@ -44,8 +71,7 @@ pub fn make_movie_app() -> App {
             title: "Movies".into(),
             items: vec![focused, second],
             total_count: 2,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -124,8 +150,7 @@ pub fn make_music_group_app() -> App {
                 title: "Music".into(),
                 items: groups,
                 total_count: group_names.len(),
-                cursor: 0,
-                scroll: 0,
+                resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -140,8 +165,7 @@ pub fn make_music_group_app() -> App {
                 title: "Alpha".into(),
                 items: vec![album],
                 total_count: 1,
-                cursor: 0,
-                scroll: 0,
+                resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -256,8 +280,7 @@ pub fn make_home_video_app() -> App {
             title: "Home Videos".into(),
             items: vec![first, second],
             total_count: 2,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -288,8 +311,7 @@ pub fn make_large_movie_library_app(library_total: usize) -> App {
             title: "Movies".into(),
             items: Vec::new(),
             total_count: 0,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),

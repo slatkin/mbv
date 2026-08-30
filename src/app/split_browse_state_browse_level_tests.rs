@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::app::tests::*;
+use crate::app::types_browse::BrowseResting;
 
 fn movie_level(items: Vec<EmbyItem>, total_count: usize, cursor: usize) -> BrowseLevel {
     BrowseLevel {
@@ -18,8 +19,7 @@ fn movie_level(items: Vec<EmbyItem>, total_count: usize, cursor: usize) -> Brows
         title: "Movies".into(),
         total_count,
         items,
-        cursor,
-        scroll: 0,
+        resting: BrowseResting::new(cursor, 0),
         item_types: Some("Movie".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -57,7 +57,11 @@ fn entering_library_restores_cursor_from_saved_focused_item_and_round_trips() {
     };
 
     let level = BrowseLevel::from_position_level(&saved, make_items(5), 5, 3);
-    assert_eq!(level.cursor, 2, "saved focused item id2 is at index 2");
+    assert_eq!(
+        level.resting().cursor(),
+        2,
+        "saved focused item id2 is at index 2"
+    );
 
     let round_trip = level.to_position_level();
     assert_eq!(round_trip.focused_item_id.as_deref(), Some("id2"));
@@ -80,7 +84,8 @@ fn go_back_reanchors_parent_cursor_onto_the_popped_child_folder() {
 
     assert_eq!(app.libs[0].nav_stack.len(), 1);
     assert_eq!(
-        app.libs[0].nav_stack[0].cursor, 1,
+        app.libs[0].nav_stack[0].resting().cursor(),
+        1,
         "parent cursor re-anchors onto the child folder (id1) that was popped"
     );
 }
@@ -90,18 +95,23 @@ fn prefetch_holds_until_cursor_is_within_prefetch_ahead_of_loaded_edge() {
     // PREFETCH_AHEAD is 25; 30 of 100 items loaded (not fully loaded).
     let mut app = make_app_stub();
     app.tab = TabSelection::EmbyLibrary(0);
-    app.libs.push(movie_lib(vec![movie_level(make_items(30), 100, 4)]));
+    app.libs
+        .push(movie_lib(vec![movie_level(make_items(30), 100, 4)]));
 
     // cursor 4: 4 + 25 = 29 < 30 -> still buffered, no fetch.
-    app.maybe_fetch_next_page(0, app.libs[0].nav_stack.last().unwrap().cursor);
+    app.maybe_fetch_next_page(0, app.libs[0].nav_stack.last().unwrap().resting().cursor());
     assert!(
         !app.libs[0].nav_stack.last().unwrap().loading,
         "cursor comfortably inside the buffer must not trigger a page fetch"
     );
 
     // cursor 5: 5 + 25 = 30, not < 30 -> threshold reached, fetch starts.
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = 5;
-    app.maybe_fetch_next_page(0, app.libs[0].nav_stack.last().unwrap().cursor);
+    app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .set_resting_cursor(5);
+    app.maybe_fetch_next_page(0, app.libs[0].nav_stack.last().unwrap().resting().cursor());
     assert!(
         app.libs[0].nav_stack.last().unwrap().loading,
         "cursor within PREFETCH_AHEAD of the loaded edge must trigger a page fetch"
