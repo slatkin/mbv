@@ -154,7 +154,14 @@ impl Model {
         let Some(id) = self.music_workspace_id.as_ref() else {
             return;
         };
-        let area = self.app.layout.main.wide_music_area;
+        // Wide Music paints into `wide_music_area`; narrow Music has no wide
+        // area, so fall back to the narrow main content area (`left_area`) so
+        // the component's `view` is still reached. It paints nothing at narrow
+        // until task 3.6 gives it a narrow branch.
+        let mut area = self.app.layout.main.wide_music_area;
+        if area.width == 0 || area.height == 0 {
+            area = self.app.layout.main.left_area;
+        }
         if area.width == 0 || area.height == 0 {
             return;
         }

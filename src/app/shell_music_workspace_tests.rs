@@ -531,6 +531,60 @@ fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
     );
 }
 
+/// migrate-narrow-browse-to-components task 2.4 (D6, first half): at a
+/// narrow width (no `wide_music_area`), a grouped album-folder Emby Music
+/// library's `MusicWorkspaceComponent` is both *rendered* (its `view` is
+/// reached via the `left_area` fallback — proven by `render_music_workspace`
+/// `_component` publishing geometry into `wide_music_area`, which a
+/// early-return would leave zeroed) and *focusable* (the active-destination
+/// pass lands TuiRealm focus on its `ComponentId::Browser{..Music}`). It
+/// still paints nothing until task 3.6 gives it a narrow branch.
+#[test]
+fn narrow_grouped_music_workspace_is_rendered_and_focusable() {
+    let mut model = Model::new(make_music_group_app());
+    model.app.panel_focus = PanelFocus::Library;
+    assert!(model.app.is_music_group_view(0));
+    assert!(model.app.is_viewing_album_folders(0));
+    assert!(!model.app.layout.main.is_wide_music_active());
+
+    model.sync_music_workspace();
+    let id = model
+        .music_workspace_id
+        .clone()
+        .expect("narrow Music workspace mounted");
+    assert!(matches!(
+        id,
+        ComponentId::Browser(BrowserKey {
+            kind: BrowserKind::Music,
+            ..
+        })
+    ));
+
+    // Render at a narrow width: no `wide_music_area`, only a narrow
+    // `left_area`, so the component's `view` is reached only via the
+    // `left_area` fallback.
+    model.app.layout.main.wide_music_area = ratatui::layout::Rect::default();
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 50, 28);
+    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    terminal
+        .draw(|frame| model.render_music_workspace_component(frame))
+        .unwrap();
+    assert!(
+        model.app.layout.main.wide_music_area.width > 0
+            && model.app.layout.main.wide_music_area.height > 0,
+        "render_music_workspace_component must reach the component view via the \
+         left_area fallback and publish geometry, not early-return at narrow"
+    );
+    assert!(
+        !model.app.layout.main.is_wide_music_active(),
+        "the narrow fallback must not mark the wide Music layout active"
+    );
+
+    // Focus: the active-destination pass lands on the mounted component.
+    model.sync_active_destination();
+    assert_eq!(model.application.focus(), Some(&id));
+}
+
 fn music_album_cursor(model: &Model, id: &ComponentId) -> usize {
     model
         .application

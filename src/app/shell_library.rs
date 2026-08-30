@@ -72,9 +72,10 @@ impl Model {
             // `emby_browser_component_id`.
             BrowserKind::TvShows => true,
             BrowserKind::Music => {
-                self.app.is_music_group_view(index)
-                    && self.app.is_viewing_album_folders(index)
-                    && self.app.layout.main.is_wide_music_active()
+                // Music mounts one component type at all widths (no TV-style
+                // split), so narrow Music is focusable too — the mount gate is
+                // already width-agnostic; only this focus gate was wide-only.
+                self.app.is_music_group_view(index) && self.app.is_viewing_album_folders(index)
             }
             BrowserKind::AudiobookshelfPodcast | BrowserKind::AudiobookshelfBook => false,
         };
