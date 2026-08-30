@@ -206,7 +206,7 @@
       same task that re-points its last production reader; no accessor returning
       the old value survives, and the resting accessor stays because it is the
       sanctioned resting-position path, not a transitional live accessor).
-- [ ] 1.2b Mechanical test-side migration only — no production change, no
+- [x] 1.2b Mechanical test-side migration only — no production change, no
       design question. `BrowseLevel` is still constructed in 91 test literals
       across 30 files, and ~120 raw `.cursor` / `.scroll` touches sit outside
       those literals (`shell_tv_workspace_tests.rs:535`,
