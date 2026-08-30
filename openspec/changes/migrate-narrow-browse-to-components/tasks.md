@@ -50,7 +50,7 @@ their disposition:
 Ends with every surface owned; legacy still paints. This is the state
 `delete-browse-level-cursor-scroll` depends on.
 
-- [ ] 2.1 Characterization tests (pass pre-change, still pass after): entering a
+- [x] 2.1 Characterization tests (pass pre-change, still pass after): entering a
       narrow TV library restores its saved series position; entering a narrow
       grouped Music library restores its saved album position.
       Regression tests (red now): narrow TV `j`/`k` moves the painted
