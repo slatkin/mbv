@@ -52,7 +52,7 @@ fn poster_placeholder_size(font_size: ratatui_image::FontSize, img_cols: u16) ->
 /// meta line, the "Playing" indicator, and the overview + director text
 /// wrapped to the banner's actual panel width. Computed once by
 /// `App::compact_banner_layout_with_overview` and consumed by
-/// `render_compact_detail` to actually render the banner, so the
+/// `render_compact_detail_with_ctx` to actually render the banner, so the
 /// row-count estimate and the render never duplicate the wrapping logic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::app) struct CompactBannerLayout {
@@ -167,7 +167,7 @@ impl App {
 
     /// Computes the compact banner's content for `item`, given the panel
     /// width it will render into (i.e. the eventual `area.width` passed to
-    /// `render_compact_detail`). Pure function of `item` + width aside
+    /// `render_compact_detail_with_ctx`). Pure function of `item` + width aside
     /// from the image-state cache lookup/fetch-trigger, so calling it twice
     /// per frame (once to measure, once to render) is safe and idempotent.
     pub(in crate::app::render) fn compact_banner_layout_with_overview(
