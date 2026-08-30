@@ -250,7 +250,7 @@ pub(in crate::app::render) struct ListRenderCtx<'a> {
 /// search results and the navigation level while painting rows.
 #[derive(Clone)]
 pub(in crate::app) struct LibraryListRenderCtx {
-    pub(in crate::app::render) items: Vec<mbv_core::api::EmbyItem>,
+    pub(in crate::app) items: Vec<mbv_core::api::EmbyItem>,
     pub(in crate::app::render) cursor: usize,
     pub(in crate::app::render) scroll: usize,
     pub(in crate::app) total_count: usize,

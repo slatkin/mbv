@@ -353,6 +353,32 @@ impl Model {
                 if let Some(extras) = narrow_extras {
                     browser.set_narrow_extras(extras);
                 }
+                // Poster prefetch is an App/image-cache effect, so keep it
+                // beside the other shell-owned image effect. The component's
+                // cursor is authoritative; the mirrored library content only
+                // supplies the candidate window.
+                if !wide {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        let ctx = self.app.library_list_render_ctx(
+                            lib_idx,
+                            true,
+                            browser.cursor(),
+                            self.app.libs[lib_idx]
+                                .nav_stack
+                                .last()
+                                .map_or(0, |level| level.scroll),
+                        );
+                        if ctx
+                            .clone()
+                            .with_cursor_scroll(browser.cursor(), 0)
+                            .selected_item()
+                            .is_some_and(|item| item.item_type == "Movie" && !item.is_folder)
+                        {
+                            self.app
+                                .fetch_nearby_movie_posters(&ctx.items, browser.cursor());
+                        }
+                    }
+                }
             }
         }
         self.application.view(id, frame, area);

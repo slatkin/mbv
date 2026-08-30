@@ -142,8 +142,7 @@ impl App {
         // Narrow generic/Movies/home-video/TV/podcast: the mounted
         // `BrowserComponent` composes this surface itself (`browser_narrow.rs`,
         // migrate-narrow-browse tasks 3.3/3.4/3.5a, closing regression 1).
-        // Publish the list area for input routing, keep the poster-prefetch
-        // window here (task 3.7 relocates it), and paint nothing — the
+        // Publish the list area for input routing and paint nothing — the
         // component owns the picture. Wide podcast reaches here too (no
         // podcast wide-workspace component exists), so its mounted
         // `BrowserComponent` paints the generic browse body across the wide
@@ -155,18 +154,6 @@ impl App {
                 self.emby_browser_active && coll != "music" && !self.inline_search_active;
             if component_owned {
                 layout.left_area = area;
-                if self.selected_movie_item(lib_idx).is_some() {
-                    let ctx = self.library_list_render_ctx(
-                        lib_idx,
-                        true,
-                        cursor.unwrap_or_else(|| {
-                            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor)
-                        }),
-                        *scroll,
-                    );
-                    let items = ctx.items.clone();
-                    self.fetch_nearby_movie_posters(&items, ctx.cursor);
-                }
                 return;
             }
         }
@@ -396,16 +383,6 @@ impl App {
         // recursive-album display projection used by the narrow browser.
         let (items, cursor, stored_scroll, total_count) =
             (ctx.items.clone(), ctx.cursor, ctx.scroll, ctx.total_count);
-
-        // Pre-warm nearby movies' poster images so they're already cached by
-        // the time the cursor reaches them (#287) -- mirrors the prefetch
-        // window `render_card` already uses for the home-card
-        // carousel. Only applies when a movie banner is actually showing
-        // (i.e. this is a movies library with a leaf Movie selected); if
-        // there's no banner, there's nothing to prefetch for.
-        if selected_movie_item.is_some() {
-            self.fetch_nearby_movie_posters(&items, cursor);
-        }
 
         // When at the album level of a music library, group albums under artist headers.
         // Suppressed while search is active: `render_grouped_album_rows` reads

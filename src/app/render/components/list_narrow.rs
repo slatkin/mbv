@@ -526,7 +526,7 @@ impl App {
     /// ahead of / behind the cursor. Called from the legacy `render_list`
     /// body (podcasts) and the task-3.3 geometry-only early return
     /// (generic/Movies/home video); task 3.7 relocates it to the shell.
-    pub(in crate::app::render) fn fetch_nearby_movie_posters(
+    pub(in crate::app) fn fetch_nearby_movie_posters(
         &mut self,
         items: &[mbv_core::api::EmbyItem],
         cursor: usize,
