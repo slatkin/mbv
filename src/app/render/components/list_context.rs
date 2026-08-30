@@ -6,15 +6,12 @@ impl App {
         &self,
         lib_idx: usize,
         _display_recursive_albums: bool,
+        cursor: usize,
+        scroll: usize,
     ) -> LibraryListRenderCtx {
         let lib = &self.libs[lib_idx];
         let (items, cursor, scroll, total_count) = match lib.nav_stack.last() {
-            Some(level) => (
-                level.items.clone(),
-                level.cursor,
-                level.scroll,
-                level.total_count,
-            ),
+            Some(level) => (level.items.clone(), cursor, scroll, level.total_count),
             None => (Vec::new(), 0, 0, 0),
         };
 

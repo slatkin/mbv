@@ -103,7 +103,12 @@ impl CompactBannerLayout {
 
 impl App {
     pub(crate) fn selected_movie_item(&self, lib_idx: usize) -> Option<mbv_core::api::EmbyItem> {
-        let ctx = self.library_list_render_ctx(lib_idx, false);
+        let ctx = self.library_list_render_ctx(
+            lib_idx,
+            false,
+            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor),
+            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.scroll),
+        );
         self.selected_movie_item_with_ctx(lib_idx, &ctx)
     }
 
@@ -135,7 +140,12 @@ impl App {
     }
 
     pub(crate) fn selected_series_item(&self, lib_idx: usize) -> Option<mbv_core::api::EmbyItem> {
-        let ctx = self.library_list_render_ctx(lib_idx, false);
+        let ctx = self.library_list_render_ctx(
+            lib_idx,
+            false,
+            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor),
+            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.scroll),
+        );
         self.selected_series_item_with_ctx(lib_idx, &ctx)
     }
 
@@ -355,7 +365,12 @@ impl App {
         // or, on a tvshows library, the selected Series — the compact banner
         // layout is generic over the item, so a Series renders its meta +
         // overview the same way a Movie does (design decision 6).
-        let ctx = self.library_list_render_ctx(lib_idx, false);
+        let ctx = self.library_list_render_ctx(
+            lib_idx,
+            false,
+            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor),
+            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.scroll),
+        );
         let Some(item) = self
             .selected_movie_item_with_ctx(lib_idx, &ctx)
             .or_else(|| self.selected_series_item_with_ctx(lib_idx, &ctx))

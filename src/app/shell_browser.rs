@@ -261,7 +261,18 @@ impl Model {
             )
             .with_group_pills(true)
         } else {
-            self.app.library_list_render_ctx(index, false)
+            self.app.library_list_render_ctx(
+                index,
+                false,
+                self.app.libs[index]
+                    .nav_stack
+                    .last()
+                    .map_or(0, |l| l.cursor),
+                self.app.libs[index]
+                    .nav_stack
+                    .last()
+                    .map_or(0, |l| l.scroll),
+            )
         };
         let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
         if let Some(comp) = self.application.get_component_mut(id) {

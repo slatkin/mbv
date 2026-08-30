@@ -137,7 +137,12 @@ pub(in crate::app::render) fn wide_album_metadata(album: &EmbyItem, artist: &str
 
 impl App {
     pub(in crate::app) fn wide_music_render_ctx(&self, lib_idx: usize) -> MusicWideRenderCtx {
-        let list = self.library_list_render_ctx(lib_idx, true);
+        let list = self.library_list_render_ctx(
+            lib_idx,
+            true,
+            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor),
+            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.scroll),
+        );
         let lib = &self.libs[lib_idx];
         let level = lib.nav_stack.last();
         let selected_album = level

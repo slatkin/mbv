@@ -105,7 +105,18 @@ impl Model {
         // album from the component's authoritative selection (its own cursor),
         // not the App browse cursor. Only on first mount fall back to the
         // App-derived item.
-        let list = self.app.library_list_render_ctx(index, true);
+        let list = self.app.library_list_render_ctx(
+            index,
+            true,
+            self.app.libs[index]
+                .nav_stack
+                .last()
+                .map_or(0, |l| l.cursor),
+            self.app.libs[index]
+                .nav_stack
+                .last()
+                .map_or(0, |l| l.scroll),
+        );
         let selected_album = self
             .application
             .get_component(id)

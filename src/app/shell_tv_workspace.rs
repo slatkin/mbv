@@ -184,7 +184,18 @@ impl Model {
         {
             return;
         }
-        let list = self.app.library_list_render_ctx(index, false);
+        let list = self.app.library_list_render_ctx(
+            index,
+            false,
+            self.app.libs[index]
+                .nav_stack
+                .last()
+                .map_or(0, |l| l.cursor),
+            self.app.libs[index]
+                .nav_stack
+                .last()
+                .map_or(0, |l| l.scroll),
+        );
         // Consume the one-shot breakpoint hand-off re-anchor (task 2.3 / D5):
         // when the active-destination pointer just flipped from the narrow
         // BrowserComponent, adopt the resting cursor/scroll it left behind

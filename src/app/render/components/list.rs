@@ -139,10 +139,14 @@ impl App {
         // Search is active for the focused Emby library. Its 3-row input box
         // is placed outside the selected replacement in inline view (see the block after
         // `placement-neutral geometry`), so here we only record that it's on.
-        let library_ctx = self
-            .tab
-            .emby_library_index()
-            .map(|lib_idx| self.library_list_render_ctx(lib_idx, true));
+        let library_ctx = self.tab.emby_library_index().map(|lib_idx| {
+            self.library_list_render_ctx(
+                lib_idx,
+                true,
+                self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor),
+                self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.scroll),
+            )
+        });
         let search_active = focused
             && library_ctx
                 .as_ref()
