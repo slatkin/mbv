@@ -134,34 +134,145 @@
         `render_compact_detail_with_ctx` stays.
       Verify: `rtk cargo clippy --workspace --all-targets` reports no new dead
       code; `rtk cargo nextest run -p mbv --no-fail-fast` (baseline as 1.1d).
-- [ ] 1.2 Delete `BrowseLevel::cursor` and `BrowseLevel::scroll`. In the same
-      commit, re-spell the remaining outcome-2 resting reads that only stop
-      compiling at deletion — mechanical `.cursor` -> `.resting().cursor()`,
-      `.scroll` -> `.resting().scroll()`:
-      - `context_menu_actions.rs:43` / `:81` / `:455` — `.map(|l| l.cursor)`
+- [ ] 1.2a Delete `BrowseLevel::cursor` and `BrowseLevel::scroll` from the type
+      and land every **production** consequence in one commit, so the crate
+      compiles (`rtk cargo check -p mbv`) with no transitional accessor left
+      behind. Tests do not gate this row — `BrowseLevel`'s fields are
+      `pub(super)`, so the test corpus is a sibling module and
+      `cargo check --tests` stays red until 1.2b; that red is expected and is
+      1.2b's scope, not a reason to defer the type change.
+      - **Re-back the type** (`types_browse.rs:39-57` / `:59-76`): drop the two
+        raw fields, add `resting: BrowseResting` as a real field
+        (`#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]` already covers
+        it), and update `resting()` (`:121`) to return the stored value, the two
+        `set_resting_*` setters (`:128`, `:132`) to write it, and add
+        `BrowseResting::new(cursor: usize, scroll: usize) -> Self` — its two
+        fields are private to `types_browse`, so without a constructor every
+        construction site outside that module (all 15 production literals and
+        every test literal) fails to compile. `pub(super)` is sufficient: the
+        module sits under `crate::app`, so the constructor is visible
+        throughout `src/app/**` (matching today's `pub(super) resting()`); do
+        NOT widen anything to `pub(crate)`. All construction sites then spell
+        `resting: BrowseResting::new(C, S)`.
+        `from_position_level` (`:80-112`) to build `resting: BrowseResting {
+        cursor, scroll }` from its local `cursor` +
+        `scroll_for_cursor(cursor, visible_rows)`, and
+        `to_position_level` (`:135`) unchanged — it already goes through
+        `resting()`. `BrowseResting`'s own doc comment says that re-back is
+        pending, so update the wording rather than delete the type.
+      - **16 production construction literals** — replace
+        `cursor: C, scroll: S` with `resting: BrowseResting { cursor: C, scroll:
+        S }` (13 are `0`/`0`, so the shape never varies):
+        `actions_navigation.rs:54`, `browse_level_actions.rs:90`,
+        `feed_actions.rs:345`, `feed_actions.rs:430`,
+        `library_browse_actions.rs:136`, `:171`, `:362`, `:475` (non-zero
+        `cursor`, position of the target id, `unwrap_or(0)`),
+        `library_load_actions.rs:293` (a field-by-field copy that already reads
+        `lvl.resting().cursor() / .scroll()`; it can collapse to
+        `resting: lvl.resting()`), `library_position_state.rs:165`,
+        `library_search_actions.rs:137` (non-zero `cursor`, position `unwrap()`),
+        `music_actions.rs:71`, `:120`, `:263`, `:333`,
+        `shell_library.rs:238` (an inline `#[cfg(test)]` site, already
+        `resting()`-sourced), plus `types_browse.rs:99` itself.
+        `crates/` builds no `BrowseLevel`.
+      - **7 outcome-2 resting reads**, mechanical `.cursor` ->
+        `.resting().cursor()`, `.scroll` -> `.resting().scroll()`:
+        `context_menu_actions.rs:43` / `:81` / `:455` — `.map(|l| l.cursor)`
         feeding `current_lib_item(lib_idx, cursor)` on the legacy context-menu
         action path (design §1.1 R1: "the App nav-level cursor on the legacy
         context-menu/mouse paths"; the menu blocks browse movement while open, so
-        resting == live and no characterization test asserts otherwise).
-      - `shell_browser.rs:293` / `:297` — `push_emby_browser_content` seeding the
+        resting == live and no characterization test asserts otherwise);
+        `shell_browser.rs:293` / `:297` — `push_emby_browser_content` seeding the
         mounted `BrowserComponent` via `set_content` (content projection at a
         nav/tab event; `BrowserComponent::set_content` re-adopts this value as
-        its own cursor, `components/browser.rs:97-108`).
-      - `shell_tv_workspace.rs:193` / `:197` — `push_tv_workspace_content` seeding
+        its own cursor, `components/browser.rs:97-108`);
+        `shell_tv_workspace.rs:193` / `:197` — `push_tv_workspace_content` seeding
         `TvWorkspaceComponent` (same shape; the one-shot `reanchor` already
         overrides on breakpoint hand-off).
-      Verify: `rtk cargo check -p mbv` is clean with no transitional accessor
-      left behind (D5 — a field is removed in the same task that re-points its
-      last reader; no accessor returning the old value survives). Re-back
-      `BrowseResting` as a real `BrowseLevel` field (or equivalent) so
-      `resting()` / `set_resting_*` / `from_position_level` keep compiling; the
-      resting accessor stays — it is the sanctioned resting-position path, not a
-      transitional live accessor (D5).
+      - **Transitional re-spellings of the writes section 2 deletes** — the same
+        spelling 1.1a and 1.1f used, and nothing more: do NOT delete or
+        restructure any of these functions here, rows 2.1-2.3 delete them (with
+        the reads at `lib_cursor_actions.rs:137`, `:206`, `:232` that feed them).
+        Five writes in `lib_cursor_actions.rs` (`:218`, `:233`, `:263`, `:298`,
+        `:311`) and three in `mouse_gestures.rs` (`:122`, `:229`, `:241`)
+        — `level.cursor = v` -> `level.set_resting_cursor(v)`; plus
+        `lib_cursor_actions.rs:137` (`last()?.cursor` ->
+        `.and_then(|l| l.resting())` then `.cursor()`, the variant 1.1a/1.1f did
+        not cover).
+      The 11 writes above are re-spelled, not repaired: after this row the delta
+      movers still write resting state they no longer own, which is exactly the
+      unreachable code section 2 removes.
+      Verify: `rtk cargo check -p mbv` clean (D5 — the field is removed in the
+      same task that re-points its last production reader; no accessor returning
+      the old value survives, and the resting accessor stays because it is the
+      sanctioned resting-position path, not a transitional live accessor).
+- [ ] 1.2b Mechanical test-side migration only — no production change, no
+      design question. `BrowseLevel` is still constructed in 91 test literals
+      across 30 files, and ~120 raw `.cursor` / `.scroll` touches sit outside
+      those literals (`shell_tv_workspace_tests.rs:535`,
+      `shell_browser_tests.rs:240`, `render/components/list_tests.rs:94`,
+      `render/tests_library_characterization.rs:64`,
+      `render/components/list_late_tests.rs:24`,
+      `render/tests_music_groups.rs:25`,
+      `render/tests_music_characterization.rs:25`,
+      `render/tests_conformance_matrix.rs:89` construct levels some other way).
+      The 1.2a commit may land with `cargo check --tests` red; **this row closes
+      it and nothing may land between the two.**
+      - **Pattern, spelled once**: inside a literal,
+        `cursor: C, scroll: S` -> `resting: BrowseResting::new(C, S)` (the
+        1.2a constructor; `BrowseResting`'s fields stay private — a read
+        becomes `.resting().cursor()`, a write `set_resting_*`). Do **not**
+        widen
+        `BrowseResting`'s fields to `pub(super)` to keep the literal shape short —
+        that re-exposes exactly the pair this change deletes.
+      - **Add one fixture ctor, in the module that already owns the test
+        `BrowseLevel` literals**: `render/test_helpers_fixtures.rs` (5 literals),
+        `input_music_track_test_support.rs` (4),
+        `split_browse_state_browse_level_tests.rs`'s `movie_level` (3) already
+        build full literals; add a `#[cfg(test)]`
+        `browse_level(parent_id, title, items, cursor, scroll) -> BrowseLevel`
+        beside them and route every literal that differs only in those five
+        values through it, rather than hand-editing 91 sites to the new shape.
+        Where a literal sets `letter_filter`, `all_items`, `item_types`, or
+        `music_grouping`, use the ctor plus field assignment (there is no
+        `..Default::default()` for `BrowseLevel`, and adding a
+        `Default`/builder for the tests' convenience would be a production
+        abstraction the ladder does not authorise).
+      - **The three `split_browse_state_browse_level_tests.rs` assertions** keep
+        their meaning verbatim — the file is the behaviour gate for this whole
+        change, so map, do not weaken:
+        `:60` `assert_eq!(level.cursor, 2)` -> `level.resting().cursor()`
+        (from_position_level resolves `focused_item_id` to the resting cursor,
+        and `:62`'s `to_position_level` round-trip is unchanged);
+        `:83` `nav_stack[0].cursor == 1` -> `nav_stack[0].resting().cursor()`
+        (`go_back`'s parent re-anchor is already
+        `actions_navigation.rs:239` / `:273` `set_resting_cursor(idx)`);
+        `:96` / `:104` read and `:103` writes raw `.cursor` to drive the
+        `maybe_fetch_next_page(lib_idx, cursor)` threshold ->
+        `.resting().cursor()` and `set_resting_cursor(5)`; the parameter is
+        already explicit (§1.1 R7), so the *semantics under test here are the
+        arithmetic*, not where the cursor lives. `:75`'s `..child` functional
+        update is the only one in the tree and stays valid in either shape.
+      - **No assertion may be deleted, relaxed, or `let _ =`-discarded to reach
+        green.** If a test fails once it compiles, that is a real regression from
+        1.2a — stop and fix 1.2a, not the test.
+      Verify: `rtk cargo check -p mbv --all-targets` clean, `rtk cargo nextest
+      run -p mbv --no-fail-fast` at the pre-existing baseline of exactly
+      `browser_local_navigation_mirrors_legacy_flat_movement`
+      (`components/browser_component_tests.rs`) — the one failure the accepted
+      1.1a/1.1d/1.1e/1.1f rows name, and the only exception to "no failures"
+      here; `rtk cargo fmt`, `rtk cargo clippy --workspace --all-targets`, and
+      `rtk make check-code-file-lines` (this row touches ~30 files, several of
+      them already near the 800-line ceiling).
 - [ ] 1.3 Verify: `rtk cargo nextest run -p mbv`. The restore characterization
       tests from `split-browse-state-interaction-fields` tasks 2.1/3.1/4.1 and
       `migrate-narrow-browse-to-components` 2.1 are the behavioural gate.
 
 ## 2. Retire what the deletion makes unreachable
+
+The 11 mover/mouse writes named below were re-spelled to `set_resting_*` by 1.2a
+so production would compile; rows 2.1-2.3 delete the functions containing them.
+Their line references predate 1.2a and that re-spelling shifts none of them.
 
 - [ ] 2.1 Delete `App::apply_lib_cursor_index` (`lib_cursor_actions.rs:241`)
       and route `ShellRequest::BrowserCursorIndex` to the resting-position

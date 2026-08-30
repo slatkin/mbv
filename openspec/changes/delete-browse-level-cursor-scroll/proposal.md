@@ -68,4 +68,11 @@ the wide-TV ctx `None` fallback, the poster-prefetch scroll read, the
 breakpoint hand-off cursor write, and the content-projection seams — plus
 three now-orphaned dead readers (`shuffle_play`, `render_compact_detail`,
 `render_selected_home_video_detail`). These land as tasks 1.1d–1.1g and the
-outcome-2 re-spellings folded into 1.2.
+outcome-2 re-spellings folded into 1.2a.
+
+The deletion itself is two commits: **1.2a** lands the type change plus every
+production consequence (`cargo check -p mbv` clean); **1.2b** is the mechanical
+test-side migration — `BrowseLevel`'s fields are `pub(super)` and the test corpus
+is a sibling module, so 1.2a necessarily lands with `cargo check --tests` red
+until 1.2b closes it. Rows 2.1-2.3 then delete the mover and mouse paths that
+1.2a only keeps compiling.
