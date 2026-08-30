@@ -139,6 +139,24 @@ fn shell_executes_grouped_music_image_paint() {
 }
 
 #[test]
+fn narrow_music_workspace_emits_selected_album_image_request() {
+    let mut model = Model::new(make_music_group_app());
+    model.app.image_protocol_enabled = true;
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 81, 20);
+    model.sync_music_workspace();
+
+    let mut terminal = Terminal::new(TestBackend::new(81, 20)).unwrap();
+    terminal
+        .draw(|frame| model.render_music_workspace_component(frame))
+        .unwrap();
+
+    assert!(
+        model.app.card_image_loading.contains("album-1:P"),
+        "narrow selected album must emit a typed image-loading request"
+    );
+}
+
+#[test]
 fn shell_mounts_music_workspace_in_narrow_mode() {
     let mut model = Model::new(make_music_group_app());
     assert!(model.app.is_music_group_view(0));

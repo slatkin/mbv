@@ -1,9 +1,10 @@
 use super::music_workspace::MusicWorkspaceComponent;
 use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
 use crate::app::components::Msg;
-use crate::app::render::{LibraryListRenderCtx, MusicWideRenderCtx};
+use crate::app::render::{shared_hero_presentation, LibraryListRenderCtx, MusicWideRenderCtx};
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
@@ -146,6 +147,23 @@ fn music_workspace_enter_sets_track_cursor_when_inline_track_focus_enabled() {
     assert_eq!(component.track_cursor(), Some(0));
     component.set_inline_track_focus_enabled(false);
     assert_eq!(component.track_cursor(), None);
+}
+
+#[test]
+fn music_workspace_selection_follows_shared_hero_gate_boundaries() {
+    for (width, height, wide) in [(81, 7, false), (82, 7, true), (82, 6, false)] {
+        let mut component = MusicWorkspaceComponent::new();
+        component.set_content(context(Some(0)));
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, Rect::new(0, 0, width, height)))
+            .unwrap();
+        assert_eq!(
+            shared_hero_presentation(Rect::new(0, 0, width, height)).is_some(),
+            wide,
+            "shared presentation gate at {width}x{height}"
+        );
+    }
 }
 
 #[test]
