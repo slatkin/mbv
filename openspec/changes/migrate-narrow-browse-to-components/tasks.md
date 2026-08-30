@@ -154,7 +154,7 @@ findings become added rows; the template does not change.
 - d. Verify: the snapshot from (a) matches; the surface's single-paint test is
      green; `rtk cargo check -p mbv`, `rtk ast-grep scan`.
 
-- [ ] 3.1 Prerequisite: split `compact_banner_layout_with_overview`
+- [x] 3.1 Prerequisite: split `compact_banner_layout_with_overview`
       (`detail.rs:166`) into a pure sizing function plus the fetch it performs
       as a side effect, with `images_enabled`, the
       `right_panel_image_renders_allowed` nav-idle gate, and image-cached-ness
