@@ -42,5 +42,8 @@ pub(in crate::app) struct NarrowBrowseExtras {
     /// No hero item is selected but the surface is a hero-capable collection
     /// at its top browse level: keep the fixed placeholder panel reserved.
     pub(in crate::app) hero_placeholder: bool,
+    /// Narrow TV season grid (`is_viewing_season_grid`): force a single-column
+    /// stride instead of the width-derived column count (legacy `list.rs`).
+    pub(in crate::app) season_grid: bool,
     pub(in crate::app) inline_hero: Option<NarrowInlineHero>,
 }

@@ -12,6 +12,7 @@
 //! the legacy painter and the component `view` run.
 
 use super::*;
+use crate::app::components::BrowserComponent;
 use crate::app::shell::Model;
 use crate::app::tests::*;
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
@@ -222,20 +223,49 @@ fn tv_shows_app() -> App {
     app
 }
 
-/// Regression 3: narrow TV `j` moves the painted selection.
+/// Regression 3: narrow TV `j` moves the painted selection. Post-task-3.4 the
+/// mounted `BrowserComponent` owns the surface, so the painted selection lives
+/// in its own layout (`test_layout`), keyed off its component-local cursor.
 #[test]
 fn narrow_tv_browse_j_moves_painted_selection() {
     let mut model = Model::new(tv_shows_app());
     model.sync_mounted_surfaces();
+    let id = model.emby_browser_id.clone().expect("narrow TV browser mounted");
     let mut term = narrow_backend();
 
+    // Seed past the selected-Series inline hero (which swallows its own row)
+    // so both samples are plain rows.
+    model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<BrowserComponent>()
+        .unwrap()
+        .set_cursor_for_test(1);
     draw(&mut model, &mut term);
-    let before = model.app.layout.main.selected_item_rect;
+    let before = model
+        .application
+        .get_component(&id)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<BrowserComponent>()
+        .unwrap()
+        .test_layout()
+        .selected_item_rect;
     assert!(before.is_some(), "narrow TV browse must paint a selected row");
 
     press(&mut model, Key::Char('j'));
     draw(&mut model, &mut term);
-    let after = model.app.layout.main.selected_item_rect;
+    let after = model
+        .application
+        .get_component(&id)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<BrowserComponent>()
+        .unwrap()
+        .test_layout()
+        .selected_item_rect;
 
     assert_ne!(
         before, after,
@@ -308,9 +338,11 @@ fn narrow_movies_surface_snapshot() {
 
 /// Characterization (task 3.4 template step a): pins the painted narrow Emby
 /// TV browse surface — inline series hero + series rows — through the full
-/// `Model::draw_frame` path. Baked pre-migration (legacy `render_list` narrow
-/// branch still paints); task 3.4 step b/c rebakes if the migration changes
-/// the buffer.
+/// `Model::draw_frame` path. Unlike narrow Movies (regression 1), narrow TV
+/// carried no double-paint bug: legacy `render_list` and `BrowserComponent`
+/// both used the `tvshows` shared-replacement plan, so they painted the same
+/// rows at the same offsets. This buffer is byte-identical before and after
+/// the task-3.4 migration — no rebake.
 #[test]
 fn narrow_tv_surface_snapshot() {
     let mut model = Model::new(tv_shows_app());
@@ -323,11 +355,11 @@ fn narrow_tv_surface_snapshot() {
     assert_eq!(output, expected, "narrow TV surface drifted:\n{output}");
 }
 
-/// Regression (task 3.4 template step a): narrow Emby TV paints each visible
-/// series/season row exactly once. Red pre-migration (legacy `render_list` +
-/// `BrowserComponent::view` double-paint); un-ignored in step d.
+/// Regression (task 3.4 template step d): narrow Emby TV paints each visible
+/// series/season row exactly once — the mounted `BrowserComponent` is the sole
+/// painter now that the legacy `render_list` narrow branch early-returns for
+/// `tvshows` too.
 #[test]
-#[ignore = "green after task 3.4"]
 fn narrow_tv_paints_each_browse_row_once() {
     let mut model = Model::new(tv_shows_app());
     model.sync_mounted_surfaces();

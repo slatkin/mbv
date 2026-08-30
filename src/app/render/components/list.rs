@@ -134,17 +134,16 @@ impl App {
             }
         }
 
-        // Narrow generic/Movies/home-video: the mounted `BrowserComponent`
+        // Narrow generic/Movies/home-video/TV: the mounted `BrowserComponent`
         // composes this surface itself (`browser_narrow.rs`,
-        // migrate-narrow-browse task 3.3, closing regression 1). Publish the
-        // list area for input routing, keep the poster-prefetch window here
+        // migrate-narrow-browse tasks 3.3/3.4, closing regression 1). Publish
+        // the list area for input routing, keep the poster-prefetch window here
         // (task 3.7 relocates it), and paint nothing — the component owns the
-        // picture. The TV/podcast/grouped-Music narrow branches below are
-        // untouched; their own tasks (3.4/3.5/3.6) convert them.
+        // picture. The podcast/grouped-Music narrow branches below are
+        // untouched; their own tasks (3.5/3.6) convert them.
         if let Some(lib_idx) = self.tab.emby_library_index() {
             let coll = self.libs[lib_idx].library.collection_type.as_str();
             let component_owned = self.emby_browser_active
-                && coll != "tvshows"
                 && coll != "music"
                 && !self.is_podcast_library(lib_idx)
                 && !self.is_feed_home_video_group_view(lib_idx)

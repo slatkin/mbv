@@ -48,7 +48,14 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         };
     }
 
-    let cols = library_column_count(content_area.width);
+    // Narrow TV season grids keep their own single-column stride
+    // (`is_viewing_season_grid`, legacy `list.rs`); every other narrow browse
+    // surface derives the column count from the list width.
+    let cols = if extras.season_grid {
+        1
+    } else {
+        library_column_count(content_area.width)
+    };
 
     let mut inline_hero_rows: u16 = match &extras.inline_hero {
         Some(NarrowInlineHero::Movie { layout: banner, .. }) => {
@@ -247,6 +254,7 @@ impl App {
         let home_video = self.is_home_video_view(lib_idx);
         let show_letter_pills = self.should_show_letter_pills(lib_idx);
         let use_shared_replacement_plan = matches!(coll.as_str(), "movies" | "tvshows");
+        let season_grid = self.is_viewing_season_grid(lib_idx);
 
         let selected_movie = self.selected_movie_item(lib_idx);
         let selected_series = if selected_movie.is_none() {
@@ -296,6 +304,7 @@ impl App {
             show_letter_pills,
             use_shared_replacement_plan,
             hero_placeholder,
+            season_grid,
             inline_hero,
         }
     }
