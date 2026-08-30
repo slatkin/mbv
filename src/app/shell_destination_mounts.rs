@@ -110,7 +110,8 @@ mod tests {
     use crate::app::components::{BrowserKey, BrowserKind};
     use crate::app::render::make_movie_app;
     use crate::app::tests::make_item;
-    use crate::app::{BrowseResting, LibraryTab, TabSelection};
+    use crate::app::types_browse::BrowseResting;
+    use crate::app::{LibraryTab, TabSelection};
     use mbv_core::config::ServiceKind;
 
     fn browser_id(library_id: &str, kind: BrowserKind) -> ComponentId {

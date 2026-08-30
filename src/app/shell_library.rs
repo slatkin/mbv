@@ -128,6 +128,7 @@ mod tests {
     use crate::app::components::OverlayId;
     use crate::app::render::make_movie_app;
     use crate::app::tests::make_item;
+    use crate::app::types_browse::BrowseResting;
     use crate::app::{
         BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibraryTab, PanelFocus, PanelMode,
         TabSelection,

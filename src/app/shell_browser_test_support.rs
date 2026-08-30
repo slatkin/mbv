@@ -4,9 +4,10 @@ use super::super::*;
 use crate::app::components::{BrowserComponent, Msg};
 use crate::app::render::make_movie_app;
 use crate::app::tests::{make_app_stub, make_item, make_items};
+use crate::app::types_browse::BrowseResting;
 use crate::app::{
-    App, BrowseLevel, BrowseResting, ContextAction, FeedHomeVideoGroup, FeedHomeVideoState,
-    LibraryTab, PanelFocus, PanelMode, TabSelection,
+    App, BrowseLevel, ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibraryTab,
+    PanelFocus, PanelMode, TabSelection,
 };
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;

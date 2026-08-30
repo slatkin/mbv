@@ -3,6 +3,7 @@ use crate::app::components::{
     browser_narrow::NarrowInlineHero, Msg, ShellRequest, TvWorkspaceComponent,
 };
 use crate::app::render::make_movie_app;
+use crate::app::types_browse::BrowseResting;
 use ratatui::layout::Rect;
 use tuirealm::component::AppComponent;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
@@ -219,7 +220,7 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
         panic!("browser Up must emit a typed shell request");
     };
     model.handle_browser_request(request);
-    assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
 
     // Flip back to wide: the kept-mounted workspace must re-anchor to the
     // resting position the narrow browser left (row 0), not its stale
@@ -277,7 +278,8 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
     assert!(matches!(request, ShellRequest::TvMoveRows { rows: 1 }));
     model.handle_tv_request(request);
     assert_eq!(
-        model.app.libs[0].nav_stack[0].cursor, 0,
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        0,
         "TvMoveRows must not write the component cursor into App's browse level"
     );
     let selected_id = model
@@ -301,7 +303,8 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
     ));
     model.handle_tv_request(request);
     assert_eq!(
-        model.app.libs[0].nav_stack[0].cursor, 0,
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        0,
         "TvJumpCursor must not write the component cursor into App's browse level"
     );
     let selected_id = model
@@ -326,7 +329,8 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
     ));
     model.handle_tv_request(request);
     assert_eq!(
-        model.app.libs[0].nav_stack[0].cursor, 0,
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        0,
         "TvCycleLetterPill must not write the component cursor into App's browse level"
     );
 
@@ -337,7 +341,8 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
     assert!(matches!(request, ShellRequest::TvMoveColumn { delta: 1 }));
     model.handle_tv_request(request);
     assert_eq!(
-        model.app.libs[0].nav_stack[0].cursor, 0,
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        0,
         "TvMoveColumn must not write the component cursor into App's browse level"
     );
 }
@@ -350,7 +355,7 @@ fn tv_series_enter_carries_the_component_selected_item() {
     // Park the App browse cursor somewhere other than the component's
     // selection: the emitted TvActivate must carry the component's own
     // selected Series, not the (mirrored) App cursor's item.
-    model.app.libs[0].nav_stack[0].cursor = 1;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(1);
     let request = model
         .application
         .get_component_mut(&id)
@@ -406,7 +411,8 @@ fn push_tv_workspace_content_uses_component_selection_over_stale_app_cursor() {
         Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
     ));
     assert_eq!(
-        model.app.libs[0].nav_stack[0].cursor, 0,
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        0,
         "App browse cursor must stay stale (no mirror)"
     );
 
@@ -481,7 +487,7 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     ));
     // Make the App library cursor stale after the component has selected
     // the series; episode activation must not consult that cursor.
-    model.app.libs[0].nav_stack[0].cursor = 1;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(1);
 
     let episode_request = model
         .application
@@ -511,7 +517,8 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     third.id = "movie-third".into();
     model.app.libs[0].nav_stack[0].items.push(third);
     assert_eq!(
-        model.app.libs[0].nav_stack[0].cursor, 1,
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        1,
         "the stale App cursor must still diverge before TvBack"
     );
     model.app.libs[0].nav_stack.push(crate::app::BrowseLevel {
@@ -519,8 +526,7 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
         title: "Seasons".into(),
         items: vec![],
         total_count: 0,
-        cursor: 99,
-        scroll: 0,
+        resting: BrowseResting::new(99, 0),
         item_types: Some("Season".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -537,7 +543,7 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
         "TvBack must pop the seasons child level"
     );
     assert_eq!(
-            model.app.libs[0].nav_stack[0].cursor, 2,
+            model.app.libs[0].nav_stack[0].resting().cursor(), 2,
             "TvBack restores the series cursor by parent_id (row of movie-third), not a reset 0, the popped child cursor 99, or the stale 1"
         );
 }
@@ -557,7 +563,7 @@ fn tv_two_level_model() -> Model {
     let mut third = crate::app::tests::make_item("Third Series", "Series");
     third.id = "movie-third".into();
     model.app.libs[0].nav_stack[0].items.push(third);
-    model.app.libs[0].nav_stack[0].cursor = 0;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(0);
     let mut mirror_target = crate::app::tests::make_item("S", "Season");
     mirror_target.id = "movie-focused".into();
     model.app.libs[0].nav_stack.push(crate::app::BrowseLevel {
@@ -568,8 +574,7 @@ fn tv_two_level_model() -> Model {
             mirror_target,
         ],
         total_count: 2,
-        cursor: 0,
-        scroll: 0,
+        resting: BrowseResting::new(0, 0),
         item_types: Some("Season".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -596,7 +601,7 @@ fn tv_season_skip_model() -> Model {
     let mut third = crate::app::tests::make_item("Third Series", "Series");
     third.id = "movie-third".into();
     model.app.libs[0].nav_stack[0].items.push(third);
-    model.app.libs[0].nav_stack[0].cursor = 0;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(0);
     let mut season = crate::app::tests::make_item("Season 1", "Season");
     season.id = "season-1".into();
     model.app.libs[0].nav_stack.push(crate::app::BrowseLevel {
@@ -604,8 +609,7 @@ fn tv_season_skip_model() -> Model {
         title: "Seasons".into(),
         items: vec![season],
         total_count: 1,
-        cursor: 0,
-        scroll: 0,
+        resting: BrowseResting::new(0, 0),
         item_types: Some("Season".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -625,8 +629,7 @@ fn tv_season_skip_model() -> Model {
             mirror_target,
         ],
         total_count: 2,
-        cursor: 0,
-        scroll: 0,
+        resting: BrowseResting::new(0, 0),
         item_types: Some("Episode".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -649,7 +652,7 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     // Divergence: the mounted BrowserComponent selects index 0 while App's
     // mirrored BrowseLevel cursor is stale at index 1. Resolve narrow extras
     // using the component-owned cursor, as the production seam does.
-    model.app.libs[0].nav_stack[0].cursor = 1;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(1);
     let component_cursor = model
         .application
         .get_component(&model.emby_browser_id.clone().expect("browser mounted"))
@@ -659,7 +662,7 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
         .expect("browser component")
         .cursor();
     assert_eq!(component_cursor, 0);
-    assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
 
     let component_extras = model.app.narrow_browse_extras(0, component_cursor);
     match component_extras.inline_hero {
@@ -670,7 +673,7 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     }
     let stale_extras = model
         .app
-        .narrow_browse_extras(0, model.app.libs[0].nav_stack[0].cursor);
+        .narrow_browse_extras(0, model.app.libs[0].nav_stack[0].resting().cursor());
     match stale_extras.inline_hero {
         Some(NarrowInlineHero::Series { item, .. }) => {
             assert_eq!(item.id, "movie-second");
@@ -678,13 +681,13 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
         _ => panic!("stale App cursor must resolve the other Series"),
     }
 
-    model.app.libs[0].nav_stack[0].cursor = component_cursor;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(component_cursor);
 
     // Wide TV layout => enter_series_selection targets the component's
     // Series (asserted by the resolved target, not merely the bool).
     let wide_target = model
         .app
-        .selected_series_item(0, model.app.libs[0].nav_stack[0].cursor)
+        .selected_series_item(0, model.app.libs[0].nav_stack[0].resting().cursor())
         .expect("series");
     assert_eq!(wide_target.id, "movie-focused");
     assert!(model.app.activate_selected_series(0));
@@ -692,7 +695,7 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     // Narrow layout => open_series_selection_modal targets the same
     // Series, proven by the modal's Series source id.
     model.app.layout.main.tv_wide_right_area = ratatui::layout::Rect::default();
-    model.app.libs[0].nav_stack[0].cursor = 0;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(0);
     model.app.activate_selected_series(0);
     match model.app.pending_overlay.as_ref() {
         Some(crate::app::types_overlay::OverlayRequest::SelectionModal(modal)) => {
@@ -729,35 +732,56 @@ fn go_back_ignores_popped_level_cursor_and_restores_by_parent_id() {
     // position of the child's parent_id "movie-third") -- by parent_id,
     // not the stale 99 and not a reset 0.
     let mut no_mirror = tv_two_level_model();
-    no_mirror.app.libs[0].nav_stack.last_mut().unwrap().cursor = 99;
+    no_mirror.app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .set_resting_cursor(99);
     no_mirror.app.go_back(0);
     assert_eq!(no_mirror.app.libs[0].nav_stack.len(), 1);
-    assert_eq!(no_mirror.app.libs[0].nav_stack[0].cursor, 2);
+    assert_eq!(no_mirror.app.libs[0].nav_stack[0].resting().cursor(), 2);
 
     // With a prior mirror call that actually mutates the popped child
     // cursor (to 1, the position of the component's selected id within the
     // child items): the restored parent cursor is still 2, identical and
     // not the mutated child cursor.
     let mut with_mirror = tv_two_level_model();
-    with_mirror.app.libs[0].nav_stack.last_mut().unwrap().cursor = 99;
-    with_mirror.app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    with_mirror.app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .set_resting_cursor(99);
+    with_mirror.app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .set_resting_cursor(1);
     assert_eq!(
-        with_mirror.app.libs[0].nav_stack.last().unwrap().cursor,
+        with_mirror.app.libs[0]
+            .nav_stack
+            .last()
+            .unwrap()
+            .resting()
+            .cursor(),
         1,
         "mirror must mutate the popped child cursor to the component selection"
     );
     with_mirror.app.go_back(0);
     assert_eq!(with_mirror.app.libs[0].nav_stack.len(), 1);
-    assert_eq!(with_mirror.app.libs[0].nav_stack[0].cursor, 2);
+    assert_eq!(with_mirror.app.libs[0].nav_stack[0].resting().cursor(), 2);
 
     // Season auto-skip: from the Episodes level, one go_back skips the
     // Season level and restores the Series cursor by parent_id (row 2),
     // despite a stale popped cursor (42).
     let mut skip = tv_season_skip_model();
-    skip.app.libs[0].nav_stack.last_mut().unwrap().cursor = 42;
+    skip.app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .set_resting_cursor(42);
     skip.app.go_back(0);
     assert_eq!(skip.app.libs[0].nav_stack.len(), 1);
-    assert_eq!(skip.app.libs[0].nav_stack[0].cursor, 2);
+    assert_eq!(skip.app.libs[0].nav_stack[0].resting().cursor(), 2);
 }
 
 #[test]
@@ -771,7 +795,7 @@ fn cycle_letter_pill_derives_from_filter_not_cursor() {
 
     // Stale cursor: cycle_letter_pill must ignore `level.cursor` and
     // advance the filter 0 -> 1 purely from `letter_filter`.
-    model.app.libs[0].nav_stack[0].cursor = 7;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(7);
     model.app.cycle_letter_pill(0, 1);
     let after_stale = model.app.libs[0].nav_stack[0].letter_filter.clone();
     assert_eq!(after_stale.as_ref().map(|f| f.index), Some(1));
@@ -779,7 +803,8 @@ fn cycle_letter_pill_derives_from_filter_not_cursor() {
     // select_letter_pill intentionally resets the level cursor to 0,
     // regardless of its prior (stale) value.
     assert_eq!(
-        model.app.libs[0].nav_stack[0].cursor, 0,
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        0,
         "select_letter_pill resets the level cursor regardless of its prior value"
     );
 
@@ -789,7 +814,7 @@ fn cycle_letter_pill_derives_from_filter_not_cursor() {
     fresh.app.libs[0].library_total = Some(1000);
     fresh.app.libs[0].nav_stack[0].letter_filter =
         Some(crate::app::render::LetterFilter::for_index(0).unwrap());
-    fresh.app.libs[0].nav_stack[0].cursor = 0;
+    fresh.app.libs[0].nav_stack[0].set_resting_cursor(0);
     fresh.app.cycle_letter_pill(0, 1);
     assert_eq!(
         fresh.app.libs[0].nav_stack[0].letter_filter, after_stale,

@@ -2,6 +2,7 @@ use super::*;
 use crate::app::components::{BrowserComponent, Msg};
 use crate::app::render::make_movie_app;
 use crate::app::tests::{make_app_stub, make_item};
+use crate::app::types_browse::BrowseResting;
 use crate::app::{App, BrowseLevel, ContextAction, LibraryTab, PanelMode, TabSelection};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -58,7 +59,7 @@ fn shell_emby_browser_effects_honor_component_target() {
         item.id, "movie-b",
         "component must resolve its own selection"
     );
-    model.app.libs[0].nav_stack[0].cursor = 0;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(0);
     model.handle_browser_request(ShellRequest::BrowserActivate { item });
     assert_eq!(
         model.app.libs[0].nav_stack.len(),
@@ -66,7 +67,8 @@ fn shell_emby_browser_effects_honor_component_target() {
         "playable activation must not navigate into the parked folder"
     );
     assert_eq!(
-        model.app.libs[0].nav_stack[0].cursor, 1,
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        1,
         "the effect must select the supplied movie, not the parked cursor"
     );
     assert_eq!(model.app.status, "Emby is unavailable");
@@ -81,10 +83,10 @@ fn shell_emby_browser_effects_honor_component_target() {
         panic!("browser Ctrl+P must emit BrowserPlay, got no typed request");
     };
     assert_eq!(item.id, "movie-b");
-    model.app.libs[0].nav_stack[0].cursor = 0;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(0);
     model.handle_browser_request(ShellRequest::BrowserPlay { item });
     assert_eq!(model.app.libs[0].nav_stack.len(), 1);
-    assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
     assert_eq!(model.app.status, "Emby is unavailable");
 
     // Ctrl+A: the supplied movie (not the parked folder) is enqueued.
@@ -95,7 +97,7 @@ fn shell_emby_browser_effects_honor_component_target() {
         panic!("browser Ctrl+A must emit BrowserEnqueue, got no typed request");
     };
     assert_eq!(item.id, "movie-b");
-    model.app.libs[0].nav_stack[0].cursor = 0;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(0);
     model.handle_browser_request(ShellRequest::BrowserEnqueue { item });
     let queued = model.app.player_tab.emby_items();
     assert_eq!(queued.len(), 1);
@@ -114,7 +116,7 @@ fn shell_emby_browser_effects_honor_component_target() {
         panic!("browser Ctrl+W must emit BrowserToggleWatched, got no typed request");
     };
     assert_eq!(item.id, "movie-b");
-    model.app.libs[0].nav_stack[0].cursor = 0;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(0);
     model.handle_browser_request(ShellRequest::BrowserToggleWatched { item });
     assert_eq!(
         model.app.status, "Emby is unavailable",
@@ -134,7 +136,7 @@ fn shell_emby_browser_effects_honor_component_target() {
         panic!("browser '.' must emit BrowserContextMenu, got no typed request");
     };
     assert_eq!(item.id, "movie-b");
-    model.app.libs[0].nav_stack[0].cursor = 0;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(0);
     model.handle_browser_request(ShellRequest::BrowserContextMenu { item });
     let menu = match model.app.pending_overlay.as_ref() {
         Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
@@ -229,14 +231,13 @@ fn shell_emby_browser_effects_honor_component_target() {
     // it to `App::go_back`, which pops the child level and restores the
     // parent cursor to the folder the child came from. Drive the parent
     // cursor off the folder first so the restoration is observable.
-    model.app.libs[0].nav_stack[0].cursor = 1;
+    model.app.libs[0].nav_stack[0].set_resting_cursor(1);
     model.app.libs[0].nav_stack.push(BrowseLevel {
         parent_id: "folder-a".into(),
         title: "Folder A".into(),
         items: vec![],
         total_count: 0,
-        cursor: 0,
-        scroll: 0,
+        resting: BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -258,7 +259,8 @@ fn shell_emby_browser_effects_honor_component_target() {
         "BrowserBack must pop the child browse level via go_back"
     );
     assert_eq!(
-        model.app.libs[0].nav_stack[0].cursor, 0,
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        0,
         "go_back must restore the parent cursor to the folder the child came from"
     );
 
@@ -348,8 +350,7 @@ fn browser_app_with_folder_and_movie() -> App {
             title: "Movies".into(),
             items: vec![folder, movie],
             total_count: 2,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -390,7 +391,7 @@ fn shell_mounts_and_syncs_the_generic_emby_browser() {
     assert_eq!(index, 1, "Down must resolve to item 1");
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     model.sync_emby_browser();
-    assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
     assert!(model
         .application
         .get_component(&id)
@@ -446,7 +447,8 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     model.app.library_position_dirty = false;
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     assert_eq!(
-        model.app.libs[0].nav_stack[0].cursor, 2,
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        2,
         "two-column Down must apply the component-resolved index"
     );
     assert!(
@@ -483,7 +485,7 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     };
     assert_eq!(index, 9, "End must resolve to the last item");
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
-    assert_eq!(model.app.libs[0].nav_stack[0].cursor, 9);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 9);
     let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
         drive_browser_key(&mut model, &id, Key::Home, KeyModifiers::NONE)
     else {
@@ -491,7 +493,7 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     };
     assert_eq!(index, 0, "Home must resolve to the first item");
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
-    assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
 
     // Right/Left move the App cursor within the row via
     // `App::move_lib_cursor` (the two-column list claims them).
@@ -504,7 +506,7 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     };
     assert_eq!(index, 1, "Right must resolve to item 1");
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
-    assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
     let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
         drive_browser_key(&mut model, &id, Key::Char('h'), KeyModifiers::NONE)
     else {
@@ -512,7 +514,7 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     };
     assert_eq!(index, 0, "h must resolve to item 0");
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
-    assert_eq!(model.app.libs[0].nav_stack[0].cursor, 0);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
 
     // One-column list: Left/Right/h/l stay unbound locally with no movement
     // request, leaving the App cursor unchanged.
@@ -539,7 +541,8 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
         "one-column Left/Right/h/l must not move the component cursor"
     );
     assert_eq!(
-        model.app.libs[0].nav_stack[0].cursor, 0,
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        0,
         "one-column Left/Right/h/l must not move the App cursor"
     );
     let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
@@ -552,7 +555,8 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     assert_eq!(index, 1);
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     assert_eq!(
-        model.app.libs[0].nav_stack[0].cursor, 1,
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        1,
         "one-column Down must stride the App cursor one item"
     );
 }
@@ -604,7 +608,7 @@ fn browser_activate_series_opens_selection_modal_at_narrow_width() {
 fn browser_navigation_persists_live_scroll_at_level_boundaries() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(browser_app_with_folder_and_movie());
-    model.app.libs[0].nav_stack[0].scroll = 7;
+    model.app.libs[0].nav_stack[0].set_resting_scroll(7);
     model.sync_emby_browser();
     let mut folder = make_item("Folder A", "CollectionFolder");
     folder.id = "folder-a".into();
@@ -612,30 +616,30 @@ fn browser_navigation_persists_live_scroll_at_level_boundaries() {
 
     model.handle_browser_request(ShellRequest::BrowserActivate { item: folder });
     assert_eq!(model.app.libs[0].nav_stack.len(), 2);
-    assert_eq!(model.app.libs[0].nav_stack[0].scroll, 7);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 7);
     assert_eq!(
         model.app.library_position_state.libraries["lib-movies"].levels[0].cursor_index,
         0
     );
 
-    model.app.libs[0].nav_stack[1].scroll = 3;
+    model.app.libs[0].nav_stack[1].set_resting_scroll(3);
     model.sync_emby_browser();
     model.handle_browser_request(ShellRequest::BrowserBack);
     assert_eq!(model.app.libs[0].nav_stack.len(), 1);
-    assert_eq!(model.app.libs[0].nav_stack[0].scroll, 7);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 7);
 }
 
 #[test]
 fn teardown_flush_captures_live_browser_scroll_without_navigation() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(browser_app_with_folder_and_movie());
-    model.app.libs[0].nav_stack[0].scroll = 6;
+    model.app.libs[0].nav_stack[0].set_resting_scroll(6);
     model.sync_emby_browser();
-    model.app.libs[0].nav_stack[0].scroll = 0;
+    model.app.libs[0].nav_stack[0].set_resting_scroll(0);
 
     model.persist_emby_browser_scroll_for_active_library();
     model.app.flush_library_position_now();
 
-    assert_eq!(model.app.libs[0].nav_stack[0].scroll, 6);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 6);
     assert!(!model.app.library_position_dirty);
 }

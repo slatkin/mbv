@@ -9,10 +9,9 @@ use crate::app::tests::{make_app_stub, make_item};
 use crate::app::types_audiobookshelf_browse::{
     build_surname_buckets, AudiobookshelfBookBrowseState,
 };
+use crate::app::types_browse::BrowseResting;
 use crate::app::{App, PanelFocus};
-use crate::app::{
-    BrowseLevel, BrowseResting, LibraryTab, QueueScope, RemoteSlotState, TabSelection,
-};
+use crate::app::{BrowseLevel, LibraryTab, QueueScope, RemoteSlotState, TabSelection};
 use crate::config::Config;
 use mbv_core::api::EmbyClient;
 use mbv_core::api::EmbyItem;
