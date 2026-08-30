@@ -162,15 +162,32 @@ findings become added rows; the template does not change.
       `inline_hero_rows` determines row layout. Verify: identical
       `CompactBannerLayout` output for the same inputs (test), and the fetch
       still fires from the shell side.
-- [ ] 3.2 Prerequisite: free ctx-function variants for the remaining `impl App`
-      painters the narrow path reaches — `render_grouped_album_rows`
-      (`album.rs:33`), `render_series_inline_detail`
-      (`detail_series_view.rs:40`), `series_inline_detail_rows`
-      (`screens/detail_series.rs:24`) — mirroring the existing
-      `render_music_group_pills_row_with_ctx` (`music.rs:43`). Ctx fields per
-      D3 kind 2; `MusicWideRenderCtx` already carries the grouped-album set.
-      Verify: `rtk cargo check -p mbv`; the `impl App` originals are gone, not
-      left alongside.
+- [ ] 3.2a Prerequisite — series inline detail: make
+      `series_inline_detail_rows` and `render_series_inline_detail` explicit
+      context functions. Shell-side series detail/image/cache effects become
+      typed outputs consumed by the shell. Verify: targeted series-detail tests
+      execute; the component-callable path has no `App` parameter or access.
+- [ ] 3.2b Prerequisite — grouped Music image seam: add the narrow typed
+      `MusicImagePaint` → shell executor seam, mirroring `HomeImagePaint`.
+      Album-art helpers consume only context/cache state and emit an instruction;
+      they do not fetch or access cache. Verify: a targeted shell-execution test.
+- [ ] 3.2c Prerequisite — grouped Music planning and inline rows: make the
+      grouped-album display plan pure from an explicit context and make inline
+      row composition consume that plan/context. Reuse existing
+      `MusicWideRenderCtx`, `LibraryListRenderCtx`, and cursor context data.
+      Verify: targeted pure-plan and inline-row tests execute with no App-backed
+      component-callable path.
+- [ ] 3.2d Prerequisite — grouped Music detail composition: make grouped album
+      rows, hero/detail/art/action-hint composition explicit-context functions
+      whose image work is typed `MusicImagePaint` output for the shell. Preserve
+      existing hero/detail/art behavior. Verify: targeted grouped-Music hero,
+      art, and row tests execute; no component-callable grouped-album renderer
+      accepts or reaches `App`.
+- [ ] 3.2e Gate: the three named legacy painters and every helper reachable by
+      their component-callable paths are context/pure functions; no App-backed
+      original or parallel component-callable path remains. Verify:
+      `rtk cargo check -p mbv --all-targets`, targeted series and grouped-Music
+      tests, `rtk ast-grep scan`, and a stated dependency check.
 - [ ] 3.3 Surface: Emby generic / Movies / home video, narrow. Template above.
       The composer lands in a new `src/app/components/browser_narrow.rs` (D3
       file-size note). Closes regression 1. Scope note: a generic-collection

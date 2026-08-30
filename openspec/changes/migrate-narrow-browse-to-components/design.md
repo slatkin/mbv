@@ -93,39 +93,36 @@ of which the component's narrow path renders today.
 
 ### D3 — What the hoist costs: the seams already exist
 
-`render_list` is ~560 lines, but the wide migrations built every seam it needs
-and its `impl App` dependencies are thin. Measured `self.` usage in the
-painters it reaches: `compact_banner_layout_with_overview` 5,
-`render_grouped_album_rows` 12, `render_series_inline_detail` 8,
-`render_letter_pills_row` 1, `series_inline_detail_rows` 1. Three kinds:
+`render_list` is ~560 lines, but its three remaining `impl App` painters are
+not uniformly thin: the grouped-album path reaches planning, inline rows,
+hero/detail, art, action hints, image state, and fetch/cache effects. The
+wide migrations provide useful precedents, not a complete ready-made seam.
+The extraction is therefore staged so every component-callable renderer is
+pure/context-driven before a surface uses it.
 
-1. **Image cache and fetch effects** — `images_enabled`, `fetch_card_image`,
-   `fetch_list_card_image_when_idle`, `fetch_series_detail`,
-   `cached_image_protocol_mut`, `card_image_loading`,
-   `right_panel_image_renders_allowed`. Resolved by the established
-   `HomeImagePaint` seam: the component computes the paint, the shell executes
-   it via `App::paint_home_image` (`home_hero.rs:279`), which already does both
-   the fetch and the stateful-image paint for wide Movies, Home, ABS
-   book/podcast, and Music. Components hold no image authority and issue no
-   effects (ADR 0022).
-2. **Shell-computed facts** — `is_music_group_view`, `is_viewing_album_folders`,
-   `is_viewing_season_grid`, `is_home_video_view`, `is_podcast_library`,
-   `should_show_letter_pills`, `recursive_album_search_enabled`,
-   `collection_type`, `group_album_info`, `build_grouped_album_display_plan`,
-   `music_grouping.settled`. These become ctx fields. `MusicWideRenderCtx`
-   (`music_wide.rs:19`) **already carries** `groups`, `group_cursor`,
-   `album_info`, `album_order`, `images_enabled` — the whole grouped-album
-   set — so narrow Music reuses the ctx it is already handed.
-3. **Pure layout** — already free functions or trivially made so.
+1. **Image cache and fetch effects** — Components emit a typed image request;
+   the shell performs fetch/cache/stateful painting. `HomeImagePaint` remains
+   the precedent, while grouped Music gets the narrow `MusicImagePaint` →
+   `App::paint_music_image` equivalent needed by its album-art path. Neither
+   a component nor a component-callable render helper may access image cache or
+   invoke a fetch (ADR 0022).
+2. **Shell-computed facts and plans** — `is_music_group_view`,
+   `is_viewing_album_folders`, `is_viewing_season_grid`,
+   `is_home_video_view`, `is_podcast_library`, `should_show_letter_pills`,
+   `recursive_album_search_enabled`, `collection_type`, group/album facts, and
+   `music_grouping.settled` become explicit context fields. The grouped-album
+   display plan is a pure function of such a context; `MusicWideRenderCtx`
+   remains the source for its existing groups, cursor, album info/order, and
+   image-enabled facts.
+3. **Pure composition** — series inline detail, grouped-row plan consumption,
+   album hero/detail/art/action-hint composition, and row sizing receive only
+   context and typed paint outputs. The shell consumes those outputs after
+   composition, preserving the current image and playback behavior.
 
-Reused rather than written: `render_generic_movies_home_video_rows_with_ctx`,
-`render_music_group_pills_row_with_ctx` (`music.rs:43`), `render_search_box`,
-`render_count_label`, `selected_detail_shell`, `prepare_wide_emby_hero_card`,
-`render_letter_grouped_rows`, `render_plain_rows`, and
-`BrowserComponent::render_letter_pills_row` (`browser.rs:256`), already used by
-the wide branch.
+Reuse existing `_with_ctx` functions where they already satisfy this boundary;
+do not retain an App-backed variant as the component-callable path.
 
-The one genuinely new piece of work is splitting
+Task 3.1 splits
 `compact_banner_layout_with_overview` (`detail.rs:166`) into a **pure sizing**
 function plus the fetch it currently performs as a side effect. Sizing must run
 *before* the list flows, because `inline_hero_rows` determines row layout — so
