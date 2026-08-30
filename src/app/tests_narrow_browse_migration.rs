@@ -518,9 +518,12 @@ fn feed_home_video_group_wide_snapshot_matches_fbc6888e_baseline() {
 
 #[test]
 fn feed_home_video_group_paints_each_row_once() {
-    let output = feed_snapshot(60, 20);
-    for row in ["Video One", "Video Two"] {
-        assert_eq!(output.matches(row).count(), 1, "feed row {row:?}: {output}");
+    for (width, height, baseline) in [
+        (60, 20, FEED_NARROW_BASELINE),
+        (140, 40, FEED_WIDE_BASELINE),
+    ] {
+        let output = feed_snapshot(width, height);
+        assert_eq!(output, baseline, "feed {width}x{height} is not a single-paint frame");
     }
 }
 
