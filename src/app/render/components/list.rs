@@ -593,7 +593,9 @@ impl App {
                 self.render_compact_detail(f, content_rect, lib_idx, focused, true, layout);
             } else if let Some(item) = &selected_series_item {
                 let images_enabled = self.images_enabled();
-                let image_loading = false;
+                let image_cache_key = format!("{}:ser_primary", item.id);
+                let image_loading =
+                    images_enabled && !self.card_image_states.contains_key(&image_cache_key);
                 let image_paint = super::detail_series_view::render_series_inline_detail(
                     super::detail_series_view::SeriesInlineDetailCtx {
                         item,
