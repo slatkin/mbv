@@ -15,7 +15,7 @@ fn library_buffer_characterization_covers_wide_unfocused_narrow_and_selected_sta
     let states = [(60, 20, 0), (60, 20, 1)];
     for (width, height, cursor) in states {
         let mut app = make_movie_app();
-        app.libs[0].nav_stack[0].cursor = cursor;
+        app.libs[0].nav_stack[0].set_resting_cursor(cursor);
         let mut model = mounted_model_at(app, width, height);
         let output = draw_mounted_frame(&mut model, width, height);
         assert!(
@@ -33,8 +33,8 @@ fn library_buffer_characterization_covers_wide_unfocused_narrow_and_selected_sta
 fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_targets() {
     let mut app = make_movie_app();
     app.libs[0].nav_stack[0].items[1].overview = "The selected movie overview.".into();
-    app.libs[0].nav_stack[0].cursor = 1;
-    app.libs[0].nav_stack[0].scroll = 1;
+    app.libs[0].nav_stack[0].set_resting_cursor(1);
+    app.libs[0].nav_stack[0].set_resting_scroll(1);
     let mut model = mounted_model_at(app, 70, 30);
     let output = draw_mounted_frame(&mut model, 70, 30);
     let layout = mounted_browser_layout(&model);
@@ -74,13 +74,14 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
         "continuation rows must not have ordinary item targets"
     );
     assert_eq!(
-        model.app.libs[0].nav_stack[0].scroll, 1,
+        model.app.libs[0].nav_stack[0].resting().scroll(),
+        1,
         "persisted scroll is retained"
     );
 
     let mut cannot_fit = make_movie_app();
     cannot_fit.libs[0].nav_stack[0].items[1].overview = "The selected movie overview.".into();
-    cannot_fit.libs[0].nav_stack[0].cursor = 1;
+    cannot_fit.libs[0].nav_stack[0].set_resting_cursor(1);
     let mut fallback_model = mounted_model_at(cannot_fit, 70, 12);
     let fallback = draw_mounted_frame(&mut fallback_model, 70, 12);
     let fallback_layout = mounted_browser_layout(&fallback_model);
@@ -116,8 +117,8 @@ fn tv_letter_grouped_app(scroll: usize) -> App {
         .collect();
     app.libs[0].nav_stack[0].items = items;
     app.libs[0].nav_stack[0].total_count = 55;
-    app.libs[0].nav_stack[0].cursor = 54;
-    app.libs[0].nav_stack[0].scroll = scroll;
+    app.libs[0].nav_stack[0].set_resting_cursor(54);
+    app.libs[0].nav_stack[0].set_resting_scroll(scroll);
     app.libs[0].library_total = Some(55);
     app
 }

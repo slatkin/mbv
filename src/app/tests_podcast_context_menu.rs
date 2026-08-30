@@ -1,3 +1,4 @@
+use crate::app::types_browse::BrowseResting;
 use super::tests_podcast::{add_emby_movie_library, audiobookshelf_app};
 use super::*;
 use crate::app::tests::*;
@@ -46,8 +47,7 @@ fn podcast_folder_context_menu_uses_play_labels_and_item_state() {
             title: "Podcasts".into(),
             items: vec![show],
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -93,8 +93,7 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
             title: "Podcasts".into(),
             items: vec![show],
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -145,8 +144,7 @@ fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
             title: "Podcasts".into(),
             items: vec![show.clone()],
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -240,8 +238,7 @@ fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
             title: "Podcasts".into(),
             items: vec![first_show.clone(), second_show.clone()],
             total_count: 2,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),

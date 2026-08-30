@@ -1,4 +1,5 @@
 #![allow(dead_code, unused_imports)]
+use crate::app::types_browse::BrowseResting;
 
 use super::*;
 use crate::app::library_browse_actions::{
@@ -211,8 +212,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
             title: "Movies".into(),
             items: vec![queued.clone()],
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),

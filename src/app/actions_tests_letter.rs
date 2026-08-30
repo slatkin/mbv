@@ -1,4 +1,5 @@
 #![allow(dead_code, unused_imports)]
+use crate::app::types_browse::BrowseResting;
 
 use super::*;
 use crate::app::library_browse_actions::{
@@ -88,8 +89,7 @@ fn push_top_level(lib: &mut LibraryTab, item_count: usize) {
         title: lib.library.name.clone(),
         items: make_items(item_count),
         total_count: item_count,
-        cursor: 0,
-        scroll: 0,
+        resting: BrowseResting::new(0, 0),
         item_types: Some("Movie".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -165,8 +165,8 @@ fn select_letter_pill_scopes_the_level_and_resets_cursor() {
     app.libs.push(lib_tab("movies"));
     push_top_level(&mut app.libs[0], 10);
     app.libs[0].library_total = Some(1000);
-    app.libs[0].nav_stack[0].cursor = 4;
-    app.libs[0].nav_stack[0].scroll = 2;
+    app.libs[0].nav_stack[0].set_resting_cursor(4);
+    app.libs[0].nav_stack[0].set_resting_scroll(2);
 
     app.select_letter_pill(0, 4); // "M–O"
 
@@ -176,8 +176,8 @@ fn select_letter_pill_scopes_the_level_and_resets_cursor() {
     assert_eq!(filter.label, "M\u{2013}O");
     assert_eq!(filter.name_ge, Some("M"));
     assert_eq!(filter.name_lt, Some("P"));
-    assert_eq!(lvl.cursor, 0);
-    assert_eq!(lvl.scroll, 0);
+    assert_eq!(lvl.resting().cursor(), 0);
+    assert_eq!(lvl.resting().scroll(), 0);
     assert!(lvl.loading, "a scoped refresh should be in flight");
 }
 
@@ -259,8 +259,7 @@ fn push_top_level_tv(lib: &mut LibraryTab, item_count: usize) {
         title: lib.library.name.clone(),
         items: make_items(item_count),
         total_count: item_count,
-        cursor: 0,
-        scroll: 0,
+        resting: BrowseResting::new(0, 0),
         item_types: Some("Series".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -314,8 +313,8 @@ fn select_letter_pill_scopes_tv_to_series() {
     assert_eq!(filter.name_ge, Some("M"));
     assert_eq!(filter.name_lt, Some("P"));
     assert_eq!(lvl.item_types, Some("Series".to_string()));
-    assert_eq!(lvl.cursor, 0);
-    assert_eq!(lvl.scroll, 0);
+    assert_eq!(lvl.resting().cursor(), 0);
+    assert_eq!(lvl.resting().scroll(), 0);
     assert!(lvl.loading, "TV scoped refresh should be in flight");
 }
 

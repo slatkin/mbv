@@ -1,3 +1,4 @@
+use crate::app::types_browse::BrowseResting;
 use super::music_grouping::{build_grouped_album_catalog, derive_album_artist};
 use super::tests::{make_app_stub, make_item};
 use super::{BrowseLevel, LibraryTab, TabSelection};
@@ -11,8 +12,7 @@ fn make_music_album_level(albums: Vec<EmbyItem>) -> BrowseLevel {
         title: "Alpha".into(),
         items: albums,
         total_count: 0,
-        cursor: 0,
-        scroll: 0,
+        resting: BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -33,8 +33,7 @@ fn make_group_level() -> BrowseLevel {
         title: "Music".into(),
         items: vec![group],
         total_count: 1,
-        cursor: 0,
-        scroll: 0,
+        resting: BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -371,7 +370,7 @@ fn commit_anchors_cursor_to_selected_album() {
     app.start_or_supersede_music_grouping(0);
     // Set cursor to album-2
     if let Some(level) = app.libs[0].nav_stack.last_mut() {
-        level.cursor = 1;
+        level.set_resting_cursor(1);
     }
 
     // Second settle (replacement) should anchor to album-2
@@ -382,7 +381,7 @@ fn commit_anchors_cursor_to_selected_album() {
     app.start_or_supersede_music_grouping(0);
 
     let level = app.libs[0].nav_stack.last().unwrap();
-    let cursor_id = level.items[level.cursor].id.clone();
+    let cursor_id = level.items[level.resting().cursor()].id.clone();
     assert_eq!(
         cursor_id, "album-2",
         "cursor should be anchored to the previously selected album"
