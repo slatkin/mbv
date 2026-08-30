@@ -15,8 +15,8 @@ use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
 use crate::app::render::{
-    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, MusicImagePaint,
-    MusicWideRenderCtx,
+    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, shared_hero_presentation,
+    MusicImagePaint, MusicWideRenderCtx,
 };
 use crate::app::ui_util::move_cursor;
 
@@ -419,10 +419,11 @@ impl Component for MusicWorkspaceComponent {
             self.album_scroll,
             self.track_cursor,
         );
-        if area.width < 100 || area.height == 0 {
-            self.album_scroll =
+        if shared_hero_presentation(area).is_none() {
+            let output =
                 render_narrow_music_group_with_ctx(frame, area, &context, &mut self.layout);
-            self.image_paint = None;
+            self.album_scroll = output.final_scroll;
+            self.image_paint = output.image_paint;
         } else {
             let output = render_wide_music_group_with_ctx(frame, area, &context, &mut self.layout);
             self.album_scroll = output.final_scroll;

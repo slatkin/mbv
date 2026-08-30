@@ -235,7 +235,7 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
     area: Rect,
     ctx: &MusicWideRenderCtx,
     layout: &mut LayoutMain,
-) -> usize {
+) -> MusicWideRenderOutput {
     let mut album_tracks = HashMap::new();
     if let (Some(album), Some(tracks)) = (&ctx.selected_album, &ctx.album_tracks) {
         album_tracks.insert(album.id.clone(), tracks.clone());
@@ -261,10 +261,10 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
             album_tracks: &album_tracks,
         },
     );
-    // Narrow's Model A composer currently paints its text-only hero; retain
-    // the typed image result for the shell seam as the compositor evolves.
-    let _ = image_paint;
-    offset
+    MusicWideRenderOutput {
+        final_scroll: offset,
+        image_paint,
+    }
 }
 
 pub(in crate::app) fn render_wide_music_group_with_ctx(
