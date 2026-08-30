@@ -84,7 +84,7 @@ Ends with every surface owned; legacy still paints. This is the state
       to it, keys reach the component, `[`/`]` cycles the group (shell-routing
       test shape in `shell_browser_tests.rs`); `switch_feed_folder_group`'s
       dead-code warning is gone.
-- [ ] 2.3 Breakpoint hand-off (D5): on an active-destination pointer flip
+- [x] 2.3 Breakpoint hand-off (D5): on an active-destination pointer flip
       between `BrowserComponent` and `TvWorkspaceComponent`, persist the
       outgoing live cursor to the resting position and set the incoming
       component's one-shot re-anchor, reusing `persist_emby_browser_scroll` and
