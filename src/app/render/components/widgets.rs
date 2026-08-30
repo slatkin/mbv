@@ -580,7 +580,7 @@ impl App {
                     // hand-off `tv_wide_*` rects here before `render_list` so
                     // input routing (`is_wide_tv_active`) and the shell's
                     // render seam can locate them.
-                    if (self.is_wide_tv_library(lib_idx) || self.is_podcast_library(lib_idx))
+                    if self.is_wide_tv_library(lib_idx)
                         && crate::app::render::arrangements::hero_left::shared_hero_presentation(
                             area,
                         )
@@ -589,34 +589,9 @@ impl App {
                         let ctx = self.wide_tv_render_ctx(lib_idx, focused, cursor_scroll);
                         ctx.publish_geometry(area, layout);
                     }
-                    // The narrow legacy render path owns the per-frame scroll
-                    // write-back (task 4.3, W): seed from the level's scroll
-                    // (the resting viewport this path persists) and let
-                    // `render_list` write the landed offset back into it.
-                    // The field write survives here, at the caller, until
-                    // 4.4/4.5 move the narrow surface's scroll onto its own
-                    // owner; the painter itself no longer reaches into
-                    // `BrowseLevel`.
-                    let (cursor, mut scroll) = cursor_scroll.unwrap_or_else(|| {
-                        (
-                            self.libs
-                                .get(lib_idx)
-                                .and_then(|lib| lib.nav_stack.last())
-                                .map(|lvl| lvl.cursor)
-                                .unwrap_or(0),
-                            self.libs
-                                .get(lib_idx)
-                                .and_then(|lib| lib.nav_stack.last())
-                                .map(|lvl| lvl.scroll)
-                                .unwrap_or(0),
-                        )
-                    });
-                    self.render_list(f, area, focused, layout, Some(cursor), &mut scroll);
-                    if let Some(lib_idx) = self.tab.emby_library_index() {
-                        if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                            level.scroll = scroll;
-                        }
-                    }
+                    // BrowserComponent owns the browse body at every width;
+                    // reserve only the destination area here.
+                    layout.left_area = area;
                 }
             }
         }
