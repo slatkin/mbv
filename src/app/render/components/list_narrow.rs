@@ -118,7 +118,15 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     // Feed group pickers retain their dedicated legacy geometry: two rows after
     // the pills hold the count/divider, then the selected video expands inline.
     if let Some(items) = extras.feed_items.as_ref() {
-        return render_feed_group_picker(f, content_area, ctx, extras, focused, layout, items);
+        return render_feed_group_picker_content(
+            f,
+            content_area,
+            ctx,
+            extras,
+            focused,
+            layout,
+            items,
+        );
     }
 
     let (pills_area, list_area) = if extras.feed_items.is_some() {
@@ -247,7 +255,63 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     (final_offset, image_paint)
 }
 
-fn render_feed_group_picker(
+pub(in crate::app) fn render_wide_feed_layer(
+    f: &mut Frame,
+    area: Rect,
+    extras: &NarrowBrowseExtras,
+    layout: &mut LayoutMain,
+) {
+    let pills = crate::app::render::arrangements::hero_left::pill_bar_areas(area);
+    let labels: Vec<String> = std::iter::once("All".into())
+        .chain(
+            extras
+                .feed_groups
+                .iter()
+                .map(|s| crate::app::ui_util::trunc_str(s, 12).into()),
+        )
+        .collect();
+    let ids: Vec<usize> = (0..labels.len()).collect();
+    layout.selector_tabs = crate::app::render::render_pill_bar(
+        f,
+        pills.pills_area,
+        crate::app::render::PillBar {
+            labels: &labels,
+            ids: &ids,
+            selected_pos: extras.feed_group_cursor,
+            prefix: Some(" ⌘ "),
+        },
+    );
+    let divider = Rect {
+        y: pills.content_area.y,
+        height: 1,
+        ..pills.content_area
+    };
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::raw(" "),
+            Span::raw("▁".repeat(divider.width.saturating_sub(1) as usize)),
+        ])),
+        divider,
+    );
+    layout.left_area = divider;
+    if let (Some(items), Some(panes)) = (
+        extras.feed_items.as_ref(),
+        crate::app::render::arrangements::library::wide_library_panes(area, 2, 1),
+    ) {
+        let row_area = panes.left_area;
+        let text_w = crate::app::render::content_width(row_area.width, false);
+        let mut y = row_area.y + 2;
+        for item in items {
+            if y >= row_area.bottom() {
+                break;
+            }
+            render_home_video_item(f, item, y, 1, row_area, text_w, false, true);
+            y = y.saturating_add(2);
+        }
+    }
+}
+
+fn render_feed_group_picker_content(
     f: &mut Frame,
     area: Rect,
     ctx: &LibraryListRenderCtx,
