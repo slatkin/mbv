@@ -557,6 +557,49 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     );
 }
 
+/// Task 3.4a: at narrow TV width (`BrowserComponent`'s only TV mount),
+/// `BrowserActivate` on a `Series` item must reopen the season-selection
+/// modal via the shared Series-activation gate rather than drill in flat
+/// through `select_item`. A non-Series folder item still drills in.
+#[test]
+fn browser_activate_series_opens_selection_modal_at_narrow_width() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut model = Model::new(browser_app_with_folder_and_movie());
+    model.app.libs[0].library.collection_type = "tvshows".into();
+    model.sync_emby_browser();
+
+    let mut series = make_item("Show A", "Series");
+    series.id = "series-a".into();
+    series.is_folder = true;
+
+    // Pre-fix: this routed through `select_item` and grew the nav stack
+    // instead of opening the modal, so `pending_overlay` stayed `None`.
+    model.handle_browser_request(ShellRequest::BrowserActivate { item: series });
+    match model.app.pending_overlay.as_ref() {
+        Some(crate::app::types_overlay::OverlayRequest::SelectionModal(modal)) => {
+            match &modal.source {
+                crate::app::types_selection_modal::SelectionModalSource::Series { series_id } => {
+                    assert_eq!(series_id.as_str(), "series-a");
+                }
+                _ => panic!("narrow Series activation must open a Series selection modal"),
+            }
+        }
+        _ => panic!("narrow Series activation must open the series selection modal"),
+    }
+    assert_eq!(
+        model.app.libs[0].nav_stack.len(),
+        1,
+        "narrow Series activation must not drill into the series"
+    );
+
+    // A non-Series folder item still drills in unchanged.
+    let mut folder = make_item("Folder A", "CollectionFolder");
+    folder.id = "folder-a".into();
+    folder.is_folder = true;
+    model.handle_browser_request(ShellRequest::BrowserActivate { item: folder });
+    assert_eq!(model.app.libs[0].nav_stack.len(), 2);
+}
+
 #[test]
 fn browser_navigation_persists_live_scroll_at_level_boundaries() {
     let _guard = crate::config::TestStateDirGuard::new();

@@ -20,11 +20,22 @@ impl Model {
             return;
         };
         match request {
+            // A `Series` item routes through the shared Series-activation gate
+            // first (task 3.4a): at narrow TV width — the only layout where
+            // `BrowserComponent` is mounted for a TV library — that reopens the
+            // season-selection modal instead of a flat drill-in. `false` means
+            // it was not a Series (or had no id), so fall back to the normal
+            // select-item path, including the folder scroll-persist.
             ShellRequest::BrowserActivate { item } => {
-                if item.is_folder {
-                    self.persist_emby_browser_scroll(lib_idx);
+                if item.item_type == "Series" && self.app.activate_selected_series_item(&item) {
+                    // handled by Series activation (season-selection modal at
+                    // narrow width, persistent workspace at wide)
+                } else {
+                    if item.is_folder {
+                        self.persist_emby_browser_scroll(lib_idx);
+                    }
+                    self.app.select_item(lib_idx, item);
                 }
-                self.app.select_item(lib_idx, item);
             }
             ShellRequest::BrowserPlay { item } => self.app.play_or_activate_lib_item(lib_idx, item),
             ShellRequest::BrowserEnqueue { item } => self.app.enqueue_lib_item(lib_idx, item),
