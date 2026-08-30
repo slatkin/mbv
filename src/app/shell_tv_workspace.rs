@@ -146,7 +146,7 @@ impl Model {
                     return;
                 };
                 if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
-                    level.cursor = cursor;
+                    level.set_resting_cursor(cursor);
                     level.set_resting_scroll(scroll);
                 }
                 self.app.save_default_library_position(lib_idx);

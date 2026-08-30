@@ -379,10 +379,7 @@ impl Model {
                             lib_idx,
                             true,
                             browser.cursor(),
-                            self.app.libs[lib_idx]
-                                .nav_stack
-                                .last()
-                                .map_or(0, |level| level.scroll),
+                            browser.scroll(),
                         );
                         if ctx
                             .clone()
