@@ -59,7 +59,7 @@ Ends with every surface owned; legacy still paints. This is the state
       buffer through `Model::draw_frame`, not `compose_base_frame` alone, since
       the double paint only exists when both painters run. Verify: restore
       green, regression red, both stated.
-- [ ] 2.2 Mount gates (D4): `emby_browser_component_id` (`shell_browser.rs:135`)
+- [x] 2.2 Mount gates (D4): `emby_browser_component_id` (`shell_browser.rs:135`)
       accepts `BrowserKind::TvShows` when `!self.app.layout.main.is_wide_tv_active()`
       (keeping `tv_workspace_component_id`'s gate as the wide half so the two are
       mutually exclusive at every width), and accepts every
