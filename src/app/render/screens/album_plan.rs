@@ -3,6 +3,7 @@ use crate::app::music_grouping::{derive_album_display_name, GroupedAlbumCatalog}
 use crate::app::render::components::album_art::INLINE_ALBUM_ART_ROWS;
 use crate::app::render::{natural_sort_key, strip_article};
 use crate::app::App;
+use std::collections::HashMap;
 use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
@@ -71,6 +72,12 @@ impl GroupedAlbumDisplayRow {
     }
 }
 
+pub(in crate::app::render) struct GroupedAlbumDisplayPlanCtx<'a> {
+    pub(in crate::app::render) images_enabled: bool,
+    pub(in crate::app::render) playing_track_id: Option<String>,
+    pub(in crate::app::render) album_tracks: &'a HashMap<String, Vec<mbv_core::api::EmbyItem>>,
+}
+
 impl App {
     /// Builds the `(artist, year, album_name)` display info for every album,
     /// consuming the settled catalog when available (no artist derivation) and
@@ -110,45 +117,13 @@ impl App {
         wrap_widths: Option<(u16, u16)>,
         hero_handles_detail: bool,
     ) -> GroupedAlbumDisplayPlan {
-        let HeaderFocusCtx {
-            in_music_group_view,
-            expand_selected,
-        } = header_focus;
-        let inline_art_rows_after_album = if self.images_enabled() {
-            INLINE_ALBUM_ART_ROWS.saturating_sub(1) as usize
-        } else {
-            0
-        };
-        let wrapped_lines = |text: &str, width: u16| wrap(text, width.max(1) as usize).len().max(1);
-        let selected_title_lines = |idx: usize| {
-            wrap_widths
-                .map(|(full_width, artwork_width)| {
-                    let suffix = if album_info[idx].1.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" • {}", album_info[idx].1)
-                    };
-                    let suffix_width = suffix.chars().count() as u16;
-                    wrapped_lines(
-                        &album_info[idx].2,
-                        full_width
-                            .saturating_sub(artwork_width)
-                            .saturating_sub(2)
-                            .saturating_sub(suffix_width),
-                    )
-                })
-                .unwrap_or(1)
-        };
-        let selected_hint_lines = |text: &str| {
-            wrap_widths
-                .map(|(full_width, artwork_width)| {
-                    wrapped_lines(
-                        text,
-                        full_width.saturating_sub(artwork_width).saturating_sub(2),
-                    )
-                })
-                .unwrap_or(1)
-        };
+        if fetch_missing_tracks {
+            for album in albums {
+                if !self.album_tracks_cache.contains_key(&album.id) {
+                    self.fetch_album_tracks(album.id.clone());
+                }
+            }
+        }
         let playing_track_id = {
             let playback = self.effective_playback_state();
             playback.active.then(|| {
@@ -158,221 +133,196 @@ impl App {
             })
         }
         .flatten();
-        let selected_detail_rows = |tracks: &[mbv_core::api::EmbyItem], show_hint: bool| {
-            let Some((full_width, artwork_width)) = wrap_widths else {
-                return if show_hint {
-                    2 + tracks.len()
+        build_grouped_album_display_plan_with_ctx(
+            albums,
+            album_info,
+            order,
+            cursor,
+            fetch_missing_tracks,
+            header_focus,
+            wrap_widths,
+            hero_handles_detail,
+            GroupedAlbumDisplayPlanCtx {
+                images_enabled: self.images_enabled(),
+                playing_track_id,
+                album_tracks: &self.album_tracks_cache,
+            },
+        )
+    }
+}
+
+pub(in crate::app::render) fn build_grouped_album_display_plan_with_ctx(
+    albums: &[mbv_core::api::EmbyItem],
+    album_info: &[(String, String, String)],
+    order: &[usize],
+    cursor: usize,
+    _fetch_missing_tracks: bool,
+    header_focus: HeaderFocusCtx,
+    wrap_widths: Option<(u16, u16)>,
+    hero_handles_detail: bool,
+    ctx: GroupedAlbumDisplayPlanCtx<'_>,
+) -> GroupedAlbumDisplayPlan {
+    let HeaderFocusCtx {
+        in_music_group_view,
+        expand_selected,
+    } = header_focus;
+    let inline_art_rows_after_album = if ctx.images_enabled {
+        INLINE_ALBUM_ART_ROWS.saturating_sub(1) as usize
+    } else {
+        0
+    };
+    let wrapped_lines = |text: &str, width: u16| wrap(text, width.max(1) as usize).len().max(1);
+    let selected_title_lines = |idx: usize| {
+        wrap_widths
+            .map(|(full_width, artwork_width)| {
+                let suffix = if album_info[idx].1.is_empty() {
+                    String::new()
                 } else {
-                    tracks.len()
+                    format!(" • {}", album_info[idx].1)
                 };
-            };
-            let table_width = full_width.saturating_sub(artwork_width).saturating_sub(4);
-            let show_length = table_width > 40;
-            let title_col_width =
-                (table_width as usize).saturating_sub(4 + if show_length { 8 } else { 0 });
-            let hint_overhead = if show_hint {
-                let hint_width = table_width.saturating_sub(2).max(1) as usize;
-                let hint_lines = wrap(
-                    "^P: Play | ^A: Enqueue | ^S: Shuffle | BACK: Exit",
-                    hint_width,
+                let suffix_width = suffix.chars().count() as u16;
+                wrapped_lines(
+                    &album_info[idx].2,
+                    full_width
+                        .saturating_sub(artwork_width)
+                        .saturating_sub(2)
+                        .saturating_sub(suffix_width),
                 )
-                .len()
-                .max(1);
-                hint_lines + 1
+            })
+            .unwrap_or(1)
+    };
+    let selected_hint_lines = |text: &str| {
+        wrap_widths
+            .map(|(full_width, artwork_width)| {
+                wrapped_lines(
+                    text,
+                    full_width.saturating_sub(artwork_width).saturating_sub(2),
+                )
+            })
+            .unwrap_or(1)
+    };
+    let playing_track_id = ctx.playing_track_id.as_deref();
+    let selected_detail_rows = |tracks: &[mbv_core::api::EmbyItem], show_hint: bool| {
+        let Some((full_width, artwork_width)) = wrap_widths else {
+            return if show_hint {
+                2 + tracks.len()
             } else {
-                0
+                tracks.len()
             };
-            let track_lines = tracks
-                .iter()
-                .enumerate()
-                .map(|(i, track)| {
-                    let track_num = if track.index_number > 0 {
-                        format!("{}. ", track.index_number)
-                    } else {
-                        format!("{}. ", i + 1)
-                    };
-                    let play_width = if playing_track_id.as_deref() == Some(track.id.as_str()) {
-                        crate::app::render::LIST_PLAY_ICON.width() + 1
-                    } else {
-                        0
-                    };
-                    wrap(
-                        &track.name,
-                        title_col_width
-                            .saturating_sub(track_num.chars().count() + play_width)
-                            .max(1),
-                    )
-                    .len()
-                    .max(1)
-                })
-                .sum::<usize>();
-            hint_overhead + track_lines
         };
-        let mut rows: Vec<GroupedAlbumDisplayRow> = Vec::new();
-        let mut has_artist_group = false;
-        let mut selected_block_bounds: Option<(usize, usize)> = None;
-        let mut track_detail_bounds: Option<(usize, usize)> = None;
-        let mut group_start = 0;
-        while group_start < order.len() {
-            let artist = album_info[order[group_start]].0.clone();
-            let mut group_end = group_start + 1;
-            while group_end < order.len() && album_info[order[group_end]].0 == artist {
-                group_end += 1;
-            }
-            if has_artist_group {
-                rows.push(GroupedAlbumDisplayRow::ArtistGroupSpacer);
-            }
-            let first_idx = order[group_start];
-            let group_header = ArtistGroupHeader {
-                first_album_id: albums[first_idx].id.clone(),
-                artist_label: artist,
-            };
-            let group_contains_cursor = order[group_start..group_end].contains(&cursor);
-            let selected_group = in_music_group_view && group_contains_cursor;
-
-            if selected_group {
-                let group_indices = order[group_start..group_end].to_vec();
-                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                let top_idx = rows.len();
-                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                rows.push(GroupedAlbumDisplayRow::ArtistHeader(group_header));
-                rows.push(GroupedAlbumDisplayRow::AlbumActionHint);
-                let hint = if expand_selected {
-                    "^P: Play | ^A: Enqueue | ^S: Shuffle | BACK: Exit"
+        let table_width = full_width.saturating_sub(artwork_width).saturating_sub(4);
+        let show_length = table_width > 40;
+        let title_col_width =
+            (table_width as usize).saturating_sub(4 + if show_length { 8 } else { 0 });
+        let hint_overhead = if show_hint {
+            let hint_width = table_width.saturating_sub(2).max(1) as usize;
+            let hint_lines = wrap(
+                "^P: Play | ^A: Enqueue | ^S: Shuffle | BACK: Exit",
+                hint_width,
+            )
+            .len()
+            .max(1);
+            hint_lines + 1
+        } else {
+            0
+        };
+        let track_lines = tracks
+            .iter()
+            .enumerate()
+            .map(|(i, track)| {
+                let track_num = if track.index_number > 0 {
+                    format!("{}. ", track.index_number)
                 } else {
-                    "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks"
+                    format!("{}. ", i + 1)
                 };
-                if !hero_handles_detail {
-                    rows.extend(std::iter::repeat_n(
-                        GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                        selected_hint_lines(hint).saturating_sub(1),
-                    ));
-                }
-
-                for &idx in &group_indices {
-                    if !hero_handles_detail && idx == cursor {
-                        rows.push(GroupedAlbumDisplayRow::AlbumInlineDetailStart(idx));
-                        match self.album_tracks_cache.get(&albums[idx].id) {
-                            Some(tracks) if !tracks.is_empty() => {
-                                let detail_rows = selected_detail_rows(tracks, false);
-                                rows.extend(
-                                    std::iter::repeat_with(|| {
-                                        GroupedAlbumDisplayRow::AlbumDetailContinuation
-                                    })
-                                    .take(detail_rows),
-                                );
-                            }
-                            Some(_) => {}
-                            None => {
-                                if fetch_missing_tracks {
-                                    self.fetch_album_tracks(albums[idx].id.clone());
-                                }
-                                rows.push(GroupedAlbumDisplayRow::AlbumLoading);
-                            }
-                        }
-                    } else {
-                        rows.push(GroupedAlbumDisplayRow::Album(idx));
-                        rows.extend(std::iter::repeat_n(
-                            GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                            selected_title_lines(idx).saturating_sub(1),
-                        ));
-                        if expand_selected && idx == cursor {
-                            match self.album_tracks_cache.get(&albums[idx].id) {
-                                Some(tracks) if !tracks.is_empty() => {
-                                    let detail_rows = selected_detail_rows(tracks, false);
-                                    let track_start = rows.len();
-                                    rows.push(GroupedAlbumDisplayRow::AlbumDetailContinuation);
-                                    rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
-                                    rows.extend(
-                                        std::iter::repeat_with(|| {
-                                            GroupedAlbumDisplayRow::AlbumDetailContinuation
-                                        })
-                                        .take(detail_rows.saturating_sub(1)),
-                                    );
-                                    rows.push(GroupedAlbumDisplayRow::AlbumDetailContinuation);
-                                    let track_end = rows.len();
-                                    track_detail_bounds = Some((track_start, track_end));
-                                }
-                                Some(_) => {}
-                                None => {
-                                    if fetch_missing_tracks {
-                                        self.fetch_album_tracks(albums[idx].id.clone());
-                                    }
-                                    rows.push(GroupedAlbumDisplayRow::AlbumLoading);
-                                    rows.extend(std::iter::repeat_n(
-                                        GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                                        selected_hint_lines("Loading…").saturating_sub(1),
-                                    ));
-                                    rows.extend(
-                                        std::iter::repeat_with(|| {
-                                            GroupedAlbumDisplayRow::AlbumDetailContinuation
-                                        })
-                                        .take(inline_art_rows_after_album.saturating_sub(1)),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let art_top = top_idx + 1;
-                let art_rows = if self.images_enabled() {
-                    INLINE_ALBUM_ART_ROWS as usize
+                let play_width = if playing_track_id.as_deref() == Some(track.id.as_str()) {
+                    crate::app::render::LIST_PLAY_ICON.width() + 1
                 } else {
                     0
                 };
-                let art_bottom = art_top + art_rows;
-                rows.extend(
-                    std::iter::repeat_with(|| GroupedAlbumDisplayRow::AlbumDetailContinuation)
-                        .take(art_bottom.saturating_sub(rows.len())),
-                );
-                let bottom_idx = rows.len();
-                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                selected_block_bounds = Some((top_idx, bottom_idx));
+                wrap(
+                    &track.name,
+                    title_col_width
+                        .saturating_sub(track_num.chars().count() + play_width)
+                        .max(1),
+                )
+                .len()
+                .max(1)
+            })
+            .sum::<usize>();
+        hint_overhead + track_lines
+    };
+    let mut rows: Vec<GroupedAlbumDisplayRow> = Vec::new();
+    let mut has_artist_group = false;
+    let mut selected_block_bounds: Option<(usize, usize)> = None;
+    let mut track_detail_bounds: Option<(usize, usize)> = None;
+    let mut group_start = 0;
+    while group_start < order.len() {
+        let artist = album_info[order[group_start]].0.clone();
+        let mut group_end = group_start + 1;
+        while group_end < order.len() && album_info[order[group_end]].0 == artist {
+            group_end += 1;
+        }
+        if has_artist_group {
+            rows.push(GroupedAlbumDisplayRow::ArtistGroupSpacer);
+        }
+        let first_idx = order[group_start];
+        let group_header = ArtistGroupHeader {
+            first_album_id: albums[first_idx].id.clone(),
+            artist_label: artist,
+        };
+        let group_contains_cursor = order[group_start..group_end].contains(&cursor);
+        let selected_group = in_music_group_view && group_contains_cursor;
+
+        if selected_group {
+            let group_indices = order[group_start..group_end].to_vec();
+            rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+            let top_idx = rows.len();
+            rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+            rows.push(GroupedAlbumDisplayRow::ArtistHeader(group_header));
+            rows.push(GroupedAlbumDisplayRow::AlbumActionHint);
+            let hint = if expand_selected {
+                "^P: Play | ^A: Enqueue | ^S: Shuffle | BACK: Exit"
             } else {
-                rows.push(GroupedAlbumDisplayRow::ArtistHeader(group_header));
-                for &idx in &order[group_start..group_end] {
-                    if idx == cursor && !in_music_group_view && !expand_selected {
-                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                        let top_idx = rows.len();
-                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                        rows.push(GroupedAlbumDisplayRow::Album(idx));
-                        rows.extend(std::iter::repeat_n(
-                            GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                            selected_title_lines(idx).saturating_sub(1),
-                        ));
-                        rows.push(GroupedAlbumDisplayRow::AlbumActionHint);
-                        rows.extend(std::iter::repeat_n(
-                            GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                            selected_hint_lines(
-                                "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks",
-                            )
-                            .saturating_sub(1),
-                        ));
-                        rows.extend(
-                            std::iter::repeat_with(|| {
-                                GroupedAlbumDisplayRow::AlbumDetailContinuation
-                            })
-                            .take(inline_art_rows_after_album.saturating_sub(1)),
-                        );
-                        let bottom_idx = rows.len();
-                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                        selected_block_bounds = Some((top_idx, bottom_idx));
-                    } else if idx == cursor && !in_music_group_view {
-                        match self.album_tracks_cache.get(&albums[idx].id) {
+                "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks"
+            };
+            if !hero_handles_detail {
+                rows.extend(std::iter::repeat_n(
+                    GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                    selected_hint_lines(hint).saturating_sub(1),
+                ));
+            }
+
+            for &idx in &group_indices {
+                if !hero_handles_detail && idx == cursor {
+                    rows.push(GroupedAlbumDisplayRow::AlbumInlineDetailStart(idx));
+                    match ctx.album_tracks.get(&albums[idx].id) {
+                        Some(tracks) if !tracks.is_empty() => {
+                            let detail_rows = selected_detail_rows(tracks, false);
+                            rows.extend(
+                                std::iter::repeat_with(|| {
+                                    GroupedAlbumDisplayRow::AlbumDetailContinuation
+                                })
+                                .take(detail_rows),
+                            );
+                        }
+                        Some(_) => {}
+                        None => {
+                            rows.push(GroupedAlbumDisplayRow::AlbumLoading);
+                        }
+                    }
+                } else {
+                    rows.push(GroupedAlbumDisplayRow::Album(idx));
+                    rows.extend(std::iter::repeat_n(
+                        GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                        selected_title_lines(idx).saturating_sub(1),
+                    ));
+                    if expand_selected && idx == cursor {
+                        match ctx.album_tracks.get(&albums[idx].id) {
                             Some(tracks) if !tracks.is_empty() => {
-                                let detail_rows = selected_detail_rows(tracks, true)
-                                    .max(inline_art_rows_after_album);
-                                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                                let top_idx = rows.len();
-                                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                                rows.push(GroupedAlbumDisplayRow::Album(idx));
-                                rows.extend(std::iter::repeat_n(
-                                    GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                                    selected_title_lines(idx).saturating_sub(1),
-                                ));
+                                let detail_rows = selected_detail_rows(tracks, false);
+                                let track_start = rows.len();
+                                rows.push(GroupedAlbumDisplayRow::AlbumDetailContinuation);
                                 rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
                                 rows.extend(
                                     std::iter::repeat_with(|| {
@@ -380,24 +330,12 @@ impl App {
                                     })
                                     .take(detail_rows.saturating_sub(1)),
                                 );
-                                let bottom_idx = rows.len();
-                                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                                selected_block_bounds = Some((top_idx, bottom_idx));
+                                rows.push(GroupedAlbumDisplayRow::AlbumDetailContinuation);
+                                let track_end = rows.len();
+                                track_detail_bounds = Some((track_start, track_end));
                             }
-                            Some(_) => rows.push(GroupedAlbumDisplayRow::Album(idx)),
+                            Some(_) => {}
                             None => {
-                                if fetch_missing_tracks {
-                                    self.fetch_album_tracks(albums[idx].id.clone());
-                                }
-                                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                                let top_idx = rows.len();
-                                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                                rows.push(GroupedAlbumDisplayRow::Album(idx));
-                                rows.extend(std::iter::repeat_n(
-                                    GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                                    selected_title_lines(idx).saturating_sub(1),
-                                ));
                                 rows.push(GroupedAlbumDisplayRow::AlbumLoading);
                                 rows.extend(std::iter::repeat_n(
                                     GroupedAlbumDisplayRow::AlbumWrappedContinuation,
@@ -409,57 +347,151 @@ impl App {
                                     })
                                     .take(inline_art_rows_after_album.saturating_sub(1)),
                                 );
-                                let bottom_idx = rows.len();
-                                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                                selected_block_bounds = Some((top_idx, bottom_idx));
                             }
                         }
-                    } else {
-                        rows.push(GroupedAlbumDisplayRow::Album(idx));
                     }
                 }
             }
-            has_artist_group = true;
-            group_start = group_end;
-        }
 
-        let find_display_cursor = |rows: &[GroupedAlbumDisplayRow]| -> usize {
-            rows.iter()
-                .position(|row| row.row_target() == Some(LibraryRowTarget::Album(cursor)))
-                .unwrap_or(0)
-        };
-        let display_cursor = find_display_cursor(&rows);
-
-        // When the hero panel handles the detail rendering, suppress the
-        // inline detail rows and clear the bounds that reference them.
-        if hero_handles_detail {
-            rows.retain(|row| {
-                !matches!(
-                    row,
-                    GroupedAlbumDisplayRow::AlbumDetailStart(_)
-                        | GroupedAlbumDisplayRow::AlbumInlineDetailStart(_)
-                        | GroupedAlbumDisplayRow::AlbumDetailContinuation
-                        | GroupedAlbumDisplayRow::AlbumDetailRule
-                        | GroupedAlbumDisplayRow::AlbumLoading
-                        | GroupedAlbumDisplayRow::AlbumActionHint
-                )
-            });
-            return GroupedAlbumDisplayPlan {
-                order: order.to_vec(),
-                display_cursor: find_display_cursor(&rows),
-                rows,
-                selected_block_bounds: None,
-                track_detail_bounds: None,
+            let art_top = top_idx + 1;
+            let art_rows = if ctx.images_enabled {
+                INLINE_ALBUM_ART_ROWS as usize
+            } else {
+                0
             };
+            let art_bottom = art_top + art_rows;
+            rows.extend(
+                std::iter::repeat_with(|| GroupedAlbumDisplayRow::AlbumDetailContinuation)
+                    .take(art_bottom.saturating_sub(rows.len())),
+            );
+            let bottom_idx = rows.len();
+            rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+            rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+            selected_block_bounds = Some((top_idx, bottom_idx));
+        } else {
+            rows.push(GroupedAlbumDisplayRow::ArtistHeader(group_header));
+            for &idx in &order[group_start..group_end] {
+                if idx == cursor && !in_music_group_view && !expand_selected {
+                    rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                    let top_idx = rows.len();
+                    rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                    rows.push(GroupedAlbumDisplayRow::Album(idx));
+                    rows.extend(std::iter::repeat_n(
+                        GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                        selected_title_lines(idx).saturating_sub(1),
+                    ));
+                    rows.push(GroupedAlbumDisplayRow::AlbumActionHint);
+                    rows.extend(std::iter::repeat_n(
+                        GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                        selected_hint_lines(
+                            "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks",
+                        )
+                        .saturating_sub(1),
+                    ));
+                    rows.extend(
+                        std::iter::repeat_with(|| GroupedAlbumDisplayRow::AlbumDetailContinuation)
+                            .take(inline_art_rows_after_album.saturating_sub(1)),
+                    );
+                    let bottom_idx = rows.len();
+                    rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                    rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                    selected_block_bounds = Some((top_idx, bottom_idx));
+                } else if idx == cursor && !in_music_group_view {
+                    match ctx.album_tracks.get(&albums[idx].id) {
+                        Some(tracks) if !tracks.is_empty() => {
+                            let detail_rows =
+                                selected_detail_rows(tracks, true).max(inline_art_rows_after_album);
+                            rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                            let top_idx = rows.len();
+                            rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                            rows.push(GroupedAlbumDisplayRow::Album(idx));
+                            rows.extend(std::iter::repeat_n(
+                                GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                                selected_title_lines(idx).saturating_sub(1),
+                            ));
+                            rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
+                            rows.extend(
+                                std::iter::repeat_with(|| {
+                                    GroupedAlbumDisplayRow::AlbumDetailContinuation
+                                })
+                                .take(detail_rows.saturating_sub(1)),
+                            );
+                            let bottom_idx = rows.len();
+                            rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                            rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                            selected_block_bounds = Some((top_idx, bottom_idx));
+                        }
+                        Some(_) => rows.push(GroupedAlbumDisplayRow::Album(idx)),
+                        None => {
+                            rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                            let top_idx = rows.len();
+                            rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                            rows.push(GroupedAlbumDisplayRow::Album(idx));
+                            rows.extend(std::iter::repeat_n(
+                                GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                                selected_title_lines(idx).saturating_sub(1),
+                            ));
+                            rows.push(GroupedAlbumDisplayRow::AlbumLoading);
+                            rows.extend(std::iter::repeat_n(
+                                GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                                selected_hint_lines("Loading…").saturating_sub(1),
+                            ));
+                            rows.extend(
+                                std::iter::repeat_with(|| {
+                                    GroupedAlbumDisplayRow::AlbumDetailContinuation
+                                })
+                                .take(inline_art_rows_after_album.saturating_sub(1)),
+                            );
+                            let bottom_idx = rows.len();
+                            rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                            rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                            selected_block_bounds = Some((top_idx, bottom_idx));
+                        }
+                    }
+                } else {
+                    rows.push(GroupedAlbumDisplayRow::Album(idx));
+                }
+            }
         }
+        has_artist_group = true;
+        group_start = group_end;
+    }
 
-        GroupedAlbumDisplayPlan {
+    let find_display_cursor = |rows: &[GroupedAlbumDisplayRow]| -> usize {
+        rows.iter()
+            .position(|row| row.row_target() == Some(LibraryRowTarget::Album(cursor)))
+            .unwrap_or(0)
+    };
+    let display_cursor = find_display_cursor(&rows);
+
+    // When the hero panel handles the detail rendering, suppress the
+    // inline detail rows and clear the bounds that reference them.
+    if hero_handles_detail {
+        rows.retain(|row| {
+            !matches!(
+                row,
+                GroupedAlbumDisplayRow::AlbumDetailStart(_)
+                    | GroupedAlbumDisplayRow::AlbumInlineDetailStart(_)
+                    | GroupedAlbumDisplayRow::AlbumDetailContinuation
+                    | GroupedAlbumDisplayRow::AlbumDetailRule
+                    | GroupedAlbumDisplayRow::AlbumLoading
+                    | GroupedAlbumDisplayRow::AlbumActionHint
+            )
+        });
+        return GroupedAlbumDisplayPlan {
             order: order.to_vec(),
+            display_cursor: find_display_cursor(&rows),
             rows,
-            display_cursor,
-            selected_block_bounds,
-            track_detail_bounds,
-        }
+            selected_block_bounds: None,
+            track_detail_bounds: None,
+        };
+    }
+
+    GroupedAlbumDisplayPlan {
+        order: order.to_vec(),
+        rows,
+        display_cursor,
+        selected_block_bounds,
+        track_detail_bounds,
     }
 }
