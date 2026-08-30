@@ -298,6 +298,13 @@ findings become added rows; the template does not change.
 - [x] 5.2 Full gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
       `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`,
       `rtk cargo fmt`, `rtk make check-code-file-lines`.
-- [ ] 5.3 Confirm all three regressions are closed by manual check at a narrow
+- [x] 5.3 Confirm all three regressions are closed by manual check at a narrow
       terminal: Movies rows paint once, TV navigates, Music's painted selection
       follows the cursor. Verify: stated per regression.
+      Maintainer manual check 2026-08-30: **Movies** — rows paint once ✅.
+      **TV** — Enter on a series opens the season-selection modal and season
+      navigation works ✅ (after correction 3.4a; the first build's flat drill-in
+      was rejected, D4 activation exception). **Grouped Music** — group pill bar
+      present, selected-album hero contained (accent title, meta, detail, art),
+      no BOLD/yellow row text, Enter opens the album-track modal ✅ (after
+      correction 3.6a).
