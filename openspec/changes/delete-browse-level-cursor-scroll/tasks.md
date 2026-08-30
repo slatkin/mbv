@@ -274,7 +274,7 @@ The 11 mover/mouse writes named below were re-spelled to `set_resting_*` by 1.2a
 so production would compile; rows 2.1-2.3 delete the functions containing them.
 Their line references predate 1.2a and that re-spelling shifts none of them.
 
-- [ ] 2.1 Delete `App::apply_lib_cursor_index` (`lib_cursor_actions.rs:241`)
+- [x] 2.1 Delete `App::apply_lib_cursor_index` (`lib_cursor_actions.rs:241`)
       and route `ShellRequest::BrowserCursorIndex` to the resting-position
       writer and effect tail directly. Verify: `rtk cargo check -p mbv`.
 - [ ] 2.2 Delete `App::move_lib_cursor_rows` and `App::jump_lib_cursor` — both
