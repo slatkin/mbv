@@ -162,7 +162,7 @@ findings become added rows; the template does not change.
       `inline_hero_rows` determines row layout. Verify: identical
       `CompactBannerLayout` output for the same inputs (test), and the fetch
       still fires from the shell side.
-- [ ] 3.2a Prerequisite — series inline detail: make
+- [x] 3.2a Prerequisite — series inline detail: make
       `series_inline_detail_rows` and `render_series_inline_detail` explicit
       context functions. Shell-side series detail/image/cache effects become
       typed outputs consumed by the shell. Verify: targeted series-detail tests
