@@ -134,7 +134,7 @@ impl App {
         if item_row_list.is_empty() {
             return None;
         }
-        let cursor = self.libs[lib_idx].nav_stack.last()?.cursor;
+        let cursor = self.libs[lib_idx].nav_stack.last()?.resting().cursor();
         let (cur_row, cur_col) = item_row_list
             .iter()
             .enumerate()
@@ -203,7 +203,12 @@ impl App {
         if !self.layout.main.left_sorted_indices.is_empty() {
             let needs_sorted = self.libs[lib_idx].nav_stack.last().is_some();
             if needs_sorted {
-                let current = self.libs[lib_idx].nav_stack.last().unwrap().cursor;
+                let current = self.libs[lib_idx]
+                    .nav_stack
+                    .last()
+                    .unwrap()
+                    .resting()
+                    .cursor();
                 let sorted_n = self.layout.main.left_sorted_indices.len();
                 let pos = self
                     .layout
@@ -215,7 +220,7 @@ impl App {
                 let new_pos = super::ui_util::move_cursor(pos, delta, sorted_n);
                 let new_cursor = self.layout.main.left_sorted_indices[new_pos];
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-                    lvl.cursor = new_cursor;
+                    lvl.set_resting_cursor(new_cursor);
                 }
                 self.save_default_library_position(lib_idx);
                 if idle {
@@ -229,8 +234,8 @@ impl App {
         if let Some(lvl) = lib.nav_stack.last_mut() {
             let n = lvl.items.len();
             if n > 0 {
-                let next = super::ui_util::move_cursor(lvl.cursor, delta, n);
-                lvl.cursor = next;
+                let next = super::ui_util::move_cursor(lvl.resting().cursor(), delta, n);
+                lvl.set_resting_cursor(next);
                 self.save_default_library_position(lib_idx);
                 if idle {
                     self.maybe_fetch_next_page(lib_idx, next);
@@ -260,7 +265,7 @@ impl App {
         }
 
         if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-            level.cursor = index;
+            level.set_resting_cursor(index);
             self.save_default_library_position(lib_idx);
         }
         if idle {
@@ -295,7 +300,7 @@ impl App {
                 let new_cursor =
                     self.layout.main.left_sorted_indices[if to_end { n - 1 } else { 0 }];
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-                    lvl.cursor = new_cursor;
+                    lvl.set_resting_cursor(new_cursor);
                 }
                 self.save_default_library_position(lib_idx);
                 self.maybe_fetch_next_page(lib_idx, new_cursor);
@@ -308,7 +313,7 @@ impl App {
             let n = lvl.items.len();
             if n > 0 {
                 let target = if to_end { n - 1 } else { 0 };
-                lvl.cursor = target;
+                lvl.set_resting_cursor(target);
                 self.save_default_library_position(lib_idx);
                 self.maybe_fetch_next_page(lib_idx, target);
             }

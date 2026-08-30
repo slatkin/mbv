@@ -290,11 +290,11 @@ impl Model {
                 self.app.libs[index]
                     .nav_stack
                     .last()
-                    .map_or(0, |l| l.cursor),
+                    .map_or(0, |l| l.resting().cursor()),
                 self.app.libs[index]
                     .nav_stack
                     .last()
-                    .map_or(0, |l| l.scroll),
+                    .map_or(0, |l| l.resting().scroll()),
             )
         };
         let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);

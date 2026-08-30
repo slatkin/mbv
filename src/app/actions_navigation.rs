@@ -1,3 +1,4 @@
+use super::types_browse::BrowseResting;
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
 use super::{App, BrowseLevel};
 use mbv_core::api::EmbyItem;
@@ -56,13 +57,13 @@ impl App {
                 title: item.name.clone(),
                 items: vec![],
                 total_count: 0,
-                cursor: 0,
+                resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 loading: true,
-                scroll: 0,
+
                 all_items: None,
                 letter_filter: None,
                 music_grouping: None,

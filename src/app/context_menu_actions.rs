@@ -40,7 +40,7 @@ impl App {
                         .libs
                         .get(lib_idx)
                         .and_then(|lib| lib.nav_stack.last())
-                        .map(|l| l.cursor)
+                        .map(|l| l.resting().cursor())
                         .unwrap_or(0);
                     if let Some(item) = self.current_lib_item(lib_idx, cursor) {
                         self.select_item(lib_idx, item);
@@ -78,7 +78,7 @@ impl App {
                         .libs
                         .get(lib_idx)
                         .and_then(|lib| lib.nav_stack.last())
-                        .map(|l| l.cursor)
+                        .map(|l| l.resting().cursor())
                         .unwrap_or(0);
                     if let Some(item) = self.current_lib_item(lib_idx, cursor) {
                         self.enqueue_lib_item(lib_idx, item);
@@ -452,7 +452,7 @@ impl App {
                         .libs
                         .get(lib_idx)
                         .and_then(|lib| lib.nav_stack.last())
-                        .map(|l| l.cursor)
+                        .map(|l| l.resting().cursor())
                         .unwrap_or(0);
                     self.current_lib_item(lib_idx, cursor)
                 })

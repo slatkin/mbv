@@ -1,5 +1,6 @@
 use super::feed_parse::fetch_and_parse_rss;
 use super::notify_actions::ToastSeverity;
+use super::types_browse::BrowseResting;
 use super::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
 use mbv_core::api::EmbyItem;
 use std::collections::{HashMap, HashSet};
@@ -347,13 +348,13 @@ impl App {
             title: lib_name.clone(),
             items: vec![],
             total_count: 0,
-            cursor: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             loading: true,
-            scroll: 0,
+
             all_items: None,
             letter_filter: None,
             music_grouping: None,
@@ -432,13 +433,13 @@ impl App {
             title: lib_name.clone(),
             items: vec![],
             total_count: 0,
-            cursor: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             loading: true,
-            scroll: 0,
+
             all_items: None,
             letter_filter: None,
             music_grouping: None,

@@ -190,11 +190,11 @@ impl Model {
             self.app.libs[index]
                 .nav_stack
                 .last()
-                .map_or(0, |l| l.cursor),
+                .map_or(0, |l| l.resting().cursor()),
             self.app.libs[index]
                 .nav_stack
                 .last()
-                .map_or(0, |l| l.scroll),
+                .map_or(0, |l| l.resting().scroll()),
         );
         // Consume the one-shot breakpoint hand-off re-anchor (task 2.3 / D5):
         // when the active-destination pointer just flipped from the narrow

@@ -1,4 +1,5 @@
 use super::types_browse::BrowseLevel;
+use super::types_browse::BrowseResting;
 use super::types_feed::FeedHomeVideoState;
 use super::App;
 use std::time::{Duration, Instant};
@@ -167,13 +168,13 @@ impl App {
                     title: root.title.clone(),
                     items: Vec::new(),
                     total_count: 0,
-                    cursor: 0,
+                    resting: BrowseResting::new(0, 0),
                     item_types: root.item_types.clone(),
                     unplayed_only: root.unplayed_only,
                     sort_by: root.sort_by.clone(),
                     sort_order: root.sort_order.clone(),
                     loading: true,
-                    scroll: 0,
+
                     all_items: None,
                     letter_filter: None,
                     music_grouping: None,

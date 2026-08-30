@@ -1,6 +1,7 @@
 use super::library_browse_actions::{
     build_album_index_with, fetch_all_album_index_items, recursive_album_search_eligible,
 };
+use super::types_browse::BrowseResting;
 use super::{
     AlbumIndexState, AlbumSearchEntry, App, BrowseLevel, LibEvent, SidebarId, PAGE_SIZE,
     PREFETCH_AHEAD,
@@ -139,13 +140,13 @@ impl App {
                     title,
                     items,
                     total_count,
-                    cursor,
+                    resting: BrowseResting::new(cursor, 0),
                     item_types: None,
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
                     loading: false,
-                    scroll: 0,
+
                     all_items: None,
                     letter_filter: None,
                     music_grouping: None,

@@ -119,7 +119,7 @@ impl App {
             .and_then(|lib| lib.nav_stack.last_mut())
         {
             if target < level.items.len() {
-                level.cursor = target;
+                level.set_resting_cursor(target);
                 self.save_default_library_position(lib_idx);
             }
         }
@@ -226,7 +226,7 @@ impl App {
                 // The component resolved the series under the click; apply it
                 // to `App`'s library cursor before any further pane effect.
                 if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                    level.cursor = target;
+                    level.set_resting_cursor(target);
                 }
             }
             TvHit::EpisodesPane => {}
@@ -238,7 +238,7 @@ impl App {
             // Apply the clicked series before activating (the click may land
             // on a series other than the focused one).
             if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                level.cursor = target;
+                level.set_resting_cursor(target);
             }
         }
         if matches!(hit, TvHit::EpisodeRow(_) | TvHit::SeriesRow(_)) {

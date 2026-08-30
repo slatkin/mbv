@@ -37,9 +37,8 @@ pub(super) struct SeriesDetail {
 /// through this type rather than the raw fields keeps the two uses from being
 /// spelled identically.
 ///
-/// Task 4.2 backs this with `BrowseLevel`'s existing `cursor`/`scroll` fields;
-/// tasks 4.3-4.5 move the live readers off those fields and this type becomes
-/// the sole owner of the resting values.
+/// The resting values are owned directly by each `BrowseLevel` and are used
+/// for persistence and re-entry when the level is not visible.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct BrowseResting {
     cursor: usize,
@@ -47,6 +46,10 @@ pub(super) struct BrowseResting {
 }
 
 impl BrowseResting {
+    pub(super) fn new(cursor: usize, scroll: usize) -> Self {
+        Self { cursor, scroll }
+    }
+
     pub(super) fn cursor(&self) -> usize {
         self.cursor
     }
@@ -61,8 +64,7 @@ pub(super) struct BrowseLevel {
     pub(super) title: String,
     pub(super) items: Vec<EmbyItem>,
     pub(super) total_count: usize,
-    pub(super) cursor: usize,
-    pub(super) scroll: usize, // viewport scroll offset for the list
+    pub(super) resting: BrowseResting,
     pub(super) item_types: Option<String>,
     pub(super) unplayed_only: bool,
     pub(super) sort_by: String,
@@ -101,8 +103,7 @@ impl BrowseLevel {
             title: saved.title.clone(),
             items,
             total_count,
-            cursor,
-            scroll,
+            resting: BrowseResting::new(cursor, scroll),
             item_types: saved.item_types.clone(),
             unplayed_only: saved.unplayed_only,
             sort_by: saved.sort_by.clone(),
@@ -119,18 +120,15 @@ impl BrowseLevel {
     /// The level's resting cursor/scroll — the persistence-facing view of its
     /// position, distinct from the live component cursor (`design.md` D1).
     pub(super) fn resting(&self) -> BrowseResting {
-        BrowseResting {
-            cursor: self.cursor,
-            scroll: self.scroll,
-        }
+        self.resting
     }
 
     pub(super) fn set_resting_cursor(&mut self, cursor: usize) {
-        self.cursor = cursor;
+        self.resting.cursor = cursor;
     }
 
     pub(super) fn set_resting_scroll(&mut self, scroll: usize) {
-        self.scroll = scroll;
+        self.resting.scroll = scroll;
     }
 
     pub(super) fn to_position_level(&self) -> crate::config::LibraryPositionLevel {
