@@ -111,26 +111,41 @@ pub(in crate::app::render) fn render_grouped_album_rows(
     // album-folder browsing) the existing always-expand behavior is
     // unchanged.
     let expand_selected = !in_music_group_view;
-    let mut plan = app.build_grouped_album_display_plan(
-        albums,
-        &album_info,
-        &order,
-        cursor,
-        true,
-        HeaderFocusCtx {
-            in_music_group_view,
-            expand_selected,
-        },
-        Some((
-            area.width,
-            if app.images_enabled() && area.width >= INLINE_ALBUM_ART_RESERVED + 20 {
-                INLINE_ALBUM_ART_RESERVED
-            } else {
-                0
+    let playback = app.effective_playback_state();
+    let playing_track_id = if playback.active {
+        app.playback_queue()
+            .emby_item_at(playback.active_idx)
+            .map(|item| item.id.clone())
+    } else {
+        None
+    };
+    let plan_ctx = crate::app::render::screens::album_plan::GroupedAlbumDisplayPlanCtx {
+        images_enabled: app.images_enabled(),
+        playing_track_id: playing_track_id.clone(),
+        album_tracks: &app.album_tracks_cache,
+    };
+    let mut plan =
+        crate::app::render::screens::album_plan::build_grouped_album_display_plan_with_ctx(
+            albums,
+            &album_info,
+            &order,
+            cursor,
+            true,
+            HeaderFocusCtx {
+                in_music_group_view,
+                expand_selected,
             },
-        )),
-        hero_handles_detail,
-    );
+            Some((
+                area.width,
+                if app.images_enabled() && area.width >= INLINE_ALBUM_ART_RESERVED + 20 {
+                    INLINE_ALBUM_ART_RESERVED
+                } else {
+                    0
+                },
+            )),
+            hero_handles_detail,
+            plan_ctx,
+        );
     if hero_handles_detail {
         return super::album_inline::render_grouped_album_rows_inline_plan(
             f,
@@ -149,7 +164,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
             .selected_block_bounds
             .is_some_and(|(top, bottom)| bottom.saturating_sub(top).saturating_add(3) >= visible)
     {
-        plan = app.build_grouped_album_display_plan(
+        plan = crate::app::render::screens::album_plan::build_grouped_album_display_plan_with_ctx(
             albums,
             &album_info,
             &order,
@@ -168,6 +183,11 @@ pub(in crate::app::render) fn render_grouped_album_rows(
                 },
             )),
             true,
+            crate::app::render::screens::album_plan::GroupedAlbumDisplayPlanCtx {
+                images_enabled: app.images_enabled(),
+                playing_track_id,
+                album_tracks: &app.album_tracks_cache,
+            },
         );
     }
     layout.left_sorted_indices = plan.order.clone();
