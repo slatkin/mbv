@@ -132,8 +132,16 @@ pub(in crate::app::render) fn render_grouped_album_rows(
         hero_handles_detail,
     );
     if hero_handles_detail {
-        return app.render_grouped_album_rows_inline_plan(
-            f, area, albums, album_info, cursor_ctx, focused, plan, layout,
+        return super::album_inline::render_grouped_album_rows_inline_plan(
+            f,
+            area,
+            albums,
+            album_info,
+            cursor_ctx,
+            focused,
+            plan,
+            app.images_enabled(),
+            layout,
         );
     }
     if !hero_handles_detail
