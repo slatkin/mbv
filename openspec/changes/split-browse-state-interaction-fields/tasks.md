@@ -80,11 +80,21 @@
 
 ## 5. Hand-off
 
-- [ ] 5.1 Confirm this change's remaining scope is closed: phases 1–4 done,
+- [x] 5.1 Confirm this change's remaining scope is closed: phases 1–4 done,
       R14 handed to `migrate-narrow-browse-to-components`, field deletion and
       retirement handed to `delete-browse-level-cursor-scroll`, doc sync handed
       to `sync-interactive-surface-docs`. Verify: `rtk cargo check -p mbv`,
       `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace
       --all-targets`, `rtk ast-grep scan`, `rtk cargo fmt --check`,
       `rtk make check-code-file-lines`.
+      **Closed.** `check`, `clippy`, `fmt --check`, `check-code-file-lines`
+      all pass (the file-lines regression this change introduced in
+      `lib_event_actions.rs`, 800->803, fixed in `90ef6d3f` by extracting the
+      Audiobookshelf progress-reconcile helpers to
+      `lib_event_actions_reconcile.rs`; now 692). Two failures are
+      pre-existing branch state, verified identical at `cfb32764^` and out of
+      this change's scope: `nextest` fails
+      `browser_local_navigation_mirrors_legacy_flat_movement` (from #618), and
+      `ast-grep scan` reports 66 errors (migrate-tui-to-tuirealm migration
+      debt).
 
