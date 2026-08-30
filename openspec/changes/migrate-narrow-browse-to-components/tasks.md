@@ -196,7 +196,7 @@ findings become added rows; the template does not change.
       `BrowserComponent` paints `left_area` too). No distinct wide layout for
       generic; the `render_list` deletion in 3.8 closes the wide case with no
       extra composer work. Verify the wide generic snapshot in 3.8.
-- [ ] 3.4 Surface: Emby TV, narrow. Template above, same composer as 3.3 —
+- [x] 3.4 Surface: Emby TV, narrow. Template above, same composer as 3.3 —
       series inline hero, season grid, letter pills. Record any TV-specific
       chord that is still dead as a Change D finding; do not fix it here.
 - [ ] 3.5 Surface: Emby podcast **and feed/home-video group picker**, narrow
