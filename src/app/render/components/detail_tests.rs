@@ -1,4 +1,6 @@
 use super::*;
+use crate::app::tests::{make_app_stub, make_item};
+use std::time::{Duration, Instant};
 // Characterization coverage stays beside the moved detail component.
 
 #[test]
@@ -56,4 +58,20 @@ fn content_rows_is_never_shorter_than_the_rendered_image_height() {
         ..no_image_layout
     };
     assert_eq!(empty_layout.content_rows(), 0);
+}
+
+#[test]
+fn compact_banner_wrapper_fetches_while_nav_gate_only_controls_display() {
+    let mut app = make_app_stub();
+    app.image_protocol_enabled = true;
+    app.last_library_nav_at = Instant::now();
+    let item = make_item("movie", "Movie");
+    let _ = app.compact_banner_layout_with_overview(&item, 60, false);
+    let key = compact_banner_image_cache_key(&item.id);
+    assert!(app.card_image_loading.contains(&key) || app.card_image_states.contains_key(&key));
+
+    app.last_library_nav_at =
+        Instant::now() - crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY - Duration::from_millis(1);
+    let gated = app.compact_banner_layout_with_overview(&item, 60, false);
+    assert!(!gated.img_is_placeholder || gated.img_height > 0);
 }
