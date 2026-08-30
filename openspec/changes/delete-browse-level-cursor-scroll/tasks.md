@@ -264,7 +264,7 @@
       here; `rtk cargo fmt`, `rtk cargo clippy --workspace --all-targets`, and
       `rtk make check-code-file-lines` (this row touches ~30 files, several of
       them already near the 800-line ceiling).
-- [ ] 1.3 Verify: `rtk cargo nextest run -p mbv`. The restore characterization
+- [x] 1.3 Verify: `rtk cargo nextest run -p mbv`. The restore characterization
       tests from `split-browse-state-interaction-fields` tasks 2.1/3.1/4.1 and
       `migrate-narrow-browse-to-components` 2.1 are the behavioural gate.
 
