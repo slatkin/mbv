@@ -87,6 +87,10 @@ impl App {
                 {
                     state.video_cursor = pos;
                 }
+            } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+                if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
+                    lvl.set_resting_cursor(pos);
+                }
             }
             let fresh = {
                 let Some(client) = self.emby_client() else {
