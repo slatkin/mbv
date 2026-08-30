@@ -705,6 +705,54 @@ fn browser_component_cursor(model: &Model, id: &ComponentId) -> usize {
         .cursor()
 }
 
+/// Task 3.7: the narrow browser's shell render seam schedules neighboring
+/// images using the mounted component cursor, and applies both image-fetch
+/// gates without relying on the legacy list painter.
+#[test]
+fn narrow_browser_shell_render_prefetches_only_when_idle_and_available() {
+    use std::time::{Duration, Instant};
+
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut model = Model::new(browser_app_with_flat_movies(6));
+    model.app.image_protocol_enabled = true;
+    model.app.image_fetches_active = 6;
+    model.sync_emby_browser();
+    let id = model.emby_browser_id.clone().expect("browser mounted");
+
+    assert!(matches!(
+        drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE),
+        Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
+    ));
+    assert_eq!(browser_component_cursor(&model, &id), 1);
+
+    // Recent navigation suppresses the shell-triggered effect entirely.
+    model.app.last_nav_at = Instant::now();
+    render_browser_model(&mut model, 80, 24);
+    assert!(model.app.pending_image_fetches.is_empty());
+    assert!(model.app.card_image_loading.is_empty());
+
+    // Once idle, the same narrow shell draw queues every neighboring movie
+    // in the cursor window. Saturating active fetches proves queued/busy
+    // suppression is handled by the image seam rather than dropping work.
+    model.app.last_nav_at = Instant::now() - Duration::from_millis(500);
+    render_browser_model(&mut model, 80, 24);
+    for i in [0, 2, 3, 4] {
+        let key = format!("id{i}:cmp_primary");
+        assert!(
+            model.app.card_image_loading.contains(&key),
+            "idle shell draw must reserve movie-{i}"
+        );
+        assert!(
+            model
+                .app
+                .pending_image_fetches
+                .iter()
+                .any(|request| request.cache_key == key),
+            "busy shell draw must queue movie-{i}"
+        );
+    }
+}
+
 /// keep-destination-components-mounted task 2.2: the Emby browser stays
 /// mounted across tab switches (keep-mounted, D1), so switching away from
 /// library A and back must leave A's `BrowserComponent` still `mounted()`

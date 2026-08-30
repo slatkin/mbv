@@ -523,9 +523,8 @@ fn paint_letter_pills_row(
 impl App {
     /// Poster-prefetch window for the narrow generic/Movies/home-video and
     /// podcast browsers (#287): pre-warm the Primary images of movies just
-    /// ahead of / behind the cursor. Called from the legacy `render_list`
-    /// body (podcasts) and the task-3.3 geometry-only early return
-    /// (generic/Movies/home video); task 3.7 relocates it to the shell.
+    /// ahead of / behind the cursor. Called from `shell_browser.rs` after the
+    /// mounted browser has established its authoritative cursor.
     pub(in crate::app) fn fetch_nearby_movie_posters(
         &mut self,
         items: &[mbv_core::api::EmbyItem],
