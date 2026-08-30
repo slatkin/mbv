@@ -217,8 +217,8 @@ impl Model {
             self.app.paint_music_image(frame, image_paint);
             if wide {
                 self.app.layout.main.wide_music_track_hitmap = track_hitmap;
-                self.app.layout.main.selected_item_rect = selected_item_rect;
             }
+            self.app.layout.main.selected_item_rect = selected_item_rect;
         }
     }
 }
