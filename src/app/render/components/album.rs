@@ -1,5 +1,7 @@
 use crate::app::layout::LayoutMain;
-use crate::app::render::components::album_art::{INLINE_ALBUM_ART_RESERVED, INLINE_ALBUM_ART_ROWS};
+use crate::app::render::components::album_art::{
+    MusicImagePaint, INLINE_ALBUM_ART_RESERVED, INLINE_ALBUM_ART_ROWS,
+};
 use crate::app::render::components::album_rows::AlbumRowCtx;
 use crate::app::render::components::list_rows::{
     draw_column_selection_markers, selected_cell_rect,
@@ -13,6 +15,7 @@ use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
+use std::collections::HashMap;
 use textwrap::wrap;
 
 /// Inset of the SURFACE_ACCENT_SOFT box from the row's own bounds, on each side.
@@ -31,6 +34,23 @@ pub(in crate::app::render) struct AlbumRowsCursorCtx {
     pub(in crate::app::render) stored_scroll: usize,
 }
 
+/// Explicit render inputs for the grouped-album rows painter, gathered by the
+/// thin App-backed wrapper so the painter itself never reaches `App`.
+pub(in crate::app::render) struct GroupedAlbumRenderCtx<'a> {
+    /// `(artist, year, album_name)` display triples for every album.
+    pub(in crate::app::render) album_info: Vec<(String, String, String)>,
+    /// Album display order (settled catalog order, or the sorted fallback).
+    pub(in crate::app::render) order: Vec<usize>,
+    pub(in crate::app::render) in_music_group_view: bool,
+    pub(in crate::app::render) playing_track_id: Option<String>,
+    pub(in crate::app::render) images_enabled: bool,
+    pub(in crate::app::render) album_tracks: &'a HashMap<String, Vec<mbv_core::api::EmbyItem>>,
+}
+
+/// Thin App-backed wrapper: pre-warms neighbouring album art (task 3.7 keeps
+/// this in the shell), gathers the explicit render context, runs the App-free
+/// painter, and executes the returned `MusicImagePaint` for the selected
+/// album's hero art.
 pub(in crate::app::render) fn render_grouped_album_rows(
     app: &mut App,
     f: &mut Frame,
@@ -43,13 +63,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
     cols: u16,
     layout: &mut LayoutMain,
 ) -> usize {
-    layout.wide_music_track_hitmap.clear();
-    let AlbumRowsCursorCtx {
-        cursor,
-        stored_scroll,
-    } = cursor_ctx;
-    let visible = area.height as usize;
-    let avail = (area.width as usize).saturating_sub(2);
+    let cursor = cursor_ctx.cursor;
     let (album_info, order) = {
         let catalog = app.libs[lib_idx]
             .nav_stack
@@ -113,14 +127,6 @@ pub(in crate::app::render) fn render_grouped_album_rows(
     }
 
     let in_music_group_view = app.is_music_group_view(lib_idx);
-    // Inline track expansion for the selected album. Narrow keeps inline
-    // track focus explicitly off (`MusicWorkspaceComponent` is mounted
-    // there with inline track focus disabled, and narrow activation opens
-    // the selection modal), so in the music-group (pill selector) view the
-    // expansion is never entered from this renderer; elsewhere (plain
-    // album-folder browsing) the existing always-expand behavior is
-    // unchanged.
-    let expand_selected = !in_music_group_view;
     let playback = app.effective_playback_state();
     let playing_track_id = if playback.active {
         app.playback_queue()
@@ -129,10 +135,69 @@ pub(in crate::app::render) fn render_grouped_album_rows(
     } else {
         None
     };
-    let plan_ctx = crate::app::render::screens::album_plan::GroupedAlbumDisplayPlanCtx {
-        images_enabled: app.images_enabled(),
-        playing_track_id: playing_track_id.clone(),
+    let images_enabled = app.images_enabled();
+
+    let ctx = GroupedAlbumRenderCtx {
+        album_info,
+        order,
+        in_music_group_view,
+        playing_track_id,
+        images_enabled,
         album_tracks: &app.album_tracks_cache,
+    };
+    let (offset, image_paint) = render_grouped_album_rows_with_ctx(
+        f,
+        area,
+        albums,
+        cursor_ctx,
+        focused,
+        hero_handles_detail,
+        cols,
+        layout,
+        ctx,
+    );
+    app.paint_music_image(f, image_paint);
+    offset
+}
+
+pub(in crate::app::render) fn render_grouped_album_rows_with_ctx(
+    f: &mut Frame,
+    area: Rect,
+    albums: &[mbv_core::api::EmbyItem],
+    cursor_ctx: AlbumRowsCursorCtx,
+    focused: bool,
+    hero_handles_detail: bool,
+    cols: u16,
+    layout: &mut LayoutMain,
+    ctx: GroupedAlbumRenderCtx<'_>,
+) -> (usize, Option<MusicImagePaint>) {
+    let GroupedAlbumRenderCtx {
+        album_info,
+        order,
+        in_music_group_view,
+        playing_track_id,
+        images_enabled,
+        album_tracks,
+    } = ctx;
+    layout.wide_music_track_hitmap.clear();
+    let AlbumRowsCursorCtx {
+        cursor,
+        stored_scroll,
+    } = cursor_ctx;
+    let visible = area.height as usize;
+    let avail = (area.width as usize).saturating_sub(2);
+    // Inline track expansion for the selected album. Narrow keeps inline
+    // track focus explicitly off (`MusicWorkspaceComponent` is mounted
+    // there with inline track focus disabled, and narrow activation opens
+    // the selection modal), so in the music-group (pill selector) view the
+    // expansion is never entered from this renderer; elsewhere (plain
+    // album-folder browsing) the existing always-expand behavior is
+    // unchanged.
+    let expand_selected = !in_music_group_view;
+    let plan_ctx = crate::app::render::screens::album_plan::GroupedAlbumDisplayPlanCtx {
+        images_enabled,
+        playing_track_id: playing_track_id.clone(),
+        album_tracks,
     };
     let mut plan =
         crate::app::render::screens::album_plan::build_grouped_album_display_plan_with_ctx(
@@ -147,7 +212,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
             },
             Some((
                 area.width,
-                if app.images_enabled() && area.width >= INLINE_ALBUM_ART_RESERVED + 20 {
+                if images_enabled && area.width >= INLINE_ALBUM_ART_RESERVED + 20 {
                     INLINE_ALBUM_ART_RESERVED
                 } else {
                     0
@@ -157,7 +222,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
             plan_ctx,
         );
     if hero_handles_detail {
-        return super::album_inline::render_grouped_album_rows_inline_plan(
+        let offset = super::album_inline::render_grouped_album_rows_inline_plan(
             f,
             area,
             albums,
@@ -165,9 +230,10 @@ pub(in crate::app::render) fn render_grouped_album_rows(
             cursor_ctx,
             focused,
             plan,
-            app.images_enabled(),
+            images_enabled,
             layout,
         );
+        return (offset, None);
     }
     if !hero_handles_detail
         && plan
@@ -186,7 +252,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
             },
             Some((
                 area.width,
-                if app.images_enabled() && area.width >= INLINE_ALBUM_ART_RESERVED + 20 {
+                if images_enabled && area.width >= INLINE_ALBUM_ART_RESERVED + 20 {
                     INLINE_ALBUM_ART_RESERVED
                 } else {
                     0
@@ -194,9 +260,9 @@ pub(in crate::app::render) fn render_grouped_album_rows(
             )),
             true,
             crate::app::render::screens::album_plan::GroupedAlbumDisplayPlanCtx {
-                images_enabled: app.images_enabled(),
+                images_enabled,
                 playing_track_id,
-                album_tracks: &app.album_tracks_cache,
+                album_tracks,
             },
         );
     }
@@ -205,7 +271,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
     let display_rows = plan.rows;
     let selected_block_bounds = plan.selected_block_bounds;
     let track_detail_bounds = plan.track_detail_bounds;
-    let selected_art_reserved_w = if app.images_enabled()
+    let selected_art_reserved_w = if images_enabled
         && selected_block_bounds.is_some()
         && area.width >= INLINE_ALBUM_ART_RESERVED + 20
     {
@@ -497,7 +563,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
                     },
                 );
                 if height > 1 {
-                    if let Some(tracks) = app.album_tracks_cache.get(&albums[*idx].id).cloned() {
+                    if let Some(tracks) = album_tracks.get(&albums[*idx].id).cloned() {
                         // Narrow keeps inline track focus explicitly off:
                         // no focused track cursor and no focus highlight.
                         super::album_detail::render_album_detail(
@@ -542,7 +608,7 @@ pub(in crate::app::render) fn render_grouped_album_rows(
                         )
                     })
                     .count() as u16;
-                if let Some(tracks) = app.album_tracks_cache.get(&albums[*idx].id).cloned() {
+                if let Some(tracks) = album_tracks.get(&albums[*idx].id).cloned() {
                     // Narrow keeps inline track focus explicitly off: the
                     // track block paints unfocused (cursor 0, no focus
                     // highlight).
@@ -634,6 +700,10 @@ pub(in crate::app::render) fn render_grouped_album_rows(
         );
     }
 
+    // The selected album's hero art is emitted as a typed `MusicImagePaint`
+    // for the shell to execute (image-cache authority stays in `App` during
+    // the migration); this painter never touches the image cache itself.
+    let mut image_paint = None;
     if let Some((art_top, art_bottom)) = selected_art_abs_rows {
         if art_top >= offset && art_top < offset + visible {
             let visible_bottom = art_bottom.min(offset + visible);
@@ -644,7 +714,11 @@ pub(in crate::app::render) fn render_grouped_album_rows(
                 height: (visible_bottom - art_top) as u16,
             };
             if let Some(album) = albums.get(cursor) {
-                app.render_inline_album_art(f, art_rect, album, layout);
+                image_paint = Some(MusicImagePaint::Album {
+                    area: art_rect,
+                    album: Box::new(album.clone()),
+                    centered: false,
+                });
             }
         }
     }
@@ -668,5 +742,5 @@ pub(in crate::app::render) fn render_grouped_album_rows(
     // audiobooks, feeds).
     draw_column_selection_markers(f, area, cursor, &layout.left_item_rows, screen_offset);
 
-    offset
+    (offset, image_paint)
 }
