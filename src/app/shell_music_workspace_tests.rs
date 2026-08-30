@@ -114,6 +114,31 @@ fn grouped_music_cursor_no_fallthrough_when_left_sorted_indices_empty() {
 }
 
 #[test]
+fn shell_executes_grouped_music_image_paint() {
+    let mut model = Model::new(make_music_group_app());
+    let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
+    client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
+        server_url: "http://127.0.0.1:1".into(),
+        user_id: "user-id".into(),
+        token: "token".into(),
+    });
+    model.app.image_protocol_enabled = true;
+    model.app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.sync_music_workspace();
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| model.render_music_workspace_component(frame))
+        .unwrap();
+
+    assert!(model.app.card_image_loading.contains("album-1:P"));
+}
+
+#[test]
 fn shell_mounts_music_workspace_in_narrow_mode() {
     let mut model = Model::new(make_music_group_app());
     assert!(model.app.is_music_group_view(0));
