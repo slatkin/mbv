@@ -10,7 +10,11 @@ impl App {
     /// Resolves the target via `selected_series_item`, then delegates the
     /// wide/narrow branch to `activate_selected_series_item`.
     pub(super) fn activate_selected_series(&mut self, lib_idx: usize) -> bool {
-        let Some(item) = self.selected_series_item(lib_idx) else {
+        let cursor = self.libs[lib_idx]
+            .nav_stack
+            .last()
+            .map_or(0, |level| level.resting().cursor());
+        let Some(item) = self.selected_series_item(lib_idx, cursor) else {
             return false;
         };
         self.activate_selected_series_item(&item)

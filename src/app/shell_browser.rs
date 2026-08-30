@@ -352,11 +352,16 @@ impl Model {
         // Narrow generic/Movies/home-video: resolve the count label, letter
         // pills and inline movie/series hero shell-side and push them to the
         // component before its `view` composes the surface (task 3.3).
+        let browser_cursor = self
+            .application
+            .get_component(id)
+            .and_then(|comp| comp.as_any().downcast_ref::<BrowserComponent>())
+            .map_or(0, BrowserComponent::cursor);
         let narrow_extras = self
             .app
             .tab
             .emby_library_index()
-            .map(|lib_idx| self.app.narrow_browse_extras(lib_idx));
+            .map(|lib_idx| self.app.narrow_browse_extras(lib_idx, browser_cursor));
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {
                 browser.set_wide_movies(home_video, letter_pills);

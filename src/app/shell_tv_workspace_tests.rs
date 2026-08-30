@@ -648,20 +648,29 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     // component's selection.
     model.app.libs[0].nav_stack[0].cursor = 1;
     assert_eq!(
-        model.app.selected_series_item(0).map(|i| i.id),
+        model
+            .app
+            .selected_series_item(0, model.app.libs[0].nav_stack[0].cursor)
+            .map(|i| i.id),
         Some("movie-second".into()),
         "stale App cursor resolves a different Series before realignment"
     );
     model.app.libs[0].nav_stack[0].cursor = 0;
     assert_eq!(
-        model.app.selected_series_item(0).map(|i| i.id),
+        model
+            .app
+            .selected_series_item(0, model.app.libs[0].nav_stack[0].cursor)
+            .map(|i| i.id),
         Some("movie-focused".into()),
         "realigned cursor resolves the component's selected Series"
     );
 
     // Wide TV layout => enter_series_selection targets the component's
     // Series (asserted by the resolved target, not merely the bool).
-    let wide_target = model.app.selected_series_item(0).expect("series");
+    let wide_target = model
+        .app
+        .selected_series_item(0, model.app.libs[0].nav_stack[0].cursor)
+        .expect("series");
     assert_eq!(wide_target.id, "movie-focused");
     assert!(model.app.activate_selected_series(0));
 

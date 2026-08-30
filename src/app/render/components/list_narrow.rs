@@ -558,7 +558,11 @@ impl App {
     /// label, letter-pill row, and the inline movie/series hero — everything
     /// that needs `App`/image-cache authority, resolved here and pushed to
     /// `BrowserComponent` each frame.
-    pub(in crate::app) fn narrow_browse_extras(&mut self, lib_idx: usize) -> NarrowBrowseExtras {
+    pub(in crate::app) fn narrow_browse_extras(
+        &mut self,
+        lib_idx: usize,
+        cursor: usize,
+    ) -> NarrowBrowseExtras {
         let coll = self.libs[lib_idx].library.collection_type.clone();
         let feed_group_view = self.is_feed_home_video_group_view(lib_idx);
         let home_video = self.is_home_video_view(lib_idx) && !feed_group_view;
@@ -582,7 +586,7 @@ impl App {
         let use_shared_replacement_plan = matches!(coll.as_str(), "movies" | "tvshows");
         let season_grid = self.is_viewing_season_grid(lib_idx);
 
-        let selected_movie = self.selected_movie_item(lib_idx).or_else(|| {
+        let selected_movie = self.selected_movie_item(lib_idx, cursor).or_else(|| {
             feed_items.as_ref().and_then(|items| {
                 let cursor = self.libs[lib_idx]
                     .feed_home_video
@@ -592,7 +596,7 @@ impl App {
             })
         });
         let selected_series = if selected_movie.is_none() {
-            self.selected_series_item(lib_idx)
+            self.selected_series_item(lib_idx, cursor)
         } else {
             None
         };
