@@ -5,6 +5,9 @@ use crate::app::render::arrangements::hero_left::{self, WrappedHeroLine, PANE_PA
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::music::{self as music_arrangement, WideMusicLeftLayout};
 use crate::app::render::arrangements::padded_rect;
+use crate::app::render::components::album::{
+    render_grouped_album_rows_with_ctx, AlbumRowsCursorCtx, GroupedAlbumRenderCtx,
+};
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::components::music_wide_browser::render_wide_right_album_browser_with_ctx;
 use crate::app::render::components::music_wide_tracks::render_wide_left_tracks;
@@ -14,6 +17,7 @@ use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::Frame;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub(in crate::app) struct MusicWideRenderCtx {
@@ -225,6 +229,44 @@ impl App {
 /// App-free grouped Music painter. The legacy `App` path still performs the
 /// track fetch before building this context; this function consumes only its
 /// resolved presentation data.
+/// Paint grouped Music in Normal geometry: the album rows and Model A inline hero.
+pub(in crate::app) fn render_narrow_music_group_with_ctx(
+    f: &mut Frame,
+    area: Rect,
+    ctx: &MusicWideRenderCtx,
+    layout: &mut LayoutMain,
+) -> usize {
+    let mut album_tracks = HashMap::new();
+    if let (Some(album), Some(tracks)) = (&ctx.selected_album, &ctx.album_tracks) {
+        album_tracks.insert(album.id.clone(), tracks.clone());
+    }
+    let (offset, image_paint) = render_grouped_album_rows_with_ctx(
+        f,
+        area,
+        &ctx.list.items,
+        AlbumRowsCursorCtx {
+            cursor: ctx.list.cursor,
+            stored_scroll: ctx.list.scroll,
+        },
+        ctx.focused,
+        true,
+        1,
+        layout,
+        GroupedAlbumRenderCtx {
+            album_info: ctx.album_info.clone(),
+            order: ctx.album_order.clone(),
+            in_music_group_view: true,
+            playing_track_id: None,
+            images_enabled: ctx.images_enabled,
+            album_tracks: &album_tracks,
+        },
+    );
+    // Narrow's Model A composer currently paints its text-only hero; retain
+    // the typed image result for the shell seam as the compositor evolves.
+    let _ = image_paint;
+    offset
+}
+
 pub(in crate::app) fn render_wide_music_group_with_ctx(
     f: &mut Frame,
     area: Rect,

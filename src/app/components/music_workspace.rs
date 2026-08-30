@@ -14,7 +14,10 @@ use tuirealm::state::State;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
-use crate::app::render::{render_wide_music_group_with_ctx, MusicImagePaint, MusicWideRenderCtx};
+use crate::app::render::{
+    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, MusicImagePaint,
+    MusicWideRenderCtx,
+};
 use crate::app::ui_util::move_cursor;
 
 pub struct MusicWorkspaceComponent {
@@ -416,9 +419,15 @@ impl Component for MusicWorkspaceComponent {
             self.album_scroll,
             self.track_cursor,
         );
-        let output = render_wide_music_group_with_ctx(frame, area, &context, &mut self.layout);
-        self.album_scroll = output.final_scroll;
-        self.image_paint = output.image_paint;
+        if area.width < 100 || area.height == 0 {
+            self.album_scroll =
+                render_narrow_music_group_with_ctx(frame, area, &context, &mut self.layout);
+            self.image_paint = None;
+        } else {
+            let output = render_wide_music_group_with_ctx(frame, area, &context, &mut self.layout);
+            self.album_scroll = output.final_scroll;
+            self.image_paint = output.image_paint;
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
