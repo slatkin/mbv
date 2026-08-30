@@ -597,21 +597,6 @@ impl App {
         }
     }
 
-    /// Returns the currently cursor-selected item at the album-folder-listing
-    /// nav_stack level (i.e. the level where `is_viewing_album_folders`
-    /// holds), if any. The cursor field always indexes into the raw
-    /// `items` array in the order it was fetched (SortName-by-album-title)
-    /// -- *not* the artist-grouped display order that
-    /// `render_list`'s grouped branch builds for rendering -- so a
-    /// plain `items.get(cursor)` is correct even for the grouped music view.
-    pub(in crate::app) fn selected_album_item(
-        &self,
-        lib_idx: usize,
-    ) -> Option<mbv_core::api::EmbyItem> {
-        let lvl = self.libs[lib_idx].nav_stack.last()?;
-        lvl.items.get(lvl.cursor).cloned()
-    }
-
     /// Resolves the display artist for an album item in the grouped music
     /// views, synchronously (never schedules artist lookups). Priority
     /// order:

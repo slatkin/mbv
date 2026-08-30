@@ -148,21 +148,12 @@ impl App {
         let list = self.library_list_render_ctx(
             lib_idx,
             true,
-            cursor_scroll.map_or_else(
-                || self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor),
-                |v| v.0,
-            ),
-            cursor_scroll.map_or_else(
-                || self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.scroll),
-                |v| v.1,
-            ),
+            cursor_scroll.map_or(0, |v| v.0),
+            cursor_scroll.map_or(0, |v| v.1),
         );
         let lib = &self.libs[lib_idx];
         let level = lib.nav_stack.last();
-        let selected_cursor = cursor_scroll
-            .map(|(cursor, _)| cursor)
-            .or_else(|| level.map(|level| level.cursor))
-            .unwrap_or(0);
+        let selected_cursor = cursor_scroll.map_or(0, |(cursor, _)| cursor);
         let selected_album = level
             .and_then(|level| level.items.get(selected_cursor))
             .cloned();

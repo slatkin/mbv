@@ -159,7 +159,12 @@ impl App {
     pub(super) fn handle_mouse_double_click_emby(&mut self, lib_idx: usize, target: usize) {
         self.handle_mouse_single_click_emby(lib_idx, target);
         if self.is_viewing_album_folders(lib_idx) {
-            self.activate_album_folder_row(lib_idx);
+            let album = self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .and_then(|level| level.items.get(target))
+                .cloned();
+            self.activate_album_folder_row(album);
         } else if !self.activate_selected_series(lib_idx) {
             // The double-click already landed `target` as the level cursor;
             // resolve the item at it and activate via the item-taking tail

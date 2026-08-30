@@ -17,10 +17,9 @@ impl Model {
             }
             Msg::Shell(request) => match request {
                 ShellRequest::MusicAlbumActivate => {
-                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                        // Outcome 3 reader: get the album from the component, which owns
-                        // the selection cursor. Fall back to the App cursor only if the
-                        // component is not mounted (should not happen in normal flow).
+                    if self.app.tab.emby_library_index().is_some() {
+                        // Outcome 3 reader: get the album from the component, which
+                        // owns the selection cursor.
                         let album = self
                             .music_workspace_id
                             .as_ref()
@@ -28,8 +27,7 @@ impl Model {
                             .and_then(|comp| {
                                 comp.as_any().downcast_ref::<MusicWorkspaceComponent>()
                             })
-                            .and_then(|comp| comp.selected_item())
-                            .or_else(|| self.app.selected_album_item(lib_idx));
+                            .and_then(|comp| comp.selected_item());
                         if let Some(album) = album {
                             if !self.app.layout.main.is_wide_music_active() {
                                 self.app.open_album_selection_modal(&album);

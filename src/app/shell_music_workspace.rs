@@ -105,35 +105,26 @@ impl Model {
         // album from the component's authoritative selection (its own cursor),
         // not the App browse cursor. Only on first mount fall back to the
         // App-derived item.
+        // Resting position: the persistence-facing cursor/scroll the shell
+        // restores on re-entry, and the first-mount re-anchor target.
+        let resting = self.app.libs[index].nav_stack.last().map(|level| {
+            let resting = level.resting();
+            (resting.cursor(), resting.scroll())
+        });
         let cursor_scroll = if self.music_workspace_reanchor {
-            None
+            resting
         } else {
             self.application
                 .get_component(id)
                 .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
                 .map(|music| (music.album_cursor(), music.album_scroll()))
+                .or(resting)
         };
         let list = self.app.library_list_render_ctx(
             index,
             true,
-            cursor_scroll.map_or_else(
-                || {
-                    self.app.libs[index]
-                        .nav_stack
-                        .last()
-                        .map_or(0, |l| l.cursor)
-                },
-                |(cursor, _)| cursor,
-            ),
-            cursor_scroll.map_or_else(
-                || {
-                    self.app.libs[index]
-                        .nav_stack
-                        .last()
-                        .map_or(0, |l| l.scroll)
-                },
-                |(_, scroll)| scroll,
-            ),
+            cursor_scroll.map_or(0, |(cursor, _)| cursor),
+            cursor_scroll.map_or(0, |(_, scroll)| scroll),
         );
         let selected_album = self
             .application
@@ -196,7 +187,18 @@ impl Model {
             return;
         }
         if let Some(lib_idx) = self.app.tab.emby_library_index() {
-            let context = self.app.wide_music_render_ctx(lib_idx, None);
+            let cursor_scroll = self
+                .application
+                .get_component(id)
+                .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
+                .map(|music| (music.album_cursor(), music.album_scroll()))
+                .or_else(|| {
+                    self.app.libs[lib_idx].nav_stack.last().map(|level| {
+                        let resting = level.resting();
+                        (resting.cursor(), resting.scroll())
+                    })
+                });
+            let context = self.app.wide_music_render_ctx(lib_idx, cursor_scroll);
             context.publish_geometry(area, &mut self.app.layout.main);
         }
         self.application.view(id, frame, area);

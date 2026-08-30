@@ -194,10 +194,9 @@ impl App {
     /// album's tracks are loading. Narrow has no inline track list to focus
     /// (see `render_album_hero_detail`), so it opens the selection modal
     /// instead (design.md decision 6).
-    pub(super) fn activate_album_folder_row(&mut self, lib_idx: usize) {
-        // Outcome 3 reader: receive the album from the component via the caller.
-        // Fallback: read from App if not provided (for legacy callers like mouse).
-        let album = self.selected_album_item(lib_idx);
+    pub(super) fn activate_album_folder_row(&mut self, album: Option<EmbyItem>) {
+        // Outcome 3 reader: the caller resolves the selected album (from the
+        // mounted component's cursor, or the clicked row index for mouse).
         if self.layout.main.is_wide_music_active() {
             return;
         }
