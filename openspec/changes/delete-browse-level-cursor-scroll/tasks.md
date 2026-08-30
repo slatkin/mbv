@@ -8,7 +8,7 @@
       `split-browse-state-interaction-fields/design.md` §1.1/1.1b is the
       checklist. (1.1a–1.1c re-point the three site-groups the field-split
       campaign left live; confirm they are landed before 1.2.)
-- [ ] 1.1a Re-point `actions_navigation.rs:92` (`select_item`, `lvl.cursor = pos`
+- [x] 1.1a Re-point `actions_navigation.rs:92` (`select_item`, `lvl.cursor = pos`
       after resolving a playable item). **Correction (design §1.1's "outcome 1 —
       drop" classification is wrong here):** `shell_browser` test
       `shell_emby_browser_effects_honor_component_target` (task 5.3d) asserts the
@@ -26,7 +26,7 @@
       (projection reset). Verify: `rtk cargo check -p mbv`; context-menu
       item-removal tests pass. (Landed in `4b26a7ec`; full `--no-fail-fast`
       suite shows no regression attributable to this drop.)
-- [ ] 1.1c Re-point the Music wide render path off `BrowseLevel` per design
+- [x] 1.1c Re-point the Music wide render path off `BrowseLevel` per design
       §1.1b **R16/R17/R18 (outcome 3)**: `wide_music_render_ctx`
       (`render/components/music_wide.rs` ~`:153/:157/:164`) and
       `selected_album_item` (`render/components/widgets.rs:612`) source the live
