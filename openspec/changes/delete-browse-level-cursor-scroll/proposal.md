@@ -40,8 +40,14 @@ No spec change. The framework requirements this work satisfies were added by
 
 `src/app/types_browse.rs`, `src/app/lib_cursor_actions.rs`,
 `src/app/mouse_gestures.rs`, `src/app/actions_navigation.rs`,
-`src/app/context_menu_actions.rs`, `src/app/render/components/music_wide.rs`,
+`src/app/context_menu_actions.rs`, `src/app/shell_browser.rs`,
+`src/app/shell_tv_workspace.rs`, `src/app/shuffle_folder_actions.rs`,
+`src/app/render/components/music_wide.rs`,
 `src/app/render/components/widgets.rs`,
+`src/app/render/components/detail.rs`,
+`src/app/render/components/home_video.rs`,
+`src/app/render/components/tv_wide.rs`,
+`src/app/render/components/list_narrow.rs`,
 `rules/interactive-component-boundary/`, and the readers named in
 `split-browse-state-interaction-fields/design.md` §1.1/1.1b.
 
@@ -54,3 +60,12 @@ Depends on `migrate-narrow-browse-to-components` — specifically its **task 2**
 The Music wide re-point (design §1.1b R16–R18) was scoped to
 `split-browse-state-interaction-fields` task 4.4 / `remove-music-workspace-cursor-mirror`
 and was left live when those changes closed; it lands here as task 1.1c.
+
+`migrate-narrow-browse-to-components` mounted components at every Emby
+breakpoint but left several live per-frame readers of the raw fields on the
+legacy render/shell paths — the narrow inline-hero resolvers (§1.1b R19/R20),
+the wide-TV ctx `None` fallback, the poster-prefetch scroll read, the
+breakpoint hand-off cursor write, and the content-projection seams — plus
+three now-orphaned dead readers (`shuffle_play`, `render_compact_detail`,
+`render_selected_home_video_detail`). These land as tasks 1.1d–1.1g and the
+outcome-2 re-spellings folded into 1.2.
