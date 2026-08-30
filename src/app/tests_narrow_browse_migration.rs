@@ -306,6 +306,44 @@ fn narrow_movies_surface_snapshot() {
     assert_eq!(output, expected, "narrow Movies surface drifted:\n{output}");
 }
 
+/// Characterization (task 3.4 template step a): pins the painted narrow Emby
+/// TV browse surface — inline series hero + series rows — through the full
+/// `Model::draw_frame` path. Baked pre-migration (legacy `render_list` narrow
+/// branch still paints); task 3.4 step b/c rebakes if the migration changes
+/// the buffer.
+#[test]
+fn narrow_tv_surface_snapshot() {
+    let mut model = Model::new(tv_shows_app());
+    model.sync_mounted_surfaces();
+    let mut term = narrow_backend();
+
+    let output = draw(&mut model, &mut term);
+
+    let expected = "                                                            \n   HOME  ▐ SHOWS                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ \n                                                            \n   Series 0                                                 \n                                                            \n                                                            \n ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ \n  Series 1                                                  \n  Series 2                                                  \n  Series 3                                                  \n  Series 4                                                  \n                                                            \n                                                            \n 🔊  100                                             \u{f06b4} \u{ede2} ♥ \u{f1c0} ";
+    assert_eq!(output, expected, "narrow TV surface drifted:\n{output}");
+}
+
+/// Regression (task 3.4 template step a): narrow Emby TV paints each visible
+/// series/season row exactly once. Red pre-migration (legacy `render_list` +
+/// `BrowserComponent::view` double-paint); un-ignored in step d.
+#[test]
+#[ignore = "green after task 3.4"]
+fn narrow_tv_paints_each_browse_row_once() {
+    let mut model = Model::new(tv_shows_app());
+    model.sync_mounted_surfaces();
+    let mut term = narrow_backend();
+
+    let output = draw(&mut model, &mut term);
+
+    for row in ["Series 0", "Series 1", "Series 2", "Series 3", "Series 4"] {
+        assert_eq!(
+            output.matches(row).count(),
+            1,
+            "narrow TV browse row {row:?} must be painted exactly once:\n{output}"
+        );
+    }
+}
+
 /// Regression 5: narrow Movies paints each browse row exactly once (currently
 /// double-painted by legacy `render_list` + `BrowserComponent::view`).
 #[test]
