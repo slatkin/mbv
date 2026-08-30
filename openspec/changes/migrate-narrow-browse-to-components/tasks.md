@@ -226,6 +226,18 @@ findings become added rows; the template does not change.
       `EmbyLibrary` arm to geometry reservation, matching the Home / Feeds / ABS
       arms. Verify: `rtk cargo clippy --workspace --all-targets` reports no dead
       code; `App` has no browse painter left.
+      Wide-podcast follow-ups from 3.5b (pre-existing, deferred here): (a)
+      `widgets.rs:580` still ORs `is_podcast_library` into the
+      `wide_tv_render_ctx().publish_geometry` guard, so `is_wide_tv_active()`
+      reports `true` for wide podcast and `input_browse_dispatch.rs:33` /
+      `lib_cursor_actions.rs:77` / `shell_overlays_menus.rs:100` treat it as
+      wide TV (1-col stride, Series-Enter interception, context-menu anchor) —
+      drop that disjunct, mirroring the `list.rs` change 3.5b made; (b)
+      re-purpose `wide_emby_podcast_uses_the_series_workspace_and_right_rail`
+      (`tests_non_music.rs:134`) to expect zeroed `tv_wide_*` once (a) lands;
+      (c) the shared narrow composer run wide leaves an empty placeholder hero
+      frame with the first rows behind the hero reservation (same as wide
+      generic) — the 3.8 wide-generic cleanup covers this.
 
 ## 4. Record the invariant
 
