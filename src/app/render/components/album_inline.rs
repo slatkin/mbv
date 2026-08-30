@@ -9,7 +9,7 @@ use crate::app::palette;
 use crate::app::render::components::album_detail::album_hero_detail_rows;
 use crate::app::render::screens::album_plan::{GroupedAlbumDisplayPlan, GroupedAlbumDisplayRow};
 use ratatui::layout::Rect;
-use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
+use ratatui::widgets::{List, ListItem, ListState, Paragraph};
 use ratatui::Frame;
 
 pub(in crate::app::render) fn render_grouped_album_rows_inline_plan(
@@ -22,7 +22,7 @@ pub(in crate::app::render) fn render_grouped_album_rows_inline_plan(
     plan: GroupedAlbumDisplayPlan,
     images_enabled: bool,
     layout: &mut LayoutMain,
-) -> usize {
+) -> (usize, Option<crate::app::render::MusicImagePaint>) {
     let AlbumRowsCursorCtx {
         cursor,
         stored_scroll,
@@ -176,8 +176,21 @@ pub(in crate::app::render) fn render_grouped_album_rows_inline_plan(
             palette::SCROLLBAR,
         );
     }
+    let image_paint = hero_area
+        .filter(|hero_area| images_enabled && hero_area.width >= 4 && hero_area.height >= 2)
+        .and_then(|hero_area| {
+            plan.order
+                .iter()
+                .find(|&&idx| idx == cursor)
+                .and_then(|&idx| _albums.get(idx))
+                .map(|album| crate::app::render::MusicImagePaint::Album {
+                    area: hero_area,
+                    album: Box::new(album.clone()),
+                    centered: false,
+                })
+        });
     if replacement.should_draw_selection_markers() {
         draw_column_selection_markers(f, area, cursor, &item_rows, offset);
     }
-    offset
+    (offset, image_paint)
 }

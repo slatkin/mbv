@@ -222,7 +222,7 @@ pub(in crate::app::render) fn render_grouped_album_rows_with_ctx(
             plan_ctx,
         );
     if hero_handles_detail {
-        let offset = super::album_inline::render_grouped_album_rows_inline_plan(
+        let (offset, image_paint) = super::album_inline::render_grouped_album_rows_inline_plan(
             f,
             area,
             albums,
@@ -233,7 +233,7 @@ pub(in crate::app::render) fn render_grouped_album_rows_with_ctx(
             images_enabled,
             layout,
         );
-        return (offset, None);
+        return (offset, image_paint);
     }
     if !hero_handles_detail
         && plan
