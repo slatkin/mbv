@@ -275,13 +275,14 @@ fn render_feed_group_picker(
     );
     let mut list_area = pills.content_area;
     if list_area.height > 0 {
-        crate::app::render::render_count_label(
-            f,
-            Rect {
-                height: 1,
-                ..list_area
-            },
-            items.len(),
+        let count_area = Rect {
+            height: 1,
+            ..list_area
+        };
+        crate::app::render::render_count_label(f, count_area, items.len());
+        f.render_widget(
+            ratatui::widgets::Paragraph::new("▁".repeat(count_area.width as usize)),
+            count_area,
         );
         list_area.y += 2;
         list_area.height = list_area.height.saturating_sub(2);
