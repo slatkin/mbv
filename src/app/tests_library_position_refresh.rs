@@ -15,8 +15,7 @@ fn mixed_services_app() -> App {
             title: "Movies".into(),
             items: make_items(1),
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -126,7 +125,7 @@ fn stale_emby_lib_index_mutates_no_library() {
     app.refresh_lib(stale);
     for idx in 0..2 {
         let lvl = &app.libs[idx].nav_stack[0];
-        assert_eq!(lvl.cursor, 0, "lib {idx} cursor");
+        assert_eq!(lvl.resting().cursor(), 0, "lib {idx} cursor");
         assert!(!lvl.loading, "lib {idx} not loading");
     }
 }
@@ -142,8 +141,7 @@ fn two_emby_libraries_app() -> App {
             title: title.into(),
             items: make_items(2),
             total_count: 2,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),

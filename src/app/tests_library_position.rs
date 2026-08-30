@@ -9,8 +9,7 @@ fn library_position_snapshot_captures_path_focus_and_feed_group() {
             title: "Movies".into(),
             items: make_items(3),
             total_count: 3,
-            cursor: 1,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(1, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -59,8 +58,8 @@ fn browse_level_restore_prefers_item_id_and_clamps_index_fallback() {
 
     let level = BrowseLevel::from_position_level(&saved, make_items(5), 5, 3);
 
-    assert_eq!(level.cursor, 3);
-    assert_eq!(level.scroll, 1);
+    assert_eq!(level.resting().cursor(), 3);
+    assert_eq!(level.resting().scroll(), 1);
     assert_eq!(level.item_types.as_deref(), Some("Movie"));
     assert!(!level.loading);
     assert!(level.all_items.is_none());
@@ -68,8 +67,8 @@ fn browse_level_restore_prefers_item_id_and_clamps_index_fallback() {
     saved.focused_item_id = Some("missing".into());
     let level = BrowseLevel::from_position_level(&saved, make_items(5), 5, 3);
 
-    assert_eq!(level.cursor, 4);
-    assert_eq!(level.scroll, 2);
+    assert_eq!(level.resting().cursor(), 4);
+    assert_eq!(level.resting().scroll(), 2);
 }
 
 #[test]
@@ -131,8 +130,8 @@ fn restore_library_position_keeps_saved_path_when_levels_exist() {
         Some("leaf-1")
     );
     assert_eq!(restored.1.len(), 2);
-    assert_eq!(restored.1[0].cursor, 1);
-    assert_eq!(restored.1[1].cursor, 0);
+    assert_eq!(restored.1[0].resting().cursor(), 1);
+    assert_eq!(restored.1[1].resting().cursor(), 0);
     assert_eq!(restored.0.levels[0].letter_filter_index, Some(0));
     assert_eq!(restored.0.levels[0].library_total, Some(301));
 }
@@ -189,7 +188,7 @@ fn restore_library_position_clamps_stale_missing_item_to_nearest_fallback() {
         restored.0.levels[1].focused_item_id.as_deref(),
         Some("leaf-1")
     );
-    assert_eq!(restored.1[1].cursor, 1);
+    assert_eq!(restored.1[1].resting().cursor(), 1);
 }
 
 #[test]
@@ -244,7 +243,7 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
         Some("folder-c")
     );
     assert_eq!(restored.1.len(), 1);
-    assert_eq!(restored.1[0].cursor, 1);
+    assert_eq!(restored.1[0].resting().cursor(), 1);
 }
 
 #[test]
@@ -267,8 +266,7 @@ fn applying_library_position_preserves_persisted_feed_group_state() {
             title: "Movies".into(),
             items: make_items(1),
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -303,8 +301,7 @@ fn save_default_library_position_persists_focused_item() {
             title: "Movies".into(),
             items: make_items(3),
             total_count: 3,
-            cursor: 2,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(2, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -338,8 +335,7 @@ fn move_lib_cursor_persists_default_library_position() {
             title: "Movies".into(),
             items: make_items(3),
             total_count: 3,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -374,8 +370,7 @@ fn flush_library_position_persists_session_scroll_without_navigation() {
             title: "Movies".into(),
             items: make_items(3),
             total_count: 3,
-            cursor: 0,
-            scroll: 6,
+            resting: crate::app::types_browse::BrowseResting::new(0, 6),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -409,8 +404,7 @@ fn saving_visible_library_position_keeps_hidden_library_state_entries() {
             title: "Movies".into(),
             items: make_items(2),
             total_count: 2,
-            cursor: 1,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(1, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -461,8 +455,7 @@ fn refresh_lib_clears_saved_position_for_active_library() {
             title: "Movies".into(),
             items: make_items(2),
             total_count: 2,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -514,8 +507,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
             title: "Movies".into(),
             items: make_items(2),
             total_count: 2,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),

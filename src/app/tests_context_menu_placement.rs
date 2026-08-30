@@ -62,7 +62,7 @@ fn pointer_placement_stays_click_anchored_not_following_selection() {
     // Move the underlying selection so the keyboard anchor (selected-item
     // rect) would sit elsewhere; the pointer anchor must not chase it.
     if let Some(ref mut level) = model.app.libs[0].nav_stack.last_mut() {
-        level.cursor = level.items.len().saturating_sub(1);
+        level.set_resting_cursor(level.items.len().saturating_sub(1));
     }
     let b = render_at(&mut model, 100, 40);
 

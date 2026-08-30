@@ -36,13 +36,12 @@ fn feeds_tab_does_not_route_into_library_behavior() {
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
             total_count: 1,
-            cursor: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             loading: false,
-            scroll: 0,
             all_items: None,
             letter_filter: None,
             music_grouping: None,
@@ -91,7 +90,7 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     // 4. The library tab's nav_stack cursor must be untouched — Feeds
     //    did not dispatch into library browsing.
     assert_eq!(
-        app.libs[0].nav_stack[0].cursor, 0,
+        app.libs[0].nav_stack[0].resting().cursor(), 0,
         "library cursor must remain unchanged by feed-tab key handling"
     );
 }
@@ -112,13 +111,12 @@ fn set_library_tab_to_feeds_does_not_corrupt_library_state() {
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
             total_count: 1,
-            cursor: 3,
+            resting: crate::app::types_browse::BrowseResting::new(3, 2),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             loading: false,
-            scroll: 2,
             all_items: None,
             letter_filter: None,
             music_grouping: None,
@@ -150,8 +148,8 @@ fn set_library_tab_to_feeds_does_not_corrupt_library_state() {
         "Feeds tab should set Library panel focus"
     );
     // Library nav_stack must be untouched.
-    assert_eq!(app.libs[0].nav_stack[0].cursor, 3);
-    assert_eq!(app.libs[0].nav_stack[0].scroll, 2);
+    assert_eq!(app.libs[0].nav_stack[0].resting().cursor(), 3);
+    assert_eq!(app.libs[0].nav_stack[0].resting().scroll(), 2);
 }
 
 /// A guid request for an empty or stale Feed snapshot must return without
@@ -279,8 +277,7 @@ fn f5_on_feeds_tab_does_not_reach_emby_or_audiobookshelf_refresh() {
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -351,8 +348,7 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
