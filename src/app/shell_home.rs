@@ -49,6 +49,8 @@ impl Model {
             ShellRequest::HomeSectionSelected(section) => {
                 self.select_home_section_from_component(section)
             }
+            // unreachable: shell_messages.rs routes only the Home* group (Play/
+            // Enqueue/ContextMenu/Delete/ToggleWatched/SectionSelected) here.
             _ => {}
         }
     }

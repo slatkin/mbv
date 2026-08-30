@@ -39,6 +39,8 @@ impl Model {
                 ComponentId::Popup(PopupId::FeedManage) => self.render_feeds_manage_popup(frame),
                 ComponentId::Overlay(OverlayId::Search) => self.render_search_overlay(frame),
                 ComponentId::Overlay(OverlayId::Sessions) => self.render_sessions_overlay(frame),
+                // ComponentId also covers non-overlay ids (screens, workspaces);
+                // those are not painted by the overlay stack.
                 _ => {}
             }
         }

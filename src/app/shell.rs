@@ -234,6 +234,8 @@ impl Model {
             (KeyCode::Esc, Some(Command::Stop), RouterOutcome::Command(Command::Stop)) => {
                 self.app.last_esc_press = None;
             }
+            // any other (key, playback command, router outcome) triple: no
+            // double-tap timer to arm or clear.
             _ => {}
         }
     }

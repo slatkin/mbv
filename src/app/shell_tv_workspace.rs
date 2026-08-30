@@ -36,6 +36,9 @@ impl Model {
                     ShellRequest::TvCycleLetterPill { delta } => {
                         self.app.cycle_letter_pill(lib_idx, delta)
                     }
+                    // closed set: the outer arm's guard already restricts this to
+                    // TvMoveRows/TvMoveColumn/TvJumpCursor/TvActivate/TvBack/
+                    // TvCycleLetterPill; the pure cursor moves need no App effect.
                     _ => {}
                 }
                 self.push_tv_workspace_content();
@@ -43,6 +46,10 @@ impl Model {
             // Episode and season cursors are component-local until the later
             // episode action slice; retain typed routing without touching App.
             ShellRequest::TvEpisodeMove { .. } | ShellRequest::TvSeasonMove { .. } => {}
+            // unreachable: shell_messages.rs routes only the Tv* group
+            // (MoveRows/MoveColumn/JumpCursor/Activate/EpisodeActivate/Back/
+            // CycleLetterPill/EpisodeMove/SeasonMove) into handle_tv_request;
+            // every one has an arm above.
             _ => {}
         }
     }

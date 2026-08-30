@@ -113,6 +113,7 @@ impl super::shell::Model {
                 self.start_edit_feed()
             }
             KeyCode::Char('d') if self.config_feed_count() > 0 => self.confirm_remove_feed(),
+            // KeyCode is a std enum; any unbound key in the list stage is a no-op.
             _ => {}
         }
     }
@@ -125,6 +126,8 @@ impl super::shell::Model {
         match key.code {
             KeyCode::Esc => self.cancel_feed_form(),
             KeyCode::Enter if !submitting => self.submit_feed_form(),
+            // KeyCode is a std enum; any unbound key in the form stage is a no-op
+            // (text input is handled by the component, not here).
             _ => {}
         }
     }

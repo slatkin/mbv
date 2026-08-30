@@ -97,6 +97,11 @@ impl Model {
             ShellRequest::BrowserCursorIndex { index } => {
                 self.app.apply_lib_cursor_index(lib_idx, index)
             }
+            // unreachable: shell_messages.rs top-level dispatch routes only the
+            // Browser* activate/effect group (BrowserActivate/Play/Enqueue/
+            // ToggleWatched/ContextMenu/Shuffle/Refresh/Rescan/Back/
+            // CycleLetterPill) and BrowserCursorIndex into handle_browser_request;
+            // every one has an arm above.
             _ => {}
         }
     }

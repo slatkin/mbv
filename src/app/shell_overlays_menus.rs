@@ -254,6 +254,9 @@ impl Model {
                     super::super::types_selection_modal::SelectionModalSource::Podcast {
                         library_item_id,
                     } => self.select_podcast_selection_modal_filter(library_item_id, selected),
+                    // SelectionModalSource is closed (Series/Album/Podcast/Book);
+                    // only Series and Podcast modals carry a filter, so Album and
+                    // Book have no filter-selection effect.
                     _ => {}
                 }
             }
@@ -271,6 +274,10 @@ impl Model {
                 };
                 self.app.activate_selection_modal_item(source, item_id);
             }
+            // unreachable: callers pass only DismissSelectionModal,
+            // SelectionModalFilterSelected, SelectionModalRefresh, or
+            // SelectionModalActivate (shell_messages.rs OR-group +
+            // shell_overlays_modals.rs); every one has an arm above.
             _ => {}
         }
     }
@@ -470,6 +477,8 @@ impl Model {
         match request {
             ShellRequest::LibraryRoutesEnter => self.handle_library_routes_enter(),
             ShellRequest::LibraryRoutesEsc => self.handle_library_routes_esc(),
+            // unreachable: shell_messages.rs routes only LibraryRoutesEnter /
+            // LibraryRoutesEsc here; both have an arm above.
             _ => {}
         }
     }

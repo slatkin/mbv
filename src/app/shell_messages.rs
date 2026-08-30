@@ -15,264 +15,266 @@ impl Model {
             Msg::TerminalEvent(event) => {
                 apply_terminal_observer(self, event, focused, music_resize, tv_resize, &mut quit)
             }
-            Msg::Shell(ShellRequest::MusicAlbumActivate) => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    // Outcome 3 reader: get the album from the component, which owns
-                    // the selection cursor. Fall back to the App cursor only if the
-                    // component is not mounted (should not happen in normal flow).
-                    let album = self
-                        .music_workspace_id
-                        .as_ref()
-                        .and_then(|id| self.application.get_component(id))
-                        .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                        .and_then(|comp| comp.selected_item())
-                        .or_else(|| self.app.selected_album_item(lib_idx));
-                    if let Some(album) = album {
-                        if !self.app.layout.main.is_wide_music_active() {
-                            self.app.open_album_selection_modal(&album);
+            Msg::Shell(request) => match request {
+                ShellRequest::MusicAlbumActivate => {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        // Outcome 3 reader: get the album from the component, which owns
+                        // the selection cursor. Fall back to the App cursor only if the
+                        // component is not mounted (should not happen in normal flow).
+                        let album = self
+                            .music_workspace_id
+                            .as_ref()
+                            .and_then(|id| self.application.get_component(id))
+                            .and_then(|comp| {
+                                comp.as_any().downcast_ref::<MusicWorkspaceComponent>()
+                            })
+                            .and_then(|comp| comp.selected_item())
+                            .or_else(|| self.app.selected_album_item(lib_idx));
+                        if let Some(album) = album {
+                            if !self.app.layout.main.is_wide_music_active() {
+                                self.app.open_album_selection_modal(&album);
+                            }
                         }
                     }
+                    self.push_music_workspace_content();
                 }
-                self.push_music_workspace_content();
-            }
-            Msg::Shell(ShellRequest::MusicAlbumCursor { target, kind }) => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    match kind {
-                        AlbumCursorKind::Move => {
-                            let idle = self.app.list_image_fetches_allowed();
-                            let now = Instant::now();
-                            self.app.last_nav_at = now;
-                            self.app.mark_library_navigation(now);
-                            if self.app.move_music_group_display_cursor(lib_idx, target) {
-                                self.app.save_default_library_position(lib_idx);
-                                if idle {
+                ShellRequest::MusicAlbumCursor { target, kind } => {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        match kind {
+                            AlbumCursorKind::Move => {
+                                let idle = self.app.list_image_fetches_allowed();
+                                let now = Instant::now();
+                                self.app.last_nav_at = now;
+                                self.app.mark_library_navigation(now);
+                                if self.app.move_music_group_display_cursor(lib_idx, target) {
+                                    self.app.save_default_library_position(lib_idx);
+                                    if idle {
+                                        self.app.maybe_fetch_next_page(lib_idx, target);
+                                    }
+                                }
+                            }
+                            AlbumCursorKind::Jump => {
+                                if self.app.jump_music_group_display_cursor(lib_idx, target) {
+                                    self.app.save_default_library_position(lib_idx);
                                     self.app.maybe_fetch_next_page(lib_idx, target);
                                 }
                             }
-                        }
-                        AlbumCursorKind::Jump => {
-                            if self.app.jump_music_group_display_cursor(lib_idx, target) {
-                                self.app.save_default_library_position(lib_idx);
-                                self.app.maybe_fetch_next_page(lib_idx, target);
+                            AlbumCursorKind::Page => {
+                                self.app.page_grouped_album_cursor(lib_idx, target);
                             }
                         }
-                        AlbumCursorKind::Page => {
-                            self.app.page_grouped_album_cursor(lib_idx, target);
+                    }
+                    self.push_music_workspace_content();
+                }
+                // Inline album-track activation/enqueue/context-menu
+                // target resolution: the component owns the cursor,
+                // the shell resolves it to the cached track and runs
+                // the App effect (task 5.3d, Album track focus).
+                ShellRequest::MusicTrackActivate => {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        if let Some((album_id, track)) = self.focused_music_track(lib_idx) {
+                            self.app.play_album_track(&album_id, &track);
                         }
                     }
+                    self.push_music_workspace_content();
                 }
-                self.push_music_workspace_content();
-            }
-            // Inline album-track activation/enqueue/context-menu
-            // target resolution: the component owns the cursor,
-            // the shell resolves it to the cached track and runs
-            // the App effect (task 5.3d, Album track focus).
-            Msg::Shell(ShellRequest::MusicTrackActivate) => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    if let Some((album_id, track)) = self.focused_music_track(lib_idx) {
-                        self.app.play_album_track(&album_id, &track);
+                ShellRequest::MusicTrackEnqueue => {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        if let Some((_, track)) = self.focused_music_track(lib_idx) {
+                            self.app.enqueue_lib_item(lib_idx, track);
+                        }
+                    }
+                    self.push_music_workspace_content();
+                }
+                ShellRequest::MusicTrackContextMenu => {
+                    if let Some((_, track)) = self
+                        .app
+                        .tab
+                        .emby_library_index()
+                        .and_then(|lib_idx| self.focused_music_track(lib_idx))
+                    {
+                        self.app.open_context_menu_for(track);
+                    }
+                    self.push_music_workspace_content();
+                }
+                // Help overlay cross-boundary requests (design D4).
+                ShellRequest::Quit => quit = true,
+                ShellRequest::DismissHelp => self.umount_help(),
+                ShellRequest::OpenSettings => {
+                    self.umount_help();
+                    self.mount_sidebar(super::super::SidebarId::Settings);
+                }
+                ShellRequest::OpenSessions => {
+                    self.umount_help();
+                    self.mount_sidebar(super::super::SidebarId::Sessions);
+                }
+                ShellRequest::OpenPlaylists => {
+                    self.umount_help();
+                    self.mount_sidebar(super::super::SidebarId::Playlists);
+                    self.app.open_playlists_panel();
+                }
+                ShellRequest::ConfirmIntent(intent) => {
+                    self.handle_confirm_intent(intent);
+                    // Confirmations rewrite Home content/focus; re-project (5.3d).
+                    self.push_home_content();
+                    // Emby browser content may have changed (5.3d.15/M2).
+                    self.push_emby_browser_content();
+                }
+                ShellRequest::DaemonLostIntent(intent) => {
+                    if self.handle_daemon_lost_intent(intent) {
+                        quit = true;
                     }
                 }
-                self.push_music_workspace_content();
-            }
-            Msg::Shell(ShellRequest::MusicTrackEnqueue) => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    if let Some((_, track)) = self.focused_music_track(lib_idx) {
-                        self.app.enqueue_lib_item(lib_idx, track);
+                ShellRequest::RemoteReanchorIntent(intent) => {
+                    self.handle_remote_reanchor_intent(intent);
+                }
+                // Context menu: the shell owns cursor navigation and
+                // action execution; the component owns key interpretation
+                // (task 5.1).
+                ShellRequest::ContextMenuIntent(intent) => {
+                    self.handle_context_menu_intent(intent);
+                    // Enter executes the action, which can refetch Home; re-project (5.3d).
+                    self.push_home_content();
+                    // Emby browser content may have changed (5.3d.15/M2).
+                    self.push_emby_browser_content();
+                }
+                ShellRequest::ContextMenuSelect(idx) => {
+                    self.handle_context_menu_select(idx);
+                    // A selected action can refetch Home; re-project (5.3d).
+                    self.push_home_content();
+                    // Emby browser content may have changed (5.3d.15/M2).
+                    self.push_emby_browser_content();
+                }
+                ShellRequest::ContextMenuDismiss => {
+                    self.app.pending_overlay =
+                        Some(super::super::types_overlay::OverlayRequest::DismissContextMenu);
+                }
+                // Search sidebar: dismiss (Esc/Backspace-on-empty).
+                // The component owns the state; the shell unmounts it.
+                ShellRequest::DismissSearch => {
+                    self.dismiss_sidebar(super::super::SidebarId::Search);
+                }
+                // Search sidebar: activate result (Enter). The
+                // component owns the cursor/results; the shell owns
+                // the library tabs and navigation spawn (task 3.2).
+                ShellRequest::SearchActivate { id, item_type } => {
+                    self.app.activate_search_result(id, item_type);
+                }
+                ShellRequest::OpenInlineSearch => {
+                    self.open_inline_search();
+                }
+                ShellRequest::InlineSearchDismiss => {
+                    self.dismiss_inline_search();
+                }
+                ShellRequest::InlineSearchActivate { id, item_type } => {
+                    self.activate_inline_search_item(id, item_type);
+                }
+                ShellRequest::DismissSessions => {
+                    self.dismiss_sidebar(super::super::SidebarId::Sessions);
+                }
+                ShellRequest::RefreshSessions => {
+                    self.app.spawn_sessions_load();
+                    self.app.spawn_cast_discovery();
+                }
+                ShellRequest::SelectSession(index) => {
+                    if let Some(target) = self.app.panel_targets.get(index).cloned() {
+                        self.app.select_panel_target(target);
                     }
                 }
-                self.push_music_workspace_content();
-            }
-            Msg::Shell(ShellRequest::MusicTrackContextMenu) => {
-                if let Some((_, track)) = self
-                    .app
-                    .tab
-                    .emby_library_index()
-                    .and_then(|lib_idx| self.focused_music_track(lib_idx))
-                {
-                    self.app.open_context_menu_for(track);
+                ShellRequest::DetachSessions => {
+                    self.app.disconnect_remote();
+                    if self.app.is_cast_attached() {
+                        self.app.detach_cast();
+                        self.app.flash(
+                            "Detached from cast target".to_string(),
+                            ToastSeverity::Success,
+                        );
+                    }
+                    self.dismiss_sidebar(super::super::SidebarId::Sessions);
                 }
-                self.push_music_workspace_content();
-            }
-            // Help overlay cross-boundary requests (design D4).
-            Msg::Shell(ShellRequest::Quit) => quit = true,
-            Msg::Shell(ShellRequest::DismissHelp) => self.umount_help(),
-            Msg::Shell(ShellRequest::OpenSettings) => {
-                self.umount_help();
-                self.mount_sidebar(super::super::SidebarId::Settings);
-            }
-            Msg::Shell(ShellRequest::OpenSessions) => {
-                self.umount_help();
-                self.mount_sidebar(super::super::SidebarId::Sessions);
-            }
-            Msg::Shell(ShellRequest::OpenPlaylists) => {
-                self.umount_help();
-                self.mount_sidebar(super::super::SidebarId::Playlists);
-                self.app.open_playlists_panel();
-            }
-            Msg::Shell(ShellRequest::ConfirmIntent(intent)) => {
-                self.handle_confirm_intent(intent);
-                // Confirmations rewrite Home content/focus; re-project (5.3d).
-                self.push_home_content();
-                // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
-            }
-            Msg::Shell(ShellRequest::DaemonLostIntent(intent)) => {
-                if self.handle_daemon_lost_intent(intent) {
-                    quit = true;
+                ShellRequest::RefreshFeeds => {
+                    self.app.refresh_feeds();
                 }
-            }
-            Msg::Shell(ShellRequest::RemoteReanchorIntent(intent)) => {
-                self.handle_remote_reanchor_intent(intent);
-            }
-            // Context menu: the shell owns cursor navigation and
-            // action execution; the component owns key interpretation
-            // (task 5.1).
-            Msg::Shell(ShellRequest::ContextMenuIntent(intent)) => {
-                self.handle_context_menu_intent(intent);
-                // Enter executes the action, which can refetch Home; re-project (5.3d).
-                self.push_home_content();
-                // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
-            }
-            Msg::Shell(ShellRequest::ContextMenuSelect(idx)) => {
-                self.handle_context_menu_select(idx);
-                // A selected action can refetch Home; re-project (5.3d).
-                self.push_home_content();
-                // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
-            }
-            Msg::Shell(ShellRequest::ContextMenuDismiss) => {
-                self.app.pending_overlay =
-                    Some(super::super::types_overlay::OverlayRequest::DismissContextMenu);
-            }
-            // Search sidebar: dismiss (Esc/Backspace-on-empty).
-            // The component owns the state; the shell unmounts it.
-            Msg::Shell(ShellRequest::DismissSearch) => {
-                self.dismiss_sidebar(super::super::SidebarId::Search);
-            }
-            // Search sidebar: activate result (Enter). The
-            // component owns the cursor/results; the shell owns
-            // the library tabs and navigation spawn (task 3.2).
-            Msg::Shell(ShellRequest::SearchActivate { id, item_type }) => {
-                self.app.activate_search_result(id, item_type);
-            }
-            Msg::Shell(ShellRequest::OpenInlineSearch) => {
-                self.open_inline_search();
-            }
-            Msg::Shell(ShellRequest::InlineSearchDismiss) => {
-                self.dismiss_inline_search();
-            }
-            Msg::Shell(ShellRequest::InlineSearchActivate { id, item_type }) => {
-                self.activate_inline_search_item(id, item_type);
-            }
-            Msg::Shell(ShellRequest::DismissSessions) => {
-                self.dismiss_sidebar(super::super::SidebarId::Sessions);
-            }
-            Msg::Shell(ShellRequest::RefreshSessions) => {
-                self.app.spawn_sessions_load();
-                self.app.spawn_cast_discovery();
-            }
-            Msg::Shell(ShellRequest::SelectSession(index)) => {
-                if let Some(target) = self.app.panel_targets.get(index).cloned() {
-                    self.app.select_panel_target(target);
+                ShellRequest::FeedsPlay(guid) => {
+                    self.app.feed_tab_play_guid(&guid);
                 }
-            }
-            Msg::Shell(ShellRequest::DetachSessions) => {
-                self.app.disconnect_remote();
-                if self.app.is_cast_attached() {
-                    self.app.detach_cast();
-                    self.app.flash(
-                        "Detached from cast target".to_string(),
-                        ToastSeverity::Success,
+                ShellRequest::FeedsEnqueue(guid) => {
+                    self.app.feed_tab_enqueue_guid(&guid);
+                }
+                request @ ShellRequest::DismissSelectionModal
+                | request @ ShellRequest::SelectionModalFilterSelected
+                | request @ ShellRequest::SelectionModalActivate(_) => {
+                    self.handle_selection_modal_request(request);
+                    // Selection-modal changes to the ABS episode filter
+                    // must reach the mounted component (5.3d.11 U6).
+                    self.push_audiobookshelf_podcast_content();
+                }
+                ShellRequest::MultiselectCommit { .. } => {
+                    self.handle_multiselect_commit();
+                    // Hiding libraries/pills refetches Home inside the commit; re-project (5.3d).
+                    self.push_home_content();
+                    // Emby browser content may have changed (5.3d.15/M2).
+                    self.push_emby_browser_content();
+                }
+                request @ ShellRequest::LibraryRoutesEnter
+                | request @ ShellRequest::LibraryRoutesEsc => {
+                    self.handle_library_routes_request(request);
+                }
+                ShellRequest::FeedsManageIntent(intent) => {
+                    self.handle_feeds_manage_intent(intent);
+                }
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(intent) => {
+                    // Typed podcast episode action intent (task 5.3d.7).
+                    // The shell resolves the episode-selection and
+                    // wide/narrow conditions from App state/layout and
+                    // runs the existing App play/enter/modal/enqueue
+                    // effects (D17); re-project after the effect.
+                    self.handle_audiobookshelf_podcast_episode_intent(intent);
+                    self.push_audiobookshelf_podcast_content();
+                }
+                ShellRequest::AudiobookshelfPodcastShowMove { index } => {
+                    // Resolved podcast show-list cursor
+                    // (split-audiobookshelf-cursor-ownership D1). The
+                    // component already resolved its own movement and
+                    // carries the landed index; apply it directly through
+                    // the index-taking entry point (clamp + `state.select`
+                    // + detail-fetch), never recomputing from a delta. The
+                    // episode-selection guard lives only on the component
+                    // now (D2).
+                    self.app.select_audiobookshelf_show(index);
+                    // The component owns the painted cursor; persist the
+                    // active tab's slot once after the movement lands so
+                    // the saved position tracks the moved cursor (B3).
+                    if let Some(index) = self.app.tab.audiobookshelf_index() {
+                        self.app.save_audiobookshelf_position(index);
+                    }
+                    // `select_audiobookshelf_show` rewrote the active browse
+                    // state (cursor/selection); re-project (5.3d.11 U6).
+                    self.push_audiobookshelf_podcast_content();
+                }
+                ShellRequest::AudiobookshelfBookMove(movement) => {
+                    self.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
+                        movement,
+                    ));
+                }
+                ShellRequest::AudiobookshelfBookIntent(intent) => {
+                    self.handle_audiobookshelf_book_request(
+                        ShellRequest::AudiobookshelfBookIntent(intent),
                     );
                 }
-                self.dismiss_sidebar(super::super::SidebarId::Sessions);
-            }
-            Msg::Shell(ShellRequest::RefreshFeeds) => {
-                self.app.refresh_feeds();
-            }
-            Msg::Shell(ShellRequest::FeedsPlay(guid)) => {
-                self.app.feed_tab_play_guid(&guid);
-            }
-            Msg::Shell(ShellRequest::FeedsEnqueue(guid)) => {
-                self.app.feed_tab_enqueue_guid(&guid);
-            }
-            Msg::Shell(request @ ShellRequest::DismissSelectionModal)
-            | Msg::Shell(request @ ShellRequest::SelectionModalFilterSelected)
-            | Msg::Shell(request @ ShellRequest::SelectionModalActivate(_)) => {
-                self.handle_selection_modal_request(request);
-                // Selection-modal changes to the ABS episode filter
-                // must reach the mounted component (5.3d.11 U6).
-                self.push_audiobookshelf_podcast_content();
-            }
-            Msg::Shell(ShellRequest::MultiselectCommit { .. }) => {
-                self.handle_multiselect_commit();
-                // Hiding libraries/pills refetches Home inside the commit; re-project (5.3d).
-                self.push_home_content();
-                // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
-            }
-            Msg::Shell(request @ ShellRequest::LibraryRoutesEnter)
-            | Msg::Shell(request @ ShellRequest::LibraryRoutesEsc) => {
-                self.handle_library_routes_request(request);
-            }
-            Msg::Shell(ShellRequest::FeedsManageIntent(intent)) => {
-                self.handle_feeds_manage_intent(intent);
-            }
-            Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(intent)) => {
-                // Typed podcast episode action intent (task 5.3d.7).
-                // The shell resolves the episode-selection and
-                // wide/narrow conditions from App state/layout and
-                // runs the existing App play/enter/modal/enqueue
-                // effects (D17); re-project after the effect.
-                self.handle_audiobookshelf_podcast_episode_intent(intent);
-                self.push_audiobookshelf_podcast_content();
-            }
-            Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { index }) => {
-                // Resolved podcast show-list cursor
-                // (split-audiobookshelf-cursor-ownership D1). The
-                // component already resolved its own movement and
-                // carries the landed index; apply it directly through
-                // the index-taking entry point (clamp + `state.select`
-                // + detail-fetch), never recomputing from a delta. The
-                // episode-selection guard lives only on the component
-                // now (D2).
-                self.app.select_audiobookshelf_show(index);
-                // The component owns the painted cursor; persist the
-                // active tab's slot once after the movement lands so
-                // the saved position tracks the moved cursor (B3).
-                if let Some(index) = self.app.tab.audiobookshelf_index() {
-                    self.app.save_audiobookshelf_position(index);
+                // Browser (generic Emby) mouse geometry lives in
+                // `BrowserComponent`, which forwards the hit region; the
+                // shell decides *when* it counts via `App`'s 400ms
+                // double-click / 30ms wheel fields (task 5.3d, correction to b5799185).
+                ShellRequest::BrowserScroll { delta } => {
+                    if self.app.note_browse_scroll() {
+                        self.app.handle_mouse_scroll_browse(delta);
+                    }
                 }
-                // `select_audiobookshelf_show` rewrote the active browse
-                // state (cursor/selection); re-project (5.3d.11 U6).
-                self.push_audiobookshelf_podcast_content();
-            }
-            Msg::Shell(ShellRequest::AudiobookshelfBookMove(movement)) => {
-                self.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
-                    movement,
-                ));
-            }
-            Msg::Shell(ShellRequest::AudiobookshelfBookIntent(intent)) => {
-                self.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookIntent(
-                    intent,
-                ));
-            }
-            // Browser (generic Emby) mouse geometry lives in
-            // `BrowserComponent`, which forwards the hit region; the
-            // shell decides *when* it counts via `App`'s 400ms
-            // double-click / 30ms wheel fields (task 5.3d, correction to b5799185).
-            Msg::Shell(ShellRequest::BrowserScroll { delta }) => {
-                if self.app.note_browse_scroll() {
-                    self.app.handle_mouse_scroll_browse(delta);
-                }
-            }
-            // Browser selected-item typed effects (task 5.3d, Emby
-            // browser effect decoupling): the component reports the
-            // explicit `EmbyItem` target; the shell forwards it
-            // straight to the App effect (no App-cursor re-read).
-            Msg::Shell(
+                // Browser selected-item typed effects (task 5.3d, Emby
+                // browser effect decoupling): the component reports the
+                // explicit `EmbyItem` target; the shell forwards it
+                // straight to the App effect (no App-cursor re-read).
                 request @ (ShellRequest::BrowserActivate { .. }
                 | ShellRequest::BrowserPlay { .. }
                 | ShellRequest::BrowserEnqueue { .. }
@@ -282,133 +284,130 @@ impl Model {
                 | ShellRequest::BrowserRefresh
                 | ShellRequest::BrowserRescan
                 | ShellRequest::BrowserBack
-                | ShellRequest::BrowserCycleLetterPill { .. }),
-            ) => {
-                self.handle_browser_request(request);
-                // Browser navigation/effects change library content; re-project (5.3d.15/M2).
-                self.push_emby_browser_content();
-            }
-            // Pure cursor movement: the component already resolved its own
-            // index, so apply the App-side nav effects but skip the content
-            // re-projection the effect requests above need.
-            Msg::Shell(request @ ShellRequest::BrowserCursorIndex { .. }) => {
-                self.handle_browser_request(request);
-            }
-            Msg::Shell(ShellRequest::BrowserClick { region, col, row }) => {
-                match region {
-                    BrowserHitRegion::SelectorTab(target) => {
-                        self.app.last_click_time = Instant::now();
-                        self.app.last_click_pos = (col, row);
-                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                            self.app.handle_mouse_selector_click_emby(lib_idx, target);
-                        }
-                        // A music-group pill switch replaces the album level;
-                        // re-anchor the workspace cursor at this nav event.
-                        self.music_workspace_reanchor = true;
-                    }
-                    BrowserHitRegion::ContextMenu(target) => {
-                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                            self.app
-                                .handle_mouse_right_click_emby(lib_idx, target, col, row);
-                        }
-                    }
-                    BrowserHitRegion::LeftRow(target) | BrowserHitRegion::InlineHero(target) => {
-                        if self.app.note_browse_double_click(col, row) {
-                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                self.app.handle_mouse_double_click_emby(lib_idx, target);
-                            }
-                        } else {
-                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                self.app.handle_mouse_single_click_emby(lib_idx, target);
-                            }
-                        }
-                    }
+                | ShellRequest::BrowserCycleLetterPill { .. }) => {
+                    self.handle_browser_request(request);
+                    // Browser navigation/effects change library content; re-project (5.3d.15/M2).
+                    self.push_emby_browser_content();
                 }
-                // Selector-tab / item clicks mutate library state; re-project (5.3d.15/M2).
-                self.push_emby_browser_content();
-            }
-            // Home (cross-Service) mouse geometry lives in
-            // `HomeComponent`, which forwards the hit region; the
-            // shell decides *when* it counts via `App`'s 400ms
-            // double-click / 30ms wheel fields (task 5.3d, home
-            // hit_test). Accepted wheel scroll is routed at the
-            // Model boundary, which moves the mounted component's
-            // section-local cursor and, as a preserved legacy
-            // quirk, the Continue Watching column's independent
-            // cursor (task 5.3d, Home wheel-scroll ownership).
-            Msg::Shell(ShellRequest::HomeScroll { delta }) => {
-                self.handle_home_scroll(delta);
-            }
-            Msg::Shell(ShellRequest::HomeClick { region, col, row }) => {
-                self.handle_home_click(region, col, row);
-            }
-            // Home typed effects (task 5.3d, Home typed-effect
-            // prep): `HomeComponent` owns the cursor and reports the
-            // flat target index it resolved; the shell forwards it
-            // straight to the `App` effect so the requested target
-            // is acted on directly (no App-owned flat cursor remains).
-            Msg::Shell(
+                // Pure cursor movement: the component already resolved its own
+                // index, so apply the App-side nav effects but skip the content
+                // re-projection the effect requests above need.
+                request @ ShellRequest::BrowserCursorIndex { .. } => {
+                    self.handle_browser_request(request);
+                }
+                ShellRequest::BrowserClick { region, col, row } => {
+                    match region {
+                        BrowserHitRegion::SelectorTab(target) => {
+                            self.app.last_click_time = Instant::now();
+                            self.app.last_click_pos = (col, row);
+                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                self.app.handle_mouse_selector_click_emby(lib_idx, target);
+                            }
+                            // A music-group pill switch replaces the album level;
+                            // re-anchor the workspace cursor at this nav event.
+                            self.music_workspace_reanchor = true;
+                        }
+                        BrowserHitRegion::ContextMenu(target) => {
+                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                self.app
+                                    .handle_mouse_right_click_emby(lib_idx, target, col, row);
+                            }
+                        }
+                        BrowserHitRegion::LeftRow(target)
+                        | BrowserHitRegion::InlineHero(target) => {
+                            if self.app.note_browse_double_click(col, row) {
+                                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                    self.app.handle_mouse_double_click_emby(lib_idx, target);
+                                }
+                            } else {
+                                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                    self.app.handle_mouse_single_click_emby(lib_idx, target);
+                                }
+                            }
+                        }
+                    }
+                    // Selector-tab / item clicks mutate library state; re-project (5.3d.15/M2).
+                    self.push_emby_browser_content();
+                }
+                // Home (cross-Service) mouse geometry lives in
+                // `HomeComponent`, which forwards the hit region; the
+                // shell decides *when* it counts via `App`'s 400ms
+                // double-click / 30ms wheel fields (task 5.3d, home
+                // hit_test). Accepted wheel scroll is routed at the
+                // Model boundary, which moves the mounted component's
+                // section-local cursor and, as a preserved legacy
+                // quirk, the Continue Watching column's independent
+                // cursor (task 5.3d, Home wheel-scroll ownership).
+                ShellRequest::HomeScroll { delta } => {
+                    self.handle_home_scroll(delta);
+                }
+                ShellRequest::HomeClick { region, col, row } => {
+                    self.handle_home_click(region, col, row);
+                }
+                // Home typed effects (task 5.3d, Home typed-effect
+                // prep): `HomeComponent` owns the cursor and reports the
+                // flat target index it resolved; the shell forwards it
+                // straight to the `App` effect so the requested target
+                // is acted on directly (no App-owned flat cursor remains).
                 request @ (ShellRequest::HomePlay(_)
                 | ShellRequest::HomeEnqueue(_)
                 | ShellRequest::HomeContextMenu { .. }
                 | ShellRequest::HomeDelete(_)
                 | ShellRequest::HomeToggleWatched
-                | ShellRequest::HomeSectionSelected(_)),
-            ) => self.handle_home_request(request),
-            // Queue mouse geometry lives in `QueueComponent`;
-            // the shell decides *when* a row click is a double-click
-            // and shares App's 30ms wheel throttle with browse/home.
-            Msg::Shell(ShellRequest::QueueScroll { delta }) => {
-                if self.app.note_browse_scroll() {
-                    self.app.handle_mouse_scroll_queue(delta);
+                | ShellRequest::HomeSectionSelected(_)) => self.handle_home_request(request),
+                // Queue mouse geometry lives in `QueueComponent`;
+                // the shell decides *when* a row click is a double-click
+                // and shares App's 30ms wheel throttle with browse/home.
+                ShellRequest::QueueScroll { delta } => {
+                    if self.app.note_browse_scroll() {
+                        self.app.handle_mouse_scroll_queue(delta);
+                    }
                 }
-            }
-            Msg::Shell(ShellRequest::QueueClick { region, col, row }) => {
-                match region {
-                    QueueHitRegion::ScopeLocal => {
-                        self.app.last_click_time = Instant::now();
-                        self.app.last_click_pos = (col, row);
-                        self.app
-                            .handle_mouse_selector_click_queue(QueueScope::Local);
-                    }
-                    QueueHitRegion::ScopeRemote => {
-                        self.app.last_click_time = Instant::now();
-                        self.app.last_click_pos = (col, row);
-                        self.app
-                            .handle_mouse_selector_click_queue(QueueScope::Remote);
-                    }
-                    QueueHitRegion::ContextMenu(slot_id) => {
-                        // The authoritative Continue-Watching-selected
-                        // fact is resolved here (Model boundary) and
-                        // passed into the App builder, so the odd
-                        // queue→Home coupling reflects the mounted
-                        // Home component's section (task 5.3d).
-                        self.app.handle_mouse_right_click_queue(
-                            slot_id,
-                            col,
-                            row,
-                            self.home_continue_watching_selected(),
-                        );
-                    }
-                    QueueHitRegion::Row(slot_id) => {
-                        if self.app.note_browse_double_click(col, row) {
-                            self.app.handle_mouse_double_click_queue(slot_id);
-                        } else {
-                            self.app.handle_mouse_single_click_queue(slot_id);
+                ShellRequest::QueueClick { region, col, row } => {
+                    match region {
+                        QueueHitRegion::ScopeLocal => {
+                            self.app.last_click_time = Instant::now();
+                            self.app.last_click_pos = (col, row);
+                            self.app
+                                .handle_mouse_selector_click_queue(QueueScope::Local);
+                        }
+                        QueueHitRegion::ScopeRemote => {
+                            self.app.last_click_time = Instant::now();
+                            self.app.last_click_pos = (col, row);
+                            self.app
+                                .handle_mouse_selector_click_queue(QueueScope::Remote);
+                        }
+                        QueueHitRegion::ContextMenu(slot_id) => {
+                            // The authoritative Continue-Watching-selected
+                            // fact is resolved here (Model boundary) and
+                            // passed into the App builder, so the odd
+                            // queue→Home coupling reflects the mounted
+                            // Home component's section (task 5.3d).
+                            self.app.handle_mouse_right_click_queue(
+                                slot_id,
+                                col,
+                                row,
+                                self.home_continue_watching_selected(),
+                            );
+                        }
+                        QueueHitRegion::Row(slot_id) => {
+                            if self.app.note_browse_double_click(col, row) {
+                                self.app.handle_mouse_double_click_queue(slot_id);
+                            } else {
+                                self.app.handle_mouse_single_click_queue(slot_id);
+                            }
                         }
                     }
+                    // Queue clicks move panel focus to the Queue panel;
+                    // re-project the Home focus flag (task 5.3d, sync_home deletion).
+                    self.push_home_content();
+                    // Emby browser content may have changed (5.3d.15/M2).
+                    self.push_emby_browser_content();
                 }
-                // Queue clicks move panel focus to the Queue panel;
-                // re-project the Home focus flag (task 5.3d, sync_home deletion).
-                self.push_home_content();
-                // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
-            }
-            // TV keyboard requests are resolved by the mounted
-            // workspace component. Cursor and pane movement remain
-            // component-local; the shell handles only cross-boundary
-            // effects such as activation, back, and letter pills.
-            Msg::Shell(
+                // TV keyboard requests are resolved by the mounted
+                // workspace component. Cursor and pane movement remain
+                // component-local; the shell handles only cross-boundary
+                // effects such as activation, back, and letter pills.
                 request @ (ShellRequest::TvMoveRows { .. }
                 | ShellRequest::TvMoveColumn { .. }
                 | ShellRequest::TvJumpCursor { .. }
@@ -417,57 +416,70 @@ impl Model {
                 | ShellRequest::TvBack
                 | ShellRequest::TvCycleLetterPill { .. }
                 | ShellRequest::TvEpisodeMove { .. }
-                | ShellRequest::TvSeasonMove { .. }),
-            ) => self.handle_tv_request(request),
-            // TV workspace mouse geometry lives in
-            // `TvWorkspaceComponent`, which resolves the pane +
-            // hit (two focusable panes); the shell decides *when*
-            // a click is a double-click via App's 400ms window
-            // and shares the 30ms wheel throttle (task 5.3d,
-            // tv_workspace hit_test).
-            Msg::Shell(ShellRequest::TvScroll { delta }) => {
-                if self.app.note_browse_scroll() {
-                    self.app.handle_mouse_scroll_browse(delta);
+                | ShellRequest::TvSeasonMove { .. }) => self.handle_tv_request(request),
+                // TV workspace mouse geometry lives in
+                // `TvWorkspaceComponent`, which resolves the pane +
+                // hit (two focusable panes); the shell decides *when*
+                // a click is a double-click via App's 400ms window
+                // and shares the 30ms wheel throttle (task 5.3d,
+                // tv_workspace hit_test).
+                ShellRequest::TvScroll { delta } => {
+                    if self.app.note_browse_scroll() {
+                        self.app.handle_mouse_scroll_browse(delta);
+                    }
+                    self.push_tv_workspace_content();
                 }
-                self.push_tv_workspace_content();
-            }
-            Msg::Shell(ShellRequest::TvClick { region, col, row }) => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    match region {
-                        TvHitRegion::ContextMenu(hit) => {
-                            self.app.handle_mouse_right_click_tv(lib_idx, hit, col, row);
-                        }
-                        TvHitRegion::Hit(hit) => {
-                            if self.app.note_browse_double_click(col, row) {
-                                self.app.handle_mouse_double_click_tv(lib_idx, hit);
-                            } else {
-                                self.app.handle_mouse_single_click_tv(lib_idx, hit);
+                ShellRequest::TvClick { region, col, row } => {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        match region {
+                            TvHitRegion::ContextMenu(hit) => {
+                                self.app.handle_mouse_right_click_tv(lib_idx, hit, col, row);
+                            }
+                            TvHitRegion::Hit(hit) => {
+                                if self.app.note_browse_double_click(col, row) {
+                                    self.app.handle_mouse_double_click_tv(lib_idx, hit);
+                                } else {
+                                    self.app.handle_mouse_single_click_tv(lib_idx, hit);
+                                }
                             }
                         }
                     }
+                    self.push_tv_workspace_content();
                 }
-                self.push_tv_workspace_content();
-            }
-            Msg::Shell(
+
                 request @ (ShellRequest::PlaylistsBack
                 | ShellRequest::PlaylistsOpen(_)
                 | ShellRequest::PlaylistsActivate { .. }
                 | ShellRequest::PlaylistsRename(_)
                 | ShellRequest::PlaylistsDelete(_)
                 | ShellRequest::PlaylistsRefresh
-                | ShellRequest::DismissPlaylists),
-            ) => self.handle_playlists_request(request),
-            Msg::Shell(ShellRequest::SettingsIntent(intent)) => {
-                if self.handle_settings_intent(intent) {
-                    quit = true;
+                | ShellRequest::DismissPlaylists) => self.handle_playlists_request(request),
+                ShellRequest::SettingsIntent(intent) => {
+                    if self.handle_settings_intent(intent) {
+                        quit = true;
+                    }
                 }
-            }
-            Msg::Shell(ShellRequest::SavePlaylistIntent(intent)) => {
-                self.handle_save_playlist_intent(intent);
-            }
-            Msg::Shell(ShellRequest::QueueIntent(intent)) => {
-                self.handle_queue_intent(intent);
-            }
+                ShellRequest::SavePlaylistIntent(intent) => {
+                    self.handle_save_playlist_intent(intent);
+                }
+                ShellRequest::QueueIntent(intent) => {
+                    self.handle_queue_intent(intent);
+                }
+                // Component owns episode_selection/episode_filter; mutated locally in
+                // AudiobookshelfPodcastComponent::handle_key before the request is emitted, and
+                // handle_audiobookshelf_podcast_episode_intent resolves the target from the
+                // component, not App state (commit 0227d748, migrate-tui-to-tuirealm task
+                // 5.3d.11 U2). No shell effect remains.
+                ShellRequest::AudiobookshelfPodcastEpisodeTransition(_) => {}
+                // Emitted only from SettingsComponent::handle_mouse (settings.rs:318); the
+                // keyboard dismiss is SettingsIntent::Back. Mouse-only, inert under D16
+                // (migrate-tui-to-tuirealm design D16, #628).
+                ShellRequest::DismissSettings => {}
+                // Produced at shell_overlays_modals.rs:164 and consumed synchronously by
+                // handle_selection_modal_request (shell_overlays_menus.rs:232); it never
+                // arrives as a top-level Msg here.
+                ShellRequest::SelectionModalRefresh => {}
+            },
             Msg::Queue(request) => {
                 self.handle_queue_request(request);
             }
@@ -479,8 +491,8 @@ impl Model {
                     quit = true;
                 }
             }
-            // No other Msg variants are produced yet.
-            _ => {}
+            // NavTarget is an unbuilt placeholder (msg.rs); navigation routing is not wired yet.
+            Msg::Navigate(_) => {}
         }
         quit
     }

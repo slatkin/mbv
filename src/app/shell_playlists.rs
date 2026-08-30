@@ -150,6 +150,9 @@ impl Model {
             ShellRequest::DismissPlaylists => {
                 self.dismiss_sidebar(super::SidebarId::Playlists);
             }
+            // unreachable: shell_messages.rs routes only the Playlists* group
+            // (Back/Open/Activate/Rename/Delete/Refresh/DismissPlaylists) here;
+            // every one has an arm above.
             _ => {}
         }
     }
