@@ -627,6 +627,10 @@ impl App {
         };
 
         let hero_placeholder = inline_hero.is_none()
+            && crate::app::render::arrangements::hero_left::shared_hero_presentation(
+                self.layout.main.left_area,
+            )
+            .is_none()
             && self.libs[lib_idx].nav_stack.len() == 1
             && matches!(
                 coll.as_str(),

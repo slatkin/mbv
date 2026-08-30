@@ -131,7 +131,7 @@ fn inline_search_active_legacy_base_frame_publishes_geometry_but_paints_no_rows(
 }
 
 #[test]
-fn wide_emby_podcast_uses_the_series_workspace_and_right_rail() {
+fn wide_emby_podcast_does_not_publish_tv_geometry() {
     let mut app = make_movie_app();
     app.libs[0].library.collection_type = "podcasts".into();
     for item in &mut app.libs[0].nav_stack[0].items {
@@ -141,8 +141,8 @@ fn wide_emby_podcast_uses_the_series_workspace_and_right_rail() {
 
     let layout = render_view(&mut app, 200, 40);
 
-    assert!(layout.tv_wide_left_area.width > 0);
-    assert!(layout.tv_wide_right_area.width > 0);
+    assert_eq!(layout.tv_wide_left_area, ratatui::layout::Rect::default());
+    assert_eq!(layout.tv_wide_right_area, ratatui::layout::Rect::default());
 }
 
 #[test]
