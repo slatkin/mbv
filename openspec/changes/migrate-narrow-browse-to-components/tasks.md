@@ -241,10 +241,10 @@ findings become added rows; the template does not change.
 
 ## 4. Record the invariant
 
-- [ ] 4.1 Add the one-owner/one-painter scenarios to
+- [x] 4.1 Add the one-owner/one-painter scenarios to
       `openspec/specs/interactive-component-framework/spec.md` via this change's
       delta. Verify: the delta applies cleanly.
-- [ ] 4.2 Give `docs/architecture/interactive-surface-ledger.md` a
+- [x] 4.2 Give `docs/architecture/interactive-surface-ledger.md` a
       per-breakpoint **owner** and **painter** column, populated from task 1's
       final table — including the deferred Queue row. Correct lines 66/68/69,
       whose "narrow = sole legacy renderer (D5)" claim is false for Movies and
