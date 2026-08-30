@@ -254,12 +254,24 @@ impl Model {
                 .as_ref()
                 .map(|state| (state.video_cursor, state.video_scroll))
                 .unwrap_or((0, 0));
+            let loading = self.app.libs[index]
+                .feed_home_video
+                .as_ref()
+                .map(|state| state.loading)
+                .or_else(|| {
+                    self.app.libs[index]
+                        .nav_stack
+                        .first()
+                        .map(|root| root.loading)
+                })
+                .unwrap_or(false);
             LibraryListRenderCtx::from_items(
                 self.app.feed_home_video_selected_items(index),
                 cursor,
                 scroll,
             )
             .with_group_pills(true)
+            .with_loading(loading)
         } else {
             self.app.library_list_render_ctx(
                 index,

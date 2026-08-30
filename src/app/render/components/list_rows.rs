@@ -293,6 +293,11 @@ impl LibraryListRenderCtx {
         self
     }
 
+    pub(in crate::app) fn with_loading(mut self, loading: bool) -> Self {
+        self.loading = loading;
+        self
+    }
+
     pub(in crate::app) fn has_group_pills(&self) -> bool {
         self.group_pills
     }

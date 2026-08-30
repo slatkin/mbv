@@ -58,7 +58,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         });
     let ctx = feed_ctx.as_ref().unwrap_or(ctx);
 
-    if extras.home_video && content_area.height > 0 {
+    if extras.home_video && extras.feed_items.is_none() && content_area.height > 0 {
         content_area = crate::app::render::render_count_label(f, content_area, ctx.total_count);
         content_area = Rect {
             y: content_area.y + 1,
@@ -70,7 +70,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     // Narrow TV season grids keep their own single-column stride
     // (`is_viewing_season_grid`, legacy `list.rs`); every other narrow browse
     // surface derives the column count from the list width.
-    let cols = if extras.season_grid {
+    let cols = if extras.season_grid || extras.feed_items.is_some() {
         1
     } else {
         library_column_count(content_area.width)
@@ -111,7 +111,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             };
     }
 
-    let (pills_area, list_area) = if !extras.feed_groups.is_empty() {
+    let (pills_area, list_area) = if extras.feed_items.is_some() {
         let areas = hero_left::pill_bar_areas(content_area);
         (areas.pills_area, areas.content_area)
     } else if extras.show_letter_pills {
@@ -128,13 +128,15 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
                 0
             };
     }
-    if !extras.feed_groups.is_empty() {
-        let ids: Vec<usize> = (0..extras.feed_groups.len()).collect();
-        let labels: Vec<String> = extras
-            .feed_groups
-            .iter()
-            .map(|s| crate::app::ui_util::trunc_str(s, 12).to_string())
-            .collect();
+    if extras.feed_items.is_some() {
+        let ids: Vec<usize> = (0..=extras.feed_groups.len()).collect();
+        let mut labels = vec!["All".to_string()];
+        labels.extend(
+            extras
+                .feed_groups
+                .iter()
+                .map(|s| crate::app::ui_util::trunc_str(s, 12).to_string()),
+        );
         layout.selector_tabs = crate::app::render::render_pill_bar(
             f,
             pills_area,
@@ -291,7 +293,7 @@ impl App {
     pub(in crate::app) fn narrow_browse_extras(&mut self, lib_idx: usize) -> NarrowBrowseExtras {
         let coll = self.libs[lib_idx].library.collection_type.clone();
         let feed_group_view = self.is_feed_home_video_group_view(lib_idx);
-        let home_video = self.is_home_video_view(lib_idx) || feed_group_view;
+        let home_video = self.is_home_video_view(lib_idx) && !feed_group_view;
         let show_letter_pills = self.should_show_letter_pills(lib_idx);
         let (feed_items, feed_groups, feed_group_cursor) = if feed_group_view {
             let items = self.feed_home_video_selected_items(lib_idx);
