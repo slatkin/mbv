@@ -25,7 +25,7 @@ fn playable_feed_entry(guid: &str) -> FeedEntry {
 fn feeds_tab_does_not_route_into_library_behavior() {
     let mut app = make_app_stub();
 
-    // Set up a library so `shuffle_play` would panic if it tried to index.
+    // Set up a library so a bounds-miss shuffle target can be checked.
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
@@ -69,11 +69,11 @@ fn feeds_tab_does_not_route_into_library_behavior() {
         "Feeds should not expose a library index"
     );
 
-    // 2. shuffle_play with a bounds-miss index (the old tab-recovery would
+    // 2. A bounds-miss shuffle target (the old tab-recovery would
     // panic on emby_library_index().unwrap()) must return early without
     // panic or mutation.
     let queue_len_before = app.player_tab.emby_items().len();
-    app.shuffle_play(app.libs.len()); // index past the single library
+    app.shuffle_play_target(app.libs.len(), None); // index past the single library
     assert_eq!(
         app.player_tab.emby_items().len(),
         queue_len_before,

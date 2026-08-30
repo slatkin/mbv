@@ -1,4 +1,3 @@
-use crate::app::layout::LayoutMain;
 use crate::app::render::components::hero::{
     inline_hero_text_width, HeroContent, HeroImage, HeroLine,
 };
@@ -9,8 +8,6 @@ use crate::app::ui_util::*;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
-use ratatui::style::*;
-use ratatui::widgets::*;
 use ratatui::Frame;
 use textwrap::wrap;
 
@@ -345,57 +342,6 @@ pub(in crate::app) fn compact_banner_layout(
         img_actual_w,
         img_height,
         img_is_placeholder,
-    }
-}
-
-impl App {
-    /// Thin `&mut self` wrapper: resolves the selected item, computes the
-    /// [`CompactBannerLayout`] (the only cache-touching step), then delegates
-    /// painting to the pure [`render_compact_detail_with_ctx`] and executes
-    /// the image paint it returns via [`App::paint_home_image`] (ADR 0022).
-    pub(crate) fn render_compact_detail(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        lib_idx: usize,
-        focused: bool,
-        show_title: bool,
-        _layout: &mut LayoutMain,
-    ) {
-        // The hero shows the selected leaf movie (movies/homevideos/podcasts)
-        // or, on a tvshows library, the selected Series — the compact banner
-        // layout is generic over the item, so a Series renders its meta +
-        // overview the same way a Movie does (design decision 6).
-        let ctx = self.library_list_render_ctx(
-            lib_idx,
-            false,
-            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor),
-            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.scroll),
-        );
-        let Some(item) = self
-            .selected_movie_item_with_ctx(lib_idx, &ctx)
-            .or_else(|| self.selected_series_item_with_ctx(lib_idx, &ctx))
-        else {
-            return;
-        };
-        if area.height == 0 || area.width < 3 {
-            return;
-        }
-
-        let truncate_overview =
-            self.is_home_video_view(lib_idx) || self.is_podcast_library(lib_idx);
-        let layout = self.compact_banner_layout_with_overview(&item, area.width, truncate_overview);
-        let image_paint = render_compact_detail_with_ctx(
-            CompactDetailCtx {
-                item: &item,
-                layout,
-            },
-            f,
-            area,
-            focused,
-            show_title,
-        );
-        self.paint_home_image(f, image_paint);
     }
 }
 

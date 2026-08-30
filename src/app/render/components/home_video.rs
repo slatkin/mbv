@@ -1,8 +1,7 @@
 use super::list_rows::focused_or_subtle;
 use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
-use crate::app::layout::LayoutMain;
+use crate::app::palette;
 use crate::app::ui_util::*;
-use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -153,40 +152,6 @@ pub(in crate::app::render) fn render_home_video_item(
             1,
             item_h.saturating_sub(2) as usize,
             super::widgets::SelectedBlockBorderStyle::Framed,
-        );
-    }
-}
-
-impl App {
-    pub(in crate::app::render) fn render_selected_home_video_detail(
-        &mut self,
-        f: &mut Frame,
-        content_area: Rect,
-        row_y: u16,
-        item_h: u16,
-        lib_idx: usize,
-        focused: bool,
-        layout: &mut LayoutMain,
-    ) {
-        let detail_height = item_h.saturating_sub(5);
-        if detail_height == 0 {
-            return;
-        }
-
-        self.render_compact_detail(
-            f,
-            Rect {
-                x: content_area.x + SELECTED_BLOCK_SIDE_PADDING,
-                y: row_y + 3,
-                width: content_area
-                    .width
-                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
-                height: detail_height,
-            },
-            lib_idx,
-            focused,
-            false,
-            layout,
         );
     }
 }

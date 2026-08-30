@@ -122,7 +122,7 @@ fn stale_emby_lib_index_mutates_no_library() {
     app.move_lib_cursor(stale, 1);
     app.jump_lib_cursor(stale, true);
     app.go_back(stale);
-    app.shuffle_play(stale);
+    app.shuffle_play_target(stale, None);
     app.refresh_lib(stale);
     for idx in 0..2 {
         let lvl = &app.libs[idx].nav_stack[0];

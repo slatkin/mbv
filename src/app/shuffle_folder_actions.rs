@@ -5,40 +5,12 @@ use mbv_core::api::EmbyItem;
 use rand::seq::SliceRandom;
 
 impl App {
-    pub(super) fn shuffle_play(&mut self, lib_idx: usize) {
-        // Defensive bounds check: the dispatch front door normalizes a stale
-        // destination first, but async Service removal can invalidate the
-        // matched index between normalization and this call. No-op (never
-        // substitute library zero) on a miss.
-        if lib_idx >= self.libs.len() {
-            return;
-        }
-        // Resolve the item at the nav level's cursor (task 4.3, R13: the
-        // legacy `impl App` path resolves at its own boundary and hands the
-        // resolved item to the shared selected-item tail — never a
-        // `BrowseLevel.cursor` read inside the effect).
-        let item = self
-            .libs
-            .get(lib_idx)
-            .and_then(|lib| lib.nav_stack.last())
-            .and_then(|lvl| lvl.items.get(lvl.cursor))
-            .cloned();
-        let Some(item) = item else {
-            // Preserve the old behaviour: when the current level exists
-            // but has no item at the resolved cursor (empty/loading),
-            // fall back to shuffling the current level's parent.
-            self.shuffle_play_target(lib_idx, None);
-            return;
-        };
-        self.shuffle_play_selected(lib_idx, item);
-    }
-
     /// Shuffle from the generic Emby browser's component-resolved selected
     /// item (task 5.3d, Emby browser shuffle decoupling). `BrowserComponent`
     /// resolved the item at its component-local cursor; when that item is a
     /// folder the folder itself is shuffled, otherwise the current browse
     /// level's parent is shuffled (falling back to the library id exactly as
-    /// `shuffle_play` did). The folder target comes from the supplied item,
+    /// the legacy shuffle path did). The folder target comes from the supplied item,
     /// never from re-reading `BrowseLevel.cursor`.
     pub(super) fn shuffle_play_selected(&mut self, lib_idx: usize, item: EmbyItem) {
         let explicit_folder = item.is_folder.then_some(item.id.clone());
@@ -49,10 +21,9 @@ impl App {
     /// is the folder id to shuffle when the caller already knows the selected
     /// item is a folder (the typed browser path supplies it from the
     /// component-resolved item); when `None`, the current browse level's
-    /// parent is shuffled, falling back to the library id exactly as the
-    /// legacy `shuffle_play` did.
-    fn shuffle_play_target(&mut self, lib_idx: usize, explicit_folder: Option<String>) {
-        // Defensive bounds check (see `shuffle_play` comment; the shell also
+    /// parent is shuffled, falling back to the library id.
+    pub(super) fn shuffle_play_target(&mut self, lib_idx: usize, explicit_folder: Option<String>) {
+        // Defensive bounds check; the shell also
         // derives a fresh `lib_idx`, so a synchronous tab change can race in).
         if lib_idx >= self.libs.len() {
             return;
@@ -113,7 +84,7 @@ impl App {
     }
 
     /// Whether the given Emby library is a tvshows library. The index
-    /// arrives explicitly from the shuffle chain (`shuffle_play` /
+    /// arrives explicitly from the shuffle chain (`shuffle_play_selected` /
     /// `execute_context_action` pass the library the folder was reached
     /// through), so this no longer reads the selected tab. Bounds-misses
     /// return false (defensive; never substitute library zero).
