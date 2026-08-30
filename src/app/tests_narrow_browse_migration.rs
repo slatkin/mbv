@@ -280,6 +280,30 @@ fn narrow_grouped_music_j_moves_painted_selection() {
     );
 }
 
+/// Characterization (task 3.3 template step a): pins the painted narrow
+/// generic/Movies surface — inline movie hero + browse rows — through the
+/// full `Model::draw_frame` path. Green before the migration (legacy
+/// `render_list` + `BrowserComponent::view` agree on the cursor at first
+/// paint) and must stay green after it (the `browser_narrow` composer is the
+/// sole painter). A byte-for-byte buffer snapshot: any drift in the hero or
+/// row layout trips it.
+#[test]
+fn narrow_movies_surface_snapshot() {
+    let mut app = crate::app::render::make_movie_app();
+    app.terminal_width = 60;
+    app.terminal_height = 20;
+    app.mini_view_focus = PanelFocus::Library;
+
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+    let mut term = narrow_backend();
+
+    let output = draw(&mut model, &mut term);
+
+    let expected = "                                                            \n   HOME  ▐ MOVIES                                           \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n▎ Focused Movie 1988                                        \n  Second Movie                                              \n   Focused Movie                                            \n   Action  1988                                             \n                                                            \n   This overview should appear in the compact movie         \n   banner while the list remains visible underneath.        \n                                                            \n ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ \n  Second Movie                                              \n                                                            \n                                                            \n 🔊  100                                             \u{f06b4} \u{ede2} ♥ \u{f1c0} ";
+    assert_eq!(output, expected, "narrow Movies surface drifted:\n{output}");
+}
+
 /// Regression 5: narrow Movies paints each browse row exactly once (currently
 /// double-painted by legacy `render_list` + `BrowserComponent::view`).
 #[test]
