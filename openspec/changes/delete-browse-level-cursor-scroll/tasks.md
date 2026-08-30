@@ -81,7 +81,7 @@
       Verify: `rtk cargo check -p mbv`; `rtk cargo nextest run -p mbv
       --no-fail-fast` — baseline is exactly ONE known pre-existing failure
       `browser_local_navigation_mirrors_legacy_flat_movement`.
-- [ ] 1.1e Drop the dead `BrowseLevel` fallback in `wide_tv_render_ctx`
+- [x] 1.1e Drop the dead `BrowseLevel` fallback in `wide_tv_render_ctx`
       (`render/components/tv_wide.rs:104-110`): the `cursor_scroll: Option<(usize,
       usize)>` parameter's `None` arm reads
       `nav_stack.last().map_or(0, |l| l.cursor / .scroll)` (`:105` / `:109`).
