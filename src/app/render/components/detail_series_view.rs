@@ -2,7 +2,7 @@ use crate::app::palette;
 use crate::app::render::components::hero::{
     inline_hero_text_width, wrap_overview_lines, HeroContent, HeroImage, HeroLine,
 };
-use crate::app::render::RENDER_FILTER;
+use crate::app::render::HomeImagePaint;
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::widgets::*;
@@ -40,18 +40,17 @@ pub(in crate::app::render) struct SeriesInlineDetailCtx<'a> {
     pub(in crate::app::render) item: &'a mbv_core::api::EmbyItem,
     pub(in crate::app::render) images_enabled: bool,
     pub(in crate::app::render) image_loading: bool,
-    pub(in crate::app::render) image: Option<&'a mut ratatui_image::thread::ThreadProtocol>,
 }
 
 pub(in crate::app::render) fn render_series_inline_detail(
-    mut ctx: SeriesInlineDetailCtx<'_>,
+    ctx: SeriesInlineDetailCtx<'_>,
     f: &mut Frame,
     area: Rect,
     focused: bool,
     show_title: bool,
-) {
+) -> Option<HomeImagePaint> {
     if area.height == 0 {
-        return;
+        return None;
     }
 
     let item = ctx.item;
@@ -62,16 +61,7 @@ pub(in crate::app::render) fn render_series_inline_detail(
     //    the `Hero` component to lay text out around ───────────────────
     let img_loading = !item.id.is_empty() && ctx.images_enabled && ctx.image_loading;
     let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) = {
-        if let Some(state) = ctx.image.as_deref_mut() {
-            let avail = ratatui::layout::Size {
-                width: SERIES_IMAGE_COLS,
-                height: SERIES_IMAGE_ROWS,
-            };
-            match state.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail) {
-                Some(actual) => (actual.width, actual.height, false),
-                None => (SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS, true),
-            }
-        } else if img_loading {
+        if ctx.images_enabled {
             (SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS, true)
         } else {
             (0, 0, false)
@@ -137,13 +127,11 @@ pub(in crate::app::render) fn render_series_inline_detail(
                 Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
                 img_rect,
             );
-        } else if let Some(state) = ctx.image.as_deref_mut() {
-            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-            f.render_stateful_widget(
-                SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
-                img_rect,
-                state,
-            );
         }
     }
+    result.img_rect.map(|image_area| HomeImagePaint::Series {
+        area: image_area,
+        item: Box::new(item.clone()),
+        show_placeholder: img_is_placeholder || img_loading,
+    })
 }

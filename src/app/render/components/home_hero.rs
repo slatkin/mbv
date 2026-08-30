@@ -299,6 +299,31 @@ impl App {
                 }
                 self.render_keep_watching_hero_image(f, area, &cache_key, centered);
             }
+            Some(HomeImagePaint::Series {
+                area,
+                item,
+                show_placeholder,
+            }) => {
+                let cache_key = format!("{}:ser_primary", item.id);
+                if self.images_enabled() {
+                    self.fetch_card_image(
+                        cache_key.clone(),
+                        item.id.clone(),
+                        String::new(),
+                        &["Primary"],
+                    );
+                }
+                if show_placeholder {
+                    self.render_keep_watching_hero_image(f, area, &cache_key, false);
+                } else if let Some(image) = self.cached_image_protocol_mut(&cache_key) {
+                    type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
+                    f.render_stateful_widget(
+                        SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
+                        area,
+                        image,
+                    );
+                }
+            }
             Some(HomeImagePaint::AudiobookshelfCover {
                 area,
                 library_item_id,
@@ -334,6 +359,11 @@ pub(in crate::app) enum HomeImagePaint {
         area: Rect,
         item: Box<mbv_core::api::EmbyItem>,
         centered: bool,
+    },
+    Series {
+        area: Rect,
+        item: Box<mbv_core::api::EmbyItem>,
+        show_placeholder: bool,
     },
     AudiobookshelfCover {
         area: Rect,
