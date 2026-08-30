@@ -157,6 +157,19 @@ impl BrowserComponent {
         area: Rect,
         ctx: &LibraryListRenderCtx,
     ) -> usize {
+        if self.narrow_extras.feed_items.is_some() {
+            let (scroll, image_paint) = crate::app::render::render_narrow_browse_with_ctx(
+                f,
+                area,
+                ctx,
+                &self.narrow_extras,
+                self.focused,
+                &mut self.layout,
+            );
+            self.image_paint = image_paint;
+            return scroll;
+        }
+
         let left_content_area = Rect {
             height: area.height.saturating_sub(1),
             ..area
