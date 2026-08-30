@@ -1,7 +1,7 @@
 use super::music_workspace::MusicWorkspaceComponent;
 use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
 use crate::app::components::Msg;
-use crate::app::render::{shared_hero_presentation, LibraryListRenderCtx, MusicWideRenderCtx};
+use crate::app::render::{LibraryListRenderCtx, MusicWideRenderCtx};
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -159,9 +159,9 @@ fn music_workspace_selection_follows_shared_hero_gate_boundaries() {
             .draw(|frame| component.view(frame, Rect::new(0, 0, width, height)))
             .unwrap();
         assert_eq!(
-            shared_hero_presentation(Rect::new(0, 0, width, height)).is_some(),
+            component.layout().is_wide_music_active(),
             wide,
-            "shared presentation gate at {width}x{height}"
+            "component layout branch at {width}x{height}"
         );
     }
 }
