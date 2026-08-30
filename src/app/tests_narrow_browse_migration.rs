@@ -447,6 +447,98 @@ fn narrow_podcast_paints_each_browse_row_once() {
     }
 }
 
+fn wide_podcast_app() -> App {
+    let mut app = podcast_app();
+    app.terminal_width = 140;
+    app.terminal_height = 40;
+    app
+}
+
+fn wide_backend() -> Terminal<TestBackend> {
+    Terminal::new(TestBackend::new(140, 40)).unwrap()
+}
+
+/// Characterization (task 3.5b template step a): pins the painted WIDE Emby
+/// podcast browse surface through the full `Model::draw_frame` path, at a
+/// wide+tall size where `shared_hero_presentation` returns `Some`. Baseline is
+/// BLANK: the `render_list` hero-presentation early return fired for wide
+/// podcast and returned before anything published `layout.left_area`, and no
+/// podcast wide-workspace component exists. Rebaked in the same-task commit
+/// that removes the podcast disjunct — see the doc comment there.
+#[test]
+fn wide_podcast_surface_snapshot() {
+    let mut model = Model::new(wide_podcast_app());
+    model.sync_mounted_surfaces();
+    let mut term = wide_backend();
+
+    let output = draw(&mut model, &mut term);
+
+    let expected = WIDE_PODCAST_SURFACE;
+    assert_eq!(output, expected, "wide podcast surface drifted:\n{output}");
+}
+
+const WIDE_PODCAST_SURFACE: &str = "                                                                                                                                            
+                                           HOME  ▐ PODCASTS                                                                                 
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+     🖧  WOIMS                                                                                                                               
+                                                                                                                                            
+    Add items with p from Home or libr                                                                                                      
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+     🖭  none                                                                                                                                
+                                                                                                                                            
+                                         🔊  100                                                                                     󰚴  ♥  ";
+
+/// Regression (task 3.5b template step d): the WIDE Emby podcast browse surface
+/// paints the generic browse body (mounted `BrowserComponent`, kind `Generic`)
+/// across the wide area — it is no longer blank.
+#[test]
+#[ignore = "red until task 3.5b removes the podcast hero-presentation early return"]
+fn wide_podcast_paints_browse_body() {
+    let mut model = Model::new(wide_podcast_app());
+    model.sync_mounted_surfaces();
+    let mut term = wide_backend();
+
+    let output = draw(&mut model, &mut term);
+
+    for row in ["Show 0", "Show 1", "Show 2", "Show 3", "Show 4"] {
+        assert_eq!(
+            output.matches(row).count(),
+            1,
+            "wide podcast browse row {row:?} must be painted exactly once:\n{output}"
+        );
+    }
+}
+
 /// Regression 5: narrow Movies paints each browse row exactly once (currently
 /// double-painted by legacy `render_list` + `BrowserComponent::view`).
 #[test]
