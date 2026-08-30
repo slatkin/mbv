@@ -231,10 +231,17 @@ pub fn render_library_to_terminal_focused(
 ) -> Terminal<TestBackend> {
     let backend = TestBackend::new(60, 20);
     let mut term = Terminal::new(backend).unwrap();
+    let mut model = crate::app::shell::Model::new(std::mem::replace(app, make_app_stub()));
+    model.sync_mounted_surfaces();
     term.draw(|f| {
-        app.render_library(f, Rect::new(0, 0, 60, 20), focused, layout, None);
+        model
+            .app
+            .render_library(f, Rect::new(0, 0, 60, 20), focused, layout, None);
+        model.render_emby_browser_component(f);
+        model.render_music_workspace_component(f);
     })
     .unwrap();
+    *app = model.app;
     term
 }
 
@@ -254,10 +261,17 @@ pub fn render_library_to_string_sized(
 ) -> String {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
+    let mut model = crate::app::shell::Model::new(std::mem::replace(app, make_app_stub()));
+    model.sync_mounted_surfaces();
     term.draw(|f| {
-        app.render_library(f, Rect::new(0, 0, width, height), true, layout, None);
+        model
+            .app
+            .render_library(f, Rect::new(0, 0, width, height), true, layout, None);
+        model.render_emby_browser_component(f);
+        model.render_music_workspace_component(f);
     })
     .unwrap();
+    *app = model.app;
     buffer_to_string(&term)
 }
 

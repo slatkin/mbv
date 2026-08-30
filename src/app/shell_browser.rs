@@ -303,7 +303,7 @@ impl Model {
         self.push_emby_browser_content();
     }
 
-    pub(super) fn render_emby_browser_component(&mut self, frame: &mut ratatui::Frame) {
+    pub(crate) fn render_emby_browser_component(&mut self, frame: &mut ratatui::Frame) {
         let Some(id) = self.emby_browser_id.as_ref() else {
             return;
         };

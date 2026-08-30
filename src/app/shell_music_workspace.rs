@@ -179,7 +179,7 @@ impl Model {
         }
     }
 
-    pub(super) fn render_music_workspace_component(&mut self, frame: &mut ratatui::Frame) {
+    pub(crate) fn render_music_workspace_component(&mut self, frame: &mut ratatui::Frame) {
         let Some(id) = self.music_workspace_id.as_ref() else {
             return;
         };

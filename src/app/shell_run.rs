@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 impl Model {
-    pub(in crate::app) fn sync_mounted_surfaces(&mut self) {
+    pub(crate) fn sync_mounted_surfaces(&mut self) {
         // Apply App-owned effect handoffs to their mounted components.
         // `sync_home` was deleted (task 5.3d, sync_home mirror deletion):
         // Home content/focus is projected event-driven by
