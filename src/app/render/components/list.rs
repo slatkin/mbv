@@ -246,7 +246,12 @@ impl App {
                     as u16;
                 content_rows + HERO_BLOCK_EXTRA_ROWS
             } else if let Some(item) = &selected_series_item {
-                self.series_inline_detail_rows(item, content_area.width, cols > 1) as u16
+                crate::app::render::screens::detail_series::series_inline_detail_rows(
+                    self,
+                    item,
+                    content_area.width,
+                    cols > 1,
+                ) as u16
                     + HERO_BLOCK_EXTRA_ROWS
             } else {
                 // No banner content to size to. If we're at the top browse
@@ -503,7 +508,8 @@ impl App {
             // wide right-rail browser deliberately has no detail block and
             // must not be reused here.
             let lib_idx = self.tab.emby_library_index().unwrap();
-            final_offset = self.render_grouped_album_rows(
+            final_offset = super::album::render_grouped_album_rows(
+                self,
                 f,
                 list_area,
                 lib_idx,
@@ -519,7 +525,8 @@ impl App {
             )
         } else if show_grouped {
             let lib_idx = self.tab.emby_library_index().unwrap();
-            final_offset = self.render_grouped_album_rows(
+            final_offset = super::album::render_grouped_album_rows(
+                self,
                 f,
                 list_area,
                 lib_idx,
@@ -585,7 +592,14 @@ impl App {
             if selected_movie_item.is_some() {
                 self.render_compact_detail(f, content_rect, lib_idx, focused, true, layout);
             } else if selected_series_item.is_some() {
-                self.render_series_inline_detail(f, content_rect, lib_idx, focused, true);
+                super::detail_series_view::render_series_inline_detail(
+                    self,
+                    f,
+                    content_rect,
+                    lib_idx,
+                    focused,
+                    true,
+                );
             }
         }
 

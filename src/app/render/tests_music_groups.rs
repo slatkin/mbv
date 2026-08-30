@@ -495,7 +495,8 @@ fn two_column_album_groups_keep_spacer_above_next_group() {
     let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
     terminal
         .draw(|f| {
-            app.render_grouped_album_rows(
+            crate::app::render::components::album::render_grouped_album_rows(
+                &mut app,
                 f,
                 Rect::new(0, 0, 80, 20),
                 0,
@@ -543,7 +544,8 @@ fn grouped_music_shared_plan_keeps_one_parent_target() {
     let mut terminal = Terminal::new(TestBackend::new(82, 30)).unwrap();
     terminal
         .draw(|f| {
-            app.render_grouped_album_rows(
+            crate::app::render::components::album::render_grouped_album_rows(
+                &mut app,
                 f,
                 Rect::new(0, 0, 82, 30),
                 0,
@@ -584,7 +586,8 @@ fn grouped_music_falls_back_when_selected_album_source_is_absent() {
 
     terminal
         .draw(|f| {
-            app.render_grouped_album_rows(
+            crate::app::render::components::album::render_grouped_album_rows(
+                &mut app,
                 f,
                 Rect::new(0, 0, 60, 20),
                 0,
