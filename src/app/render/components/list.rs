@@ -247,7 +247,7 @@ impl App {
                 content_rows + HERO_BLOCK_EXTRA_ROWS
             } else if let Some(item) = &selected_series_item {
                 crate::app::render::screens::detail_series::series_inline_detail_rows(
-                    self,
+                    self.images_enabled(),
                     item,
                     content_area.width,
                     cols > 1,

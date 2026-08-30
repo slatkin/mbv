@@ -2,7 +2,6 @@ use crate::app::render::components::detail_series_view::{
     series_meta_line, SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_ROWS,
 };
 use crate::app::render::components::hero::wrap_overview_lines;
-use crate::app::App;
 
 /// Rows reserved below the overview text in the Series inline detail pane
 /// for the divider/season-pills row and the (roughly estimated) episode
@@ -21,7 +20,7 @@ const SERIES_DETAIL_OVERVIEW_MAX_LINES: usize = 4;
 /// block (see `render_series_inline_detail`), so no space is reserved
 /// for it here.
 pub(in crate::app::render) fn series_inline_detail_rows(
-    app: &App,
+    images_enabled: bool,
     item: &mbv_core::api::EmbyItem,
     panel_width: u16,
     show_title: bool,
@@ -53,7 +52,7 @@ pub(in crate::app::render) fn series_inline_detail_rows(
     }
 
     // Keep the block tall enough for the image and its bottom gutter.
-    let img_height = if app.images_enabled() {
+    let img_height = if images_enabled {
         SERIES_IMAGE_ROWS as usize
     } else {
         0
