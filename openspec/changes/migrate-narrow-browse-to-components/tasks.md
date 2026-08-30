@@ -171,7 +171,7 @@ findings become added rows; the template does not change.
       `MusicImagePaint` → shell executor seam, mirroring `HomeImagePaint`.
       Album-art helpers consume only context/cache state and emit an instruction;
       they do not fetch or access cache. Verify: a targeted shell-execution test.
-- [ ] 3.2c Prerequisite — grouped Music planning and inline rows: make the
+- [x] 3.2c Prerequisite — grouped Music planning and inline rows: make the
       grouped-album display plan pure from an explicit context and make inline
       row composition consume that plan/context. Reuse existing
       `MusicWideRenderCtx`, `LibraryListRenderCtx`, and cursor context data.
