@@ -8,12 +8,12 @@
       `split-browse-state-interaction-fields/design.md` §1.1/1.1b is the
       checklist. (1.1a–1.1c re-point the three site-groups the field-split
       campaign left live; confirm they are landed before 1.2.)
-- [ ] 1.1a Re-point `actions_navigation.rs:92` (`select_item`, `lvl.cursor = pos`
+- [x] 1.1a Re-point `actions_navigation.rs:92` (`select_item`, `lvl.cursor = pos`
       after resolving a playable item). Per design §1.1 **outcome 1**: drop the
       write — the mounted component owns the live cursor and the caller already
       holds the resolved item/index. Verify: `rtk cargo check -p mbv`;
       `select_item` restore/characterization tests pass.
-- [ ] 1.1b Re-point `context_menu_actions.rs:206` and `:345` (post-removal
+- [x] 1.1b Re-point `context_menu_actions.rs:206` and `:345` (post-removal
       `lvl.cursor = …min(len-1)` re-clamp). Per design §1.1: drop both writes —
       the component re-clamps its own cursor against the projected content
       (projection reset). Verify: `rtk cargo check -p mbv`; context-menu
