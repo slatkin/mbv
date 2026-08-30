@@ -127,5 +127,6 @@ Two boundaries stack: the **render boundary** governs painting; the
   reproduce with real logs/instrumentation from the actual failing process,
   capture the real response/error (not a reconstruction), and state the
   confirmed root cause before writing a fix. A fix proposed without that
-  evidence is a guess, not a fix — say so and stop instead of shipping it.
+- Commit your work when completed. DO NOT leave a dirty worktree with mystery
+  changes.
 
