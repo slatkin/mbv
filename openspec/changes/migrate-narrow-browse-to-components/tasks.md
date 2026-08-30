@@ -125,6 +125,20 @@ Ends with every surface owned; legacy still paints. This is the state
       latent pre-`6cf469e1` state), it does not remove the second painter.
       Task 3 does.
 
+### Change D findings (keyboard-routing gaps — recorded, not fixed here)
+
+Per design Risks / D coupling. These surface during task 2/3 and belong to the
+keyboard-routing family, not this change:
+
+- **Narrow TV Enter on a Series** now emits `BrowserActivate` → `select_item`
+  (drill into the series folder) instead of the legacy
+  `open_series_selection_modal`. Matches D4's "activation `BrowserComponent`
+  already implements" and task 3.4's drill-in direction. The narrow arm of
+  `activate_selected_series` / `activate_selected_series_item` becomes
+  unreachable for TV. (Unit C, `56e5cfb0`.)
+- **Narrow TV season/episode chords** have no `BrowserComponent` translation and
+  stay dead under the router (ADR 0023). (Unit C.)
+
 ## 3. One painter per surface (D2, D3)
 
 One row per surface from task 1, each following the same template. Added audit
