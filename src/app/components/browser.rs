@@ -591,10 +591,19 @@ impl Default for BrowserComponent {
 impl Component for BrowserComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = LayoutMain::default();
-        let context = self
+        let mut context = self
             .context
             .clone()
             .with_cursor_scroll(self.cursor, self.scroll);
+        if let Some(items) = self.narrow_extras.feed_items.as_ref() {
+            context = LibraryListRenderCtx::from_items(
+                items.clone(),
+                self.cursor.min(items.len().saturating_sub(1)),
+                self.scroll,
+            )
+            .with_group_pills(true)
+            .with_loading(context.loading);
+        }
         // Task 5.3d.17a: when the wide Movies/home-video hero-on-left layout
         // is active (this component's own `kind` AND the area is wide enough
         // for the shared split), paint the full hero + pills + list layout

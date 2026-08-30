@@ -20,6 +20,9 @@ use crate::app::render::components::list_rows::{
 use crate::app::render::HomeImagePaint;
 use crate::app::App;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::text::{Line, Span};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 /// Full narrow generic/Movies/home-video browse composition
@@ -279,9 +282,20 @@ fn render_feed_group_picker(
             height: 1,
             ..list_area
         };
-        crate::app::render::render_count_label(f, count_area, items.len());
+        let label = format!(" {} items", items.len());
+        let divider = "▁".repeat(
+            count_area
+                .width
+                .saturating_sub(label.chars().count() as u16) as usize,
+        );
         f.render_widget(
-            ratatui::widgets::Paragraph::new("▁".repeat(count_area.width as usize)),
+            Paragraph::new(Line::from(vec![
+                Span::styled(
+                    label,
+                    Style::default().fg(crate::app::palette::TEXT_SECONDARY),
+                ),
+                Span::raw(divider),
+            ])),
             count_area,
         );
         list_area.y += 2;

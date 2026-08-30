@@ -151,10 +151,8 @@ impl App {
         // (task 3.6 converts it).
         if let Some(lib_idx) = self.tab.emby_library_index() {
             let coll = self.libs[lib_idx].library.collection_type.as_str();
-            let component_owned = self.emby_browser_active
-                && coll != "music"
-                && !self.is_feed_home_video_group_view(lib_idx)
-                && !self.inline_search_active;
+            let component_owned =
+                self.emby_browser_active && coll != "music" && !self.inline_search_active;
             if component_owned {
                 layout.left_area = area;
                 if self.selected_movie_item(lib_idx).is_some() {

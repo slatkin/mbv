@@ -556,25 +556,9 @@ impl App {
                 self.ensure_music_group_album_level(lib_idx);
                 self.ensure_feed_home_video_group_level(lib_idx);
                 if self.is_feed_home_video_group_view(lib_idx) {
-                    // Feed group pickers use BrowserComponent for both widths;
-                    // publish the same hero-left handoff as other wide browse
-                    // surfaces so the component receives its left/right panes.
-                    if crate::app::render::arrangements::hero_left::shared_hero_presentation(area)
-                        .is_some()
-                    {
-                        if let Some(panes) =
-                            crate::app::render::arrangements::library::wide_library_panes(
-                                area,
-                                crate::app::render::arrangements::hero_left::PANE_PAD_X,
-                                crate::app::render::arrangements::hero_left::PANE_PAD_Y,
-                            )
-                        {
-                            layout.movies_wide_area = area;
-                            layout.movies_wide_right_area = panes.right_area;
-                        }
-                    } else {
-                        layout.left_area = area;
-                    }
+                    // BrowserComponent owns feed group presentation at every
+                    // width; publish only the full browser area.
+                    layout.left_area = area;
                     return;
                 }
                 {
