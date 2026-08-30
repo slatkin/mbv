@@ -179,76 +179,81 @@ impl App {
         panel_width: u16,
         truncate_overview: bool,
     ) -> CompactBannerLayout {
-        let inner_w = panel_width as usize;
-
-        let primary_cache_key = compact_banner_image_cache_key(&item.id);
-        if self.images_enabled() {
+        let key = compact_banner_image_cache_key(&item.id);
+        let images_enabled = self.images_enabled();
+        if images_enabled {
             self.fetch_card_image(
-                primary_cache_key.clone(),
+                key.clone(),
                 item.id.clone(),
                 item.series_id.clone(),
                 &["Primary"],
             );
         }
-
-        // `right_panel_image_renders_allowed()` (the 150ms nav-idle debounce) exists
-        // to stop the *real* poster from flickering in and out while rapidly
-        // scrolling through many different movies -- it must keep gating
-        // which image is actually substituted in. But the placeholder box's
-        // size is fixed (IMG_COLS x IMG_ROWS) regardless of which movie is
-        // selected, so reserving it doesn't cause that flicker; gating the
-        // reservation itself only desynced the poster's placeholder from the
-        // rest of the banner's content (meta line, overview), which renders
-        // at its final layout immediately, on the very first frame. So the
-        // placeholder is reserved unconditionally here whenever a real image
-        // isn't yet ready to show, and only the "is it the real image or the
-        // placeholder" choice below still depends on the nav-idle gate.
-        let nav_gate_open = self.right_panel_image_renders_allowed();
-        // Cap the poster's bounding-box width at half the panel's inner width,
-        // so a narrow panel (single-panel view) doesn't reserve the same
-        // wide/tall box a full-width panel would -- the fixed IMG_COLS box
-        // looked oversized (and briefly all the more so as the placeholder)
-        // once the panel got narrow enough for it to dominate the banner.
+        let inner_w = panel_width as usize;
         let img_cols = IMG_COLS.min((inner_w / 2) as u16);
-        // `image_picker` is only `None` before the run loop's one-time init
-        // (or in tests that don't set one up) -- fall back to the full
-        // bounding box in that case, since there's no real font metrics yet
-        // to fit the canonical poster aspect ratio against.
-        let (placeholder_w, placeholder_h) = self
+        let placeholder_size = self
             .image_picker
             .as_ref()
             .map(|picker| poster_placeholder_size(picker.font_size(), img_cols))
             .unwrap_or((img_cols, IMG_ROWS));
-
         let has_no_art = self
             .card_image_states
-            .get(&primary_cache_key)
+            .get(&key)
             .is_some_and(|e| e.img.is_none());
-        let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) =
-            if !self.images_enabled() {
-                (0, 0, false)
-            } else if has_no_art {
-                // Fetch resolved with no image for this movie -- nothing to
-                // reserve space for.
-                (0, 0, false)
-            } else if nav_gate_open {
-                match self.cached_image_protocol_mut(&primary_cache_key) {
-                    // A real image resolved; show it (or, if resize+encode is
-                    // still running on the worker thread -- `size_for` is
-                    // `None` -- keep showing the placeholder a beat longer).
-                    Some(state) => match state.size_for(
+        let cached_size = if self.right_panel_image_renders_allowed() {
+            self.cached_image_protocol_mut(&key).and_then(|state| {
+                state
+                    .size_for(
                         ratatui_image::Resize::Scale(Some(RENDER_FILTER)),
                         ratatui::layout::Size {
                             width: img_cols,
                             height: IMG_ROWS,
                         },
-                    ) {
-                        Some(actual) => (actual.width, actual.height, false),
-                        None => (placeholder_w, placeholder_h, true),
-                    },
-                    // Either the fetch is still in flight (no entry yet), or a
-                    // real image already resolved but the nav-idle gate hasn't
-                    // opened yet -- either way, reserve the placeholder now.
+                    )
+                    .map(|s| (s.width, s.height))
+            })
+        } else {
+            None
+        };
+        let playback = self.effective_playback_state();
+        let show_playing = playback.active
+            && self
+                .playback_queue()
+                .emby_item_at(playback.active_idx)
+                .is_some_and(|i| i.id == item.id);
+        Self::compact_banner_layout(
+            item,
+            panel_width,
+            truncate_overview,
+            images_enabled,
+            self.right_panel_image_renders_allowed(),
+            has_no_art,
+            cached_size,
+            placeholder_size,
+            show_playing,
+        )
+    }
+
+    pub(in crate::app::render) fn compact_banner_layout(
+        item: &mbv_core::api::EmbyItem,
+        panel_width: u16,
+        truncate_overview: bool,
+        images_enabled: bool,
+        nav_gate_open: bool,
+        has_no_art: bool,
+        cached_size: Option<(u16, u16)>,
+        placeholder_size: (u16, u16),
+        show_playing: bool,
+    ) -> CompactBannerLayout {
+        let inner_w = panel_width as usize;
+
+        let (placeholder_w, placeholder_h) = placeholder_size;
+        let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) =
+            if !images_enabled || has_no_art {
+                (0, 0, false)
+            } else if nav_gate_open {
+                match cached_size {
+                    Some((width, height)) => (width, height, false),
                     None => (placeholder_w, placeholder_h, true),
                 }
             } else {
@@ -282,15 +287,6 @@ impl App {
             Some(meta)
         };
 
-        let playback = self.effective_playback_state();
-        let now_playing_id: Option<String> = if playback.active {
-            self.playback_queue()
-                .emby_item_at(playback.active_idx)
-                .map(|i| i.id.clone())
-        } else {
-            None
-        };
-        let show_playing = now_playing_id.as_deref() == Some(item.id.as_str());
         if show_playing {
             rows_before_overview += 1;
         }
