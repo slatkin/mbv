@@ -527,9 +527,71 @@ fn feed_home_video_group_paints_each_row_once() {
     }
 }
 
-const FEED_NARROW_BASELINE: &str = "                                                            \n   HOME  ▐ YOUTUBE                                          \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n  ⌘ ◢ All ◤◢ Channel A ◤                                    \n                                                            \n▎ Video One                                                 \n  Video Two                                                 \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n 🔊  100                                             \u{f06b4} \u{ede2} ♥ \u{f1c0} ";
-const FEED_WIDE_BASELINE: &str = "                                                                                                                                            \n                                           HOME  ▐ YOUTUBE                                                                                  \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                    ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  \n                                                                                    ▎  Video One                                            \n                                                                                       Video Two                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                              Video One ○                                                                                   \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n     🖧  WOIMS                                                                                                                               \n                                                                                                                                            \n    Add items with p from Home or libr                                                                                                      \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n                                                                                                                                            \n     🖭  none                                                                        ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  \n                                                                                                                                            \n                                         🔊  100                                                                                     \u{f06b4} \u{ede2} ♥ \u{f1c0} ";
-
+/// Captured from parent `fbc6888e` (legacy `render_feed_home_video_group_view`),
+/// using `feed_home_video_group_app()` with TestBackend at exactly 60x20 and
+/// 140x40; capture method: temporary worktree at `fbc6888e`, copied this test
+/// harness, ran `cargo test -p mbv --bin mbv feed_home_video_group_* -- --nocapture`,
+/// and recorded each assertion's complete TestBackend `left` frame.
+const FEED_NARROW_BASELINE: &str = r###"                                                            
+   HOME  ▐ YOUTUBE                                          
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+  ⌘ ◢ All ◤◢ Channel A ◤                                    
+                                                            
+  2 items▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ 
+                                                            
+▎ Video One                                                 
+  Video Two                                                 
+ ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ 
+ Video Two                                                  
+                                                            
+                                                            
+                                                            
+                                                            
+ 🔊  100                                             󰚴  ♥  "###;
+const FEED_WIDE_BASELINE: &str = r###"                                                                                                                                            
+                                           HOME  ▐ YOUTUBE                                                                                  
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                           ⌘ ◢ All ◤◢ Channel A ◤                                                                           
+                                                                                                                                            
+                                          ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  
+                                                                                                                                            
+                                            Video One                               ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  
+                                                                                    ▎  Video One                                            
+                                          ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ Video Two                                        ▔▔  
+                                          Video Two                                                                                         
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                              Video One ○                                                                                   
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+     🖧  WOIMS                                                                                                                               
+                                                                                                                                            
+    Add items with p from Home or libr                                                                                                      
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+     🖭  none                                                                        ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  
+                                                                                                                                            
+                                         🔊  100                                                                                     󰚴  ♥  "###;
 /// Characterization (task 3.5b template step a): pins the painted WIDE Emby
 /// podcast browse surface through the full `Model::draw_frame` path, at a
 /// wide+tall size where `shared_hero_presentation` returns `Some`. The
