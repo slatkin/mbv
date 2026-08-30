@@ -6,11 +6,36 @@
       non-test reader of `BrowseLevel::cursor`/`scroll` remains outside
       `types_browse.rs` itself. Stop and report if any does — the inventory in
       `split-browse-state-interaction-fields/design.md` §1.1/1.1b is the
-      checklist.
+      checklist. (1.1a–1.1c re-point the three site-groups the field-split
+      campaign left live; confirm they are landed before 1.2.)
+- [ ] 1.1a Re-point `actions_navigation.rs:92` (`select_item`, `lvl.cursor = pos`
+      after resolving a playable item). Per design §1.1 **outcome 1**: drop the
+      write — the mounted component owns the live cursor and the caller already
+      holds the resolved item/index. Verify: `rtk cargo check -p mbv`;
+      `select_item` restore/characterization tests pass.
+- [ ] 1.1b Re-point `context_menu_actions.rs:206` and `:345` (post-removal
+      `lvl.cursor = …min(len-1)` re-clamp). Per design §1.1: drop both writes —
+      the component re-clamps its own cursor against the projected content
+      (projection reset). Verify: `rtk cargo check -p mbv`; context-menu
+      item-removal tests pass.
+- [ ] 1.1c Re-point the Music wide render path off `BrowseLevel` per design
+      §1.1b **R16/R17/R18 (outcome 3)**: `wide_music_render_ctx`
+      (`render/components/music_wide.rs` ~`:153/:157/:164`) and
+      `selected_album_item` (`render/components/widgets.rs:612`) source the live
+      album cursor/scroll and selected item from `MusicWorkspaceComponent`
+      (`selected_item()` at `music_workspace.rs:142`, plus `album_cursor()` /
+      `album_scroll()`), threading the value as a shell-side parameter where the
+      ctx builder can't reach the component (Group A — wide surface, component
+      always mounted, per D6/D7). Verify: `rtk cargo check -p mbv`,
+      `rtk cargo nextest run -p mbv` (music characterization tests).
 - [ ] 1.2 Delete `BrowseLevel::cursor` and `BrowseLevel::scroll`. Verify:
       `rtk cargo check -p mbv` is clean with no transitional accessor left
       behind (D5 — a field is removed in the same task that re-points its last
-      reader; no accessor returning the old value survives).
+      reader; no accessor returning the old value survives). Re-back
+      `BrowseResting` as a real `BrowseLevel` field (or equivalent) so
+      `resting()` / `set_resting_*` / `from_position_level` keep compiling; the
+      resting accessor stays — it is the sanctioned resting-position path, not a
+      transitional live accessor (D5).
 - [ ] 1.3 Verify: `rtk cargo nextest run -p mbv`. The restore characterization
       tests from `split-browse-state-interaction-fields` tasks 2.1/3.1/4.1 and
       `migrate-narrow-browse-to-components` 2.1 are the behavioural gate.

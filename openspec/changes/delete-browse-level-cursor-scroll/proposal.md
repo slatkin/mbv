@@ -39,11 +39,18 @@ No spec change. The framework requirements this work satisfies were added by
 ## Impact
 
 `src/app/types_browse.rs`, `src/app/lib_cursor_actions.rs`,
-`src/app/mouse_gestures.rs`, `rules/interactive-component-boundary/`, and the
-readers named in `split-browse-state-interaction-fields/design.md` §1.1/1.1b.
+`src/app/mouse_gestures.rs`, `src/app/actions_navigation.rs`,
+`src/app/context_menu_actions.rs`, `src/app/render/components/music_wide.rs`,
+`src/app/render/components/widgets.rs`,
+`rules/interactive-component-boundary/`, and the readers named in
+`split-browse-state-interaction-fields/design.md` §1.1/1.1b.
 
 ## Sequencing
 
 Depends on `migrate-narrow-browse-to-components` — specifically its **task 2**
 (ownership), not the full painter hoist. Blocks
 `sync-interactive-surface-docs`.
+
+The Music wide re-point (design §1.1b R16–R18) was scoped to
+`split-browse-state-interaction-fields` task 4.4 / `remove-music-workspace-cursor-mirror`
+and was left live when those changes closed; it lands here as task 1.1c.
