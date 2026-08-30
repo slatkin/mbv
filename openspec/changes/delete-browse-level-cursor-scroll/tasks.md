@@ -1,6 +1,6 @@
 ## 1. Delete the fields
 
-- [ ] 1.1 Confirm the precondition: every browse surface has an owning
+- [x] 1.1 Confirm the precondition: every browse surface has an owning
       component and `library_list_render_ctx` takes cursor/scroll as
       parameters (`migrate-narrow-browse-to-components` task 2). Verify: no
       non-test reader of `BrowseLevel::cursor`/`scroll` remains outside
@@ -112,7 +112,7 @@
         `select_item`.
       Verify: `rtk cargo check -p mbv`; `rtk cargo nextest run -p mbv
       --no-fail-fast` (baseline as 1.1d).
-- [ ] 1.1g Retire three dead `BrowseLevel::cursor` readers that
+- [x] 1.1g Retire three dead `BrowseLevel::cursor` readers that
       `migrate-narrow-browse-to-components` orphaned but did not delete; the
       field deletion forces the choice and re-pointing dead code is pointless
       (D5), so they land here rather than in section 2:
