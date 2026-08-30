@@ -56,9 +56,13 @@ fn render_podcast_shell_with(
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|frame| {
         let mut layout = LayoutMain::default();
-        model
-            .app
-            .render_library(frame, Rect::new(0, 0, width, height), focused, &mut layout);
+        model.app.render_library(
+            frame,
+            Rect::new(0, 0, width, height),
+            focused,
+            &mut layout,
+            None,
+        );
         model.app.layout.main = layout;
         model.render_audiobookshelf_podcast_component(frame);
     })

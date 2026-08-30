@@ -510,6 +510,7 @@ impl App {
         area: Rect,
         focused: bool,
         layout: &mut LayoutMain,
+        cursor_scroll: Option<(usize, usize)>,
     ) {
         // If a music-group library's nav_stack was truncated to just the group
         // level (e.g., stale breadcrumb click), immediately re-push the album level.
@@ -567,7 +568,7 @@ impl App {
                         )
                         .is_some()
                     {
-                        let ctx = self.wide_music_render_ctx(lib_idx);
+                        let ctx = self.wide_music_render_ctx(lib_idx, cursor_scroll);
                         ctx.publish_geometry(area, layout);
                     }
                     // Wide TV's mounted `TvWorkspaceComponent` paints the
@@ -582,7 +583,7 @@ impl App {
                         )
                         .is_some()
                     {
-                        let ctx = self.wide_tv_render_ctx(lib_idx, focused);
+                        let ctx = self.wide_tv_render_ctx(lib_idx, focused, cursor_scroll);
                         ctx.publish_geometry(area, layout);
                     }
                     // The narrow legacy render path owns the per-frame scroll
@@ -593,13 +594,21 @@ impl App {
                     // 4.4/4.5 move the narrow surface's scroll onto its own
                     // owner; the painter itself no longer reaches into
                     // `BrowseLevel`.
-                    let mut scroll = self
-                        .libs
-                        .get(lib_idx)
-                        .and_then(|lib| lib.nav_stack.last())
-                        .map(|lvl| lvl.scroll)
-                        .unwrap_or(0);
-                    self.render_list(f, area, focused, layout, &mut scroll);
+                    let (cursor, mut scroll) = cursor_scroll.unwrap_or_else(|| {
+                        (
+                            self.libs
+                                .get(lib_idx)
+                                .and_then(|lib| lib.nav_stack.last())
+                                .map(|lvl| lvl.cursor)
+                                .unwrap_or(0),
+                            self.libs
+                                .get(lib_idx)
+                                .and_then(|lib| lib.nav_stack.last())
+                                .map(|lvl| lvl.scroll)
+                                .unwrap_or(0),
+                        )
+                    });
+                    self.render_list(f, area, focused, layout, Some(cursor), &mut scroll);
                     if let Some(lib_idx) = self.tab.emby_library_index() {
                         if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
                             level.scroll = scroll;

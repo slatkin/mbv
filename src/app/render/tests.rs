@@ -573,11 +573,13 @@ fn rendered_text(app: App, width: u16, height: u16) -> String {
     let mut model = crate::app::shell::Model::new(app);
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|f| model.app.compose_base_frame(f)).unwrap();
+    terminal
+        .draw(|f| model.app.compose_base_frame(f, None))
+        .unwrap();
     model.sync_playback();
     terminal
         .draw(|f| {
-            model.app.compose_base_frame(f);
+            model.app.compose_base_frame(f, None);
             model.render_playback_component(f);
         })
         .unwrap();

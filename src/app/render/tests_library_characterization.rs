@@ -12,7 +12,13 @@ fn render_library(app: &mut App, width: u16, height: u16, focused: bool) -> Stri
     let mut layout = LayoutMain::default();
     terminal
         .draw(|f| {
-            app.render_library(f, Rect::new(0, 0, width, height), focused, &mut layout);
+            app.render_library(
+                f,
+                Rect::new(0, 0, width, height),
+                focused,
+                &mut layout,
+                None,
+            );
         })
         .unwrap();
     buffer_to_string(&terminal)

@@ -547,7 +547,7 @@ pub(crate) fn left_down(col: u16, row: u16) -> MouseEvent {
 pub(crate) fn render_app_to_string(app: &mut App, width: u16, height: u16) -> String {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.compose_base_frame(f)).unwrap();
+    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
 
     let buf = term.backend().buffer();
     let area = *buf.area();
@@ -572,7 +572,7 @@ fn aggregate_zero_area_render_leaves_layout_untouched() {
     let before_left = app.layout.main.left_area;
     let before_hero = app.layout.main.hero_area;
     let mut term = Terminal::new(TestBackend::new(0, 0)).unwrap();
-    term.draw(|f| app.compose_base_frame(f)).unwrap();
+    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
     assert_eq!(
         app.layout.main.left_area,
         before_left,
@@ -592,7 +592,7 @@ fn aggregate_surfaces_do_not_bleed_across_destinations() {
     // cross-surface bleed from one destination into another.
     let mut app = make_app_stub();
     let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
-    term.draw(|f| app.compose_base_frame(f)).unwrap();
+    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
 
     let main = &app.layout.main;
     // The destination tag is only set on the completed frame.

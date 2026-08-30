@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::components::{BrowserComponent, MusicWorkspaceComponent, TvWorkspaceComponent};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
@@ -54,7 +55,25 @@ impl Model {
             crate::app::TabSelection::EmbyLibrary(index)
                 if self.inline_search_component_id(index).is_some()
         );
-        self.app.compose_base_frame(f);
+        let cursor_scroll = self.app.tab.emby_library_index().and_then(|_| {
+            self.emby_browser_component_id()
+                .and_then(|id| self.application.get_component(&id))
+                .and_then(|c| c.as_any().downcast_ref::<BrowserComponent>())
+                .map(|c| (c.cursor(), c.scroll()))
+                .or_else(|| {
+                    self.tv_workspace_component_id()
+                        .and_then(|id| self.application.get_component(&id))
+                        .and_then(|c| c.as_any().downcast_ref::<TvWorkspaceComponent>())
+                        .map(|c| (c.cursor(), c.scroll()))
+                })
+                .or_else(|| {
+                    self.music_workspace_component_id()
+                        .and_then(|id| self.application.get_component(&id))
+                        .and_then(|c| c.as_any().downcast_ref::<MusicWorkspaceComponent>())
+                        .map(|c| (c.album_cursor(), c.album_scroll()))
+                })
+        });
+        self.app.compose_base_frame(f, cursor_scroll);
         if music_resize {
             self.push_music_workspace_content();
         }

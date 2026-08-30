@@ -25,9 +25,9 @@ fn render_tv_workspace(app: &mut App, layout: &mut LayoutMain) -> (String, TvWor
     let mut term = Terminal::new(backend).unwrap();
     let area = Rect::new(0, 0, 100, 30);
     let mut component = TvWorkspaceComponent::new();
-    component.set_content(app.wide_tv_render_ctx(0, true));
+    component.set_content(app.wide_tv_render_ctx(0, true, None));
     term.draw(|f| {
-        app.render_library(f, area, true, layout);
+        app.render_library(f, area, true, layout, None);
         component.view(f, area);
     })
     .unwrap();
@@ -113,7 +113,7 @@ fn wide_tv_legacy_base_frame_publishes_geometry_but_paints_no_workspace() {
     let area = Rect::new(0, 0, 100, 30);
     let mut term = Terminal::new(TestBackend::new(100, 30)).unwrap();
     term.draw(|f| {
-        app.render_library(f, area, true, &mut layout);
+        app.render_library(f, area, true, &mut layout, None);
     })
     .unwrap();
 
@@ -196,14 +196,14 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
     let mut layout = crate::app::layout::LayoutMain::default();
     let area = Rect::new(0, 0, 100, 30);
     let mut component = TvWorkspaceComponent::new();
-    component.set_content(app.wide_tv_render_ctx(0, true));
+    component.set_content(app.wide_tv_render_ctx(0, true, None));
     terminal
         .draw(|f| {
             f.render_widget(
                 Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
                 area,
             );
-            app.render_library(f, area, true, &mut layout);
+            app.render_library(f, area, true, &mut layout, None);
             component.view(f, area);
         })
         .unwrap();

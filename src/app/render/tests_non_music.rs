@@ -76,6 +76,7 @@ fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
                 ratatui::layout::Rect::new(0, 0, 120, 40),
                 true,
                 &mut layout,
+                None,
             );
         })
         .unwrap();
@@ -112,6 +113,7 @@ fn inline_search_active_legacy_base_frame_publishes_geometry_but_paints_no_rows(
             ratatui::layout::Rect::new(0, 0, 70, 30),
             true,
             &mut layout,
+            None,
         );
     })
     .unwrap();
@@ -250,11 +252,11 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
     // `TvWorkspaceComponent` paints the surface pills over it, exactly as
     // the live shell does.
     let mut component = crate::app::components::TvWorkspaceComponent::new();
-    component.set_content(app.wide_tv_render_ctx(0, true));
+    component.set_content(app.wide_tv_render_ctx(0, true, None));
     let wide_area = ratatui::layout::Rect::new(0, 0, 120, 20);
     terminal
         .draw(|f| {
-            app.render_library(f, wide_area, true, &mut layout);
+            app.render_library(f, wide_area, true, &mut layout, None);
             component.view(f, wide_area);
         })
         .unwrap();

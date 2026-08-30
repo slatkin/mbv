@@ -598,7 +598,7 @@ mod tests {
             let backend = ratatui::backend::TestBackend::new(120, 40);
             let mut term = ratatui::Terminal::new(backend).unwrap();
             term.draw(|f| {
-                model.app.compose_base_frame(f);
+                model.app.compose_base_frame(f, None);
                 if render_component {
                     model.render_emby_browser_component(f);
                 }

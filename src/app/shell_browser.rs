@@ -138,7 +138,7 @@ impl Model {
         }
     }
 
-    fn emby_browser_component_id(&self) -> Option<ComponentId> {
+    pub(super) fn emby_browser_component_id(&self) -> Option<ComponentId> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
         };
@@ -309,7 +309,7 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
-        // Per-draw adapter (D18 step 1): the legacy base frame (self.app.compose_base_frame(f))
+        // Per-draw adapter (D18 step 1): the legacy base frame (self.app.compose_base_frame(f, None))
         // has already populated movies_wide_right_area / movies_wide_area this
         // frame. The base frame and the mounted component share one paint, so
         // the 1-column right-rail stride (the only reader of this field) is

@@ -126,6 +126,10 @@ impl MusicWorkspaceComponent {
         self.album_cursor
     }
 
+    pub(in crate::app) fn album_scroll(&self) -> usize {
+        self.album_scroll
+    }
+
     /// The album item under the component's own album cursor, cloned out of
     /// the cached render context. Mirrors `TvWorkspaceComponent::selected_item()`
     /// for outcome 3 readers (R16/R18): the shell supplies this instead of

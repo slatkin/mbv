@@ -11,7 +11,13 @@ fn render_music(app: &mut App, width: u16, height: u16, focused: bool) -> String
     let mut layout = LayoutMain::default();
     terminal
         .draw(|f| {
-            app.render_library(f, Rect::new(0, 0, width, height), focused, &mut layout);
+            app.render_library(
+                f,
+                Rect::new(0, 0, width, height),
+                focused,
+                &mut layout,
+                None,
+            );
         })
         .unwrap();
     buffer_to_string(&terminal)
@@ -102,7 +108,7 @@ fn wide_music_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
     let mut layout = LayoutMain::default();
     let mut term = Terminal::new(TestBackend::new(120, 40)).unwrap();
     term.draw(|f| {
-        app.render_library(f, Rect::new(0, 0, 120, 40), true, &mut layout);
+        app.render_library(f, Rect::new(0, 0, 120, 40), true, &mut layout, None);
     })
     .unwrap();
 

@@ -24,7 +24,13 @@ fn render_library(app: &mut App, width: u16, height: u16) -> (Terminal<TestBacke
     let mut layout = LayoutMain::default();
     terminal
         .draw(|frame| {
-            app.render_library(frame, Rect::new(0, 0, width, height), true, &mut layout);
+            app.render_library(
+                frame,
+                Rect::new(0, 0, width, height),
+                true,
+                &mut layout,
+                None,
+            );
         })
         .unwrap();
     (terminal, layout)
@@ -90,7 +96,7 @@ fn render_music_component(
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     let area = Rect::new(0, 0, width, height);
     let lib_idx = app.tab.emby_library_index().unwrap();
-    let context = app.wide_music_render_ctx(lib_idx);
+    let context = app.wide_music_render_ctx(lib_idx, None);
     let mut component = MusicWorkspaceComponent::new();
     component.set_content(context);
     terminal.draw(|frame| component.view(frame, area)).unwrap();

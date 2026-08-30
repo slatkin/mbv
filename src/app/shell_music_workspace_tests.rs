@@ -84,7 +84,7 @@ fn grouped_music_cursor_no_fallthrough_when_left_sorted_indices_empty() {
     model.sync_music_workspace();
     let id = model.music_workspace_id.clone().expect("mounted");
 
-    let order = model.app.wide_music_render_ctx(0).album_order.clone();
+    let order = model.app.wide_music_render_ctx(0, None).album_order.clone();
     assert_eq!(order, vec![0, 2, 1], "display order must differ from raw");
 
     let message = model
@@ -146,7 +146,7 @@ fn music_resize_push_uses_current_frame_geometry() {
     let mut wide_terminal = Terminal::new(TestBackend::new(160, 30)).unwrap();
     wide_terminal
         .draw(|frame| {
-            model.app.compose_base_frame(frame);
+            model.app.compose_base_frame(frame, None);
             model.render_music_workspace_component(frame);
         })
         .unwrap();
@@ -181,7 +181,7 @@ fn music_resize_push_uses_current_frame_geometry() {
     let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
     narrow_terminal
         .draw(|frame| {
-            model.app.compose_base_frame(frame);
+            model.app.compose_base_frame(frame, None);
             model.render_music_workspace_component(frame);
         })
         .unwrap();

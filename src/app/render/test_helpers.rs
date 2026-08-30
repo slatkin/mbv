@@ -232,7 +232,7 @@ pub fn render_library_to_terminal_focused(
     let backend = TestBackend::new(60, 20);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        app.render_library(f, Rect::new(0, 0, 60, 20), focused, layout);
+        app.render_library(f, Rect::new(0, 0, 60, 20), focused, layout, None);
     })
     .unwrap();
     term
@@ -255,7 +255,7 @@ pub fn render_library_to_string_sized(
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        app.render_library(f, Rect::new(0, 0, width, height), true, layout);
+        app.render_library(f, Rect::new(0, 0, width, height), true, layout, None);
     })
     .unwrap();
     buffer_to_string(&term)
@@ -294,6 +294,7 @@ pub fn render_view_to_terminal(
             0,
             false,
             &None,
+            None,
         );
     })
     .unwrap();
@@ -303,7 +304,7 @@ pub fn render_view_to_terminal(
 pub fn render_app_to_terminal(app: &mut App, width: u16, height: u16) -> Terminal<TestBackend> {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.compose_base_frame(f)).unwrap();
+    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
     term
 }
 
@@ -344,7 +345,7 @@ pub fn render_home_shell_with(
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        model.app.compose_base_frame(f);
+        model.app.compose_base_frame(f, None);
         model.render_home_component(f);
     })
     .unwrap();

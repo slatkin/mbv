@@ -96,12 +96,19 @@ impl App {
         &self,
         lib_idx: usize,
         focused: bool,
+        cursor_scroll: Option<(usize, usize)>,
     ) -> TvWideRenderCtx {
         let list = self.library_list_render_ctx(
             lib_idx,
             false,
-            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor),
-            self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.scroll),
+            cursor_scroll.map_or_else(
+                || self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor),
+                |v| v.0,
+            ),
+            cursor_scroll.map_or_else(
+                || self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.scroll),
+                |v| v.1,
+            ),
         );
         let selected_series = list
             .selected_item()

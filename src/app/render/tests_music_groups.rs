@@ -665,7 +665,7 @@ fn wide_music_frame_publishes_identical_geometry_from_publish_and_paint() {
     let mut publish_layout = LayoutMain::default();
     let mut paint_layout = LayoutMain::default();
 
-    let ctx = app.wide_music_render_ctx(0);
+    let ctx = app.wide_music_render_ctx(0, None);
     let published = ctx
         .publish_geometry(Rect::new(0, 0, 120, 24), &mut publish_layout)
         .expect("wide area publishes panes");
@@ -676,7 +676,7 @@ fn wide_music_frame_publishes_identical_geometry_from_publish_and_paint() {
             render_wide_music_group_with_ctx(
                 f,
                 Rect::new(0, 0, 120, 24),
-                &app2.wide_music_render_ctx(0),
+                &app2.wide_music_render_ctx(0, None),
                 &mut paint_layout,
             );
         })

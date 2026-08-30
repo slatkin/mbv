@@ -73,6 +73,7 @@ impl App {
         area: Rect,
         focused: bool,
         layout: &mut LayoutMain,
+        cursor: Option<usize>,
         scroll: &mut usize,
     ) {
         if area.height == 0 {
@@ -143,8 +144,9 @@ impl App {
             self.library_list_render_ctx(
                 lib_idx,
                 true,
-                self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor),
-                self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.scroll),
+                cursor
+                    .unwrap_or_else(|| self.libs[lib_idx].nav_stack.last().map_or(0, |l| l.cursor)),
+                *scroll,
             )
         });
         let search_active = focused

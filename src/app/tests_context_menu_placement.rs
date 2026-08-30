@@ -39,7 +39,7 @@ fn render_at(model: &mut Model, width: u16, height: u16) -> (u16, u16) {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        model.app.compose_base_frame(f);
+        model.app.compose_base_frame(f, None);
         model.render_context_menu_overlay(f);
     })
     .unwrap();
@@ -179,7 +179,7 @@ fn context_menu_entries_render_below_the_reserved_top_row() {
     // paints via `render_context_menu_content` (task 2.5 / 5.3c).
     terminal
         .draw(|f| {
-            model.app.compose_base_frame(f);
+            model.app.compose_base_frame(f, None);
             model.render_context_menu_overlay(f);
         })
         .unwrap();

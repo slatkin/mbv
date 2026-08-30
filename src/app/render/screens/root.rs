@@ -207,7 +207,7 @@ impl App {
     /// a bare `App`. Not named `render` — issue #607: there is no parallel
     /// legacy render path, only this base-frame composer beneath the mounted
     /// component views.
-    pub fn compose_base_frame(&mut self, f: &mut Frame) {
+    pub fn compose_base_frame(&mut self, f: &mut Frame, cursor_scroll: Option<(usize, usize)>) {
         let area = f.area();
         let Some(chrome) = self.compute_frame_layout(area) else {
             // Zero-dimension terminal: `self.layout` is left untouched here --
@@ -285,6 +285,7 @@ impl App {
             player_h,
             show_controls,
             &now_playing_title,
+            cursor_scroll,
         );
 
         // The Context menu is an owned TuiRealm component now (task 5.3c):
@@ -319,6 +320,7 @@ impl App {
         player_h: u16,
         show_controls: bool,
         now_playing_title: &Option<(String, Color)>,
+        cursor_scroll: Option<(usize, usize)>,
     ) {
         if area.height < 4 {
             return;
@@ -539,7 +541,7 @@ impl App {
             }
         }
         if right_visible {
-            self.render_library(f, render_lib_area, left_focused, layout);
+            self.render_library(f, render_lib_area, left_focused, layout, cursor_scroll);
         }
 
         // Status bar at the bottom of the right panel. Playback prompts are

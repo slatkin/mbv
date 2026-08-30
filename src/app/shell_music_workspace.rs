@@ -28,7 +28,7 @@ impl Model {
         Some((album.id.clone(), track))
     }
 
-    fn music_workspace_component_id(&self) -> Option<ComponentId> {
+    pub(super) fn music_workspace_component_id(&self) -> Option<ComponentId> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
         };
@@ -130,7 +130,7 @@ impl Model {
                 self.app.fetch_album_tracks(album.id.clone());
             }
         }
-        let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index);
+        let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index, None);
         let columns = self.app.current_library_columns(index);
         let wide = self.app.layout.main.is_wide_music_active();
         // Consume the one-shot re-anchor trigger: a genuine navigation event
@@ -178,7 +178,7 @@ impl Model {
             return;
         }
         if let Some(lib_idx) = self.app.tab.emby_library_index() {
-            let context = self.app.wide_music_render_ctx(lib_idx);
+            let context = self.app.wide_music_render_ctx(lib_idx, None);
             context.publish_geometry(area, &mut self.app.layout.main);
         }
         self.application.view(id, frame, area);
