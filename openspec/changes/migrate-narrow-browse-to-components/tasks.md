@@ -177,7 +177,7 @@ findings become added rows; the template does not change.
       `MusicWideRenderCtx`, `LibraryListRenderCtx`, and cursor context data.
       Verify: targeted pure-plan and inline-row tests execute with no App-backed
       component-callable path.
-- [ ] 3.2d Prerequisite — grouped Music detail composition: make grouped album
+- [x] 3.2d Prerequisite — grouped Music detail composition: make grouped album
       rows, hero/detail/art/action-hint composition explicit-context functions
       whose image work is typed `MusicImagePaint` output for the shell. Preserve
       existing hero/detail/art behavior. Verify: targeted grouped-Music hero,
