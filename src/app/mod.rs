@@ -40,6 +40,7 @@ mod key_policy;
 pub(crate) mod layout;
 mod lib_cursor_actions;
 mod lib_event_actions;
+mod lib_event_actions_reconcile;
 mod library_browse_actions;
 mod library_column_width;
 mod library_load_actions;
