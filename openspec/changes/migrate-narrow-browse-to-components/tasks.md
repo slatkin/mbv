@@ -130,14 +130,18 @@ Ends with every surface owned; legacy still paints. This is the state
 Per design Risks / D coupling. These surface during task 2/3 and belong to the
 keyboard-routing family, not this change:
 
-- **Narrow TV Enter on a Series** now emits `BrowserActivate` → `select_item`
-  (drill into the series folder) instead of the legacy
-  `open_series_selection_modal`. Matches D4's "activation `BrowserComponent`
-  already implements" and task 3.4's drill-in direction. The narrow arm of
-  `activate_selected_series` / `activate_selected_series_item` becomes
-  unreachable for TV. (Unit C, `56e5cfb0`.)
+- **Narrow TV Enter on a Series** — the section-3 build routed this through
+  `BrowserActivate` → `select_item` (drill into the series folder), which made
+  the narrow arm of `activate_selected_series_item` unreachable for TV (Unit C,
+  `56e5cfb0`). **Reversed by maintainer decision 2026-08-30** (manual 5.3 check:
+  the flat drill-in makes the narrow series list useless): narrow TV Series-Enter
+  MUST reopen `open_series_selection_modal`. The flat-list cursor/scroll/paging
+  stay on `BrowserComponent`; only activation of a `Series` item routes to
+  `activate_selected_series_item`. Fixed in **task 3.4a**; D4 updated.
 - **Narrow TV season/episode chords** have no `BrowserComponent` translation and
-  stay dead under the router (ADR 0023). (Unit C.)
+  stay dead under the router (ADR 0023) — still true and still fine: the
+  reopened season-selection modal carries its own season navigation, so the bare
+  chords are not needed at narrow width.
 
 ## 3. One painter per surface (D2, D3)
 
@@ -199,6 +203,18 @@ findings become added rows; the template does not change.
 - [x] 3.4 Surface: Emby TV, narrow. Template above, same composer as 3.3 —
       series inline hero, season grid, letter pills. Record any TV-specific
       chord that is still dead as a Change D finding; do not fix it here.
+- [ ] 3.4a Correction (manual 5.3 regression, maintainer decision 2026-08-30):
+      narrow TV **Enter on a `Series` row reopens the season-selection modal**,
+      not the flat drill-in the section-3 build introduced. In
+      `BrowserComponent`'s narrow-TV activation path, a `Series` item routes to
+      `App::activate_selected_series_item` (its existing narrow arm already calls
+      `open_series_selection_modal`); non-Series rows keep the generic drill-in.
+      Cursor/scroll/paging stay on `BrowserComponent`. Revert the matching
+      `56e5cfb0` drill-in wiring for the Series case only. Verify: at a narrow
+      terminal, Enter on a series opens the modal and season navigation works;
+      Enter on a non-series folder still drills in; a red→green shell-routing
+      test asserts the Series-Enter → modal path; `rtk cargo nextest run -p mbv`,
+      `rtk cargo clippy --workspace --all-targets`.
 - [x] 3.5 Surface: Emby podcast **and feed/home-video group picker**, narrow
       **and** wide. One surface (`is_feed_home_video_group_view`; audit-results
       table). Template above. Wide podcast is currently blank, so (a)'s snapshot
@@ -217,6 +233,30 @@ findings become added rows; the template does not change.
 - [x] 3.6 Surface: Emby grouped Music, narrow (D6 second half).
       `MusicWorkspaceComponent::view` gains a narrow branch: grouped-album rows
       plus the Model A hero, **not** the wide right-rail track table.
+- [ ] 3.6a Correction (manual 5.3 regression, 2026-08-30): the narrow branch
+      (`render_narrow_music_group_with_ctx`, `music_wide.rs:233`) shipped without
+      the group pill bar and with a malformed inline hero. Fix:
+      - **Pill bar:** reserve a pills row above the album rows via
+        `hero_left::pill_bar_areas` (mirroring narrow browse `list_narrow.rs`
+        and pre-migration `list.rs`) and render it with
+        `render_music_group_pills_row_with_ctx` from `MusicWideRenderCtx`'s
+        `groups`/`group_cursor`. Rows render into the reduced content area.
+      - **Inline hero:** the selected-album hero must use the shared narrow
+        presentation (contained card, teal title, meta + detail text, image),
+        not the current custom path in `album_inline.rs` that mis-sizes height
+        (ignores the pills reservation) and applies a `BOLD` modifier (the
+        yellow/white selected text). Reuse `selected_detail_content_area` +
+        the shared detail renderer TV's narrow composer uses.
+      - **Keep** the album-track modal on Enter (`open_album_selection_modal`
+        via `shell_messages.rs:34`) — maintainer decision 2026-08-30: parity
+        with the reopened narrow-TV modal; D6's "no track table" governs the
+        wide right-rail only, not the modal overlay. Do NOT add the scout's
+        proposed `is_music_group_view` guard.
+      Verify: red→green tests asserting (a) the pills row renders
+      (`layout.selector_tabs` non-empty), (b) the hero detail text paints inside
+      the reserved card, (c) selected-row style is the standard role, not BOLD;
+      manual narrow check; `rtk cargo nextest run -p mbv`, `rtk cargo clippy
+      --workspace --all-targets`, `rtk ast-grep scan`.
 - [x] 3.7 Relocate `render_list`'s poster-prefetch window
       (`fetch_list_card_image_when_idle`) to the shell beside
       `paint_home_image`, keyed off the component's selection. Verify: prefetch

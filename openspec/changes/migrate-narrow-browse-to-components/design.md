@@ -137,10 +137,19 @@ Extend `emby_browser_component_id` to accept `BrowserKind::TvShows` and
 `is_podcast_library` when `!is_wide_tv_active()`, keeping
 `tv_workspace_component_id` as the wide half so the two are mutually exclusive
 at every width. Narrow TV is a flat series list: exactly the cursor, scroll,
-paging, and activation `BrowserComponent` already implements, and its
+and paging `BrowserComponent` already implements, and its
 composition (series inline hero, season grid, letter pills) lands in the same
 narrow composer as Movies and generic — one body of code for five collection
 kinds instead of two.
+
+**Activation exception (maintainer decision 2026-08-30, task 3.4a).** Enter on a
+narrow-TV `Series` row does *not* use `BrowserComponent`'s generic drill-in; it
+routes to `App::activate_selected_series_item`, whose narrow arm opens
+`open_series_selection_modal`. The section-3 build wired the flat drill-in
+(`56e5cfb0`) and recorded the lost modal as a Change D finding; the manual 5.3
+check rejected it — a flat series list with no way into seasons is unusable.
+Only Series activation is special-cased; cursor/scroll/paging and every
+non-Series row stay on `BrowserComponent`.
 
 *Rejected — a narrow `TvWorkspaceComponent` view (drop its wide-only gate).*
 One component would own TV at both widths, so the cursor survives a resize, but
@@ -177,6 +186,14 @@ move:
   table, which narrow deliberately does not have (task 3.2 of the original
   migration). Today it unconditionally calls `render_wide_music_group_with_ctx`,
   whose `publish_geometry` returns `None` at narrow.
+
+The narrow branch also carries the **group pill bar** (same `pill_bar_areas`
+slot the narrow browser uses) and its selected-album **inline hero** uses the
+shared narrow presentation, not a bespoke path — task 3.6a, after the first
+build shipped both broken. "No right-rail track table" is a layout statement
+about the wide split; narrow grouped-Music Enter still opens the album-track
+**modal** (`open_album_selection_modal`), parity with narrow TV's
+season-selection modal (D4 activation exception).
 
 ### D7 — Migrate one surface at a time, ownership before painting
 
