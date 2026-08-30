@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::render::compact_banner_layout;
 // Characterization coverage stays beside the moved library component.
 use crate::app::layout::LayoutMain;
 use crate::app::render::components::list_rows::{
@@ -468,10 +469,10 @@ fn pure_compact_banner_sizing_is_deterministic() {
     let app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     let item = app.libs[0].nav_stack.last().unwrap().items[0].clone();
     let inputs = (81, false, true, true, false, Some((12, 18)), (8, 12));
-    let first = super::App::compact_banner_layout(
+    let first = compact_banner_layout(
         &item, inputs.0, inputs.1, inputs.2, inputs.3, inputs.4, inputs.5, inputs.6, false,
     );
-    let second = super::App::compact_banner_layout(
+    let second = compact_banner_layout(
         &item, inputs.0, inputs.1, inputs.2, inputs.3, inputs.4, inputs.5, inputs.6, false,
     );
     assert_eq!(first, second);

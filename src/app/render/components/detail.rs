@@ -57,7 +57,7 @@ fn poster_placeholder_size(font_size: ratatui_image::FontSize, img_cols: u16) ->
 /// `render_compact_detail` to actually render the banner, so the
 /// row-count estimate and the render never duplicate the wrapping logic.
 #[derive(Debug, PartialEq, Eq)]
-pub(in crate::app::render) struct CompactBannerLayout {
+pub(in crate::app) struct CompactBannerLayout {
     meta_line: Option<String>,
     show_playing: bool,
     /// Wrapped overview lines, plus (if there's a director) a blank
@@ -84,11 +84,11 @@ impl CompactBannerLayout {
     /// past the banner's row budget into the list rows below it. No upper
     /// cap is applied to the text side -- real Emby movie metadata is short
     /// by convention (#263), so unbounded growth there is intended.
-    pub(in crate::app::render) fn content_rows(&self) -> usize {
+    pub(in crate::app) fn content_rows(&self) -> usize {
         self.content_rows_with_title(0)
     }
 
-    pub(in crate::app::render) fn content_rows_with_title(&self, title_rows: u16) -> usize {
+    pub(in crate::app) fn content_rows_with_title(&self, title_rows: u16) -> usize {
         let text_rows = title_rows as usize
             + self.meta_line.is_some() as usize
             + self.show_playing as usize
@@ -222,7 +222,7 @@ impl App {
                 .playback_queue()
                 .emby_item_at(playback.active_idx)
                 .is_some_and(|i| i.id == item.id);
-        Self::compact_banner_layout(
+        compact_banner_layout(
             item,
             panel_width,
             truncate_overview,
@@ -234,121 +234,122 @@ impl App {
             show_playing,
         )
     }
+}
 
-    pub(in crate::app::render) fn compact_banner_layout(
-        item: &mbv_core::api::EmbyItem,
-        panel_width: u16,
-        truncate_overview: bool,
-        images_enabled: bool,
-        nav_gate_open: bool,
-        has_no_art: bool,
-        cached_size: Option<(u16, u16)>,
-        placeholder_size: (u16, u16),
-        show_playing: bool,
-    ) -> CompactBannerLayout {
-        let inner_w = panel_width as usize;
+pub(in crate::app) fn compact_banner_layout(
+    item: &mbv_core::api::EmbyItem,
+    panel_width: u16,
+    truncate_overview: bool,
+    images_enabled: bool,
+    nav_gate_open: bool,
+    has_no_art: bool,
+    cached_size: Option<(u16, u16)>,
+    placeholder_size: (u16, u16),
+    show_playing: bool,
+) -> CompactBannerLayout {
+    let inner_w = panel_width as usize;
 
-        let (placeholder_w, placeholder_h) = placeholder_size;
-        let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) =
-            if !images_enabled || has_no_art {
-                (0, 0, false)
-            } else if nav_gate_open {
-                match cached_size {
-                    Some((width, height)) => (width, height, false),
-                    None => (placeholder_w, placeholder_h, true),
-                }
+    let (placeholder_w, placeholder_h) = placeholder_size;
+    let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) =
+        if !images_enabled || has_no_art {
+            (0, 0, false)
+        } else if nav_gate_open {
+            match cached_size {
+                Some((width, height)) => (width, height, false),
+                None => (placeholder_w, placeholder_h, true),
+            }
+        } else {
+            (placeholder_w, placeholder_h, true)
+        };
+
+    let narrow_w = inline_hero_text_width(inner_w as u16, img_actual_w, img_height, 0) as usize;
+
+    let mut rows_before_overview = 0usize;
+
+    let dur_str = if item.runtime_ticks > 0 {
+        fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
+    } else {
+        String::new()
+    };
+    let year_str = if item.production_year > 0 {
+        item.production_year.to_string()
+    } else {
+        String::new()
+    };
+    let meta = [item.genre.as_str(), year_str.as_str(), dur_str.as_str()]
+        .iter()
+        .filter(|s| !s.is_empty())
+        .copied()
+        .collect::<Vec<_>>()
+        .join("  ");
+    let meta_line = if meta.is_empty() {
+        None
+    } else {
+        rows_before_overview += 1;
+        Some(meta)
+    };
+
+    if show_playing {
+        rows_before_overview += 1;
+    }
+
+    // Rows before the overview block sit above the poster image's
+    // bottom edge too (as long as there aren't more of them than the
+    // image is tall), so they narrow the wrap width the same way
+    // overview/director lines do; `shadow_lines` counts how many of the
+    // *upcoming* overview/director lines still fall within the image's
+    // row span.
+    let shadow_lines = (img_height.saturating_add(1) as usize).saturating_sub(rows_before_overview);
+
+    let mut lines: Vec<String> = Vec::new();
+    let mut director_line_idx: Option<usize> = None;
+    if !item.overview.is_empty() || !item.director.is_empty() {
+        let cleaned_overview = if truncate_overview {
+            trunc_overview(&item.overview)
+        } else {
+            clean_overview(&item.overview)
+        };
+        for paragraph in cleaned_overview.lines() {
+            let paragraph = if paragraph.trim().is_empty() {
+                " "
             } else {
-                (placeholder_w, placeholder_h, true)
+                paragraph.trim()
             };
-
-        let narrow_w = inline_hero_text_width(inner_w as u16, img_actual_w, img_height, 0) as usize;
-
-        let mut rows_before_overview = 0usize;
-
-        let dur_str = if item.runtime_ticks > 0 {
-            fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
-        } else {
-            String::new()
-        };
-        let year_str = if item.production_year > 0 {
-            item.production_year.to_string()
-        } else {
-            String::new()
-        };
-        let meta = [item.genre.as_str(), year_str.as_str(), dur_str.as_str()]
-            .iter()
-            .filter(|s| !s.is_empty())
-            .copied()
-            .collect::<Vec<_>>()
-            .join("  ");
-        let meta_line = if meta.is_empty() {
-            None
-        } else {
-            rows_before_overview += 1;
-            Some(meta)
-        };
-
-        if show_playing {
-            rows_before_overview += 1;
+            let line_idx = lines.len();
+            let wrap_w = if line_idx < shadow_lines {
+                narrow_w.max(1)
+            } else {
+                inner_w.max(1)
+            };
+            for wrapped in wrap(paragraph, wrap_w) {
+                lines.push(wrapped.into_owned());
+            }
         }
 
-        // Rows before the overview block sit above the poster image's
-        // bottom edge too (as long as there aren't more of them than the
-        // image is tall), so they narrow the wrap width the same way
-        // overview/director lines do; `shadow_lines` counts how many of the
-        // *upcoming* overview/director lines still fall within the image's
-        // row span.
-        let shadow_lines =
-            (img_height.saturating_add(1) as usize).saturating_sub(rows_before_overview);
-
-        let mut lines: Vec<String> = Vec::new();
-        let mut director_line_idx: Option<usize> = None;
-        if !item.overview.is_empty() || !item.director.is_empty() {
-            let cleaned_overview = if truncate_overview {
-                trunc_overview(&item.overview)
-            } else {
-                clean_overview(&item.overview)
-            };
-            for paragraph in cleaned_overview.lines() {
-                let paragraph = if paragraph.trim().is_empty() {
-                    " "
-                } else {
-                    paragraph.trim()
-                };
-                let line_idx = lines.len();
-                let wrap_w = if line_idx < shadow_lines {
-                    narrow_w.max(1)
-                } else {
-                    inner_w.max(1)
-                };
-                for wrapped in wrap(paragraph, wrap_w) {
-                    lines.push(wrapped.into_owned());
-                }
-            }
-
-            // Director flows after the overview: blank gap then the director
-            // line (rendered specially so its "Director: " label keeps its
-            // own style, matching the banner's previous look).
-            if !item.director.is_empty() {
-                if !lines.is_empty() {
-                    lines.push(String::new());
-                }
-                director_line_idx = Some(lines.len());
+        // Director flows after the overview: blank gap then the director
+        // line (rendered specially so its "Director: " label keeps its
+        // own style, matching the banner's previous look).
+        if !item.director.is_empty() {
+            if !lines.is_empty() {
                 lines.push(String::new());
             }
-        }
-
-        CompactBannerLayout {
-            meta_line,
-            show_playing,
-            lines,
-            director_line_idx,
-            img_actual_w,
-            img_height,
-            img_is_placeholder,
+            director_line_idx = Some(lines.len());
+            lines.push(String::new());
         }
     }
 
+    CompactBannerLayout {
+        meta_line,
+        show_playing,
+        lines,
+        director_line_idx,
+        img_actual_w,
+        img_height,
+        img_is_placeholder,
+    }
+}
+
+impl App {
     pub(crate) fn render_compact_detail(
         &mut self,
         f: &mut Frame,

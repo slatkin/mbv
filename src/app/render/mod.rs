@@ -22,6 +22,8 @@ pub(in crate::app) use components::chrome_player::{
 pub(in crate::app) use components::confirm_modal::render_confirm_modal_content;
 pub(in crate::app) use components::context_menu::render_context_menu_content;
 pub(in crate::app) use components::daemon_lost_modal::render_daemon_lost_modal_content;
+#[allow(unused_imports)]
+pub(in crate::app) use components::detail::{compact_banner_layout, CompactBannerLayout};
 pub(in crate::app) use components::feeds::{render_feeds_content, FeedsRenderModel};
 pub(in crate::app) use components::feeds_manage::{
     render_feeds_manage_content, FeedsManageRenderModel,
