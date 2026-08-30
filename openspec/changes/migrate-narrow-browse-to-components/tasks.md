@@ -188,7 +188,7 @@ findings become added rows; the template does not change.
       original or parallel component-callable path remains. Verify:
       `rtk cargo check -p mbv --all-targets`, targeted series and grouped-Music
       tests, `rtk ast-grep scan`, and a stated dependency check.
-- [ ] 3.3 Surface: Emby generic / Movies / home video, narrow. Template above.
+- [x] 3.3 Surface: Emby generic / Movies / home video, narrow. Template above.
       The composer lands in a new `src/app/components/browser_narrow.rs` (D3
       file-size note). Closes regression 1. Scope note: a generic-collection
       Emby library also double-paints at **wide** (`is_wide_movies_library`
