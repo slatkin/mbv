@@ -203,7 +203,6 @@ impl App {
                                 let id = item_id.to_string();
                                 lvl.items.retain(|i| i.id != id);
                                 lvl.total_count = lvl.total_count.saturating_sub(1);
-                                lvl.cursor = lvl.cursor.min(lvl.items.len().saturating_sub(1));
                             }
                         }
                     }
@@ -342,7 +341,6 @@ impl App {
                             if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
                                 lvl.items.remove(pos);
                                 lvl.total_count = lvl.total_count.saturating_sub(1);
-                                lvl.cursor = pos.min(lvl.items.len().saturating_sub(1));
                             }
                         }
                     }
