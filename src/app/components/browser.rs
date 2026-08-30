@@ -393,7 +393,16 @@ impl BrowserComponent {
                         && !key.modifiers.contains(KeyModifiers::ALT) =>
                 {
                     let delta = if c == '[' { -1 } else { 1 };
-                    Some(ShellRequest::BrowserCycleLetterPill { delta })
+                    // The shell-projected content decides which pill row this
+                    // chord drives: a feed/home-video group picker
+                    // (`is_feed_home_video_group_view`, task 2.2) cycles its
+                    // group pills; every other browse surface cycles its
+                    // letter-range pills.
+                    Some(if self.context.has_group_pills() {
+                        ShellRequest::BrowserCycleGroup { delta }
+                    } else {
+                        ShellRequest::BrowserCycleLetterPill { delta }
+                    })
                 }
                 _ => None,
             };

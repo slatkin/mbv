@@ -1,6 +1,7 @@
 use super::components::{BrowserComponent, BrowserKey, BrowserKind, ComponentId, ShellRequest};
 use super::shell::Model;
 use super::{ConfirmAction, ConfirmModal, PanelFocus, TabSelection};
+use crate::app::render::LibraryListRenderCtx;
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -86,6 +87,16 @@ impl Model {
             ShellRequest::BrowserCycleLetterPill { delta } => {
                 self.app.cycle_letter_pill(lib_idx, delta)
             }
+            // `[`/`]` on a feed/home-video group-picker library
+            // (`is_feed_home_video_group_view`, migrate-narrow-browse task
+            // 2.2): the component's projected content carries the
+            // group-pill flag, so its bracket keys mean group cycling; the
+            // shell derives the active library index from its own tab state
+            // and runs `App::switch_feed_folder_group` (rem_euclid wrap over
+            // "All" + every visible group).
+            ShellRequest::BrowserCycleGroup { delta } => {
+                self.app.switch_feed_folder_group(lib_idx, delta)
+            }
             // Every local browser cursor key (arrows/hjkl, Page keys,
             // Home/End) resolves to an item index inside the component and
             // arrives here already resolved (task 5.3d, Emby browser local
@@ -100,7 +111,7 @@ impl Model {
             // unreachable: shell_messages.rs top-level dispatch routes only the
             // Browser* activate/effect group (BrowserActivate/Play/Enqueue/
             // ToggleWatched/ContextMenu/Shuffle/Refresh/Rescan/Back/
-            // CycleLetterPill) and BrowserCursorIndex into handle_browser_request;
+            // CycleLetterPill/CycleGroup) and BrowserCursorIndex into handle_browser_request;
             // every one has an arm above.
             _ => {}
         }
@@ -132,9 +143,6 @@ impl Model {
             return None;
         };
         let library = self.app.libs.get(index)?;
-        if self.app.is_podcast_library(index) || self.app.is_feed_home_video_group_view(index) {
-            return None;
-        }
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
         let owns = match kind {
             BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos => true,
@@ -174,6 +182,20 @@ impl Model {
     /// re-point. Focus is owned by `sync_active_destination`, so this no
     /// longer calls `active()`.
     pub(super) fn mount_emby_browser(&mut self) {
+        // The feed/home-video group-picker surface's root listing must be
+        // loaded shell-side (migrate-narrow-browse task 2.2): the legacy
+        // painter called `ensure_lib_loaded_for` from inside the render, and
+        // `is_feed_home_video_group_view` — the mount/projection gate — only
+        // turns true once that load has produced state. Mirrors the
+        // unconditional call `render_list` still makes for library tabs.
+        if let TabSelection::EmbyLibrary(index) = self.app.tab {
+            if index < self.app.libs.len()
+                && (self.app.is_feed_home_video_library(index)
+                    || self.app.is_podcast_library(index))
+            {
+                self.app.ensure_lib_loaded_for(index);
+            }
+        }
         let next_id = self.emby_browser_component_id();
         if self.emby_browser_id != next_id {
             match next_id {
@@ -217,7 +239,30 @@ impl Model {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
-        let context = self.app.library_list_render_ctx(index, false);
+        // Feed/home-video group picker (migrate-narrow-browse task 2.2): this
+        // surface never flows through `library_list_render_ctx` — every cursor
+        // path branches on `is_feed_home_video_group_view` first and
+        // reads/writes `feed_home_video.{video_cursor,video_scroll}`. Project
+        // the selected group's items with that cursor/scroll and flag the
+        // group-pill row so the component's `[`/`]` chord means group cycling.
+        // The component's `BrowserCursorIndex` still lands in
+        // `apply_lib_cursor_index`'s existing `is_feed_home_video_group_view`
+        // branch.
+        let context = if self.app.is_feed_home_video_group_view(index) {
+            let (cursor, scroll) = self.app.libs[index]
+                .feed_home_video
+                .as_ref()
+                .map(|state| (state.video_cursor, state.video_scroll))
+                .unwrap_or((0, 0));
+            LibraryListRenderCtx::from_items(
+                self.app.feed_home_video_selected_items(index),
+                cursor,
+                scroll,
+            )
+            .with_group_pills(true)
+        } else {
+            self.app.library_list_render_ctx(index, false)
+        };
         let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {

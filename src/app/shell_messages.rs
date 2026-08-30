@@ -278,7 +278,8 @@ impl Model {
                 | ShellRequest::BrowserRefresh
                 | ShellRequest::BrowserRescan
                 | ShellRequest::BrowserBack
-                | ShellRequest::BrowserCycleLetterPill { .. }) => {
+                | ShellRequest::BrowserCycleLetterPill { .. }
+                | ShellRequest::BrowserCycleGroup { .. }) => {
                     self.handle_browser_request(request);
                     // Browser navigation/effects change library content; re-project (5.3d.15/M2).
                     self.push_emby_browser_content();

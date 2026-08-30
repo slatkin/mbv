@@ -2,7 +2,10 @@ use super::*;
 use crate::app::components::{BrowserComponent, Msg};
 use crate::app::render::make_movie_app;
 use crate::app::tests::{make_app_stub, make_item, make_items};
-use crate::app::{App, BrowseLevel, ContextAction, LibraryTab, PanelMode, TabSelection};
+use crate::app::{
+    App, BrowseLevel, ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibraryTab,
+    PanelFocus, PanelMode, TabSelection,
+};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
@@ -795,5 +798,104 @@ fn emby_browser_refreshes_content_on_repoint_after_switch() {
     assert!(
         !output.contains("Item 1"),
         "the stale pre-switch content must not survive re-point"
+    );
+}
+
+/// migrate-narrow-browse-to-components task 2.2: a feed/home-video
+/// group-picker library (`is_feed_home_video_group_view` — here a podcast
+/// channel) is owned by the mounted `BrowserComponent`. Its `[`/`]` chord
+/// emits `BrowserCycleGroup` (not `BrowserCycleLetterPill`) because the shell
+/// projects the group-pill flag onto the component's content, and routing it
+/// through the shell moves `selected_group` via the previously-dead
+/// `App::switch_feed_folder_group`.
+fn feed_group_picker_app() -> App {
+    let mut app = make_app_stub();
+    app.tab = TabSelection::EmbyLibrary(0);
+
+    let mut library = make_item("Podcast", "CollectionFolder");
+    library.id = "lib-pod".into();
+    library.is_folder = true;
+    library.item_type = "Channel".into();
+
+    let mut folder = make_item("Show A", "Folder");
+    folder.id = "show-a".into();
+    folder.is_folder = true;
+
+    let mut e1 = make_item("E1", "Episode");
+    e1.id = "e1".into();
+    let mut e2 = make_item("E2", "Episode");
+    e2.id = "e2".into();
+
+    app.libs.push(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            parent_id: "lib-pod".into(),
+            title: "Podcast".into(),
+            items: vec![folder.clone()],
+            total_count: 1,
+            cursor: 0,
+            scroll: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        }],
+        feed_home_video: Some(FeedHomeVideoState {
+            all_items: vec![e1, e2.clone()],
+            groups: vec![FeedHomeVideoGroup {
+                folder,
+                items: vec![e2],
+            }],
+            loading: false,
+            ..FeedHomeVideoState::default()
+        }),
+        ..LibraryTab::new(library)
+    });
+
+    app
+}
+
+#[test]
+fn feed_group_picker_bracket_keys_cycle_groups() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut model = Model::new(feed_group_picker_app());
+    model.app.panel_focus = PanelFocus::Library;
+    model.app.panel_mode = PanelMode::Both;
+    assert!(model.app.is_feed_home_video_group_view(0));
+    model.sync_emby_browser();
+    let id = model
+        .emby_browser_id
+        .clone()
+        .expect("feed group-picker browser mounted");
+
+    let msg = drive_browser_key(&mut model, &id, Key::Char(']'), KeyModifiers::NONE);
+    assert!(
+        matches!(
+            msg,
+            Some(Msg::Shell(ShellRequest::BrowserCycleGroup { delta: 1 }))
+        ),
+        "group-picker `]` must emit BrowserCycleGroup, got {msg:?}"
+    );
+
+    assert_eq!(
+        model.app.libs[0]
+            .feed_home_video
+            .as_ref()
+            .unwrap()
+            .selected_group,
+        0
+    );
+    model.handle_browser_request(ShellRequest::BrowserCycleGroup { delta: 1 });
+    assert_eq!(
+        model.app.libs[0]
+            .feed_home_video
+            .as_ref()
+            .unwrap()
+            .selected_group,
+        1,
+        "routing BrowserCycleGroup must advance the selected group"
     );
 }

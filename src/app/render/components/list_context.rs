@@ -32,6 +32,7 @@ impl App {
             loading: lib.nav_stack.last().is_some_and(|level| level.loading),
             search_query: None,
             search_loading: false,
+            group_pills: false,
         }
     }
 }

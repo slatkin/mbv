@@ -7,7 +7,7 @@ use mbv_core::config::ServiceKind;
 impl Model {
     /// Route TuiRealm's native LIFO focus to the active destination's child
     /// component, or back to `UiRoot` when the destination has no mounted
-    /// surface component (e.g. an un-componented podcast/feed-group Emby
+    /// surface component (e.g. a narrow non-wide grouped-Music Emby
     /// library). Idempotent: `active()` on the already-active component is a
     /// no-op. The destination child is derived directly from `App.tab` via
     /// `library_child_id`; there is no Library-parent component or routing
@@ -53,9 +53,6 @@ impl Model {
         let library = self.app.libs.get(index)?;
         if let Some(id) = self.inline_search_component_id(index) {
             return Some(id);
-        }
-        if self.app.is_podcast_library(index) || self.app.is_feed_home_video_group_view(index) {
-            return None;
         }
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
         // Wide TV focuses `TvWorkspaceComponent` under its distinct
@@ -129,7 +126,11 @@ mod tests {
     use crate::app::components::BrowserComponent;
     use crate::app::components::OverlayId;
     use crate::app::render::make_movie_app;
-    use crate::app::{PanelFocus, PanelMode, TabSelection};
+    use crate::app::tests::make_item;
+    use crate::app::{
+        BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibraryTab, PanelFocus, PanelMode,
+        TabSelection,
+    };
 
     #[test]
     fn shell_routes_focus_to_the_active_destination_child() {
@@ -207,6 +208,91 @@ mod tests {
             .as_any()
             .downcast_ref::<TvWorkspaceComponent>()
             .is_some());
+    }
+
+    /// migrate-narrow-browse-to-components task 2.2: every
+    /// `is_feed_home_video_group_view` Emby library — podcast channels and
+    /// configured home-video feed-view libraries alike — is owned by the
+    /// mounted `BrowserComponent` at every width. Both resolve
+    /// `Some(ComponentId::Browser(..))` and take TuiRealm focus, narrow and
+    /// wide.
+    #[test]
+    fn feed_group_picker_libraries_route_to_browser_component_at_every_width() {
+        let build = |podcast: bool, wide: bool| {
+            let mut app = make_movie_app();
+            let lib = &mut app.libs[0];
+            lib.library.name = "Feed".into();
+            if podcast {
+                lib.library.item_type = "Channel".into();
+            } else {
+                lib.library.collection_type = "homevideos".into();
+            }
+            let mut folder = make_item("Channel A", "Folder");
+            folder.id = "folder-a".into();
+            folder.is_folder = true;
+            let mut v1 = make_item("V1", "Episode");
+            v1.id = "v1".into();
+            let mut v2 = make_item("V2", "Episode");
+            v2.id = "v2".into();
+            lib.nav_stack = vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Feed".into(),
+                items: vec![folder.clone()],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+                music_grouping: None,
+            }];
+            lib.feed_home_video = Some(FeedHomeVideoState {
+                all_items: vec![v1, v2.clone()],
+                groups: vec![FeedHomeVideoGroup {
+                    folder,
+                    items: vec![v2],
+                }],
+                loading: false,
+                ..FeedHomeVideoState::default()
+            });
+            app.config.lock().unwrap().feed_view_libraries = vec!["feed".into()];
+            app.tab = TabSelection::EmbyLibrary(0);
+            app.panel_focus = PanelFocus::Library;
+            app.panel_mode = PanelMode::Both;
+            app.layout.main.movies_wide_area = if wide {
+                ratatui::layout::Rect::new(0, 0, 200, 50)
+            } else {
+                ratatui::layout::Rect::default()
+            };
+            let mut model = Model::new(app);
+            assert!(model.app.is_feed_home_video_group_view(0));
+            model.sync_emby_browser();
+            model.sync_active_destination();
+            model
+        };
+
+        for podcast in [false, true] {
+            for wide in [false, true] {
+                let model = build(podcast, wide);
+                let id = model
+                    .emby_browser_id
+                    .clone()
+                    .unwrap_or_else(|| panic!("podcast={podcast} wide={wide}: browser id"));
+                assert!(matches!(id, ComponentId::Browser(_)));
+                assert_eq!(model.application.focus(), Some(&id));
+                assert!(model
+                    .application
+                    .get_component(&id)
+                    .unwrap()
+                    .as_any()
+                    .downcast_ref::<BrowserComponent>()
+                    .is_some());
+            }
+        }
     }
 
     /// migrate-narrow-browse-to-components task 2.2 (reviewer block): drive a
@@ -289,10 +375,12 @@ mod tests {
     #[test]
     fn shell_routes_focus_back_to_ui_root_without_a_mounted_child() {
         let mut model = Model::new(make_movie_app());
-        // Podcast libraries have no surface component; the destination falls
-        // back to UiRoot (whose terminal translation owns the remaining
-        // legacy key dispatch for those surfaces).
-        model.app.libs[0].library.item_type = "Channel".into();
+        // A narrow (non-wide) grouped-Music library has no surface component
+        // yet; the destination falls back to UiRoot (whose terminal
+        // translation owns the remaining legacy key dispatch for those
+        // surfaces). Podcast / feed-group libraries now route to the mounted
+        // BrowserComponent (migrate-narrow-browse task 2.2).
+        model.app.libs[0].library.collection_type = "music".into();
         model.app.tab = TabSelection::EmbyLibrary(0);
         model.app.panel_focus = PanelFocus::Library;
         model.app.panel_mode = PanelMode::Both;

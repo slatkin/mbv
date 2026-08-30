@@ -427,6 +427,18 @@ pub enum ShellRequest {
     BrowserCycleLetterPill {
         delta: i64,
     },
+    /// `[`/`]` on a focused `BrowserComponent` whose projected content is a
+    /// feed/home-video group picker (`is_feed_home_video_group_view`;
+    /// migrate-narrow-browse task 2.2). The component reports the cycle delta
+    /// (-1 for `[`, +1 for `]`) with neither CONTROL nor ALT — the same guard
+    /// as `BrowserCycleLetterPill`, which the two are mutually exclusive with
+    /// (the projected `group_pills` flag selects one or the other). The shell
+    /// derives the active Emby library index from its own tab state and runs
+    /// `App::switch_feed_folder_group`. No item is carried: the pill row is a
+    /// whole-surface control.
+    BrowserCycleGroup {
+        delta: i64,
+    },
     /// Every local browser cursor key (arrows/hjkl, Page keys, Home/End) on
     /// the focused generic/Movies/home-video `BrowserComponent` (task 5.3d,
     /// Emby browser local navigation): the component resolves the target item

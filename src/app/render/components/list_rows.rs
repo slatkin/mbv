@@ -259,6 +259,11 @@ pub(in crate::app) struct LibraryListRenderCtx {
     pub(in crate::app) loading: bool,
     pub(in crate::app) search_query: Option<String>,
     pub(in crate::app) search_loading: bool,
+    /// The projected surface shows a feed/home-video group-pill row
+    /// (`is_feed_home_video_group_view`; migrate-narrow-browse task 2.2). The
+    /// focused `BrowserComponent`'s `[`/`]` chord then means group cycling
+    /// (`BrowserCycleGroup`) rather than letter-pill cycling.
+    pub(in crate::app) group_pills: bool,
 }
 
 impl LibraryListRenderCtx {
@@ -278,7 +283,18 @@ impl LibraryListRenderCtx {
             loading: false,
             search_query: None,
             search_loading: false,
+            group_pills: false,
         }
+    }
+
+    /// Marks this projection as a feed/home-video group picker (task 2.2).
+    pub(in crate::app) fn with_group_pills(mut self, group_pills: bool) -> Self {
+        self.group_pills = group_pills;
+        self
+    }
+
+    pub(in crate::app) fn has_group_pills(&self) -> bool {
+        self.group_pills
     }
 
     pub(in crate::app) fn with_cursor_scroll(mut self, cursor: usize, scroll: usize) -> Self {
