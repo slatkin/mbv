@@ -317,16 +317,7 @@ fn render_feed_group_picker(
     let text_w =
         crate::app::render::content_width(list_area.width, items.len() > list_area.height as usize);
     let panel_w = (text_w as usize).saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING as usize) as u16;
-    let selected_h = extras
-        .inline_hero
-        .as_ref()
-        .map(|hero| match hero {
-            NarrowInlineHero::Movie { layout, .. } => {
-                layout.content_rows().saturating_add(5) as u16
-            }
-            _ => 1,
-        })
-        .unwrap_or(1);
+    let selected_h = 1;
     let mut row = list_area.y;
     let mut offset = ctx.scroll.min(selected);
     if selected < offset {
@@ -341,7 +332,30 @@ fn render_feed_group_picker(
             break;
         }
         let h = if idx == selected { selected_h } else { 1 };
-        render_home_video_item(f, item, row, h, list_area, text_w, idx == selected, focused);
+        render_home_video_item(
+            f,
+            item,
+            row,
+            h,
+            if idx == selected {
+                Rect {
+                    x: list_area.x.saturating_sub(1),
+                    width: list_area.width.saturating_add(1),
+                    ..list_area
+                }
+            } else if idx == selected.saturating_add(1) {
+                Rect {
+                    x: list_area.x + 1,
+                    width: list_area.width.saturating_sub(1),
+                    ..list_area
+                }
+            } else {
+                list_area
+            },
+            text_w,
+            idx == selected,
+            focused,
+        );
         if idx == selected {
             layout.selected_item_rect = Some(Rect {
                 x: list_area.x,
@@ -372,6 +386,27 @@ fn render_feed_group_picker(
             }
         }
         row = row.saturating_add(h);
+    }
+    if let Some(item) = items.last() {
+        let y = row;
+        f.render_widget(
+            Paragraph::new("▔".repeat(text_w)),
+            Rect {
+                x: list_area.x,
+                y,
+                width: text_w as u16,
+                height: 1,
+            },
+        );
+        f.render_widget(
+            Paragraph::new(item.display_name()),
+            Rect {
+                x: list_area.x,
+                y: y + 1,
+                width: text_w as u16 - 1,
+                height: 1,
+            },
+        );
     }
     (offset, image)
 }
