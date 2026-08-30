@@ -56,7 +56,7 @@
       ctx builder can't reach the component (Group A — wide surface, component
       always mounted, per D6/D7). Verify: `rtk cargo check -p mbv`,
       `rtk cargo nextest run -p mbv` (music characterization tests).
-- [ ] 1.1d Re-point the narrow inline-hero item resolvers `selected_movie_item`
+- [x] 1.1d Re-point the narrow inline-hero item resolvers `selected_movie_item`
       and `selected_series_item` (`render/components/detail.rs:107` / `:144`),
       which build a `LibraryListRenderCtx` from
       `nav_stack.last().map_or(0, |l| l.cursor / .scroll)` (`:111,112` and
