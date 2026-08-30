@@ -431,7 +431,6 @@ fn narrow_podcast_surface_snapshot() {
 /// painter now that the legacy `render_list` narrow branch early-returns for
 /// podcast libraries too.
 #[test]
-#[ignore = "task 3.5a b/c: BrowserComponent does not yet own the narrow podcast surface"]
 fn narrow_podcast_paints_each_browse_row_once() {
     let mut model = Model::new(podcast_app());
     model.sync_mounted_surfaces();
