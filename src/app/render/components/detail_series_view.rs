@@ -62,7 +62,14 @@ pub(in crate::app::render) fn render_series_inline_detail(
     let img_loading = !item.id.is_empty() && ctx.images_enabled && ctx.image_loading;
     let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) = {
         if ctx.images_enabled {
-            (SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS, true)
+            // The shell owns cache lookup. `image_loading` is the only
+            // component-visible state that should select the placeholder;
+            // cached artwork must reach the Series-specific painter.
+            (
+                SERIES_IMAGE_COLS,
+                SERIES_IMAGE_PLACEHOLDER_ROWS,
+                ctx.image_loading,
+            )
         } else {
             (0, 0, false)
         }
