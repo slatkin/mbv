@@ -214,7 +214,7 @@ findings become added rows; the template does not change.
       `is_feed_home_video_group_view` dispatch branch in `render_library`
       (`widgets.rs:554-559`) — converges with 3.8. `ensure_lib_loaded_for`
       (an effect, `home_feed.rs:21`) moves to the shell side.
-- [ ] 3.6 Surface: Emby grouped Music, narrow (D6 second half).
+- [x] 3.6 Surface: Emby grouped Music, narrow (D6 second half).
       `MusicWorkspaceComponent::view` gains a narrow branch: grouped-album rows
       plus the Model A hero, **not** the wide right-rail track table.
 - [ ] 3.7 Relocate `render_list`'s poster-prefetch window
