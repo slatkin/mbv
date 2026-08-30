@@ -600,7 +600,8 @@ impl Component for BrowserComponent {
         // for the shared split), paint the full hero + pills + list layout
         // itself instead of just the inner list rows; otherwise keep the
         // narrow list-row behavior.
-        let wide = matches!(self.kind, BrowserKind::Movies | BrowserKind::HomeVideos)
+        let wide = (matches!(self.kind, BrowserKind::Movies | BrowserKind::HomeVideos)
+            || self.narrow_extras.feed_items.is_some())
             && shared_hero_presentation(area).is_some();
         self.wide_movies = wide;
         self.scroll = if wide {
