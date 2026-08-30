@@ -78,6 +78,14 @@ pub(in crate::app::render) fn render_grouped_album_rows(
     // rather than the source item order because grouped music lists can be
     // sorted by artist and album independently of the API response.
     if app.images_enabled() {
+        if let Some(album) = albums.get(cursor) {
+            app.fetch_card_image(
+                crate::app::render::components::album_art::inline_album_art_cache_key(&album.id),
+                album.id.clone(),
+                album.series_id.clone(),
+                crate::app::render::MUSIC_ALBUM_IMAGE_TYPES,
+            );
+        }
         const PREFETCH_AHEAD: usize = 3;
         const PREFETCH_BEHIND: usize = 1;
         if let Some(cursor_pos) = order.iter().position(|&idx| idx == cursor) {

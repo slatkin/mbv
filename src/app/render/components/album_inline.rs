@@ -9,7 +9,7 @@ use crate::app::palette;
 use crate::app::render::components::album_detail::album_hero_detail_rows;
 use crate::app::render::screens::album_plan::{GroupedAlbumDisplayPlan, GroupedAlbumDisplayRow};
 use ratatui::layout::Rect;
-use ratatui::widgets::{List, ListItem, ListState};
+use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 use ratatui::Frame;
 
 pub(in crate::app::render) fn render_grouped_album_rows_inline_plan(
@@ -60,7 +60,7 @@ pub(in crate::app::render) fn render_grouped_album_rows_inline_plan(
     let total_display = item_rows.len();
     let row_targets = replacement.row_targets();
 
-    layout.left_sorted_indices = plan.order;
+    layout.left_sorted_indices = plan.order.clone();
     layout.left_item_rows = item_rows.clone();
     layout.left_screen_offset = 0;
     layout.left_row_map = row_targets
@@ -144,6 +144,28 @@ pub(in crate::app::render) fn render_grouped_album_rows_inline_plan(
 
     if let Some(hero_area) = hero_area {
         selected_detail_shell(f, hero_area, hero_rows, focused);
+        if let Some(album_idx) = plan.order.iter().find(|&&idx| idx == cursor) {
+            if let Some((artist, year, title)) = album_info.get(*album_idx) {
+                let meta = if year.is_empty() {
+                    artist.clone()
+                } else {
+                    format!("{artist} • {year}")
+                };
+                let content = vec![
+                    ratatui::text::Line::from(ratatui::text::Span::styled(
+                        format!(" {title}"),
+                        ratatui::style::Style::default()
+                            .fg(crate::app::palette::TEXT_FOCUS_ACCENT)
+                            .add_modifier(ratatui::style::Modifier::BOLD),
+                    )),
+                    ratatui::text::Line::from(ratatui::text::Span::styled(
+                        format!(" {meta}"),
+                        ratatui::style::Style::default().fg(crate::app::palette::TEXT_DETAIL_META),
+                    )),
+                ];
+                f.render_widget(Paragraph::new(content), hero_area);
+            }
+        }
     }
     if focused && total_display > visible {
         crate::app::render::render_right_scrollbar(
