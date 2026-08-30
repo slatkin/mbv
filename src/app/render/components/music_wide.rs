@@ -240,9 +240,36 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
     if let (Some(album), Some(tracks)) = (&ctx.selected_album, &ctx.album_tracks) {
         album_tracks.insert(album.id.clone(), tracks.clone());
     }
+
+    // Group pill bar above the album rows, mirroring the narrow browser
+    // (`list_narrow.rs`) and the wide sibling's right-pane pill slot. Album
+    // rows then render into the reduced content area.
+    let content_area = if ctx.groups.is_empty() {
+        area
+    } else {
+        let areas = hero_left::pill_bar_areas(area);
+        if ctx.list.is_search_active() {
+            crate::app::render::components::hero::render_search_box(
+                f,
+                areas.pills_area,
+                ctx.list.search_query.as_deref().unwrap_or_default(),
+                ctx.list.search_loading,
+            );
+        } else {
+            crate::app::render::components::music::render_music_group_pills_row_with_ctx(
+                f,
+                areas.pills_area,
+                &ctx.groups,
+                ctx.group_cursor,
+                layout,
+            );
+        }
+        areas.content_area
+    };
+
     let (offset, image_paint) = render_grouped_album_rows_with_ctx(
         f,
-        area,
+        content_area,
         &ctx.list.items,
         AlbumRowsCursorCtx {
             cursor: ctx.list.cursor,

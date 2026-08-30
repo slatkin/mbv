@@ -1,6 +1,9 @@
 use super::album::AlbumRowsCursorCtx;
 use super::album_rows::AlbumRowCtx;
-use super::hero::{selected_detail_shell, InlineDisplayRow, HERO_BLOCK_EXTRA_ROWS};
+use super::detail_series_view::{SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS};
+use super::hero::{
+    selected_detail_shell, HeroContent, HeroImage, InlineDisplayRow, HERO_BLOCK_EXTRA_ROWS,
+};
 use super::list_rows::{
     draw_column_selection_markers, selected_cell_rect, DisplayRow, InlineReplacementPlan,
 };
@@ -9,7 +12,7 @@ use crate::app::palette;
 use crate::app::render::components::album_detail::album_hero_detail_rows;
 use crate::app::render::screens::album_plan::{GroupedAlbumDisplayPlan, GroupedAlbumDisplayRow};
 use ratatui::layout::Rect;
-use ratatui::widgets::{List, ListItem, ListState, Paragraph};
+use ratatui::widgets::{List, ListItem, ListState};
 use ratatui::Frame;
 
 pub(in crate::app::render) fn render_grouped_album_rows_inline_plan(
@@ -142,28 +145,53 @@ pub(in crate::app::render) fn render_grouped_album_rows_inline_plan(
         }
     }
 
+    let mut image_paint = None;
     if let Some(hero_area) = hero_area {
         selected_detail_shell(f, hero_area, hero_rows, focused);
-        if let Some(album_idx) = plan.order.iter().find(|&&idx| idx == cursor) {
-            if let Some((artist, year, title)) = album_info.get(*album_idx) {
+        // Shared narrow hero presentation (contained card: accent title, meta
+        // line, top-right image), mirroring the narrow TV series hero
+        // (`render_series_inline_detail`) rather than a bespoke text path.
+        let content_rect = crate::app::render::arrangements::library::selected_detail_content_area(
+            hero_area,
+            crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING,
+            HERO_BLOCK_EXTRA_ROWS,
+        );
+        if let Some(&album_idx) = plan.order.iter().find(|&&idx| idx == cursor) {
+            if let Some((artist, year, title)) = album_info.get(album_idx) {
                 let meta = if year.is_empty() {
                     artist.clone()
                 } else {
                     format!("{artist} • {year}")
                 };
-                let content = vec![
-                    ratatui::text::Line::from(ratatui::text::Span::styled(
-                        format!(" {title}"),
-                        ratatui::style::Style::default()
-                            .fg(crate::app::palette::TEXT_FOCUS_ACCENT)
-                            .add_modifier(ratatui::style::Modifier::BOLD),
-                    )),
-                    ratatui::text::Line::from(ratatui::text::Span::styled(
-                        format!(" {meta}"),
-                        ratatui::style::Style::default().fg(crate::app::palette::TEXT_DETAIL_META),
-                    )),
-                ];
-                f.render_widget(Paragraph::new(content), hero_area);
+                let image = images_enabled.then_some(HeroImage {
+                    actual_w: SERIES_IMAGE_COLS,
+                    height: SERIES_IMAGE_ROWS,
+                });
+                let content = HeroContent {
+                    title: Some(title.as_str()),
+                    meta_line: (!meta.is_empty()).then_some(meta.as_str()),
+                    meta_color: crate::app::palette::TEXT_DETAIL_META,
+                    show_playing: false,
+                    unconditional_spacer_after_meta: true,
+                    lines: &[],
+                    image,
+                };
+                let result = crate::app::render::components::hero::paint_hero_content(
+                    f,
+                    content_rect,
+                    &content,
+                    false,
+                );
+                image_paint = result.img_rect.and_then(|img_rect| {
+                    _albums
+                        .get(album_idx)
+                        .filter(|_| images_enabled && img_rect.width >= 4 && img_rect.height >= 2)
+                        .map(|album| crate::app::render::MusicImagePaint::Album {
+                            area: img_rect,
+                            album: Box::new(album.clone()),
+                            centered: false,
+                        })
+                });
             }
         }
     }
@@ -176,19 +204,6 @@ pub(in crate::app::render) fn render_grouped_album_rows_inline_plan(
             palette::SCROLLBAR,
         );
     }
-    let image_paint = hero_area
-        .filter(|hero_area| images_enabled && hero_area.width >= 4 && hero_area.height >= 2)
-        .and_then(|hero_area| {
-            plan.order
-                .iter()
-                .find(|&&idx| idx == cursor)
-                .and_then(|&idx| _albums.get(idx))
-                .map(|album| crate::app::render::MusicImagePaint::Album {
-                    area: hero_area,
-                    album: Box::new(album.clone()),
-                    centered: false,
-                })
-        });
     if replacement.should_draw_selection_markers() {
         draw_column_selection_markers(f, area, cursor, &item_rows, offset);
     }

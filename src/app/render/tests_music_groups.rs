@@ -415,7 +415,13 @@ fn narrow_grouped_music_keeps_bottom_hero_fully_visible() {
     assert!(layout.left_item_rows[selected_row + 1..continuation_end]
         .iter()
         .all(Vec::is_empty));
-    let selected_screen_row = layout.hero_area.y.saturating_sub(list_area.y) as usize;
+    // Album rows render below the reserved group pill row (task 3.6a), so
+    // screen-space row targets are measured from the content area, not the
+    // pane top.
+    let content_top = super::arrangements::hero_left::pill_bar_areas(list_area)
+        .content_area
+        .y;
+    let selected_screen_row = layout.hero_area.y.saturating_sub(content_top) as usize;
     let target_end = selected_screen_row + expected_height;
     assert!(layout.left_row_targets.len() >= target_end);
     assert!(layout.left_row_targets[selected_screen_row + 1..target_end]
