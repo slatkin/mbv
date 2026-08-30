@@ -8,16 +8,24 @@
       `split-browse-state-interaction-fields/design.md` §1.1/1.1b is the
       checklist. (1.1a–1.1c re-point the three site-groups the field-split
       campaign left live; confirm they are landed before 1.2.)
-- [x] 1.1a Re-point `actions_navigation.rs:92` (`select_item`, `lvl.cursor = pos`
-      after resolving a playable item). Per design §1.1 **outcome 1**: drop the
-      write — the mounted component owns the live cursor and the caller already
-      holds the resolved item/index. Verify: `rtk cargo check -p mbv`;
-      `select_item` restore/characterization tests pass.
+- [ ] 1.1a Re-point `actions_navigation.rs:92` (`select_item`, `lvl.cursor = pos`
+      after resolving a playable item). **Correction (design §1.1's "outcome 1 —
+      drop" classification is wrong here):** `shell_browser` test
+      `shell_emby_browser_effects_honor_component_target` (task 5.3d) asserts the
+      activation effect lands the App cursor on the supplied item
+      (`nav_stack[0].cursor == 1`, not the parked 0). This write is the
+      **outcome-2 resting-position update at the activation event**, not a mirror.
+      Keep it; spell it `lvl.set_resting_cursor(pos)` so it survives 1.2 as a
+      `BrowseResting` write. Verify: `rtk cargo check -p mbv`;
+      `rtk cargo nextest run -p mbv --no-fail-fast` — no failures beyond the two
+      known-pre-existing (`browser_local_navigation_mirrors_legacy_flat_movement`,
+      and — once this is fixed — nothing else).
 - [x] 1.1b Re-point `context_menu_actions.rs:206` and `:345` (post-removal
       `lvl.cursor = …min(len-1)` re-clamp). Per design §1.1: drop both writes —
       the component re-clamps its own cursor against the projected content
       (projection reset). Verify: `rtk cargo check -p mbv`; context-menu
-      item-removal tests pass.
+      item-removal tests pass. (Landed in `4b26a7ec`; full `--no-fail-fast`
+      suite shows no regression attributable to this drop.)
 - [ ] 1.1c Re-point the Music wide render path off `BrowseLevel` per design
       §1.1b **R16/R17/R18 (outcome 3)**: `wide_music_render_ctx`
       (`render/components/music_wide.rs` ~`:153/:157/:164`) and
