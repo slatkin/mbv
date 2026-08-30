@@ -252,15 +252,9 @@ impl Model {
                     // state (cursor/selection); re-project (5.3d.11 U6).
                     self.push_audiobookshelf_podcast_content();
                 }
-                ShellRequest::AudiobookshelfBookMove(movement) => {
-                    self.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
-                        movement,
-                    ));
-                }
-                ShellRequest::AudiobookshelfBookIntent(intent) => {
-                    self.handle_audiobookshelf_book_request(
-                        ShellRequest::AudiobookshelfBookIntent(intent),
-                    );
+                request @ (ShellRequest::AudiobookshelfBookMove(_)
+                | ShellRequest::AudiobookshelfBookIntent(_)) => {
+                    self.handle_audiobookshelf_book_request(request);
                 }
                 // Browser (generic Emby) mouse geometry lives in
                 // `BrowserComponent`, which forwards the hit region; the
