@@ -105,17 +105,35 @@ impl Model {
         // album from the component's authoritative selection (its own cursor),
         // not the App browse cursor. Only on first mount fall back to the
         // App-derived item.
+        let cursor_scroll = if self.music_workspace_reanchor {
+            None
+        } else {
+            self.application
+                .get_component(id)
+                .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
+                .map(|music| (music.album_cursor(), music.album_scroll()))
+        };
         let list = self.app.library_list_render_ctx(
             index,
             true,
-            self.app.libs[index]
-                .nav_stack
-                .last()
-                .map_or(0, |l| l.cursor),
-            self.app.libs[index]
-                .nav_stack
-                .last()
-                .map_or(0, |l| l.scroll),
+            cursor_scroll.map_or_else(
+                || {
+                    self.app.libs[index]
+                        .nav_stack
+                        .last()
+                        .map_or(0, |l| l.cursor)
+                },
+                |(cursor, _)| cursor,
+            ),
+            cursor_scroll.map_or_else(
+                || {
+                    self.app.libs[index]
+                        .nav_stack
+                        .last()
+                        .map_or(0, |l| l.scroll)
+                },
+                |(_, scroll)| scroll,
+            ),
         );
         let selected_album = self
             .application
@@ -130,7 +148,7 @@ impl Model {
                 self.app.fetch_album_tracks(album.id.clone());
             }
         }
-        let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index, None);
+        let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index, cursor_scroll);
         let columns = self.app.current_library_columns(index);
         let wide = self.app.layout.main.is_wide_music_active();
         // Consume the one-shot re-anchor trigger: a genuine navigation event
