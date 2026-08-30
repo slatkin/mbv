@@ -222,7 +222,7 @@ findings become added rows; the template does not change.
       `paint_home_image`, keyed off the component's selection. Verify: prefetch
       still fires as the cursor moves (test asserting the fetch call, since this
       is a behaviour-preserving relocation, not a deletion).
-- [ ] 3.8 Delete `render_list` (`list.rs`) and reduce `render_library`'s
+- [x] 3.8 Delete `render_list` (`list.rs`) and reduce `render_library`'s
       `EmbyLibrary` arm to geometry reservation, matching the Home / Feeds / ABS
       arms. Verify: `rtk cargo clippy --workspace --all-targets` reports no dead
       code; `App` has no browse painter left.
