@@ -1,5 +1,8 @@
 use super::*;
+use crate::app::render::HomeImagePaint;
 use crate::app::tests::{make_app_stub, make_item};
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
 use std::time::{Duration, Instant};
 // Characterization coverage stays beside the moved detail component.
 
@@ -58,6 +61,49 @@ fn content_rows_is_never_shorter_than_the_rendered_image_height() {
         ..no_image_layout
     };
     assert_eq!(empty_layout.content_rows(), 0);
+}
+
+#[test]
+fn compact_detail_pure_fn_returns_image_paint_without_app() {
+    let item = make_item("movie-1", "Movie");
+    let mut term = Terminal::new(TestBackend::new(60, 20)).unwrap();
+
+    for placeholder in [true, false] {
+        let layout = CompactBannerLayout {
+            meta_line: None,
+            show_playing: false,
+            lines: vec!["A short overview.".to_string()],
+            director_line_idx: None,
+            img_actual_w: 18,
+            img_height: 12,
+            img_is_placeholder: placeholder,
+        };
+        let mut paint = None;
+        term.draw(|f| {
+            let area = f.area();
+            paint = render_compact_detail_with_ctx(
+                CompactDetailCtx {
+                    item: &item,
+                    layout,
+                },
+                f,
+                area,
+                true,
+                true,
+            );
+        })
+        .unwrap();
+
+        match paint {
+            Some(HomeImagePaint::CompactBanner {
+                show_placeholder, ..
+            }) => assert_eq!(
+                show_placeholder, placeholder,
+                "placeholder flag must pass through from the layout"
+            ),
+            _ => panic!("expected a CompactBanner image paint"),
+        }
+    }
 }
 
 #[test]

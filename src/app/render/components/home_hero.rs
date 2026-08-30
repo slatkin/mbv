@@ -343,6 +343,30 @@ impl App {
                     self.paint_series_image(f, area, &cache_key);
                 }
             }
+            Some(HomeImagePaint::CompactBanner {
+                area,
+                item,
+                show_placeholder,
+            }) => {
+                if show_placeholder {
+                    f.render_widget(
+                        Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
+                        area,
+                    );
+                } else {
+                    let cache_key = super::detail::compact_banner_image_cache_key(&item.id);
+                    if let Some(state) = self.cached_image_protocol_mut(&cache_key) {
+                        type SImg =
+                            ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
+                        f.render_stateful_widget(
+                            SImg::default()
+                                .resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
+                            area,
+                            state,
+                        );
+                    }
+                }
+            }
             Some(HomeImagePaint::AudiobookshelfCover {
                 area,
                 library_item_id,
@@ -380,6 +404,15 @@ pub(in crate::app) enum HomeImagePaint {
         centered: bool,
     },
     Series {
+        area: Rect,
+        item: Box<mbv_core::api::EmbyItem>,
+        show_placeholder: bool,
+    },
+    /// The compact movie/Series detail banner's poster. Painted byte-identically
+    /// to the legacy inline `render_compact_detail` block: a dim placeholder
+    /// while `show_placeholder`, else the cached protocol rendered straight into
+    /// `area` (no `fetch_*` -- the prefetch loop owns fetching, #287).
+    CompactBanner {
         area: Rect,
         item: Box<mbv_core::api::EmbyItem>,
         show_placeholder: bool,

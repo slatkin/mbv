@@ -3,6 +3,7 @@ use crate::app::render::components::hero::{
     inline_hero_text_width, HeroContent, HeroImage, HeroLine,
 };
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
+use crate::app::render::HomeImagePaint;
 use crate::app::render::RENDER_FILTER;
 use crate::app::ui_util::*;
 use crate::app::{palette, App};
@@ -350,6 +351,10 @@ pub(in crate::app) fn compact_banner_layout(
 }
 
 impl App {
+    /// Thin `&mut self` wrapper: resolves the selected item, computes the
+    /// [`CompactBannerLayout`] (the only cache-touching step), then delegates
+    /// painting to the pure [`render_compact_detail_with_ctx`] and executes
+    /// the image paint it returns via [`App::paint_home_image`] (ADR 0022).
     pub(crate) fn render_compact_detail(
         &mut self,
         f: &mut Frame,
@@ -381,82 +386,102 @@ impl App {
 
         let truncate_overview =
             self.is_home_video_view(lib_idx) || self.is_podcast_library(lib_idx);
-        let content =
-            self.compact_banner_layout_with_overview(&item, area.width, truncate_overview);
-
-        // — Title —
-        // The caller decides whether the selected item's name belongs in the
-        // hero or remains in the ordinary list row.
-        let title = item.display_name();
-
-        // — Overview + Director (#204, #263) —
-        // The Director line is rendered specially (its own label style); every
-        // other line is the banner's wrapped overview text, which grows to
-        // fit the block's full wrapped height (computed by
-        // `compact_banner_layout` and consumed by the list layout before any
-        // of this renders, so `area` is already sized to fit every line)
-        // instead of clipping or scrolling it.
-        let lines: Vec<HeroLine> = content
-            .lines
-            .iter()
-            .enumerate()
-            .map(|(idx, line_text)| {
-                if Some(idx) == content.director_line_idx {
-                    HeroLine::Prefixed {
-                        label: "Director: ",
-                        value: item.director.clone(),
-                    }
-                } else {
-                    HeroLine::Plain(line_text.clone())
-                }
-            })
-            .collect();
-
-        let hero_content = HeroContent {
-            title: show_title.then_some(title.as_str()),
-            // The metadata row directly below the selected movie title
-            // renders in #9e9e9e foreground (palette::TEXT_SECONDARY) — light grey
-            // text on the SURFACE_FOCUSED block that frames the selected
-            // row + banner.
-            meta_line: content.meta_line.as_deref(),
-            meta_color: palette::TEXT_DETAIL_META,
-            show_playing: content.show_playing,
-            unconditional_spacer_after_meta: false,
-            lines: &lines,
-            image: (content.img_height > 0).then_some(HeroImage {
-                actual_w: content.img_actual_w,
-                height: content.img_height,
-            }),
-        };
-        let result = crate::app::render::components::hero::paint_hero_content(
+        let layout = self.compact_banner_layout_with_overview(&item, area.width, truncate_overview);
+        let image_paint = render_compact_detail_with_ctx(
+            CompactDetailCtx {
+                item: &item,
+                layout,
+            },
             f,
             area,
-            &hero_content,
             focused,
+            show_title,
         );
-
-        if let Some(img_rect) = result.img_rect {
-            if content.img_is_placeholder {
-                // Image still loading -- draw a dim placeholder block to
-                // hold the space (mirrors episode.rs's series-image
-                // placeholder).
-                f.render_widget(
-                    Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
-                    img_rect,
-                );
-            } else {
-                let primary_cache_key = compact_banner_image_cache_key(&item.id);
-                if let Some(state) = self.cached_image_protocol_mut(&primary_cache_key) {
-                    type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-                    f.render_stateful_widget(
-                        SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
-                        img_rect,
-                        state,
-                    );
-                }
-            }
-        }
+        self.paint_home_image(f, image_paint);
     }
+}
+
+/// Everything the shell resolves for the pure compact-banner painter: the
+/// selected item plus its already-computed [`CompactBannerLayout`] (so this
+/// path never re-enters `compact_banner_layout_with_overview` or the image
+/// cache).
+pub(in crate::app::render) struct CompactDetailCtx<'a> {
+    pub(in crate::app::render) item: &'a mbv_core::api::EmbyItem,
+    pub(in crate::app::render) layout: CompactBannerLayout,
+}
+
+/// Pure compact movie/Series banner painter: builds the [`HeroContent`],
+/// paints it, and returns the poster image still needing paint as a
+/// [`HomeImagePaint::CompactBanner`] request (executed by
+/// [`App::paint_home_image`]). No `App`, no image-cache access, no fetch.
+pub(in crate::app::render) fn render_compact_detail_with_ctx(
+    ctx: CompactDetailCtx<'_>,
+    f: &mut Frame,
+    area: Rect,
+    focused: bool,
+    show_title: bool,
+) -> Option<HomeImagePaint> {
+    let CompactDetailCtx {
+        item,
+        layout: content,
+    } = ctx;
+    if area.height == 0 || area.width < 3 {
+        return None;
+    }
+
+    // — Title —
+    // The caller decides whether the selected item's name belongs in the
+    // hero or remains in the ordinary list row.
+    let title = item.display_name();
+
+    // — Overview + Director (#204, #263) —
+    // The Director line is rendered specially (its own label style); every
+    // other line is the banner's wrapped overview text, which grows to
+    // fit the block's full wrapped height (computed by
+    // `compact_banner_layout` and consumed by the list layout before any
+    // of this renders, so `area` is already sized to fit every line)
+    // instead of clipping or scrolling it.
+    let lines: Vec<HeroLine> = content
+        .lines
+        .iter()
+        .enumerate()
+        .map(|(idx, line_text)| {
+            if Some(idx) == content.director_line_idx {
+                HeroLine::Prefixed {
+                    label: "Director: ",
+                    value: item.director.clone(),
+                }
+            } else {
+                HeroLine::Plain(line_text.clone())
+            }
+        })
+        .collect();
+
+    let hero_content = HeroContent {
+        title: show_title.then_some(title.as_str()),
+        // The metadata row directly below the selected movie title
+        // renders in #9e9e9e foreground (palette::TEXT_SECONDARY) — light grey
+        // text on the SURFACE_FOCUSED block that frames the selected
+        // row + banner.
+        meta_line: content.meta_line.as_deref(),
+        meta_color: palette::TEXT_DETAIL_META,
+        show_playing: content.show_playing,
+        unconditional_spacer_after_meta: false,
+        lines: &lines,
+        image: (content.img_height > 0).then_some(HeroImage {
+            actual_w: content.img_actual_w,
+            height: content.img_height,
+        }),
+    };
+    let result =
+        crate::app::render::components::hero::paint_hero_content(f, area, &hero_content, focused);
+
+    let img_rect = result.img_rect?;
+    Some(HomeImagePaint::CompactBanner {
+        area: img_rect,
+        item: Box::new(item.clone()),
+        show_placeholder: content.img_is_placeholder,
+    })
 }
 
 #[cfg(test)]
