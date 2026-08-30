@@ -255,7 +255,7 @@ findings become added rows; the template does not change.
 
 - [x] 5.1 Split any file over 800 lines (D3's table anticipates
       `browser.rs`). Verify: `rtk make check-code-file-lines`.
-- [ ] 5.2 Full gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
+- [x] 5.2 Full gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
       `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`,
       `rtk cargo fmt`, `rtk make check-code-file-lines`.
 - [ ] 5.3 Confirm all three regressions are closed by manual check at a narrow
