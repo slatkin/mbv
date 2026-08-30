@@ -19,6 +19,12 @@ pub enum ComponentId {
     Queue,
     Home,
     Browser(BrowserKey),
+    /// Wide TV workspace (`TvWorkspaceComponent`). Distinct from
+    /// `Browser(BrowserKey { kind: TvShows })` -- which the narrow TV
+    /// `BrowserComponent` uses -- so both can stay mounted across a
+    /// wide<->narrow breakpoint flip (keep-mounted, D1) without one
+    /// component type shadowing the other under a shared id.
+    TvWorkspace(BrowserKey),
     Feeds,
     InlineSearch(BrowserKey),
     Overlay(OverlayId),

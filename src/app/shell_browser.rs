@@ -154,8 +154,8 @@ impl Model {
             kind,
         });
         debug_assert!(
-            self.tv_workspace_component_id().is_none(),
-            "narrow BrowserComponent and wide TvWorkspaceComponent must be mutually exclusive"
+            self.tv_workspace_component_id().as_ref() != Some(&id),
+            "narrow BrowserComponent and wide TvWorkspaceComponent must not share a ComponentId"
         );
         Some(id)
     }

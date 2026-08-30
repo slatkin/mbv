@@ -71,7 +71,7 @@ impl Model {
         {
             return None;
         }
-        Some(ComponentId::Browser(BrowserKey {
+        Some(ComponentId::TvWorkspace(BrowserKey {
             service: ServiceKind::Emby,
             library_id: library.library.id.clone(),
             kind: BrowserKind::TvShows,

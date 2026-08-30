@@ -58,10 +58,21 @@ impl Model {
             return None;
         }
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
+        // Wide TV focuses `TvWorkspaceComponent` under its distinct
+        // `ComponentId::TvWorkspace`; narrow TV focuses the mounted
+        // `BrowserComponent` under `ComponentId::Browser` (D4). The two
+        // mount gates share `is_wide_tv_active()`, so mirror that split here.
+        if kind == BrowserKind::TvShows && self.app.layout.main.is_wide_tv_active() {
+            return Some(ComponentId::TvWorkspace(BrowserKey {
+                service: ServiceKind::Emby,
+                library_id: library.library.id.clone(),
+                kind,
+            }));
+        }
         let mounted_surface = match kind {
             BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos => true,
-            // Wide TV focuses TvWorkspaceComponent; narrow TV focuses the
-            // mounted BrowserComponent (D4), matching `emby_browser_component_id`.
+            // Narrow TV focuses the mounted BrowserComponent (D4), matching
+            // `emby_browser_component_id`.
             BrowserKind::TvShows => true,
             BrowserKind::Music => {
                 self.app.is_music_group_view(index)
@@ -190,6 +201,83 @@ mod tests {
         let tv_id = wide.tv_workspace_id.clone().expect("wide TV workspace");
         assert_eq!(wide.application.focus(), Some(&tv_id));
         assert!(wide
+            .application
+            .get_component(&tv_id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<TvWorkspaceComponent>()
+            .is_some());
+    }
+
+    /// migrate-narrow-browse-to-components task 2.2 (reviewer block): drive a
+    /// TV library through wide -> narrow -> wide via `sync_mounted_surfaces()`
+    /// in production order (not the individual `sync_*` out of order). Because
+    /// wide TV now mounts under `ComponentId::TvWorkspace` and narrow TV under
+    /// `ComponentId::Browser`, both components can stay mounted across the
+    /// flips and the active-destination pointer alone gates render/focus. At
+    /// each step the mounted component *type* under the resolved id and the
+    /// focus target must match the width.
+    #[test]
+    fn tv_library_wide_narrow_wide_transition_routes_and_focuses_correctly() {
+        use crate::app::components::TvWorkspaceComponent;
+        use ratatui::layout::Rect;
+
+        let mut app = make_movie_app();
+        app.libs[0].library.collection_type = "tvshows".into();
+        for item in &mut app.libs[0].nav_stack[0].items {
+            item.item_type = "Series".into();
+        }
+        app.tab = TabSelection::EmbyLibrary(0);
+        app.panel_focus = PanelFocus::Library;
+        app.panel_mode = PanelMode::Both;
+        app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
+        let mut model = Model::new(app);
+
+        let wide = Rect::new(40, 0, 60, 20);
+        let narrow = Rect::default();
+
+        // Wide: TvWorkspaceComponent owns the surface and focus.
+        model.app.layout.main.tv_wide_right_area = wide;
+        model.sync_mounted_surfaces();
+        let tv_id = model.tv_workspace_id.clone().expect("wide TV workspace id");
+        assert!(matches!(tv_id, ComponentId::TvWorkspace(_)));
+        assert_eq!(model.emby_browser_id, None);
+        assert_eq!(model.application.focus(), Some(&tv_id));
+        assert!(model
+            .application
+            .get_component(&tv_id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<TvWorkspaceComponent>()
+            .is_some());
+
+        // Narrow: BrowserComponent owns the surface and focus; the TV
+        // workspace stays mounted (keep-mounted) but is no longer the pointer.
+        model.app.layout.main.tv_wide_right_area = narrow;
+        model.sync_mounted_surfaces();
+        let browser_id = model.emby_browser_id.clone().expect("narrow TV browser id");
+        assert!(matches!(browser_id, ComponentId::Browser(_)));
+        assert_eq!(model.tv_workspace_id, None);
+        assert!(
+            model.application.mounted(&tv_id),
+            "the wide TV workspace stays mounted across the narrow flip"
+        );
+        assert_eq!(model.application.focus(), Some(&browser_id));
+        assert!(model
+            .application
+            .get_component(&browser_id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<BrowserComponent>()
+            .is_some());
+
+        // Wide again: the same TvWorkspaceComponent is re-pointed and focused.
+        model.app.layout.main.tv_wide_right_area = wide;
+        model.sync_mounted_surfaces();
+        assert_eq!(model.tv_workspace_id.as_ref(), Some(&tv_id));
+        assert_eq!(model.emby_browser_id, None);
+        assert_eq!(model.application.focus(), Some(&tv_id));
+        assert!(model
             .application
             .get_component(&tv_id)
             .unwrap()

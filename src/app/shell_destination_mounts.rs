@@ -54,7 +54,9 @@ impl Model {
             .mounted_destinations
             .iter()
             .filter_map(|id| match id {
-                ComponentId::Browser(key) | ComponentId::InlineSearch(key)
+                ComponentId::Browser(key)
+                | ComponentId::TvWorkspace(key)
+                | ComponentId::InlineSearch(key)
                     if !live.contains(key.library_id.as_str()) =>
                 {
                     Some(id.clone())
@@ -431,7 +433,9 @@ mod tests {
 
     fn library_id_of(id: &ComponentId) -> &str {
         match id {
-            ComponentId::Browser(key) | ComponentId::InlineSearch(key) => &key.library_id,
+            ComponentId::Browser(key)
+            | ComponentId::TvWorkspace(key)
+            | ComponentId::InlineSearch(key) => &key.library_id,
             _ => panic!("expected a destination id"),
         }
     }
