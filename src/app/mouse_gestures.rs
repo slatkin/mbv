@@ -68,20 +68,22 @@ impl App {
         }
     }
 
-    /// Destination-agnostic wheel scroll for the remaining legacy browse
-    /// surfaces (Emby library rows; Home, Audiobookshelf, and Feeds are
-    /// no-ops). Home no longer routes here: its wheel is claimed by
+    /// Destination-agnostic wheel handling for browse surfaces. Emby,
+    /// Home, Audiobookshelf, and Feeds are no-ops. Home no longer routes here:
+    /// its wheel is claimed by
     /// `HomeComponent` and handled at the Model boundary
     /// (`Model::handle_home_scroll`), which keeps the same throttle/readiness
     /// gates and the Continue Watching `cw_move_cursor` quirk (task 5.3d,
     /// Home wheel-scroll ownership).
-    pub(super) fn handle_mouse_scroll_browse(&mut self, delta: i64) {
+    pub(super) fn handle_mouse_scroll_browse(&mut self, _delta: i64) {
         if !self.browse_mouse_ready() {
             return;
         }
         match self.tab {
-            TabSelection::EmbyLibrary(lib_idx) => self.move_lib_cursor(lib_idx, delta),
-            TabSelection::Home | TabSelection::AudiobookshelfLibrary(_) | TabSelection::Feeds => {}
+            TabSelection::EmbyLibrary(_)
+            | TabSelection::Home
+            | TabSelection::AudiobookshelfLibrary(_)
+            | TabSelection::Feeds => {}
         }
     }
 

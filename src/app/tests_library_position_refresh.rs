@@ -118,8 +118,6 @@ fn refresh_current_view_with_queue_focus_leaves_browse_destinations_untouched() 
 fn stale_emby_lib_index_mutates_no_library() {
     let mut app = two_emby_libraries_app();
     let stale = app.libs.len() + 1;
-    app.move_lib_cursor(stale, 1);
-    app.jump_lib_cursor(stale, true);
     app.go_back(stale);
     app.shuffle_play_target(stale, None);
     app.refresh_lib(stale);

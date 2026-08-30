@@ -325,40 +325,6 @@ fn save_default_library_position_persists_focused_item() {
 }
 
 #[test]
-fn move_lib_cursor_persists_default_library_position() {
-    let mut app = make_app_stub();
-    let mut library = make_item("Movies", "CollectionFolder");
-    library.id = "lib-movies".into();
-    app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            parent_id: "lib-movies".into(),
-            title: "Movies".into(),
-            items: make_items(3),
-            total_count: 3,
-            resting: crate::app::types_browse::BrowseResting::new(0, 0),
-            item_types: Some("Movie".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            music_grouping: None,
-        }],
-        ..LibraryTab::new(library)
-    });
-
-    app.move_lib_cursor(0, 1);
-
-    let saved = app
-        .library_position_state
-        .libraries
-        .get("lib-movies")
-        .expect("position saved");
-    assert_eq!(saved.levels[0].focused_item_id.as_deref(), Some("id1"));
-}
-
-#[test]
 fn flush_library_position_persists_session_scroll_without_navigation() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();

@@ -1,11 +1,9 @@
 use super::{
     App, SelectionModalFilter, SelectionModalListState, SelectionModalRow, SelectionModalSource,
 };
-use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use crate::app::types_selection_modal::SelectionModalItem;
 use crate::app::ui_util::fmt_duration_approx;
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
-use std::time::Instant;
 
 pub(super) fn series_season_pill_labels(detail: &super::SeriesDetail) -> Vec<String> {
     detail
@@ -83,39 +81,6 @@ impl App {
         library_column_count(self.layout.main.left_area.width)
     }
 
-    /// Moves the library cursor vertically by `item_rows` display rows
-    /// (1 for up/down, one viewport for page keys). Flat lists stride by
-    /// `cols` items per row; letter-grouped lists move through the laid-out
-    /// row map, since independent bucket packing means item index no longer
-    /// maps to row by division. Grouped album views stride by `cols` too;
-    /// the single-column views (feed home-video groups, season grids)
-    /// receive `item_rows` exactly as they do today.
-    pub(super) fn move_lib_cursor_rows(&mut self, lib_idx: usize, item_rows: i64) {
-        // Defensive bounds check: the dispatch front door normalizes a stale
-        // destination first, but async Service removal can invalidate the
-        // matched index between normalization and this call. No-op (never
-        // substitute library zero) on a miss.
-        if lib_idx >= self.libs.len() {
-            return;
-        }
-
-        // Letter-grouped lists: resolve the target item through the last
-        // frame's laid-out item rows. The grouped-album view also publishes
-        // `left_sorted_indices` but resolves movement through its own
-        // column-aware cursor (see `album_cursor.rs`), so it is excluded.
-        if !self.is_viewing_album_folders(lib_idx)
-            && !self.layout.main.left_sorted_indices.is_empty()
-        {
-            if let Some(delta) = self.letter_vertical_delta(lib_idx, item_rows) {
-                self.move_lib_cursor(lib_idx, delta);
-                return;
-            }
-        }
-
-        let cols = self.current_library_columns(lib_idx);
-        self.move_lib_cursor(lib_idx, item_rows * cols as i64);
-    }
-
     /// Computes the flat (sorted-order) delta that lands the cursor on the
     /// item `item_rows` rows up (negative) or down (positive) from its
     /// current display row, per the last frame's laid-out item rows.
@@ -170,125 +135,6 @@ impl App {
             }
         }
         Some(target_pos? as i64 - cur_pos? as i64)
-    }
-
-    pub(super) fn move_lib_cursor(&mut self, lib_idx: usize, delta: i64) {
-        if lib_idx >= self.libs.len() {
-            return;
-        }
-        self.move_lib_cursor_inner(lib_idx, delta);
-    }
-
-    fn move_lib_cursor_inner(&mut self, lib_idx: usize, delta: i64) {
-        // Defensive bounds check; see `move_lib_cursor_rows` for the stale
-        // index contract. Never substitute library zero on a miss.
-        let now = Instant::now();
-        let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
-        self.last_nav_at = now;
-        self.mark_library_navigation(now);
-
-        if self.is_feed_home_video_group_view(lib_idx) {
-            if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
-                let n = state.selected_len();
-                if n > 0 {
-                    state.video_cursor = super::ui_util::move_cursor(state.video_cursor, delta, n);
-                    self.save_default_library_position(lib_idx);
-                }
-            }
-            return;
-        }
-
-        // With letter-grouped display, navigate in sorted display order so
-        // the cursor follows what the user sees (articles stripped) rather than raw item order.
-        if !self.layout.main.left_sorted_indices.is_empty() {
-            let needs_sorted = self.libs[lib_idx].nav_stack.last().is_some();
-            if needs_sorted {
-                let current = self.libs[lib_idx]
-                    .nav_stack
-                    .last()
-                    .unwrap()
-                    .resting()
-                    .cursor();
-                let sorted_n = self.layout.main.left_sorted_indices.len();
-                let pos = self
-                    .layout
-                    .main
-                    .left_sorted_indices
-                    .iter()
-                    .position(|&i| i == current)
-                    .unwrap_or(0);
-                let new_pos = super::ui_util::move_cursor(pos, delta, sorted_n);
-                let new_cursor = self.layout.main.left_sorted_indices[new_pos];
-                if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-                    lvl.set_resting_cursor(new_cursor);
-                }
-                self.save_default_library_position(lib_idx);
-                if idle {
-                    self.maybe_fetch_next_page(lib_idx, new_cursor);
-                }
-                return;
-            }
-        }
-
-        let lib = &mut self.libs[lib_idx];
-        if let Some(lvl) = lib.nav_stack.last_mut() {
-            let n = lvl.items.len();
-            if n > 0 {
-                let next = super::ui_util::move_cursor(lvl.resting().cursor(), delta, n);
-                lvl.set_resting_cursor(next);
-                self.save_default_library_position(lib_idx);
-                if idle {
-                    self.maybe_fetch_next_page(lib_idx, next);
-                }
-            }
-        }
-    }
-
-    pub(super) fn jump_lib_cursor(&mut self, lib_idx: usize, to_end: bool) {
-        // Defensive bounds check; see `move_lib_cursor_rows` for the stale
-        // index contract. Never substitute library zero on a miss.
-        if lib_idx >= self.libs.len() {
-            return;
-        }
-
-        if self.is_feed_home_video_group_view(lib_idx) {
-            if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
-                let n = state.selected_len();
-                if n > 0 {
-                    state.video_cursor = if to_end { n - 1 } else { 0 };
-                    self.save_default_library_position(lib_idx);
-                }
-            }
-            return;
-        }
-
-        // With letter-grouped display, Home/End jump to the first/last item
-        // in sorted display order (article-stripped), not raw item order.
-        if !self.layout.main.left_sorted_indices.is_empty() {
-            let needs_sorted = !self.layout.main.left_sorted_indices.is_empty();
-            if needs_sorted {
-                let n = self.layout.main.left_sorted_indices.len();
-                let new_cursor =
-                    self.layout.main.left_sorted_indices[if to_end { n - 1 } else { 0 }];
-                if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-                    lvl.set_resting_cursor(new_cursor);
-                }
-                self.save_default_library_position(lib_idx);
-                self.maybe_fetch_next_page(lib_idx, new_cursor);
-                return;
-            }
-        }
-
-        let lib = &mut self.libs[lib_idx];
-        if let Some(lvl) = lib.nav_stack.last_mut() {
-            let n = lvl.items.len();
-            if n > 0 {
-                let target = if to_end { n - 1 } else { 0 };
-                lvl.set_resting_cursor(target);
-                self.save_default_library_position(lib_idx);
-                self.maybe_fetch_next_page(lib_idx, target);
-            }
-        }
     }
 
     pub(super) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {

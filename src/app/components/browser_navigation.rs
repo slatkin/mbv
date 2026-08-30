@@ -20,14 +20,14 @@ impl BrowserComponent {
     }
 
     /// Move the component-local cursor `item_rows` displayed item rows down
-    /// (positive) or up (negative), mirroring `App::move_lib_cursor_rows` for
+    /// (positive) or up (negative), matching the former legacy row movement for
     /// the generic/Movies/home-video browser (task 5.3d prep): letter-
     /// grouped lists resolve the target through the last painted
     /// `left_item_rows`/`left_sorted_indices` (headers/gaps skipped, a
     /// ragged target row falls back to its last item), and flat lists stride
     /// by the painted column count. The legacy stale-layout fallback
     /// (sorted present but cursor unpainted) moves in sorted order by the
-    /// multiplied delta, exactly like `App`.
+    /// multiplied delta, using the same displayed-row rules.
     pub(super) fn move_rows(&mut self, item_rows: i64) -> usize {
         if !self.layout.left_sorted_indices.is_empty() {
             if let Some(delta) = self.letter_vertical_delta(item_rows) {
@@ -37,8 +37,7 @@ impl BrowserComponent {
         self.move_cursor_delta(item_rows * self.columns() as i64)
     }
 
-    /// Move the component-local cursor by `delta` items, mirroring
-    /// `App::move_lib_cursor`: sorted display order when the last painted
+    /// Move the component-local cursor by `delta` items, using sorted display order when the last painted
     /// list is letter-grouped, raw item order otherwise.
     pub(super) fn move_cursor_delta(&mut self, delta: i64) -> usize {
         if !self.layout.left_sorted_indices.is_empty() {
@@ -50,8 +49,7 @@ impl BrowserComponent {
     }
 
     /// Move in the letter-grouped display order: the cursor's position in
-    /// `left_sorted_indices` is the authority, exactly as
-    /// `App::move_lib_cursor_inner`'s sorted branch moves the App cursor.
+    /// `left_sorted_indices` is the authority, according to the painted sorted indices.
     pub(super) fn move_sorted_cursor(&mut self, delta: i64) {
         let sorted = &self.layout.left_sorted_indices;
         if sorted.is_empty() {
@@ -62,8 +60,7 @@ impl BrowserComponent {
         self.cursor = sorted[new_pos];
     }
 
-    /// Move in raw item order, mirroring `App::move_lib_cursor_inner`'s
-    /// fallback branch on `lvl.items.len()`; a zero-count list stays put.
+    /// Move in raw item order, using raw item order; a zero-count list stays put.
     pub(super) fn move_raw_cursor(&mut self, delta: i64) {
         let count = self.context.item_count();
         if count > 0 {
