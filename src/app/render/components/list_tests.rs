@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::palette;
 use crate::app::render::compact_banner_layout;
 // Characterization coverage stays beside the moved library component.
 use crate::app::layout::LayoutMain;
@@ -197,6 +198,20 @@ fn selected_series_without_cached_art_requests_loading_placeholder() {
         .unwrap();
 
     assert!(app.card_image_loading.contains("movie-0:ser_primary"));
+
+    // The loading flag must reach the rendered placeholder, not merely arm a
+    // fetch. Check one cell in the localized series-image region so a caller
+    // hard-coding `image_loading = false` fails this regression test.
+    let content_rect = super::library::selected_detail_content_area(layout.hero_area, 2, 2);
+    let image_bg = terminal.backend().buffer()
+        [(content_rect.x + content_rect.width - 9, content_rect.y + 6)]
+        .style()
+        .bg;
+    assert_eq!(
+        image_bg,
+        Some(palette::BORDER_UNFOCUSED),
+        "selected Series artwork area should paint the loading placeholder"
+    );
 }
 
 /// Item rows (non-empty entries of `left_item_rows`): the packed rows of a
