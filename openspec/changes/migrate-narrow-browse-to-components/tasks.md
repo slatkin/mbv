@@ -203,7 +203,7 @@ findings become added rows; the template does not change.
 - [x] 3.4 Surface: Emby TV, narrow. Template above, same composer as 3.3 —
       series inline hero, season grid, letter pills. Record any TV-specific
       chord that is still dead as a Change D finding; do not fix it here.
-- [ ] 3.4a Correction (manual 5.3 regression, maintainer decision 2026-08-30):
+- [x] 3.4a Correction (manual 5.3 regression, maintainer decision 2026-08-30):
       narrow TV **Enter on a `Series` row reopens the season-selection modal**,
       not the flat drill-in the section-3 build introduced. In
       `BrowserComponent`'s narrow-TV activation path, a `Series` item routes to
