@@ -272,6 +272,30 @@ impl App {
         }
     }
 
+    /// Paints cached Series artwork using its portrait inline-detail budget.
+    fn paint_series_image(&mut self, f: &mut Frame, area: Rect, cache_key: &str) {
+        if let Some(image) = self.cached_image_protocol_mut(cache_key) {
+            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
+            let avail = Size {
+                width: area.width,
+                height: area.height,
+            };
+            if let Some(actual) =
+                image.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
+            {
+                f.render_stateful_widget(
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
+                    Rect {
+                        width: actual.width,
+                        height: actual.height,
+                        ..area
+                    },
+                    image,
+                );
+            }
+        }
+    }
+
     /// Fetches (if needed) and paints the image a [`HomeImagePaint`] request
     /// describes, using App's image-cache authority. Shared by the
     /// `App::render_home_list` wrapper (`home.rs`), which computes its own
@@ -315,13 +339,8 @@ impl App {
                 }
                 if show_placeholder {
                     self.render_keep_watching_hero_image(f, area, &cache_key, false);
-                } else if let Some(image) = self.cached_image_protocol_mut(&cache_key) {
-                    type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-                    f.render_stateful_widget(
-                        SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
-                        area,
-                        image,
-                    );
+                } else {
+                    self.paint_series_image(f, area, &cache_key);
                 }
             }
             Some(HomeImagePaint::AudiobookshelfCover {

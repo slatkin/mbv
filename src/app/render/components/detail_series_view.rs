@@ -13,7 +13,7 @@ pub(in crate::app::render) const SERIES_DETAIL_EPISODE_ROWS_ESTIMATE: usize = 8;
 pub(in crate::app::render) const SERIES_DETAIL_TRAILING_BLANK_ROWS: usize = 1;
 pub(in crate::app::render) const SERIES_IMAGE_COLS: u16 = 18;
 pub(in crate::app::render) const SERIES_IMAGE_ROWS: u16 = 12;
-pub(in crate::app::render) const SERIES_IMAGE_PLACEHOLDER_ROWS: u16 = 10;
+pub(in crate::app::render) const SERIES_IMAGE_PLACEHOLDER_ROWS: u16 = SERIES_IMAGE_ROWS;
 
 pub(in crate::app::render) fn series_meta_line(item: &mbv_core::api::EmbyItem) -> String {
     let year_range = match (item.production_year, item.end_year) {

@@ -63,3 +63,7 @@ mod home_video_tests;
 #[cfg(test)]
 #[path = "hero_tests.rs"]
 mod hero_tests;
+
+#[cfg(test)]
+#[path = "detail_series_tests.rs"]
+mod detail_series_tests;
