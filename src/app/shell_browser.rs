@@ -1,8 +1,10 @@
 use super::components::{BrowserComponent, BrowserKey, BrowserKind, ComponentId, ShellRequest};
 use super::shell::Model;
 use super::{ConfirmAction, ConfirmModal, PanelFocus, TabSelection};
+use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use crate::app::render::LibraryListRenderCtx;
 use mbv_core::config::ServiceKind;
+use std::time::Instant;
 
 impl Model {
     /// Route the generic Emby browser's selected-item typed effects (task
@@ -110,14 +112,32 @@ impl Model {
             }
             // Every local browser cursor key (arrows/hjkl, Page keys,
             // Home/End) resolves to an item index inside the component and
-            // arrives here already resolved (task 5.3d, Emby browser local
-            // navigation). `apply_lib_cursor_index` writes it through the App
-            // nav level so `save_default_library_position` /
-            // `mark_library_navigation` / `maybe_fetch_next_page` /
-            // `last_nav_at` idle side effects stay byte-for-byte identical to
-            // the legacy `handle_lib_key` arms.
+            // arrives here already resolved. Keep the resting-position write
+            // and its navigation effects in this shell arm.
             ShellRequest::BrowserCursorIndex { index } => {
-                self.app.apply_lib_cursor_index(lib_idx, index)
+                if lib_idx >= self.app.libs.len() {
+                    return;
+                }
+                let now = Instant::now();
+                let idle = now.duration_since(self.app.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
+                self.app.last_nav_at = now;
+                self.app.mark_library_navigation(now);
+                if self.app.is_feed_home_video_group_view(lib_idx) {
+                    if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
+                        if state.selected_len() > 0 {
+                            state.video_cursor = index;
+                            self.app.save_default_library_position(lib_idx);
+                        }
+                    }
+                    return;
+                }
+                if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
+                    level.set_resting_cursor(index);
+                    self.app.save_default_library_position(lib_idx);
+                }
+                if idle {
+                    self.app.maybe_fetch_next_page(lib_idx, index);
+                }
             }
             // unreachable: shell_messages.rs top-level dispatch routes only the
             // Browser* activate/effect group (BrowserActivate/Play/Enqueue/
@@ -256,9 +276,6 @@ impl Model {
         // reads/writes `feed_home_video.{video_cursor,video_scroll}`. Project
         // the selected group's items with that cursor/scroll and flag the
         // group-pill row so the component's `[`/`]` chord means group cycling.
-        // The component's `BrowserCursorIndex` still lands in
-        // `apply_lib_cursor_index`'s existing `is_feed_home_video_group_view`
-        // branch.
         let context = if self.app.is_feed_home_video_group_view(index) {
             let (cursor, scroll) = self.app.libs[index]
                 .feed_home_video
