@@ -170,7 +170,8 @@ impl Model {
         // the component's `view` is still reached. It paints nothing at narrow
         // until task 3.6 gives it a narrow branch.
         let mut area = self.app.layout.main.wide_music_area;
-        if area.width == 0 || area.height == 0 {
+        let wide = area.width > 0 && area.height > 0;
+        if !wide {
             area = self.app.layout.main.left_area;
         }
         if area.width == 0 || area.height == 0 {
@@ -196,8 +197,10 @@ impl Model {
             });
         if let Some((image_paint, track_hitmap, selected_item_rect)) = projection {
             self.app.paint_music_image(frame, image_paint);
-            self.app.layout.main.wide_music_track_hitmap = track_hitmap;
-            self.app.layout.main.selected_item_rect = selected_item_rect;
+            if wide {
+                self.app.layout.main.wide_music_track_hitmap = track_hitmap;
+                self.app.layout.main.selected_item_rect = selected_item_rect;
+            }
         }
     }
 }
