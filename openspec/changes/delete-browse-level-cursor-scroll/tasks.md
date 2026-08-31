@@ -328,8 +328,11 @@ Their line references predate 1.2a and that re-spelling shifts none of them.
 
 ## 4. Close out
 
-- [ ] 4.1 Split any file pushed over 800 lines. Verify:
+- [x] 4.1 Split any file pushed over 800 lines. Verify:
       `rtk make check-code-file-lines`.
+      Result (`2b91957f`): no-op — the campaign only deleted code/files, grew
+      none. `rtk make check-code-file-lines` → "all governed tracked files are
+      at or below 800 lines".
 - [ ] 4.2 Full gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
       `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`,
       `rtk cargo fmt`, `rtk make check-code-file-lines`.
