@@ -18,30 +18,30 @@
 
 ## 1. Unit 1 — chrome geometry to an arrangement
 
-- [ ] 1.1 Record the starting count: `ast-grep scan --json | jq 'length'` reports
+- [x] 1.1 Record the starting count: `ast-grep scan --json | jq 'length'` reports
       **52**. If it does not, stop and report — the plan is sized against 52.
-- [ ] 1.2 Create `src/app/render/arrangements/chrome.rs` with a
+- [x] 1.2 Create `src/app/render/arrangements/chrome.rs` with a
       `pub(in crate::app) struct ChromeGeometryInput` carrying the values
       `App::compute_chrome_geometry` (`src/app/render/screens/root.rs:75-182`)
       reads from `self`: effective panel mode, terminal width/height, queue column
       width, and panel focus. Verify `rtk cargo check -p mbv` compiles with the
       struct unused.
-- [ ] 1.3 Move the body of `compute_chrome_geometry` into
+- [x] 1.3 Move the body of `compute_chrome_geometry` into
       `pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChromeGeometry`
       in that file — a free function, **not** an `impl App` block (design D1).
       Register the module in `src/app/render/arrangements/mod.rs`. Verify
       `rtk cargo check -p mbv` passes.
-- [ ] 1.4 Replace `compute_chrome_geometry` in
+- [x] 1.4 Replace `compute_chrome_geometry` in
       `src/app/render/screens/root.rs` with a thin `&self` shim that builds
       `ChromeGeometryInput` and calls `chrome_geometry`. Keep its existing
       `pub(in crate::app::render)` visibility so `src/app/render/test_helpers.rs:298`
       still resolves. Verify `rtk cargo nextest run -p mbv` is green.
-- [ ] 1.5 Delete the identity split at `src/app/render/screens/root.rs:232`
+- [x] 1.5 Delete the identity split at `src/app/render/screens/root.rs:232`
       (`let [main_area] = Layout::vertical([Constraint::Min(0)]).areas(area);`) and
       use `area` directly at its one use site. Verify `rtk cargo nextest run -p mbv`
       is green and `ast-grep scan --json | jq '[.[]|select(.ruleId=="no-layout-in-screens")]|length'`
       reports **0**.
-- [ ] 1.6 Drop any `ratatui` imports in `src/app/render/screens/root.rs` that 1.3
+- [x] 1.6 Drop any `ratatui` imports in `src/app/render/screens/root.rs` that 1.3
       and 1.5 orphaned. Verify `rtk cargo clippy --workspace --all-targets` is warning-free
       and `ast-grep scan --json | jq 'length'` reports **≈39** (down from 52).
 
