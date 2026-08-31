@@ -34,7 +34,7 @@
       first that `QueueComponent` has equivalent coverage for each, and add it
       where it does not. Verify: `rtk cargo nextest run -p mbv`;
       `screens/queue.rs` drops from 757 to roughly 430 lines.
-- [ ] 2.3 Delete the orphans this creates, and only those: `queue_row_map`
+- [x] 2.3 Delete the orphans this creates, and only those: `queue_row_map`
       (`layout.rs:112`, write-only — confirm with `rtk grep` before removing),
       and `build_queue_rows` + the `QueueRow` enum + their tests
       (`ui_util.rs:236-327`). Verify: `rtk cargo clippy --workspace
