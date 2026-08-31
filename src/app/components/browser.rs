@@ -449,10 +449,7 @@ impl BrowserComponent {
             .cloned()
     }
 
-    /// Returns the column count of the last painted list geometry used for
-    /// cursor movement. Wide Movies/home-video hero rails are one column;
-    /// otherwise the count comes from the painted list area. The Browser
-    /// mount gate excludes TV and feed home-video-group special cases.
+    /// Handle a mouse event against the component's painted browse geometry.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         let col = mouse.column;
         let row = mouse.row;

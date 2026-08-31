@@ -3,6 +3,7 @@ use crate::app::library_column_width::library_column_count;
 use crate::app::ui_util::move_cursor;
 
 impl BrowserComponent {
+    /// Return the column count used by the painted browse geometry.
     pub(super) fn columns(&self) -> usize {
         if self.wide_movies {
             1
