@@ -204,11 +204,7 @@ impl Component for InlineSearchComponent {
         let context = LibraryListRenderCtx::from_items(items, self.cursor, self.scroll)
             .with_search(self.query.clone(), self.loading);
         let list_area = if self.wide {
-            Rect {
-                y: area.y.saturating_add(1),
-                height: area.height.saturating_sub(1),
-                ..area
-            }
+            area
         } else {
             render_search_box(frame, Rect { height: 1, ..area }, &self.query, self.loading);
             Rect {

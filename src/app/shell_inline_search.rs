@@ -268,7 +268,7 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
-        let wide = shared_hero_presentation(area).is_some();
+        let wide = shared_hero_presentation(self.app.layout.main.left_area).is_some();
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(search) = comp.as_any_mut().downcast_mut::<InlineSearchComponent>() {
                 search.set_wide(wide);
