@@ -288,10 +288,7 @@ fn feed_group_picker_bracket_keys_cycle_groups() {
 #[test]
 fn feed_group_picker_routes_at_visible_narrow_and_wide_widths() {
     let _guard = crate::config::TestStateDirGuard::new();
-    for (width, wide_area) in [
-        (40, ratatui::layout::Rect::default()),
-        (120, ratatui::layout::Rect::new(0, 0, 120, 30)),
-    ] {
+    for width in [40, 120] {
         let mut app = feed_group_picker_app();
         app.terminal_width = width;
         app.panel_focus = PanelFocus::Library;
