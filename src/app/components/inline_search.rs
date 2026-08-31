@@ -281,11 +281,13 @@ mod tests {
     }
 
     #[test]
-    fn inline_library_search_renders_plain_candidates_without_app() {
+    fn inline_library_search_clears_rows_removed_by_filter() {
         let mut component = InlineSearchComponent::new();
-        component.query = "one".into();
         component.set_content(
-            SearchPool::Items(vec![make_item("One", "Movie")]),
+            SearchPool::Items(vec![
+                make_item("LongName", "Movie"),
+                make_item("Short", "Movie"),
+            ]),
             false,
             true,
         );
@@ -293,12 +295,22 @@ mod tests {
         terminal
             .draw(|frame| component.view(frame, frame.area()))
             .unwrap();
-        assert!(terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .any(|cell| cell.symbol() == "O"));
+
+        component.query = "short".into();
+        terminal
+            .draw(|frame| {
+                frame
+                    .buffer_mut()
+                    .cell_mut((10, 1))
+                    .expect("test cell in bounds")
+                    .set_symbol("N");
+                component.view(frame, frame.area());
+            })
+            .unwrap();
+
+        let cells = terminal.backend().buffer().content();
+        assert!(cells.iter().any(|cell| cell.symbol() == "S"));
+        assert!(!cells.iter().any(|cell| cell.symbol() == "N"));
     }
 
     #[test]
