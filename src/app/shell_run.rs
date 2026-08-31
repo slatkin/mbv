@@ -4,7 +4,18 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 impl Model {
+    /// Project inline-search visibility from mounted component state.
+    /// Mount state is the only source of truth.
+    fn project_inline_search_active(&mut self) {
+        self.app.inline_search_active = matches!(
+            self.app.tab,
+            crate::app::TabSelection::EmbyLibrary(index)
+                if self.inline_search_component_id(index).is_some()
+        );
+    }
+
     pub(crate) fn sync_mounted_surfaces(&mut self) {
+        self.project_inline_search_active();
         // Apply App-owned effect handoffs to their mounted components.
         // `sync_home` was deleted (task 5.3d, sync_home mirror deletion):
         // Home content/focus is projected event-driven by
@@ -49,12 +60,9 @@ impl Model {
         // `InlineSearchComponent` overlays `left_area`, the legacy
         // `render_list` must not underpaint the ordinary browse list there.
         // Mount state is the only source of truth (the `App` library-search
-        // state was removed), so compute it once per frame.
-        self.app.inline_search_active = matches!(
-            self.app.tab,
-            crate::app::TabSelection::EmbyLibrary(index)
-                if self.inline_search_component_id(index).is_some()
-        );
+        // state was removed), so compute it once per frame. Startup draws can
+        // reach this method before the first surface-sync pass.
+        self.project_inline_search_active();
         // The mounted `BrowserComponent` owns the narrow generic/Movies/
         // home-video paint (task 3.3); project its active-destination pointer
         // so `render_list` suppresses its now-duplicate narrow branch.

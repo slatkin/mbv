@@ -24,6 +24,47 @@ fn mounted_tv_model() -> Model {
 }
 
 #[test]
+fn sync_projects_inline_search_visibility_before_tv_content() {
+    let mut app = make_movie_app();
+    app.libs[0].library.collection_type = "tvshows".into();
+    app.libs[0].library_total = Some(1000);
+    for item in &mut app.libs[0].nav_stack[0].items {
+        item.item_type = "Series".into();
+    }
+    let mut second_app = make_movie_app();
+    let mut second = second_app.libs.remove(0);
+    second.library.collection_type = "tvshows".into();
+    second.library.id = "tv-library-b".into();
+    second.library_total = Some(1000);
+    for item in &mut second.nav_stack[0].items {
+        item.item_type = "Series".into();
+    }
+    app.libs.push(second);
+    app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
+    let mut model = Model::new(app);
+
+    // Mount A's real inline-search component, then switch to B. The shared
+    // sync seam must refresh the projection before pushing B's TV context.
+    let search_id =
+        crate::app::components::ComponentId::InlineSearch(crate::app::components::BrowserKey {
+            service: mbv_core::config::ServiceKind::Emby,
+            library_id: model.app.libs[0].library.id.clone(),
+            kind: crate::app::components::BrowserKind::TvShows,
+        });
+    model
+        .application
+        .mount(
+            search_id,
+            Box::new(crate::app::components::InlineSearchComponent::new()),
+            vec![],
+        )
+        .unwrap();
+    model.app.tab = TabSelection::EmbyLibrary(1);
+    model.sync_mounted_surfaces();
+    assert!(model.app.should_show_letter_pills(1));
+}
+
+#[test]
 fn push_tv_workspace_content_projects_selected_series_on_mount() {
     let model = mounted_tv_model();
     let id = model
