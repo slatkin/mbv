@@ -281,6 +281,27 @@ mod tests {
     }
 
     #[test]
+    fn inline_library_search_renders_plain_candidates_without_app() {
+        let mut component = InlineSearchComponent::new();
+        component.query = "one".into();
+        component.set_content(
+            SearchPool::Items(vec![make_item("One", "Movie")]),
+            false,
+            true,
+        );
+        let mut terminal = Terminal::new(TestBackend::new(40, 5)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        assert!(terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .any(|cell| cell.symbol() == "O"));
+    }
+
+    #[test]
     fn inline_library_search_mouse_uses_tuirealm_event_directly() {
         let mut component = InlineSearchComponent::new();
         component.query = "on".into();
