@@ -223,9 +223,8 @@ one you're relying on:
      and `rtk ast-grep test -U` regenerates snapshots after an intentional rule
      change.
 
-   The scan catches the common bypasses and nothing subtler. Note that it reports
-   a standing set of pre-existing screen-boundary diagnostics; the bar is that
-   your change adds none, not that the output is empty. It does **not** catch:
+   The scan catches the common bypasses and nothing subtler. The bare
+   `ast-grep scan` gates the whole tree and must be clean. It does **not** catch:
    - **Duplicated arrangement geometry** — a screen that calls an existing
      arrangement correctly but a second, near-identical arrangement was added
      elsewhere instead of extending the first one.
