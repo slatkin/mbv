@@ -285,14 +285,10 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
     }
 }
 
-pub(in crate::app) fn music_album_columns(area: Rect) -> usize {
-    let Some(panes) = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y) else {
-        return 1;
-    };
-    let right_pane =
-        hero_left::hero_on_left_right_pane(panes.right_panel, panes.right_area, PANE_PAD_Y);
-    let browser_area = padded_rect(right_pane.list_panel, PANE_PAD_X, PANE_PAD_Y);
-    crate::app::library_column_width::library_column_count(browser_area.width)
+/// Wide grouped Music paints one full-width album row at a time. Keep the
+/// mounted component's navigation in that same one-dimensional geometry.
+pub(in crate::app) fn music_album_columns(_area: Rect) -> usize {
+    1
 }
 
 pub(in crate::app) fn render_wide_music_group_with_ctx(
@@ -466,6 +462,12 @@ fn render_wide_left_hero(
 mod tests {
     use super::wide_album_metadata;
     use crate::app::tests::make_item;
+    use ratatui::layout::Rect;
+
+    #[test]
+    fn wide_grouped_music_uses_one_navigation_column() {
+        assert_eq!(super::music_album_columns(Rect::new(0, 0, 200, 40)), 1);
+    }
 
     #[test]
     fn wide_album_metadata_removes_artist_and_year_prefix() {

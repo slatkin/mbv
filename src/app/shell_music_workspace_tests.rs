@@ -32,6 +32,8 @@ fn shell_mounts_and_syncs_music_workspace() {
         message,
         Some(Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
     ));
+    // Wide grouped Music paints full-width album rows, so bare horizontal
+    // navigation must be swallowed rather than pretending there are columns.
     let message = model
         .application
         .get_component_mut(&id)
@@ -40,10 +42,7 @@ fn shell_mounts_and_syncs_music_workspace() {
             code: Key::Char('h'),
             modifiers: KeyModifiers::NONE,
         }));
-    assert!(matches!(
-        message,
-        Some(Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
-    ));
+    assert_eq!(message, None);
 }
 
 #[test]
