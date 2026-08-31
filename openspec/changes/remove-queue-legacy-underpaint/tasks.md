@@ -53,7 +53,7 @@
       call is reinstated.
 - [x] 3.3 Confirm #623's repro by hand: arrow through a multi-item queue and
       see no ghost row. Verify: stated, with the #623 comment updated.
-- [ ] 3.4 Full gate: `rtk cargo check -p mbv`,
+- [x] 3.4 Full gate: `rtk cargo check -p mbv`,
       `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace
       --all-targets`, `rtk ast-grep scan`, `rtk cargo fmt`,
       `rtk make check-code-file-lines`.
