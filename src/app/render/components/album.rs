@@ -51,6 +51,8 @@ pub(in crate::app::render) struct GroupedAlbumRenderCtx<'a> {
 /// this in the shell), gathers the explicit render context, runs the App-free
 /// painter, and executes the returned `MusicImagePaint` for the selected
 /// album's hero art.
+// TODO(interactive-surface-ledger): delete with legacy album rows (pinned by music characterization tests).
+#[allow(dead_code)]
 pub(in crate::app::render) fn render_grouped_album_rows(
     app: &mut App,
     f: &mut Frame,

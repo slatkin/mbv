@@ -1,7 +1,6 @@
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::library_column_count;
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
-use crate::app::App;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
@@ -37,18 +36,5 @@ pub(in crate::app) fn render_generic_movies_home_video_rows_with_ctx(
         } else {
             super::list_plain::render_plain_rows(f, row_ctx, layout)
         }
-    }
-}
-
-impl App {
-    /// Whether `lib_idx` is the dedicated Movies library (a
-    /// `collection_type == "movies"` library that is not routed through the
-    /// feed/home-video group view). Only this library gets the wide
-    /// hero-on-left arrangement; home videos, podcasts, TV, and music keep
-    /// their own.
-    pub(in crate::app::render) fn is_wide_movies_library(&self, lib_idx: usize) -> bool {
-        self.libs.get(lib_idx).is_some_and(|lib| {
-            lib.library.collection_type == "movies" && !self.is_feed_home_video_group_view(lib_idx)
-        })
     }
 }

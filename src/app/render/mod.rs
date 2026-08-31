@@ -88,7 +88,7 @@ pub(in crate::app) use components::widgets::{render_count_label, render_pill_bar
 #[allow(unused_imports)]
 pub(in crate::app) use components::chrome::{
     left_panel_content_area, panel_content_area, panel_row_text_width, render_panel_row,
-    render_panel_shell, render_panel_shell_at, render_sidebar_scrollbar, toast_line,
+    render_panel_shell, render_panel_shell_at, render_sidebar_scrollbar,
 };
 
 // Re-exports so paths that resolved at `render::X` (or, from render's other

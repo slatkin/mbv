@@ -10,14 +10,3 @@ pub(in crate::app::render) struct BookHeroPlan {
     pub(in crate::app::render) placeholder: bool,
     pub(in crate::app::render) content_rows: u16,
 }
-
-impl BookHeroPlan {
-    pub(in crate::app::render) fn constrained_to_height(&self, height: u16) -> Self {
-        let image_height = self.image_height.min(height.saturating_sub(1));
-        Self {
-            image_height,
-            content_rows: self.content_rows.min(height),
-            ..self.clone()
-        }
-    }
-}

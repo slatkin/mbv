@@ -237,9 +237,7 @@ fn render_narrow_podcast(
     }
     let cursor_row =
         state.cursor() / library_column_width::library_column_count(list_area.width).max(1);
-    let Some(flow) = inline_detail_flow(cursor_row, hero_rows, list_area.height, *scroll) else {
-        return None;
-    };
+    let flow = inline_detail_flow(cursor_row, hero_rows, list_area.height, *scroll)?;
     *scroll = flow.offset;
     let hero_area = Rect {
         x: list_area.x,
