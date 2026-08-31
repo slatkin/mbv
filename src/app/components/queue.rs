@@ -391,7 +391,9 @@ impl Default for QueueComponent {
 
 impl Component for QueueComponent {
     fn view(&mut self, frame: &mut Frame, area: ratatui::layout::Rect) {
-        let area = if self.area.width > 0 { self.area } else { area };
+        // The shell passes the current layout area every frame. Never reuse the
+        // previous area when this panel is hidden or resized: stale geometry
+        // would repaint the old queue panel and leave a ghost behind.
         self.area = area;
         self.geometry = QueueRenderGeometry::default();
         if let (Some(title_area), Some(title)) = (self.title_area, self.title.as_ref()) {
