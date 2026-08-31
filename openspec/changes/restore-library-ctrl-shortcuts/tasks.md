@@ -59,12 +59,12 @@
 
 ## 6. Tests (D5)
 
-- [ ] 6.1 Component tests in
+- [x] 6.1 Component tests in
       `src/app/components/music_workspace_component_tests.rs`:
       `ctrl_s_on_album_emits_library_shuffle`,
       `ctrl_s_with_track_focus_does_not_shuffle`,
       `ctrl_p_empty_list_is_unclaimed`. Verify: `rtk cargo nextest run -p mbv`.
-- [ ] 6.2 Component tests in
+- [x] 6.2 Component tests in
       `src/app/components/tv_workspace_component_tests.rs`:
       `ctrl_r_emits_library_rescan`,
       `ctrl_w_emits_library_toggle_watched`. Verify: `rtk cargo nextest run -p mbv`.
