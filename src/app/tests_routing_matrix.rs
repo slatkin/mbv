@@ -27,7 +27,9 @@ use crate::app::components::{
 };
 use crate::app::components::msg::{ConfirmIntent, ContextMenuIntent};
 use crate::app::input_resolver::KeyChord;
-use crate::app::router::{resolve_router_outcome, RouterOutcome, RouterSnapshot};
+use crate::app::router::{
+    resolve_router_outcome, resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot,
+};
 use crate::app::shell::apply_router_outcome;
 use crate::app::types_playback::QueueScope;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -73,6 +75,23 @@ fn fold_tick_with_outcome(
     apply_router_outcome(messages, focused.as_ref(), &outcome)
 }
 
+/// Like `fold_tick`, but routes through the focus-aware entrypoint so the
+/// "the focused leaf is the blocking overlay / a text entry" rules apply.
+fn fold_tick_focused(
+    leaf: Option<Msg>,
+    key: KeyEvent,
+    focused: Option<ComponentId>,
+    snapshot: RouterSnapshot,
+) -> Vec<Msg> {
+    let mut messages = Vec::new();
+    if let Some(leaf) = leaf {
+        messages.push(leaf);
+    }
+    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
+    let outcome = resolve_router_outcome_with_focused(key, &snapshot, focused.as_ref());
+    apply_router_outcome(messages, focused.as_ref(), &outcome)
+}
+
 fn idle_snapshot() -> RouterSnapshot {
     RouterSnapshot {
         ..RouterSnapshot::default()
@@ -89,11 +108,81 @@ fn active_snapshot() -> RouterSnapshot {
 
 // ── U2 coverage rows ────────────────────────────────────────────────────────
 
-/// Blocking overlay `Swallow`s an unbound chord: the leaf (the overlay) is the
-/// active component; the router's `Swallow` discards even its request and runs
-/// nothing.
+/// Post-fix: the focused leaf IS the blocking overlay, so the router no longer
+/// swallows the overlay's own key. An unbound chord (`x` while a Confirm modal
+/// owns focus) falls through and the overlay's typed `ConfirmIntent::Dismiss`
+/// request stands.
 #[test]
-fn blocking_overlay_swallows_unbound_chord() {
+fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
+    let snapshot = RouterSnapshot {
+        blocking_overlay_open: true,
+        ..RouterSnapshot::default()
+    };
+    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Dismiss)));
+    let out = fold_tick_focused(
+        leaf,
+        key(KeyCode::Char('x')),
+        Some(ComponentId::Modal(ModalId::Confirm)),
+        snapshot,
+    );
+    assert_eq!(out.len(), 1, "the overlay's own request must stand");
+    assert!(matches!(
+        &out[0],
+        Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Dismiss))
+    ));
+}
+
+/// Post-fix: a global chord (`q` would otherwise quit) reaches the focused
+/// blocking overlay instead of being swallowed; the overlay's
+/// `ConfirmIntent::Accept` request stands.
+#[test]
+fn focused_blocking_overlay_keeps_its_own_global_chord() {
+    let snapshot = RouterSnapshot {
+        blocking_overlay_open: true,
+        ..RouterSnapshot::default()
+    };
+    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Accept)));
+    let out = fold_tick_focused(
+        leaf,
+        key(KeyCode::Char('q')),
+        Some(ComponentId::Modal(ModalId::Confirm)),
+        snapshot,
+    );
+    assert_eq!(
+        out.len(),
+        1,
+        "a global quit chord must not be swallowed away from the focused overlay"
+    );
+    assert!(matches!(
+        &out[0],
+        Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Accept))
+    ));
+}
+
+/// Post-fix: with the blocking overlay focused, both an unmatched chord and a
+/// global chord resolve to `FallThrough` in the central router.
+#[test]
+fn focused_blocking_overlay_falls_through_unmatched_and_global_chords() {
+    let snapshot = RouterSnapshot {
+        blocking_overlay_open: true,
+        ..RouterSnapshot::default()
+    };
+    let focused = ComponentId::Modal(ModalId::Confirm);
+
+    for code in [KeyCode::Char('z'), KeyCode::Char('q')] {
+        assert_eq!(
+            resolve_router_outcome_with_focused(key(code), &snapshot, Some(&focused)),
+            RouterOutcome::FallThrough,
+            "the focused blocking overlay must keep {code:?}"
+        );
+    }
+}
+
+/// The old invariant, preserved via an explicit outcome: when the router
+/// returns `Swallow` (its "blocking overlay, no leaf request" path),
+/// `apply_router_outcome` discards the leaf's message and runs nothing.
+#[test]
+fn injected_swallow_discards_leaf_message() {
     let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Dismiss)));
     let out = fold_tick_with_outcome(
         leaf,
@@ -105,38 +194,6 @@ fn blocking_overlay_swallows_unbound_chord() {
         out.is_empty(),
         "Swallow must discard the leaf's message and run nothing"
     );
-}
-
-/// Blocking overlay `Swallow`s a global chord (`q` would otherwise quit).
-#[test]
-fn blocking_overlay_swallows_global_chord() {
-    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Dismiss)));
-    let out = fold_tick_with_outcome(
-        leaf,
-        key(KeyCode::Char('q')),
-        Some(ComponentId::Modal(ModalId::Confirm)),
-        RouterOutcome::Swallow,
-    );
-    assert!(
-        out.is_empty(),
-        "a blocking overlay's Swallow must swallow even a global quit chord"
-    );
-}
-
-#[test]
-fn live_blocking_overlay_swallows_unmatched_and_global_chords() {
-    let snapshot = RouterSnapshot {
-        blocking_overlay_open: true,
-        ..RouterSnapshot::default()
-    };
-
-    for code in [KeyCode::Char('z'), KeyCode::Char('q')] {
-        assert_eq!(
-            resolve_router_outcome(key(code), &snapshot),
-            RouterOutcome::Swallow,
-            "blocking overlays must swallow {code:?} in the central router"
-        );
-    }
 }
 
 /// Router `Command` discards the focused leaf's message for that tick and
@@ -570,5 +627,129 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
         ),
         RouterOutcome::Swallow,
         "unhandled Alt chords must not leak into destination handling"
+    );
+}
+
+// ── task 5.2: text-entry focus keeps global bindings from firing ────────────
+
+fn text_entry_snapshot() -> RouterSnapshot {
+    RouterSnapshot {
+        text_entry_focused: true,
+        ..RouterSnapshot::default()
+    }
+}
+
+fn browser_key() -> BrowserKey {
+    BrowserKey {
+        service: ServiceKind::Emby,
+        library_id: "lib".into(),
+        kind: BrowserKind::Generic,
+    }
+}
+
+#[test]
+fn quit_global_does_not_fire_in_search_sidebar() {
+    let focused = ComponentId::Overlay(OverlayId::Search);
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char('q')),
+            &text_entry_snapshot(),
+            Some(&focused),
+        ),
+        RouterOutcome::FallThrough,
+        "`q` is character input in the search sidebar, not Quit"
+    );
+}
+
+#[test]
+fn panel_mode_cycle_global_does_not_fire_in_search_sidebar() {
+    let focused = ComponentId::Overlay(OverlayId::Search);
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char('x')),
+            &text_entry_snapshot(),
+            Some(&focused),
+        ),
+        RouterOutcome::FallThrough,
+        "`x` is character input in the search sidebar, not panel-mode cycle"
+    );
+}
+
+#[test]
+fn library_tab_jump_does_not_fire_in_search_sidebar() {
+    let focused = ComponentId::Overlay(OverlayId::Search);
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char('1')),
+            &text_entry_snapshot(),
+            Some(&focused),
+        ),
+        RouterOutcome::FallThrough,
+        "a digit is character input in the search sidebar, not a tab jump"
+    );
+}
+
+#[test]
+fn quit_global_does_not_fire_in_inline_search() {
+    let focused = ComponentId::InlineSearch(browser_key());
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char('q')),
+            &text_entry_snapshot(),
+            Some(&focused),
+        ),
+        RouterOutcome::FallThrough,
+        "`q` is character input in inline library search, not Quit"
+    );
+}
+
+#[test]
+fn library_tab_jump_with_modifiers_is_swallowed() {
+    let focused = ComponentId::Browser(browser_key());
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            KeyEvent::new(KeyCode::Char('1'), KeyModifiers::ALT),
+            &idle_snapshot(),
+            Some(&focused),
+        ),
+        RouterOutcome::Swallow,
+        "`Alt+1` is claimed by the policy's alt_swallow entry, not a tab jump"
+    );
+}
+
+// ── task 5.3: ConfirmIntent::Accept re-encodes to the `y` chord ─────────────
+
+/// `handle_confirm_intent(Accept)` must re-encode to `KeyCode::Char('y')` so it
+/// reaches the action handler's `Char('y')`-only accept arm for
+/// `RemoveActiveQueueItem`.
+#[test]
+fn confirm_accept_re_encodes_to_y_chord() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = crate::app::tests::make_app_stub();
+    app.player_tab
+        .set_items(crate::app::tests::make_items(3), app.player_tab.queue_cursor);
+    app.player_tab.queue_cursor = 1;
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.current_idx = 1;
+    }
+    app.remove_from_queue(1);
+    assert!(
+        matches!(
+            app.pending_overlay,
+            Some(crate::app::types_overlay::OverlayRequest::Confirm(_))
+        ),
+        "removing the active queue item asks for confirmation"
+    );
+
+    let mut model = crate::app::shell::Model::new(app);
+    model.sync_mounted_surfaces();
+    model.handle_confirm_intent(ConfirmIntent::Accept);
+
+    assert_eq!(
+        model.app.player_tab.emby_items().len(),
+        2,
+        "Accept re-encodes to Char('y') and reaches the RemoveActiveQueueItem accept arm"
     );
 }
