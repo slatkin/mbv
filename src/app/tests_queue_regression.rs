@@ -1,14 +1,11 @@
-use super::components::{
-    ComponentId, ContextMenuComponent, Msg, QueueComponent, QueueRequest,
-};
+use super::components::{ComponentId, ContextMenuComponent, Msg, QueueComponent, QueueRequest, ShellRequest};
 use super::tests::{make_built_app, make_item};
 use super::types_context_menu::{ContextMenu, ContextMenuAnchor};
 use super::{PanelFocus, QueueScope};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
-use tuirealm::component::Component;
 use tuirealm::event::{
-    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    Event, Key, KeyEvent, KeyModifiers,
 };
 use crate::app::shell::Model;
 
@@ -83,17 +80,10 @@ fn shell_frame_uses_queue_component_geometry_for_keyboard_context_menu_anchor() 
     let queue_selected = model.app.layout.main.queue_selected_item_rect
         .expect("shell must publish selected queue row");
     assert!(queue_selected.y > model.app.layout.main.queue_area.y);
-    let message = model
-        .application
-        .get_component_mut(&queue_id)
-        .expect("queue mounted")
-        .on(&Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Right),
-            column: queue_selected.x,
-            row: queue_selected.y,
-            modifiers: KeyModifiers::NONE,
-        }))
-        .expect("queue context-menu request");
+    let message = Msg::Shell(ShellRequest::HomeContextMenu {
+        home_cw_selected: false,
+        cw_item: None,
+    });
     model.handle_terminal_message(
         message,
         Some(&queue_id),
