@@ -43,8 +43,7 @@ fn sync_projects_inline_search_visibility_before_tv_content() {
     app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
     let mut model = Model::new(app);
 
-    // Mount A's real inline-search component, then switch to B. The shared
-    // sync seam must refresh the projection before pushing B's TV context.
+    // Simulate the stale projection left by a previous tick while A was active.
     let search_id =
         crate::app::components::ComponentId::InlineSearch(crate::app::components::BrowserKey {
             service: mbv_core::config::ServiceKind::Emby,
@@ -59,9 +58,23 @@ fn sync_projects_inline_search_visibility_before_tv_content() {
             vec![],
         )
         .unwrap();
+    model.app.inline_search_active = true;
     model.app.tab = TabSelection::EmbyLibrary(1);
     model.sync_mounted_surfaces();
-    assert!(model.app.should_show_letter_pills(1));
+
+    let id = model
+        .tv_workspace_id
+        .as_ref()
+        .expect("TV workspace mounted");
+    let component = model
+        .application
+        .get_component(id)
+        .expect("TV workspace component mounted")
+        .as_any()
+        .downcast_ref::<TvWorkspaceComponent>()
+        .expect("TV workspace component type");
+    assert!(component.show_letter_pills());
+    assert!(!model.app.inline_search_active);
 }
 
 #[test]

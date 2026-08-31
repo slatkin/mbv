@@ -102,6 +102,11 @@ impl TvWorkspaceComponent {
         self.cursor
     }
 
+    /// Whether letter pills are enabled in the pushed context.
+    pub(in crate::app) fn show_letter_pills(&self) -> bool {
+        self.context.show_letter_pills
+    }
+
     /// The scroll offset the component tracks for its series list. Read by
     /// the breakpoint hand-off so the resting `BrowseLevel` scroll matches
     /// the wide workspace before the narrow `BrowserComponent` adopts it.
