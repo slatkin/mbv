@@ -547,16 +547,12 @@ impl App {
                         )
                     )
                 });
+                // `from_media_type` maps every ABS media type to exactly one of
+                // Book | Podcast, so the non-book arm *is* the podcast surface;
+                // a kind guard here would be unreachable branch weight.
                 if is_book {
                     layout.audiobookshelf_book_area = area;
-                } else if matches!(
-                    self.tab
-                        .audiobookshelf_index()
-                        .and_then(|index| self.audiobookshelf_kind_at(index)),
-                    Some(
-                        crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast
-                    )
-                ) {
+                } else {
                     layout.audiobookshelf_podcast_area = area;
                 }
             }
