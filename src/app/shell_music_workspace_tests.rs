@@ -10,10 +10,15 @@ use ratatui::Terminal;
 use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
-
 #[test]
 fn music_mouse_album_click_emits_and_shell_applies_cursor() {
-    let mut model = Model::new(make_music_group_app());
+    let mut app = make_music_group_app();
+    let mut second_album = make_item("Second Album", "MusicAlbum");
+    second_album.id = "album-2".into();
+    second_album.artist = "Alpha".into();
+    app.libs[0].nav_stack[1].items.push(second_album);
+    let mut model = Model::new(app);
+    assert_eq!(model.app.libs[0].nav_stack[1].resting().cursor(), 0);
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
     model.sync_music_workspace();
@@ -39,11 +44,12 @@ fn music_mouse_album_click_emits_and_shell_applies_cursor() {
     let (row, target) = left_row_targets
         .iter()
         .enumerate()
-        .find_map(|(row, target)| match target {
+        .filter_map(|(row, target)| match target {
             Some(LibraryRowTarget::Album(album)) => Some((row, *album)),
             _ => None,
         })
-        .unwrap();
+        .nth(1)
+        .expect("second painted album target");
     let message = model
         .application
         .get_component_mut(&id)
@@ -61,8 +67,7 @@ fn music_mouse_album_click_emits_and_shell_applies_cursor() {
             kind: AlbumCursorKind::Move
         }))
     );
-    let mut music_resize = false;
-    let mut tv_resize = false;
+    let (mut music_resize, mut tv_resize) = (false, false);
     model.handle_terminal_message(
         message.expect("album cursor request"),
         Some(&id),
@@ -71,7 +76,6 @@ fn music_mouse_album_click_emits_and_shell_applies_cursor() {
     );
     assert_eq!(model.app.libs[0].nav_stack[1].resting().cursor(), target);
 }
-
 #[test]
 fn shell_mounts_and_syncs_music_workspace() {
     let mut model = Model::new(make_music_group_app());
@@ -110,13 +114,11 @@ fn shell_mounts_and_syncs_music_workspace() {
         assert_eq!(message, None, "unexpected claim for {code:?}");
     }
 }
-
 #[test]
 fn push_music_workspace_fetches_selected_album_tracks() {
     let mut model = Model::new(make_music_group_app());
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
-
     let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
     client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
         server_url: "http://127.0.0.1:1".into(),
@@ -127,7 +129,6 @@ fn push_music_workspace_fetches_selected_album_tracks() {
         std::sync::Mutex::new(client),
     ));
     model.sync_music_workspace();
-
     assert!(model.app.album_tracks_loading.contains("album-1"));
     let component = model
         .application
