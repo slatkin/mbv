@@ -18,7 +18,7 @@ use super::msg::{Msg, ShellRequest, TvHit, TvHitRegion};
 use super::user_event::UserEvent;
 #[cfg(test)]
 use crate::app::layout::LayoutMain;
-use crate::app::render::{render_wide_tv_with_ctx, TvWideRenderCtx};
+use crate::app::render::{render_wide_tv_with_ctx, HomeImagePaint, TvWideRenderCtx};
 use crate::app::ui_util::move_cursor;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -37,6 +37,7 @@ pub struct TvWorkspaceComponent {
     initialized: bool,
     last_series_id: Option<String>,
     layout: crate::app::layout::LayoutMain,
+    image_paint: Option<HomeImagePaint>,
 }
 
 impl TvWorkspaceComponent {
@@ -60,6 +61,7 @@ impl TvWorkspaceComponent {
             initialized: false,
             last_series_id: None,
             layout: Default::default(),
+            image_paint: None,
         }
     }
 
@@ -123,6 +125,10 @@ impl TvWorkspaceComponent {
     pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
         self.cursor = cursor.min(self.context.list.item_count().saturating_sub(1));
         self.scroll = scroll;
+    }
+
+    pub(in crate::app) fn take_image_paint(&mut self) -> Option<HomeImagePaint> {
+        self.image_paint.take()
     }
 
     pub(in crate::app) fn selected_item_id(&self) -> Option<String> {
@@ -526,13 +532,17 @@ impl Default for TvWorkspaceComponent {
 impl Component for TvWorkspaceComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = Default::default();
+        self.image_paint = None;
         let context = self.context.clone().with_local_state(
             self.cursor,
             self.scroll,
             self.season_cursor,
             self.episode_cursor,
         );
-        self.scroll = render_wide_tv_with_ctx(frame, area, &context, &mut self.layout);
+        let (scroll, image_paint) =
+            render_wide_tv_with_ctx(frame, area, &context, &mut self.layout);
+        self.scroll = scroll;
+        self.image_paint = image_paint;
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

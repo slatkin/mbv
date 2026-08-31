@@ -2,8 +2,10 @@ use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
-use crate::app::render::components::hero::{HeroContent, HeroLine};
+use crate::app::render::components::detail_series_view::{SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS};
+use crate::app::render::components::hero::{HeroContent, HeroImage, HeroLine};
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
+use crate::app::render::HomeImagePaint;
 use crate::app::render::{render_pill_bar, render_placeholder, MarkerEdge, PillBar};
 use crate::app::{palette, App, PanelFocus, SeriesDetail};
 use mbv_core::api::EmbyItem;
@@ -24,6 +26,8 @@ pub(in crate::app) struct TvWideRenderCtx {
     pub(in crate::app) episode_cursor: Option<usize>,
     pub(in crate::app) focused: bool,
     pub(in crate::app) show_letter_pills: bool,
+    pub(in crate::app) images_enabled: bool,
+    pub(in crate::app) image_loading: bool,
 }
 
 impl TvWideRenderCtx {
@@ -44,7 +48,19 @@ impl TvWideRenderCtx {
             episode_cursor,
             focused,
             show_letter_pills,
+            images_enabled: true,
+            image_loading: true,
         }
+    }
+
+    pub(in crate::app) fn with_image_state(
+        mut self,
+        images_enabled: bool,
+        image_loading: bool,
+    ) -> Self {
+        self.images_enabled = images_enabled;
+        self.image_loading = image_loading;
+        self
     }
 
     pub(in crate::app) fn with_local_state(
@@ -130,13 +146,13 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     area: Rect,
     ctx: &TvWideRenderCtx,
     layout: &mut LayoutMain,
-) -> usize {
+) -> (usize, Option<HomeImagePaint>) {
     layout.tv_wide_episode_rows.clear();
     layout.tv_wide_season_tabs.clear();
     layout.tv_wide_area = area;
 
     let Some(panes) = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y) else {
-        return 0;
+        return (0, None);
     };
     let left_panel = panes.left_panel;
     let right_panel = panes.right_panel;
@@ -152,7 +168,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
         left_panel,
     );
-    if !render_tv_series_selection(
+    let (selection_rendered, image_paint) = render_tv_series_selection(
         f,
         left_area,
         episode_focused,
@@ -161,7 +177,10 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         ctx.season_cursor,
         ctx.episode_cursor,
         layout,
-    ) {
+        ctx.images_enabled,
+        ctx.image_loading,
+    );
+    if !selection_rendered {
         render_placeholder(f, left_area, " Loading\u{2026}");
     }
 
@@ -211,7 +230,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         layout,
     );
     hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
-    final_scroll
+    (final_scroll, image_paint)
 }
 
 fn render_tv_series_selection(
@@ -223,9 +242,11 @@ fn render_tv_series_selection(
     season_cursor: usize,
     episode_cursor: Option<usize>,
     layout: &mut LayoutMain,
-) -> bool {
+    images_enabled: bool,
+    image_loading: bool,
+) -> (bool, Option<HomeImagePaint>) {
     let Some(item) = selected_series else {
-        return false;
+        return (false, None);
     };
     let title = item.display_name();
     let meta = super::detail_series_view::series_meta_line(item);
@@ -242,23 +263,31 @@ fn render_tv_series_selection(
             show_playing: false,
             unconditional_spacer_after_meta: true,
             lines,
-            image: None,
+            image: (images_enabled).then_some(HeroImage {
+                actual_w: SERIES_IMAGE_COLS,
+                height: SERIES_IMAGE_ROWS,
+            }),
         },
         focused,
     );
+    let image_paint = result.img_rect.map(|image_area| HomeImagePaint::Series {
+        area: image_area,
+        item: Box::new(item.clone()),
+        show_placeholder: image_loading,
+    });
     let Some(detail) = detail else {
         render_placeholder(
             f,
             Rect::new(area.x, result.next_row, area.width, 1),
             " Loading\u{2026}",
         );
-        return true;
+        return (true, image_paint);
     };
     let Some(season) = detail.seasons.get(season_cursor) else {
-        return true;
+        return (true, image_paint);
     };
     if result.next_row >= area.bottom() {
-        return true;
+        return (true, image_paint);
     }
     let labels: Vec<String> = detail
         .seasons
@@ -293,7 +322,7 @@ fn render_tv_series_selection(
                 " Loading\u{2026}"
             },
         );
-        return true;
+        return (true, image_paint);
     }
     let start = episode_cursor
         .map(|cursor| cursor.saturating_sub(visible.saturating_sub(1)))
@@ -345,7 +374,7 @@ fn render_tv_series_selection(
         Table::new(rows, [Constraint::Min(10), Constraint::Length(7)]).column_spacing(1),
         Rect::new(area.x, first_row, area.width, visible as u16),
     );
-    true
+    (true, image_paint)
 }
 
 #[cfg(test)]

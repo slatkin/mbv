@@ -238,6 +238,9 @@ impl Model {
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
+        let image_loading = selected_series
+            .as_ref()
+            .is_some_and(|item| self.app.series_detail_loading.contains(&item.id));
         let context = TvWideRenderCtx::new(
             list,
             selected_series,
@@ -246,7 +249,8 @@ impl Model {
             None,
             matches!(self.app.effective_panel_focus(), PanelFocus::Library),
             self.app.should_show_letter_pills(index),
-        );
+        )
+        .with_image_state(self.app.images_enabled(), image_loading);
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(tv) = comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>() {
                 tv.set_content(context);
@@ -266,6 +270,12 @@ impl Model {
             return;
         }
         self.application.view(id, frame, area);
+        let image_paint = self
+            .application
+            .get_component_mut(id)
+            .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
+            .and_then(TvWorkspaceComponent::take_image_paint);
+        self.app.paint_home_image(frame, image_paint);
     }
 }
 

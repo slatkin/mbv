@@ -3,6 +3,7 @@ use super::*;
 use crate::app::components::TvWorkspaceComponent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::test_helpers::buffer_to_string;
+use crate::app::render::HomeImagePaint;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, SeriesDetail, TabSelection};
 use ratatui::backend::TestBackend;
@@ -81,6 +82,27 @@ fn tv_app() -> App {
         },
     );
     app
+}
+
+#[test]
+fn wide_tv_requests_selected_series_primary_image_with_budget_and_placeholder() {
+    let app = tv_app();
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(app.wide_tv_render_ctx(0, true, None));
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal.draw(|f| component.view(f, f.area())).unwrap();
+    match component.take_image_paint() {
+        Some(HomeImagePaint::Series {
+            area,
+            item,
+            show_placeholder,
+        }) => {
+            assert_eq!(item.id, "series");
+            assert_eq!((area.width, area.height), (18, 12));
+            assert!(show_placeholder);
+        }
+        _ => panic!("expected selected Series image request"),
+    }
 }
 
 #[test]
