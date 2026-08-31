@@ -52,7 +52,7 @@
 
 ## 5. Claim the chords in the TV component (D3)
 
-- [ ] 5.1 In `TvWorkspaceComponent::handle_key`, add `Ctrl+P/A/W/S/R` and
+- [x] 5.1 In `TvWorkspaceComponent::handle_key`, add `Ctrl+P/A/W/S/R` and
       bare `r` arms before the letter-pill arm, resolving from
       `self.selected_item()` with the pane-correct `EmbyItem` per 1.1.
       Verify: `rtk cargo check -p mbv`.
