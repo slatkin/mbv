@@ -175,13 +175,6 @@ impl MusicWorkspaceComponent {
         self.context.focused && self.track_cursor.is_none()
     }
 
-    /// Whether the active panel is the Library panel (track-mode keys are
-    /// only tracked while the Library panel owns the keys -- with the Queue
-    /// panel focused, Up/Down etc. keep their queue meaning).
-    fn library_panel_active(&self) -> bool {
-        self.context.focused
-    }
-
     pub(in crate::app) fn track_cursor(&self) -> Option<usize> {
         self.track_cursor
     }
@@ -265,15 +258,11 @@ impl MusicWorkspaceComponent {
             // focused and the Library panel owns the keys; with the Queue
             // panel focused the keys are left unclaimed for the central
             // router.
-            Key::Up | Key::Char('k')
-                if self.track_cursor.is_some() && self.library_panel_active() =>
-            {
+            Key::Up | Key::Char('k') if self.track_cursor.is_some() && self.context.focused => {
                 self.move_track(-1);
                 None
             }
-            Key::Down | Key::Char('j')
-                if self.track_cursor.is_some() && self.library_panel_active() =>
-            {
+            Key::Down | Key::Char('j') if self.track_cursor.is_some() && self.context.focused => {
                 self.move_track(1);
                 None
             }
@@ -282,11 +271,11 @@ impl MusicWorkspaceComponent {
             Key::Char('a')
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && self.track_cursor.is_some()
-                    && self.library_panel_active() =>
+                    && self.context.focused =>
             {
                 Some(Msg::Shell(ShellRequest::MusicTrackEnqueue))
             }
-            Key::Char('.') if self.track_cursor.is_some() && self.library_panel_active() => {
+            Key::Char('.') if self.track_cursor.is_some() && self.context.focused => {
                 Some(Msg::Shell(ShellRequest::MusicTrackContextMenu))
             }
             // `[`/`]` at the album-list level cycle the App-owned group pill.
