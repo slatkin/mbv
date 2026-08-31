@@ -283,12 +283,8 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
     }
 }
 
-/// Wide grouped Music paints one full-width album row at a time. Keep the
-/// mounted component's navigation in that same one-dimensional geometry.
-pub(in crate::app) fn music_album_columns(_area: Rect) -> usize {
-    1
-}
-
+/// Wide grouped Music paints one full-width album row at a time. The mounted
+/// component's navigation uses that same one-dimensional geometry.
 pub(in crate::app) fn render_wide_music_group_with_ctx(
     f: &mut Frame,
     area: Rect,
@@ -460,13 +456,6 @@ fn render_wide_left_hero(
 mod tests {
     use super::wide_album_metadata;
     use crate::app::tests::make_item;
-    use ratatui::layout::Rect;
-
-    #[test]
-    fn wide_grouped_music_uses_one_navigation_column() {
-        assert_eq!(super::music_album_columns(Rect::new(0, 0, 200, 40)), 1);
-    }
-
     #[test]
     fn wide_album_metadata_removes_artist_and_year_prefix() {
         let mut album = make_item("Bob Dylan (1970) New Morning", "MusicAlbum");

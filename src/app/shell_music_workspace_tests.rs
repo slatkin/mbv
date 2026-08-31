@@ -96,17 +96,19 @@ fn shell_mounts_and_syncs_music_workspace() {
         message,
         Some(Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
     ));
-    // Wide grouped Music paints full-width album rows, so bare horizontal
-    // navigation must be swallowed rather than pretending there are columns.
-    let message = model
-        .application
-        .get_component_mut(&id)
-        .unwrap()
-        .on(&Event::Keyboard(KeyEvent {
-            code: Key::Char('h'),
-            modifiers: KeyModifiers::NONE,
-        }));
-    assert_eq!(message, None);
+    // Grouped Music paints one album per row; horizontal keys fall through to
+    // the central router rather than being claimed by this component.
+    for code in [Key::Left, Key::Right, Key::Char('h'), Key::Char('l')] {
+        let message = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .on(&Event::Keyboard(KeyEvent {
+                code,
+                modifiers: KeyModifiers::NONE,
+            }));
+        assert_eq!(message, None, "unexpected claim for {code:?}");
+    }
 }
 
 #[test]

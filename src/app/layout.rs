@@ -209,14 +209,6 @@ impl LayoutMain {
         self.wide_music_right_area.width > 0 && self.wide_music_right_area.height > 0
     }
 
-    /// Whether the wide Movies hero-on-left layout rendered this frame.
-    /// The right rail is only set by the wide Movies renderer, so it is a
-    /// reliable signal that cursor movement should stride the one-column
-    /// right-rail list (see `App::current_library_columns`).
-    pub(crate) fn is_wide_movies_active(&self) -> bool {
-        self.movies_wide_right_area.width > 0 && self.movies_wide_right_area.height > 0
-    }
-
     pub(crate) fn is_wide_tv_active(&self) -> bool {
         self.tv_wide_right_area.width > 0 && self.tv_wide_right_area.height > 0
     }

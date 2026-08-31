@@ -324,28 +324,6 @@ impl MusicWorkspaceComponent {
                     kind: AlbumCursorKind::Move,
                 }))
             }
-            Key::Left | Key::Char('h')
-                if self.album_columns > 1 && self.can_emit_album_cursor() =>
-            {
-                let target = self
-                    .move_album_rows(-1, 1, true)
-                    .unwrap_or(self.album_cursor);
-                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                    target,
-                    kind: AlbumCursorKind::Move,
-                }))
-            }
-            Key::Right | Key::Char('l')
-                if self.album_columns > 1 && self.can_emit_album_cursor() =>
-            {
-                let target = self
-                    .move_album_rows(1, 1, true)
-                    .unwrap_or(self.album_cursor);
-                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                    target,
-                    kind: AlbumCursorKind::Move,
-                }))
-            }
             Key::Home if self.can_emit_album_cursor() => {
                 let target = self
                     .context

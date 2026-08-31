@@ -54,33 +54,6 @@ pub(super) fn series_modal_state_for_season(
 }
 
 impl App {
-    /// Number of columns the currently-rendered library list uses: 1 for
-    /// every single-column renderer (season grids, feed home-video group
-    /// views) and the pane-derived count for the plain, letter-grouped,
-    /// and grouped-album list renderers. Grouped album views (album-folder
-    /// listings and the music-group view) render through
-    /// `render_power_grouped_album_rows`, which packs `cols` albums per
-    /// row, so they stride by the pane-derived count like the other
-    /// column-aware renderers. Search results always render through the
-    /// plain (column-aware) renderer, so they use the pane-derived count
-    /// even inside a music library at the album-folder level.
-    pub(super) fn current_library_columns(&self, lib_idx: usize) -> usize {
-        use crate::app::library_column_width::library_column_count;
-        if self.layout.main.is_wide_movies_active() {
-            // The wide Movies right rail always renders the list as one
-            // column (right-panel-arrangements spec), regardless of how
-            // wide the rail gets.
-            return 1;
-        }
-        if self.layout.main.is_wide_tv_active() {
-            return 1;
-        }
-        if self.is_viewing_season_grid(lib_idx) || self.is_feed_home_video_group_view(lib_idx) {
-            return 1;
-        }
-        library_column_count(self.layout.main.left_area.width)
-    }
-
     pub(super) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
         if lib.library.collection_type != "music" {

@@ -92,7 +92,6 @@ fn wide_tv_persists_series_workspace_and_separate_targets() {
     assert!(layout.is_wide_tv_active());
     assert!(!component.test_layout().tv_wide_episode_rows.is_empty());
     assert!(!component.test_layout().tv_wide_season_tabs.is_empty());
-    assert_eq!(app.current_library_columns(0), 1);
     assert!(output.contains("The Series"));
     assert!(output.contains("Pilot"));
     assert!(output.contains("1h"));

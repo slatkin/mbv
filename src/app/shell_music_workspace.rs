@@ -1,5 +1,5 @@
 use super::components::{BrowserKey, BrowserKind, ComponentId, MusicWorkspaceComponent};
-use super::render::{music_album_columns, MusicWideRenderCtx};
+use super::render::MusicWideRenderCtx;
 use super::shell::Model;
 use super::TabSelection;
 use mbv_core::api::EmbyItem;
@@ -141,14 +141,9 @@ impl Model {
         }
         let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index, cursor_scroll);
         let wide = self.app.layout.main.is_wide_music_active();
-        // Wide Music paints the album browser in the post-hero right rail;
-        // derive navigation columns from that same mounted geometry rather
-        // than the unrelated pre-hero left area.
-        let columns = if wide {
-            music_album_columns(self.app.layout.main.wide_music_area)
-        } else {
-            self.app.current_library_columns(index)
-        };
+        // Grouped Music paints one full-width album row at a time in both
+        // presentations, so navigation uses the same one-dimensional geometry.
+        let columns = 1;
         // Consume the one-shot re-anchor trigger: a genuine navigation event
         // (mount, group switch, recursive activation, saved-position restore)
         // adopts the shell's resting cursor/scroll below, unconditionally.
