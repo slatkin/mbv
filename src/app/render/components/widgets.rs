@@ -506,7 +506,7 @@ pub(in crate::app::render) fn render_placeholder(f: &mut Frame, area: Rect, msg:
 impl App {
     pub(in crate::app::render) fn render_library(
         &mut self,
-        f: &mut Frame,
+        _f: &mut Frame,
         area: Rect,
         focused: bool,
         layout: &mut LayoutMain,

@@ -4,7 +4,7 @@
 //! repository's file-size limit.
 
 use super::{attached_app, tracker};
-use crate::app::tests::{make_item, make_session};
+use crate::app::tests::make_session;
 use crate::app::*;
 use mbv_core::remote_reconciliation::{RemoteObservation, TrackingState};
 

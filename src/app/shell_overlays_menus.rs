@@ -576,8 +576,7 @@ impl Model {
     }
 
     fn library_routes_cursor(&self) -> usize {
-        self.with_library_routes(|c| c.cursor())
-            .unwrap_or_else(|| 0)
+        self.with_library_routes(|c| c.cursor()).unwrap_or(0)
     }
 
     pub(in crate::app) fn enter_device_stage(

@@ -51,7 +51,6 @@ impl SelectionModalComponent {
 
         if same_source {
             modal.cursor = previous_id
-                .as_deref()
                 .and_then(|id| {
                     modal
                         .state

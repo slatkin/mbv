@@ -451,26 +451,23 @@ impl HomeComponent {
                     }));
                 }
             }
-            MouseEventKind::Down(MouseButton::Right) => {
-                if self.list_area.contains(pos) {
-                    // Resolve the row under the click before opening the menu;
-                    // a blank/gap click leaves the cursor unchanged (no hitmap
-                    // rect matches), so the context menu opens at the current
-                    // cursor. Matching the left-click/`BrowserComponent` row
-                    // treatment, resolving a row also moves the component-local
-                    // cursor so the emitted `ContextMenu` and the cursor agree
-                    // on the row under the click.
-                    if let Some((_, flat_idx)) =
-                        self.hitmap.iter().find(|(rect, _)| rect.contains(pos))
-                    {
-                        self.cursor = *flat_idx;
-                    }
-                    return Some(Msg::Shell(ShellRequest::HomeClick {
-                        region: HomeHitRegion::ContextMenu(self.cursor),
-                        col: mouse.column,
-                        row: mouse.row,
-                    }));
+            MouseEventKind::Down(MouseButton::Right) if self.list_area.contains(pos) => {
+                // Resolve the row under the click before opening the menu;
+                // a blank/gap click leaves the cursor unchanged (no hitmap
+                // rect matches), so the context menu opens at the current
+                // cursor. Matching the left-click/`BrowserComponent` row
+                // treatment, resolving a row also moves the component-local
+                // cursor so the emitted `ContextMenu` and the cursor agree
+                // on the row under the click.
+                if let Some((_, flat_idx)) = self.hitmap.iter().find(|(rect, _)| rect.contains(pos))
+                {
+                    self.cursor = *flat_idx;
                 }
+                return Some(Msg::Shell(ShellRequest::HomeClick {
+                    region: HomeHitRegion::ContextMenu(self.cursor),
+                    col: mouse.column,
+                    row: mouse.row,
+                }));
             }
             _ => {}
         }

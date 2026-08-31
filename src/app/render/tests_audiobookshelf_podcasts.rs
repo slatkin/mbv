@@ -166,7 +166,7 @@ fn narrow_podcast_panel_shows_one_alphabetical_pill_row() {
 
     assert_surface_pills(
         &terminal,
-        &layout,
+        layout,
         Rect::new(0, 0, 60, 20),
         1,
         ratatui::style::Color::Reset,

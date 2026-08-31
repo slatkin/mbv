@@ -236,14 +236,14 @@ impl MusicWorkspaceComponent {
             // the track from `track_cursor()` (target resolution lives at
             // the shell/component boundary, not in `App`).
             Key::Enter if self.track_cursor.is_some() => {
-                return Some(Msg::Shell(ShellRequest::MusicTrackActivate));
+                Some(Msg::Shell(ShellRequest::MusicTrackActivate))
             }
             // Ctrl+P keeps its "play current" meaning: with a focused track
             // that is the track, exactly like Enter.
             Key::Char('p')
                 if key.modifiers.contains(KeyModifiers::CONTROL) && self.track_cursor.is_some() =>
             {
-                return Some(Msg::Shell(ShellRequest::MusicTrackActivate));
+                Some(Msg::Shell(ShellRequest::MusicTrackActivate))
             }
             // Enter on an album row (Library panel): enter inline track
             // focus when wide with cached tracks; otherwise request the
@@ -253,13 +253,13 @@ impl MusicWorkspaceComponent {
                     self.track_cursor = Some(0);
                     return None;
                 }
-                return Some(Msg::Shell(ShellRequest::MusicAlbumActivate));
+                Some(Msg::Shell(ShellRequest::MusicAlbumActivate))
             }
             // Exit inline track focus locally; the key must not reach the
             // unprefixed panel's Esc/Stop semantics.
             Key::Esc | Key::Backspace if self.track_cursor.is_some() => {
                 self.track_cursor = None;
-                return None;
+                None
             }
             // Track moves are local to the component while a track is
             // focused and the Library panel owns the keys; with the Queue
@@ -269,13 +269,13 @@ impl MusicWorkspaceComponent {
                 if self.track_cursor.is_some() && self.library_panel_active() =>
             {
                 self.move_track(-1);
-                return None;
+                None
             }
             Key::Down | Key::Char('j')
                 if self.track_cursor.is_some() && self.library_panel_active() =>
             {
                 self.move_track(1);
-                return None;
+                None
             }
             // Enqueue / context menu target the focused track while one is
             // focused (Library panel); otherwise leave the key unhandled.
@@ -284,10 +284,10 @@ impl MusicWorkspaceComponent {
                     && self.track_cursor.is_some()
                     && self.library_panel_active() =>
             {
-                return Some(Msg::Shell(ShellRequest::MusicTrackEnqueue));
+                Some(Msg::Shell(ShellRequest::MusicTrackEnqueue))
             }
             Key::Char('.') if self.track_cursor.is_some() && self.library_panel_active() => {
-                return Some(Msg::Shell(ShellRequest::MusicTrackContextMenu));
+                Some(Msg::Shell(ShellRequest::MusicTrackContextMenu))
             }
             // `[`/`]` at the album-list level cycle the App-owned group pill.
             // A focused inline track is a track-level context, so guard on
@@ -297,32 +297,32 @@ impl MusicWorkspaceComponent {
                     && !key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                return Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: -1 }));
+                Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: -1 }))
             }
             Key::Char(']')
                 if self.track_cursor.is_none()
                     && !key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                return Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }));
+                Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }))
             }
             Key::Up | Key::Char('k') if self.can_emit_album_cursor() => {
                 let target = self
                     .move_album_rows(-1, self.album_columns, true)
                     .unwrap_or(self.album_cursor);
-                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Move,
-                }));
+                }))
             }
             Key::Down | Key::Char('j') if self.can_emit_album_cursor() => {
                 let target = self
                     .move_album_rows(1, self.album_columns, true)
                     .unwrap_or(self.album_cursor);
-                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Move,
-                }));
+                }))
             }
             Key::Left | Key::Char('h')
                 if self.album_columns > 1 && self.can_emit_album_cursor() =>
@@ -330,10 +330,10 @@ impl MusicWorkspaceComponent {
                 let target = self
                     .move_album_rows(-1, 1, true)
                     .unwrap_or(self.album_cursor);
-                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Move,
-                }));
+                }))
             }
             Key::Right | Key::Char('l')
                 if self.album_columns > 1 && self.can_emit_album_cursor() =>
@@ -341,10 +341,10 @@ impl MusicWorkspaceComponent {
                 let target = self
                     .move_album_rows(1, 1, true)
                     .unwrap_or(self.album_cursor);
-                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Move,
-                }));
+                }))
             }
             Key::Home if self.can_emit_album_cursor() => {
                 let target = self
@@ -354,10 +354,10 @@ impl MusicWorkspaceComponent {
                     .copied()
                     .unwrap_or(self.album_cursor);
                 self.album_cursor = target;
-                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Jump,
-                }));
+                }))
             }
             Key::End if self.can_emit_album_cursor() => {
                 let target = self
@@ -367,28 +367,28 @@ impl MusicWorkspaceComponent {
                     .copied()
                     .unwrap_or(self.album_cursor);
                 self.album_cursor = target;
-                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Jump,
-                }));
+                }))
             }
             Key::PageUp if self.can_emit_album_cursor() => {
                 let target = self
                     .move_album_rows(-(self.page_rows as i64), self.album_columns, false)
                     .unwrap_or(self.album_cursor);
-                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Page,
-                }));
+                }))
             }
             Key::PageDown if self.can_emit_album_cursor() => {
                 let target = self
                     .move_album_rows(self.page_rows as i64, self.album_columns, false)
                     .unwrap_or(self.album_cursor);
-                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Page,
-                }));
+                }))
             }
             _ => None,
         }

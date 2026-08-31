@@ -12,7 +12,7 @@ fn series_inline_detail_reserves_portrait_image_budget() {
     let rows = crate::app::render::screens::detail_series::series_inline_detail_rows(
         true, &item, 40, true,
     );
-    assert!(rows >= SERIES_IMAGE_ROWS as usize + 1);
+    assert!(rows > SERIES_IMAGE_ROWS as usize);
     assert!(series_meta_line(&item).is_empty());
 }
 

@@ -31,7 +31,7 @@ pub(super) enum PanelMode {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum SettingKey {
+pub(crate) enum SettingKey {
     Services,
     StayAlive,
     AutoReconnect,
@@ -62,7 +62,7 @@ pub(super) enum SettingKey {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) enum SettingsDestination {
+pub(crate) enum SettingsDestination {
     #[default]
     Main,
     Services,

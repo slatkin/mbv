@@ -516,8 +516,8 @@ fn book_hero_plan(
         };
     };
     let has_cover = images_enabled && book.cover_path.is_some();
-    let image_width = has_cover.then_some(18).unwrap_or(0).min(width);
-    let image_height = has_cover.then_some(12).unwrap_or(0);
+    let image_width = if has_cover { 18 } else { 0 }.min(width);
+    let image_height = if has_cover { 12 } else { 0 };
     let author_rows = u16::from(
         book.author_display
             .as_deref()

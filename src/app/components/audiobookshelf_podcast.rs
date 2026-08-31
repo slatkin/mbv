@@ -181,99 +181,89 @@ impl AudiobookshelfPodcastComponent {
         match key.code {
             Key::Up | Key::Char('k') if self.episode_selection.is_none() => {
                 self.move_cursor(-1);
-                return Some(self.show_move_request());
+                Some(self.show_move_request())
             }
             Key::Down | Key::Char('j') if self.episode_selection.is_none() => {
                 self.move_cursor(1);
-                return Some(self.show_move_request());
+                Some(self.show_move_request())
             }
             Key::Left | Key::Char('h') if self.episode_selection.is_none() => {
                 self.move_cursor(-1);
-                return Some(self.show_move_request());
+                Some(self.show_move_request())
             }
             Key::Right | Key::Char('l') if self.episode_selection.is_none() => {
                 self.move_cursor(1);
-                return Some(self.show_move_request());
+                Some(self.show_move_request())
             }
             Key::PageUp if self.episode_selection.is_none() => {
                 self.move_cursor(-(self.page_size() as i64));
-                return Some(self.show_move_request());
+                Some(self.show_move_request())
             }
             Key::PageDown if self.episode_selection.is_none() => {
                 self.move_cursor(self.page_size() as i64);
-                return Some(self.show_move_request());
+                Some(self.show_move_request())
             }
             Key::Home if self.episode_selection.is_none() => {
                 self.select_show(0);
-                return Some(self.show_move_request());
+                Some(self.show_move_request())
             }
             Key::End if self.episode_selection.is_none() => {
                 self.select_show(self.state.shows.len().saturating_sub(1));
-                return Some(self.show_move_request());
+                Some(self.show_move_request())
             }
             Key::Up | Key::Char('k') => {
                 self.move_episode(-1);
-                return Some(Msg::Shell(
+                Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
                         PodcastEpisodeTransition::PreviousEpisode,
                     ),
-                ));
+                ))
             }
             Key::Down | Key::Char('j') => {
                 self.move_episode(1);
-                return Some(Msg::Shell(
+                Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
                         PodcastEpisodeTransition::NextEpisode,
                     ),
-                ));
+                ))
             }
             Key::Char('[') if self.episode_selection.is_some() => {
                 self.cycle_filter(-1);
-                return Some(Msg::Shell(
+                Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
                         PodcastEpisodeTransition::PreviousFilter,
                     ),
-                ));
+                ))
             }
             Key::Char(']') if self.episode_selection.is_some() => {
                 self.cycle_filter(1);
-                return Some(Msg::Shell(
+                Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
                         PodcastEpisodeTransition::NextFilter,
                     ),
-                ));
+                ))
             }
             Key::Esc | Key::Backspace if self.episode_selection.is_some() => {
                 self.episode_selection = None;
-                return Some(Msg::Shell(
+                Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
                         PodcastEpisodeTransition::Exit,
                     ),
-                ));
+                ))
             }
             // Space/Enter/Ctrl+A action intents (task 5.3d.7): the component
             // only reports the matched intent; the shell resolves the
             // episode-selection and wide/narrow conditions from App state at
             // the Model boundary and runs the existing App effect (D17).
-            Key::Char(' ') => {
-                return Some(Msg::Shell(
-                    ShellRequest::AudiobookshelfPodcastEpisodeIntent(
-                        PodcastEpisodeIntent::FocusOrPlay,
-                    ),
-                ));
-            }
-            Key::Enter => {
-                return Some(Msg::Shell(
-                    ShellRequest::AudiobookshelfPodcastEpisodeIntent(
-                        PodcastEpisodeIntent::OpenOrPlay,
-                    ),
-                ));
-            }
-            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Some(Msg::Shell(
-                    ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue),
-                ));
-            }
+            Key::Char(' ') => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::FocusOrPlay),
+            )),
+            Key::Enter => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay),
+            )),
+            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue),
+            )),
             _ => None,
         }
     }

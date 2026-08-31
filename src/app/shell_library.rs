@@ -134,8 +134,7 @@ mod tests {
     use crate::app::tests::make_item;
     use crate::app::types_browse::BrowseResting;
     use crate::app::{
-        BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibraryTab, PanelFocus, PanelMode,
-        TabSelection,
+        BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, PanelFocus, PanelMode, TabSelection,
     };
 
     #[test]

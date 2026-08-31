@@ -89,7 +89,7 @@ pub(in crate::app::render) fn render_series_inline_detail(
         ) as usize
     };
 
-    let ser_meta = series_meta_line(&item);
+    let ser_meta = series_meta_line(item);
     // Row the overview starts on: title (0/1) + meta (0/1) + spacer (1,
     // unconditional -- see `unconditional_spacer_after_meta`).
     let overview_start_row = area.y + title_rows + (!ser_meta.is_empty()) as u16 + 1;

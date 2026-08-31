@@ -23,7 +23,7 @@ pub(in crate::app) fn render_generic_movies_home_video_rows_with_ctx(
                 " (empty)"
             },
         );
-        return 0;
+        0
     } else {
         let row_ctx = ctx.rows(list_area, library_column_count(list_area.width), focused, 0);
         if !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some()) {

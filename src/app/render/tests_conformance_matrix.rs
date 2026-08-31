@@ -90,7 +90,7 @@ fn render_book_component(
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     let area = Rect::new(0, 0, width, height);
     let mut component = AudiobookshelfBookComponent::new();
-    if let Some(state) = app.audiobookshelf_book_browse.get(0) {
+    if let Some(state) = app.audiobookshelf_book_browse.first() {
         component.set_content(state, true, app.images_enabled());
     }
     terminal.draw(|frame| component.view(frame, area)).unwrap();
@@ -111,7 +111,7 @@ fn render_podcast_component(
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     let area = Rect::new(0, 0, width, height);
     let mut component = AudiobookshelfPodcastComponent::new();
-    if let Some(state) = app.audiobookshelf_browse.get(0) {
+    if let Some(state) = app.audiobookshelf_browse.first() {
         component.set_content(state, true, app.images_enabled());
     }
     terminal.draw(|frame| component.view(frame, area)).unwrap();

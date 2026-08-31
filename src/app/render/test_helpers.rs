@@ -4,6 +4,7 @@ use super::screens::album_plan::GroupedAlbumDisplayRow;
 use super::*;
 use crate::app::components::{BrowserComponent, MusicWorkspaceComponent, TvWorkspaceComponent};
 use crate::app::layout::{AppLayout, LayoutPlayback, LibraryRowTarget};
+use crate::app::render::components::widgets::render_right_scrollbar_with_viewport;
 use crate::app::shell::Model;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::types_audiobookshelf_browse::{

@@ -460,7 +460,6 @@ impl BrowserComponent {
     /// Browser mount gate excludes the TV (wide TV, season grids) and feed
     /// home-video-group special cases, so no other legacy branch applies to
     /// this component.
-
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         let col = mouse.column;
         let row = mouse.row;
@@ -518,25 +517,24 @@ impl BrowserComponent {
                     return Some(Msg::Shell(ShellRequest::BrowserClick { region, col, row }));
                 }
             }
-            MouseEventKind::Down(MouseButton::Right) => {
-                if self.layout.left_area.contains(position)
-                    || self.layout.inline_hero_area.contains(position)
-                {
-                    // Resolve the row under the click before opening the menu;
-                    // a blank/gap click leaves the cursor unchanged
-                    // (`resolve_left_cursor` returns None for headers/gaps).
-                    let in_hero = self.layout.inline_hero_area.contains(position);
-                    if !in_hero {
-                        if let Some(resolved) = self.resolve_left_cursor(col, row) {
-                            self.cursor = resolved;
-                        }
+            MouseEventKind::Down(MouseButton::Right)
+                if (self.layout.left_area.contains(position)
+                    || self.layout.inline_hero_area.contains(position)) =>
+            {
+                // Resolve the row under the click before opening the menu;
+                // a blank/gap click leaves the cursor unchanged
+                // (`resolve_left_cursor` returns None for headers/gaps).
+                let in_hero = self.layout.inline_hero_area.contains(position);
+                if !in_hero {
+                    if let Some(resolved) = self.resolve_left_cursor(col, row) {
+                        self.cursor = resolved;
                     }
-                    return Some(Msg::Shell(ShellRequest::BrowserClick {
-                        region: BrowserHitRegion::ContextMenu(self.cursor),
-                        col,
-                        row,
-                    }));
                 }
+                return Some(Msg::Shell(ShellRequest::BrowserClick {
+                    region: BrowserHitRegion::ContextMenu(self.cursor),
+                    col,
+                    row,
+                }));
             }
             _ => {}
         }

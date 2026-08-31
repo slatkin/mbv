@@ -1,3 +1,14 @@
+#![allow(dead_code, unused_imports)]
+#![allow(
+    clippy::question_mark,
+    clippy::large_enum_variant,
+    clippy::type_complexity,
+    clippy::too_many_arguments,
+    clippy::if_same_then_else,
+    clippy::obfuscated_if_else,
+    clippy::field_reassign_with_default
+)]
+
 mod action;
 mod actions;
 mod actions_navigation;

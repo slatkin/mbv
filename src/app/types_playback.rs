@@ -44,7 +44,7 @@ pub(super) struct PlaybackState {
 /// instance. A stale `Remote` UI preference is ignored unless a direct remote
 /// queue is actually present.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum QueueScope {
+pub(crate) enum QueueScope {
     Local,
     Remote,
 }

@@ -1,8 +1,8 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_item, make_session};
-use mbv_core::playback_queue::{QueueItem, QueueSlotId};
+use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::remote_reconciliation::{
-    ReconciliationTracker, RemoteObservation, SubmittedOccurrence, TrackingState,
+    ReconciliationTracker, SubmittedOccurrence, TrackingState,
 };
 
 #[cfg(test)]

@@ -267,7 +267,7 @@ pub(in crate::app) fn render_wide_feed_layer(
             extras
                 .feed_groups
                 .iter()
-                .map(|s| crate::app::ui_util::trunc_str(s, 12).into()),
+                .map(|s| crate::app::ui_util::trunc_str(s, 12)),
         )
         .collect();
     let ids: Vec<usize> = (0..labels.len()).collect();
@@ -347,7 +347,7 @@ fn render_feed_group_picker_content(
             extras
                 .feed_groups
                 .iter()
-                .map(|s| crate::app::ui_util::trunc_str(s, 12).into()),
+                .map(|s| crate::app::ui_util::trunc_str(s, 12)),
         )
         .collect();
     let ids: Vec<usize> = (0..labels.len()).collect();
@@ -401,7 +401,7 @@ fn render_feed_group_picker_content(
         .unwrap_or(extras.feed_video_cursor.min(items.len() - 1));
     let text_w =
         crate::app::render::content_width(list_area.width, items.len() > list_area.height as usize);
-    let panel_w = (text_w as usize).saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING as usize) as u16;
+    let panel_w = text_w.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING as usize) as u16;
     let selected_h = 1;
     let mut row = list_area.y;
     let mut offset = ctx.scroll.min(selected);

@@ -201,7 +201,7 @@ pub(in crate::app::render) fn build_grouped_album_display_plan_with_ctx(
                 } else {
                     format!("{}. ", i + 1)
                 };
-                let play_width = if playing_track_id.as_deref() == Some(track.id.as_str()) {
+                let play_width = if playing_track_id == Some(track.id.as_str()) {
                     crate::app::render::LIST_PLAY_ICON.width() + 1
                 } else {
                     0

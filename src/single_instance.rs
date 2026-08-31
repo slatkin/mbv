@@ -85,7 +85,7 @@ pub fn resolve(socket: &Path, lock: &Path) -> io::Result<Resolution> {
     };
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(lock, std::fs::Permissions::from_mode(0o600));
-    return Ok(Resolution::Fresh(LockGuard { file }));
+    Ok(Resolution::Fresh(LockGuard { file }))
 }
 
 /// Read the PID out of the lock file (best-effort, used by `mbv -q`).

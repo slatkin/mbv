@@ -31,6 +31,19 @@ pub(in crate::app) fn wide_library_panes(
     })
 }
 
+pub(in crate::app::render) fn selected_detail_content_area(
+    hero_area: Rect,
+    side_padding: u16,
+    extra_rows: u16,
+) -> Rect {
+    Rect {
+        x: hero_area.x.saturating_add(side_padding),
+        y: hero_area.y.saturating_add(2),
+        width: hero_area.width.saturating_sub(side_padding * 2),
+        height: hero_area.height.saturating_sub(extra_rows),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -77,18 +90,5 @@ mod tests {
                 height: 0
             },
         );
-    }
-}
-
-pub(in crate::app::render) fn selected_detail_content_area(
-    hero_area: Rect,
-    side_padding: u16,
-    extra_rows: u16,
-) -> Rect {
-    Rect {
-        x: hero_area.x.saturating_add(side_padding),
-        y: hero_area.y.saturating_add(2),
-        width: hero_area.width.saturating_sub(side_padding * 2),
-        height: hero_area.height.saturating_sub(extra_rows),
     }
 }
