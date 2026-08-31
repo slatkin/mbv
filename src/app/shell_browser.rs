@@ -57,7 +57,7 @@ impl Model {
             // the component-resolved item, never a `BrowseLevel.cursor`
             // re-read.
             ShellRequest::BrowserShuffle { item } => self.app.shuffle_play_selected(lib_idx, item),
-            // Bare or Alt+`r` refreshes the active Emby library (task 5.3d,
+            // Bare `r` refreshes the active Emby library (task 5.3d,
             // Emby browser refresh): the shell derives the active library
             // index from its own tab state and runs `App::refresh_lib` on it,
             // the same call the legacy `handle_lib_key` `Char('r')` arm made.

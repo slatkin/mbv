@@ -274,6 +274,30 @@ fn browser_alt_refresh_stays_component_owned() {
 }
 
 #[test]
+fn browser_context_menu_requires_bare_dot() {
+    let mut browser = BrowserComponent::new();
+    browser.set_content(LibraryListRenderCtx::from_items(make_items(1), 0, 0), true);
+
+    let modified = browser.on(&Event::Keyboard(TuiKeyEvent {
+        code: Key::Char('.'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+    assert_eq!(modified, None, "Ctrl+. must not open the context menu");
+
+    let bare = browser.on(&Event::Keyboard(TuiKeyEvent {
+        code: Key::Char('.'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(
+        matches!(
+            bare,
+            Some(Msg::Shell(ShellRequest::BrowserContextMenu { .. }))
+        ),
+        "bare `.` must open the context menu, got {bare:?}"
+    );
+}
+
+#[test]
 fn browser_syncs_cursor_from_context_on_set_content() {
     let mut browser = BrowserComponent::new();
     browser.set_content(

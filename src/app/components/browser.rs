@@ -381,21 +381,21 @@ impl BrowserComponent {
                 Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     selected.map(|item| ShellRequest::BrowserToggleWatched { item })
                 }
-                // '.' opens the context menu for the component-selected item
-                // (task 5.3d, Emby browser context-menu decoupling). No
-                // modifier guard: the legacy `handle_global_view_key` arm it
-                // replaces matched `Char('.')` with any modifiers, so this
-                // preserves the legacy '.' modifier behavior exactly.
-                Key::Char('.') => selected.map(|item| ShellRequest::BrowserContextMenu { item }),
+                // Bare `.` opens the context menu for the component-selected
+                // item (task 5.3d, Emby browser context-menu decoupling).
+                // Modified `.` (e.g. Ctrl+.) is not claimed here.
+                Key::Char('.') if key.modifiers.is_empty() => {
+                    selected.map(|item| ShellRequest::BrowserContextMenu { item })
+                }
                 // Ctrl+S shuffles the component-selected item. Control-
                 // modifier guarded exactly as the legacy `handle_lib_key`
                 // arm; with no selected item this chord remains unclaimed.
                 Key::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     selected.map(|item| ShellRequest::BrowserShuffle { item })
                 }
-                // Ctrl+`r` rescans the focused library; bare or Alt+`r`
-                // refreshes it. The CONTROL arm comes first so it can never
-                // be shadowed by the bare arm, preserving legacy precedence.
+                // Ctrl+`r` rescans the focused library; bare `r` refreshes
+                // it. The CONTROL arm comes first so it can never be shadowed
+                // by the bare arm, preserving legacy precedence.
                 Key::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     Some(ShellRequest::BrowserRescan)
                 }
