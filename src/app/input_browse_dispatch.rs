@@ -20,10 +20,8 @@ impl App {
         self.activate_selected_series_item(&item)
     }
 
-    /// Item-targeted Series activation (task 2.1, remove-tv-workspace-
-    /// cursor-mirror): the caller supplies the resolved Series item instead
-    /// of an App browse cursor, so activation no longer depends on the
-    /// mirrored `nav_stack.last().cursor`.
+    /// Item-targeted Series activation: the caller supplies the resolved
+    /// Series item instead of an App browse cursor.
     ///
     /// Keeps the non-Series guard (`enter_series_selection` also enforces
     /// `item_type == "Series"` and a non-empty id) and the wide-fetch vs
