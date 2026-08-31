@@ -47,10 +47,16 @@ fn queue_arrow_press_leaves_exactly_one_highlighted_row() {
         .draw(|frame| model.draw_frame(frame, false, false))
         .unwrap();
     let buffer = terminal.backend().buffer();
-    let highlighted = buffer
-        .content()
-        .iter()
-        .filter(|cell| cell.symbol() == "▎")
+    let queue_area = model.app.layout.main.queue_area;
+    let highlighted_rows = (queue_area.y..queue_area.bottom())
+        .filter(|&y| {
+            (queue_area.x..queue_area.right()).any(|x| {
+                buffer[(x, y)].style().bg == Some(crate::app::palette::SURFACE_FOCUSED)
+            })
+        })
         .count();
-    assert_eq!(highlighted, 1, "exactly one queue row must be highlighted");
+    assert_eq!(
+        highlighted_rows, 1,
+        "exactly one queue row must have the focused background"
+    );
 }
