@@ -68,7 +68,7 @@
       `src/app/components/tv_workspace_component_tests.rs`:
       `ctrl_r_emits_library_rescan`,
       `ctrl_w_emits_library_toggle_watched`. Verify: `rtk cargo nextest run -p mbv`.
-- [ ] 6.3 Model tests mirroring `shell_browser_tests.rs:81-211`: one per new
+- [x] 6.3 Model tests mirroring `shell_browser_tests.rs:81-211`: one per new
       variant, driving the key through the mounted music/TV component and
       asserting the `App` effect ran. Verify: `rtk cargo nextest run -p mbv`.
 
