@@ -185,9 +185,9 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
 
 /// Wide-Movies exact parity: a Movies-keyed component on a >=82-wide
 /// rendered list uses its own kind and painted geometry, and the right
-/// rail strides ONE item per row — exactly the legacy
-/// `current_library_columns` result. Down from 0 lands at 1, not 2, and
-/// returns the typed rows request; Left/Right/h/l stay unbound locally.
+/// rail strides ONE item per row, matching its painted one-column geometry.
+/// Down from 0 lands at 1, not 2, and returns the typed rows request;
+/// Left/Right/h/l stay unbound locally.
 #[test]
 fn browser_local_navigation_strides_one_column_for_wide_movies() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);

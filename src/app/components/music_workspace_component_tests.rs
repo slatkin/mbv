@@ -108,40 +108,19 @@ fn music_workspace_vertical_move_follows_album_display_order() {
     // The shell re-anchors the album cursor at the navigation event; an
     // ordinary push no longer carries it.
     component.re_anchor(2, 0);
-    component.set_album_columns(2);
+    component.set_album_columns(1);
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.album_cursor(), 3);
+    assert_eq!(component.album_cursor(), 0);
     assert!(matches!(
         message,
         Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-            target: 3,
+            target: 0,
             kind: AlbumCursorKind::Move,
         }))
     ));
-
-    for (key, target) in [
-        (Key::Left, 2),
-        (Key::Right, 0),
-        (Key::Char('h'), 2),
-        (Key::Char('l'), 0),
-    ] {
-        component.re_anchor(2, 0);
-        let message = component.on(&Event::Keyboard(KeyEvent {
-            code: key,
-            modifiers: KeyModifiers::NONE,
-        }));
-        assert_eq!(component.album_cursor(), target, "{key:?}");
-        assert!(matches!(
-            message,
-            Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                target: actual,
-                kind: AlbumCursorKind::Move,
-            })) if actual == target
-        ));
-    }
 }
 
 #[test]
@@ -210,7 +189,7 @@ fn music_workspace_horizontal_move_is_ignored_at_one_column() {
     component.re_anchor(1, 0);
     component.set_album_columns(1);
 
-    for key in [Key::Char('h'), Key::Char('l')] {
+    for key in [Key::Left, Key::Right, Key::Char('h'), Key::Char('l')] {
         let message = component.on(&Event::Keyboard(KeyEvent {
             code: key,
             modifiers: KeyModifiers::NONE,

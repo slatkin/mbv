@@ -349,10 +349,8 @@ impl BrowserComponent {
                     return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 // Column navigation applies only to a painted list with
-                // more than one column (the legacy
-                // `current_library_columns(lib_idx) > 1` guard). A
-                // one-column list leaves Left/Right/h/l unbound locally,
-                // matching `handle_lib_key`'s one-column behavior.
+                // more than one column. A one-column list leaves
+                // Left/Right/h/l unbound locally.
                 Key::Left | Key::Char('h') if self.columns() > 1 => {
                     let index = self.move_cursor_delta(-1);
                     return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
@@ -451,15 +449,10 @@ impl BrowserComponent {
             .cloned()
     }
 
-    /// Columns the last painted list packs per row for cursor movement
-    /// (task 5.3d prep): the wide Movies/home-videos hero-on-left right
-    /// rail is always one column (mirroring `App::current_library_columns`,
-    /// selected by this component's own `kind` and painted geometry in
-    /// `view()`), otherwise the pane-derived `library_column_count` of the
-    /// painted list area. The
-    /// Browser mount gate excludes the TV (wide TV, season grids) and feed
-    /// home-video-group special cases, so no other legacy branch applies to
-    /// this component.
+    /// Returns the column count of the last painted list geometry used for
+    /// cursor movement. Wide Movies/home-video hero rails are one column;
+    /// otherwise the count comes from the painted list area. The Browser
+    /// mount gate excludes TV and feed home-video-group special cases.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         let col = mouse.column;
         let row = mouse.row;
