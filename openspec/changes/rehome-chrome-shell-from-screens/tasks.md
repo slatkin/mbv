@@ -50,16 +50,16 @@
 These pin current output *before* the painter flips. They must pass against
 unmodified code; if one fails, the test is wrong, not the code.
 
-- [ ] 2.1 Add `TestBackend` tests capturing the queue title row's current rendered
+- [x] 2.1 Add `TestBackend` tests capturing the queue title row's current rendered
       output with **no remote session** (`RemoteSlotState::Off`), where
       `src/app/render/screens/queue.rs` is the sole painter and `QueueComponent`
       paints no title. Cover nerd-fonts on and off. Verify they pass on the
       current tree with no source changes.
-- [ ] 2.2 Add the same coverage for `RemoteSlotState::DirectRemote`,
+- [x] 2.2 Add the same coverage for `RemoteSlotState::DirectRemote`,
       `AttachedSession` with an mbv client, and `AttachedSession` with a non-mbv
       client — the three states where `show_split` is true and both painters run.
       Verify they pass on the current tree with no source changes.
-- [ ] 2.3 Commit 2.1 and 2.2 on their own, with no production change in the
+- [x] 2.3 Commit 2.1 and 2.2 on their own, with no production change in the
       commit. Verify `git show --stat` lists only test files.
 
 ## 3. Unit 2, commit B — delete the legacy queue-title underpaint
