@@ -717,6 +717,57 @@ fn library_tab_jump_with_modifiers_is_swallowed() {
     );
 }
 
+/// F3 (`Command::OpenSessions`) toggles: a second press while the Sessions
+/// sidebar is open closes it and must not re-run the session/cast load.
+#[test]
+fn open_sessions_command_toggles_without_respawning_loads() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let app = crate::app::tests::make_app_stub();
+    let mut model = crate::app::shell::Model::new(app);
+    model.sync_mounted_surfaces();
+
+    let sessions = ComponentId::Overlay(OverlayId::Sessions);
+
+    model.app.dispatch(Command::OpenSessions);
+    model.sync_modal_requests();
+    assert!(model.application.mounted(&sessions), "first F3 opens Sessions");
+
+    // Clear the flag the open set so a spurious re-mount would be observable.
+    model.app.sessions_loading = false;
+
+    model.app.dispatch(Command::OpenSessions);
+    model.sync_modal_requests();
+    assert!(
+        !model.application.mounted(&sessions),
+        "second F3 toggles Sessions closed"
+    );
+    assert!(
+        !model.app.sessions_loading,
+        "toggle-close must not respawn the sessions load"
+    );
+}
+
+/// `c` opens the Clear Queue prompt even when the library/browser widget is
+/// focused (legacy `clear_queue_prompt_c` sat above the view handlers), but
+/// stays as character input while a text entry owns focus.
+#[test]
+fn clear_queue_c_is_global_but_yields_to_text_entry() {
+    let focused = ComponentId::Browser(browser_key());
+    assert_eq!(
+        resolve_router_outcome_with_focused(key(KeyCode::Char('c')), &idle_snapshot(), Some(&focused)),
+        RouterOutcome::Command(Command::RequestClearQueue),
+        "`c` opens the clear-queue prompt with the browser focused"
+    );
+
+    let mut typing = idle_snapshot();
+    typing.text_entry_focused = true;
+    assert_eq!(
+        resolve_router_outcome_with_focused(key(KeyCode::Char('c')), &typing, Some(&focused)),
+        RouterOutcome::FallThrough,
+        "`c` is character input while a text entry owns focus"
+    );
+}
+
 // ── task 5.3: ConfirmIntent::Accept re-encodes to the `y` chord ─────────────
 
 /// `handle_confirm_intent(Accept)` must re-encode to `KeyCode::Char('y')` so it

@@ -95,7 +95,9 @@ impl SessionsComponent {
             }
             Key::Char('r') => Some(Msg::Shell(ShellRequest::RefreshSessions)),
             Key::Enter => Some(Msg::Shell(ShellRequest::SelectSession(self.cursor))),
-            Key::Char('d') if self.can_disconnect => Some(Msg::Shell(ShellRequest::DetachSessions)),
+            Key::Char('d') if self.can_disconnect || self.cast_attachment_id.is_some() => {
+                Some(Msg::Shell(ShellRequest::DetachSessions))
+            }
             _ => None,
         }
     }
@@ -216,6 +218,17 @@ mod tests {
         let message = component.handle_key(&key(Key::Up));
         assert_eq!(component.cursor, 0);
         assert_eq!(message, None);
+    }
+
+    #[test]
+    fn disconnect_key_detaches_cast_only_attachment() {
+        let mut component = SessionsComponent::new();
+        component.can_disconnect = false;
+        component.cast_attachment_id = Some("cast-1".to_string());
+        assert_eq!(
+            component.handle_key(&key(Key::Char('d'))),
+            Some(Msg::Shell(ShellRequest::DetachSessions))
+        );
     }
 
     #[test]

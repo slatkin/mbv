@@ -190,8 +190,14 @@ impl Model {
                     }
                 }
                 ShellRequest::DetachSessions => {
-                    self.app.disconnect_remote();
-                    if self.app.is_cast_attached() {
+                    let cast_attached = self.app.is_cast_attached();
+                    // Skip disconnect_remote's "No session selected" toast when
+                    // only a cast target is attached; the cast detach below is
+                    // the real action in that case.
+                    if self.app.can_disconnect_remote() || !cast_attached {
+                        self.app.disconnect_remote();
+                    }
+                    if cast_attached {
                         self.app.detach_cast();
                         self.app.flash(
                             "Detached from cast target".to_string(),

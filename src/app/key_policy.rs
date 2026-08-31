@@ -21,6 +21,10 @@ pub(super) struct RouterSnapshot {
     pub panel_focus: PanelFocus,
     pub blocking_overlay_open: bool,
     pub help_overlay_open: bool,
+    /// Whether the (non-blocking) Sessions sidebar is mounted. When open, Esc
+    /// closes it and takes precedence over the double-Escape playback stop,
+    /// matching the legacy context stack (Sessions before Playback).
+    pub sessions_sidebar_open: bool,
     pub selection_modal_open: bool,
     pub context_menu_open: bool,
     pub idle_feed_link_available: bool,
@@ -61,6 +65,7 @@ pub(super) enum KeyPolicyBinding {
     Any,
     SettingsOpen,
     SessionsOpen,
+    SessionsDismiss,
     PlaylistsOpen,
     SearchOpen,
     HelpOpen,
@@ -89,6 +94,7 @@ impl KeyPolicyBinding {
             Self::Any => true,
             Self::SettingsOpen => chord.code == KeyCode::F(2),
             Self::SessionsOpen => chord.code == KeyCode::F(3),
+            Self::SessionsDismiss => chord.code == KeyCode::Esc,
             Self::PlaylistsOpen => chord.code == KeyCode::F(4),
             Self::SearchOpen => {
                 chord.mods.contains(KeyModifiers::CONTROL)
@@ -144,7 +150,8 @@ pub(super) enum KeyPolicyGate {
     PanelFocusQueue,
     PanelFocusLibraryBoth,
     QueueColumnWidth,
-    NoContextMenu,
+    ClearQueuePrompt,
+    SessionsSidebarOpen,
     Playback,
 }
 
@@ -166,7 +173,10 @@ impl KeyPolicyGate {
                     && snapshot.panel_mode == PanelMode::Both
             }
             Self::QueueColumnWidth => snapshot.panel_mode == PanelMode::Both,
-            Self::NoContextMenu => !snapshot.context_menu_open,
+            Self::ClearQueuePrompt => {
+                !snapshot.blocking_overlay_open && !snapshot.context_menu_open
+            }
+            Self::SessionsSidebarOpen => snapshot.sessions_sidebar_open,
             Self::Playback => {
                 if snapshot.blocking_overlay_open {
                     return false;
@@ -271,9 +281,9 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
     },
     KeyPolicyEntry {
         name: "clear_queue_prompt_c",
-        owner: KeyPolicyOwner::Sub(ComponentId::Queue),
+        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
         binding: KeyPolicyBinding::ClearQueue,
-        gate: KeyPolicyGate::NoContextMenu,
+        gate: KeyPolicyGate::ClearQueuePrompt,
         blocking: false,
     },
     KeyPolicyEntry {
@@ -281,6 +291,13 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         owner: KeyPolicyOwner::Sub(ComponentId::Playback),
         binding: KeyPolicyBinding::Visualizer,
         gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "sessions_sidebar_escape",
+        owner: KeyPolicyOwner::Active(Some(ComponentId::Overlay(OverlayId::Sessions))),
+        binding: KeyPolicyBinding::SessionsDismiss,
+        gate: KeyPolicyGate::SessionsSidebarOpen,
         blocking: false,
     },
     KeyPolicyEntry {
@@ -394,6 +411,7 @@ pub(super) fn command_for_policy(
         KeyPolicyBinding::AltPanelLeft => Some(Command::FocusPanel(PanelFocus::Queue)),
         KeyPolicyBinding::PanelModeCycle => Some(Command::CyclePanelMode),
         KeyPolicyBinding::CtrlL => Some(Command::ForceClear),
+        KeyPolicyBinding::ClearQueue => Some(Command::RequestClearQueue),
         KeyPolicyBinding::F5 => Some(Command::RefreshCurrentView),
         KeyPolicyBinding::Visualizer => Some(Command::ToggleVisualizer),
         KeyPolicyBinding::Playback => {
@@ -530,6 +548,35 @@ mod tests {
                 .unwrap()
                 .name,
             "playback"
+        );
+    }
+
+    #[test]
+    fn sessions_sidebar_escape_precedes_double_escape_playback_stop() {
+        let mut armed = snapshot();
+        armed.player_active = true;
+        armed.esc_double_tap = true;
+
+        assert_eq!(
+            resolve_policy(chord(KeyCode::Esc, KeyModifiers::NONE), &armed)
+                .unwrap()
+                .name,
+            "playback"
+        );
+
+        armed.sessions_sidebar_open = true;
+        assert_eq!(
+            resolve_policy(chord(KeyCode::Esc, KeyModifiers::NONE), &armed)
+                .unwrap()
+                .name,
+            "sessions_sidebar_escape"
+        );
+        assert_eq!(
+            crate::app::router::resolve_router_outcome(
+                crossterm::event::KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+                &armed
+            ),
+            crate::app::router::RouterOutcome::FallThrough
         );
     }
 

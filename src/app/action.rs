@@ -85,6 +85,8 @@ pub(super) enum Command {
     PreviousLibraryTab,
     SetLibraryTab(usize),
     ForceClear,
+    /// Raise the "Clear queue?" confirmation prompt (the global `c` binding).
+    RequestClearQueue,
     RefreshCurrentView,
     ToggleSettings,
     OpenSessions,
@@ -573,9 +575,10 @@ impl App {
                 }
             }
             Command::ForceClear => self.force_clear = true,
+            Command::RequestClearQueue => self.request_clear_queue(),
             Command::RefreshCurrentView => self.refresh_current_view(),
             Command::ToggleSettings => self.request_sidebar_toggle(super::SidebarId::Settings),
-            Command::OpenSessions => self.request_sidebar_open(super::SidebarId::Sessions),
+            Command::OpenSessions => self.request_sidebar_toggle(super::SidebarId::Sessions),
             Command::OpenPlaylists => self.open_playlists_panel(),
             Command::OpenSearch => self.open_search_sidebar(),
             // Model handles this shell-only command before delegating the

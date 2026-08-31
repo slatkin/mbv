@@ -175,6 +175,9 @@ impl Model {
             help_overlay_open: self
                 .application
                 .mounted(&ComponentId::Overlay(OverlayId::Help)),
+            sessions_sidebar_open: self
+                .application
+                .mounted(&ComponentId::Overlay(OverlayId::Sessions)),
             selection_modal_open: self
                 .application
                 .mounted(&ComponentId::Overlay(OverlayId::SelectionModal)),
