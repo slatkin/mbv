@@ -216,6 +216,9 @@ mod test_helpers;
 #[cfg(test)]
 pub(crate) use test_helpers::{make_large_movie_library_app, make_movie_app, make_music_group_app};
 #[cfg(test)]
+#[path = "queue_title_characterization_tests.rs"]
+mod queue_title_characterization_tests;
+#[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
 #[cfg(test)]

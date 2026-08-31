@@ -344,6 +344,25 @@ pub fn render_app_to_terminal(app: &mut App, width: u16, height: u16) -> Termina
 /// Home content is Model-owned (task 5.3d), so a test that needs seeded
 /// Continue Watching rows/pills uses `render_home_shell_with` and seeds
 /// `model.home_content` before the push.
+pub fn render_queue_shell(
+    mut app: App,
+    width: u16,
+    height: u16,
+) -> (crate::app::shell::Model, Terminal<TestBackend>) {
+    app.terminal_width = width;
+    app.terminal_height = height;
+    let mut model = crate::app::shell::Model::new(app);
+    model.sync_queue();
+    let backend = TestBackend::new(width, height);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| {
+        model.app.compose_base_frame(f, None);
+        model.render_queue_component(f);
+    })
+    .unwrap();
+    (model, term)
+}
+
 pub fn render_home_shell(
     app: App,
     width: u16,
