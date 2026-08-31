@@ -47,11 +47,11 @@ impl Model {
 
     fn inline_search_area(&self) -> Rect {
         let main = &self.app.layout.main;
-        if main.left_area.width > 0 && main.left_area.height > 0 {
-            main.left_area
-        } else if main.tv_wide_right_area.width > 0 {
+        if main.tv_wide_right_area.width > 0 {
             main.tv_wide_right_area
         } else if main.movies_wide_right_area.width > 0 {
+            main.movies_wide_right_area
+        } else if main.left_area.width > 0 && main.left_area.height > 0 {
             main.movies_wide_right_area
         } else {
             main.wide_music_browser_area
