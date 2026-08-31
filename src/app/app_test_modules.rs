@@ -144,6 +144,26 @@ mod tests_player_event;
 mod tests_routing_matrix;
 
 #[cfg(test)]
+#[path = "tests_routing_matrix_support.rs"]
+mod tests_routing_matrix_support;
+
+#[cfg(test)]
+#[path = "tests_routing_matrix_blocking.rs"]
+mod tests_routing_matrix_blocking;
+
+#[cfg(test)]
+#[path = "tests_routing_matrix_focus.rs"]
+mod tests_routing_matrix_focus;
+
+#[cfg(test)]
+#[path = "tests_routing_matrix_playback.rs"]
+mod tests_routing_matrix_playback;
+
+#[cfg(test)]
+#[path = "tests_routing_matrix_globals.rs"]
+mod tests_routing_matrix_globals;
+
+#[cfg(test)]
 #[path = "tests_tick_harness.rs"]
 pub(crate) mod tests_tick_harness;
 
