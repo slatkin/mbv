@@ -1,4 +1,6 @@
-use super::components::{BrowserComponent, BrowserKey, BrowserKind, ComponentId, ShellRequest};
+use super::components::{
+    BrowserComponent, BrowserKey, BrowserKind, ComponentId, InlineSearchComponent, ShellRequest,
+};
 use super::shell::Model;
 use super::{ConfirmAction, ConfirmModal, PanelFocus, TabSelection};
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
@@ -276,7 +278,7 @@ impl Model {
         // reads/writes `feed_home_video.{video_cursor,video_scroll}`. Project
         // the selected group's items with that cursor/scroll and flag the
         // group-pill row so the component's `[`/`]` chord means group cycling.
-        let context = if self.app.is_feed_home_video_group_view(index) {
+        let mut context = if self.app.is_feed_home_video_group_view(index) {
             let (cursor, scroll) = self.app.libs[index]
                 .feed_home_video
                 .as_ref()
@@ -314,6 +316,16 @@ impl Model {
                     .map_or(0, |l| l.resting().scroll()),
             )
         };
+        // The mounted search owns the query/loading state; project it onto the
+        // browser context so its existing search-box seam is live.
+        if let Some(search_id) = self.inline_search_component_id(index) {
+            if let Some(comp) = self.application.get_component(&search_id) {
+                if let Some(search) = comp.as_any().downcast_ref::<InlineSearchComponent>() {
+                    let (query, loading) = search.search_state();
+                    context = context.with_search(query.to_owned(), loading);
+                }
+            }
+        }
         let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {

@@ -95,6 +95,10 @@ impl InlineSearchComponent {
         self.loading = loading;
     }
 
+    pub(in crate::app) fn search_state(&self) -> (&str, bool) {
+        (&self.query, self.loading)
+    }
+
     #[cfg(test)]
     pub(in crate::app) fn test_loading(&self) -> bool {
         self.loading
