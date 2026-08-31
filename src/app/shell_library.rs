@@ -21,7 +21,7 @@ impl Model {
     /// the #607 acceptance gate). Mirrors the exact condition
     /// `sync_queue` uses to claim focus.
     pub(super) fn sync_active_destination(&mut self) {
-        if self.library_overlay_mounted() {
+        if self.overlay_holds_focus() {
             return;
         }
         let queue_owns_focus = matches!(self.app.effective_panel_focus(), PanelFocus::Queue)
@@ -99,7 +99,11 @@ impl Model {
         }))
     }
 
-    fn library_overlay_mounted(&self) -> bool {
+    /// Whether any sidebar, modal, or popup overlay is mounted. Every
+    /// focus-management sync pass (`sync_active_destination`, `sync_queue`)
+    /// consults this before re-activating its own surface, so a mounted
+    /// overlay that just took focus is never stolen back on the next tick.
+    pub(super) fn overlay_holds_focus(&self) -> bool {
         [
             ComponentId::Overlay(super::components::OverlayId::Search),
             ComponentId::Overlay(super::components::OverlayId::Settings),
@@ -452,7 +456,7 @@ mod tests {
 
     /// Symmetric regression guard under D3 (single focus pass): when a
     /// blocking modal is up, `sync_active_destination` short-circuits on
-    /// `library_overlay_mounted()` — the modal owns native LIFO focus (D3
+    /// `overlay_holds_focus()` — the modal owns native LIFO focus (D3
     /// first-match-wins), never the destination child. `sync_queue` also
     /// skips activation under blocking overlays. After the modal is
     /// dismissed, the next `sync_active_destination` pass routes focus back

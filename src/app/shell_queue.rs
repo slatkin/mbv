@@ -17,12 +17,18 @@ impl Model {
 
         let queue_focused = matches!(self.app.effective_panel_focus(), PanelFocus::Queue)
             && !self.blocking_overlay_active();
-        if queue_focused {
-            if self.application.focus() != Some(&id) {
-                self.application.active(&id).expect("activate Queue");
+        // A mounted sidebar/modal/popup owns focus while it is up; re-activating
+        // Queue here would steal the keypress it needs to close itself (mini
+        // view keeps `effective_panel_focus` on Queue, so this pass fires every
+        // tick otherwise).
+        if !self.overlay_holds_focus() {
+            if queue_focused {
+                if self.application.focus() != Some(&id) {
+                    self.application.active(&id).expect("activate Queue");
+                }
+            } else if self.application.focus() == Some(&id) {
+                self.application.blur().expect("blur Queue");
             }
-        } else if self.application.focus() == Some(&id) {
-            self.application.blur().expect("blur Queue");
         }
 
         let scope = self.app.visible_queue_scope();
