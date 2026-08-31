@@ -32,12 +32,6 @@ pub(in crate::app) fn render_plain_rows(
         hero_rows,
     } = ctx;
     let n = items.len();
-    // The list widget only writes its rows; clear the whole surface first so
-    // rows removed by filtering cannot leave glyphs from the previous frame.
-    f.render_widget(
-        Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
-        content_area,
-    );
     // Publish the identity display order just like letter-grouped lists publish
     // their sorted order; the fresh frame layout makes this authoritative for
     // cursor and hit testing even when the list has no grouping.

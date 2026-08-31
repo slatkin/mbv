@@ -281,38 +281,6 @@ mod tests {
     }
 
     #[test]
-    fn inline_library_search_clears_rows_removed_by_filter() {
-        let mut component = InlineSearchComponent::new();
-        component.set_content(
-            SearchPool::Items(vec![
-                make_item("LongName", "Movie"),
-                make_item("Short", "Movie"),
-            ]),
-            false,
-            true,
-        );
-        let mut terminal = Terminal::new(TestBackend::new(40, 5)).unwrap();
-        terminal
-            .draw(|frame| {
-                component.view(frame, frame.area());
-                frame
-                    .buffer_mut()
-                    .cell_mut((39, 2))
-                    .expect("test cell in bounds")
-                    .set_symbol("N");
-                component.query = "short".into();
-                component.view(frame, frame.area());
-            })
-            .unwrap();
-
-        let buffer = terminal.backend().buffer();
-        assert_eq!(buffer.cell((1, 1)).unwrap().symbol(), "S");
-        // The second row belonged to the longer unfiltered result set and
-        // must be reset rather than retaining its old `LongName` glyphs.
-        assert_eq!(buffer.cell((1, 2)).unwrap().symbol(), " ");
-    }
-
-    #[test]
     fn inline_library_search_mouse_uses_tuirealm_event_directly() {
         let mut component = InlineSearchComponent::new();
         component.query = "on".into();
