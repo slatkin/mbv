@@ -110,6 +110,8 @@ pub(crate) struct LayoutMain {
     /// Queue placement and scope areas published independently of mounted
     /// component-local queue geometry.
     pub queue_area: Rect,
+    /// Whether the queue panel reserved a title row in this frame.
+    pub queue_title_reserved: bool,
     /// Screen rect of the selected row/cell in the library panel. The outer
     /// selectable renderer owns this; nested detail/hero renderers never
     /// overwrite it. Consumed by the context menu's keyboard anchor.

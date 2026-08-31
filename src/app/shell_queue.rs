@@ -49,7 +49,7 @@ impl Model {
         let title = self.app.queue_title_model();
         let title_area = {
             let area = self.app.layout.main.queue_area;
-            (area.height > 0).then_some(Rect {
+            self.app.layout.main.queue_title_reserved.then_some(Rect {
                 x: area.x + 2,
                 y: area.y.saturating_sub(2),
                 width: area.width.saturating_sub(4),
@@ -74,7 +74,7 @@ impl Model {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
                 queue.set_area(self.app.layout.main.queue_area);
                 let area = self.app.layout.main.queue_area;
-                queue.set_title_area((area.height > 0).then_some(Rect {
+                queue.set_title_area(self.app.layout.main.queue_title_reserved.then_some(Rect {
                     x: area.x + 2,
                     y: area.y.saturating_sub(2),
                     width: area.width.saturating_sub(4),

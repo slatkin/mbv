@@ -357,6 +357,7 @@ impl App {
             // Title and status bar panels float within the queue panel with
             // 2 columns left/right indent and 1 row of space on all sides.
             let title_overhead = if qla.height >= 4 { 3 } else { 0 };
+            layout.queue_title_reserved = title_overhead > 0;
             let status_overhead = if qla.height >= title_overhead + 4 {
                 3
             } else {
