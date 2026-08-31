@@ -10,6 +10,9 @@ impl Model {
     }
 
     pub(super) fn sync_feeds(&mut self) {
+        if !matches!(self.app.tab, super::TabSelection::Feeds) {
+            return;
+        }
         let state = &self.app.feed_tab;
         let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
         if let Some(comp) = self.application.get_component_mut(&ComponentId::Feeds) {
@@ -44,8 +47,38 @@ mod tests {
     use mbv_core::config::{FeedKind, FeedSubscription};
 
     #[test]
+    fn hidden_tab_does_not_overwrite_mounted_feeds_component() {
+        let mut model = Model::new(make_app_stub());
+        model.app.tab = super::super::TabSelection::Feeds;
+        model.app.feed_tab.subscriptions = vec![FeedSubscription {
+            name: "Visible Feed".into(),
+            url: "https://example.test/visible".into(),
+            kind: FeedKind::Audio,
+        }];
+        model.sync_feeds();
+
+        model.app.tab = super::super::TabSelection::Home;
+        model.app.feed_tab.subscriptions = vec![FeedSubscription {
+            name: "Hidden Feed".into(),
+            url: "https://example.test/hidden".into(),
+            kind: FeedKind::Audio,
+        }];
+        model.sync_feeds();
+
+        let component = model
+            .application
+            .get_component(&ComponentId::Feeds)
+            .expect("Feeds component mounted")
+            .as_any()
+            .downcast_ref::<FeedsComponent>()
+            .expect("Feeds component type");
+        assert_eq!(component.subscription_names(), ["Visible Feed"]);
+    }
+
+    #[test]
     fn shell_syncs_feed_snapshot_into_mounted_component() {
         let mut model = Model::new(make_app_stub());
+        model.app.tab = super::super::TabSelection::Feeds;
         model.app.feed_tab.subscriptions = vec![FeedSubscription {
             name: "Shell Feed".into(),
             url: "https://example.test/feed".into(),
