@@ -20,7 +20,7 @@
 
 ## 2. Archive
 
-- [ ] 2.1 Archive the completed changes in the chain
+- [x] 2.1 Archive the completed changes in the chain
       (`split-browse-state-interaction-fields`,
       `migrate-narrow-browse-to-components`,
       `delete-browse-level-cursor-scroll`, and this one) per AGENTS.md, dating
