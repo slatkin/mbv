@@ -51,7 +51,7 @@
       `compose_base_frame` reserves `queue_area` and paints no slot rows, and
       `QueueComponent` is the sole row painter. Verify: it fails if the legacy
       call is reinstated.
-- [ ] 3.3 Confirm #623's repro by hand: arrow through a multi-item queue and
+- [x] 3.3 Confirm #623's repro by hand: arrow through a multi-item queue and
       see no ghost row. Verify: stated, with the #623 comment updated.
 - [ ] 3.4 Full gate: `rtk cargo check -p mbv`,
       `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace
