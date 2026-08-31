@@ -98,6 +98,23 @@ impl TvWorkspaceComponent {
             .as_ref()
             .map_or(0, |detail| detail.seasons.len());
         self.season_cursor = self.season_cursor.min(season_count.saturating_sub(1));
+        if let Some(episode_cursor) = self.episode_cursor {
+            let episode_count = self
+                .context
+                .series_detail
+                .as_ref()
+                .and_then(|detail| detail.seasons.get(self.season_cursor))
+                .and_then(|season| {
+                    self.context
+                        .series_detail
+                        .as_ref()?
+                        .episodes
+                        .get(&season.id)
+                })
+                .map_or(0, Vec::len);
+            self.episode_cursor =
+                (episode_count > 0).then(|| episode_cursor.min(episode_count - 1));
+        }
     }
 
     pub(in crate::app) fn cursor(&self) -> usize {

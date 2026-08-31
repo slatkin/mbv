@@ -109,6 +109,81 @@ fn tv_right_selects_first_episode_for_activation() {
 }
 
 #[test]
+fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
+    let mut series = make_item("Series", "Series");
+    series.id = "series-id".into();
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-id".into();
+    let episode = |name: &str, id: &str| {
+        let mut item = make_item(name, "Episode");
+        item.id = id.into();
+        item
+    };
+    let detail = |episodes| crate::app::SeriesDetail {
+        seasons: vec![season.clone()],
+        episodes: [("season-id".into(), episodes)].into_iter().collect(),
+    };
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        Some(series.clone()),
+        Some(detail(vec![
+            episode("Episode 1", "episode-1"),
+            episode("Episode 2", "episode-2"),
+            episode("Episode 3", "episode-3"),
+        ])),
+        0,
+        None,
+        true,
+        false,
+    ));
+    let key = |code| {
+        Event::Keyboard(KeyEvent {
+            code,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+    component.on(&key(Key::Right));
+    component.on(&key(Key::Down));
+    component.on(&key(Key::Down));
+    assert_eq!(
+        component.episode_activation_selection(),
+        Some(("series-id".into(), 0, 2))
+    );
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        Some(series.clone()),
+        Some(detail(vec![episode("Episode 1", "episode-1")])),
+        0,
+        Some(2),
+        true,
+        false,
+    ));
+    assert_eq!(
+        component.episode_activation_selection(),
+        Some(("series-id".into(), 0, 0))
+    );
+    assert!(matches!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE
+        })),
+        Some(Msg::Shell(ShellRequest::TvEpisodeActivate))
+    ));
+
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        Some(series),
+        Some(detail(Vec::new())),
+        0,
+        Some(0),
+        true,
+        false,
+    ));
+    assert_eq!(component.episode_activation_selection(), None);
+}
+
+#[test]
 fn tv_keyboard_leaves_key_unclaimed_when_queue_is_focused() {
     let mut component = TvWorkspaceComponent::new();
     component.set_content(TvWideRenderCtx::new(
