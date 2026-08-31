@@ -96,31 +96,31 @@ unmodified code; if one fails, the test is wrong, not the code.
 
 Order is load-bearing: 4.1-4.2 must precede 4.4 (design D3).
 
-- [ ] 4.1 Move the queue-panel geometry from `render_main`
+- [x] 4.1 Move the queue-panel geometry from `render_main`
       (`src/app/render/screens/root.rs:479-546`: `render_queue_panel_frame` call,
       content-area carve, status-pill row placement) into a queue panel
       arrangement function alongside `src/app/render/arrangements/chrome.rs`,
       returning typed rects. Verify `rtk cargo nextest run -p mbv` is green with
       output unchanged.
-- [ ] 4.2 Move the playlist/autosave status pill *painting* from that same block
+- [x] 4.2 Move the playlist/autosave status pill *painting* from that same block
       into `src/app/render/components/queue.rs` as a content-model painter taking
       the rect from 4.1. Verify `rtk cargo nextest run -p mbv` is green.
-- [ ] 4.3 Move `paint_legacy_chrome`'s two backdrop `render_widget` calls
+- [x] 4.3 Move `paint_legacy_chrome`'s two backdrop `render_widget` calls
       (`src/app/render/screens/root.rs:590,598`) into
       `src/app/render/components/chrome.rs`. Verify `rtk cargo nextest run -p mbv`
       is green.
-- [ ] 4.4 Move `compose_base_frame`, `render_main`, and `compute_frame_layout` out
+- [x] 4.4 Move `compose_base_frame`, `render_main`, and `compute_frame_layout` out
       of `src/app/render/screens/root.rs` into a shell-side module next to
       `src/app/shell_run.rs`, preserving the `AppLayout` atomic-swap ordering and
       the `layout.main.browse_destination` tag exactly. Keep the public name
       `compose_base_frame` (design Open Questions). Verify all ~20 existing call
       sites compile and `rtk cargo nextest run -p mbv` is green — in particular
       `tests_conformance_matrix.rs` and `shell_browser_tests.rs`.
-- [ ] 4.5 Delete `src/app/render/screens/root.rs` and its `root` entry in
+- [x] 4.5 Delete `src/app/render/screens/root.rs` and its `root` entry in
       `src/app/render/screens/mod.rs`; prune orphaned re-exports in
       `src/app/render/mod.rs`. Verify `rtk cargo clippy --workspace --all-targets`
       is warning-free.
-- [ ] 4.6 Verify `ast-grep scan` (no path argument) exits 0 with **no findings**.
+- [x] 4.6 Verify `ast-grep scan` (no path argument) exits 0 with **no findings**.
       Do not run or gate on `rtk make check-code-file-lines` here — the 800-line
       cap is checked once, pre-PR, at 5.4.
 
