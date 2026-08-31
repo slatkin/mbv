@@ -72,10 +72,12 @@ unmodified code; if one fails, the test is wrong, not the code.
       `rtk cargo check -p mbv` passes.
 - [ ] 3.2 Delete `src/app/render/screens/queue.rs` and its `queue` entry in
       `src/app/render/screens/mod.rs`, and remove the
-      `self.render_queue_title(...)` call at `src/app/render/screens/root.rs:492`
-      along with the now-unused `title_overhead` computation feeding only it.
-      Do **not** touch `src/app/render/components/queue.rs` or
-      `src/app/components/queue.rs`. Verify `rtk cargo check -p mbv` passes.
+      `self.render_queue_title(...)` call at `src/app/render/screens/root.rs:367`.
+      **Retain the `title_overhead` reservation and its use in
+      `queue_content_area`: it remains load-bearing geometry until 4.1 moves
+      the queue-panel arrangement.** Do **not** touch
+      `src/app/render/components/queue.rs` or `src/app/components/queue.rs`.
+      Verify `rtk cargo check -p mbv` passes.
 - [ ] 3.3 Run the unit-2A tests. If any fail, the two painters diverge: stop,
       report the exact diff in rendered output and which state produced it, and
       get a decision on which rendering is correct before changing either the

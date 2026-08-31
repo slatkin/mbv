@@ -115,10 +115,11 @@ The rects coincide: legacy uses `{x: qla.x+2, y: qla.y+1, w: qla.width-4, h:1}`
 (`root.rs:494`); the shell derives `{x: queue_area.x+2, y: queue_area.y-2, ...}`
 where `queue_area.y == qla.y + 3`. Same row.
 
-So the component's title paint is gated on a side effect of the legacy painter it
-is supposed to have replaced. The fix is to derive `title_area` from
-`layout.main.queue_area` unconditionally, delete `screens/queue.rs` whole, and let
-`QueueComponent` be sole painter in both cases. `queue_scope_local_area` and
+The `title_overhead` reservation that makes `queue_area.y == qla.y + 3` remains
+load-bearing until D3's queue-panel extraction; deleting the legacy title painter
+must not remove or change that reservation early. So the fix is to derive
+`title_area` from `layout.main.queue_area` unconditionally, delete
+`screens/queue.rs` whole, and let `QueueComponent` be sole painter in both cases. `queue_scope_local_area` and
 `queue_scope_remote_area` then have no non-test readers and come out of
 `AppLayout` — the component already owns the equivalents in
 `QueueRenderGeometry::scope_local_area/scope_remote_area`.
