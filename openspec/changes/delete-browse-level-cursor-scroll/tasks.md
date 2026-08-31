@@ -333,9 +333,23 @@ Their line references predate 1.2a and that re-spelling shifts none of them.
       Result (`2b91957f`): no-op — the campaign only deleted code/files, grew
       none. `rtk make check-code-file-lines` → "all governed tracked files are
       at or below 800 lines".
-- [ ] 4.2 Full gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
+- [x] 4.2 Full gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
       `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`,
       `rtk cargo fmt`, `rtk make check-code-file-lines`.
+      Result (run at code HEAD `76fae07f`, `--no-fail-fast` used):
+      • `cargo check -p mbv` — 0 errors; `--all-targets` error census 0.
+      • `cargo nextest run -p mbv --no-fail-fast` — 1157 passed / 1 failed.
+        Sole failure `app::components::browser_component_tests::browser_local_navigation_mirrors_legacy_flat_movement`
+        is the pre-existing baseline (present on `main`, tracked as the pre-PR
+        blocker) — unchanged by this campaign.
+      • `cargo clippy --workspace --all-targets` — 113 warnings (= baseline),
+        0 errors.
+      • `ast-grep scan` — 66 errors, ALL in the pre-existing `no-*-in-screens`
+        legacy rule family (tuirealm-migration debt); this change touched no
+        `screens/` file and the `interactive-component-boundary` family is
+        clean.
+      • `cargo fmt --check` — clean.
+      • `make check-code-file-lines` — pass.
 - [x] 4.3 Confirm #607's acceptance criterion "component-local interaction
       state has one owner" holds literally: no `App` field stores a live
       cursor, scroll, or selection for a mounted component. Verify: stated
