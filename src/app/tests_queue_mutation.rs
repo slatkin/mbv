@@ -244,6 +244,49 @@ fn clearing_remote_queue_in_direct_remote_mode_leaves_local_queue_metadata_intac
     assert!(app.queue_dirty);
 }
 
+/// `c` (`request_clear_queue`) must raise the confirmation for a direct-remote
+/// daemon queue -- the queue lives in `remote_player_tab`, so the old
+/// `self.player_tab.total_queue_len() == 0` check (the always-empty local queue)
+/// silently swallowed the key. Clearing itself is already supported
+/// (`execute_pending_queue_action` -> `replace_direct_remote_queue`).
+#[test]
+fn clear_queue_prompt_opens_for_direct_remote_daemon_queue() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    // Empty local queue is the real socket-attached-mbvd state: the queue lives
+    // only in `remote_player_tab`. Pre-fix this made the old `player_tab` check
+    // early-return, so this test fails without the fix.
+    let mut app = make_remote_app_stub(Vec::new(), make_items(3));
+    app.set_queue_scope(QueueScope::Remote);
+    assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
+
+    app.request_clear_queue();
+
+    assert!(
+        matches!(
+            app.pending_overlay,
+            Some(super::types_overlay::OverlayRequest::Confirm(_))
+        ),
+        "clear-queue confirmation must open for a direct-remote daemon queue"
+    );
+}
+
+/// A connected Emby session owns its queue on the remote device; `c` still
+/// refuses it with the explanatory toast rather than opening the prompt.
+#[test]
+fn clear_queue_prompt_refused_for_connected_session_queue() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_remote_app_stub(make_items(2), make_items(3));
+    app.set_queue_scope(QueueScope::Remote);
+    app.connected_session_id = Some("session".into());
+
+    app.request_clear_queue();
+
+    assert!(!matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::Confirm(_))
+    ));
+}
+
 #[test]
 fn clearing_tracked_queue_applies_immediately_and_stops_tracking() {
     let _guard = crate::config::TestStateDirGuard::new();

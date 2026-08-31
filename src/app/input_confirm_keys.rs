@@ -164,16 +164,21 @@ impl App {
 
     /// Show the clear-queue confirmation modal (called from QueueIntent::Clear).
     pub(super) fn request_clear_queue(&mut self) {
-        if matches!(self.effective_panel_focus(), PanelFocus::Queue)
-            && self.visible_queue_scope() == QueueScope::Remote
-        {
+        let scope = self.visible_queue_scope();
+        // Legacy `handle_key_clear_queue_prompt` refused a Queue-focused remote
+        // scope outright, which also swallowed `c` for a socket-attached mbvd
+        // whose queue the confirm's `y` handler can clear. Narrow the refusal to
+        // a connected Emby session (queue owned on the remote device); the
+        // direct-remote daemon queue falls through to the same prompt a local
+        // queue gets.
+        if scope == QueueScope::Remote && self.connected_session_id.is_some() {
             self.flash(
                 "Remote queue is controlled by the daemon".into(),
                 ToastSeverity::Error,
             );
             return;
         }
-        if self.player_tab.total_queue_len() == 0 {
+        if self.queue_for_scope(scope).total_queue_len() == 0 {
             return;
         }
         self.ask_confirm(ConfirmModal {
