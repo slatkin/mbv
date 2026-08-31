@@ -47,6 +47,42 @@ fn shell_emby_browser_wide_movies_renders_letter_pills() {
     );
 }
 
+#[test]
+fn shell_emby_browser_wide_movies_paints_one_item_per_row() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_large_movie_library_app(12);
+    app.libs[0].nav_stack[0].items = make_items(12);
+    app.libs[0].nav_stack[0].total_count = 12;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut model = Model::new(app);
+    model.sync_emby_browser();
+    let id = model.emby_browser_id.clone().expect("browser mounted");
+    let backend = TestBackend::new(120, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| {
+            model.app.compose_base_frame(frame, None);
+            model.render_emby_browser_component(frame);
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let row_of = |needle: &str| {
+        (0..buffer.area().height)
+            .find(|&y| {
+                (0..buffer.area().width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+                    .contains(needle)
+            })
+            .expect(needle)
+    };
+    assert_ne!(row_of("Item 0"), row_of("Item 1"));
+    assert!(matches!(
+        drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE),
+        Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
+    ));
+}
+
 /// Task 5.3d, Emby browser effect decoupling: `BrowserComponent` resolves
 /// its own selected `EmbyItem` from its component-local cursor over the
 /// mirrored content, and the shell routes each typed effect to an `App`
