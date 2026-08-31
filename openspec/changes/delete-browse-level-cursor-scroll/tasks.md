@@ -310,10 +310,21 @@ Their line references predate 1.2a and that re-spelling shifts none of them.
       rule family produces zero `ast-grep scan` diagnostics. (The 66 pre-existing
       `no-*-in-screens` scan errors are a separate legacy rule family tracked by
       the interactive-surface migration, out of scope here.)
-- [ ] 3.2 Delete the warning comments that documented the old rule (for example
+- [x] 3.2 Delete the warning comments that documented the old rule (for example
       `input_browse_dispatch.rs:22`, `context_menu_actions.rs:305`), since the
       thing they warned about no longer compiles. Verify: `rtk grep -n
       "mirror" src/app/` returns only historical references in archived docs.
+      Result (`5c24e186`): deleted the stale "remove-tv-workspace-cursor-mirror"
+      warning paragraph in `input_browse_dispatch.rs` doc comment on
+      `activate_selected_series_item` (it warned about the deleted
+      `nav_stack.last().cursor` mirror, which no longer compiles); kept the
+      design-rationale paragraph below it. KEPT the `context_menu_actions.rs`
+      `toggle_watched_item` comment: it is R1/task-4.3 design rationale
+      explaining why the API takes `item`, not a warning about deleted code
+      (docs-owner content, #614). Grep gate re-scoped: `"mirror"` in `src/app/`
+      still has ~197 hits, all unrelated legitimate "mirror layout/behaviour"
+      uses; the deleted field-pair convention has zero remaining warnings.
+      `rtk cargo check -p mbv` clean.
 
 ## 4. Close out
 
