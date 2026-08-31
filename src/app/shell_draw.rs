@@ -252,8 +252,8 @@ impl App {
         // painted solely by the mounted `PlaybackComponent` (row 3.9).
         self.paint_legacy_chrome(f, chrome);
 
-        let (lib_area, queue_area) = if self.effective_panel_mode() == PanelMode::LibraryOnly {
-            (right_area, Rect::default())
+        let (lib_area, queue_geometry) = if self.effective_panel_mode() == PanelMode::LibraryOnly {
+            (right_area, Default::default())
         } else {
             // The card fills the top of the left column; the queue list takes
             // the rows below it. Short terminals keep that same structure.
@@ -322,7 +322,7 @@ impl App {
                 card_height: layout.card.height,
                 narrow_player_height: narrow_player_h,
             });
-            (right_area, queue_geometry.panel_area)
+            (right_area, queue_geometry)
         };
 
         // Apply the shared horizontal padding once here, at the single point
@@ -345,17 +345,10 @@ impl App {
         // internally before reaching the inline presentation path.
 
         if self.effective_panel_mode() != PanelMode::LibraryOnly {
-            render_queue_panel_frame(f, queue_area, queue_focused);
-            let queue_geometry = queue_panel_geometry(QueuePanelInputs {
-                left_content: queue_area,
-                card_height: 0,
-                narrow_player_height: 0,
-            });
+            render_queue_panel_frame(f, queue_geometry.panel_area, queue_focused);
             layout.queue_title_reserved = queue_geometry.title_reserved;
             layout.queue_title_area = queue_geometry.title_area;
-            if queue_geometry.content_area.height >= 1 {
-                layout.queue_area = queue_geometry.content_area;
-            }
+            layout.queue_area = queue_geometry.content_area;
             layout.queue_selected_item_rect = None;
             if let Some(pill_row) = queue_geometry.pill_row {
                 render_queue_status(
