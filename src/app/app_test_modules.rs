@@ -100,6 +100,10 @@ mod tests_podcast_context_menu;
 mod tests_queue_scope;
 
 #[cfg(test)]
+#[path = "tests_queue_regression.rs"]
+mod tests_queue_regression;
+
+#[cfg(test)]
 #[path = "tests_queue_consume.rs"]
 mod tests_queue_consume;
 
