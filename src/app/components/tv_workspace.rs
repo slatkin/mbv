@@ -99,7 +99,9 @@ impl TvWorkspaceComponent {
             .map_or(0, |detail| detail.seasons.len());
         self.season_cursor = self.season_cursor.min(season_count.saturating_sub(1));
         if let Some(episode_cursor) = self.episode_cursor {
-            let episode_count = self
+            // Missing detail or episode data means the refresh is still loading;
+            // do not discard the component-local selection in that interval.
+            let Some(episodes) = self
                 .context
                 .series_detail
                 .as_ref()
@@ -111,9 +113,11 @@ impl TvWorkspaceComponent {
                         .episodes
                         .get(&season.id)
                 })
-                .map_or(0, Vec::len);
+            else {
+                return;
+            };
             self.episode_cursor =
-                (episode_count > 0).then(|| episode_cursor.min(episode_count - 1));
+                (!episodes.is_empty()).then(|| episode_cursor.min(episodes.len() - 1));
         }
     }
 

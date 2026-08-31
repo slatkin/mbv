@@ -150,6 +150,23 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
         component.episode_activation_selection(),
         Some(("series-id".into(), 0, 2))
     );
+
+    // An unavailable detail refresh must not erase the mounted component's
+    // local episode cursor while the data is loading.
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        Some(series.clone()),
+        None,
+        0,
+        Some(2),
+        true,
+        false,
+    ));
+    assert_eq!(
+        component.episode_activation_selection(),
+        Some(("series-id".into(), 0, 2))
+    );
+
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
         Some(series.clone()),
