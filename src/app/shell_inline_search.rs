@@ -1,6 +1,7 @@
 use super::components::{BrowserKey, BrowserKind, ComponentId, InlineSearchComponent, SearchPool};
 use super::shell::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
+use crate::app::render::shared_hero_presentation;
 use mbv_core::config::ServiceKind;
 use ratatui::layout::Rect;
 
@@ -264,6 +265,12 @@ impl Model {
         let area = self.inline_search_area();
         if area.width == 0 || area.height == 0 {
             return;
+        }
+        let wide = shared_hero_presentation(area).is_some();
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            if let Some(search) = comp.as_any_mut().downcast_mut::<InlineSearchComponent>() {
+                search.set_wide(wide);
+            }
         }
         self.application.view(&id, frame, area);
     }

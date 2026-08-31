@@ -17,7 +17,9 @@ use tuirealm::state::State;
 
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
-use crate::app::render::{render_generic_movies_home_video_rows_with_ctx, LibraryListRenderCtx};
+use crate::app::render::{
+    render_generic_movies_home_video_rows_with_ctx, render_search_box, LibraryListRenderCtx,
+};
 use crate::app::ui_util::move_cursor;
 
 #[derive(Clone)]
@@ -62,6 +64,7 @@ pub struct InlineSearchComponent {
     scroll: usize,
     focused: bool,
     layout: crate::app::layout::LayoutMain,
+    wide: bool,
 }
 
 impl InlineSearchComponent {
@@ -74,7 +77,12 @@ impl InlineSearchComponent {
             scroll: 0,
             focused: false,
             layout: Default::default(),
+            wide: false,
         }
+    }
+
+    pub(in crate::app) fn set_wide(&mut self, wide: bool) {
+        self.wide = wide;
     }
 
     pub(in crate::app) fn set_content(&mut self, pool: SearchPool, loading: bool, focused: bool) {
@@ -195,9 +203,19 @@ impl Component for InlineSearchComponent {
         let items = self.pool.filtered_items(&self.query);
         let context = LibraryListRenderCtx::from_items(items, self.cursor, self.scroll)
             .with_search(self.query.clone(), self.loading);
+        let list_area = if self.wide {
+            area
+        } else {
+            render_search_box(frame, Rect { height: 1, ..area }, &self.query, self.loading);
+            Rect {
+                y: area.y.saturating_add(1),
+                height: area.height.saturating_sub(1),
+                ..area
+            }
+        };
         self.scroll = render_generic_movies_home_video_rows_with_ctx(
             frame,
-            area,
+            list_area,
             &context,
             self.focused,
             crate::app::library_column_width::library_column_count(area.width),
