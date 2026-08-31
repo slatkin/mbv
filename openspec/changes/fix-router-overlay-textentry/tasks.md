@@ -2,7 +2,7 @@
 
 ## 1. Router snapshot
 
-- [ ] 1.1 Add `text_entry_focused: bool` to `RouterSnapshot` in
+- [x] 1.1 Add `text_entry_focused: bool` to `RouterSnapshot` in
   `src/app/key_policy.rs`. Update the shell's `router_outcome` in
   `src/app/shell.rs` to set the field by inspecting the focused leaf:
   - `Some(ComponentId::Overlay(OverlayId::Search))` → true (search sidebar)
@@ -13,7 +13,7 @@
   Add a `Default`-deriving placeholder; existing tests that build
   `RouterSnapshot::default()` keep working.
 
-- [ ] 1.2 Update `resolve_router_outcome` in `src/app/router.rs` with
+- [x] 1.2 Update `resolve_router_outcome` in `src/app/router.rs` with
   two new rules:
   - **Never swallow the focused leaf's own typed request.** When the
     policy would return `Swallow` and the focused leaf is a blocking
@@ -31,7 +31,7 @@
   declines or the overlay's own request is silent → the leaf's
   request stands."
 
-- [ ] 1.3 Update `KeyPolicyBinding::LibraryTabJump` in
+- [x] 1.3 Update `KeyPolicyBinding::LibraryTabJump` in
   `src/app/key_policy.rs:97` to also require `chord.mods.is_empty()`.
   Move the `library_tab_jump` entry in `KEY_POLICY` so it is
   ordered **after** `alt_swallow` — `Alt+1` is swallowed, not
@@ -39,7 +39,7 @@
 
 ## 2. Confirm-intent key translation
 
-- [ ] 2.1 Update `handle_confirm_intent` in
+- [x] 2.1 Update `handle_confirm_intent` in
   `src/app/shell_modal_actions.rs:14-28` to re-encode `Accept` as
   `KeyEvent::new(KeyCode::Char('y'), NONE)`, matching the action
   handler's `Char('y')`-only arms. `Cancel` (`Esc`), `Save`
@@ -52,7 +52,7 @@
 
 ## 3. Double-tap timer
 
-- [ ] 3.1 Drop the `arm_first_press = focus() != Some(&ComponentId::UiRoot)`
+- [x] 3.1 Drop the `arm_first_press = focus() != Some(&ComponentId::UiRoot)`
   gate in `src/app/shell.rs:176` (or wherever the assignment lives
   after the snapshot population). The first eligible Space/Esc
   press arms the timer regardless of focus; the second press
