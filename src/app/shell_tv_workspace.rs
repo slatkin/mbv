@@ -45,9 +45,21 @@ impl Model {
                 }
                 self.push_tv_workspace_content();
             }
-            // Episode and season cursors are component-local until the later
-            // episode action slice; retain typed routing without touching App.
-            ShellRequest::TvEpisodeMove { .. } | ShellRequest::TvSeasonMove { .. } => {}
+            ShellRequest::TvEpisodeMove { .. } => {}
+            ShellRequest::TvSeasonMove { .. } => {
+                // The component moves its season cursor first; use that
+                // authoritative selection to lazily fetch uncached episodes.
+                let selected_season = self
+                    .tv_workspace_id
+                    .as_ref()
+                    .and_then(|id| self.application.get_component(id))
+                    .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
+                    .and_then(TvWorkspaceComponent::selected_season);
+                if let Some((series_id, season_id)) = selected_season {
+                    self.app.fetch_series_season_episodes(series_id, season_id);
+                    self.push_tv_workspace_content();
+                }
+            }
             // unreachable: shell_messages.rs routes only the Tv* group
             // (MoveRows/MoveColumn/JumpCursor/Activate/EpisodeActivate/Back/
             // CycleLetterPill/EpisodeMove/SeasonMove) into handle_tv_request;

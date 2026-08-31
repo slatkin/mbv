@@ -166,6 +166,19 @@ impl TvWorkspaceComponent {
         ))
     }
 
+    pub(in crate::app) fn selected_season(&self) -> Option<(String, String)> {
+        let series_id = self.context.selected_series.as_ref()?.id.clone();
+        let season_id = self
+            .context
+            .series_detail
+            .as_ref()?
+            .seasons
+            .get(self.season_cursor)?
+            .id
+            .clone();
+        Some((series_id, season_id))
+    }
+
     fn move_episode(&mut self, delta: i64) {
         let count = self
             .context
