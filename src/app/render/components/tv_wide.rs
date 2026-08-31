@@ -3,7 +3,9 @@ use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::detail_series_view::{SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS};
-use crate::app::render::components::hero::{HeroContent, HeroImage, HeroLine};
+use crate::app::render::components::hero::{
+    inline_hero_text_width, wrap_overview_lines, HeroContent, HeroImage, HeroLine,
+};
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::HomeImagePaint;
 use crate::app::render::{render_pill_bar, render_placeholder, MarkerEdge, PillBar};
@@ -250,9 +252,22 @@ fn render_tv_series_selection(
     };
     let title = item.display_name();
     let meta = super::detail_series_view::series_meta_line(item);
-    let overview =
-        (!item.overview.is_empty()).then(|| vec![HeroLine::Plain(item.overview.clone())]);
-    let lines = overview.as_deref().unwrap_or_default();
+    let overview_lines = if item.overview.is_empty() {
+        Vec::new()
+    } else {
+        let overview_start_row = area.y + 1 + (!meta.is_empty()) as u16 + 1;
+        wrap_overview_lines(&item.overview, |line_idx| {
+            inline_hero_text_width(
+                area.width,
+                SERIES_IMAGE_COLS,
+                SERIES_IMAGE_ROWS,
+                overview_start_row
+                    .saturating_add(line_idx as u16)
+                    .saturating_sub(area.y),
+            ) as usize
+        })
+    };
+    let lines: Vec<HeroLine> = overview_lines.into_iter().map(HeroLine::Plain).collect();
     let result = crate::app::render::components::hero::paint_hero_content(
         f,
         area,
@@ -262,7 +277,7 @@ fn render_tv_series_selection(
             meta_color: palette::TEXT_DETAIL_META,
             show_playing: false,
             unconditional_spacer_after_meta: true,
-            lines,
+            lines: &lines,
             image: (images_enabled).then_some(HeroImage {
                 actual_w: SERIES_IMAGE_COLS,
                 height: SERIES_IMAGE_ROWS,

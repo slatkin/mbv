@@ -238,9 +238,13 @@ impl Model {
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
-        let image_loading = selected_series
-            .as_ref()
-            .is_some_and(|item| self.app.series_detail_loading.contains(&item.id));
+        let image_loading = selected_series.as_ref().is_some_and(|item| {
+            self.app.images_enabled()
+                && !self
+                    .app
+                    .card_image_states
+                    .contains_key(&format!("{}:ser_primary", item.id))
+        });
         let context = TvWideRenderCtx::new(
             list,
             selected_series,

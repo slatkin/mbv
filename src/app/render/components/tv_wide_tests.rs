@@ -13,6 +13,7 @@ use ratatui::widgets::Block;
 use ratatui::Terminal;
 use std::collections::HashMap;
 use tuirealm::component::Component;
+use unicode_width::UnicodeWidthStr;
 
 /// Paints the wide TV workspace exactly as the live shell does: draw the
 /// legacy `App` base frame (which now only publishes the `tv_wide_*`
@@ -103,6 +104,17 @@ fn wide_tv_requests_selected_series_primary_image_with_budget_and_placeholder() 
         }
         _ => panic!("expected selected Series image request"),
     }
+}
+
+#[test]
+fn wide_tv_series_overview_wraps_around_portrait_budget() {
+    let text = "one two three four five six seven eight nine ten eleven twelve thirteen";
+    let lines = wrap_overview_lines(text, |line| {
+        inline_hero_text_width(82, SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS, 3 + line as u16) as usize
+    });
+    let full_width = wrap_overview_lines(text, |_| 82);
+    assert!(lines[0].width() <= 63);
+    assert_ne!(lines, full_width);
 }
 
 #[test]

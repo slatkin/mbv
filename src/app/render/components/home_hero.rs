@@ -338,7 +338,12 @@ impl App {
                     );
                 }
                 if show_placeholder {
-                    self.render_keep_watching_hero_image(f, area, &cache_key, false);
+                    // Series artwork uses the portrait inline-detail budget,
+                    // not the generic 16:9 hero budget.
+                    f.render_widget(
+                        Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
+                        area,
+                    );
                 } else {
                     self.paint_series_image(f, area, &cache_key);
                 }
