@@ -443,3 +443,65 @@ fn music_workspace_track_targeted_actions_emit_typed_messages() {
         Some(Msg::Shell(ShellRequest::MusicTrackContextMenu))
     ));
 }
+
+#[test]
+fn ctrl_s_on_album_emits_library_shuffle() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+
+    let message = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('s'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::EmbyLibraryShuffle { item }))
+            if item.id == "id" && item.item_type == "MusicAlbum"
+    ));
+}
+
+#[test]
+fn ctrl_s_with_track_focus_does_not_shuffle() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+    component.set_inline_track_focus_enabled(true);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+
+    let message = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('s'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+
+    assert_eq!(message, None);
+    assert_eq!(component.track_cursor(), Some(0));
+}
+
+#[test]
+fn ctrl_p_empty_list_is_unclaimed() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(Vec::new(), 0, 0),
+        None,
+        "Artist".into(),
+        Vec::new(),
+        0,
+        Vec::new(),
+        Vec::new(),
+        true,
+        true,
+        None,
+        false,
+        None,
+    ));
+
+    let message = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('p'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+
+    assert_eq!(message, None);
+}

@@ -351,3 +351,69 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
         Some(Msg::Shell(ShellRequest::TvEpisodeActivate))
     ));
 }
+
+#[test]
+fn ctrl_r_emits_library_rescan() {
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
+        None,
+        None,
+        0,
+        None,
+        true,
+        false,
+    ));
+
+    let message = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('r'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+
+    assert_eq!(message, Some(Msg::Shell(ShellRequest::EmbyLibraryRescan)));
+}
+
+#[test]
+fn ctrl_w_emits_library_toggle_watched() {
+    let mut series = make_item("Series", "Series");
+    series.id = "series-id".into();
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-id".into();
+    let mut episode = make_item("Episode 1", "Episode");
+    episode.id = "episode-id".into();
+    episode.series_id = series.id.clone();
+    let detail = crate::app::SeriesDetail {
+        seasons: vec![season],
+        episodes: [("season-id".into(), vec![episode])].into_iter().collect(),
+    };
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        Some(series.clone()),
+        Some(detail),
+        0,
+        None,
+        true,
+        false,
+    ));
+
+    // The local Episodes pane is focused, but legacy library actions target
+    // the selected series-list item rather than the highlighted episode.
+    assert!(matches!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Right,
+            modifiers: KeyModifiers::NONE,
+        })),
+        Some(Msg::Shell(ShellRequest::TvMoveColumn { delta: 1 }))
+    ));
+    let message = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('w'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::EmbyLibraryToggleWatched { item }))
+            if item.id == "series-id" && item.item_type == "Series"
+    ));
+}
