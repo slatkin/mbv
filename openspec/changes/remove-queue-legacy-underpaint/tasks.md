@@ -22,7 +22,7 @@
 
 ## 2. Delete the duplicate painter
 
-- [ ] 2.1 Delete the legacy body call at `render/screens/root.rs:506`. Verify:
+- [x] 2.1 Delete the legacy body call at `render/screens/root.rs:506`. Verify:
       1.1's regression test goes green; the queue still paints, via the
       component only.
 - [ ] 2.2 Delete `render_queue` (`render/screens/queue.rs:277-566`) and its
