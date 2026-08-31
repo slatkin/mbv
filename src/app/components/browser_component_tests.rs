@@ -193,7 +193,7 @@ fn browser_local_navigation_strides_one_column_for_wide_movies() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
     browser.set_content(LibraryListRenderCtx::from_items(make_items(12), 0, 0), true);
     browser.set_wide_movies(false, false);
-    let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
     terminal
         .draw(|frame| browser.view(frame, frame.area()))
         .unwrap();
