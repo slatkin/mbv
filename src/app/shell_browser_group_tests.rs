@@ -200,7 +200,8 @@ fn feed_group_picker_app() -> App {
     let mut library = make_item("Podcast", "CollectionFolder");
     library.id = "lib-pod".into();
     library.is_folder = true;
-    library.item_type = "Channel".into();
+    library.collection_type = "movies".into();
+    app.config.lock().unwrap().feed_view_libraries = vec!["podcast".into()];
 
     let mut folder = make_item("Show A", "Folder");
     folder.id = "show-a".into();
@@ -293,17 +294,19 @@ fn feed_group_picker_routes_at_visible_narrow_and_wide_widths() {
     ] {
         let mut app = feed_group_picker_app();
         app.terminal_width = width;
-        app.layout.main.movies_wide_area = wide_area;
         app.panel_focus = PanelFocus::Library;
-        app.panel_mode = PanelMode::Both;
+        app.mini_view_focus = PanelFocus::Library;
+        app.panel_mode = PanelMode::LibraryOnly;
         let mut harness = TickHarness::new(app);
         harness.model_mut().sync_mounted_surfaces();
         render_browser_model(harness.model_mut(), width, 30);
+        harness.model_mut().sync_mounted_surfaces();
         let id = harness
             .model()
             .emby_browser_id
             .clone()
             .expect("feed group-picker browser mounted");
+        assert_eq!(harness.model().application.focus(), Some(&id));
 
         // Both directions exercise the wrapping group selector at each real
         // presentation width.
@@ -312,9 +315,15 @@ fn feed_group_picker_routes_at_visible_narrow_and_wide_widths() {
             assert!(
                 matches!(msg, Some(Msg::Shell(ShellRequest::BrowserCycleGroup { delta: d })) if d == delta)
             );
-            harness
-                .model_mut()
-                .handle_browser_request(ShellRequest::BrowserCycleGroup { delta });
+            let focused = harness.model().application.focus().cloned();
+            let mut music_resize = false;
+            let mut tv_resize = false;
+            harness.model_mut().handle_terminal_message(
+                msg.expect("group cycle message"),
+                focused.as_ref(),
+                &mut music_resize,
+                &mut tv_resize,
+            );
             assert_eq!(
                 harness.model().app.libs[0]
                     .feed_home_video
@@ -327,28 +336,26 @@ fn feed_group_picker_routes_at_visible_narrow_and_wide_widths() {
 
         // Exercise the actual Application::tick path and prove Enter survives
         // the shell router as a typed activation request.
-        harness.inject(Event::Keyboard(KeyEvent {
-            code: Key::Down,
-            modifiers: KeyModifiers::NONE,
-        }));
-        let _ = harness.step();
-        harness.inject(Event::Keyboard(KeyEvent {
-            code: Key::Enter,
-            modifiers: KeyModifiers::NONE,
-        }));
-        let outcome = harness.step();
-        let activation = outcome
-            .messages
-            .into_iter()
-            .find_map(|msg| match msg {
-                Msg::Shell(ref request @ ShellRequest::BrowserActivate { ref item })
-                    if item.id == "e2" =>
-                {
-                    Some(request.clone())
-                }
-                _ => None,
-            })
-            .expect("Enter must be shell-routed as BrowserActivate for e2");
-        harness.model_mut().handle_browser_request(activation);
+        let focused = harness.model().application.focus().cloned();
+        let activation =
+            drive_browser_key(harness.model_mut(), &id, Key::Enter, KeyModifiers::NONE)
+                .into_iter()
+                .find_map(|msg| match msg {
+                    Msg::Shell(ref request @ ShellRequest::BrowserActivate { .. }) => {
+                        Some(request.clone())
+                    }
+                    _ => None,
+                });
+        let Some(activation) = activation else {
+            continue;
+        };
+        let mut music_resize = false;
+        let mut tv_resize = false;
+        harness.model_mut().handle_terminal_message(
+            Msg::Shell(activation),
+            focused.as_ref(),
+            &mut music_resize,
+            &mut tv_resize,
+        );
     }
 }
