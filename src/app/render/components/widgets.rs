@@ -504,9 +504,10 @@ pub(in crate::app::render) fn render_placeholder(f: &mut Frame, area: Rect, msg:
 }
 
 impl App {
+    #[allow(unused_variables)]
     pub(in crate::app::render) fn render_library(
         &mut self,
-        _f: &mut Frame,
+        f: &mut Frame,
         area: Rect,
         focused: bool,
         layout: &mut LayoutMain,
