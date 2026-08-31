@@ -52,6 +52,30 @@ Each new key arm does `self.selected_item().map(|item| ShellRequest::Library…
 
 ## D3. Key-arm placement and precedence
 
+### Legacy semantics (`de45cdb8^:src/app/input_lib_keys.rs`)
+
+The legacy `handle_lib_key` is the shared left-column handler (the source
+identifies it alongside `handle_queue_key` at lines 20-27). Its `Ctrl+A` path
+runs first, in `handle_enqueue_selected_key`, and enqueues the current
+selection at lines 63-80 and 100-104. The remaining actions are matched in the
+single library-key match:
+
+| Chord | Legacy action | Legacy source |
+|---|---|---|
+| `Ctrl+P` | Play or activate the current library item (`current_lib_item(lib_idx)`). For Music this was the highlighted album/current stack item; for TV it was the current stack item: the series at root, then the season/episode when drilled. | lines 175-180 |
+| `Ctrl+A` | Enqueue the current selection. | lines 63-80, 100-104 |
+| `Ctrl+W` | Toggle watched on the current library item. Music targeted the highlighted album/current stack item. TV had no pane-specific target: it targeted `lvl.items[lvl.cursor]`, so it toggled the series at root and the current season/episode when drilled. | lines 182-184 |
+| `Ctrl+S` | Shuffle-play the current library selection. | lines 185-187 |
+| `Ctrl+R` | Open the rescan confirmation for the whole library. | lines 188-196 |
+| bare `r` | Refresh the library. | line 197 |
+
+`Ctrl+A` is checked before the global-key helper and the library match
+(lines 100-107). Within the library match, `Ctrl+R` precedes the `r` arm
+(lines 188-197), so Ctrl+R rescans rather than refreshing. The Ctrl predicates
+use `contains(CONTROL)` (lines 77, 175, 182, 185, and 188); the later `r` arm
+has no modifier predicate, so the documented bare-`r` refresh is the ordinary
+unmodified case and Ctrl+R is claimed by precedence.
+
 ### Music (`MusicWorkspaceComponent::handle_key`)
 
 The early return is `if !self.context.focused { return None; }`. Existing
@@ -61,29 +85,25 @@ track-level arms (`music_workspace.rs:231-297`) must keep winning when
 
 | Chord | Guard | Emits |
 |---|---|---|
-| `Ctrl+P` | `track_cursor.is_none()` | `LibraryPlay { item }` (legacy: non-folder album → `select` == activate; `play_or_activate_lib_item` covers both) |
+| `Ctrl+P` | `track_cursor.is_none()` | `LibraryPlay { item }` (legacy: highlighted album/current stack item; non-folder album activation is covered by `play_or_activate_lib_item`) |
 | `Ctrl+A` | `track_cursor.is_none()` | `LibraryEnqueue { item }` |
 | `Ctrl+W` | `track_cursor.is_none()` | `LibraryToggleWatched { item }` |
 | `Ctrl+S` | `track_cursor.is_none()` | `LibraryShuffle { item }` |
 | `Ctrl+R` | `track_cursor.is_none()` | `LibraryRescan` |
 | bare `r` (no CONTROL/ALT) | `track_cursor.is_none()` | `LibraryRefresh` |
 
-`Ctrl+R` arm comes before bare `r`, matching legacy precedence
-(`input_lib_keys.rs:282` before `:291`).
+`Ctrl+R` must come before bare `r`, preserving the legacy precedence above.
 
 ### TV (`TvWorkspaceComponent::handle_key`)
 
 The `_ => None` at `tv_workspace.rs:393` is the drop site. Add the same five
 chords + bare `r`. The Episodes-pane arms (`tv_workspace.rs:319-346`) already
-claim `[`/`]`/`j`/`k` when `pane == Pane::Episodes`; the Ctrl chords act on
-`selected_item()` regardless of pane (legacy `handle_lib_key` did not gate
-them on drill level), so place them after the pane-specific arms and before
-the letter-pill arm.
-
-Open question for the implementer: does legacy `Ctrl+W` on a TV series toggle
-the whole series watched, or the highlighted episode when the Episodes pane
-is focused? Check `toggle_watched` in `~/Dev/mbv/src/app/input_lib_keys.rs`
-and mirror it via which `EmbyItem` `selected_item()` returns per pane.
+claim `[`/`]`/`j`/`k` when `pane == Pane::Episodes`; place these library chords
+after the pane-specific arms and before the letter-pill arm. They must
+resolve the legacy-equivalent current stack item: TV has no legacy pane target,
+and the item is the series at root or the current season/episode when drilled.
+In particular, `Ctrl+W` must not invent a pane-specific highlighted-episode
+target; it mirrors the legacy `lvl.items[lvl.cursor]` behavior described above.
 
 ## D4. No router change
 
