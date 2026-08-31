@@ -84,6 +84,62 @@ fn shell_emby_browser_wide_movies_paints_one_item_per_row() {
     ));
 }
 
+#[test]
+fn shell_emby_browser_wide_movies_guards_hero_to_movie_items() {
+    let _guard = crate::config::TestStateDirGuard::new();
+
+    let render_left_pane = |selected: usize, non_movie: bool| {
+        let mut app = browser_app_with_folder_and_movie();
+        if non_movie {
+            app.libs[0].nav_stack[0].items[1].item_type = "BoxSet".into();
+            app.libs[0].nav_stack[0].items[1].name = "Box Set".into();
+        }
+        app.libs[0].nav_stack[0].set_resting_cursor(selected);
+        app.panel_mode = PanelMode::LibraryOnly;
+        let mut model = Model::new(app);
+        model.sync_emby_browser();
+
+        let backend = TestBackend::new(200, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| {
+                model.app.compose_base_frame(frame, None);
+                model.render_emby_browser_component(frame);
+            })
+            .unwrap();
+
+        let area = crate::app::render::wide_library_panes(model.app.layout.main.left_area, 2, 1)
+            .expect("wide browser panes")
+            .left_area;
+        let buffer = terminal.backend().buffer();
+        let mut rendered = String::new();
+        for y in 0..area.height {
+            for x in 0..area.width {
+                rendered.push_str(buffer[(area.x + x, area.y + y)].symbol());
+            }
+        }
+        rendered
+    };
+
+    let folder_pane = render_left_pane(0, false);
+    assert!(
+        !folder_pane.contains("Folder A"),
+        "folder selection must not paint a wide hero card: {folder_pane}"
+    );
+
+    let non_movie_pane = render_left_pane(1, true);
+    assert!(
+        !non_movie_pane.contains("Box Set"),
+        "non-Movie selection must not paint a wide hero card: {non_movie_pane}"
+    );
+
+    let movie_pane = render_left_pane(1, false);
+    assert!(
+        movie_pane.contains("Movie B"),
+        "Movie selection must paint the wide hero card: {movie_pane}"
+    );
+}
+
 /// Task 5.3d, Emby browser effect decoupling: `BrowserComponent` resolves
 /// its own selected `EmbyItem` from its component-local cursor over the
 /// mirrored content, and the shell routes each typed effect to an `App`

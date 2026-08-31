@@ -216,19 +216,25 @@ impl BrowserComponent {
             left_panel,
         );
         let hero_content = padded_rect(left_area, PANE_PAD_X, 0);
-        let hero_data = ctx.selected_item().and_then(|item| {
-            prepare_wide_emby_hero_card(item, hero_content).map(
-                |(meta_layout, meta_area, img_area)| {
-                    HeroData::Emby(
-                        Box::new(item.clone()),
-                        meta_area,
-                        meta_area,
-                        img_area,
-                        meta_layout,
-                    )
-                },
-            )
-        });
+        let hero_data = ctx
+            .selected_item()
+            .filter(|item| {
+                !item.is_folder
+                    && (!matches!(self.kind, BrowserKind::Movies) || item.item_type == "Movie")
+            })
+            .and_then(|item| {
+                prepare_wide_emby_hero_card(item, hero_content).map(
+                    |(meta_layout, meta_area, img_area)| {
+                        HeroData::Emby(
+                            Box::new(item.clone()),
+                            meta_area,
+                            meta_area,
+                            img_area,
+                            meta_layout,
+                        )
+                    },
+                )
+            });
 
         // Right rail: pill row + one-column list.
         let right_pane = hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
