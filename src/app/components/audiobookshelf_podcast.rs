@@ -293,6 +293,26 @@ impl AudiobookshelfPodcastComponent {
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        let pos: ratatui::layout::Position = (mouse.column, mouse.row).into();
+        // TODO(remove-legacy-keyboard-endpoint): podcast episode wheel parity
+        if self.episode_selection.is_none()
+            && self.geometry.list_area.width > 0
+            && self.geometry.list_area.height > 0
+            && self.geometry.list_area.contains(pos)
+        {
+            let columns = self.geometry.columns.max(1) as i64;
+            match mouse.kind {
+                MouseEventKind::ScrollDown => {
+                    self.move_cursor(3 * columns);
+                    return Some(self.show_move_request());
+                }
+                MouseEventKind::ScrollUp => {
+                    self.move_cursor(-(3 * columns));
+                    return Some(self.show_move_request());
+                }
+                _ => {}
+            }
+        }
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
             let pos: ratatui::layout::Position = (mouse.column, mouse.row).into();
             let mut selected = false;

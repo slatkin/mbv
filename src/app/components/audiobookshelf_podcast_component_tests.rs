@@ -266,6 +266,49 @@ fn abs_podcast_narrow_grid_navigation_uses_columns_and_page_rows() {
 }
 
 #[test]
+fn abs_podcast_wheel_moves_three_grid_rows_and_ignores_outside_list() {
+    let state = narrow_grid_component_state();
+    let mut component = AudiobookshelfPodcastComponent::new();
+    component.set_content(&state, true, false);
+    view_narrow(&mut component, 100, 6);
+    let list = component.geometry().list_area;
+    let inside = MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: list.x,
+        row: list.y,
+        modifiers: KeyModifiers::NONE,
+    };
+    assert!(matches!(
+        component.on(&Event::Mouse(inside)),
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            index: 8
+        }))
+    ));
+    assert!(matches!(
+        component.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: list.x,
+            row: list.y,
+            modifiers: KeyModifiers::NONE,
+        })),
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            index: 2
+        }))
+    ));
+    assert_eq!(component.cursor(), 2);
+    assert_eq!(
+        component.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::NONE,
+        })),
+        None
+    );
+    assert_eq!(component.cursor(), 2);
+}
+
+#[test]
 fn abs_podcast_grid_mouse_selects_second_column_and_bucket_start() {
     let state = narrow_grid_component_state();
     let mut component = AudiobookshelfPodcastComponent::new();

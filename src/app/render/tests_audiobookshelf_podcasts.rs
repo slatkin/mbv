@@ -77,6 +77,63 @@ use mbv_core::audiobookshelf::AudiobookshelfProgress;
 use mbv_core::audiobookshelf::AudiobookshelfShow;
 
 #[test]
+fn narrow_podcast_show_paint_matches_each_grid_hit_rect() {
+    let mut app = audiobookshelf_app();
+    app.audiobookshelf_browse[0]
+        .shows
+        .extend((1..4).map(|index| AudiobookshelfShow {
+            library_item_id: format!("show-{index}"),
+            title: format!("Show {index}"),
+            author: None,
+            description: None,
+            cover_path: None,
+        }));
+    let (mut model, terminal) = render_podcast_shell(app, 100, 6, true);
+    let component_id = model
+        .abs_podcast_id
+        .as_ref()
+        .expect("podcast component mounted");
+    let (list_area, rows) = model
+        .application
+        .get_component_mut(component_id)
+        .and_then(|comp| {
+            comp.as_any_mut()
+                .downcast_mut::<AudiobookshelfPodcastComponent>()
+        })
+        .map(|component| {
+            (
+                component.geometry().list_area,
+                component.geometry().show_rows.clone(),
+            )
+        })
+        .expect("podcast component mounted");
+    let first_row = rows
+        .iter()
+        .filter(|(rect, _)| rect.y == rows[0].0.y)
+        .collect::<Vec<_>>();
+    assert_eq!(first_row.len(), 2);
+    assert_eq!(first_row[0].0.width, 49);
+    assert_eq!(first_row[1].0.width, 49);
+    assert!(first_row[0].0.x + first_row[0].0.width <= first_row[1].0.x);
+    assert_eq!(list_area.width, 100);
+    let buffer = terminal.backend().buffer();
+    for (rect, index) in rows {
+        let title = if index == 0 {
+            "Show A".to_owned()
+        } else {
+            format!("Show {index}")
+        };
+        let text = (rect.x..rect.x + rect.width)
+            .map(|x| buffer[(x, rect.y)].symbol())
+            .collect::<String>();
+        assert!(
+            text.contains(&title),
+            "{title:?} not painted in rect {rect:?}: {text:?}"
+        );
+    }
+}
+
+#[test]
 fn wide_podcasts_use_a_left_hero_and_right_show_workspace() {
     let app = audiobookshelf_app();
     let (model, _terminal) = render_podcast_shell(app, 100, 30, true);
