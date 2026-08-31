@@ -299,10 +299,17 @@ Their line references predate 1.2a and that re-spelling shifts none of them.
 
 ## 3. Retire the conventions the types now enforce
 
-- [ ] 3.1 Review `rules/interactive-component-boundary/` and remove only the
+- [x] 3.1 Review `rules/interactive-component-boundary/` and remove only the
       clauses the types now make unrepresentable; keep every clause still
       guarding a real boundary. Verify: `rtk ast-grep test` fixtures pass and
       `rtk ast-grep scan` is clean.
+      Result: reviewed all 7 rules rule-by-rule; none carried a clause tied to
+      the deleted `BrowseLevel.cursor`/`.scroll` mirror convention (no file
+      mentions cursor/scroll/mirror/BrowseLevel). Zero diff, no commit. Verify:
+      `rtk ast-grep test` → 7 passed / 0 failed; `interactive-component-boundary`
+      rule family produces zero `ast-grep scan` diagnostics. (The 66 pre-existing
+      `no-*-in-screens` scan errors are a separate legacy rule family tracked by
+      the interactive-surface migration, out of scope here.)
 - [ ] 3.2 Delete the warning comments that documented the old rule (for example
       `input_browse_dispatch.rs:22`, `context_menu_actions.rs:305`), since the
       thing they warned about no longer compiles. Verify: `rtk grep -n
