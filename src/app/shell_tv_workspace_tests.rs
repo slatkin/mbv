@@ -804,9 +804,24 @@ fn tv_season_skip_model() -> Model {
 
 #[test]
 fn wide_tv_handoff_does_not_fetch_empty_series_id() {
-    let mut model = mounted_tv_model();
-    model.app.libs[0].nav_stack[0].items[0].id.clear();
+    let mut app = make_movie_app();
+    app.libs[0].library.collection_type = "tvshows".into();
+    app.libs[0].nav_stack[0].items[0].item_type = "Series".into();
+    app.libs[0].nav_stack[0].items[0].id.clear();
+    app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
+    let mut model = Model::new(app);
+    let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
+    client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
+        server_url: "http://127.0.0.1:1".into(),
+        user_id: "user-id".into(),
+        token: "token".into(),
+    });
+    model.app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
 
+    // This is the first wide-TV handoff, so the mounted component cannot have
+    // already captured a valid ID before the guard is exercised.
     model.sync_tv_workspace();
 
     assert!(model.app.series_detail_loading.is_empty());
