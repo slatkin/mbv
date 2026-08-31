@@ -1,5 +1,6 @@
 use ratatui::layout::Rect;
 
+pub(in crate::app::render) mod chrome;
 pub(in crate::app::render) mod hero_left;
 pub(in crate::app::render) mod home;
 pub(in crate::app::render) mod library;
