@@ -692,6 +692,33 @@ fn abs_podcast_legacy_base_frame_publishes_geometry_but_paints_no_shows() {
 /// entry, selector pill, or filter pill. (The `feeds.rs` component
 /// double-pill-bar fix in `33782e1e` was a separate, component-side bug.)
 #[test]
+fn queue_legacy_base_frame_reserves_geometry_but_paints_no_slot_rows() {
+    for (width, height) in [(60, 20), (140, 30)] {
+        let mut app = crate::app::tests::make_app_stub();
+        app.player_tab.set_queue_items(
+            crate::app::tests::make_items(2)
+                .into_iter()
+                .map(|item| QueueItem::Emby(Box::new(item)))
+                .collect(),
+            0,
+        );
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal
+            .draw(|frame| app.compose_base_frame(frame, None))
+            .unwrap();
+        assert!(
+            app.layout.main.queue_area.width > 0,
+            "base frame must reserve queue_area at {width}x{height}"
+        );
+        let output = buffer_to_string(&terminal);
+        assert!(
+            !output.contains("Item 0") && !output.contains("Item 1"),
+            "QueueComponent must be the sole slot-row painter at {width}x{height}: {output:?}"
+        );
+    }
+}
+
+#[test]
 fn feeds_legacy_base_frame_publishes_geometry_but_paints_no_entries() {
     for (width, height) in [(60, 20), (140, 30)] {
         let mut app = feed_app();
