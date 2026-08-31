@@ -185,6 +185,30 @@ impl TvWorkspaceComponent {
         Some((series_id, season_id))
     }
 
+    /// Entering the Episodes pane by keyboard starts at the first available
+    /// episode, while retaining an existing local selection.
+    fn ensure_episode_cursor(&mut self) {
+        if self.episode_cursor.is_some() {
+            return;
+        }
+        let has_episode = self
+            .context
+            .series_detail
+            .as_ref()
+            .and_then(|detail| detail.seasons.get(self.season_cursor))
+            .and_then(|season| {
+                self.context
+                    .series_detail
+                    .as_ref()?
+                    .episodes
+                    .get(&season.id)
+            })
+            .is_some_and(|episodes| !episodes.is_empty());
+        if has_episode {
+            self.episode_cursor = Some(0);
+        }
+    }
+
     fn move_episode(&mut self, delta: i64) {
         let count = self
             .context
@@ -302,6 +326,7 @@ impl TvWorkspaceComponent {
                 Some(ShellRequest::TvMoveColumn { delta: -1 })
             }
             Key::Right | Key::Char('l') => {
+                self.ensure_episode_cursor();
                 self.pane = Pane::Episodes;
                 Some(ShellRequest::TvMoveColumn { delta: 1 })
             }

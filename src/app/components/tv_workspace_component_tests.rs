@@ -66,6 +66,49 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
 }
 
 #[test]
+fn tv_right_selects_first_episode_for_activation() {
+    let mut series = make_item("Series", "Series");
+    series.id = "series-id".into();
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-id".into();
+    let mut episode = make_item("Episode 1", "Episode");
+    episode.id = "episode-id".into();
+    let detail = crate::app::SeriesDetail {
+        seasons: vec![season],
+        episodes: [("season-id".into(), vec![episode])].into_iter().collect(),
+    };
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        Some(series),
+        Some(detail),
+        0,
+        None,
+        true,
+        false,
+    ));
+
+    let key = |code| {
+        Event::Keyboard(KeyEvent {
+            code,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+    assert!(matches!(
+        component.on(&key(Key::Right)),
+        Some(Msg::Shell(ShellRequest::TvMoveColumn { delta: 1 }))
+    ));
+    assert_eq!(
+        component.episode_activation_selection(),
+        Some(("series-id".into(), 0, 0))
+    );
+    assert!(matches!(
+        component.on(&key(Key::Enter)),
+        Some(Msg::Shell(ShellRequest::TvEpisodeActivate))
+    ));
+}
+
+#[test]
 fn tv_keyboard_leaves_key_unclaimed_when_queue_is_focused() {
     let mut component = TvWorkspaceComponent::new();
     component.set_content(TvWideRenderCtx::new(
