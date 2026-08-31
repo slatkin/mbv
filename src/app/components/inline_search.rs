@@ -293,24 +293,23 @@ mod tests {
         );
         let mut terminal = Terminal::new(TestBackend::new(40, 5)).unwrap();
         terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-
-        component.query = "short".into();
-        terminal
             .draw(|frame| {
+                component.view(frame, frame.area());
                 frame
                     .buffer_mut()
-                    .cell_mut((10, 1))
+                    .cell_mut((39, 2))
                     .expect("test cell in bounds")
                     .set_symbol("N");
+                component.query = "short".into();
                 component.view(frame, frame.area());
             })
             .unwrap();
 
-        let cells = terminal.backend().buffer().content();
-        assert!(cells.iter().any(|cell| cell.symbol() == "S"));
-        assert!(!cells.iter().any(|cell| cell.symbol() == "N"));
+        let buffer = terminal.backend().buffer();
+        assert_eq!(buffer.cell((1, 1)).unwrap().symbol(), "S");
+        // The second row belonged to the longer unfiltered result set and
+        // must be reset rather than retaining its old `LongName` glyphs.
+        assert_eq!(buffer.cell((1, 2)).unwrap().symbol(), " ");
     }
 
     #[test]
