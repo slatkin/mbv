@@ -395,7 +395,7 @@ fn render_book_hero(
         focused,
     );
     (plan.image_key.is_some() && result.img_rect.is_some()).then(|| {
-        super::home_hero::HomeImagePaint::AudiobookshelfCover {
+        super::home_hero::HomeImagePaint::AudiobookshelfBookCover {
             area: result.img_rect.unwrap(),
             library_item_id: book.library_item_id.clone(),
             show_placeholder: plan.placeholder,

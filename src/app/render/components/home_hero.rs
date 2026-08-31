@@ -296,6 +296,25 @@ impl App {
         }
     }
 
+    fn paint_audiobookshelf_cover(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        cache_key: &str,
+        show_placeholder: bool,
+    ) {
+        if show_placeholder {
+            self.render_keep_watching_hero_image(f, area, cache_key, false);
+        } else if let Some(image) = self.cached_image_protocol_mut(cache_key) {
+            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
+            f.render_stateful_widget(
+                SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
+                area,
+                image,
+            );
+        }
+    }
+
     /// Fetches (if needed) and paints the image a [`HomeImagePaint`] request
     /// describes, using App's image-cache authority. Shared by the
     /// `App::render_home_list` wrapper (`home.rs`), which computes its own
@@ -378,18 +397,16 @@ impl App {
                 show_placeholder,
             }) => {
                 if let Some(cache_key) = self.audiobookshelf_cover_key(&library_item_id) {
-                    if show_placeholder {
-                        self.render_keep_watching_hero_image(f, area, &cache_key, false);
-                    } else if let Some(image) = self.cached_image_protocol_mut(&cache_key) {
-                        type SImg =
-                            ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-                        f.render_stateful_widget(
-                            SImg::default()
-                                .resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
-                            area,
-                            image,
-                        );
-                    }
+                    self.paint_audiobookshelf_cover(f, area, &cache_key, show_placeholder);
+                }
+            }
+            Some(HomeImagePaint::AudiobookshelfBookCover {
+                area,
+                library_item_id,
+                show_placeholder,
+            }) => {
+                if let Some(cache_key) = self.audiobookshelf_book_cover_key(&library_item_id) {
+                    self.paint_audiobookshelf_cover(f, area, &cache_key, show_placeholder);
                 }
             }
             None => {}
@@ -430,6 +447,14 @@ pub(in crate::app) enum HomeImagePaint {
         /// other beside-image hero; `false` for the two-column/text `Generic`
         /// detail block, which renders nothing until the cover is cached (an
         /// existing, preserved difference between the two call sites).
+        show_placeholder: bool,
+    },
+    /// Audiobookshelf book artwork must stay isolated from podcast artwork,
+    /// including when both use the same library item ID (book-browsing spec
+    /// line 124).
+    AudiobookshelfBookCover {
+        area: Rect,
+        library_item_id: String,
         show_placeholder: bool,
     },
 }

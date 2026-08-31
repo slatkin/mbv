@@ -268,6 +268,28 @@ impl App {
             self.current_protocol_suffix(),
         ))
     }
+
+    /// Triggers the Audiobookshelf book-cover fetch for `library_item_id` and
+    /// returns its isolated image cache key, or `None` with no server configured.
+    /// The book-browsing spec requires book artwork to remain isolated from
+    /// podcast artwork (line 124).
+    pub(in crate::app::render) fn audiobookshelf_book_cover_key(
+        &mut self,
+        library_item_id: &str,
+    ) -> Option<String> {
+        let setup = self.config.lock().unwrap().audiobookshelf_setup.clone()?;
+        if self.images_enabled() {
+            self.fetch_audiobookshelf_book_cover(
+                setup.server_url.clone(),
+                library_item_id.to_string(),
+            );
+        }
+        Some(images::audiobookshelf_book_cover_cache_key(
+            &setup.server_url,
+            library_item_id,
+            self.current_protocol_suffix(),
+        ))
+    }
 }
 
 /// Renders the generic Home hero detail's non-image content (title/meta/

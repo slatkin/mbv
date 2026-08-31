@@ -233,6 +233,75 @@ mod tests {
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
+    fn abs_book_hero_uses_isolated_book_cover_key() {
+        let mut app = make_app_stub();
+        app.image_protocol_enabled = true;
+        app.config.lock().unwrap().audiobookshelf_setup = Some(
+            mbv_core::config::AudiobookshelfSetup::new("https://books.example"),
+        );
+        mbv_core::config::save_service_secret(
+            mbv_core::config::ServiceKind::Audiobookshelf,
+            "book-hero-secret",
+        )
+        .unwrap();
+
+        let library = AudiobookshelfLibrary {
+            id: "books".into(),
+            name: "Books".into(),
+            media_type: "book".into(),
+        };
+        let mut state = AudiobookshelfBookBrowseState::new(library.clone());
+        state.books.push(AudiobookshelfBook {
+            library_item_id: "book-hero-isolation".into(),
+            title: "Book".into(),
+            author_display: None,
+            author_sort_key: "Book".into(),
+            cover_path: Some("cover.jpg".into()),
+            duration_seconds: 60.0,
+            narrator: None,
+            published_year: None,
+            genres: Vec::new(),
+            description: None,
+            series_name: None,
+            chapters: Vec::new(),
+            audio_files: Vec::new(),
+        });
+        state.selected_id = Some("book-hero-isolation".into());
+        app.audiobookshelf_libraries.push(library);
+        app.audiobookshelf_book_browse.push(state);
+        app.tab = TabSelection::AudiobookshelfLibrary(0);
+        app.panel_focus = PanelFocus::Library;
+
+        let mut model = Model::new(app);
+        model.sync_audiobookshelf_book();
+        model.app.layout.main.audiobookshelf_book_area = Rect::new(0, 0, 100, 40);
+        let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+        terminal
+            .draw(|frame| model.render_audiobookshelf_book_component(frame))
+            .unwrap();
+
+        let server = "https://books.example";
+        let suffix = model.app.current_protocol_suffix();
+        let book_key = crate::app::images::audiobookshelf_book_cover_cache_key(
+            server,
+            "book-hero-isolation",
+            suffix,
+        );
+        let generic_key = crate::app::images::audiobookshelf_cover_cache_key(
+            server,
+            "book-hero-isolation",
+            suffix,
+        );
+        assert!(
+            model.app.card_image_loading.contains(&book_key)
+                || model.app.card_image_states.contains_key(&book_key),
+            "book hero must reserve or load the isolated book-cover key"
+        );
+        assert!(!model.app.card_image_loading.contains(&generic_key));
+        assert!(!model.app.card_image_states.contains_key(&generic_key));
+    }
+
+    #[test]
     fn abs_book_shell_mounts_and_routes_component() {
         let mut app = make_app_stub();
         let library = AudiobookshelfLibrary {
