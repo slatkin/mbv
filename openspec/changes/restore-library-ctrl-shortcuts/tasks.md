@@ -74,9 +74,9 @@
 
 ## 7. Close out
 
-- [ ] 7.1 Update the Music and TV workspace rows in
+- [x] 7.1 Update the Music and TV workspace rows in
       `docs/architecture/interactive-surface-ledger.md`.
-- [ ] 7.2 Re-read `render/components/help.rs` `Ctrl+S`/`Ctrl+R` lines and the
+- [x] 7.2 Re-read `render/components/help.rs` `Ctrl+S`/`Ctrl+R` lines and the
       `["Shuffle", "Rescan", "Search library"]` "Emby-only" gate — confirm it
       still reads correctly now that Music/TV honor the chords. Adjust only
       if the gate text is now wrong.
