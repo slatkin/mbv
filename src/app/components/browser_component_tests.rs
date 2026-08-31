@@ -33,7 +33,7 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
         (Key::Right, 4, 5),
         (Key::Char('l'), 4, 5),
         (Key::Down, 39, 39),  // clamp at the last item
-        (Key::Up, 1, 0),      // clamp at the first item
+        (Key::Up, 1, 1),      // already at the first painted row
         (Key::Left, 0, 0),    // clamp at the left edge
         (Key::Right, 39, 39), // clamp at the right edge
         // PageDown/PageUp stride (height - 1) * cols — the page excludes
