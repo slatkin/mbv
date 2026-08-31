@@ -44,6 +44,11 @@ pub enum ShellRequest {
     /// raises the menu through `App` (target resolution lives at the
     /// shell/component boundary).
     MusicTrackContextMenu,
+    /// `[`/`]` in grouped Music: cycle to the previous (`delta == -1`) or next
+    /// (`delta == 1`) group; the shell runs `App::switch_music_group`.
+    MusicGroupSwitch {
+        delta: i64,
+    },
     /// Quit the application.
     Quit,
     /// Dismiss the Help overlay (Esc/F1 while help is open).

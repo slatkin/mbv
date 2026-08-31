@@ -95,6 +95,16 @@ impl Model {
                     }
                     self.push_music_workspace_content();
                 }
+                ShellRequest::MusicGroupSwitch { delta } => {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        self.app.switch_music_group(lib_idx, delta);
+                    }
+                    // A group switch replaces the album level; re-anchor the
+                    // workspace cursor at this nav event (mirrors the pill
+                    // click path in `ShellRequest::BrowserClick`).
+                    self.music_workspace_reanchor = true;
+                    self.push_music_workspace_content();
+                }
                 // Help overlay cross-boundary requests (design D4).
                 ShellRequest::Quit => quit = true,
                 ShellRequest::DismissHelp => self.umount_help(),

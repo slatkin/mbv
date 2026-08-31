@@ -39,8 +39,10 @@ impl App {
         }
 
         // Verify count before popping so we never lose the album level.
+        // Nothing to switch between with fewer than two groups: bail before
+        // popping/re-fetching so `[`/`]` is a true no-op there.
         let n = self.libs[lib_idx].nav_stack[stack_len - 2].items.len();
-        if n == 0 {
+        if n < 2 {
             return;
         }
 

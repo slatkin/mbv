@@ -374,6 +374,48 @@ fn music_workspace_ordinary_push_leaves_album_cursor_alone() {
 }
 
 #[test]
+fn music_workspace_bracket_keys_request_group_switch() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(grouped_context(1, vec![0, 1, 2, 3], true, None));
+
+    let prev = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('['),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(
+        prev,
+        Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: -1 }))
+    );
+
+    let next = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char(']'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(
+        next,
+        Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }))
+    );
+}
+
+#[test]
+fn music_workspace_bracket_keys_ignored_with_focused_track() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+    component.set_inline_track_focus_enabled(true);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.track_cursor(), Some(0));
+
+    let message = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('['),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(message, None);
+}
+
+#[test]
 fn music_workspace_track_targeted_actions_emit_typed_messages() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_content(context(None));

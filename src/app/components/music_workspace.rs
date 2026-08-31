@@ -289,6 +289,23 @@ impl MusicWorkspaceComponent {
             Key::Char('.') if self.track_cursor.is_some() && self.library_panel_active() => {
                 return Some(Msg::Shell(ShellRequest::MusicTrackContextMenu));
             }
+            // `[`/`]` at the album-list level cycle the App-owned group pill.
+            // A focused inline track is a track-level context, so guard on
+            // `track_cursor.is_none()`; the focus gate is the early return.
+            Key::Char('[')
+                if self.track_cursor.is_none()
+                    && !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                return Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: -1 }));
+            }
+            Key::Char(']')
+                if self.track_cursor.is_none()
+                    && !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                return Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }));
+            }
             Key::Up | Key::Char('k') if self.can_emit_album_cursor() => {
                 let target = self
                     .move_album_rows(-1, self.album_columns, true)
