@@ -69,10 +69,6 @@ pub(super) struct ImageFetchReq {
     pub item_id: String,
     pub series_id: String,
     pub types: Vec<String>,
-    /// When true, the decoded image is center-cropped to a square before it is
-    /// handed to the protocol. Used by the artist-header collage so its tiles
-    /// are uniform squares regardless of the cover's native aspect ratio.
-    pub square_crop: bool,
     pub source: ImageSource,
 }
 
@@ -287,7 +283,7 @@ impl App {
         series_id: String,
         types: &[&str],
     ) {
-        self.queue_card_image_fetch(cache_key, item_id, series_id, types, false);
+        self.queue_card_image_fetch(cache_key, item_id, series_id, types);
     }
 
     fn queue_card_image_fetch(
@@ -296,7 +292,6 @@ impl App {
         item_id: String,
         series_id: String,
         types: &[&str],
-        square_crop: bool,
     ) {
         if self.card_image_loading.contains(&cache_key)
             || self.card_image_states.contains_key(&cache_key)
@@ -310,7 +305,6 @@ impl App {
             item_id,
             series_id,
             types: types.iter().map(|s| s.to_string()).collect(),
-            square_crop,
             source: ImageSource::Emby,
         };
         if self.image_fetches_active >= MAX_IMAGE_FETCHES {
@@ -362,7 +356,6 @@ impl App {
             item_id,
             series_id: String::new(),
             types: Vec::new(),
-            square_crop: false,
             source: ImageSource::Audiobookshelf {
                 server_url,
                 api_key,
@@ -573,7 +566,6 @@ impl App {
             item_id,
             series_id,
             types,
-            square_crop,
             source,
         } = req;
         std::thread::spawn(move || {
@@ -678,20 +670,7 @@ impl App {
                     fetched
                 };
                 // Decode off the UI thread; the main loop only builds the protocol.
-                let img = bytes
-                    .and_then(|b| image::load_from_memory(&b).ok())
-                    .map(|img| {
-                        if square_crop {
-                            // Center-crop to a square so collage tiles are uniform
-                            // regardless of the cover's native aspect ratio.
-                            let side = img.width().min(img.height());
-                            let x = (img.width() - side) / 2;
-                            let y = (img.height() - side) / 2;
-                            img.crop_imm(x, y, side, side)
-                        } else {
-                            img
-                        }
-                    });
+                let img = bytes.and_then(|b| image::load_from_memory(&b).ok());
                 let _ = tx.send((cache_key, img));
             }));
             if result.is_err() {
