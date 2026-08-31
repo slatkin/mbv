@@ -20,18 +20,14 @@
 //! the effect into the router. Playback rows additionally pin the live
 //! first-press FallThrough / second-press Command policy.
 
-use crate::app::action::Command;
 use crate::app::components::{
-    BrowserKey, BrowserKind, ComponentId, ModalId, Msg, OverlayId, QueueRequest, ShellRequest,
+    BrowserKey, BrowserKind, ComponentId, Msg,
     TerminalObserverEvent,
 };
-use crate::app::components::msg::{ConfirmIntent, ContextMenuIntent};
-use crate::app::input_resolver::KeyChord;
 use crate::app::router::{
     resolve_router_outcome, resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot,
 };
 use crate::app::shell::apply_router_outcome;
-use crate::app::types_playback::QueueScope;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::config::ServiceKind;
 
