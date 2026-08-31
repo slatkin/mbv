@@ -230,6 +230,11 @@ impl Model {
                     .cloned()
                     .filter(|item| item.item_type == "Series")
             });
+        if let Some(item) = selected_series.as_ref() {
+            // Detail loading is an App-owned effect; schedule it at the shell
+            // hand-off rather than from the render context or painter.
+            self.app.fetch_series_detail(item.id.clone());
+        }
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());

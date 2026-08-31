@@ -78,6 +78,38 @@ fn sync_projects_inline_search_visibility_before_tv_content() {
 }
 
 #[test]
+fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
+    let mut model = mounted_tv_model();
+    let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
+    client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
+        server_url: "http://127.0.0.1:1".into(),
+        user_id: "user-id".into(),
+        token: "token".into(),
+    });
+    model.app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+
+    model.push_tv_workspace_content();
+    assert!(model.app.series_detail_loading.contains("movie-focused"));
+
+    // Re-pushing the same selection does not duplicate the request.
+    model.push_tv_workspace_content();
+    assert_eq!(model.app.series_detail_loading.len(), 1);
+
+    model.app.series_detail_cache.insert(
+        "movie-focused".into(),
+        crate::app::SeriesDetail {
+            seasons: Vec::new(),
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+    model.app.series_detail_loading.clear();
+    model.push_tv_workspace_content();
+    assert!(model.app.series_detail_loading.is_empty());
+}
+
+#[test]
 fn push_tv_workspace_content_projects_selected_series_on_mount() {
     let model = mounted_tv_model();
     let id = model
