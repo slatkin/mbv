@@ -143,4 +143,4 @@ Order is load-bearing: 4.1-4.2 must precede 4.4 (design D3).
       `rtk make check-code-file-lines`. This is the only point the 800-line cap
       is enforced; split the shell draw module by concern only if it fails here.
       Verify all five pass.
-- [ ] 5.5 Close issue #635 referencing this change. Verify the issue is closed.
+- [x] 5.5 Close issue #635 referencing this change. Verified closed after the whole-tree ratchet and final gates passed.
