@@ -282,9 +282,20 @@ Their line references predate 1.2a and that re-spelling shifts none of them.
       non-test caller is `mouse_gestures.rs:83`. Delete the mouse call sites
       with them; do not repair mouse behaviour (D16). Verify:
       `rtk cargo clippy --workspace --all-targets` reports no dead code.
-- [ ] 2.3 Re-check `mouse_gestures.rs` for remaining writes to the deleted
-      fields (`:122`, `:219`, `:231`) and delete those paths. Verify:
-      `rtk cargo check -p mbv`.
+- [x] 2.3 Re-check `mouse_gestures.rs` for remaining writes to the deleted
+      fields. **Result: zero raw writes remain; no code change (user decision
+      2026-08-30).** The three sites this row targeted (`handle_mouse_single_click_emby`,
+      `handle_mouse_single_click_tv`, `handle_mouse_double_click_tv`) were
+      re-spelled to the sanctioned `set_resting_cursor` by 1.2a; a scout pass
+      at `65da5bd8` confirmed all three are LIVE (routed from real
+      `BrowserClick`/`TvClick` events through `shell_messages.rs`), add only the
+      resting-position persistence write (components own the live cursor), and
+      are unconstrained by tests. Deleting them would break live behaviour,
+      outside this section's remit ("retire what the deletion makes
+      **unreachable**"), so they stay — same shape 1.1f accepted at the TV
+      breakpoint hand-off. Verify: raw-field write grep over `src/app/` returns
+      only `#[cfg(test)]` orphan-file hits (see 4.4) — no production writes to
+      the deleted fields exist anywhere; `rtk cargo check -p mbv` clean.
 
 ## 3. Retire the conventions the types now enforce
 
@@ -304,6 +315,21 @@ Their line references predate 1.2a and that re-spelling shifts none of them.
 - [ ] 4.2 Full gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
       `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`,
       `rtk cargo fmt`, `rtk make check-code-file-lines`.
+- [ ] 4.4 Resolve the three ORPHANED test files on this branch (user decision
+      2026-08-30: decided at section 4): `src/app/render/components/list_tests.rs`
+      (782 lines), `src/app/render/components/list_late_tests.rs`,
+      `src/app/render/components/movies_tv_header_fit_tests.rs` (230 lines).
+      `cargo nextest list` at `65da5bd8` proves zero tests from them reach the
+      binary — no `mod`/`#[path]`/`include!` declaration survives since
+      `c1ac59fa` (remove legacy Emby browse painter) deleted the declaring
+      arm while keeping the bodies. They still contain raw
+      `BrowseLevel::cursor/scroll` writes and calls to the movers 2.2 deleted;
+      every compile/test gate is blind to them. Choose ONE: (a) delete all
+      three, after verifying no unique coverage survives nowhere (their render
+      helpers `render_list_term`/`buffer_to_string` are referenced by live
+      suites — check before deleting), or (b) restore declarations and migrate
+      them like 1.2b did. Do NOT silently re-wire. Surface the outcome in the
+      PR description.
 - [ ] 4.3 Confirm #607's acceptance criterion "component-local interaction
       state has one owner" holds literally: no `App` field stores a live
       cursor, scroll, or selection for a mounted component. Verify: stated
