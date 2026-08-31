@@ -200,11 +200,11 @@ impl Model {
         };
 
         let outcome = resolve_router_outcome_with_focused(key, &snapshot, self.application.focus());
-        // The router arms the double-tap timer for typed leaf requests.
-        // When UiRoot is focused, the observer key is the leaf message
-        // and the legacy timer path no longer exists.
-        let arm_first_press = self.application.focus() != Some(&ComponentId::UiRoot);
-        self.update_double_tap_state(key, &snapshot, &outcome, arm_first_press);
+        // The router arms the double-tap timer on the first eligible Space/Esc
+        // press regardless of focus; the second press within the window is
+        // claimed by `command_for_policy` when the double-tap snapshot flag is
+        // set.
+        self.update_double_tap_state(key, &snapshot, &outcome);
         outcome
     }
 
@@ -217,7 +217,6 @@ impl Model {
         key: crossterm::event::KeyEvent,
         snapshot: &RouterSnapshot,
         outcome: &RouterOutcome,
-        arm_first_press: bool,
     ) {
         let playback = playback_command_for_key(
             super::input_resolver::KeyChord::from_key(key),
@@ -226,7 +225,7 @@ impl Model {
         );
         match (key.code, playback, outcome) {
             (KeyCode::Char(' '), Some(Command::TogglePlayPause), RouterOutcome::FallThrough)
-                if arm_first_press && !snapshot.space_double_tap =>
+                if !snapshot.space_double_tap =>
             {
                 self.app.last_space_press = Some(Instant::now());
             }
@@ -236,7 +235,7 @@ impl Model {
                 RouterOutcome::Command(Command::TogglePlayPause),
             ) => self.app.last_space_press = None,
             (KeyCode::Esc, Some(Command::Stop), RouterOutcome::FallThrough)
-                if arm_first_press && !snapshot.esc_double_tap =>
+                if !snapshot.esc_double_tap =>
             {
                 self.app.last_esc_press = Some(Instant::now());
             }

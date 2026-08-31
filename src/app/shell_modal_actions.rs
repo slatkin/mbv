@@ -13,7 +13,7 @@ impl Model {
     pub(super) fn handle_confirm_intent(&mut self, intent: ConfirmIntent) {
         let key = match intent {
             ConfirmIntent::Accept => {
-                KeyEvent::new(KeyCode::Enter, crossterm::event::KeyModifiers::NONE)
+                KeyEvent::new(KeyCode::Char('y'), crossterm::event::KeyModifiers::NONE)
             }
             ConfirmIntent::Cancel => {
                 KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE)
