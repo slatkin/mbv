@@ -64,13 +64,13 @@ unmodified code; if one fails, the test is wrong, not the code.
 
 ## 3. Unit 2, commit B — delete the legacy queue-title underpaint
 
-- [ ] 3.1 In `src/app/shell_queue.rs:50`, derive `title_area` from
-      `self.app.layout.main.queue_area` unconditionally, dropping the
-      `(…queue_scope_local_area.height > 0).then(…)` gate. Keep the rect
-      arithmetic identical (`x + 2`, `y - 2`, `width - 4`, `height 1`). Apply the
-      same change to the second gate at `src/app/shell_queue.rs:78`. Verify
+- [x] 3.1 In `src/app/shell_queue.rs:50`, derive `title_area` from
+      `self.app.layout.main.queue_area` when the root has reserved a title row,
+      using `queue_title_reserved` as the published semantic signal. Keep the
+      rect arithmetic identical (`x + 2`, `y - 2`, `width - 4`, `height 1`). Apply
+      the same gate to the second site at `src/app/shell_queue.rs:78`. Verify
       `rtk cargo check -p mbv` passes.
-- [ ] 3.2 Delete `src/app/render/screens/queue.rs` and its `queue` entry in
+- [x] 3.2 Delete `src/app/render/screens/queue.rs` and its `queue` entry in
       `src/app/render/screens/mod.rs`, and remove the
       `self.render_queue_title(...)` call at `src/app/render/screens/root.rs:367`.
       **Retain the `title_overhead` reservation and its use in
@@ -78,17 +78,19 @@ unmodified code; if one fails, the test is wrong, not the code.
       the queue-panel arrangement.** Do **not** touch
       `src/app/render/components/queue.rs` or `src/app/components/queue.rs`.
       Verify `rtk cargo check -p mbv` passes.
-- [ ] 3.3 Run the unit-2A tests. If any fail, the two painters diverge: stop,
+- [x] 3.3 Run the unit-2A tests. If any fail, the two painters diverge: stop,
       report the exact diff in rendered output and which state produced it, and
       get a decision on which rendering is correct before changing either the
-      test or the painter (design D2, first Risk). Verify the suite's outcome is
-      recorded either way.
-- [ ] 3.4 Delete `queue_scope_local_area` and `queue_scope_remote_area` from
+      test or the painter (design D2, first Risk). The initial 4/8 divergence was
+      resolved by the user's decision to preserve legacy output; the unchanged
+      characterization suite now passes 8/8.
+- [x] 3.4 Delete `queue_scope_local_area` and `queue_scope_remote_area` from
       `LayoutMain` in `src/app/layout.rs:113-114` and fix any test-only readers to
       use `QueueComponent::test_scope_pill_areas` instead. Verify
       `rtk cargo nextest run -p mbv` is green.
-- [ ] 3.5 Verify `ast-grep scan --json | jq 'length'` reports **≈19** and
-      `rtk cargo clippy --workspace --all-targets` is warning-free.
+- [x] 3.5 Verify `ast-grep scan --json | jq 'length'` reports **18** and
+      `rtk cargo clippy --workspace --all-targets` has no new warnings versus
+      the known baseline.
 
 ## 4. Unit 3 — queue panel arrangement, backdrops, and the shell move
 

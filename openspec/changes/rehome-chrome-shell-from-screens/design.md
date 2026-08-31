@@ -118,9 +118,11 @@ where `queue_area.y == qla.y + 3`. Same row.
 The `title_overhead` reservation that makes `queue_area.y == qla.y + 3` remains
 load-bearing until D3's queue-panel extraction; deleting the legacy title painter
 must not remove or change that reservation early. So the fix is to derive
-`title_area` from `layout.main.queue_area` unconditionally, delete
-`screens/queue.rs` whole, and let `QueueComponent` be sole painter in both cases. `queue_scope_local_area` and
-`queue_scope_remote_area` then have no non-test readers and come out of
+`title_area` from `layout.main.queue_area` when the root has reserved a title row,
+using a published semantic reservation signal; delete `screens/queue.rs` whole,
+and let `QueueComponent` be sole painter in both cases. Short queue panels retain
+the legacy no-title behavior when no title row was reserved. `queue_scope_local_area`
+and `queue_scope_remote_area` then have no non-test readers and come out of
 `AppLayout` — the component already owns the equivalents in
 `QueueRenderGeometry::scope_local_area/scope_remote_area`.
 
@@ -167,7 +169,9 @@ intermediate commit red.
   mbv / AttachedSession non-mbv, × nerd-fonts on and off), per the
   `ui-design-system` "A surface is migrated" scenario. If they show a real
   divergence, resolve it explicitly and record which rendering wins — do not let
-  the deletion silently change output.
+  the deletion silently change output. The suite found two divergences; the user
+  chose legacy output, so the migrated painter preserves the `Reset` Off icon
+  foreground and the single-space non-mbv AttachedSession label.
 - **[Risk] `compute_chrome_geometry`'s input struct drifts from `App` state.** →
   It is built at one call site (`compute_frame_layout`) and consumed at one
   (`chrome_geometry`); a struct with named fields makes a missed read a compile
@@ -193,9 +197,10 @@ intermediate commit red.
    Verify: `ast-grep scan` drops to ~39; `rtk cargo nextest run -p mbv` green.
 2. **Unit 2, commit A** — queue-title characterization tests against current
    output, in all four remote states. Verify: they pass on unmodified code.
-3. **Unit 2, commit B** — unconditional `title_area` derivation in `shell_queue.rs`;
-   delete `screens/queue.rs`; delete the two dead `AppLayout` fields. Verify:
-   commit A's tests unchanged and passing; `ast-grep scan` drops to ~19.
+3. **Unit 2, commit B** — reservation-aware `title_area` derivation in
+   `shell_queue.rs`; delete `screens/queue.rs`; delete the two dead `AppLayout`
+   fields. Verify commit A's tests unchanged and passing, including no title on
+   short queue panels; `ast-grep scan` drops to ~19.
 4. **Unit 3** — queue-panel block to a queue arrangement; backdrops to
    `components/chrome.rs`; `compose_base_frame`/`render_main` to the shell;
    `screens/root.rs` and `screens/mod.rs`'s `root`/`queue` entries deleted.
