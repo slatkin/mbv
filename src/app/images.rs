@@ -121,6 +121,9 @@ impl App {
     /// Inline series detail pane can render without the user
     /// drilling in first.
     pub(super) fn fetch_series_detail(&mut self, series_id: String) {
+        if series_id.is_empty() {
+            return;
+        }
         if self.series_detail_loading.contains(&series_id)
             || self.series_detail_cache.contains_key(&series_id)
         {

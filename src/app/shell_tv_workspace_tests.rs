@@ -803,6 +803,17 @@ fn tv_season_skip_model() -> Model {
 }
 
 #[test]
+fn wide_tv_handoff_does_not_fetch_empty_series_id() {
+    let mut model = mounted_tv_model();
+    model.app.libs[0].nav_stack[0].items[0].id.clear();
+
+    model.sync_tv_workspace();
+
+    assert!(model.app.series_detail_loading.is_empty());
+    assert!(model.app.series_detail_cache.is_empty());
+}
+
+#[test]
 fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     let mut model = mounted_tv_model();
     model.app.layout.main.tv_wide_right_area = Rect::default();
