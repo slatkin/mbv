@@ -191,6 +191,124 @@ fn long_queue() -> Vec<mbv_core::playback_queue::QueueSlot> {
 }
 
 #[test]
+#[test]
+fn queue_component_upward_scrolling_reaches_top() {
+    let mut component = QueueComponent::new();
+    component.set_content(
+        long_queue(),
+        29,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    for _ in 0..29 {
+        component.on(&Event::Keyboard(key(Key::Up)));
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+    }
+    assert_eq!(component.test_cursor(), 0);
+    assert_eq!(component.test_scroll(), 0);
+}
+
+#[test]
+fn queue_component_page_up_from_bottom_reaches_top() {
+    let mut component = QueueComponent::new();
+    component.set_content(
+        long_queue(),
+        29,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    component.set_area(ratatui::layout::Rect::new(0, 0, 40, 8));
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    for _ in 0..5 {
+        component.on(&Event::Keyboard(key(Key::PageUp)));
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+    }
+    assert_eq!(component.test_cursor(), 0);
+    assert_eq!(component.test_scroll(), 0);
+}
+
+#[test]
+fn queue_component_instances_isolate_viewport_state() {
+    let slots = long_queue();
+    let mut bottom = QueueComponent::new();
+    bottom.set_content(
+        slots.clone(),
+        29,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    let mut untouched = QueueComponent::new();
+    untouched.set_content(
+        slots,
+        0,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    terminal
+        .draw(|frame| bottom.view(frame, frame.area()))
+        .unwrap();
+    terminal
+        .draw(|frame| untouched.view(frame, frame.area()))
+        .unwrap();
+    assert!(bottom.test_scroll() > 0);
+    assert_eq!(untouched.test_scroll(), 0);
+    assert_eq!(untouched.test_cursor(), 0);
+}
+
+#[test]
+fn now_playing_queue_row_shows_elapsed_next_to_duration() {
+    let mut item = crate::app::tests::make_item("playing", "Audio");
+    item.runtime_ticks = 120 * mbv_core::api::TICKS_PER_SECOND;
+    let slot = PlaybackQueue::from_queue_items(vec![QueueItem::Emby(Box::new(item))], None)
+        .slots()
+        .to_vec();
+    let mut component = QueueComponent::new();
+    component.set_content(
+        slot,
+        0,
+        QueueScope::Local,
+        true,
+        PlaybackState {
+            active: true,
+            active_idx: 0,
+            position_ticks: 30 * mbv_core::api::TICKS_PER_SECOND,
+            runtime_ticks: 120 * mbv_core::api::TICKS_PER_SECOND,
+            paused: false,
+        },
+        QueueTitleModel::default(),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let output: String = (0..buffer.area().height)
+        .flat_map(|y| (0..buffer.area().width).map(move |x| buffer[(x, y)].symbol().to_owned()))
+        .collect();
+    assert!(output.contains("0:30 / 2:00"));
+}
+
+#[test]
 fn queue_scope_switch_resets_component_scroll() {
     // Scroll is component-owned (split-queue-cursor-ownership D3): switching
     // scope resets the component's own scroll to 0. Drive scroll nonzero by
