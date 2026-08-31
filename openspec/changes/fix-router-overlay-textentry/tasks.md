@@ -135,7 +135,7 @@
 
 ## 6. Spec delta
 
-- [ ] 6.1 Update the `interactive-component-framework` spec's
+- [x] 6.1 Update the `interactive-component-framework` spec's
   "Input precedence preserved through focus and subscriptions"
   requirement with a new scenario: "A global binding does not
   fire when the focused leaf is a text-entry component." Add a
@@ -144,23 +144,37 @@
   leaf is not a text-entry component; otherwise the leaf's
   character input stands as a typed request."
 
+  **Already authored & committed** in `de45cdb8` at
+  `openspec/changes/fix-router-overlay-textentry/specs/interactive-component-framework/spec.md`:
+  the MODIFIED requirement carries the clarifying sentence and the
+  new scenario. `openspec validate fix-router-overlay-textentry
+  --strict` → valid. Delta merges to the main spec at archive/sync.
+
 ## 7. Verification
 
-- [ ] 7.1 Run `rtk cargo fmt --all -- --check` — 0 diff.
-- [ ] 7.2 Run `rtk cargo check -p mbv` — 0 errors (25 prod
-  warnings, all pre-existing).
-- [ ] 7.3 Run `rtk cargo nextest run -p mbv` — exactly 4 failures
-  (the pre-existing baseline minus the three conformance-matrix
-  rows and the `music_resize` row this change fixes).
-- [ ] 7.4 Run `rtk cargo clippy --workspace --all-targets` — 0
-  errors (85 warnings, all pre-existing).
-- [ ] 7.5 Run `rtk make check-code-file-lines` — PASS.
-- [ ] 7.6 Run `rtk ast-grep scan` — 69 diagnostics (pre-existing
-  screen-boundary baseline, unchanged).
-- [ ] 7.7 Run `rtk ast-grep test` — 7 passed, 0 failed.
+  **Note (orchestrator):** tasks 1.1–1.3 and the conformance-matrix
+  fixes landed upstream in `de45cdb8` before this change's HEAD, so
+  the baseline is cleaner than the plan predicted. Observed values
+  below supersede the plan's estimates.
+
+- [x] 7.1 Run `rtk cargo fmt --all -- --check` — 0 diff. ✅
+- [x] 7.2 Run `rtk cargo check -p mbv` — 0 errors (34 prod
+  warnings, all pre-existing; plan estimated 25). ✅
+- [x] 7.3 Run `rtk cargo nextest run -p mbv --no-fail-fast` —
+  1164 passed, **1 failed**: `browser_local_navigation_mirrors_legacy_flat_movement`
+  (pre-existing baseline, tracked as #632; the conformance-matrix +
+  `music_resize` rows the plan expected to fix were already green
+  at HEAD). No new failures. ✅
+- [x] 7.4 Run `rtk cargo clippy --workspace --all-targets` — 0
+  errors (111 warnings, all pre-existing; plan estimated 85). ✅
+- [x] 7.5 Run `rtk make check-code-file-lines` — PASS. ✅
+- [x] 7.6 Run `rtk ast-grep scan` — 66 diagnostics (pre-existing
+  screen-boundary baseline, unchanged; plan estimated 69). ✅
+- [x] 7.7 Run `rtk ast-grep test` — 7 passed, 0 failed. ✅
 - [ ] 7.8 Squash all fix commits into one, per user request.
-- [ ] 7.9 Update the `interactive-component-framework` spec
-  (task 6.1) and re-run `openspec validate --specs` — passes.
+- [x] 7.9 Update the `interactive-component-framework` spec
+  (task 6.1) and re-run `openspec validate --specs` — passes
+  (66 passed, 0 failed). ✅
 
 ## 8. Final
 
