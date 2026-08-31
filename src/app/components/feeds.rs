@@ -288,6 +288,9 @@ impl FeedsComponent {
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        if !self.focused {
+            return None;
+        }
         let position: Position = (mouse.column, mouse.row).into();
         match mouse.kind {
             MouseEventKind::ScrollDown if self.layout.left_area.contains(position) => {

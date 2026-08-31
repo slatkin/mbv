@@ -264,6 +264,37 @@ fn group_change_reflects_active_filter() {
 }
 
 #[test]
+fn unfocused_component_ignores_mouse_input() {
+    let mut component = grouped_component();
+    let subscriptions = [FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: FeedKind::Audio,
+    }];
+    let entries = vec![entry("First", false), entry("Second", true)];
+    component.set_content(&subscriptions, &[entries.clone()], &entries, false, false);
+    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
+        .unwrap();
+    let selector = component.layout().selector_tabs[1].0;
+    component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+        column: selector.x,
+        row: selector.y,
+        kind: MouseEventKind::Down(MouseButton::Left),
+        modifiers: KeyModifiers::NONE,
+    }));
+    component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+        column: component.layout().left_area.x,
+        row: component.layout().left_area.y,
+        kind: MouseEventKind::ScrollDown,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.selected_group(), 0);
+    assert_eq!(component.cursor(), 0);
+}
+
+#[test]
 fn mouse_owns_feed_selector_and_row_geometry() {
     let mut component = grouped_component();
     let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
