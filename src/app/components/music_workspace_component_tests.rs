@@ -121,6 +121,27 @@ fn music_workspace_vertical_move_follows_album_display_order() {
             kind: AlbumCursorKind::Move,
         }))
     ));
+
+    for (key, target) in [
+        (Key::Left, 2),
+        (Key::Right, 0),
+        (Key::Char('h'), 2),
+        (Key::Char('l'), 0),
+    ] {
+        component.re_anchor(2, 0);
+        let message = component.on(&Event::Keyboard(KeyEvent {
+            code: key,
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert_eq!(component.album_cursor(), target, "{key:?}");
+        assert!(matches!(
+            message,
+            Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                target: actual,
+                kind: AlbumCursorKind::Move,
+            })) if actual == target
+        ));
+    }
 }
 
 #[test]
