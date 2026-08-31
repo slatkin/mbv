@@ -509,7 +509,6 @@ impl App {
                 layout.queue_area = queue_content_area;
             }
             layout.queue_selected_item_rect = None;
-            self.render_queue(f, queue_content_area, queue_focused, layout);
 
             if status_overhead > 0 {
                 let pill_row = Rect {
