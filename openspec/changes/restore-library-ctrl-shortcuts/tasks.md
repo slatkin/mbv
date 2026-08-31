@@ -2,13 +2,13 @@
 
 ## 1. Confirm the defect and legacy semantics
 
-- [ ] 1.1 In `~/Dev/mbv/src/app/input_lib_keys.rs`, record in `design.md` D3
+- [x] 1.1 In `~/Dev/mbv/src/app/input_lib_keys.rs`, record in `design.md` D3
       exactly what `Ctrl+P/A/W/S/R` and bare `r` did for a **music** library
       row and a **TV** library row (series vs episode), including whether
       `Ctrl+W` targeted the series or the highlighted episode by pane.
       Verify: the notes cite line numbers from the legacy file, not this
       proposal's summary.
-- [ ] 1.2 Confirm on this branch that `MusicWorkspaceComponent::handle_key`
+- [x] 1.2 Confirm on this branch that `MusicWorkspaceComponent::handle_key`
       and `TvWorkspaceComponent::handle_key` drop these chords at `_ => None`
       (`music_workspace.rs:360`, `tv_workspace.rs:393`) and that no shell
       fallback consumes them. Verify:
