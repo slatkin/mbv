@@ -300,9 +300,26 @@ impl Model {
                 | ShellRequest::EmbyLibraryShuffle { .. }
                 | ShellRequest::EmbyLibraryRefresh
                 | ShellRequest::EmbyLibraryRescan) => {
+                    // Keep the existing Browser projection for generic Emby
+                    // libraries, and also refresh the separately-mounted
+                    // Music/TV workspace when one issued an EmbyLibrary*
+                    // effect request.
+                    let reproject_workspace = matches!(
+                        &request,
+                        ShellRequest::EmbyLibraryPlay { .. }
+                            | ShellRequest::EmbyLibraryEnqueue { .. }
+                            | ShellRequest::EmbyLibraryToggleWatched { .. }
+                            | ShellRequest::EmbyLibraryShuffle { .. }
+                            | ShellRequest::EmbyLibraryRefresh
+                            | ShellRequest::EmbyLibraryRescan
+                    );
                     self.handle_browser_request(request);
                     // Browser navigation/effects change library content; re-project (5.3d.15/M2).
                     self.push_emby_browser_content();
+                    if reproject_workspace {
+                        self.push_music_workspace_content();
+                        self.push_tv_workspace_content();
+                    }
                 }
                 // Pure cursor movement: the component already resolved its own
                 // index, so apply the App-side nav effects but skip the content
