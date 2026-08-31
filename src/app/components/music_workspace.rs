@@ -278,6 +278,44 @@ impl MusicWorkspaceComponent {
             Key::Char('.') if self.track_cursor.is_some() && self.context.focused => {
                 Some(Msg::Shell(ShellRequest::MusicTrackContextMenu))
             }
+            // Album-level library actions apply only when no inline track is
+            // focused; track Ctrl+P/Ctrl+A above retain precedence.
+            Key::Char('p')
+                if key.modifiers.contains(KeyModifiers::CONTROL) && self.track_cursor.is_none() =>
+            {
+                self.selected_item()
+                    .map(|item| Msg::Shell(ShellRequest::EmbyLibraryPlay { item }))
+            }
+            Key::Char('a')
+                if key.modifiers.contains(KeyModifiers::CONTROL) && self.track_cursor.is_none() =>
+            {
+                self.selected_item()
+                    .map(|item| Msg::Shell(ShellRequest::EmbyLibraryEnqueue { item }))
+            }
+            Key::Char('w')
+                if key.modifiers.contains(KeyModifiers::CONTROL) && self.track_cursor.is_none() =>
+            {
+                self.selected_item()
+                    .map(|item| Msg::Shell(ShellRequest::EmbyLibraryToggleWatched { item }))
+            }
+            Key::Char('s')
+                if key.modifiers.contains(KeyModifiers::CONTROL) && self.track_cursor.is_none() =>
+            {
+                self.selected_item()
+                    .map(|item| Msg::Shell(ShellRequest::EmbyLibraryShuffle { item }))
+            }
+            Key::Char('r')
+                if key.modifiers.contains(KeyModifiers::CONTROL) && self.track_cursor.is_none() =>
+            {
+                Some(Msg::Shell(ShellRequest::EmbyLibraryRescan))
+            }
+            Key::Char('r')
+                if self.track_cursor.is_none()
+                    && !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                Some(Msg::Shell(ShellRequest::EmbyLibraryRefresh))
+            }
             // `[`/`]` at the album-list level cycle the App-owned group pill.
             // A focused inline track is a track-level context, so guard on
             // `track_cursor.is_none()`; the focus gate is the early return.
