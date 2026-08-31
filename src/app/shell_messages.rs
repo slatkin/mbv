@@ -293,7 +293,13 @@ impl Model {
                 | ShellRequest::BrowserRescan
                 | ShellRequest::BrowserBack
                 | ShellRequest::BrowserCycleLetterPill { .. }
-                | ShellRequest::BrowserCycleGroup { .. }) => {
+                | ShellRequest::BrowserCycleGroup { .. }
+                | ShellRequest::EmbyLibraryPlay { .. }
+                | ShellRequest::EmbyLibraryEnqueue { .. }
+                | ShellRequest::EmbyLibraryToggleWatched { .. }
+                | ShellRequest::EmbyLibraryShuffle { .. }
+                | ShellRequest::EmbyLibraryRefresh
+                | ShellRequest::EmbyLibraryRescan) => {
                     self.handle_browser_request(request);
                     // Browser navigation/effects change library content; re-project (5.3d.15/M2).
                     self.push_emby_browser_content();

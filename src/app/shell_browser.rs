@@ -41,9 +41,14 @@ impl Model {
                     self.app.select_item(lib_idx, item);
                 }
             }
-            ShellRequest::BrowserPlay { item } => self.app.play_or_activate_lib_item(lib_idx, item),
-            ShellRequest::BrowserEnqueue { item } => self.app.enqueue_lib_item(lib_idx, item),
-            ShellRequest::BrowserToggleWatched { item } => {
+            ShellRequest::BrowserPlay { item } | ShellRequest::EmbyLibraryPlay { item } => {
+                self.app.play_or_activate_lib_item(lib_idx, item)
+            }
+            ShellRequest::BrowserEnqueue { item } | ShellRequest::EmbyLibraryEnqueue { item } => {
+                self.app.enqueue_lib_item(lib_idx, item)
+            }
+            ShellRequest::BrowserToggleWatched { item }
+            | ShellRequest::EmbyLibraryToggleWatched { item } => {
                 self.app.toggle_watched_item(lib_idx, item)
             }
             // '.' raises the context menu for the supplied item via the
@@ -58,18 +63,22 @@ impl Model {
             // (falling back to the library id). The folder target comes from
             // the component-resolved item, never a `BrowseLevel.cursor`
             // re-read.
-            ShellRequest::BrowserShuffle { item } => self.app.shuffle_play_selected(lib_idx, item),
+            ShellRequest::BrowserShuffle { item } | ShellRequest::EmbyLibraryShuffle { item } => {
+                self.app.shuffle_play_selected(lib_idx, item)
+            }
             // Bare `r` refreshes the active Emby library (task 5.3d,
             // Emby browser refresh): the shell derives the active library
             // index from its own tab state and runs `App::refresh_lib` on it,
             // the same call the legacy `handle_lib_key` `Char('r')` arm made.
-            ShellRequest::BrowserRefresh => self.app.refresh_lib(lib_idx),
+            ShellRequest::BrowserRefresh | ShellRequest::EmbyLibraryRefresh => {
+                self.app.refresh_lib(lib_idx)
+            }
             // Ctrl+`r` raises the Rescan Library confirmation (task 5.3d,
             // Emby browser rescan): same title/message/hint and
             // `ConfirmAction::RescanLibrary(lib_idx)` as the legacy
             // `handle_lib_key` CONTROL arm, derived from the shell's own tab
             // state (the library name comes from the active library).
-            ShellRequest::BrowserRescan => {
+            ShellRequest::BrowserRescan | ShellRequest::EmbyLibraryRescan => {
                 let name = self.app.libs[lib_idx].library.name.clone();
                 self.app.ask_confirm(ConfirmModal {
                     title: " Rescan Library ".into(),
@@ -142,10 +151,9 @@ impl Model {
                 }
             }
             // unreachable: shell_messages.rs top-level dispatch routes only the
-            // Browser* activate/effect group (BrowserActivate/Play/Enqueue/
-            // ToggleWatched/ContextMenu/Shuffle/Refresh/Rescan/Back/
-            // CycleLetterPill/CycleGroup) and BrowserCursorIndex into handle_browser_request;
-            // every one has an arm above.
+            // Browser* and EmbyLibrary* activate/effect groups plus
+            // BrowserCursorIndex into handle_browser_request; every one has
+            // an arm above.
             _ => {}
         }
     }
