@@ -23,10 +23,7 @@ impl KeyChord {
     }
 
     pub(super) fn from_key(key: KeyEvent) -> Self {
-        Self {
-            code: key.code,
-            mods: key.modifiers,
-        }
+        Self::new(key.code, key.modifiers)
     }
 }
 
@@ -84,6 +81,8 @@ pub(super) struct InputSnapshot {
 
 /// Outcome of resolving a key within a context.
 #[derive(Debug, Clone, PartialEq)]
+// TODO(interactive-surface-ledger): retain Swallow for the shared resolver outcome shape.
+#[allow(dead_code)]
 pub(super) enum KeyResolution {
     Command(super::action::Command),
     Swallow,

@@ -4,7 +4,7 @@ use super::tests_routing_matrix_support::*;
 use crate::app::action::Command;
 use crate::app::components::{ComponentId, Msg, OverlayId, ShellRequest};
 use crate::app::components::msg::{ConfirmIntent, ContextMenuIntent};
-use crate::app::router::{resolve_router_outcome, resolve_router_outcome_with_focused, RouterOutcome};
+use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[test]
@@ -67,7 +67,7 @@ fn destination_independent_globals_resolve_to_router_commands() {
     ];
     for (key, command) in globals {
         assert_eq!(
-            resolve_router_outcome(key, &snapshot),
+            resolve_router_outcome_with_focused(key, &snapshot, None),
             RouterOutcome::Command(command),
             "global {key:?} must be claimed by the router"
         );
@@ -75,7 +75,7 @@ fn destination_independent_globals_resolve_to_router_commands() {
 
     snapshot.help_overlay_open = false;
     assert_eq!(
-        resolve_router_outcome(key(KeyCode::F(1)), &snapshot),
+        resolve_router_outcome_with_focused(key(KeyCode::F(1)), &snapshot, None),
         RouterOutcome::Command(Command::OpenHelp)
     );
 }
@@ -84,7 +84,7 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
     let mut snapshot = idle_snapshot();
     snapshot.blocking_overlay_open = true;
     assert_eq!(
-        resolve_router_outcome(key(KeyCode::F(1)), &snapshot),
+        resolve_router_outcome_with_focused(key(KeyCode::F(1)), &snapshot, None),
         RouterOutcome::Swallow,
         "F1 must not open Help over a blocking overlay"
     );
@@ -92,7 +92,7 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
     snapshot.blocking_overlay_open = false;
     snapshot.help_overlay_open = true;
     assert_eq!(
-        resolve_router_outcome(key(KeyCode::F(1)), &snapshot),
+        resolve_router_outcome_with_focused(key(KeyCode::F(1)), &snapshot, None),
         RouterOutcome::FallThrough,
         "Help keeps F1 for its dismiss request"
     );
@@ -100,24 +100,21 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
     snapshot.help_overlay_open = false;
     snapshot.panel_focus = crate::app::PanelFocus::Queue;
     assert_eq!(
-        resolve_router_outcome(
+        resolve_router_outcome_with_focused(
             KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
-            &snapshot
-        ),
+            &snapshot, None),
         RouterOutcome::Command(Command::FocusPanel(crate::app::PanelFocus::Library))
     );
     assert_eq!(
-        resolve_router_outcome(
+        resolve_router_outcome_with_focused(
             KeyEvent::new(KeyCode::Down, KeyModifiers::ALT),
-            &snapshot
-        ),
+            &snapshot, None),
         RouterOutcome::Command(Command::NextLibraryTab)
     );
     assert_eq!(
-        resolve_router_outcome(
+        resolve_router_outcome_with_focused(
             KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT),
-            &snapshot
-        ),
+            &snapshot, None),
         RouterOutcome::Swallow,
         "unhandled Alt chords must not leak into destination handling"
     );

@@ -136,11 +136,6 @@ pub fn bool_val(v: bool) -> String {
     }
 }
 
-#[cfg(test)]
-pub fn settings_total_rows() -> usize {
-    SETTING_SECTIONS.iter().map(|(_, keys)| keys.len()).sum()
-}
-
 pub fn settings_cursor_to_key(cursor: usize) -> SettingKey {
     let mut idx = 0;
     for &(_, keys) in SETTING_SECTIONS {

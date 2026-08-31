@@ -25,7 +25,7 @@ use crate::app::components::{
     TerminalObserverEvent,
 };
 use crate::app::router::{
-    resolve_router_outcome, resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot,
+    resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot,
 };
 use crate::app::shell::apply_router_outcome;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -43,7 +43,7 @@ pub(crate) fn fold_tick(
         messages.push(leaf);
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
-    let outcome = resolve_router_outcome(key, &snapshot);
+    let outcome = resolve_router_outcome_with_focused(key, &snapshot, None);
     apply_router_outcome(messages, focused.as_ref(), &outcome)
 }
 

@@ -3,7 +3,7 @@
 use super::tests_routing_matrix_support::*;
 use crate::app::action::Command;
 use crate::app::components::{BrowserKey, BrowserKind, ComponentId, Msg, ShellRequest};
-use crate::app::router::{resolve_router_outcome, RouterOutcome, RouterSnapshot};
+use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::config::ServiceKind;
 
@@ -47,7 +47,7 @@ fn playback_gating_space_second_press_claims_toggle() {
     let mut snapshot = active_snapshot();
     snapshot.space_double_tap = true;
     assert_eq!(
-        resolve_router_outcome(key(KeyCode::Char(' ')), &snapshot),
+        resolve_router_outcome_with_focused(key(KeyCode::Char(' ')), &snapshot, None),
         RouterOutcome::Command(Command::TogglePlayPause)
     );
 }
@@ -56,7 +56,7 @@ fn playback_gating_esc_second_press_claims_stop() {
     let mut snapshot = active_snapshot();
     snapshot.esc_double_tap = true;
     assert_eq!(
-        resolve_router_outcome(key(KeyCode::Esc), &snapshot),
+        resolve_router_outcome_with_focused(key(KeyCode::Esc), &snapshot, None),
         RouterOutcome::Command(Command::Stop)
     );
 }
@@ -64,32 +64,30 @@ fn playback_gating_esc_second_press_claims_stop() {
 fn playback_policy_preserves_per_key_eligibility() {
     let active = active_snapshot();
     assert_eq!(
-        resolve_router_outcome(
+        resolve_router_outcome_with_focused(
             key(KeyCode::Char('<')),
-            &active,
-        ),
+            &active, None),
         RouterOutcome::Command(Command::SeekRelative(-5.0))
     );
     assert_eq!(
-        resolve_router_outcome(key(KeyCode::Char('a')), &active),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('a')), &active, None),
         RouterOutcome::Command(Command::ToggleMuteOrCycleAudio)
     );
     assert_eq!(
-        resolve_router_outcome(
+        resolve_router_outcome_with_focused(
             KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL),
-            &active,
-        ),
+            &active, None),
         RouterOutcome::FallThrough
     );
     assert_eq!(
-        resolve_router_outcome(key(KeyCode::Char('m')), &idle_snapshot()),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('m')), &idle_snapshot(), None),
         RouterOutcome::Command(Command::ToggleMute)
     );
 }
 #[test]
 fn visualizer_resolves_to_router_command() {
     assert_eq!(
-        resolve_router_outcome(key(KeyCode::Char('v')), &idle_snapshot()),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('v')), &idle_snapshot(), None),
         RouterOutcome::Command(Command::ToggleVisualizer)
     );
 }
@@ -103,11 +101,11 @@ fn playback_and_visualizer_commands_are_swallowed_under_blocking_overlay() {
     };
 
     assert_eq!(
-        resolve_router_outcome(key(KeyCode::Char('v')), &snapshot),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('v')), &snapshot, None),
         RouterOutcome::Swallow
     );
     assert_eq!(
-        resolve_router_outcome(key(KeyCode::Char('m')), &snapshot),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('m')), &snapshot, None),
         RouterOutcome::Swallow
     );
 }
@@ -119,7 +117,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
         ..RouterSnapshot::default()
     };
     assert_eq!(
-        resolve_router_outcome(key(KeyCode::Char('o')), &snapshot),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &snapshot, None),
         RouterOutcome::Command(Command::OpenIdleFeedLink)
     );
 
@@ -128,7 +126,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
         ..snapshot
     };
     assert_eq!(
-        resolve_router_outcome(key(KeyCode::Char('o')), &connected),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &connected, None),
         RouterOutcome::FallThrough
     );
 }

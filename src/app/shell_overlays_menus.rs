@@ -183,17 +183,6 @@ impl Model {
         }
     }
 
-    pub(in crate::app) fn handle_context_menu_key(&mut self, key: crossterm::event::KeyEvent) {
-        let intent = match key.code {
-            crossterm::event::KeyCode::Up => ContextMenuIntent::MoveUp,
-            crossterm::event::KeyCode::Down => ContextMenuIntent::MoveDown,
-            crossterm::event::KeyCode::Enter => ContextMenuIntent::Select,
-            crossterm::event::KeyCode::Esc => ContextMenuIntent::Dismiss,
-            _ => return,
-        };
-        self.handle_context_menu_intent(intent);
-    }
-
     /// Activate the context-menu entry at the component-owned cursor (mouse
     /// click on a selectable row, or hover-resolved selection).
     pub(in crate::app) fn handle_context_menu_select(&mut self, idx: usize) {
@@ -753,10 +742,6 @@ impl Model {
 
     fn feeds_manage_id() -> ComponentId {
         ComponentId::Popup(PopupId::FeedManage)
-    }
-
-    pub(in crate::app) fn handle_feeds_manage_request(&mut self, key: crossterm::event::KeyEvent) {
-        self.handle_feeds_manage_key(key);
     }
 
     pub(in crate::app) fn render_feeds_manage_popup(&mut self, f: &mut ratatui::Frame) {

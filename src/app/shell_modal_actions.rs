@@ -72,16 +72,6 @@ impl Model {
         }
     }
 
-    pub(super) fn handle_daemon_lost_key(&mut self, key: KeyEvent) -> bool {
-        let intent = match key.code {
-            KeyCode::Char('r') | KeyCode::Char('R') => DaemonLostIntent::RestartWithTray,
-            KeyCode::Char('s') | KeyCode::Char('S') => DaemonLostIntent::RestartWithoutTray,
-            KeyCode::Char('q') | KeyCode::Char('Q') => DaemonLostIntent::Quit,
-            _ => return false,
-        };
-        self.handle_daemon_lost_intent(intent)
-    }
-
     fn set_daemon_lost_restart_error(&mut self, error: String) {
         let id = ComponentId::Modal(ModalId::DaemonLost);
         if let Some(component) = self.application.get_component_mut(&id) {
@@ -122,17 +112,6 @@ impl Model {
                 }
             }
         }
-    }
-
-    pub(super) fn handle_remote_reanchor_key(&mut self, key: KeyEvent) {
-        let intent = match key.code {
-            KeyCode::Esc => RemoteReanchorIntent::Dismiss,
-            KeyCode::Up => RemoteReanchorIntent::MoveUp,
-            KeyCode::Down => RemoteReanchorIntent::MoveDown,
-            KeyCode::Enter => RemoteReanchorIntent::Accept,
-            _ => return,
-        };
-        self.handle_remote_reanchor_intent(intent);
     }
 
     pub(super) fn handle_save_playlist_intent(&mut self, intent: SavePlaylistIntent) {
@@ -197,16 +176,6 @@ impl Model {
             self.app.force_clear = true;
             self.app.save_queue_as_playlist(name);
         }
-    }
-
-    /// Compatibility bridge for callers that still provide crossterm keys.
-    pub(super) fn handle_save_playlist_key(&mut self, key: KeyEvent) {
-        let intent = match key.code {
-            KeyCode::Esc => SavePlaylistIntent::Dismiss,
-            KeyCode::Enter => SavePlaylistIntent::Submit,
-            _ => return,
-        };
-        self.handle_save_playlist_intent(intent);
     }
 }
 

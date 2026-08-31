@@ -94,44 +94,6 @@ impl super::shell::Model {
         }
     }
 
-    /// Compatibility bridge for callers that still provide crossterm keys.
-    pub(in crate::app) fn handle_feeds_manage_key(&mut self, key: KeyEvent) {
-        let Some(stage) = self.feeds_manage_stage() else {
-            return;
-        };
-        match stage {
-            FeedsManageStage::List => self.handle_feeds_manage_list_key(key),
-            FeedsManageStage::Form(form) => self.handle_feeds_manage_form_key(key, form),
-        }
-    }
-
-    fn handle_feeds_manage_list_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc => self.dismiss_feeds_manage(),
-            KeyCode::Char('a') => self.start_add_feed(),
-            KeyCode::Enter | KeyCode::Char('e') if self.config_feed_count() > 0 => {
-                self.start_edit_feed()
-            }
-            KeyCode::Char('d') if self.config_feed_count() > 0 => self.confirm_remove_feed(),
-            // KeyCode is a std enum; any unbound key in the list stage is a no-op.
-            _ => {}
-        }
-    }
-
-    fn handle_feeds_manage_form_key(&mut self, key: KeyEvent, _form: FeedForm) {
-        let submitting = self
-            .feeds_manage
-            .as_ref()
-            .is_some_and(|p| p.pending_add.is_some());
-        match key.code {
-            KeyCode::Esc => self.cancel_feed_form(),
-            KeyCode::Enter if !submitting => self.submit_feed_form(),
-            // KeyCode is a std enum; any unbound key in the form stage is a no-op
-            // (text input is handled by the component, not here).
-            _ => {}
-        }
-    }
-
     fn config_feed_count(&self) -> usize {
         self.app.config.lock().unwrap().feeds.len()
     }

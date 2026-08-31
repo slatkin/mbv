@@ -287,19 +287,6 @@ impl App {
         self.queue_card_image_fetch(cache_key, item_id, series_id, types, false);
     }
 
-    /// Like [`fetch_card_image`], but the decoded image is center-cropped to a
-    /// square. Use a cache key distinct from the standalone image (e.g. a
-    /// `:sq` suffix) so the un-cropped variant is not clobbered.
-    pub(super) fn fetch_card_image_square(
-        &mut self,
-        cache_key: String,
-        item_id: String,
-        series_id: String,
-        types: &[&str],
-    ) {
-        self.queue_card_image_fetch(cache_key, item_id, series_id, types, true);
-    }
-
     fn queue_card_image_fetch(
         &mut self,
         cache_key: String,

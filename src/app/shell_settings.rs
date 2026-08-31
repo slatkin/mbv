@@ -118,14 +118,16 @@ impl Model {
             rows,
             services,
             setup,
-            area: (self.app.layout.main.panel_area.width > 0)
-                .then_some(self.app.layout.main.panel_area)
-                .unwrap_or(Rect {
+            area: if self.app.layout.main.panel_area.width > 0 {
+                self.app.layout.main.panel_area
+            } else {
+                Rect {
                     x: 0,
                     y: 0,
                     width: SETTINGS_PANEL_W.min(self.app.terminal_width),
                     height: self.app.terminal_height,
-                }),
+                }
+            },
         }
     }
 

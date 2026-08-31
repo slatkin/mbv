@@ -287,8 +287,11 @@ pub(crate) struct FrameChromeGeometry {
     /// Whether the queue panel holds panel focus this frame.
     pub queue_focused: bool,
     /// Left column width in columns (queue panel width in `Both` mode).
+    // TODO(interactive-surface-ledger): retain published geometry for legacy input consumers.
+    #[allow(dead_code)]
     pub left_w: u16,
     /// Right column width in columns.
+    #[allow(dead_code)]
     pub right_w: u16,
 }
 

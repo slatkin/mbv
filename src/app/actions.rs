@@ -123,10 +123,6 @@ impl App {
             .max(1)
     }
 
-    pub(super) fn queue_page_size(&self) -> usize {
-        self.layout.main.queue_area.height.saturating_sub(1).max(1) as usize
-    }
-
     /// Resolve the item the library panel currently selects. `cursor` is the
     /// resolved index the caller owns (component-resolved for the generic
     /// browser, or the App nav-level cursor on the legacy context-menu/mouse

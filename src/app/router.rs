@@ -36,10 +36,6 @@ pub(super) enum RouterOutcome {
 /// `resolve_router_outcome_with_focused`, which carries the focused leaf so
 /// the policy can tell "the leaf is the blocking overlay" from "an overlay is
 /// mounted elsewhere".
-pub(super) fn resolve_router_outcome(key: KeyEvent, snapshot: &RouterSnapshot) -> RouterOutcome {
-    resolve_router_outcome_with_focused(key, snapshot, None)
-}
-
 /// Resolve a chord against the live ordered policy, carrying the focused
 /// leaf so the policy can apply the two text-entry/overlay rules:
 ///

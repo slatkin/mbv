@@ -54,6 +54,8 @@ pub(super) struct KeyPolicyEntry {
 
 /// The component or router surface associated with a policy layer.
 #[derive(Debug, Clone)]
+// TODO(interactive-surface-ledger): owner payload is reserved for focused-leaf routing.
+#[allow(dead_code)]
 pub(super) enum KeyPolicyOwner {
     /// The active/focused component receives the key first.
     Active(Option<ComponentId>),
@@ -514,13 +516,13 @@ mod tests {
         let mut text_entry = snapshot();
         text_entry.text_entry_focused = true;
         assert_eq!(
-            crate::app::router::resolve_router_outcome(key, &text_entry),
+            crate::app::router::resolve_router_outcome_with_focused(key, &text_entry, None),
             crate::app::router::RouterOutcome::FallThrough
         );
 
         let normal = snapshot();
         assert_eq!(
-            crate::app::router::resolve_router_outcome(key, &normal),
+            crate::app::router::resolve_router_outcome_with_focused(key, &normal, None),
             crate::app::router::RouterOutcome::Command(Command::CyclePanelMode)
         );
     }
@@ -572,9 +574,10 @@ mod tests {
             "sessions_sidebar_escape"
         );
         assert_eq!(
-            crate::app::router::resolve_router_outcome(
+            crate::app::router::resolve_router_outcome_with_focused(
                 crossterm::event::KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
-                &armed
+                &armed,
+                None
             ),
             crate::app::router::RouterOutcome::FallThrough
         );

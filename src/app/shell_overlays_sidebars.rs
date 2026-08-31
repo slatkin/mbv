@@ -179,12 +179,8 @@ impl Model {
         if !self.application.mounted(&id) {
             return None;
         }
-        let Some(comp) = self.application.get_component_mut(&id) else {
-            return None;
-        };
-        let Some(search) = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>() else {
-            return None;
-        };
+        let comp = self.application.get_component_mut(&id)?;
+        let search = comp.as_any_mut().downcast_mut::<SearchSidebarComponent>()?;
         search.tick_clock(now)
     }
 

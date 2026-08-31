@@ -188,38 +188,4 @@ impl App {
             on_confirm: ConfirmAction::ClearQueue,
         });
     }
-    pub(super) fn handle_key_clear_queue_prompt(
-        &mut self,
-        key: KeyEvent,
-        _home_cw_selected: bool,
-        _cw_item: Option<EmbyItem>,
-    ) -> Option<bool> {
-        if key.code != KeyCode::Char('c') || key.modifiers.contains(KeyModifiers::ALT) {
-            return None;
-        }
-        if matches!(self.effective_panel_focus(), PanelFocus::Queue)
-            && self.visible_queue_scope() == QueueScope::Remote
-        {
-            self.flash(
-                "Remote queue is controlled by the daemon".into(),
-                ToastSeverity::Error,
-            );
-            return Some(false);
-        }
-        if self.player_tab.total_queue_len() == 0 {
-            return Some(false);
-        }
-        self.notify_with_actions(
-            "mbv",
-            "Clear queue?",
-            &[("clear:yes", "Clear"), ("clear:no", "Cancel")],
-        );
-        self.ask_confirm(ConfirmModal {
-            title: " Clear Queue ".into(),
-            message: "Clear the queue?".into(),
-            hint: "[y] Confirm    [Esc] Cancel".into(),
-            on_confirm: ConfirmAction::ClearQueue,
-        });
-        Some(false)
-    }
 }

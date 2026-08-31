@@ -42,30 +42,6 @@ impl App {
         }
     }
 
-    pub(super) fn notify_with_actions(&self, title: &str, body: &str, actions: &[(&str, &str)]) {
-        if !self.system_notifications {
-            return;
-        }
-        let mut cmd = std::process::Command::new("notify-send");
-        cmd.arg("--app-name=mbv")
-            .arg(title)
-            .arg(body)
-            .stderr(std::process::Stdio::null());
-        for (id, label) in actions {
-            cmd.arg(format!("--action={}={}", id, label));
-        }
-        let tx = self.notif_action_tx.clone();
-        std::thread::spawn(move || match cmd.output() {
-            Ok(out) if out.status.success() => {
-                let chosen = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                let _ = tx.send(chosen);
-            }
-            _ => {
-                let _ = tx.send("__notif_failed__".into());
-            }
-        });
-    }
-
     pub(super) fn trigger_lib_rescan(&mut self, lib_idx: usize) {
         self.clear_saved_library_position(lib_idx);
         let Some(client) = self.emby_snapshot() else {

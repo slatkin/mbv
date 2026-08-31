@@ -536,31 +536,9 @@ pub(crate) fn install_test_emby(app: &mut App, config: crate::config::Config) {
     ));
 }
 
-pub(crate) fn left_down(col: u16, row: u16) -> MouseEvent {
-    MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: col,
-        row,
-        modifiers: KeyModifiers::NONE,
-    }
-}
 
-pub(crate) fn render_app_to_string(app: &mut App, width: u16, height: u16) -> String {
-    let backend = TestBackend::new(width, height);
-    let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
 
-    let buf = term.backend().buffer();
-    let area = *buf.area();
-    let mut out = String::new();
-    for y in 0..area.height {
-        for x in 0..area.width {
-            out.push_str(buf[(x, y)].symbol());
-        }
-        out.push('\n');
-    }
-    out
-}
+
 
 #[test]
 fn aggregate_zero_area_render_leaves_layout_untouched() {
