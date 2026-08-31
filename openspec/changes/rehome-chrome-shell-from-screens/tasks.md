@@ -126,18 +126,18 @@ Order is load-bearing: 4.1-4.2 must precede 4.4 (design D3).
 
 ## 5. Close the ratchet
 
-- [ ] 5.1 In `.github/workflows/architecture-boundaries.yml`, replace
+- [x] 5.1 In `.github/workflows/architecture-boundaries.yml`, replace
       `ast-grep scan src/app/components/` with bare `ast-grep scan` and delete the
       comment block explaining the scoped path. Verify the job's script is a bare
       scan and the `0.44.1` pin is untouched.
-- [ ] 5.2 Update `docs/architecture/interactive-surface-ledger.md` where it
+- [x] 5.2 Update `docs/architecture/interactive-surface-ledger.md` where it
       describes the frontend-boundary checks as a ratchet on touched code, and
       note that the chrome shell was rehomed rather than migrated. Verify the file
       no longer claims a standing violation baseline.
-- [ ] 5.3 Update `.opencode/skills/mbv-frontend/SKILL.md` and its `.agents/` and
+- [x] 5.3 Update `.opencode/skills/mbv-frontend/SKILL.md` and its `.agents/` and
       `.codex/` mirrors to state that the checks gate the whole tree. Verify all
       three copies match.
-- [ ] 5.4 Run the full pre-PR gate: `ast-grep scan`,
+- [x] 5.4 Run the full pre-PR gate: `ast-grep scan`,
       `rtk cargo clippy --workspace --all-targets`,
       `rtk cargo nextest run -p mbv`, `rtk cargo fmt --check`, and
       `rtk make check-code-file-lines`. This is the only point the 800-line cap
