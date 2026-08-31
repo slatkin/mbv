@@ -327,6 +327,32 @@ pub enum ShellRequest {
         col: u16,
         row: u16,
     },
+    /// Ctrl+P/A/W/S/R and bare `r` requests from an Emby Music or TV
+    /// workspace. These mirror the corresponding `Browser*` requests while
+    /// reserving the `EmbyLibrary*` prefix because `LibraryRoutes*` already
+    /// occupies the `Library*` namespace.
+    ///
+    /// Equivalent to [`BrowserPlay`].
+    EmbyLibraryPlay {
+        item: EmbyItem,
+    },
+    /// Equivalent to [`BrowserEnqueue`] for an Emby Music or TV workspace.
+    EmbyLibraryEnqueue {
+        item: EmbyItem,
+    },
+    /// Equivalent to [`BrowserToggleWatched`] for an Emby Music or TV
+    /// workspace.
+    EmbyLibraryToggleWatched {
+        item: EmbyItem,
+    },
+    /// Equivalent to [`BrowserShuffle`] for an Emby Music or TV workspace.
+    EmbyLibraryShuffle {
+        item: EmbyItem,
+    },
+    /// Equivalent to [`BrowserRefresh`] for an Emby Music or TV workspace.
+    EmbyLibraryRefresh,
+    /// Equivalent to [`BrowserRescan`] for an Emby Music or TV workspace.
+    EmbyLibraryRescan,
     /// Enter on the mounted generic/Movies/home-video `BrowserComponent`
     /// (task 5.3d, Emby browser effect decoupling): the component resolved
     /// its own selected `EmbyItem` from its component-local cursor/content,
