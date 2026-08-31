@@ -63,10 +63,6 @@ impl Model {
         // state was removed), so compute it once per frame. Startup draws can
         // reach this method before the first surface-sync pass.
         self.project_inline_search_active();
-        // The mounted `BrowserComponent` owns the narrow generic/Movies/
-        // home-video paint (task 3.3); project its active-destination pointer
-        // so `render_list` suppresses its now-duplicate narrow branch.
-        self.app.emby_browser_active = self.emby_browser_id.is_some();
         let cursor_scroll = self.app.tab.emby_library_index().and_then(|_| {
             self.emby_browser_component_id()
                 .and_then(|id| self.application.get_component(&id))

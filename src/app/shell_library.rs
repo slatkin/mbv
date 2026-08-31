@@ -629,12 +629,6 @@ mod tests {
         model.app.panel_focus = PanelFocus::Library;
         model.app.panel_mode = PanelMode::Both;
         model.sync_emby_browser();
-        // The narrow generic/Movies surface is now owned by the mounted
-        // `BrowserComponent`; `draw_frame` projects that as `emby_browser_active`
-        // so the legacy `render_list` branch suppresses its duplicate paint
-        // (task 3.3). Mirror that projection here so `app_only` is the real
-        // suppressed base frame and the component is the sole browse painter.
-        model.app.emby_browser_active = true;
         let id = model.emby_browser_id.clone().expect("browser mounted");
         assert!(model.application.mounted(&id));
 
