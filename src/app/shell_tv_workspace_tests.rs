@@ -490,6 +490,77 @@ fn push_tv_workspace_content_uses_component_selection_over_stale_app_cursor() {
 }
 
 #[test]
+fn tv_season_move_fetches_uncached_episodes_for_component_selection() {
+    let mut model = mounted_tv_model();
+    let mut season_one = crate::app::tests::make_item("Season 1", "Season");
+    season_one.id = "season-1".into();
+    let mut season_two = crate::app::tests::make_item("Season 2", "Season");
+    season_two.id = "season-2".into();
+    let mut episodes = std::collections::HashMap::new();
+    episodes.insert("season-1".into(), vec![]);
+    model.app.series_detail_cache.insert(
+        "movie-focused".into(),
+        crate::app::SeriesDetail {
+            seasons: vec![season_one, season_two],
+            episodes,
+        },
+    );
+    model.push_tv_workspace_content();
+    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+
+    let enter = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<TvWorkspaceComponent>()
+        .unwrap()
+        .on(&Event::Keyboard(KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE,
+        }));
+    let Some(Msg::Shell(request)) = enter else {
+        panic!("series Enter must produce a typed request");
+    };
+    model.handle_tv_request(request);
+
+    // Diverge the legacy App cursor: the component's selected series remains authoritative.
+    model.app.libs[0].nav_stack[0].set_resting_cursor(1);
+    let season = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<TvWorkspaceComponent>()
+        .unwrap()
+        .on(&Event::Keyboard(KeyEvent {
+            code: Key::Char(']'),
+            modifiers: KeyModifiers::NONE,
+        }));
+    assert!(matches!(
+        season,
+        Some(Msg::Shell(ShellRequest::TvSeasonMove { delta: 1 }))
+    ));
+
+    let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
+    client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
+        server_url: "http://127.0.0.1:1".into(),
+        user_id: "user-id".into(),
+        token: "token".into(),
+    });
+    model.app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+    model.handle_tv_request(ShellRequest::TvSeasonMove { delta: 1 });
+
+    assert!(model
+        .app
+        .series_season_loading
+        .contains(&("movie-focused".into(), "season-2".into())));
+    assert!(model.app.series_detail_loading.contains("movie-focused"));
+}
+
+#[test]
 fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     let mut model = mounted_tv_model();
     let mut season_one = crate::app::tests::make_item("Season 1", "Season");
