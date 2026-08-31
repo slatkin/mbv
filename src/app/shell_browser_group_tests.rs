@@ -5,6 +5,7 @@ use super::test_support::*;
 use crate::app::components::{BrowserComponent, Msg};
 use crate::app::render::make_movie_app;
 use crate::app::tests::{make_app_stub, make_item, make_items};
+use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{
     App, BrowseLevel, ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibraryTab,
     PanelFocus, PanelMode, TabSelection,
@@ -284,29 +285,70 @@ fn feed_group_picker_bracket_keys_cycle_groups() {
 }
 
 #[test]
-fn feed_group_picker_keeps_keyboard_navigation_and_activation_at_both_widths() {
+fn feed_group_picker_routes_at_visible_narrow_and_wide_widths() {
     let _guard = crate::config::TestStateDirGuard::new();
-    for width in [40, 120] {
-        let mut model = Model::new(feed_group_picker_app());
-        model.app.panel_focus = PanelFocus::Library;
-        model.app.panel_mode = PanelMode::Both;
-        model.sync_emby_browser();
-        let id = model
+    for (width, wide_area) in [
+        (40, ratatui::layout::Rect::default()),
+        (120, ratatui::layout::Rect::new(0, 0, 120, 30)),
+    ] {
+        let mut app = feed_group_picker_app();
+        app.terminal_width = width;
+        app.layout.main.movies_wide_area = wide_area;
+        app.panel_focus = PanelFocus::Library;
+        app.panel_mode = PanelMode::Both;
+        let mut harness = TickHarness::new(app);
+        harness.model_mut().sync_mounted_surfaces();
+        render_browser_model(harness.model_mut(), width, 30);
+        let id = harness
+            .model()
             .emby_browser_id
             .clone()
             .expect("feed group-picker browser mounted");
-        render_browser_model(&mut model, width, 30);
 
-        let msg = drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE);
-        assert!(matches!(
-            msg,
-            Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
-        ));
-        model.handle_browser_request(ShellRequest::BrowserCursorIndex { index: 1 });
+        // Both directions exercise the wrapping group selector at each real
+        // presentation width.
+        for (key, delta, expected) in [(Key::Char(']'), 1, 1usize), (Key::Char('['), -1, 0usize)] {
+            let msg = drive_browser_key(harness.model_mut(), &id, key, KeyModifiers::NONE);
+            assert!(
+                matches!(msg, Some(Msg::Shell(ShellRequest::BrowserCycleGroup { delta: d })) if d == delta)
+            );
+            harness
+                .model_mut()
+                .handle_browser_request(ShellRequest::BrowserCycleGroup { delta });
+            assert_eq!(
+                harness.model().app.libs[0]
+                    .feed_home_video
+                    .as_ref()
+                    .unwrap()
+                    .selected_group,
+                expected
+            );
+        }
 
-        let msg = drive_browser_key(&mut model, &id, Key::Enter, KeyModifiers::NONE);
-        assert!(
-            matches!(msg, Some(Msg::Shell(ShellRequest::BrowserActivate { ref item })) if item.id == "e2")
-        );
+        // Exercise the actual Application::tick path and prove Enter survives
+        // the shell router as a typed activation request.
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let _ = harness.step();
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let outcome = harness.step();
+        let activation = outcome
+            .messages
+            .into_iter()
+            .find_map(|msg| match msg {
+                Msg::Shell(ref request @ ShellRequest::BrowserActivate { ref item })
+                    if item.id == "e2" =>
+                {
+                    Some(request.clone())
+                }
+                _ => None,
+            })
+            .expect("Enter must be shell-routed as BrowserActivate for e2");
+        harness.model_mut().handle_browser_request(activation);
     }
 }
