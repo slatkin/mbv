@@ -5,13 +5,13 @@
       buffer through `Model::draw_frame` — **not** `compose_base_frame` alone,
       since the ghost only exists when both painters run. Verify:
       `rtk cargo nextest run -p mbv`, test red, stated.
-- [ ] 1.2 Publish `layout.main.queue_area` from `render_main`
+- [x] 1.2 Publish `layout.main.queue_area` from `render_main`
       (`render/screens/root.rs`) instead of from inside the painter, preserving
       the existing "no publish when `height < 1`" semantics. Verify: component
       placement (`shell_queue.rs:36/47/60/73`), page-size (`actions.rs:127`),
       and the context-menu anchor (`shell_overlays_menus.rs:90/112`) still see
       the same rect — assert it in a test rather than by inspection.
-- [ ] 1.3 Add `QueueComponent::selected_row_rect() -> Option<Rect>`, derived
+- [x] 1.3 Add `QueueComponent::selected_row_rect() -> Option<Rect>`, derived
       from its own `geometry.rows` and `cursor`, and publish it into
       `layout.main.queue_selected_item_rect` from `render_queue_component`
       (`shell_queue.rs:53`) after the `application.view(..)` call — mirroring
