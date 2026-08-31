@@ -70,6 +70,25 @@ component-owned value referred to, the component SHALL reset that value to its
 own default or clamp it against the new content; it SHALL NOT fall through to
 the value carried in the shell's snapshot.
 
+A component SHALL NOT hold echo-detection state: a field whose purpose is to
+distinguish the component's own writes from values arriving in a shell
+projection (for example a stored copy of the last pushed cursor, compared
+against the current one to decide whether to adopt an incoming value). Such a
+field is evidence of two owners. Where the shell must move a component-owned
+cursor, it SHALL do so through an explicit re-anchor at the navigation event
+that requires it, not by an equality test evaluated on every content push.
+
+A type projected from the shell into an Interactive Component SHALL NOT carry
+a field the component owns. Content the shell computes and interaction state
+the component owns SHALL be separate types, so that a projection cannot
+overwrite an interaction value and no component needs to save and restore its
+own fields around one.
+
+Where a cursor or scroll value is both interacted with and persisted, the live
+value and the persisted resting position SHALL be distinct, separately named
+state. The component owns the live value; the shell owns the resting position
+and writes it only at a navigation event.
+
 #### Scenario: Local interaction does not become a global message
 
 - **WHEN** the user moves a cursor, scrolls, cycles a filter chip, or edits a local form field
@@ -126,6 +145,37 @@ the value carried in the shell's snapshot.
   sub-selection derived from it, to its own defaults
 - **AND** the values carried in the shell's snapshot for those fields are
   discarded rather than adopted
+
+#### Scenario: A shell re-anchor lands regardless of prior local movement
+
+- **WHEN** the shell re-anchors a component-owned cursor at a navigation event
+  (a group switch, a recursive activation, or a saved-position restore)
+- **THEN** the component adopts the re-anchored value
+- **AND** the outcome does not depend on whether the user moved that cursor
+  since the previous projection
+
+#### Scenario: Ordinary content pushes leave a component cursor alone
+
+- **WHEN** the shell pushes refreshed content without a navigation event
+- **THEN** the component's cursor, scroll, and local focus are unchanged
+- **AND** the component holds no stored copy of a previously pushed value in
+  order to reach that outcome
+
+#### Scenario: A projected content type carries no component-owned field
+
+- **WHEN** the shell projects browse content into a component
+- **THEN** the projected type contains only content the shell computed
+- **AND** the component's cursor, scroll, selection, and local filters are
+  absent from it, so the component neither saves nor restores its own state
+  around the projection
+
+#### Scenario: Live cursor and resting position are distinct state
+
+- **WHEN** the user moves the cursor on a visible browse level, and the shell
+  later persists that level's position or restores it on re-entry
+- **THEN** the live cursor is read from the component that owns it
+- **AND** the persisted resting position is separate state the shell writes at
+  the navigation event, not the same field serving both purposes
 
 #### Scenario: Painted output is not written back into shell state every frame
 
