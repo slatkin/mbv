@@ -399,10 +399,6 @@ impl MusicWorkspaceComponent {
             let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
             if let Some(track) = self.layout.wide_music_track_at(position) {
                 self.track_cursor = Some(track);
-                return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                    target: self.album_cursor,
-                    kind: AlbumCursorKind::Move,
-                }));
             } else if self.layout.wide_music_browser_area.contains(position) {
                 let row = position
                     .y

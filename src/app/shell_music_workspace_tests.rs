@@ -2,8 +2,8 @@ use super::*;
 use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
 use crate::app::components::Msg;
 use crate::app::layout::LibraryRowTarget;
-use crate::app::render::make_music_group_app;
-use crate::app::tests::make_item;
+pub(crate) use crate::app::render::make_music_group_app;
+pub(crate) use crate::app::tests::make_item;
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -12,7 +12,7 @@ use tuirealm::event::{
 };
 
 #[test]
-fn music_mouse_album_click_emits_and_applies_cursor_request() {
+fn music_mouse_album_click_emits_and_shell_applies_cursor() {
     let mut model = Model::new(make_music_group_app());
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
@@ -61,7 +61,14 @@ fn music_mouse_album_click_emits_and_applies_cursor_request() {
             kind: AlbumCursorKind::Move
         }))
     );
-    assert!(model.app.move_music_group_display_cursor(0, target));
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    model.handle_terminal_message(
+        message.expect("album cursor request"),
+        Some(&id),
+        &mut music_resize,
+        &mut tv_resize,
+    );
     assert_eq!(model.app.libs[0].nav_stack[1].resting().cursor(), target);
 }
 

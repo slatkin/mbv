@@ -233,5 +233,8 @@ impl Model {
 }
 
 #[cfg(test)]
+#[path = "shell_music_workspace_mouse_tests.rs"]
+mod mouse_tests;
+#[cfg(test)]
 #[path = "shell_music_workspace_tests.rs"]
 mod tests;
