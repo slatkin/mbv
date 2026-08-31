@@ -47,15 +47,15 @@ impl Model {
         };
         let playback = self.app.displayed_queue_playback_state();
         let title = self.app.queue_title_model();
-        let title_area = (self.app.layout.main.queue_scope_local_area.height > 0).then(|| {
+        let title_area = {
             let area = self.app.layout.main.queue_area;
-            Rect {
+            Some(Rect {
                 x: area.x + 2,
                 y: area.y.saturating_sub(2),
                 width: area.width.saturating_sub(4),
                 height: 1,
-            }
-        });
+            })
+        };
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
                 queue.set_content(slots, cursor, scope, queue_focused, playback, title);
@@ -74,14 +74,12 @@ impl Model {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
                 queue.set_area(self.app.layout.main.queue_area);
                 let area = self.app.layout.main.queue_area;
-                queue.set_title_area(
-                    (self.app.layout.main.queue_scope_local_area.height > 0).then(|| Rect {
-                        x: area.x + 2,
-                        y: area.y.saturating_sub(2),
-                        width: area.width.saturating_sub(4),
-                        height: 1,
-                    }),
-                );
+                queue.set_title_area(Some(Rect {
+                    x: area.x + 2,
+                    y: area.y.saturating_sub(2),
+                    width: area.width.saturating_sub(4),
+                    height: 1,
+                }));
             }
         }
         self.application

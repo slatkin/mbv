@@ -110,8 +110,6 @@ pub(crate) struct LayoutMain {
     /// Queue placement and scope areas published independently of mounted
     /// component-local queue geometry.
     pub queue_area: Rect,
-    pub queue_scope_local_area: Rect,
-    pub queue_scope_remote_area: Rect,
     /// Screen rect of the selected row/cell in the library panel. The outer
     /// selectable renderer owns this; nested detail/hero renderers never
     /// overwrite it. Consumed by the context menu's keyboard anchor.

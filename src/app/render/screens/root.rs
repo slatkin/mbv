@@ -363,18 +363,6 @@ impl App {
                 0
             };
 
-            if title_overhead > 0 {
-                self.render_queue_title(
-                    f,
-                    Rect {
-                        x: qla.x + 2,
-                        y: qla.y + 1,
-                        width: qla.width.saturating_sub(4),
-                        height: 1,
-                    },
-                    layout,
-                );
-            }
             let queue_content_area = Rect {
                 y: qla.y + title_overhead,
                 height: qla.height.saturating_sub(title_overhead + status_overhead),

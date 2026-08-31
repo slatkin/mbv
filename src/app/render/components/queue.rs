@@ -41,13 +41,23 @@ impl App {
             remote_state,
             RemoteSlotState::DirectRemote | RemoteSlotState::AttachedSession
         );
+        let is_mbv_session = matches!(remote_state, RemoteSlotState::DirectRemote)
+            || (matches!(remote_state, RemoteSlotState::AttachedSession)
+                && self
+                    .connected_session_state
+                    .as_ref()
+                    .is_some_and(|session| session.client.eq_ignore_ascii_case("mbv")));
         let mut local_spans = self.remote_status_spans(remote_state, &daemon_endpoint);
         if show_split {
             if let Some(trailing) = local_spans.get_mut(3) {
                 trailing.content = "".into();
             }
             if let Some(label) = local_spans.get_mut(2) {
-                label.content = " Connected: ".into();
+                label.content = if is_mbv_session {
+                    " Connected: ".into()
+                } else {
+                    " Connected:".into()
+                };
             }
         }
         if self.use_nerd_fonts {
@@ -98,12 +108,6 @@ impl App {
         } else {
             String::new()
         };
-        let is_mbv_session = matches!(remote_state, RemoteSlotState::DirectRemote)
-            || (matches!(remote_state, RemoteSlotState::AttachedSession)
-                && self
-                    .connected_session_state
-                    .as_ref()
-                    .is_some_and(|session| session.client.eq_ignore_ascii_case("mbv")));
         QueueTitleModel {
             local_icon: local_spans
                 .get(1)
@@ -147,6 +151,9 @@ pub(in crate::app) fn render_queue_title_content(
     let local_fg = palette::TEXT_FOCUS_ACCENT;
     for span in &mut local_spans {
         span.style = Style::default().fg(local_fg).bg(local_bg);
+    }
+    if !model.show_split {
+        local_spans[0].style = local_spans[0].style.fg(ratatui::style::Color::Reset);
     }
     if let Some(icon) = local_spans.get_mut(1) {
         icon.style = icon.style.fg(palette::TEXT_METADATA);
