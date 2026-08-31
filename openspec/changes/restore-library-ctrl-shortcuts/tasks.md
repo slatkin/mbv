@@ -41,12 +41,12 @@
 
 ## 4. Claim the chords in the Music component (D3)
 
-- [ ] 4.1 In `MusicWorkspaceComponent::handle_key`, add album-level arms for
+- [x] 4.1 In `MusicWorkspaceComponent::handle_key`, add album-level arms for
       `Ctrl+P/A/W/S/R` and bare `r`, each guarded on `track_cursor.is_none()`,
       placed before the `[`/`]` group-pill arms, resolving the target from
       `self.selected_item()` and returning `Msg::Shell(ShellRequest::Library…)`.
       `Ctrl+R` before bare `r`. Verify: `rtk cargo check -p mbv`.
-- [ ] 4.2 Confirm the existing track-focus `Ctrl+P` / `Ctrl+A` arms
+- [x] 4.2 Confirm the existing track-focus `Ctrl+P` / `Ctrl+A` arms
       (`music_workspace.rs:236, 271`) still win when `track_cursor.is_some()`.
       Verify: test 5.2 below.
 
