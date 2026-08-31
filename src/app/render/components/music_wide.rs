@@ -141,6 +141,13 @@ impl App {
     /// Pre-warm nearby album art for narrow grouped Music after navigation has
     /// gone idle. `order` is the already-resolved display order, so this does
     /// not repeat the grouping or sorting work used to build the render context.
+    ///
+    /// Shell-side effect, not painting: like `fetch_nearby_movie_posters`
+    /// (`list_narrow.rs`), this is an `App` image-fetch helper that lives in the
+    /// render module because the album cache-key/art-type constants are render-
+    /// scoped. Called only from `shell_music_workspace.rs` after the mounted
+    /// component has established its authoritative cursor — never from
+    /// `MusicWorkspaceComponent::view`, which must stay free of `App` effects.
     pub(in crate::app) fn prewarm_grouped_music_album_images(
         &mut self,
         albums: &[EmbyItem],
