@@ -1,5 +1,5 @@
 use super::components::{BrowserKey, BrowserKind, ComponentId, MusicWorkspaceComponent};
-use super::render::MusicWideRenderCtx;
+use super::render::{shared_hero_presentation, MusicWideRenderCtx};
 use super::shell::Model;
 use super::TabSelection;
 use mbv_core::api::EmbyItem;
@@ -178,10 +178,9 @@ impl Model {
         };
         // Wide Music paints into `wide_music_area`; narrow Music has no wide
         // area, so fall back to the narrow main content area (`left_area`) so
-        // the component's `view` is still reached. It paints nothing at narrow
-        // until task 3.6 gives it a narrow branch.
+        // the component's `view` is still reached.
         let mut area = self.app.layout.main.wide_music_area;
-        let wide = area.width > 0 && area.height > 0;
+        let wide = shared_hero_presentation(area).is_some();
         if !wide {
             area = self.app.layout.main.left_area;
         }
@@ -202,6 +201,13 @@ impl Model {
                 });
             let context = self.app.wide_music_render_ctx(lib_idx, cursor_scroll);
             context.publish_geometry(area, &mut self.app.layout.main);
+            if !wide && self.app.images_enabled() {
+                self.app.prewarm_grouped_music_album_images(
+                    &context.list.items,
+                    context.list.cursor(),
+                    &context.album_order,
+                );
+            }
         }
         self.application.view(id, frame, area);
         let projection = self
@@ -227,6 +233,9 @@ impl Model {
     }
 }
 
+#[cfg(test)]
+#[path = "shell_music_workspace_image_tests.rs"]
+mod image_tests;
 #[cfg(test)]
 #[path = "shell_music_workspace_mouse_tests.rs"]
 mod mouse_tests;

@@ -529,11 +529,8 @@ fn grouped_hero_art_follows_album_focus() {
     // The hero renders the *selected* album's art (portrait `:P`), never a
     // square collage tile (`:sq`).
     assert!(model.app.card_image_loading.contains("album-2:P"));
-    // Music-group view's album rows now render through the same
-    // `render_wide_right_album_browser` the wide hero-on-left layout uses
-    // for its right pane, which does not pre-warm neighbouring albums'
-    // art (only the selected album's hero art loads) -- matching wide's
-    // existing behaviour rather than narrow's former bespoke prefetch.
+    // Narrow grouped Music pre-warms neighbouring album art through the shell;
+    // the row painter itself still emits only the selected album's hero art.
     assert!(!model.app.card_image_loading.contains("album-2:sq"));
 }
 
