@@ -548,7 +548,14 @@ impl App {
                 });
                 if is_book {
                     layout.audiobookshelf_book_area = area;
-                } else {
+                } else if matches!(
+                    self.tab
+                        .audiobookshelf_index()
+                        .and_then(|index| self.audiobookshelf_kind_at(index)),
+                    Some(
+                        crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast
+                    )
+                ) {
                     layout.audiobookshelf_podcast_area = area;
                 }
             }
