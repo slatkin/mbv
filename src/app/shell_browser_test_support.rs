@@ -103,3 +103,137 @@ pub(super) fn browser_component_cursor(model: &Model, id: &ComponentId) -> usize
         .unwrap()
         .cursor()
 }
+
+fn mounted_music_model() -> Model {
+    let mut model = Model::new(crate::app::render::make_music_group_app());
+    model.sync_music_workspace();
+    model
+}
+
+fn mounted_tv_model() -> Model {
+    let mut app = make_movie_app();
+    app.libs[0].library.collection_type = "tvshows".into();
+    for item in &mut app.libs[0].nav_stack[0].items {
+        item.item_type = "Series".into();
+    }
+    app.layout.main.tv_wide_right_area = ratatui::layout::Rect::new(40, 0, 60, 20);
+    let mut model = Model::new(app);
+    model.sync_tv_workspace();
+    model
+}
+
+fn dispatch_component_key(
+    model: &mut Model,
+    id: &ComponentId,
+    code: Key,
+    modifiers: KeyModifiers,
+) -> ShellRequest {
+    let message = model
+        .application
+        .get_component_mut(id)
+        .expect("workspace mounted")
+        .on(&Event::Keyboard(KeyEvent { code, modifiers }));
+    let Some(Msg::Shell(request)) = message else {
+        panic!("workspace key must emit a shell request");
+    };
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    model.handle_terminal_message(
+        Msg::Shell(request.clone()),
+        Some(id),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    request
+}
+
+#[test]
+fn shell_music_ctrl_p_runs_library_play_effect() {
+    let mut model = mounted_music_model();
+    let id = model
+        .music_workspace_id
+        .clone()
+        .expect("Music workspace mounted");
+    let request = dispatch_component_key(&mut model, &id, Key::Char('p'), KeyModifiers::CONTROL);
+
+    assert!(matches!(
+        request,
+        ShellRequest::EmbyLibraryPlay { ref item } if item.id == "album-1"
+    ));
+    assert_eq!(model.app.status, "Emby is unavailable");
+}
+
+#[test]
+fn shell_music_ctrl_a_runs_library_enqueue_effect() {
+    let mut model = mounted_music_model();
+    let id = model
+        .music_workspace_id
+        .clone()
+        .expect("Music workspace mounted");
+    let request = dispatch_component_key(&mut model, &id, Key::Char('a'), KeyModifiers::CONTROL);
+
+    assert!(matches!(
+        request,
+        ShellRequest::EmbyLibraryEnqueue { ref item } if item.id == "album-1"
+    ));
+    let queued = model.app.player_tab.emby_items();
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[0].id, "album-1");
+}
+
+#[test]
+fn shell_tv_ctrl_w_runs_library_toggle_watched_effect() {
+    let mut model = mounted_tv_model();
+    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+    let request = dispatch_component_key(&mut model, &id, Key::Char('w'), KeyModifiers::CONTROL);
+
+    assert!(matches!(
+        request,
+        ShellRequest::EmbyLibraryToggleWatched { ref item } if item.id == "movie-focused"
+    ));
+    assert_eq!(model.app.status, "Emby is unavailable");
+}
+
+#[test]
+fn shell_tv_ctrl_s_runs_library_shuffle_effect() {
+    let mut model = mounted_tv_model();
+    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+    let request = dispatch_component_key(&mut model, &id, Key::Char('s'), KeyModifiers::CONTROL);
+
+    assert!(matches!(
+        request,
+        ShellRequest::EmbyLibraryShuffle { ref item } if item.id == "movie-focused"
+    ));
+    assert_eq!(model.app.status, "Emby is unavailable");
+}
+
+#[test]
+fn shell_music_ctrl_r_runs_library_rescan_effect() {
+    let mut model = mounted_music_model();
+    let id = model
+        .music_workspace_id
+        .clone()
+        .expect("Music workspace mounted");
+    let request = dispatch_component_key(&mut model, &id, Key::Char('r'), KeyModifiers::CONTROL);
+
+    assert_eq!(request, ShellRequest::EmbyLibraryRescan);
+    match model.app.pending_overlay.as_ref() {
+        Some(crate::app::types_overlay::OverlayRequest::Confirm(modal)) => {
+            assert!(matches!(
+                modal.on_confirm,
+                crate::app::ConfirmAction::RescanLibrary(0)
+            ));
+        }
+        _ => panic!("Ctrl+R must raise the rescan confirmation"),
+    }
+}
+
+#[test]
+fn shell_tv_refresh_runs_library_refresh_effect() {
+    let mut model = mounted_tv_model();
+    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+    let request = dispatch_component_key(&mut model, &id, Key::Char('r'), KeyModifiers::NONE);
+
+    assert_eq!(request, ShellRequest::EmbyLibraryRefresh);
+    assert!(model.app.libs[0].nav_stack[0].loading);
+}
