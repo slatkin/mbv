@@ -1,9 +1,11 @@
 use super::*;
 use crate::app::components::{BrowserComponent, Msg};
-use crate::app::render::make_movie_app;
-use crate::app::tests::{make_app_stub, make_item};
+use crate::app::render::{make_large_movie_library_app, make_movie_app};
+use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::types_browse::BrowseResting;
 use crate::app::{App, BrowseLevel, ContextAction, LibraryTab, PanelMode, TabSelection};
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 #[path = "shell_browser_group_tests.rs"]
@@ -11,6 +13,39 @@ mod group_tests;
 #[path = "shell_browser_test_support.rs"]
 mod test_support;
 use test_support::*;
+
+/// The mounted Movies browser must receive the wide letter-pill projection from
+/// the shell. This checks the rendered output, rather than only the shared
+/// breakpoint predicate: the pre-projection implementation leaves the row
+/// empty even though `BrowserComponent::view` selects the wide layout.
+#[test]
+fn shell_emby_browser_wide_movies_renders_letter_pills() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_large_movie_library_app(1000);
+    app.libs[0].nav_stack[0].items = make_items(1000);
+    app.libs[0].nav_stack[0].total_count = 1000;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut model = Model::new(app);
+    model.sync_emby_browser();
+
+    let backend = TestBackend::new(200, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| {
+            model.app.compose_base_frame(frame, None);
+            model.render_emby_browser_component(frame);
+        })
+        .unwrap();
+
+    let buffer = terminal.backend().buffer();
+    let rendered = (0..buffer.area().height)
+        .flat_map(|y| (0..buffer.area().width).map(move |x| buffer[(x, y)].symbol()))
+        .collect::<String>();
+    assert!(
+        rendered.contains("A–C"),
+        "wide Movies letter-pill row was not rendered: {rendered}"
+    );
+}
 
 /// Task 5.3d, Emby browser effect decoupling: `BrowserComponent` resolves
 /// its own selected `EmbyItem` from its component-local cursor over the

@@ -214,7 +214,7 @@ mod sessions_tests;
 #[path = "test_helpers.rs"]
 mod test_helpers;
 #[cfg(test)]
-pub(crate) use test_helpers::{make_movie_app, make_music_group_app};
+pub(crate) use test_helpers::{make_large_movie_library_app, make_movie_app, make_music_group_app};
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
