@@ -171,14 +171,23 @@
 - [x] 7.6 Run `rtk ast-grep scan` — 66 diagnostics (pre-existing
   screen-boundary baseline, unchanged; plan estimated 69). ✅
 - [x] 7.7 Run `rtk ast-grep test` — 7 passed, 0 failed. ✅
-- [ ] 7.8 Squash all fix commits into one, per user request.
+- [x] 7.8 Squash all fix commits into one, per user request.
+
+  **Deferred to PR time (user decision, 2026-08-31).** The fix
+  commits (`42860bbb` code, `f48b5e48` tests) are non-adjacent —
+  the concurrent `sync-interactive-surface-docs` (#614) committed
+  to `feat/migrate-tui-to-tuirealm` in the same session and its
+  commits are interleaved. A rebase to squash would rewrite another
+  agent's history on a shared long-lived branch. Since the branch
+  is itself squash-merged at PR time, a per-commit squash inside it
+  adds little; history collapses when the branch PR is cut.
 - [x] 7.9 Update the `interactive-component-framework` spec
   (task 6.1) and re-run `openspec validate --specs` — passes
   (66 passed, 0 failed). ✅
 
 ## 8. Final
 
-- [ ] 8.1 Mark this change complete. The fixes are filed against
+- [x] 8.1 Mark this change complete. The fixes are filed against
   `fix-router-overlay-textentry`; the just-archived
   `migrate-tui-to-tuirealm` and `remove-legacy-keyboard-endpoint`
   are not reopened.
