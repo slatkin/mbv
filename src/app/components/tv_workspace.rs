@@ -432,6 +432,55 @@ impl TvWorkspaceComponent {
                 self.jump_cursor(true);
                 Some(ShellRequest::TvJumpCursor { to_end: true })
             }
+            // Library effects use the component's selected item. TV keeps
+            // the series-list selection authoritative even while the local
+            // Episodes pane is focused, matching the legacy stack target.
+            Key::Char('p')
+                if key
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
+            {
+                self.selected_item()
+                    .map(|item| ShellRequest::EmbyLibraryPlay { item })
+            }
+            Key::Char('a')
+                if key
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
+            {
+                self.selected_item()
+                    .map(|item| ShellRequest::EmbyLibraryEnqueue { item })
+            }
+            Key::Char('w')
+                if key
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
+            {
+                self.selected_item()
+                    .map(|item| ShellRequest::EmbyLibraryToggleWatched { item })
+            }
+            Key::Char('s')
+                if key
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
+            {
+                self.selected_item()
+                    .map(|item| ShellRequest::EmbyLibraryShuffle { item })
+            }
+            Key::Char('r')
+                if key
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
+            {
+                Some(ShellRequest::EmbyLibraryRescan)
+            }
+            Key::Char('r')
+                if !key.modifiers.intersects(
+                    tuirealm::event::KeyModifiers::CONTROL | tuirealm::event::KeyModifiers::ALT,
+                ) =>
+            {
+                Some(ShellRequest::EmbyLibraryRefresh)
+            }
             Key::Char(c @ ('[' | ']'))
                 if !key
                     .modifiers
