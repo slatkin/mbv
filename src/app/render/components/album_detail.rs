@@ -18,19 +18,33 @@ pub(in crate::app::render) fn album_hero_detail_rows(images_enabled: bool) -> us
     (1 + 1 + 1).max(image_rows) + 1
 }
 
+/// Presentation switches for [`render_album_detail`]. Both call sites pass
+/// literals, so the field names carry the intent the booleans could not.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::app::render) struct AlbumDetailPresentation {
+    pub focused: bool,
+    pub show_title: bool,
+    pub selected_region_gutter: bool,
+    pub flush_left: bool,
+    pub show_hint: bool,
+}
+
 pub(in crate::app::render) fn render_album_detail(
     f: &mut Frame,
     area: Rect,
     items: &[mbv_core::api::EmbyItem],
     cursor: usize,
-    focused: bool,
-    show_title: bool,
-    selected_region_gutter: bool,
-    flush_left: bool,
-    show_hint: bool,
+    presentation: AlbumDetailPresentation,
     art_reserved_w: u16,
     layout: &mut LayoutMain,
 ) {
+    let AlbumDetailPresentation {
+        focused,
+        show_title,
+        selected_region_gutter,
+        flush_left,
+        show_hint,
+    } = presentation;
     if area.height == 0 {
         return;
     }

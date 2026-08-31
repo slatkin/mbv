@@ -104,9 +104,7 @@ impl AppComponent<Msg, UserEvent> for ConfirmComponent {
         let Event::Keyboard(key) = ev else {
             return None;
         };
-        let Some(action) = self.on_confirm.as_ref() else {
-            return None;
-        };
+        let action = self.on_confirm.as_ref()?;
         let intent = confirm_intent_for_key(action, key.code)?;
         Some(Msg::Shell(ShellRequest::ConfirmIntent(intent)))
     }

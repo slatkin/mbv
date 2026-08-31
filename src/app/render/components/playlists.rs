@@ -99,22 +99,43 @@ impl PlaylistsRenderGeometry {
     }
 }
 
+/// Everything the playlists painter reads and mutates, gathered from the
+/// component once per frame. The painter keeps no ownership: cursors and
+/// scroll offsets are written back through these borrows.
+pub(in crate::app) struct PlaylistsViewState<'a> {
+    pub panel_area: Option<Rect>,
+    pub playlists: &'a [EmbyItem],
+    pub playlists_cursor: &'a mut usize,
+    pub playlists_scroll: &'a mut usize,
+    pub playlists_loading: bool,
+    pub playlists_open: Option<&'a EmbyItem>,
+    pub open_items: &'a [EmbyItem],
+    pub open_cursor: &'a mut usize,
+    pub open_scroll: &'a mut usize,
+    pub open_loading: bool,
+    pub loaded_id: Option<&'a str>,
+    pub geometry: &'a mut PlaylistsRenderGeometry,
+}
+
 pub(in crate::app) fn render_playlists_content(
     frame: &mut Frame,
     area: Rect,
-    panel_area: Option<Rect>,
-    playlists: &[EmbyItem],
-    playlists_cursor: &mut usize,
-    playlists_scroll: &mut usize,
-    playlists_loading: bool,
-    playlists_open: Option<&EmbyItem>,
-    open_items: &[EmbyItem],
-    open_cursor: &mut usize,
-    open_scroll: &mut usize,
-    open_loading: bool,
-    loaded_id: Option<&str>,
-    geometry: &mut PlaylistsRenderGeometry,
+    view: PlaylistsViewState<'_>,
 ) {
+    let PlaylistsViewState {
+        panel_area,
+        playlists,
+        playlists_cursor,
+        playlists_scroll,
+        playlists_loading,
+        playlists_open,
+        open_items,
+        open_cursor,
+        open_scroll,
+        open_loading,
+        loaded_id,
+        geometry,
+    } = view;
     *geometry = PlaylistsRenderGeometry::default();
     let (title, hint) = if let Some(playlist) = playlists_open {
         (

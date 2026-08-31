@@ -33,6 +33,8 @@ pub use self::shell::ShellRequest;
 /// The single TuiRealm outbound type, grouping surface output enums (design
 /// D4). `Application` requires `Msg: PartialEq`; convenience `Debug`/`Clone`
 /// derives aid diagnostics and follow-on message cascades.
+// TODO(migrate-tui-to-tuirealm): box the large request variant after migration churn settles.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Msg {
     Navigate(NavTarget),

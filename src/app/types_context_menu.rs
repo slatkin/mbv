@@ -52,6 +52,9 @@ impl Clone for ContextMenuEntry {
     }
 }
 
+/// One multiselect row: `(name_lower, display_name, is_hidden)`.
+pub(crate) type MultiSelectItem = (String, String, bool);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MultiSelectKind {
     HiddenLibraries,
@@ -63,7 +66,7 @@ pub(crate) enum MultiSelectKind {
 #[derive(Clone)]
 pub(super) struct MultiSelectPopup {
     pub(super) kind: MultiSelectKind,
-    pub(super) items: Vec<(String, String, bool)>, // (name_lower, display_name, is_hidden)
+    pub(super) items: Vec<MultiSelectItem>,
     pub(super) cursor: usize,
 }
 

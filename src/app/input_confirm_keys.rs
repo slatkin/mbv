@@ -3,8 +3,7 @@ use super::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
     SavePlaylistDialog, SavePlaylistStage, SidebarId, UndoEntry,
 };
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use mbv_core::api::EmbyItem;
+use crossterm::event::{KeyCode, KeyEvent};
 use mbv_core::playback_queue::RemoveSlotResult;
 
 impl App {

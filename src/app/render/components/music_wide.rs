@@ -90,9 +90,7 @@ impl MusicWideRenderCtx {
         layout.wide_music_area = area;
         layout.wide_music_art_area = Rect::default();
 
-        let Some(panes) = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y) else {
-            return None;
-        };
+        let panes = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y)?;
         let left_layout = music_arrangement::wide_music_left_layout(
             panes.left_area,
             self.selected_album.is_some() && self.images_enabled,

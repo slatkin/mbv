@@ -65,9 +65,7 @@ impl FeedsManageComponent {
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        let Some(stage) = self.stage.clone() else {
-            return None;
-        };
+        let stage = self.stage.clone()?;
         match stage {
             FeedsManageStage::List => self.handle_list_key(key),
             FeedsManageStage::Form(form) => self.handle_form_key(key, &form),

@@ -82,6 +82,7 @@ impl CompactBannerLayout {
     /// past the banner's row budget into the list rows below it. No upper
     /// cap is applied to the text side -- real Emby movie metadata is short
     /// by convention (#263), so unbounded growth there is intended.
+    #[cfg(test)]
     pub(in crate::app) fn content_rows(&self) -> usize {
         self.content_rows_with_title(0)
     }

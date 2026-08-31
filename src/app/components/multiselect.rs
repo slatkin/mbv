@@ -11,7 +11,7 @@ use tuirealm::state::State;
 use super::msg::Msg;
 use super::user_event::UserEvent;
 use crate::app::render::{render_multiselect_content, MultiSelectRenderModel};
-use crate::app::types_context_menu::{MultiSelectKind, MultiSelectPopup};
+use crate::app::types_context_menu::{MultiSelectItem, MultiSelectKind, MultiSelectPopup};
 
 pub struct MultiselectComponent {
     kind: Option<MultiSelectKind>,
@@ -50,7 +50,7 @@ impl MultiselectComponent {
 
     pub(in crate::app) fn commit_snapshot(
         &self,
-    ) -> Option<(MultiSelectKind, Vec<(String, String, bool)>)> {
+    ) -> Option<(MultiSelectKind, Vec<MultiSelectItem>)> {
         self.kind.map(|kind| (kind, self.items.clone()))
     }
 

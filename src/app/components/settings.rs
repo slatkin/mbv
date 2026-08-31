@@ -159,9 +159,7 @@ impl SettingsComponent {
     }
 
     fn setup_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        let Some(setup) = self.setup.as_mut() else {
-            return None;
-        };
+        let setup = self.setup.as_mut()?;
         let busy = match setup {
             SetupDraft::Emby { busy, .. } | SetupDraft::Audiobookshelf { busy, .. } => *busy,
         };

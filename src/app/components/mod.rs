@@ -59,6 +59,7 @@ pub use self::multiselect::MultiselectComponent;
 pub use self::music_workspace::MusicWorkspaceComponent;
 pub(in crate::app) use self::playback::{PlaybackComponent, PlaybackProjection};
 pub use self::playlists::PlaylistsComponent;
+pub(in crate::app) use self::playlists::PlaylistsContent;
 pub use self::queue::QueueComponent;
 pub use self::remote_reanchor::RemoteReanchorComponent;
 pub(in crate::app) use self::root::UiRootComponent;

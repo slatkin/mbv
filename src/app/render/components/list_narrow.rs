@@ -129,10 +129,9 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         );
     }
 
-    let (pills_area, list_area) = if extras.feed_items.is_some() {
-        let areas = hero_left::pill_bar_areas(content_area);
-        (areas.pills_area, areas.content_area)
-    } else if extras.show_letter_pills {
+    // Feed-group and letter pickers share one pill-bar geometry; only the
+    // pills' *contents* differ, which is decided where they are painted.
+    let (pills_area, list_area) = if extras.feed_items.is_some() || extras.show_letter_pills {
         let areas = hero_left::pill_bar_areas(content_area);
         (areas.pills_area, areas.content_area)
     } else {

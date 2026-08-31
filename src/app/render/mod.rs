@@ -65,6 +65,7 @@ pub(in crate::app) use components::music_wide::{
 };
 pub(in crate::app) use components::playlists::{
     render_playlists_content, render_save_playlist_content, PlaylistsRenderGeometry,
+    PlaylistsViewState,
 };
 pub(in crate::app) use components::queue::{
     render_queue_content, render_queue_title_content, QueueRenderGeometry, QueueTitleModel,

@@ -1,8 +1,6 @@
 use super::types_settings::SettingsDestination;
 use super::*;
 
-use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-
 use ratatui::backend::TestBackend;
 
 use ratatui::Terminal;

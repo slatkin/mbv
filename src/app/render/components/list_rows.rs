@@ -156,11 +156,6 @@ impl<'a> InlineReplacementPlan<'a> {
         self.total_display_rows
     }
 
-    #[cfg(test)]
-    pub(in crate::app::render) fn detail_screen_row(&self) -> Option<usize> {
-        self.detail_screen_row
-    }
-
     pub(in crate::app::render) fn hero_area(&self, content_area: Rect) -> Option<Rect> {
         self.detail_screen_row.map(|screen_row| Rect {
             y: content_area.y + screen_row as u16,

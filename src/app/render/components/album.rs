@@ -2,6 +2,7 @@ use crate::app::layout::LayoutMain;
 use crate::app::render::components::album_art::{
     MusicImagePaint, INLINE_ALBUM_ART_RESERVED, INLINE_ALBUM_ART_ROWS,
 };
+use crate::app::render::components::album_detail::AlbumDetailPresentation;
 use crate::app::render::components::album_rows::AlbumRowCtx;
 use crate::app::render::components::list_rows::{
     draw_column_selection_markers, selected_cell_rect,
@@ -577,11 +578,13 @@ pub(in crate::app::render) fn render_grouped_album_rows_with_ctx(
                             },
                             &tracks,
                             0,
-                            false,
-                            false,
-                            false,
-                            true,
-                            false,
+                            AlbumDetailPresentation {
+                                focused: false,
+                                show_title: false,
+                                selected_region_gutter: false,
+                                flush_left: true,
+                                show_hint: false,
+                            },
                             selected_art_reserved_w,
                             layout,
                         );
@@ -645,12 +648,16 @@ pub(in crate::app::render) fn render_grouped_album_rows_with_ctx(
                         track_area,
                         &tracks,
                         cursor,
-                        detail_focused,
-                        false, // show_title: Album(idx) row above already shows it
-                        false,
-                        true,
-                        false, // show_hint: AlbumActionHint row at top already shows it
-                        0,     // art_reserved_w: already accounted for in track_area
+                        // show_title: the Album(idx) row above already shows it.
+                        // show_hint: the AlbumActionHint row at top already shows it.
+                        AlbumDetailPresentation {
+                            focused: detail_focused,
+                            show_title: false,
+                            selected_region_gutter: false,
+                            flush_left: true,
+                            show_hint: false,
+                        },
+                        0, // art_reserved_w: already accounted for in track_area
                         layout,
                     );
                 }

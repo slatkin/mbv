@@ -1,38 +1,11 @@
 use crate::app::layout::LayoutMain;
-use crate::app::ui_util::*;
 use crate::app::{palette, App, QueueScope, RemoteSlotState};
-use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
-
-// Extra gap reserved between the title and whatever follows it (inline
-// percent and/or the right-aligned duration), on top of their own widths
-// which are already accounted for separately via `pct_w`/`right_w`.
-const QUEUE_TITLE_QUIET_COLUMNS: usize = 2;
-
-/// Time text for one queue row. The now-playing row shows the moving
-/// elapsed time next to its duration (`1:05 / 3:22`), matching the playback
-/// panel's time readout; every other row shows just its duration. Empty
-/// when the duration is unknown.
-fn queue_row_time_text(pos_ticks: i64, dur_ticks: i64, show_elapsed: bool) -> String {
-    let dur_s = dur_ticks / TICKS_PER_SECOND;
-    if dur_s <= 0 {
-        return String::new();
-    }
-    if show_elapsed {
-        format!(
-            "{} / {}",
-            fmt_duration_short(pos_ticks / TICKS_PER_SECOND),
-            fmt_duration_short(dur_s)
-        )
-    } else {
-        fmt_duration_short(dur_s)
-    }
-}
 
 impl App {
     /// Renders the "Queue" title pill (and optional Local/Remote scope pills)

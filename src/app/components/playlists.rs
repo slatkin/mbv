@@ -8,7 +8,7 @@ use tuirealm::state::State;
 
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
-use crate::app::render::{render_playlists_content, PlaylistsRenderGeometry};
+use crate::app::render::{render_playlists_content, PlaylistsRenderGeometry, PlaylistsViewState};
 use mbv_core::api::EmbyItem;
 use std::time::{Duration, Instant};
 
@@ -26,6 +26,22 @@ pub struct PlaylistsComponent {
     panel_area: Option<Rect>,
     geometry: PlaylistsRenderGeometry,
     last_click: Option<(Instant, u16, u16)>,
+}
+
+/// Owned snapshot of playlist state, handed to the component whenever the
+/// shell refreshes it. Grouped into one value because the fields always
+/// travel together and the component mirrors them all.
+pub(in crate::app) struct PlaylistsContent {
+    pub playlists: Vec<EmbyItem>,
+    pub cursor: usize,
+    pub scroll: usize,
+    pub loading: bool,
+    pub open: Option<EmbyItem>,
+    pub open_items: Vec<EmbyItem>,
+    pub open_cursor: usize,
+    pub open_scroll: usize,
+    pub open_loading: bool,
+    pub loaded_id: Option<String>,
 }
 
 impl PlaylistsComponent {
@@ -47,19 +63,19 @@ impl PlaylistsComponent {
         }
     }
 
-    pub(in crate::app) fn set_content(
-        &mut self,
-        playlists: Vec<EmbyItem>,
-        cursor: usize,
-        scroll: usize,
-        loading: bool,
-        open: Option<EmbyItem>,
-        open_items: Vec<EmbyItem>,
-        open_cursor: usize,
-        open_scroll: usize,
-        open_loading: bool,
-        loaded_id: Option<String>,
-    ) {
+    pub(in crate::app) fn set_content(&mut self, content: PlaylistsContent) {
+        let PlaylistsContent {
+            playlists,
+            cursor,
+            scroll,
+            loading,
+            open,
+            open_items,
+            open_cursor,
+            open_scroll,
+            open_loading,
+            loaded_id,
+        } = content;
         self.playlists = playlists;
         self.cursor = self
             .cursor
@@ -250,18 +266,20 @@ impl Component for PlaylistsComponent {
         render_playlists_content(
             frame,
             area,
-            self.panel_area,
-            &self.playlists,
-            &mut self.cursor,
-            &mut self.scroll,
-            self.loading,
-            self.open.as_ref(),
-            &self.open_items,
-            &mut self.open_cursor,
-            &mut self.open_scroll,
-            self.open_loading,
-            self.loaded_id.as_deref(),
-            &mut self.geometry,
+            PlaylistsViewState {
+                panel_area: self.panel_area,
+                playlists: &self.playlists,
+                playlists_cursor: &mut self.cursor,
+                playlists_scroll: &mut self.scroll,
+                playlists_loading: self.loading,
+                playlists_open: self.open.as_ref(),
+                open_items: &self.open_items,
+                open_cursor: &mut self.open_cursor,
+                open_scroll: &mut self.open_scroll,
+                open_loading: self.open_loading,
+                loaded_id: self.loaded_id.as_deref(),
+                geometry: &mut self.geometry,
+            },
         );
     }
 

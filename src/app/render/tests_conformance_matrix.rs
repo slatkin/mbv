@@ -94,12 +94,14 @@ fn render_book_component(
         component.set_content(state, true, app.images_enabled());
     }
     terminal.draw(|frame| component.view(frame, area)).unwrap();
-    let mut layout = LayoutMain::default();
-    layout.left_area = area;
     let geometry = component.geometry();
-    layout.hero_area = geometry.hero_area.unwrap_or_default();
-    layout.selected_item_rect = geometry.selected_item_rect;
-    layout.selector_tabs = geometry.selector_tabs.clone();
+    let layout = LayoutMain {
+        left_area: area,
+        hero_area: geometry.hero_area.unwrap_or_default(),
+        selected_item_rect: geometry.selected_item_rect,
+        selector_tabs: geometry.selector_tabs.clone(),
+        ..Default::default()
+    };
     (terminal, layout)
 }
 
@@ -115,13 +117,15 @@ fn render_podcast_component(
         component.set_content(state, true, app.images_enabled());
     }
     terminal.draw(|frame| component.view(frame, area)).unwrap();
-    let mut layout = LayoutMain::default();
-    layout.left_area = area;
     let geometry = component.geometry();
-    layout.hero_area = geometry.hero_area;
-    layout.inline_hero_area = geometry.inline_hero_area;
-    layout.selected_item_rect = geometry.selected_item_rect;
-    layout.selector_tabs = geometry.selector_tabs.clone();
+    let layout = LayoutMain {
+        left_area: area,
+        hero_area: geometry.hero_area,
+        inline_hero_area: geometry.inline_hero_area,
+        selected_item_rect: geometry.selected_item_rect,
+        selector_tabs: geometry.selector_tabs.clone(),
+        ..Default::default()
+    };
     (terminal, layout)
 }
 

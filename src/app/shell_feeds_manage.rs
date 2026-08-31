@@ -10,7 +10,6 @@
 use super::components::msg::FeedsManageIntent;
 use super::components::{ComponentId, FeedsManageComponent, PopupId};
 use super::types_feeds_manage::{FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage};
-use crossterm::event::{KeyCode, KeyEvent};
 use mbv_core::config::FeedSubscription;
 
 impl super::shell::Model {
