@@ -180,11 +180,11 @@ impl AudiobookshelfPodcastComponent {
         }
         match key.code {
             Key::Up | Key::Char('k') if self.episode_selection.is_none() => {
-                self.move_cursor(-1);
+                self.move_cursor(-(self.geometry.columns.max(1) as i64));
                 Some(self.show_move_request())
             }
             Key::Down | Key::Char('j') if self.episode_selection.is_none() => {
-                self.move_cursor(1);
+                self.move_cursor(self.geometry.columns.max(1) as i64);
                 Some(self.show_move_request())
             }
             Key::Left | Key::Char('h') if self.episode_selection.is_none() => {
@@ -196,11 +196,11 @@ impl AudiobookshelfPodcastComponent {
                 Some(self.show_move_request())
             }
             Key::PageUp if self.episode_selection.is_none() => {
-                self.move_cursor(-(self.page_size() as i64));
+                self.move_cursor(-((self.page_size() * self.geometry.columns.max(1)) as i64));
                 Some(self.show_move_request())
             }
             Key::PageDown if self.episode_selection.is_none() => {
-                self.move_cursor(self.page_size() as i64);
+                self.move_cursor((self.page_size() * self.geometry.columns.max(1)) as i64);
                 Some(self.show_move_request())
             }
             Key::Home if self.episode_selection.is_none() => {
@@ -297,6 +297,7 @@ impl AudiobookshelfPodcastComponent {
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
             let pos: ratatui::layout::Position = (mouse.column, mouse.row).into();
+            let mut selected = false;
             if let Some((_, index)) = self
                 .geometry
                 .show_rows
@@ -304,6 +305,7 @@ impl AudiobookshelfPodcastComponent {
                 .find(|(rect, _)| rect.contains(pos))
             {
                 self.select_show(*index);
+                selected = true;
             }
             if let Some((_, bucket)) = self
                 .geometry
@@ -318,7 +320,11 @@ impl AudiobookshelfPodcastComponent {
                     .get(*bucket)
                 {
                     self.select_show(range.start);
+                    selected = true;
                 }
+            }
+            if selected {
+                return Some(self.show_move_request());
             }
         }
         None

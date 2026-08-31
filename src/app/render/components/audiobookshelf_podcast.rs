@@ -89,6 +89,8 @@ pub(in crate::app) struct PodcastInteraction {
 /// so selector and show targets cannot drift from the rendered surface.
 #[derive(Default)]
 pub(in crate::app) struct AudiobookshelfPodcastGeometry {
+    /// Column count used by the painted show grid and keyboard navigation.
+    pub columns: usize,
     pub selector_tabs: Vec<(Rect, usize)>,
     pub show_rows: Vec<(Rect, usize)>,
     pub episode_rows: Vec<(Rect, usize)>,
@@ -157,6 +159,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     // this layout (the right panel paints an ordinary show grid).
     geometry.list_area = right_panel;
     geometry.right_area = right_panel;
+    geometry.columns = 1;
     if state.shows.is_empty() {
         render_placeholder(frame, right_panel, "No podcast shows");
         return image_paint;
@@ -211,6 +214,7 @@ fn render_narrow_podcast(
 
     let list_area = parts.content_area;
     geometry.list_area = list_area;
+    geometry.columns = library_column_width::library_column_count(list_area.width).max(1);
     let hero_content_width = list_area
         .width
         .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
@@ -227,7 +231,7 @@ fn render_narrow_podcast(
         list_area,
         focused,
         state,
-        library_column_width::library_column_count(list_area.width),
+        geometry.columns,
         hero_rows,
         *scroll,
         geometry,
@@ -235,8 +239,7 @@ fn render_narrow_podcast(
     if hero_rows == 0 {
         return None;
     }
-    let cursor_row =
-        state.cursor() / library_column_width::library_column_count(list_area.width).max(1);
+    let cursor_row = state.cursor() / geometry.columns.max(1);
     let flow = inline_detail_flow(cursor_row, hero_rows, list_area.height, *scroll)?;
     *scroll = flow.offset;
     let hero_area = Rect {
@@ -443,12 +446,16 @@ fn render_show_rows(
         if let Some(crate::app::render::components::hero::InlineDisplayRow::Source(source_row)) =
             inline_display_row(rows.len(), cursor_row, hero_rows, display_row)
         {
-            for index in &rows[source_row] {
+            let cell_width = library_column_width::library_cell_width(area, cols);
+            for (column, index) in rows[source_row].iter().enumerate() {
                 geometry.show_rows.push((
                     Rect {
+                        x: area.x
+                            + column as u16
+                                * (cell_width + library_column_width::LIBRARY_COLUMN_GAP),
                         y: area.y + screen_row as u16,
+                        width: cell_width,
                         height: 1,
-                        ..area
                     },
                     *index,
                 ));
