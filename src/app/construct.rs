@@ -206,6 +206,7 @@ impl App {
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             last_library_nav_at: Instant::now() - Duration::from_secs(1),
+            queue_cursor_pushed: false,
             library_position_dirty: false,
             library_position_dirty_at: Instant::now() - Duration::from_secs(1),
             refocus_at: None,

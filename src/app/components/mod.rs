@@ -61,6 +61,7 @@ pub(in crate::app) use self::playback::{PlaybackComponent, PlaybackProjection};
 pub use self::playlists::PlaylistsComponent;
 pub(in crate::app) use self::playlists::PlaylistsContent;
 pub use self::queue::QueueComponent;
+pub(in crate::app) use self::queue::QueueCursorUpdate;
 pub use self::remote_reanchor::RemoteReanchorComponent;
 pub(in crate::app) use self::root::UiRootComponent;
 pub use self::save_playlist::SavePlaylistComponent;

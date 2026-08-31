@@ -1,5 +1,5 @@
 use super::msg::{Msg, QueueColumnResize, QueueHitRegion, QueueIntent, QueueRequest, ShellRequest};
-use super::queue::QueueComponent;
+use super::queue::{QueueComponent, QueueCursorUpdate};
 use crate::app::render::QueueTitleModel;
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use mbv_core::playback_queue::{PlaybackQueue, QueueItem};
@@ -40,7 +40,7 @@ fn queue_activation_uses_slot_id_after_snapshot_reorder() {
     let mut component = QueueComponent::new();
     component.set_content(
         slots.clone(),
-        0,
+        QueueCursorUpdate::Set(0),
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -56,7 +56,7 @@ fn queue_activation_uses_slot_id_after_snapshot_reorder() {
     reordered.swap(0, 1);
     component.set_content(
         reordered,
-        0,
+        QueueCursorUpdate::Preserve,
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -68,12 +68,51 @@ fn queue_activation_uses_slot_id_after_snapshot_reorder() {
     ));
 }
 
+/// Regression test for the bug where `set_content` only ever consulted its
+/// cursor argument inside the slot-identity fallback, so a `Set` push was
+/// silently discarded whenever the previously selected slot still existed.
+/// That's the common case for follow-the-playhead: no slot is removed (a
+/// music album keeps every slot alive since `consume_audio` defaults to
+/// false), so identity reconciliation alone would keep the cursor pinned to
+/// the item the user had selected instead of moving it to the newly playing
+/// item.
+#[test]
+fn queue_set_content_follow_the_playhead_moves_cursor_when_slots_persist() {
+    let slots = queue();
+    let mut component = QueueComponent::new();
+    component.set_content(
+        slots.clone(),
+        QueueCursorUpdate::Set(0),
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    assert_eq!(component.test_cursor(), 0);
+
+    // Same slot list, no removal: an identity-based `Preserve` would find
+    // slot 0 still present at index 0 and leave the cursor there.
+    component.set_content(
+        slots,
+        QueueCursorUpdate::Set(1),
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    assert_eq!(
+        component.test_cursor(),
+        1,
+        "a Set push must move the cursor even when the previously selected slot persists"
+    );
+}
+
 #[test]
 fn queue_component_emits_typed_keyboard_intents() {
     let mut component = QueueComponent::new();
     component.set_content(
         queue(),
-        0,
+        QueueCursorUpdate::Set(0),
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -124,7 +163,7 @@ fn queue_component_renders_a_snapshot_without_app_state() {
     let mut component = QueueComponent::new();
     component.set_content(
         queue(),
-        0,
+        QueueCursorUpdate::Set(0),
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -150,7 +189,7 @@ fn queue_right_click_uses_the_rendered_slot_target() {
     let mut component = QueueComponent::new();
     component.set_content(
         slots,
-        0,
+        QueueCursorUpdate::Set(0),
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -195,7 +234,7 @@ fn queue_component_upward_scrolling_reaches_top() {
     let mut component = QueueComponent::new();
     component.set_content(
         long_queue(),
-        29,
+        QueueCursorUpdate::Set(29),
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -220,7 +259,7 @@ fn queue_component_page_up_from_bottom_reaches_top() {
     let mut component = QueueComponent::new();
     component.set_content(
         long_queue(),
-        29,
+        QueueCursorUpdate::Set(29),
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -247,7 +286,7 @@ fn queue_component_instances_isolate_viewport_state() {
     let mut bottom = QueueComponent::new();
     bottom.set_content(
         slots.clone(),
-        29,
+        QueueCursorUpdate::Set(29),
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -256,7 +295,7 @@ fn queue_component_instances_isolate_viewport_state() {
     let mut untouched = QueueComponent::new();
     untouched.set_content(
         slots,
-        0,
+        QueueCursorUpdate::Set(0),
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -284,7 +323,7 @@ fn now_playing_queue_row_shows_elapsed_next_to_duration() {
     let mut component = QueueComponent::new();
     component.set_content(
         slot,
-        0,
+        QueueCursorUpdate::Set(0),
         QueueScope::Local,
         true,
         PlaybackState {
@@ -316,7 +355,7 @@ fn queue_scope_switch_resets_component_scroll() {
     let mut component = QueueComponent::new();
     component.set_content(
         slots,
-        29,
+        QueueCursorUpdate::Set(29),
         QueueScope::Local,
         true,
         PlaybackState::default(),
@@ -334,7 +373,10 @@ fn queue_scope_switch_resets_component_scroll() {
 
     // Keyboard scope change preassigns `self.scope` before the request, so
     // the shell's `set_content` scope-diff reset would not fire; the
-    // component must reset its own scroll at key time.
+    // component must reset its own scroll at key time. This assertion is
+    // necessarily taken before the next draw: the stale (pre-refresh) cursor
+    // is still 29 rows below the top, so rendering now would legitimately
+    // re-clamp scroll to reveal it, independent of whether the reset ran.
     component.on(&Event::Keyboard(key(Key::Char(']'))));
     assert_eq!(
         component.test_scroll(),
@@ -346,7 +388,7 @@ fn queue_scope_switch_resets_component_scroll() {
     // `set_content` with a differing scope; the component resets there too.
     component.set_content(
         long_queue(),
-        29,
+        QueueCursorUpdate::Set(29),
         QueueScope::Remote,
         true,
         PlaybackState::default(),
@@ -363,12 +405,24 @@ fn queue_scope_switch_resets_component_scroll() {
     );
     component.set_content(
         long_queue(),
-        0,
+        // A nonzero-but-in-view cursor, not 0: with the stale (pre-reset)
+        // scroll from the Remote content above, render's own reveal-cursor
+        // clamp would independently drag scroll down to this same cursor
+        // value regardless of whether the reset ran, which would make a
+        // cursor-0 assertion pass even on a broken reset. This value only
+        // renders as scroll 0 if the reset actually fired.
+        QueueCursorUpdate::Set(3),
         QueueScope::Local,
         true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    // Assert after a draw, not immediately after `set_content`: only a draw
+    // proves the reset survives the render pass rather than just the field
+    // write.
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
     assert_eq!(
         component.test_scroll(),
         0,
@@ -396,7 +450,7 @@ fn queue_scope_mouse_pills_reset_component_scroll_from_nonzero() {
     let mut component = QueueComponent::new();
     component.set_content(
         slots,
-        29,
+        QueueCursorUpdate::Set(29),
         QueueScope::Local,
         true,
         PlaybackState::default(),

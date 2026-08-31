@@ -16,6 +16,15 @@ use crate::app::render::{
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use mbv_core::playback_queue::QueueSlot;
 
+/// Why the shell is pushing a cursor. `Preserve` keeps the user's selection
+/// pinned to its slot across a content refresh; `Set` is an authoritative
+/// move (follow-the-playhead, jump-to-now-playing, wheel scroll, scope switch)
+/// that must win over slot-identity reconciliation.
+pub(in crate::app) enum QueueCursorUpdate {
+    Preserve,
+    Set(usize),
+}
+
 pub struct QueueComponent {
     slots: Vec<QueueSlot>,
     cursor: usize,
@@ -62,7 +71,7 @@ impl QueueComponent {
     pub(in crate::app) fn set_content(
         &mut self,
         slots: Vec<QueueSlot>,
-        cursor: usize,
+        cursor: QueueCursorUpdate,
         scope: QueueScope,
         focused: bool,
         playback: PlaybackState,
@@ -75,10 +84,18 @@ impl QueueComponent {
             self.scroll = 0;
         }
         let selected_slot = self.slots.get(self.cursor).map(|slot| slot.slot_id);
+        let previous_cursor = self.cursor;
         self.slots = slots;
-        self.cursor = selected_slot
-            .and_then(|slot_id| self.slots.iter().position(|slot| slot.slot_id == slot_id))
-            .unwrap_or_else(|| cursor.min(self.slots.len().saturating_sub(1)));
+        self.cursor = match cursor {
+            // Reconcile by slot identity so the user's selection stays
+            // pinned to its row across a routine content refresh; fall back
+            // to clamping the old cursor only when that slot is gone.
+            QueueCursorUpdate::Preserve => selected_slot
+                .and_then(|slot_id| self.slots.iter().position(|slot| slot.slot_id == slot_id))
+                .unwrap_or_else(|| previous_cursor.min(self.slots.len().saturating_sub(1))),
+            // An authoritative move: skip identity reconciliation entirely.
+            QueueCursorUpdate::Set(idx) => idx.min(self.slots.len().saturating_sub(1)),
+        };
         // Clamp against the component's own scroll/cursor/slot count only;
         // no scroll value is pushed from the shell anymore.
         self.scroll = self.scroll.min(self.cursor);

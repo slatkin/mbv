@@ -333,6 +333,12 @@ pub struct App {
     pub(super) last_scroll_at: Instant,
     pub(super) last_nav_at: Instant,
     pub(super) last_library_nav_at: Instant,
+    /// Set by an authoritative `queue_cursor` write (follow-the-playhead,
+    /// jump-to-now-playing, wheel scroll, scope switch) so the next
+    /// `sync_queue` pushes it into `QueueComponent` as a `Set` rather than
+    /// reconciling by slot identity (`QueueCursorUpdate::Preserve`).
+    /// Cleared once consumed.
+    pub(super) queue_cursor_pushed: bool,
     /// Set once `library_position_state` has an unflushed in-memory change.
     /// The disk write + shared-document sync are debounced off this rather
     /// than run synchronously on every cursor move -- see

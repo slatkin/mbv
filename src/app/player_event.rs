@@ -270,6 +270,9 @@ impl App {
                 self.player.status.lock().unwrap().current_idx = adjusted;
                 if !self.queue_cursor_held_by_user() {
                     self.playback_queue_mut().queue_cursor = adjusted;
+                    // Local mpv advance: an authoritative follow-the-playhead
+                    // move, must win over slot-identity reconciliation.
+                    self.queue_cursor_pushed = true;
                 }
                 if !self.has_direct_remote_queue() {
                     if let Some(item) = self.playback_queue().emby_item_at(adjusted) {
@@ -317,6 +320,9 @@ impl App {
                     {
                         self.player.send_command(PlayerCommand::JumpTo(idx));
                         self.playback_queue_mut().queue_cursor = idx;
+                        // Auto-advance to the next-up item: an authoritative
+                        // follow-the-playhead move.
+                        self.queue_cursor_pushed = true;
                         self.flash(label, ToastSeverity::Neutral);
                     } else {
                         log::warn!(target: "app", "next-up: item not in queue, cannot jump");
@@ -335,12 +341,17 @@ impl App {
                 let active_cursor = active_index.unwrap_or(0);
 
                 let pending_local_cursor = self.pending_queue_edit_cursor.take();
+                // Preserving the user's held selection carries no new
+                // cursor intent (the value is just what's already there);
+                // every other branch computes a fresh authoritative index.
+                let user_holding_local =
+                    !self.has_direct_remote_queue() && self.queue_cursor_held_by_user();
                 let cursor = if self.has_direct_remote_queue() {
                     self.pending_remote_move_cursor
                         .take()
                         .filter(|pc| *pc < total)
                         .unwrap_or(active_cursor)
-                } else if self.queue_cursor_held_by_user() {
+                } else if user_holding_local {
                     // User is actively navigating — preserve their
                     // selection cursor, but still replace the queue
                     // contents so slot data stays current.
@@ -355,6 +366,11 @@ impl App {
                 let queue = self.playback_queue_mut();
                 queue.set_unified_state(&unified, cursor);
                 self.queue_source = source;
+                if !user_holding_local {
+                    // Unified/direct-remote reconciliation: an authoritative
+                    // follow-the-playhead move.
+                    self.queue_cursor_pushed = true;
+                }
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 // mbvd never auto-seeks on this event itself — it always

@@ -131,6 +131,9 @@ impl App {
                                     })
                                 {
                                     self.player_tab.queue_cursor = new_idx;
+                                    // Attached-Emby session item change: an
+                                    // authoritative follow-the-playhead move.
+                                    self.queue_cursor_pushed = true;
                                 }
                             }
                             self.runtime_zero_since = None;

@@ -1,5 +1,6 @@
 use super::components::{
-    ComponentId, QueueColumnResize, QueueComponent, QueueIntent, QueueMove, QueueRequest,
+    ComponentId, QueueColumnResize, QueueComponent, QueueCursorUpdate, QueueIntent, QueueMove,
+    QueueRequest,
 };
 use super::shell::Model;
 use super::{PanelFocus, QueueScope};
@@ -32,9 +33,17 @@ impl Model {
         }
 
         let scope = self.app.visible_queue_scope();
-        let (slots, cursor) = {
-            let queue = self.app.queue_for_scope(scope);
-            (queue.slots().to_vec(), queue.queue_cursor)
+        let slots = self.app.queue_for_scope(scope).slots().to_vec();
+        // An authoritative writer (follow-the-playhead, jump-to-now-playing,
+        // wheel scroll, scope switch) armed `queue_cursor_pushed`; consume it
+        // as a `Set` that wins over slot-identity reconciliation. Otherwise
+        // this is a routine content refresh: `Preserve` the component's own
+        // selection pinned to its slot.
+        let cursor = if self.app.queue_cursor_pushed {
+            self.app.queue_cursor_pushed = false;
+            QueueCursorUpdate::Set(self.app.queue_for_scope(scope).queue_cursor)
+        } else {
+            QueueCursorUpdate::Preserve
         };
         let playback = self.app.displayed_queue_playback_state();
         let title = self.app.queue_title_model();
@@ -159,6 +168,7 @@ impl Model {
                 };
                 if active {
                     self.app.playback_queue_mut().queue_cursor = current_idx;
+                    self.app.queue_cursor_pushed = true;
                     if self.app.player.is_remote() {
                         self.app.set_queue_scope(QueueScope::Remote);
                     }
