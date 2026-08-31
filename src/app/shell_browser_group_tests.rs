@@ -282,3 +282,31 @@ fn feed_group_picker_bracket_keys_cycle_groups() {
         "routing BrowserCycleGroup must advance the selected group"
     );
 }
+
+#[test]
+fn feed_group_picker_keeps_keyboard_navigation_and_activation_at_both_widths() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    for width in [40, 120] {
+        let mut model = Model::new(feed_group_picker_app());
+        model.app.panel_focus = PanelFocus::Library;
+        model.app.panel_mode = PanelMode::Both;
+        model.sync_emby_browser();
+        let id = model
+            .emby_browser_id
+            .clone()
+            .expect("feed group-picker browser mounted");
+        render_browser_model(&mut model, width, 30);
+
+        let msg = drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE);
+        assert!(matches!(
+            msg,
+            Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
+        ));
+        model.handle_browser_request(ShellRequest::BrowserCursorIndex { index: 1 });
+
+        let msg = drive_browser_key(&mut model, &id, Key::Enter, KeyModifiers::NONE);
+        assert!(
+            matches!(msg, Some(Msg::Shell(ShellRequest::BrowserActivate { ref item })) if item.id == "e2")
+        );
+    }
+}
