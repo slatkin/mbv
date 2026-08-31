@@ -336,12 +336,32 @@ Their line references predate 1.2a and that re-spelling shifts none of them.
 - [ ] 4.2 Full gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
       `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`,
       `rtk cargo fmt`, `rtk make check-code-file-lines`.
-- [ ] 4.3 Confirm #607's acceptance criterion "component-local interaction
+- [x] 4.3 Confirm #607's acceptance criterion "component-local interaction
       state has one owner" holds literally: no `App` field stores a live
       cursor, scroll, or selection for a mounted component. Verify: stated
       against `split-browse-state-interaction-fields/design.md` §1.1/1.1b/1.2,
       every row resolved. Recording this across the ledger, ADR 0022, and the
       spec is `sync-interactive-surface-docs` (#614).
+      Result (verified at `2b91957f`): **YES** for the criterion's defined
+      scope. `BrowseLevel` (`types_browse.rs:62`) carries only
+      `resting: BrowseResting` (private `cursor`/`scroll`, `BrowseResting::new`
+      sole external ctor); `AudiobookshelfBrowseState` /
+      `AudiobookshelfBookBrowseState` carry only a resting `selected_id`
+      (`scroll`/`episode_selection`/`chapter_selection`/`selected_bucket`
+      removed, component-owned). Raw grep for `lvl.cursor` / `level.scroll` /
+      `nav_stack.last().cursor` field access across non-test `src/` = zero.
+      Every §1.1 row R1–R13, §1.1b row R14–R20, and §1.2 field resolves to
+      outcome-1 (cursor is now a threaded parameter fed from
+      `Component::cursor()`) or outcome-2 (`l.resting().cursor()` copy at a
+      navigation/load/persist event). The three surviving `set_resting_*`
+      writers on live paths are the task-2.3-sanctioned event-driven
+      persistence seams (shell records the component-resolved index for
+      `save_default_library_position`; never read back per-frame), not
+      per-frame mirrors. One documented exception: `feed_home_video.video_cursor`
+      is an `App`-held live cursor for the feed home-video group view — the
+      authority design's D6 places it explicitly OUT OF SCOPE ("reads its own
+      `feed_home_video.video_cursor`, not `BrowseLevel`"). Ledger/ADR-0022/spec
+      recording is #614's job, not this change.
 - [x] 4.4 Resolve the three ORPHANED test files on this branch (user decision
       2026-08-30: decided at section 4): `src/app/render/components/list_tests.rs`
       (782 lines), `src/app/render/components/list_late_tests.rs`,
