@@ -16,12 +16,12 @@
 
 ## 2. Add the `Library*` request variants
 
-- [ ] 2.1 Add `LibraryPlay { item }`, `LibraryEnqueue { item }`,
+- [x] 2.1 Add `LibraryPlay { item }`, `LibraryEnqueue { item }`,
       `LibraryToggleWatched { item }`, `LibraryShuffle { item }`,
       `LibraryRefresh`, `LibraryRescan` to `ShellRequest`
       (`src/app/components/msg/shell.rs`), each with a doc comment pointing
       at the `Browser*` equivalent it mirrors. Verify: `rtk cargo check -p mbv`.
-- [ ] 2.2 Check `CONTEXT.md` for a name collision with `Library*` terms; if
+- [x] 2.2 Check `CONTEXT.md` for a name collision with `Library*` terms; if
       one exists, rename to `EmbyLibrary*` before proceeding. Verify: the
       chosen prefix appears in no other `ShellRequest` variant.
 
