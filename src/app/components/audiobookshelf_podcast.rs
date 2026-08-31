@@ -196,11 +196,13 @@ impl AudiobookshelfPodcastComponent {
                 Some(self.show_move_request())
             }
             Key::PageUp if self.episode_selection.is_none() => {
-                self.move_cursor(-((self.page_size() * self.geometry.columns.max(1)) as i64));
+                let page_rows = self.geometry.list_area.height.saturating_sub(1).max(1) as usize;
+                self.move_cursor(-((page_rows * self.geometry.columns.max(1)) as i64));
                 Some(self.show_move_request())
             }
             Key::PageDown if self.episode_selection.is_none() => {
-                self.move_cursor((self.page_size() * self.geometry.columns.max(1)) as i64);
+                let page_rows = self.geometry.list_area.height.saturating_sub(1).max(1) as usize;
+                self.move_cursor((page_rows * self.geometry.columns.max(1)) as i64);
                 Some(self.show_move_request())
             }
             Key::Home if self.episode_selection.is_none() => {
@@ -266,10 +268,6 @@ impl AudiobookshelfPodcastComponent {
             )),
             _ => None,
         }
-    }
-
-    fn page_size(&self) -> usize {
-        self.geometry.show_rows.len().max(1)
     }
 
     fn move_episode(&mut self, delta: i64) {

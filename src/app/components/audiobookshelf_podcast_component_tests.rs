@@ -12,7 +12,9 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 /// split-audiobookshelf-cursor-ownership D4 / task 1.3 → 5.1: when a content
 /// push drops the show the component had selected, the component resets its
@@ -188,6 +190,127 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(unrelated, None);
+}
+
+fn narrow_grid_component_state() -> AudiobookshelfBrowseState {
+    let library = AudiobookshelfLibrary {
+        id: "lib".into(),
+        name: "Podcasts".into(),
+        media_type: "podcast".into(),
+    };
+    let mut state = AudiobookshelfBrowseState::new(library);
+    state.append_page(
+        0,
+        20,
+        12,
+        (0..12)
+            .map(|i| AudiobookshelfShow {
+                library_item_id: format!("show-{i}"),
+                title: format!("Show {i}"),
+                author: None,
+                description: None,
+                cover_path: None,
+            })
+            .collect(),
+    );
+    state.select(2);
+    state
+}
+
+fn view_narrow(component: &mut AudiobookshelfPodcastComponent, width: u16, height: u16) {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+}
+
+#[test]
+fn abs_podcast_narrow_grid_navigation_uses_columns_and_page_rows() {
+    let state = narrow_grid_component_state();
+    let mut component = AudiobookshelfPodcastComponent::new();
+    component.set_content(&state, true, false);
+    view_narrow(&mut component, 100, 6);
+    assert_eq!(component.geometry().columns, 2);
+    assert!(matches!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE
+        })),
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            index: 4
+        }))
+    ));
+    assert!(matches!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Right,
+            modifiers: KeyModifiers::NONE
+        })),
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            index: 5
+        }))
+    ));
+    let mut page_component = AudiobookshelfPodcastComponent::new();
+    page_component.set_content(&state, true, false);
+    view_narrow(&mut page_component, 100, 6);
+    let page_rows = page_component
+        .geometry()
+        .list_area
+        .height
+        .saturating_sub(1)
+        .max(1) as usize;
+    page_component.on(&Event::Keyboard(KeyEvent {
+        code: Key::PageDown,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(page_component.cursor(), 2 + page_rows * 2);
+}
+
+#[test]
+fn abs_podcast_grid_mouse_selects_second_column_and_bucket_start() {
+    let state = narrow_grid_component_state();
+    let mut component = AudiobookshelfPodcastComponent::new();
+    component.set_content(&state, true, false);
+    view_narrow(&mut component, 100, 6);
+    let rects = component.geometry().show_rows.clone();
+    let second = rects.iter().find(|(_, i)| *i == 1).unwrap().0;
+    let msg = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: second.x + second.width / 2,
+        row: second.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        msg,
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            index: 1
+        }))
+    ));
+    let first = rects.iter().find(|(_, i)| *i == 0).unwrap().0;
+    let msg = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: first.x + first.width / 2,
+        row: first.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        msg,
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            index: 0
+        }))
+    ));
+    let bucket = component.geometry().selector_tabs[0].0;
+    let msg = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: bucket.x,
+        row: bucket.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        msg,
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            index: 0
+        }))
+    ));
 }
 
 #[test]

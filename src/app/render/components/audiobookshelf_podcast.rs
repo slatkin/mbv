@@ -13,6 +13,8 @@ use crate::app::render::{render_pill_bar, render_placeholder, HomeImagePaint, Pi
 use crate::app::types_audiobookshelf_browse::{
     build_show_title_buckets, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
 };
+use crate::app::ui_util::trunc_str;
+use unicode_width::UnicodeWidthStr;
 
 /// Podcast hero content row budget, shared by the legacy `App` narrow
 /// renderer and `AudiobookshelfPodcastComponent`'s narrow path so both admit
@@ -421,18 +423,32 @@ fn render_show_rows(
                 Some(crate::app::render::components::hero::InlineDisplayRow::Source(
                     source_row,
                 )) => {
+                    let cell_width = library_column_width::library_cell_width(area, cols) as usize;
                     let text = rows[source_row]
                         .iter()
-                        .map(|index| {
+                        .enumerate()
+                        .map(|(column, index)| {
                             let marker = if *index == state.cursor() && focused {
                                 "> "
                             } else {
                                 "  "
                             };
-                            format!("{marker}{}", state.shows[*index].title)
+                            let title_width = cell_width.saturating_sub(marker.width());
+                            let cell = format!(
+                                "{marker}{}",
+                                trunc_str(&state.shows[*index].title, title_width)
+                            );
+                            let padding = " ".repeat(cell_width.saturating_sub(cell.width()));
+                            if column + 1 < rows[source_row].len() {
+                                format!(
+                                    "{cell}{padding}{}",
+                                    " ".repeat(library_column_width::LIBRARY_COLUMN_GAP as usize)
+                                )
+                            } else {
+                                format!("{cell}{padding}")
+                            }
                         })
-                        .collect::<Vec<_>>()
-                        .join("  ");
+                        .collect::<String>();
                     ListItem::new(text)
                 }
                 None => ListItem::new(Line::default()),
