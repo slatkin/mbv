@@ -82,7 +82,7 @@
   → 1 passed). The `dce4389d` underpaint removal did not regress this
   path. No code change required.
 
-- [ ] 4.2 Update the three `tests_conformance_matrix` rows that report
+- [x] 4.2 Update the three `tests_conformance_matrix` rows that report
   a blank buffer for the leaf the component owns to assert the
   post-fix behavior (the rendered buffer must include the leaf's
   painted surface, not a blank buffer for a leaf the component
@@ -91,9 +91,18 @@
   is a separate layout-conformance regression and is out of
   scope for this change.
 
+  **No change required.** Scouted `src/app/render/tests_conformance_matrix.rs`:
+  the Music/Home/Feeds legs already render through mounted components
+  and assert non-blank buffers (converted in archived commits
+  `971106ab`/`2320cc7e`/`c455e28c`). No row currently asserts a blank
+  buffer for a component-owned leaf, and
+  `matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer`
+  passes at baseline (not `#[ignore]`d). The precondition this task
+  describes no longer exists in the tree.
+
 ## 5. Routing matrix
 
-- [ ] 5.1 Rewrite the three `blocking_overlay_swallows_*_chord` tests
+- [x] 5.1 Rewrite the three `blocking_overlay_swallows_*_chord` tests
   in `src/app/tests_routing_matrix.rs:96,112,131` to assert the
   post-fix behavior: the leaf's `ConfirmIntent::Accept` /
   `ConfirmIntent::Dismiss` stands instead of being discarded.
@@ -103,7 +112,7 @@
   `apply_router_outcome` fold semantics as the policy's
   "blocking overlay, no leaf request" path.
 
-- [ ] 5.2 Add new matrix rows pinning the text-entry rule:
+- [x] 5.2 Add new matrix rows pinning the text-entry rule:
   - `quit_global_does_not_fire_in_search_sidebar` — focused leaf is
     `Overlay(Search)`, key is `q`, snapshot has
     `text_entry_focused: true`, outcome is `FallThrough`.
@@ -118,7 +127,7 @@
     `Swallow` (because the policy's `alt_swallow` entry swallows
     it first).
 
-- [ ] 5.3 Add new matrix rows for the ConfirmIntent re-encoding:
+- [x] 5.3 Add new matrix rows for the ConfirmIntent re-encoding:
   - `confirm_accept_re_encodes_to_y_chord` — the action handler's
     `apply_confirm_action(RemoveActiveQueueItem, Char('y'))` path
     is invoked. The test confirms the re-encoding from
