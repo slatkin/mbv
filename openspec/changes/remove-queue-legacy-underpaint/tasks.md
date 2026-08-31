@@ -1,6 +1,6 @@
 ## 1. Prove the defect and re-home the geometry
 
-- [ ] 1.1 Regression test, red now: with two or more queue items, one arrow
+- [x] 1.1 Regression test, red now: with two or more queue items, one arrow
       press leaves exactly one highlighted row. Assert on the `TestBackend`
       buffer through `Model::draw_frame` — **not** `compose_base_frame` alone,
       since the ghost only exists when both painters run. Verify:
