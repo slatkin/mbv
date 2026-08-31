@@ -163,6 +163,10 @@ impl App {
         if self.is_home_video_view(lib_idx) {
             return false;
         }
+        // Inline search owns the pill row's slot; pills must not be selectable while filtering.
+        if self.inline_search_active {
+            return false;
+        }
         if lib.nav_stack.len() != 1 {
             return false;
         }
