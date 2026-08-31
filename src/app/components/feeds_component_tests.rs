@@ -71,6 +71,48 @@ fn grouped_component() -> FeedsComponent {
 }
 
 #[test]
+fn unfocused_component_ignores_keyboard_input() {
+    let mut component = component();
+    let subscriptions = [FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: FeedKind::Audio,
+    }];
+    let entries = vec![entry("First", false), entry("Second", true)];
+    component.set_content(&subscriptions, &[entries.clone()], &entries, false, false);
+    let keys = [
+        Key::Char('r'),
+        Key::Char('w'),
+        Key::Up,
+        Key::Down,
+        Key::Left,
+        Key::Right,
+        Key::PageUp,
+        Key::PageDown,
+        Key::Home,
+        Key::End,
+        Key::Char('['),
+        Key::Char(']'),
+        Key::Enter,
+        Key::Char('e'),
+    ];
+
+    for code in keys {
+        assert_eq!(
+            component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+                code,
+                modifiers: KeyModifiers::NONE,
+            })),
+            None
+        );
+    }
+    assert_eq!(component.cursor(), 0);
+    assert_eq!(component.scroll(), 0);
+    assert_eq!(component.selected_group(), 0);
+    assert_eq!(component.watched_filter(), WatchedFilter::All);
+}
+
+#[test]
 fn down_moves_the_component_cursor_without_app_state() {
     let mut component = component();
     let msg = component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
