@@ -191,7 +191,6 @@ fn long_queue() -> Vec<mbv_core::playback_queue::QueueSlot> {
 }
 
 #[test]
-#[test]
 fn queue_component_upward_scrolling_reaches_top() {
     let mut component = QueueComponent::new();
     component.set_content(
