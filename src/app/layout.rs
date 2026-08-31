@@ -107,9 +107,6 @@ pub(crate) struct LayoutMain {
     /// Selected-parent geometry only for inline replacement. Wide hero areas
     /// remain render bookkeeping and are intentionally not interactive.
     pub inline_hero_area: Rect,
-    /// Visible queue slot map, published by the queue painter at its natural
-    /// checkpoint before hit-testing consumes it.
-    pub queue_row_map: Vec<Option<usize>>,
     /// Queue placement and scope areas published independently of mounted
     /// component-local queue geometry.
     pub queue_area: Rect,
