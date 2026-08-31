@@ -339,7 +339,7 @@ Their line references predate 1.2a and that re-spelling shifts none of them.
       against `split-browse-state-interaction-fields/design.md` §1.1/1.1b/1.2,
       every row resolved. Recording this across the ledger, ADR 0022, and the
       spec is `sync-interactive-surface-docs` (#614).
-- [ ] 4.4 Resolve the three ORPHANED test files on this branch (user decision
+- [x] 4.4 Resolve the three ORPHANED test files on this branch (user decision
       2026-08-30: decided at section 4): `src/app/render/components/list_tests.rs`
       (782 lines), `src/app/render/components/list_late_tests.rs`,
       `src/app/render/components/movies_tv_header_fit_tests.rs` (230 lines).
@@ -354,3 +354,16 @@ Their line references predate 1.2a and that re-spelling shifts none of them.
       suites — check before deleting), or (b) restore declarations and migrate
       them like 1.2b did. Do NOT silently re-wire. Surface the outcome in the
       PR description.
+      Outcome (`76fae07f`): chose (a) — `git rm` all three (1169 deletions).
+      Scout confirmed: truly orphaned since `c1ac59fa` (zero compiled tests);
+      every test renders through the `App::render_list` painter deleted with the
+      legacy browse painter, so (b) would be a ~1170-line from-scratch rewrite,
+      not an API port; `buffer_to_string` has a live twin at
+      `src/app/render/test_helpers.rs:29` while `render_list_term`/
+      `render_list_to_string` are dead wrappers over the deleted painter; and
+      every behaviour area is covered by the live `tests_library_characterization.rs`
+      + `tests_music_groups.rs` characterization suites (the deliberate
+      post-migration replacement, per the `list_tests.rs` header comment).
+      Gates: `nextest` 1157 passed / 1 failed UNCHANGED (known baseline
+      failure only); check/file-lines/fmt clean; clippy 111 (≤ baseline).
+      PR-description note pending row 4.3.
