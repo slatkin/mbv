@@ -315,6 +315,12 @@ Their line references predate 1.2a and that re-spelling shifts none of them.
 - [ ] 4.2 Full gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
       `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`,
       `rtk cargo fmt`, `rtk make check-code-file-lines`.
+- [ ] 4.3 Confirm #607's acceptance criterion "component-local interaction
+      state has one owner" holds literally: no `App` field stores a live
+      cursor, scroll, or selection for a mounted component. Verify: stated
+      against `split-browse-state-interaction-fields/design.md` §1.1/1.1b/1.2,
+      every row resolved. Recording this across the ledger, ADR 0022, and the
+      spec is `sync-interactive-surface-docs` (#614).
 - [ ] 4.4 Resolve the three ORPHANED test files on this branch (user decision
       2026-08-30: decided at section 4): `src/app/render/components/list_tests.rs`
       (782 lines), `src/app/render/components/list_late_tests.rs`,
@@ -330,9 +336,3 @@ Their line references predate 1.2a and that re-spelling shifts none of them.
       suites — check before deleting), or (b) restore declarations and migrate
       them like 1.2b did. Do NOT silently re-wire. Surface the outcome in the
       PR description.
-- [ ] 4.3 Confirm #607's acceptance criterion "component-local interaction
-      state has one owner" holds literally: no `App` field stores a live
-      cursor, scroll, or selection for a mounted component. Verify: stated
-      against `split-browse-state-interaction-fields/design.md` §1.1/1.1b/1.2,
-      every row resolved. Recording this across the ledger, ADR 0022, and the
-      spec is `sync-interactive-surface-docs` (#614).
