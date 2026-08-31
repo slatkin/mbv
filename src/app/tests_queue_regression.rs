@@ -1,4 +1,6 @@
-use super::components::{ComponentId, ContextMenuComponent, Msg, QueueComponent, QueueRequest};
+use super::components::{
+    ComponentId, ContextMenuComponent, Msg, QueueComponent, QueueRequest,
+};
 use super::tests::{make_built_app, make_item};
 use super::types_context_menu::{ContextMenu, ContextMenuAnchor};
 use super::{PanelFocus, QueueScope};
@@ -50,15 +52,38 @@ fn shell_frame_uses_queue_component_geometry_for_keyboard_context_menu_anchor() 
     );
     app.panel_focus = PanelFocus::Queue;
     app.set_queue_scope(QueueScope::Local);
-    app.open_context_menu(false, None);
 
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
     terminal.draw(|frame| model.draw_frame(frame, false, false)).unwrap();
 
+    let queue_id = ComponentId::Queue;
+    let message = model
+        .application
+        .get_component_mut(&queue_id)
+        .expect("queue mounted")
+        .on(&Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }))
+        .expect("queue cursor movement emits a request");
+    let mut resize_music = false;
+    let mut resize_tv = false;
+    model.handle_terminal_message(
+        message,
+        Some(&queue_id),
+        &mut resize_music,
+        &mut resize_tv,
+    );
+    terminal.draw(|frame| model.draw_frame(frame, false, false)).unwrap();
+
     let queue_selected = model.app.layout.main.queue_selected_item_rect
         .expect("shell must publish selected queue row");
+    assert!(queue_selected.y > model.app.layout.main.queue_area.y);
+    model.app.open_context_menu(false, None);
+    model.sync_mounted_surfaces();
+    terminal.draw(|frame| model.draw_frame(frame, false, false)).unwrap();
     let menu = model
         .application
         .get_component(&ComponentId::Overlay(super::components::OverlayId::ContextMenu))
