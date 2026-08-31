@@ -57,7 +57,7 @@ fn shell_emby_browser_wide_movies_paints_one_item_per_row() {
     let mut model = Model::new(app);
     model.sync_emby_browser();
     let id = model.emby_browser_id.clone().expect("browser mounted");
-    let backend = TestBackend::new(120, 30);
+    let backend = TestBackend::new(200, 30);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| {
