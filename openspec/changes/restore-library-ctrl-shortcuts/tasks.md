@@ -27,7 +27,7 @@
 
 ## 3. Route the variants in the shell (D1)
 
-- [ ] 3.1 Extend `Model::handle_browser_request`
+- [x] 3.1 Extend `Model::handle_browser_request`
       (`src/app/shell_browser.rs:20`) — or extract a shared
       `handle_emby_library_request` — so the six new variants call
       `play_or_activate_lib_item` / `enqueue_lib_item` / `toggle_watched_item`
@@ -35,7 +35,7 @@
       with `lib_idx` from `self.app.tab.emby_library_index()`. Verify:
       `rtk cargo check -p mbv`; if `shell_browser.rs` exceeds 800 lines,
       split per `rtk make check-code-file-lines`.
-- [ ] 3.2 Add the dispatch arms in `src/app/shell_messages.rs` so the new
+- [x] 3.2 Add the dispatch arms in `src/app/shell_messages.rs` so the new
       variants reach 3.1 (an unrouted variant is silent — see
       `make-shell-dispatch-exhaustive`). Verify: `rtk cargo check -p mbv`.
 
