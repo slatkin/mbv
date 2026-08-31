@@ -2,7 +2,7 @@ use super::components::{BrowserComponent, BrowserKey, BrowserKind, ComponentId, 
 use super::shell::Model;
 use super::{ConfirmAction, ConfirmModal, PanelFocus, TabSelection};
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
-use crate::app::render::LibraryListRenderCtx;
+use crate::app::render::{shared_hero_presentation, LibraryListRenderCtx};
 use mbv_core::config::ServiceKind;
 use std::time::Instant;
 
@@ -339,13 +339,11 @@ impl Model {
         // the component paints the full hero-on-left rect, so hand it the full
         // library area (`movies_wide_area`, published by the App render path
         // this frame); otherwise hand it the narrow inner list area.
-        let wide_area = self.app.layout.main.movies_wide_area;
-        let wide = wide_area.width > 0 && wide_area.height > 0;
-        let area = if wide {
-            wide_area
-        } else {
-            self.app.layout.main.left_area
-        };
+        // Derive the presentation from the same shared arrangement predicate
+        // used by BrowserComponent::view. `movies_wide_area` is component
+        // layout state and is not populated until the component paints.
+        let area = self.app.layout.main.left_area;
+        let wide = shared_hero_presentation(area).is_some();
         if area.width == 0 || area.height == 0 {
             return;
         }
