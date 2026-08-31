@@ -76,7 +76,8 @@ fn narrow_tv_library_restores_saved_series_position() {
     };
     app.replace_saved_library_position(0, position.clone());
 
-    let level = BrowseLevel::from_position_level(&saved, folder_items("Series", "Series", 5), 5, 10);
+    let level =
+        BrowseLevel::from_position_level(&saved, folder_items("Series", "Series", 5), 5, 10);
     app.handle_lib_event(LibEvent::RestoreLibraryPosition {
         lib_idx: 0,
         requested_position: position.clone(),
@@ -85,7 +86,8 @@ fn narrow_tv_library_restores_saved_series_position() {
     });
 
     assert_eq!(
-        app.libs[0].nav_stack[0].resting().cursor(), 3,
+        app.libs[0].nav_stack[0].resting().cursor(),
+        3,
         "entering the narrow TV library must restore the saved series (Series-3 at index 3)"
     );
 }
@@ -134,7 +136,11 @@ fn narrow_grouped_music_library_restores_saved_album_position() {
         nav_stack,
     });
 
-    assert_eq!(app.libs[0].nav_stack.len(), 2, "grouped path must survive restore");
+    assert_eq!(
+        app.libs[0].nav_stack.len(),
+        2,
+        "grouped path must survive restore"
+    );
     assert_eq!(
         app.libs[0].nav_stack[1].resting().cursor(), 2,
         "entering the narrow grouped Music library must restore the saved album (album-2 at index 2)"
@@ -229,7 +235,10 @@ fn tv_shows_app() -> App {
 fn narrow_tv_browse_j_moves_painted_selection() {
     let mut model = Model::new(tv_shows_app());
     model.sync_mounted_surfaces();
-    let id = model.emby_browser_id.clone().expect("narrow TV browser mounted");
+    let id = model
+        .emby_browser_id
+        .clone()
+        .expect("narrow TV browser mounted");
     let mut term = narrow_backend();
 
     // Seed past the selected-Series inline hero (which swallows its own row)
@@ -252,7 +261,10 @@ fn narrow_tv_browse_j_moves_painted_selection() {
         .unwrap()
         .test_layout()
         .selected_item_rect;
-    assert!(before.is_some(), "narrow TV browse must paint a selected row");
+    assert!(
+        before.is_some(),
+        "narrow TV browse must paint a selected row"
+    );
 
     press(&mut model, Key::Char('j'));
     draw(&mut model, &mut term);
@@ -421,7 +433,10 @@ fn narrow_podcast_surface_snapshot() {
     let output = draw(&mut model, &mut term);
 
     let expected = "                                                            \n   HOME  ▐ PODCASTS                                         \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n▎ Show 0                                                    \n  Show 1                                                    \n  Show 2                                                    \n  Show 3                                                    \n  Show 4                                                    \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n 🔊  100                                             \u{f06b4} \u{ede2} ♥ \u{f1c0} ";
-    assert_eq!(output, expected, "narrow podcast surface drifted:\n{output}");
+    assert_eq!(
+        output, expected,
+        "narrow podcast surface drifted:\n{output}"
+    );
 }
 
 /// Regression (task 3.5a template step d): narrow Emby podcast paints each
@@ -476,17 +491,28 @@ fn feed_home_video_group_app() -> App {
     second.id = "video-two".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-            parent_id: "lib-youtube".into(), title: "YouTube".into(),
-            items: vec![folder.clone()], total_count: 1,
+            parent_id: "lib-youtube".into(),
+            title: "YouTube".into(),
+            items: vec![folder.clone()],
+            total_count: 1,
             resting: crate::app::types_browse::BrowseResting::new(0, 0),
-            item_types: None, unplayed_only: false, sort_by: "SortName".into(),
-            sort_order: "Ascending".into(), loading: false, all_items: None,
-            letter_filter: None, music_grouping: None,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
             all_items: vec![first.clone(), second.clone()],
-            groups: vec![FeedHomeVideoGroup { folder, items: vec![first, second] }],
-            loading: false, ..FeedHomeVideoState::default()
+            groups: vec![FeedHomeVideoGroup {
+                folder,
+                items: vec![first, second],
+            }],
+            loading: false,
+            ..FeedHomeVideoState::default()
         }),
         ..LibraryTab::new(library)
     });
@@ -522,7 +548,10 @@ fn feed_home_video_group_paints_each_row_once() {
         (140, 40, FEED_WIDE_BASELINE),
     ] {
         let output = feed_snapshot(width, height);
-        assert_eq!(output, baseline, "feed {width}x{height} is not a single-paint frame");
+        assert_eq!(
+            output, baseline,
+            "feed {width}x{height} is not a single-paint frame"
+        );
     }
 }
 

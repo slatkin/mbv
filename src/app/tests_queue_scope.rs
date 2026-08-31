@@ -68,7 +68,6 @@ fn queue_scope_resolution_matrix_direct_remote_displaying_remote() {
     assert!(!app.local_queue_metadata_applies(QueueScope::Remote));
 }
 
-
 #[test]
 fn direct_remote_play_items_keeps_local_queue_intact() {
     let _guard = crate::config::TestStateDirGuard::new();

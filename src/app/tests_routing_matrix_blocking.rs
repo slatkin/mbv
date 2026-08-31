@@ -2,8 +2,8 @@
 
 use super::tests_routing_matrix_support::*;
 use crate::app::action::Command;
-use crate::app::components::{BrowserKey, BrowserKind, ComponentId, ModalId, Msg, ShellRequest};
 use crate::app::components::msg::ConfirmIntent;
+use crate::app::components::{BrowserKey, BrowserKind, ComponentId, ModalId, Msg, ShellRequest};
 use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use crossterm::event::KeyCode;
 use mbv_core::config::ServiceKind;
@@ -14,7 +14,9 @@ fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
         blocking_overlay_open: true,
         ..RouterSnapshot::default()
     };
-    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Dismiss)));
+    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(
+        ConfirmIntent::Dismiss,
+    )));
     let out = fold_tick_focused(
         leaf,
         key(KeyCode::Char('x')),
@@ -33,7 +35,9 @@ fn focused_blocking_overlay_keeps_its_own_global_chord() {
         blocking_overlay_open: true,
         ..RouterSnapshot::default()
     };
-    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Accept)));
+    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(
+        ConfirmIntent::Accept,
+    )));
     let out = fold_tick_focused(
         leaf,
         key(KeyCode::Char('q')),
@@ -68,7 +72,9 @@ fn focused_blocking_overlay_falls_through_unmatched_and_global_chords() {
 }
 #[test]
 fn injected_swallow_discards_leaf_message() {
-    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Dismiss)));
+    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(
+        ConfirmIntent::Dismiss,
+    )));
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('x')),
@@ -112,10 +118,7 @@ fn fallthrough_leaves_exactly_one_leaf_message_standing() {
         RouterOutcome::FallThrough,
     );
     assert_eq!(out.len(), 1, "exactly one leaf message must stand");
-    assert!(matches!(
-        &out[0],
-        Msg::Shell(ShellRequest::Quit)
-    ));
+    assert!(matches!(&out[0], Msg::Shell(ShellRequest::Quit)));
 }
 #[test]
 fn fallthrough_with_no_leaf_message_fires_no_global_effect() {

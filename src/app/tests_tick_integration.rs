@@ -29,9 +29,7 @@ fn queue_focused_harness() -> TickHarness {
     TickHarness::new(app)
 }
 
-fn search_component_mut(
-    harness: &mut TickHarness,
-) -> &mut SearchSidebarComponent {
+fn search_component_mut(harness: &mut TickHarness) -> &mut SearchSidebarComponent {
     harness
         .model_mut()
         .application
@@ -61,7 +59,9 @@ fn tick_delivers_key_to_focused_queue_before_root_observer_once() {
     assert_eq!(outcome.raw_messages.len(), 2, "one leaf and one observer");
     assert!(matches!(
         outcome.raw_messages.first(),
-        Some(Msg::Queue(QueueRequest::Scope(crate::app::QueueScope::Local)))
+        Some(Msg::Queue(QueueRequest::Scope(
+            crate::app::QueueScope::Local
+        )))
     ));
     assert!(matches!(
         outcome.raw_messages.get(1),
@@ -135,7 +135,9 @@ fn search_clock_user_event_reaches_mounted_search_component() {
     let raw_messages = harness
         .model_mut()
         .application
-        .tick(tuirealm::application::PollStrategy::Once(Duration::from_millis(500)))
+        .tick(tuirealm::application::PollStrategy::Once(
+            Duration::from_millis(500),
+        ))
         .expect("tick user clock");
 
     assert!(raw_messages.iter().any(|msg| {
@@ -154,7 +156,10 @@ fn search_clock_sweep_dispatches_debounce_on_step() {
     let mut harness = TickHarness::new(make_app_stub());
     harness.model_mut().mount_sidebar(SidebarId::Search);
     arm_search_query(&mut harness, "ab");
-    assert!(harness.model_mut().tick_search_clock(Instant::now()).is_none());
+    assert!(harness
+        .model_mut()
+        .tick_search_clock(Instant::now())
+        .is_none());
 
     std::thread::sleep(Duration::from_millis(310));
     let outcome = harness.step();
@@ -220,7 +225,9 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     assert!(matches!(outcome.router, RouterOutcome::FallThrough));
     assert!(matches!(
         outcome.raw_messages.first(),
-        Some(Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Accept)))
+        Some(Msg::Shell(ShellRequest::ConfirmIntent(
+            ConfirmIntent::Accept
+        )))
     ));
 
     harness
@@ -233,7 +240,9 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     let raw_messages = harness
         .model_mut()
         .application
-        .tick(tuirealm::application::PollStrategy::Once(Duration::from_millis(500)))
+        .tick(tuirealm::application::PollStrategy::Once(
+            Duration::from_millis(500),
+        ))
         .expect("tick lower focused queue");
     let router = harness.model_mut().router_outcome(&raw_messages);
     let messages = apply_router_outcome(raw_messages, pre_fold_focus.as_ref(), &router);

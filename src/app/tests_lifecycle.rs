@@ -356,8 +356,6 @@ fn render_interval_is_slow_when_idle_with_no_fetches_in_flight() {
     assert_eq!(app.render_interval(), Duration::from_secs(1));
 }
 
-
-
 #[test]
 fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
     let mut app = make_app_stub();

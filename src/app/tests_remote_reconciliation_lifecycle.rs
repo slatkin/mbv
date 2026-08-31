@@ -188,4 +188,3 @@ fn stopped_but_present_session_keeps_tracking_idle() {
     );
     assert_eq!(app.connected_session_id.as_deref(), Some("session"));
 }
-

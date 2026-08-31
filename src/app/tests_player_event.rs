@@ -17,7 +17,10 @@ fn intro_started_auto_skips_when_client_prefers_it() {
         Ok(PlayerCommand::SeekAbsolute(secs)) if secs == 30.0
     ));
     assert!(matches!(rx.try_recv(), Ok(PlayerCommand::SkipIntroDismiss)));
-    assert!(app.status.is_empty(), "auto-skip must not leave a TUI prompt");
+    assert!(
+        app.status.is_empty(),
+        "auto-skip must not leave a TUI prompt"
+    );
 }
 
 #[test]
@@ -32,5 +35,8 @@ fn intro_started_does_not_show_tui_prompt_when_client_does_not_auto_skip() {
     });
 
     assert!(rx.try_recv().is_err(), "manual mode must not auto-seek");
-    assert!(app.status.is_empty(), "manual mode must not show a TUI prompt");
+    assert!(
+        app.status.is_empty(),
+        "manual mode must not show a TUI prompt"
+    );
 }

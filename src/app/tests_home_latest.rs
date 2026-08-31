@@ -87,11 +87,7 @@ fn fetch_home_with_no_emby_preserves_feeds_and_abs_entries_without_error() {
     let content = app.fetch_home().expect("no-Emby refresh must not fail");
 
     // Feeds and Audiobookshelf pills are both rebuilt from their sources.
-    assert_eq!(
-        content.latest.len(),
-        2,
-        "both non-Emby pills must exist"
-    );
+    assert_eq!(content.latest.len(), 2, "both non-Emby pills must exist");
     let feeds = content
         .latest
         .iter()
@@ -681,8 +677,7 @@ fn async_clamp_keeps_pending_home_source_until_restored() {
     let parsed: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(saved).expect("prefs written")).unwrap();
     assert_eq!(
-        parsed["home_section"],
-        "abs:book-lib",
+        parsed["home_section"], "abs:book-lib",
         "unrelated save must keep the pending Home source while restoration is pending"
     );
 }

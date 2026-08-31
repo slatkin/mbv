@@ -1,9 +1,7 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_item, make_session};
 use mbv_core::playback_queue::QueueSlotId;
-use mbv_core::remote_reconciliation::{
-    ReconciliationTracker, SubmittedOccurrence, TrackingState,
-};
+use mbv_core::remote_reconciliation::{ReconciliationTracker, SubmittedOccurrence, TrackingState};
 
 #[cfg(test)]
 #[path = "tests_remote_reconciliation_consume.rs"]
@@ -42,7 +40,6 @@ fn attached_app() -> App {
     );
     app
 }
-
 
 #[test]
 fn tracking_retirement_clears_reanchor_popup() {
@@ -84,7 +81,6 @@ fn submitted_sequence_without_exact_visible_queue_has_no_projection() {
     assert!(app.remote_tracker.is_some());
     assert!(app.remote_queue_projection.is_none());
 }
-
 
 #[test]
 fn replacement_tracker_ignores_an_earlier_in_flight_poll() {

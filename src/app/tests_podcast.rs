@@ -255,4 +255,3 @@ fn audiobookshelf_episode_seams_noop_on_absent_index() {
     assert_eq!(app.audiobookshelf_browse.len(), 1);
     assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(0)));
 }
-

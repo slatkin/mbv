@@ -1,7 +1,7 @@
-use crate::app::types_browse::BrowseResting;
 use super::music_grouping::{build_grouped_album_catalog, derive_album_artist};
 use super::tests::{make_app_stub, make_item};
 use super::{BrowseLevel, LibraryTab, TabSelection};
+use crate::app::types_browse::BrowseResting;
 use mbv_core::api::EmbyItem;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};

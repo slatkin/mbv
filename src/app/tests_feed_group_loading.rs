@@ -1,6 +1,6 @@
-use crate::app::types_browse::BrowseResting;
 use super::*;
 use crate::app::tests::*;
+use crate::app::types_browse::BrowseResting;
 
 #[test]
 fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() {

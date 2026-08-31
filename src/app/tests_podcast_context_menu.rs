@@ -1,7 +1,7 @@
-use crate::app::types_browse::BrowseResting;
 use super::tests_podcast::{add_emby_movie_library, audiobookshelf_app};
 use super::*;
 use crate::app::tests::*;
+use crate::app::types_browse::BrowseResting;
 
 #[test]
 fn podcast_library_detects_collection_type() {

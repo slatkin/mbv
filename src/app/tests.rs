@@ -535,10 +535,6 @@ pub(crate) fn install_test_emby(app: &mut App, config: crate::config::Config) {
     ));
 }
 
-
-
-
-
 #[test]
 fn aggregate_zero_area_render_leaves_layout_untouched() {
     // 2.1j aggregate: a 0-dimension terminal frame (`compute_frame_layout`
@@ -552,13 +548,11 @@ fn aggregate_zero_area_render_leaves_layout_untouched() {
     let mut term = Terminal::new(TestBackend::new(0, 0)).unwrap();
     term.draw(|f| app.compose_base_frame(f, None)).unwrap();
     assert_eq!(
-        app.layout.main.left_area,
-        before_left,
+        app.layout.main.left_area, before_left,
         "zero-area render must not touch left_area"
     );
     assert_eq!(
-        app.layout.main.hero_area,
-        before_hero,
+        app.layout.main.hero_area, before_hero,
         "zero-area render must not touch hero_area"
     );
 }

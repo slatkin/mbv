@@ -90,7 +90,8 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     // 4. The library tab's nav_stack cursor must be untouched — Feeds
     //    did not dispatch into library browsing.
     assert_eq!(
-        app.libs[0].nav_stack[0].resting().cursor(), 0,
+        app.libs[0].nav_stack[0].resting().cursor(),
+        0,
         "library cursor must remain unchanged by feed-tab key handling"
     );
 }
@@ -408,4 +409,3 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
     );
     assert_eq!(app.player_tab.total_queue_len(), 0);
 }
-

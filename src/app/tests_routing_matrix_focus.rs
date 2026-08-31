@@ -1,7 +1,9 @@
 //! Routing matrix: focus precedence and policy rows.
 
 use super::tests_routing_matrix_support::*;
-use crate::app::components::{BrowserKey, BrowserKind, ComponentId, Msg, QueueRequest, ShellRequest};
+use crate::app::components::{
+    BrowserKey, BrowserKind, ComponentId, Msg, QueueRequest, ShellRequest,
+};
 use crate::app::input_resolver::KeyChord;
 use crate::app::types_playback::QueueScope;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -9,9 +11,7 @@ use mbv_core::config::ServiceKind;
 
 #[test]
 fn queue_focus_routes_queue_chord_to_queue_owner() {
-    let leaf = Some(Msg::Queue(QueueRequest::Scope(
-        QueueScope::Local,
-    )));
+    let leaf = Some(Msg::Queue(QueueRequest::Scope(QueueScope::Local)));
     let out = fold_tick(
         leaf,
         key(KeyCode::Char('[')),
@@ -19,14 +19,13 @@ fn queue_focus_routes_queue_chord_to_queue_owner() {
         idle_snapshot(),
     );
     assert_eq!(out.len(), 1, "Queue's own scope request must stand");
-    assert!(matches!(
-        &out[0],
-        Msg::Queue(QueueRequest::Scope(_))
-    ));
+    assert!(matches!(&out[0], Msg::Queue(QueueRequest::Scope(_))));
 }
 #[test]
 fn library_focus_routes_bracket_to_library_leaf() {
-    let leaf = Some(Msg::Shell(ShellRequest::BrowserCycleLetterPill { delta: -1 }));
+    let leaf = Some(Msg::Shell(ShellRequest::BrowserCycleLetterPill {
+        delta: -1,
+    }));
     let out = fold_tick(
         leaf,
         key(KeyCode::Char('[')),
@@ -58,7 +57,11 @@ fn ctrl_a_under_library_focus_is_enqueue_not_audio_toggle() {
         })),
         active_snapshot(),
     );
-    assert_eq!(out.len(), 1, "Ctrl+a must reach the leaf as enqueue-selected");
+    assert_eq!(
+        out.len(),
+        1,
+        "Ctrl+a must reach the leaf as enqueue-selected"
+    );
     assert!(matches!(
         &out[0],
         Msg::Shell(ShellRequest::BrowserEnqueue { .. })

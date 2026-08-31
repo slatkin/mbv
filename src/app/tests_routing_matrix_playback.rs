@@ -64,9 +64,7 @@ fn playback_gating_esc_second_press_claims_stop() {
 fn playback_policy_preserves_per_key_eligibility() {
     let active = active_snapshot();
     assert_eq!(
-        resolve_router_outcome_with_focused(
-            key(KeyCode::Char('<')),
-            &active, None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('<')), &active, None),
         RouterOutcome::Command(Command::SeekRelative(-5.0))
     );
     assert_eq!(
@@ -76,7 +74,9 @@ fn playback_policy_preserves_per_key_eligibility() {
     assert_eq!(
         resolve_router_outcome_with_focused(
             KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL),
-            &active, None),
+            &active,
+            None
+        ),
         RouterOutcome::FallThrough
     );
     assert_eq!(

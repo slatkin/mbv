@@ -2,14 +2,16 @@
 
 use super::tests_routing_matrix_support::*;
 use crate::app::action::Command;
-use crate::app::components::{ComponentId, Msg, OverlayId, ShellRequest};
 use crate::app::components::msg::{ConfirmIntent, ContextMenuIntent};
+use crate::app::components::{ComponentId, Msg, OverlayId, ShellRequest};
 use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[test]
 fn clear_queue_c_does_not_fire_under_open_context_menu() {
-    let leaf = Some(Msg::Shell(ShellRequest::ContextMenuIntent(ContextMenuIntent::Dismiss)));
+    let leaf = Some(Msg::Shell(ShellRequest::ContextMenuIntent(
+        ContextMenuIntent::Dismiss,
+    )));
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('c')),
@@ -102,19 +104,25 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
     assert_eq!(
         resolve_router_outcome_with_focused(
             KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
-            &snapshot, None),
+            &snapshot,
+            None
+        ),
         RouterOutcome::Command(Command::FocusPanel(crate::app::PanelFocus::Library))
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
             KeyEvent::new(KeyCode::Down, KeyModifiers::ALT),
-            &snapshot, None),
+            &snapshot,
+            None
+        ),
         RouterOutcome::Command(Command::NextLibraryTab)
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
             KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT),
-            &snapshot, None),
+            &snapshot,
+            None
+        ),
         RouterOutcome::Swallow,
         "unhandled Alt chords must not leak into destination handling"
     );
@@ -195,7 +203,10 @@ fn open_sessions_command_toggles_without_respawning_loads() {
 
     model.app.dispatch(Command::OpenSessions);
     model.sync_modal_requests();
-    assert!(model.application.mounted(&sessions), "first F3 opens Sessions");
+    assert!(
+        model.application.mounted(&sessions),
+        "first F3 opens Sessions"
+    );
 
     // Clear the flag the open set so a spurious re-mount would be observable.
     model.app.sessions_loading = false;
@@ -215,7 +226,11 @@ fn open_sessions_command_toggles_without_respawning_loads() {
 fn clear_queue_c_is_global_but_yields_to_text_entry() {
     let focused = ComponentId::Browser(browser_key());
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('c')), &idle_snapshot(), Some(&focused)),
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char('c')),
+            &idle_snapshot(),
+            Some(&focused)
+        ),
         RouterOutcome::Command(Command::RequestClearQueue),
         "`c` opens the clear-queue prompt with the browser focused"
     );
@@ -232,8 +247,10 @@ fn clear_queue_c_is_global_but_yields_to_text_entry() {
 fn confirm_accept_re_encodes_to_y_chord() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab
-        .set_items(crate::app::tests::make_items(3), app.player_tab.queue_cursor);
+    app.player_tab.set_items(
+        crate::app::tests::make_items(3),
+        app.player_tab.queue_cursor,
+    );
     app.player_tab.queue_cursor = 1;
     {
         let mut st = app.player.status.lock().unwrap();

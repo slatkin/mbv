@@ -8,7 +8,9 @@
 //! which sets the component's rect, then read `ContextMenuComponent::menu_rect()`.
 use super::tests_podcast::add_emby_movie_library;
 use super::*;
-use crate::app::components::{ComponentId, ContextMenuComponent, HomeComponent, OverlayId, ShellRequest};
+use crate::app::components::{
+    ComponentId, ContextMenuComponent, HomeComponent, OverlayId, ShellRequest,
+};
 use crate::app::shell::Model;
 use crate::app::tests::*;
 use ratatui::backend::TestBackend;
@@ -46,7 +48,6 @@ fn render_at(model: &mut Model, width: u16, height: u16) -> (u16, u16) {
     let rect = mounted_context_menu_rect(model);
     (rect.x, rect.y)
 }
-
 
 #[test]
 fn pointer_placement_stays_click_anchored_not_following_selection() {
@@ -142,7 +143,10 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     };
     // Keyboard anchor: `SelectedItem(Library)` resolved to the component's
     // painted panel + selected rect (no pointer).
-    assert!(matches!(anchor, ContextMenuAnchor::SelectedItem(PanelFocus::Library)));
+    assert!(matches!(
+        anchor,
+        ContextMenuAnchor::SelectedItem(PanelFocus::Library)
+    ));
     let (ex, ey) = ContextMenu::place(panel, size, selected.as_ref(), None);
     let expected = Rect::new(ex, ey, size.0, size.1);
     assert_eq!(
