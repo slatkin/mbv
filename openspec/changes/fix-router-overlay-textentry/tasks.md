@@ -62,7 +62,7 @@
 
 ## 4. Wide-music track hitmap + conformance-matrix
 
-- [ ] 4.1 Publish `wide_music_track_hitmap` from the Music workspace
+- [x] 4.1 Publish `wide_music_track_hitmap` from the Music workspace
   leaf's `view` (or from a `set_content`-time shell reader) so the
   shell can push it. This is not a return to a global hit map;
   the leaf owns the geometry and the shell reads a narrow
@@ -71,6 +71,16 @@
   `wide_music_track_hitmap` is the same shape the shell currently
   reads. Verify `shell_music_workspace::tests::music_resize_push_uses_current_frame_geometry`
   passes after the publication lands.
+
+  **Already satisfied (per user).** The Music-wide render component
+  (`src/app/render/components/music_wide_tracks.rs:120`) already
+  pushes `(row_rect, ti)` into `layout.wide_music_track_hitmap` from
+  the leaf's own painted geometry, and `shell_music_workspace.rs:214`
+  reads that projection at push time.
+  `music_resize_push_uses_current_frame_geometry` passes at baseline
+  (`rtk cargo nextest run -p mbv -E 'test(music_resize_push_uses_current_frame_geometry)'`
+  → 1 passed). The `dce4389d` underpaint removal did not regress this
+  path. No code change required.
 
 - [ ] 4.2 Update the three `tests_conformance_matrix` rows that report
   a blank buffer for the leaf the component owns to assert the
