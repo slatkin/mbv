@@ -80,6 +80,19 @@ pub(super) fn browser_app_with_flat_movies(n: usize) -> App {
     app
 }
 
+pub(super) fn browser_component_painted_rows(model: &Model, id: &ComponentId) -> Vec<Vec<usize>> {
+    model
+        .application
+        .get_component(id)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<BrowserComponent>()
+        .unwrap()
+        .test_layout()
+        .left_item_rows
+        .clone()
+}
+
 pub(super) fn browser_component_cursor(model: &Model, id: &ComponentId) -> usize {
     model
         .application

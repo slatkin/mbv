@@ -65,18 +65,19 @@ fn shell_emby_browser_wide_movies_paints_one_item_per_row() {
             model.render_emby_browser_component(frame);
         })
         .unwrap();
-    let buffer = terminal.backend().buffer();
-    let row_of = |needle: &str| {
-        (0..buffer.area().height)
-            .find(|&y| {
-                (0..buffer.area().width)
-                    .map(|x| buffer[(x, y)].symbol())
-                    .collect::<String>()
-                    .contains(needle)
-            })
-            .expect(needle)
+    let rows = browser_component_painted_rows(&model, &id);
+    let item_rows: Vec<&Vec<usize>> = rows.iter().filter(|row| !row.is_empty()).collect();
+    assert!(
+        item_rows.iter().all(|row| row.len() == 1),
+        "wide rail painted multiple columns: {item_rows:?}"
+    );
+    let row_of = |item| {
+        item_rows
+            .iter()
+            .position(|row| row.contains(&item))
+            .expect("painted item")
     };
-    assert_ne!(row_of("Item 0"), row_of("Item 1"));
+    assert_ne!(row_of(0), row_of(1));
     assert!(matches!(
         drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE),
         Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
