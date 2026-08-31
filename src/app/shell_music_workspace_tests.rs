@@ -1,12 +1,69 @@
 use super::*;
 use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
 use crate::app::components::Msg;
+use crate::app::layout::LibraryRowTarget;
 use crate::app::render::make_music_group_app;
 use crate::app::tests::make_item;
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
+
+#[test]
+fn music_mouse_album_click_emits_and_applies_cursor_request() {
+    let mut model = Model::new(make_music_group_app());
+    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.sync_music_workspace();
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| model.render_music_workspace_component(frame))
+        .unwrap();
+    let id = model.music_workspace_id.clone().unwrap();
+    let (browser_area, left_row_targets) = {
+        let layout = model
+            .application
+            .get_component(&id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<MusicWorkspaceComponent>()
+            .unwrap()
+            .layout();
+        (
+            layout.wide_music_browser_area,
+            layout.left_row_targets.clone(),
+        )
+    };
+    let (row, target) = left_row_targets
+        .iter()
+        .enumerate()
+        .find_map(|(row, target)| match target {
+            Some(LibraryRowTarget::Album(album)) => Some((row, *album)),
+            _ => None,
+        })
+        .unwrap();
+    let message = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: browser_area.x + 1,
+            row: browser_area.y + row as u16,
+            modifiers: KeyModifiers::NONE,
+        }));
+    assert_eq!(
+        message,
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+            target,
+            kind: AlbumCursorKind::Move
+        }))
+    );
+    assert!(model.app.move_music_group_display_cursor(0, target));
+    assert_eq!(model.app.libs[0].nav_stack[1].resting().cursor(), target);
+}
 
 #[test]
 fn shell_mounts_and_syncs_music_workspace() {
