@@ -42,11 +42,11 @@
 
 ## 3. Record and confirm
 
-- [ ] 3.1 Update `docs/architecture/interactive-surface-ledger.md:63` to state
+- [x] 3.1 Update `docs/architecture/interactive-surface-ledger.md:63` to state
       the Queue body has no legacy underpaint, matching the wording already used
       for Playback (row 62) and Feeds (row 72). Verify: the row names the owner
       and the painter, consistent with #625's per-breakpoint column.
-- [ ] 3.2 Add a conformance test in the shape of the existing
+- [x] 3.2 Add a conformance test in the shape of the existing
       Feeds/Playback rows in `tests_conformance_matrix.rs`:
       `compose_base_frame` reserves `queue_area` and paints no slot rows, and
       `QueueComponent` is the sole row painter. Verify: it fails if the legacy
