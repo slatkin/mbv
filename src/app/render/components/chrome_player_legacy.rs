@@ -6,7 +6,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Color;
 
 impl App {
-    pub(in crate::app::render) fn playback_panel_context<'a>(
+    pub(in crate::app) fn playback_panel_context<'a>(
         &'a mut self,
         area: Rect,
         playback: &'a mut LayoutPlayback,
@@ -68,7 +68,7 @@ impl App {
             .unwrap_or_else(|| vec![(title.to_string(), title_color)])
     }
 
-    pub(in crate::app::render) fn playback_progress(&self) -> (i64, i64, bool) {
+    pub(in crate::app) fn playback_progress(&self) -> (i64, i64, bool) {
         if let Some(ref remote) = self.connected_session_state {
             let elapsed_s = self.remote_pos_at.elapsed().as_secs_f64();
             let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);

@@ -1,5 +1,5 @@
-mod arrangements;
-mod components;
+pub(in crate::app) mod arrangements;
+pub(in crate::app) mod components;
 mod screens;
 mod theme;
 

@@ -15,7 +15,7 @@ use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 
 impl App {
-    pub(in crate::app::render) fn remote_status_spans(
+    pub(in crate::app) fn remote_status_spans(
         &self,
         remote_state: RemoteSlotState,
         daemon_endpoint: &str,
@@ -79,7 +79,7 @@ impl App {
 
     /// Returns `(icon, label)` for a remote pill without styling.
     /// Used by queue-title rendering that applies its own colors.
-    pub(in crate::app::render) fn remote_icon_and_label(
+    pub(in crate::app) fn remote_icon_and_label(
         &self,
         remote_state: RemoteSlotState,
         daemon_endpoint: &str,
@@ -118,7 +118,7 @@ impl App {
         (icon, label)
     }
 
-    pub(in crate::app::render) fn playlist_status_spans(&self) -> Vec<Span<'static>> {
+    pub(in crate::app) fn playlist_status_spans(&self) -> Vec<Span<'static>> {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let (label, on) = match &self.queue_source {
             crate::config::QueueSource::Playlist { name, .. } => (format!("{gap}{name}"), true),
@@ -150,7 +150,7 @@ impl App {
         ]
     }
 
-    pub(in crate::app::render) fn autosave_status_spans(&self) -> Option<Vec<Span<'static>>> {
+    pub(in crate::app) fn autosave_status_spans(&self) -> Option<Vec<Span<'static>>> {
         let autosave_on = self.queue_is_saved_playlist() && {
             let config = self.config.lock().unwrap();
             let cfg = &*config;
@@ -184,7 +184,7 @@ impl App {
         }
     }
 
-    pub(in crate::app::render) fn mute_status_spans(&self) -> Option<Vec<Span<'static>>> {
+    pub(in crate::app) fn mute_status_spans(&self) -> Option<Vec<Span<'static>>> {
         self.playback_display_target()
             .displayed_mute(self)
             .then(|| {
@@ -202,7 +202,7 @@ impl App {
             })
     }
 
-    pub(in crate::app::render) fn volume_status_spans(&self) -> Vec<Span<'static>> {
+    pub(in crate::app) fn volume_status_spans(&self) -> Vec<Span<'static>> {
         let volume = self.playback_display_target().displayed_volume(self);
         // Speaker glyph reflects the volume state (0 / low / mid / high).
         let icon = if volume == 0 {
@@ -232,11 +232,11 @@ impl App {
         ]
     }
 
-    pub(in crate::app::render) fn status_width(spans: &[Span]) -> u16 {
+    pub(in crate::app) fn status_width(spans: &[Span]) -> u16 {
         spans.iter().map(|s| s.content.width() as u16).sum()
     }
 
-    pub(in crate::app::render) fn append_status(
+    pub(in crate::app) fn append_status(
         spans: &mut Vec<Span<'static>>,
         status: Vec<Span<'static>>,
     ) {
@@ -246,20 +246,13 @@ impl App {
         spans.extend(status);
     }
 
-    pub(in crate::app::render) fn set_status_label_color(
-        spans: &mut [Span<'static>],
-        color: Color,
-    ) {
+    pub(in crate::app) fn set_status_label_color(spans: &mut [Span<'static>], color: Color) {
         if let Some(label) = spans.get_mut(2) {
             label.style = label.style.fg(color);
         }
     }
 
-    pub(in crate::app::render) fn set_status_pill_style(
-        spans: &mut [Span<'static>],
-        fg: Color,
-        bg: Color,
-    ) {
+    pub(in crate::app) fn set_status_pill_style(spans: &mut [Span<'static>], fg: Color, bg: Color) {
         for span in spans.iter_mut() {
             span.style = span.style.bg(bg);
         }
@@ -268,14 +261,14 @@ impl App {
 
     /// Uppercase the status label span (index 2, same convention as
     /// [`Self::set_status_label_color`]) in place.
-    pub(in crate::app::render) fn uppercase_status_label(spans: &mut [Span<'static>]) {
+    pub(in crate::app) fn uppercase_status_label(spans: &mut [Span<'static>]) {
         let Some(label) = spans.get_mut(2) else {
             return;
         };
         label.content = label.content.to_uppercase().into();
     }
 
-    pub(in crate::app::render) fn render_remote_status_hitbox(
+    pub(in crate::app) fn render_remote_status_hitbox(
         &self,
         layout: &mut LayoutPlayback,
         area: Rect,
@@ -301,7 +294,7 @@ impl App {
     /// detail and the service-state glyphs (Emby, Audiobookshelf,
     /// stay-alive, shared-data).
     /// The playlist status pill renders in the left queue panel instead.
-    pub(in crate::app::render) fn render_status_bar(
+    pub(in crate::app) fn render_status_bar(
         &mut self,
         f: &mut Frame,
         area: Rect,

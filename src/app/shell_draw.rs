@@ -4,12 +4,14 @@ use crate::app::layout::{
 use crate::app::render::arrangements::chrome::{
     chrome_geometry, ChromeGeometryInput, PLAYER_BOX_HEIGHT,
 };
+use crate::app::render::arrangements::queue::queue_panel_geometry;
+use crate::app::render::components::queue::render_queue_status;
 use crate::app::render::components::widgets::{render_queue_panel_frame, right_panel_content_area};
 use crate::app::{palette, App, PanelFocus, PanelMode, TabSelection};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::text::Span;
+use ratatui::widgets::Block;
 use ratatui::Frame;
 use std::time::Instant;
 
@@ -59,14 +61,11 @@ impl App {
     /// Compute the root/chrome geometry for one frame, paint-free. Pure reads
     /// of `self` state; the single production caller is `compute_frame_layout`
     /// (the only seam entry), and `render_main` consumes the result rather
-    /// than recomputing it. `pub(in crate::app::render)` so the render test
+    /// than recomputing it. `pub(in crate::app)` so the render test
     /// helpers can render a view through `render_main` with the same
     /// authoritative geometry without pulling in `compute_frame_layout`'s
     /// terminal-normalization side effects.
-    pub(in crate::app::render) fn compute_chrome_geometry(
-        &self,
-        area: Rect,
-    ) -> FrameChromeGeometry {
+    pub(in crate::app) fn compute_chrome_geometry(&self, area: Rect) -> FrameChromeGeometry {
         chrome_geometry(ChromeGeometryInput {
             area,
             panel_mode: self.effective_panel_mode(),
@@ -185,7 +184,7 @@ impl App {
 }
 
 impl App {
-    pub(in crate::app::render) fn render_main(
+    pub(in crate::app) fn render_main(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -351,60 +350,20 @@ impl App {
         // internally before reaching the inline presentation path.
 
         if self.effective_panel_mode() != PanelMode::LibraryOnly {
-            let queue_list_area = render_queue_panel_frame(f, queue_area, queue_focused);
-            let qla = queue_list_area;
-
-            // Title and status bar panels float within the queue panel with
-            // 2 columns left/right indent and 1 row of space on all sides.
-            let title_overhead = if qla.height >= 4 { 3 } else { 0 };
-            layout.queue_title_reserved = title_overhead > 0;
-            let status_overhead = if qla.height >= title_overhead + 4 {
-                3
-            } else {
-                0
-            };
-
-            let queue_content_area = Rect {
-                y: qla.y + title_overhead,
-                height: qla.height.saturating_sub(title_overhead + status_overhead),
-                ..qla
-            };
-            if queue_content_area.height >= 1 {
-                layout.queue_area = queue_content_area;
+            let qla = render_queue_panel_frame(f, queue_area, queue_focused);
+            let queue_geometry = queue_panel_geometry(qla);
+            layout.queue_title_reserved = queue_geometry.title_reserved;
+            if queue_geometry.content_area.height >= 1 {
+                layout.queue_area = queue_geometry.content_area;
             }
             layout.queue_selected_item_rect = None;
-
-            if status_overhead > 0 {
-                let pill_row = Rect {
-                    x: qla.x + 2,
-                    y: qla.y + qla.height.saturating_sub(2),
-                    width: qla.width.saturating_sub(4),
-                    height: 1,
-                };
-                let pill_bg = palette::SURFACE_CHROME;
-                f.render_widget(
-                    Block::default().style(Style::default().bg(pill_bg)),
+            if let Some(pill_row) = queue_geometry.pill_row {
+                render_queue_status(
+                    f,
                     pill_row,
+                    self.playlist_status_spans(),
+                    self.autosave_status_spans(),
                 );
-                f.render_widget(
-                    Paragraph::new(Line::from(self.playlist_status_spans())),
-                    pill_row,
-                );
-                if let Some(autosave_spans) = self.autosave_status_spans() {
-                    let autosave_w = Self::status_width(&autosave_spans);
-                    let autosave_x = pill_row.x + pill_row.width.saturating_sub(autosave_w);
-                    if autosave_x > pill_row.x {
-                        f.render_widget(
-                            Paragraph::new(Line::from(autosave_spans)),
-                            Rect {
-                                x: autosave_x,
-                                y: pill_row.y,
-                                width: autosave_w,
-                                height: 1,
-                            },
-                        );
-                    }
-                }
             }
         }
         if right_visible {
@@ -433,7 +392,7 @@ impl App {
     /// `self.tab`. Task 2.3's `Model::draw_frame` will hoist this call out of
     /// `render_main` and settle the `self.tab` normalization ordering so it can
     /// run after the body.
-    pub(in crate::app::render) fn paint_legacy_chrome(
+    pub(in crate::app) fn paint_legacy_chrome(
         &mut self,
         f: &mut Frame,
         chrome: &FrameChromeGeometry,
@@ -448,22 +407,14 @@ impl App {
             ..
         } = *chrome;
 
-        // Full-column background behind the card image and queue list.
-        if self.effective_panel_mode() != PanelMode::LibraryOnly {
-            let left_bg = palette::resolve_surface_focus(queue_focused);
-            f.render_widget(
-                Block::default().style(Style::default().bg(left_bg)),
-                left_area,
-            );
-        }
-
-        // Full-column background for the right panel (tabs, player, library, queue, status).
-        if right_visible {
-            f.render_widget(
-                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
-                right_full_area,
-            );
-        }
+        crate::app::render::components::chrome::render_legacy_backdrops(
+            f,
+            left_area,
+            right_full_area,
+            queue_focused,
+            self.effective_panel_mode() != PanelMode::LibraryOnly,
+            right_visible,
+        );
 
         // Tab bar at the very top of the right column.
         if right_visible {

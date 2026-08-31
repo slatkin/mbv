@@ -8,12 +8,12 @@ pub(super) mod audiobookshelf_books;
 
 pub(super) mod audiobookshelf_podcast;
 pub(super) mod backdrop;
-pub(super) mod card;
-pub(super) mod chrome;
+pub(in crate::app) mod card;
+pub(in crate::app) mod chrome;
 pub(super) mod chrome_player;
-pub(super) mod chrome_player_legacy;
-pub(super) mod chrome_status;
-pub(super) mod chrome_tabs;
+pub(in crate::app) mod chrome_player_legacy;
+pub(in crate::app) mod chrome_status;
+pub(in crate::app) mod chrome_tabs;
 pub(super) mod confirm_modal;
 pub(super) mod context_menu;
 pub(super) mod daemon_lost_modal;
@@ -46,7 +46,7 @@ pub(super) mod music_wide;
 pub(super) mod music_wide_browser;
 pub(super) mod music_wide_tracks;
 pub(super) mod playlists;
-pub(super) mod queue;
+pub(in crate::app) mod queue;
 pub(super) mod remote_reanchor;
 pub(super) mod search_sidebar;
 pub(super) mod selection_modal;
@@ -55,7 +55,7 @@ pub(super) mod settings;
 pub(super) mod settings_component;
 pub(super) mod tv_wide;
 pub(super) mod visualizer;
-pub(super) mod widgets;
+pub(in crate::app) mod widgets;
 
 #[cfg(test)]
 #[path = "home_video_tests.rs"]

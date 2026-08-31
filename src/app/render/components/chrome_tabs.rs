@@ -31,12 +31,7 @@ impl App {
     ///
     /// `tabs_area` is the precomputed hit-target rect (root/chrome geometry,
     /// task 2.1a) and is painted around, never recomputed here.
-    pub(in crate::app::render) fn render_tabs(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        tabs_area: Rect,
-    ) {
+    pub(in crate::app) fn render_tabs(&mut self, f: &mut Frame, area: Rect, tabs_area: Rect) {
         // Fill the tab bar area with the tab box's own background.
         f.render_widget(
             Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),

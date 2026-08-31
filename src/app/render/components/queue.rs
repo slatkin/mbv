@@ -278,6 +278,37 @@ fn queue_row_time_text(pos_ticks: i64, dur_ticks: i64, show_elapsed: bool) -> St
     }
 }
 
+pub(in crate::app) fn render_queue_status(
+    frame: &mut Frame,
+    area: Rect,
+    playlist: Vec<Span<'static>>,
+    autosave: Option<Vec<Span<'static>>>,
+) {
+    frame.render_widget(
+        Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
+        area,
+    );
+    frame.render_widget(Paragraph::new(Line::from(playlist)), area);
+    if let Some(spans) = autosave {
+        let width = spans
+            .iter()
+            .map(|span| span.content.width() as u16)
+            .sum::<u16>();
+        let x = area.x + area.width.saturating_sub(width);
+        if x > area.x {
+            frame.render_widget(
+                Paragraph::new(Line::from(spans)),
+                Rect {
+                    x,
+                    y: area.y,
+                    width,
+                    height: 1,
+                },
+            );
+        }
+    }
+}
+
 pub(in crate::app) fn render_queue_content(
     frame: &mut Frame,
     area: Rect,

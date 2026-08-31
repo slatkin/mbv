@@ -254,7 +254,7 @@ impl App {
     /// `rows_used`/`cols_used` are 0 if the queue is empty or the image is not
     /// yet ready. `image_loading` is true when a fetch is in-flight (caller
     /// should defer rendering the rest of the view until the image arrives).
-    pub(in crate::app::render) fn render_card(
+    pub(in crate::app) fn render_card(
         &mut self,
         f: &mut Frame,
         area: Rect,

@@ -11,15 +11,15 @@ use unicode_width::UnicodeWidthStr;
 
 // The main UI re-renders frequently while scrolling; prefer a cheaper filter in
 // these hot paths to reduce terminal image preparation stalls.
-pub(in crate::app::render) const RENDER_FILTER: ratatui_image::FilterType =
+pub(in crate::app) const RENDER_FILTER: ratatui_image::FilterType =
     ratatui_image::FilterType::Triangle;
 
 // Configured music albums need the image worker's child-audio lookup; their
 // album containers do not reliably expose usable Primary images.
-pub(in crate::app::render) const MUSIC_ALBUM_IMAGE_TYPES: &[&str] = &["AudioChild"];
+pub(in crate::app) const MUSIC_ALBUM_IMAGE_TYPES: &[&str] = &["AudioChild"];
 
 /// Columns of empty space between the left and right panels.
-pub(in crate::app::render) const COLUMN_GAP: u16 = 0;
+pub(in crate::app) const COLUMN_GAP: u16 = 0;
 
 /// Left-edge padding applied once to every tab's content area
 /// (Home, library lists, music groups, albums, series, home-video, feed
@@ -30,9 +30,9 @@ pub(in crate::app::render) const COLUMN_GAP: u16 = 0;
 ///
 /// Detail surfaces that need additional internal alignment can add their own
 /// indentation relative to this padded edge.
-pub(in crate::app::render) const TAB_LEFT_PAD: u16 = 2;
+pub(in crate::app) const TAB_LEFT_PAD: u16 = 2;
 
-pub(in crate::app::render) fn right_panel_content_area(area: Rect, left_collapsed: bool) -> Rect {
+pub(in crate::app) fn right_panel_content_area(area: Rect, left_collapsed: bool) -> Rect {
     if left_collapsed {
         Rect {
             x: area.x + 1,
@@ -52,7 +52,7 @@ pub(in crate::app::render) fn right_panel_content_area(area: Rect, left_collapse
 /// hardcodes one. Positions the thumb at the area's own right edge if the
 /// area already reaches the frame's right edge, otherwise just outside the
 /// area (so a scrollbar never overlaps a panel's own content column).
-pub(in crate::app::render) fn render_right_scrollbar(
+pub(in crate::app) fn render_right_scrollbar(
     f: &mut Frame,
     area: Rect,
     max_offset: usize,
@@ -70,7 +70,7 @@ pub(in crate::app::render) fn render_right_scrollbar(
     );
 }
 
-pub(in crate::app::render) fn render_right_scrollbar_with_viewport(
+pub(in crate::app) fn render_right_scrollbar_with_viewport(
     f: &mut Frame,
     area: Rect,
     content_length: usize,
@@ -95,7 +95,7 @@ pub(in crate::app::render) fn render_right_scrollbar_with_viewport(
     );
 }
 
-pub(in crate::app::render) fn render_scrollbar_with_viewport_at(
+pub(in crate::app) fn render_scrollbar_with_viewport_at(
     f: &mut Frame,
     area: Rect,
     content_length: usize,
@@ -133,7 +133,7 @@ pub(in crate::app::render) fn render_scrollbar_with_viewport_at(
 /// visible scroll window `[offset, offset+visible)`. The block fills the full row width
 /// supplied by `area.x` and `area.width` (interior content can indent itself further).
 /// Call before rendering list/row content so the background shows through.
-pub(in crate::app::render) fn render_selected_block_background(
+pub(in crate::app) fn render_selected_block_background(
     f: &mut Frame,
     area: Rect,
     offset: usize,
@@ -228,11 +228,7 @@ pub(in crate::app) fn render_selected_block_borders(
     }
 }
 
-pub(in crate::app::render) fn render_queue_panel_frame(
-    f: &mut Frame,
-    area: Rect,
-    focused: bool,
-) -> Rect {
+pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focused: bool) -> Rect {
     if area.width == 0 || area.height == 0 {
         return Rect::default();
     }
@@ -286,12 +282,12 @@ pub(in crate::app) fn render_count_label(f: &mut Frame, area: Rect, count: usize
 }
 
 /// Width in columns reserved for a list's scrollbar gutter.
-pub(in crate::app::render) const SCROLLBAR_GUTTER: u16 = 1;
+pub(in crate::app) const SCROLLBAR_GUTTER: u16 = 1;
 
 /// Usable text width of a list column of the given `width` once the
 /// scrollbar gutter is reserved (when `needs_scrollbar`). Centralizes the
 /// `width - gutter` arithmetic every scrolling list repeats.
-pub(in crate::app::render) fn content_width(width: u16, needs_scrollbar: bool) -> usize {
+pub(in crate::app) fn content_width(width: u16, needs_scrollbar: bool) -> usize {
     let gutter = if needs_scrollbar { SCROLLBAR_GUTTER } else { 0 };
     width.saturating_sub(gutter) as usize
 }
@@ -490,7 +486,7 @@ pub(in crate::app) fn render_pill_bar(
 /// Callers pass the exact text (`" (empty)"`, `" Loading…"`, or a
 /// context-specific string like `"Indexing music library..."`) so the
 /// wording stays local, but the placeholder styling is defined once.
-pub(in crate::app::render) fn render_placeholder(f: &mut Frame, area: Rect, msg: &str) {
+pub(in crate::app) fn render_placeholder(f: &mut Frame, area: Rect, msg: &str) {
     if area.width == 0 || area.height == 0 {
         return;
     }
@@ -505,7 +501,7 @@ pub(in crate::app::render) fn render_placeholder(f: &mut Frame, area: Rect, msg:
 
 impl App {
     #[allow(unused_variables)]
-    pub(in crate::app::render) fn render_library(
+    pub(in crate::app) fn render_library(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -609,7 +605,7 @@ impl App {
     ///    first few tracks — see `fetch_album_artist` in `images.rs`).
     /// 3. `parse_album_folder_name` heuristic.
     /// 4. Literal "Unknown Artist".
-    pub(in crate::app::render) fn resolve_group_album_artist(
+    pub(in crate::app) fn resolve_group_album_artist(
         &self,
         item: &mbv_core::api::EmbyItem,
     ) -> String {
