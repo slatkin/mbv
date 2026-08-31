@@ -285,6 +285,16 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
     }
 }
 
+pub(in crate::app) fn music_album_columns(area: Rect) -> usize {
+    let Some(panes) = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y) else {
+        return 1;
+    };
+    let right_pane =
+        hero_left::hero_on_left_right_pane(panes.right_panel, panes.right_area, PANE_PAD_Y);
+    let browser_area = padded_rect(right_pane.list_panel, PANE_PAD_X, PANE_PAD_Y);
+    crate::app::library_column_width::library_column_count(browser_area.width)
+}
+
 pub(in crate::app) fn render_wide_music_group_with_ctx(
     f: &mut Frame,
     area: Rect,

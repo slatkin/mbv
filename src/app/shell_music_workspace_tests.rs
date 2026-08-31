@@ -11,8 +11,10 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 #[test]
 fn shell_mounts_and_syncs_music_workspace() {
     let mut model = Model::new(make_music_group_app());
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    // The mounted browser is in the post-hero right rail, whose width—not
+    // the pre-hero left area—determines horizontal navigation availability.
+    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 200, 30);
+    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(100, 0, 100, 30);
     model.sync_music_workspace();
     let id = model
         .music_workspace_id
@@ -24,6 +26,18 @@ fn shell_mounts_and_syncs_music_workspace() {
         .unwrap()
         .on(&Event::Keyboard(KeyEvent {
             code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
+    ));
+    let message = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .on(&Event::Keyboard(KeyEvent {
+            code: Key::Char('h'),
             modifiers: KeyModifiers::NONE,
         }));
     assert!(matches!(
