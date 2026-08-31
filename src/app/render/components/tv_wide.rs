@@ -229,6 +229,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         list_area,
         &ctx.list,
         right_focused,
+        crate::app::library_column_width::library_column_count(list_area.width),
         layout,
     );
     hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);

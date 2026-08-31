@@ -196,6 +196,7 @@ impl Component for InlineSearchComponent {
             area,
             &context,
             self.focused,
+            crate::app::library_column_width::library_column_count(area.width),
             &mut self.layout,
         );
     }

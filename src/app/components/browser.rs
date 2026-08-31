@@ -184,6 +184,7 @@ impl BrowserComponent {
                 area,
                 ctx,
                 self.focused,
+                crate::app::library_column_width::library_column_count(area.width),
                 &mut self.layout,
             );
         };
@@ -261,6 +262,7 @@ impl BrowserComponent {
             list_area,
             ctx,
             self.focused,
+            1,
             &mut self.layout,
         );
 
