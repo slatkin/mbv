@@ -505,6 +505,10 @@ impl App {
                 height: qla.height.saturating_sub(title_overhead + status_overhead),
                 ..qla
             };
+            if queue_content_area.height >= 1 {
+                layout.queue_area = queue_content_area;
+            }
+            layout.queue_selected_item_rect = None;
             self.render_queue(f, queue_content_area, queue_focused, layout);
 
             if status_overhead > 0 {

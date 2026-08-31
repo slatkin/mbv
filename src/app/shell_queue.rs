@@ -71,6 +71,11 @@ impl Model {
         }
         self.application
             .view(&id, frame, self.app.layout.main.queue_area);
+        self.app.layout.main.queue_selected_item_rect = self
+            .application
+            .get_component(&id)
+            .and_then(|comp| comp.as_any().downcast_ref::<QueueComponent>())
+            .and_then(QueueComponent::selected_row_rect);
     }
 
     pub(super) fn handle_queue_request(&mut self, request: QueueRequest) {

@@ -31,6 +31,18 @@ pub struct QueueComponent {
 }
 
 impl QueueComponent {
+    pub(crate) fn selected_row_rect(&self) -> Option<Rect> {
+        self.geometry
+            .rows
+            .iter()
+            .find(|(_, slot_id)| {
+                self.slots
+                    .get(self.cursor)
+                    .is_some_and(|slot| slot.slot_id == *slot_id)
+            })
+            .map(|(rect, _)| *rect)
+    }
+
     pub fn new() -> Self {
         Self {
             slots: Vec::new(),

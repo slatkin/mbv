@@ -281,9 +281,6 @@ impl App {
         focused: bool,
         layout: &mut LayoutMain,
     ) {
-        layout.queue_selected_item_rect = None;
-        layout.queue_area = area;
-
         if area.height < 1 {
             return;
         }
