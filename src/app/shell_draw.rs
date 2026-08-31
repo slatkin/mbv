@@ -4,7 +4,7 @@ use crate::app::layout::{
 use crate::app::render::arrangements::chrome::{
     chrome_geometry, ChromeGeometryInput, PLAYER_BOX_HEIGHT,
 };
-use crate::app::render::arrangements::queue::queue_panel_geometry;
+use crate::app::render::arrangements::queue::{queue_panel_geometry, QueuePanelInputs};
 use crate::app::render::components::queue::render_queue_status;
 use crate::app::render::components::widgets::{render_queue_panel_frame, right_panel_content_area};
 use crate::app::{palette, App, PanelFocus, PanelMode, TabSelection};
@@ -267,7 +267,6 @@ impl App {
                 height: card_h,
                 width: card_w,
             };
-            let mut left_remaining = left_content.height.saturating_sub(layout.card.height);
 
             // Queue-only mode has no right column, so the playback panel
             // (seekbar + title + controls) renders here instead: stacked
@@ -315,19 +314,15 @@ impl App {
                         ),
                     );
                     narrow_player_h = player_h;
-                    left_remaining = left_remaining.saturating_sub(player_h);
                 }
             }
 
-            let queue_h = left_remaining.saturating_sub(1);
-            (
-                right_area,
-                Rect {
-                    y: left_content.y + layout.card.height + narrow_player_h + 1,
-                    height: queue_h,
-                    ..left_content
-                },
-            )
+            let queue_geometry = queue_panel_geometry(QueuePanelInputs {
+                left_content,
+                card_height: layout.card.height,
+                narrow_player_height: narrow_player_h,
+            });
+            (right_area, queue_geometry.panel_area)
         };
 
         // Apply the shared horizontal padding once here, at the single point
@@ -350,9 +345,14 @@ impl App {
         // internally before reaching the inline presentation path.
 
         if self.effective_panel_mode() != PanelMode::LibraryOnly {
-            let qla = render_queue_panel_frame(f, queue_area, queue_focused);
-            let queue_geometry = queue_panel_geometry(qla);
+            render_queue_panel_frame(f, queue_area, queue_focused);
+            let queue_geometry = queue_panel_geometry(QueuePanelInputs {
+                left_content: queue_area,
+                card_height: 0,
+                narrow_player_height: 0,
+            });
             layout.queue_title_reserved = queue_geometry.title_reserved;
+            layout.queue_title_area = queue_geometry.title_area;
             if queue_geometry.content_area.height >= 1 {
                 layout.queue_area = queue_geometry.content_area;
             }

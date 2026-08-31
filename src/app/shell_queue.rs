@@ -5,7 +5,6 @@ use super::components::{
 use super::shell::Model;
 use super::{PanelFocus, QueueScope};
 use crate::app::notify_actions::ToastSeverity;
-use ratatui::layout::Rect;
 
 impl Model {
     pub(super) fn sync_queue(&mut self) {
@@ -47,15 +46,7 @@ impl Model {
         };
         let playback = self.app.displayed_queue_playback_state();
         let title = self.app.queue_title_model();
-        let title_area = {
-            let area = self.app.layout.main.queue_area;
-            self.app.layout.main.queue_title_reserved.then_some(Rect {
-                x: area.x + 2,
-                y: area.y.saturating_sub(2),
-                width: area.width.saturating_sub(4),
-                height: 1,
-            })
-        };
+        let title_area = self.app.layout.main.queue_title_area;
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
                 queue.set_content(slots, cursor, scope, queue_focused, playback, title);
@@ -73,13 +64,7 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
                 queue.set_area(self.app.layout.main.queue_area);
-                let area = self.app.layout.main.queue_area;
-                queue.set_title_area(self.app.layout.main.queue_title_reserved.then_some(Rect {
-                    x: area.x + 2,
-                    y: area.y.saturating_sub(2),
-                    width: area.width.saturating_sub(4),
-                    height: 1,
-                }));
+                queue.set_title_area(self.app.layout.main.queue_title_area);
             }
         }
         self.application

@@ -112,6 +112,7 @@ pub(crate) struct LayoutMain {
     pub queue_area: Rect,
     /// Whether the queue panel reserved a title row in this frame.
     pub queue_title_reserved: bool,
+    pub queue_title_area: Option<Rect>,
     /// Screen rect of the selected row/cell in the library panel. The outer
     /// selectable renderer owns this; nested detail/hero renderers never
     /// overwrite it. Consumed by the context menu's keyboard anchor.
