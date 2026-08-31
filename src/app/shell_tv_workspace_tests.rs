@@ -5,7 +5,7 @@ use crate::app::components::{
 use crate::app::render::make_movie_app;
 use crate::app::types_browse::BrowseResting;
 use ratatui::layout::Rect;
-use tuirealm::component::AppComponent;
+use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 #[path = "shell_tv_workspace_group_tests.rs"]
@@ -75,6 +75,51 @@ fn sync_projects_inline_search_visibility_before_tv_content() {
         .expect("TV workspace component type");
     assert!(component.show_letter_pills());
     assert!(!model.app.inline_search_active);
+}
+
+#[test]
+fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
+    let mut model = mounted_tv_model();
+    model.app.image_protocol_enabled = true;
+    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+    model.push_tv_workspace_content();
+    let component = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<TvWorkspaceComponent>()
+        .unwrap();
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(100, 30)).unwrap();
+    terminal.draw(|f| component.view(f, f.area())).unwrap();
+    assert!(matches!(
+        component.take_image_paint(),
+        Some(crate::app::render::HomeImagePaint::Series {
+            show_placeholder: true,
+            ..
+        })
+    ));
+
+    model.app.card_image_states.insert(
+        "movie-focused:ser_primary".into(),
+        crate::app::images::CachedImage::empty(),
+    );
+    model.push_tv_workspace_content();
+    let component = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<TvWorkspaceComponent>()
+        .unwrap();
+    terminal.draw(|f| component.view(f, f.area())).unwrap();
+    assert!(matches!(
+        component.take_image_paint(),
+        Some(crate::app::render::HomeImagePaint::Series {
+            show_placeholder: false,
+            ..
+        })
+    ));
 }
 
 #[test]

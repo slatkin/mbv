@@ -13,7 +13,6 @@ use ratatui::widgets::Block;
 use ratatui::Terminal;
 use std::collections::HashMap;
 use tuirealm::component::Component;
-use unicode_width::UnicodeWidthStr;
 
 /// Paints the wide TV workspace exactly as the live shell does: draw the
 /// legacy `App` base frame (which now only publishes the `tv_wide_*`
@@ -107,14 +106,50 @@ fn wide_tv_requests_selected_series_primary_image_with_budget_and_placeholder() 
 }
 
 #[test]
-fn wide_tv_series_overview_wraps_around_portrait_budget() {
-    let text = "one two three four five six seven eight nine ten eleven twelve thirteen";
-    let lines = wrap_overview_lines(text, |line| {
-        inline_hero_text_width(82, SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS, 3 + line as u16) as usize
-    });
-    let full_width = wrap_overview_lines(text, |_| 82);
-    assert!(lines[0].width() <= 63);
-    assert_ne!(lines, full_width);
+fn wide_tv_series_overview_wraps_around_portrait_in_real_painter() {
+    let mut app = tv_app();
+    app.libs[0].nav_stack[0].items[0].overview =
+        "one two three four five six seven eight nine ten eleven twelve thirteen".into();
+    let mut layout = LayoutMain::default();
+    let (output, _) = render_tv_workspace(&mut app, &mut layout);
+    assert!(
+        output.contains("one two three"),
+        "overview should be painted: {output:?}"
+    );
+    assert!(
+        output.contains("four five six"),
+        "overview should wrap beside the portrait: {output:?}"
+    );
+    assert!(!output.contains("one two three four five six seven eight nine"));
+}
+
+#[test]
+fn wide_tv_series_placeholder_paints_the_full_portrait_budget() {
+    let mut app = tv_app();
+    let item = app.libs[0].nav_stack[0].items[0].clone();
+    let mut terminal = Terminal::new(TestBackend::new(30, 20)).unwrap();
+    terminal
+        .draw(|f| {
+            app.paint_home_image(
+                f,
+                Some(HomeImagePaint::Series {
+                    area: Rect::new(2, 2, 18, 12),
+                    item: Box::new(item),
+                    show_placeholder: true,
+                }),
+            );
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    for y in 2..14 {
+        for x in 2..20 {
+            assert_eq!(
+                buffer[(x, y)].bg,
+                palette::BORDER_UNFOCUSED,
+                "unpainted portrait cell at {x},{y}"
+            );
+        }
+    }
 }
 
 #[test]
