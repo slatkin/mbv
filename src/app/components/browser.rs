@@ -181,7 +181,7 @@ impl BrowserComponent {
             // Breakpoint no longer fits: fall back to the plain list rows.
             return render_generic_movies_home_video_rows_with_ctx(
                 f,
-                area,
+                body_area,
                 ctx,
                 self.focused,
                 crate::app::library_column_width::library_column_count(area.width),

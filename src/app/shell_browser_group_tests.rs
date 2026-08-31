@@ -286,6 +286,68 @@ fn feed_group_picker_bracket_keys_cycle_groups() {
 }
 
 #[test]
+fn feed_group_picker_wide_borderline_height_keeps_pills_above_rows() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = feed_group_picker_app();
+    app.panel_focus = PanelFocus::Library;
+    app.mini_view_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+
+    // At this terminal height the mounted browser's full area is just tall
+    // enough for hero-on-left, while the feed layer's two reserved rows make
+    // its body too short. This must take the body-area fallback, not repaint
+    // the group-pill row at the top of the full area.
+    let width = 120;
+    let height = 15;
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| {
+            model.app.compose_base_frame(frame, None);
+            model.render_emby_browser_component(frame);
+        })
+        .unwrap();
+
+    let area = model.app.layout.main.left_area;
+    assert_eq!(
+        area.height, 7,
+        "fixture must exercise the borderline wide height"
+    );
+    assert!(crate::app::render::shared_hero_presentation(area).is_some());
+    assert!(crate::app::render::wide_library_panes(
+        ratatui::layout::Rect {
+            y: area.y + 2,
+            height: area.height - 2,
+            ..area
+        },
+        2,
+        1,
+    )
+    .is_none());
+
+    let buffer = terminal.backend().buffer();
+    let row = |y| {
+        (area.x..area.right())
+            .map(|x| buffer[(x, y)].symbol())
+            .collect::<String>()
+    };
+    let pills = row(area.y);
+    assert!(
+        pills.contains("All"),
+        "feed group pills must remain visible at the top row: {pills:?}"
+    );
+    let body = (area.y + 2..area.bottom())
+        .map(row)
+        .collect::<Vec<_>>()
+        .join("\\n");
+    assert!(
+        body.contains("E1") && body.contains("E2"),
+        "feed rows must still render below the group-pill layer: {body:?}"
+    );
+}
+
+#[test]
 fn feed_group_picker_routes_at_visible_narrow_and_wide_widths() {
     let _guard = crate::config::TestStateDirGuard::new();
     for width in [40, 120] {
