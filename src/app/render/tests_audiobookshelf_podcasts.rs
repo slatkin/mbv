@@ -246,6 +246,43 @@ fn podcast_wide_rendering_covers_threshold_and_larger_width() {
 }
 
 #[test]
+fn podcast_selected_row_indent_is_inside_focus_surface() {
+    let (mut model, terminal) = render_podcast_shell(audiobookshelf_app(), 60, 6, true);
+    let component_id = model
+        .abs_podcast_id
+        .as_ref()
+        .expect("podcast component mounted");
+    let selected_row = model
+        .application
+        .get_component_mut(component_id)
+        .and_then(|component| {
+            component
+                .as_any_mut()
+                .downcast_mut::<AudiobookshelfPodcastComponent>()
+        })
+        .and_then(|component| {
+            component
+                .geometry()
+                .show_rows
+                .iter()
+                .find(|(_, index)| *index == 0)
+                .map(|(rect, _)| *rect)
+        })
+        .expect("selected show row must be painted");
+    let buffer = terminal.backend().buffer();
+    let selected_bg = palette::resolve_surface_focus(true);
+    assert_eq!(
+        buffer[(selected_row.x, selected_row.y)].style().bg,
+        Some(selected_bg)
+    );
+    assert_eq!(
+        buffer[(selected_row.x + 1, selected_row.y)].style().bg,
+        Some(selected_bg),
+        "both selected-row indent cells must be inside the focus surface"
+    );
+}
+
+#[test]
 fn podcast_wide_layout_stays_narrow_below_threshold() {
     let width = crate::app::TWO_COLUMN_THRESHOLD - 1;
     let (model, terminal) = render_podcast_shell(audiobookshelf_app(), width, 20, true);

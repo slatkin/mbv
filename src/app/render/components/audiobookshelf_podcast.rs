@@ -79,7 +79,7 @@ use crate::app::{library_column_width, palette};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{List, ListItem, Paragraph};
+use ratatui::widgets::{Block, List, ListItem, Paragraph};
 use ratatui::Frame;
 
 /// The component-owned interaction values the podcast renderer needs, passed
@@ -444,7 +444,8 @@ fn render_show_rows(
     };
     let items: Vec<ListItem> = (scroll..total_display)
         .take(area.height as usize)
-        .map(|display_row| {
+        .enumerate()
+        .map(|(screen_row, display_row)| {
             match inline_display_row(rows.len(), cursor_row, hero_rows, display_row) {
                 Some(crate::app::render::components::hero::InlineDisplayRow::Replacement) => {
                     ListItem::new(Line::default())
@@ -457,11 +458,31 @@ fn render_show_rows(
                         .iter()
                         .enumerate()
                         .map(|(column, index)| {
-                            let marker = if *index == state.cursor() && focused {
-                                "> "
-                            } else {
-                                "  "
-                            };
+                            let selected = *index == state.cursor();
+                            if selected {
+                                let x = area.x
+                                    + column as u16
+                                        * (cell_width as u16
+                                            + library_column_width::LIBRARY_COLUMN_GAP);
+                                let width = if column + 1 < rows[source_row].len() {
+                                    cell_width as u16 + library_column_width::LIBRARY_COLUMN_GAP
+                                } else {
+                                    cell_width as u16
+                                };
+                                frame.render_widget(
+                                    Block::default().style(
+                                        Style::default()
+                                            .bg(palette::resolve_surface_focus(focused)),
+                                    ),
+                                    ratatui::layout::Rect {
+                                        x,
+                                        y: area.y + screen_row as u16,
+                                        width,
+                                        height: 1,
+                                    },
+                                );
+                            }
+                            let marker = if selected && focused { "> " } else { "  " };
                             let title_width = cell_width.saturating_sub(marker.width());
                             let cell = format!(
                                 "{marker}{}",
