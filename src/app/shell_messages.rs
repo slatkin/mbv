@@ -288,6 +288,7 @@ impl Model {
                 | ShellRequest::BrowserEnqueue { .. }
                 | ShellRequest::BrowserToggleWatched { .. }
                 | ShellRequest::BrowserContextMenu { .. }
+                | ShellRequest::EmbyLibraryContextMenu { .. }
                 | ShellRequest::BrowserShuffle { .. }
                 | ShellRequest::BrowserRefresh
                 | ShellRequest::BrowserRescan
