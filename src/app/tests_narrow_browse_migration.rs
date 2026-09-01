@@ -648,19 +648,47 @@ fn feed_home_video_group_browser_scroll_updates_video_scroll() {
     let id = model.emby_browser_id.clone().expect("feed browser mounted");
     let mut term = Terminal::new(TestBackend::new(60, 20)).unwrap();
     draw(&mut model, &mut term);
-    let area = model.application.get_component(&id).unwrap().as_any()
-        .downcast_ref::<BrowserComponent>().unwrap().test_layout().left_area;
+    let (area, max_offset) = {
+        let component = model.application.get_component(&id).unwrap();
+        let browser = component
+            .as_any()
+            .downcast_ref::<BrowserComponent>()
+            .unwrap();
+        let layout = browser.test_layout();
+        (
+            layout.left_area,
+            layout
+                .left_item_rows
+                .len()
+                .saturating_sub(layout.left_area.height as usize),
+        )
+    };
     let focused = model.application.focus().cloned();
-    let msg = model.application.get_component_mut(&id).unwrap().on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::ScrollDown,
-        column: area.x + 1,
-        row: area.y + 1,
-        modifiers: KeyModifiers::NONE,
-    })).expect("scroll emits typed request");
     let mut music_resize = false;
     let mut tv_resize = false;
-    model.handle_terminal_message(msg, focused.as_ref(), &mut music_resize, &mut tv_resize);
-    assert_eq!(model.app.libs[0].feed_home_video.as_ref().unwrap().video_scroll, 1);
+    // Drive the typed scroll path through the boundary: the final wheel event
+    // has a raw result of max_offset + 1, but the component must emit the
+    // clamped offset max_offset to the feed state.
+    for _ in 0..=max_offset {
+        model.app.last_scroll_at = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        let msg = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .on(&Event::Mouse(MouseEvent {
+                kind: MouseEventKind::ScrollDown,
+                column: area.x + 1,
+                row: area.y + 1,
+                modifiers: KeyModifiers::NONE,
+            }))
+            .expect("scroll emits typed request");
+        model.handle_terminal_message(msg, focused.as_ref(), &mut music_resize, &mut tv_resize);
+    }
+    assert_ne!(max_offset + 1, max_offset);
+    assert_eq!(
+        model.app.libs[0].feed_home_video.as_ref().unwrap().video_scroll,
+        max_offset
+    );
 }
 
 #[test]
