@@ -2,6 +2,7 @@ use crate::app::render::arrangements::hero_left;
 use crate::app::render::arrangements::hero_left::{
     hero_on_left_list_panel_border, PANE_PAD_X, PANE_PAD_Y,
 };
+use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::detail_series_view::{
     SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
@@ -134,7 +135,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
     *geometry = AudiobookshelfPodcastGeometry::default();
-    let Some((hero_panel, right_panel)) = hero_left::shared_hero_presentation(area) else {
+    let Some(panes) = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y) else {
         return render_narrow_podcast(
             frame,
             area,
@@ -152,9 +153,22 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     // `render_audiobookshelf_hero` `show_title = false`). Persistent-
     // mode episode pills + table are wide-only (narrow routes Enter to
     // the selection modal instead).
+    frame.render_widget(
+        Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+        Rect {
+            x: panes.left_panel.x,
+            y: panes.left_panel.bottom(),
+            width: panes.left_panel.width,
+            height: 1,
+        },
+    );
+    frame.render_widget(
+        Block::default().style(palette::resolve_surface_focus(focused)),
+        panes.left_panel,
+    );
     let image_paint = render_podcast_hero(
         frame,
-        hero_panel,
+        panes.left_area,
         state,
         interaction,
         focused,
@@ -166,13 +180,13 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     // Wide layout: the list/browser occupies the right panel; the hero panel
     // is the painted hero. No inline hero and no selected-item shell exist in
     // this layout (the right panel paints an ordinary show grid).
-    geometry.right_area = right_panel;
+    geometry.right_area = panes.right_area;
     geometry.columns = 1;
-    let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_panel, PANE_PAD_Y);
+    let right_pane =
+        hero_left::hero_on_left_right_pane(panes.right_panel, panes.right_area, PANE_PAD_Y);
     frame.render_widget(
-        ratatui::widgets::Block::default()
-            .style(crate::app::palette::resolve_surface_focus(focused)),
-        right_panel,
+        Block::default().style(palette::resolve_surface_focus(focused)),
+        panes.right_panel,
     );
     let buckets = build_show_title_buckets(&state.shows);
     let labels: Vec<String> = buckets.iter().map(|bucket| bucket.label.into()).collect();
@@ -199,7 +213,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         return image_paint;
     }
     if state.selected_show().is_some() {
-        geometry.hero_area = hero_panel;
+        geometry.hero_area = panes.left_area;
     }
     render_show_rows(
         frame,
