@@ -1,4 +1,8 @@
 use crate::app::render::arrangements::hero_left;
+use crate::app::render::arrangements::hero_left::{
+    hero_on_left_list_panel_border, PANE_PAD_X, PANE_PAD_Y,
+};
+use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::detail_series_view::{
     SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
     SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS,
@@ -159,17 +163,42 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     // Wide layout: the list/browser occupies the right panel; the hero panel
     // is the painted hero. No inline hero and no selected-item shell exist in
     // this layout (the right panel paints an ordinary show grid).
-    geometry.list_area = right_panel;
     geometry.right_area = right_panel;
     geometry.columns = 1;
+    let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_panel, PANE_PAD_Y);
+    frame.render_widget(
+        ratatui::widgets::Block::default()
+            .style(crate::app::palette::resolve_surface_focus(focused)),
+        right_panel,
+    );
+    hero_on_left_list_panel_border(frame, right_pane.list_panel, focused);
+    let buckets = build_show_title_buckets(&state.shows);
+    let labels: Vec<String> = buckets.iter().map(|bucket| bucket.label.into()).collect();
+    let ids: Vec<usize> = (0..labels.len()).collect();
+    let selected_bucket = buckets
+        .iter()
+        .position(|bucket| state.cursor() >= bucket.start && state.cursor() < bucket.end)
+        .unwrap_or(0);
+    geometry.selector_tabs = render_pill_bar(
+        frame,
+        right_pane.pills_area,
+        PillBar {
+            labels: &labels,
+            ids: &ids,
+            selected_pos: selected_bucket,
+            prefix: Some(" ⌘ "),
+        },
+    );
+    let browser = padded_rect(right_pane.list_panel, PANE_PAD_X, PANE_PAD_Y);
+    geometry.list_area = browser;
     if state.shows.is_empty() {
-        render_placeholder(frame, right_panel, "No podcast shows");
+        render_placeholder(frame, browser, "No podcast shows");
         return image_paint;
     }
     if state.selected_show().is_some() {
         geometry.hero_area = hero_panel;
     }
-    render_show_rows(frame, right_panel, focused, state, 1, 0, *scroll, geometry);
+    render_show_rows(frame, browser, focused, state, 1, 0, *scroll, geometry);
     image_paint
 }
 
