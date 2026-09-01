@@ -521,8 +521,10 @@ fn render_feed_group_picker_content(
             if let Some(NarrowInlineHero::Movie {
                 item,
                 layout: banner,
-            }) = extras.inline_hero.as_ref()
-            {
+            }) = extras.inline_hero.as_ref().filter(|hero| match hero {
+                NarrowInlineHero::Movie { layout, .. } => layout.has_detail_text(),
+                _ => false,
+            }) {
                 selected_detail_shell(
                     f,
                     Rect {

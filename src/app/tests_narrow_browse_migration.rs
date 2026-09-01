@@ -535,15 +535,34 @@ fn feed_snapshot(width: u16, height: u16) -> String {
 #[test]
 fn feed_home_video_group_narrow_snapshot_matches_fbc6888e_baseline() {
     let output = feed_snapshot(60, 20);
-    assert!(output.contains("Family"), "feed narrow metadata missing");
-    assert!(output.contains("Distinctive wrapping"), "feed narrow overview missing");
+    assert!(output.contains("Family"));
+    assert!(output.contains("1h"));
+    assert!(output.contains("Distinctive wrapping"));
+    assert!(output.contains("▁"));
 }
 
 #[test]
 fn feed_home_video_group_wide_snapshot_matches_fbc6888e_baseline() {
     let output = feed_snapshot(140, 40);
-    assert!(output.contains("Family"), "feed wide metadata missing");
-    assert!(output.contains("Distinctive wrapping"), "feed wide overview missing");
+    assert!(output.contains("Family"));
+    assert!(output.contains("1h"));
+    assert!(output.contains("Distinctive wrapping"));
+    assert!(output.contains("▔"));
+}
+
+#[test]
+fn feed_home_video_group_metadata_free_selected_row_stays_ordinary() {
+    let mut app = feed_home_video_group_app();
+    let state = app.libs[0].feed_home_video.as_mut().unwrap();
+    state.groups[0].items[0].overview.clear();
+    state.groups[0].items[0].genre.clear();
+    state.all_items[0].overview.clear();
+    state.all_items[0].genre.clear();
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+    let mut term = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    let output = draw(&mut model, &mut term);
+    assert_eq!(output.matches("Video Two").count(), 1);
 }
 
 #[test]
