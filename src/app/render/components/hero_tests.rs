@@ -40,7 +40,9 @@ fn inline_hero_image_has_shared_top_right_and_gutter_geometry() {
 
     assert_eq!(image_rect, Some(Rect::new(9, 1, 3, 2)));
     let buffer = terminal.backend().buffer();
-    for y in 1..=3 {
+    // The gutter is needed only while the image occupies the row; the row
+    // immediately below the image resumes the full text width.
+    for y in 1..=2 {
         assert_eq!(buffer[(8, y)].symbol(), " ", "missing gutter on row {y}");
     }
     assert_ne!(
