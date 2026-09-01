@@ -298,10 +298,9 @@ pub(in crate::app) fn render_home_content(
                 KeepWatchingHeroLayout,
                 u16,
             ),
-            // Audiobookshelf: image beside the metadata column, same
-            // shape as `Emby` -- the standard inline arrangement.
-            GenericBeside(QueueItem, u16, KeepWatchingHeroLayout, u16),
-            // Feed: text-only, no image to sit beside.
+            // Feed and Audiobookshelf use the shared stacked detail block;
+            // Audiobookshelf artwork is painted above its metadata.
+            // Feed remains text-only in the shared renderer.
             Generic(QueueItem, u16),
             None,
         }
@@ -348,7 +347,7 @@ pub(in crate::app) fn render_home_content(
                         .map(|item| {
                             // Feeds have no cover to sit beside and stay
                             // text-only at the full hero width.
-                            let QueueItem::Audiobookshelf(episode) = &item else {
+                            let QueueItem::Audiobookshelf(_) = &item else {
                                 let text = crate::app::render::components::home_latest_row::home_latest_detail_text(
                                     &item,
                                     inner_w as usize,
@@ -356,28 +355,16 @@ pub(in crate::app) fn render_home_content(
                                 );
                                 return HeroContentDims::Generic(item, text.meta_height);
                             };
-                            // Strip URLs (an unbroken URL is one giant
-                            // unbreakable word to the wrapper) and cap long
-                            // descriptions at 400 chars, matching
-                            // `home_latest_detail_text`'s Feed/two-column
-                            // overview handling and Emby's home-video/podcast
-                            // library views (`trunc_overview`) -- podcast
-                            // overviews routinely carry ad copy.
-                            let overview = episode
-                                .description
-                                .as_deref()
-                                .map(trunc_overview)
-                                .unwrap_or_default();
-                            let (img_w, layout, image_rows) =
-                                crate::app::render::components::home_hero::beside_image_hero_dims(
-                                    item.title(),
-                                    episode.show_title.as_deref().unwrap_or(""),
-                                    &overview,
-                                    inner_w,
-                                    max_allowed,
-                                    1,
-                                );
-                            HeroContentDims::GenericBeside(item, img_w, layout, image_rows)
+                            let layout = crate::app::render::components::home_latest_row::home_latest_detail_text(
+                                &item,
+                                inner_w as usize,
+                                inner_w as usize,
+                            );
+                            let image_rows = inner_w.saturating_mul(9).saturating_add(31) / 32;
+                            HeroContentDims::Generic(
+                                item,
+                                (layout.meta_height + 1 + image_rows).min(max_allowed),
+                            )
                         })
                         .unwrap_or(HeroContentDims::None),
                 }
@@ -385,9 +372,6 @@ pub(in crate::app) fn render_home_content(
         let content_rows = match &dims {
             HeroContentDims::Emby(_, _, meta_layout, image_rows) => {
                 meta_layout.height.max(*image_rows)
-            }
-            HeroContentDims::GenericBeside(_, _, layout, image_rows) => {
-                layout.height.max(*image_rows)
             }
             HeroContentDims::Generic(_, rows) => *rows,
             HeroContentDims::None => 0,
@@ -441,25 +425,6 @@ pub(in crate::app) fn render_home_content(
                     hero_content,
                     img_area,
                     meta_layout,
-                ))
-            }
-            (
-                HeroContentDims::GenericBeside(item, img_w, layout, image_rows),
-                Some(hero_content),
-            ) => {
-                let (meta_area, img_area) =
-                    crate::app::render::components::home_hero::beside_image_hero_rects(
-                        hero_content,
-                        img_w,
-                        layout.height,
-                        image_rows,
-                    );
-                Some(HeroData::GenericBeside(
-                    item,
-                    meta_area,
-                    hero_content,
-                    img_area,
-                    layout,
                 ))
             }
             (HeroContentDims::Generic(item, _), Some(hero_content)) => {
