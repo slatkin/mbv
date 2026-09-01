@@ -8,19 +8,25 @@ The canonical media-list foundation introduces two embedded controls: `InlineMed
 Home sections and Feeds SHALL prepare provider-neutral rows and embed the canonical controls. Existing parent components retain Service effects, selection restoration, images, workspaces, group/filter state, and typed message translation. Controls retain cursor, scroll, replacement admission, geometry, and `HitRegions`.
 
 ### D2 — Home identity and state
-Home section preparation preserves stable `pref_key` and `restore_section` identity. Section-local cursor/scroll is passed through the active control and preserved on refresh and breakpoint handoff using `ViewportAnchor`; no App-wide interaction mirror is added.
+Home section preparation preserves stable `pref_key` and `restore_section` identity. Home has exactly one active section and one flat cursor/scroll position at a time; only the active section's rows are projected into the canonical control. That single active-section cursor/scroll is carried through the canonical control and preserved on refresh and breakpoint handoff using `ViewportAnchor`. No per-section cursor cache and no App-wide interaction mirror are added.
 
 ### D3 — Feeds structural projection
-Feed group labels become `Heading`, separators become `Spacer`, and entries become selectable `Item` rows carrying stable FeedEntry targets and watched/active semantic state. Watched selector and group selection remain parent-owned.
+As canonical-list content: FeedAgeGroup / date labels become non-selectable `Heading` rows, separators become non-selectable `Spacer` rows, and feed entries become selectable `Item` rows carrying stable FeedEntry targets and watched/active semantic state. As parent-owned chrome outside the canonical control: the subscription/group selector pills and the watched selector stay owned by the Feeds parent and are never projected as canonical rows. Group selection remains parent-owned.
 
 ### D4 — #623 baseline and deferred indent
 The accepted Feeds Wide one-column/framing baseline is a prerequisite, not reimplemented here. The outstanding two-space row-indent correction is applied in the canonical source-of-truth painter/model so Home and Feeds cannot drift.
 
 ### D5 — Ownership and verification
-Mounted parents own mouse subscription and `MouseGestureState`; controls own child hit regions. Keyboard resolution remains solely in `router.rs`/`key_policy.rs`. Characterize current output and behavior first. Perform live Wide/Narrow visual correction and obtain explicit user confirmation before changing UI tests; then add focused buffer/geometry tests with metadata, groups, focus, progress, images, and watched states.
+Mouse ownership split:
+
+- The mounted destination parent / AppComponent owns the mouse subscription, raw gesture recognition and delivery, arbitration, blocking-overlay behavior, and `MouseGestureState`.
+- The embedded canonical control owns only view-populated `HitRegions<Target>` and list-local updates (it also retains cursor, scroll, and replacement geometry per D1).
+- The parent delegates point resolution to the child; there is no second gesture recognizer in the child.
+
+Keyboard resolution stays solely in `router.rs`/`key_policy.rs`. Characterize current output and behavior first by source-reading and manual observation only. Perform live Wide/Narrow visual correction and obtain explicit user live visual approval before changing or adding any UI test or fixture; then add focused buffer/geometry tests with metadata, groups, focus, progress, images, and watched states.
 
 ### D6 — Scope and stacking
-Do not change non-hero two-column policies, #640, Audiobookshelf, or Emby homevideos feed-view work. Stack on PR #606's `feat/migrate-tui-to-tuirealm` branch, after accepted #634/#637, the canonical foundation, and Feeds Wide prerequisite. Keep independently reversible and enforce ≤800 lines for changed source files.
+Do not change non-hero two-column policies or Emby homevideos feed-view work. The Music/Audiobookshelf canonical slice is out of scope; standalone #640 is superseded. The Emby homevideos feed view (#634/#637) is an out-of-scope boundary note, not a prerequisite. Stack on PR #606's `feat/migrate-tui-to-tuirealm` branch, after the landed canonical foundation and the accepted #623 Feeds Wide prerequisite. Keep independently reversible and enforce ≤800 lines for changed source files.
 
 ## Risks
 
