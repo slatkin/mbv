@@ -1,3 +1,5 @@
+> Status: complete (2026-09-01). Retained as a historical prerequisite ahead of the canonical media-list slices. User live visual acceptance already occurred (see the Acceptance note in `tasks.md`). The deferred two-space list-row indent is owned by the canonical Home/Feeds source-of-truth slice, not this change.
+
 ## Why
 
 Issue #623 reports three defects in the **Feeds Service / Feeds tab Wide panel** (`render_feeds_content`), not the Emby homevideos feed view. At the Wide breakpoint the panel becomes a malformed two-column list, lacks the established rail surface treatment, and renders selected rows incorrectly.

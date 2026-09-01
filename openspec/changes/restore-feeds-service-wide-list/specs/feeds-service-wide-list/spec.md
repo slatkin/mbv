@@ -9,7 +9,7 @@ The Feeds Service/tab Wide panel MUST render one full-width selectable row per F
 - **THEN** every visible FeedEntry occupies one row spanning the list width and no second-column cell is emitted
 
 ### Requirement: Wide rail has established semantic framing
-The Wide Feeds Service right rail MUST paint the existing semantic surface/backdrop and border treatment used by the Hero-on-left list panel. The treatment MUST be applied by the arrangement/render boundary, not by arbitrary screen colors.
+The Wide Feeds Service right rail MUST paint the existing semantic surface/backdrop and border treatment used by the Hero-on-left list panel. The treatment MUST be applied by the arrangement/render boundary, not by arbitrary screen colors. Its semantic border/background MUST NOT overwrite the first visible heading or the final visible FeedEntry/marker at the 82-column threshold or a larger Wide width.
 
 #### Scenario: framed rail
 - **GIVEN** a Wide Feeds Service panel with visible entries
@@ -23,6 +23,12 @@ A selected Feeds Service row MUST paint its title exactly once, with its selecte
 - **GIVEN** a metadata-bearing selected FeedEntry at the Wide threshold
 - **WHEN** the row is rendered
 - **THEN** its title appears once, its selected background is contiguous across the row, and each marker is aligned within that row
+
+#### Scenario: framing preserves edge content at Wide widths
+- **GIVEN** a metadata-bearing Feeds Service list whose first visible row is a heading and whose final visible row is a state-bearing FeedEntry/marker
+- **WHEN** the buffer is rendered at 82 columns and at a larger Wide width
+- **THEN** the first heading remains readable and the final visible FeedEntry/marker retains its semantic background and marker
+- **AND** the semantic border/background cells do not overwrite either content row
 
 ### Requirement: Narrow behavior is preserved
 The change MUST preserve existing Narrow Feeds Service output and geometry. Any Narrow change requires a failing regression test demonstrating necessity.
@@ -38,4 +44,4 @@ Automated coverage MUST exercise selected, played, and active states with metada
 #### Scenario: state-bearing threshold matrix
 - **GIVEN** representative metadata-bearing FeedEntries in selected, played, and active states
 - **WHEN** rendered at 82 columns and a larger Wide width
-- **THEN** tests verify one-column placement, semantic framing, title count, and marker alignment
+- **THEN** tests verify one-column placement, semantic framing, title count, marker alignment, and preservation of the first visible heading and final visible FeedEntry/marker from semantic border/background overwrite

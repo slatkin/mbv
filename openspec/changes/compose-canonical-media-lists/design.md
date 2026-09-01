@@ -2,7 +2,7 @@
 
 See `proposal.md` for motivation. PR #606 is open from `feat/migrate-tui-to-tuirealm` and remains blocked by issue #641. This change is the non-implementation architecture and delivery umbrella: it defines the final contract, names the implementation slices, and closes only after every slice has landed on the feature branch. It does not add destination code itself.
 
-The repository already has destination-sized TuiRealm `AppComponent`s, typed `Msg`/`UserEvent` boundaries, central keyboard routing, a shared PillBar painter, Hero-on-left arrangement primitives, and a render-component substrate. The Hero-on-left foundation is not yet universal: issue #640 identified Audiobookshelf Podcast (and the related Books surface) as broken. The standalone #640 implementation is superseded; its implementation must be reverted and the required Books/Podcasts repairs are absorbed into the canonical Music/Audiobookshelf slice without bespoke exceptions.
+The repository already has destination-sized TuiRealm `AppComponent`s, typed `Msg`/`UserEvent` boundaries, central keyboard routing, a shared PillBar painter, Hero-on-left arrangement primitives, and a render-component substrate. The Hero-on-left foundation is not yet universal: Audiobookshelf Podcast (and the related Books surface) is broken. The superseded standalone Audiobookshelf implementation must be reverted; the required Books/Podcasts repairs are absorbed into the canonical Music/Audiobookshelf slice without bespoke exceptions.
 
 Current list state and geometry are split among `BrowserComponent`, `HomeComponent`, `TvWorkspaceComponent`, `MusicWorkspaceComponent`, Audiobookshelf components, `FeedsComponent`, and `QueueComponent`. Generic Emby and TV already share the most reliable existing fixed-row painter path. The new foundation re-homes that working painter behavior rather than rewriting it.
 
@@ -146,7 +146,7 @@ Parent-owned pills, workspace children, Queue scope buttons, and overlays keep t
 
 ### D7 — Arrangements place; child geometry stays local
 
-The shared Hero-on-left decision and arrangement primitives produce left workspace, pills, and list rectangles. This foundation is partly aspirational until independent issue #640 makes Audiobookshelf Podcast use it. Slice 3 starts only after that fix lands.
+The shared Hero-on-left decision and arrangement primitives produce left workspace, pills, and list rectangles. Slice 3 owns the Audiobookshelf Books/Podcasts arrangement and geometry repairs required for canonical composition, without a standalone prerequisite or bespoke exception.
 
 The parent passes only the list rectangle to the active child. The child view delegates pixels to render-component functions and stores visible target rectangles, selected ordinary/replacement parent geometry, viewport facts, and optional explicit Inline child targets. The parent does not recompute row coordinates.
 
@@ -168,7 +168,7 @@ Before implementation slices begin:
 
 - `restore-feed-group-inline-expansion` is narrowed to the #634/#637 Narrow Feed defects and lands independently. It removes its conflicting Wide expansion. Slice 2 later replaces that now-green Narrow implementation without taking ownership of the bug-fix change's acceptance criteria.
 - `restore-feeds-service-wide-list` independently corrects issue #623 in the Feeds Service/tab Wide panel (one column, rail framing, and selected-row geometry) before slice 2. It does not touch the Emby homevideos feed view fixed by #634/#637.
-- Do not sequence a standalone #640 repair before slice 3. Slice 3 owns Audiobookshelf Books and Podcasts together, including non-list arrangement/geometry defects required for canonical composition, and repairs them without bespoke exceptions.
+- Slice 3 owns Audiobookshelf Books and Podcasts together, including non-list arrangement/geometry defects required for canonical composition, and repairs them without bespoke exceptions; no standalone prerequisite is sequenced.
 - `restore-mouse-support` records D6's parent-gesture/child-hit contract and removes overlapping canonical list row-hit tasks before slice 1 begins.
 
 ### D11 — Verification combines focused automation and explicit manual evidence
@@ -222,12 +222,12 @@ No bespoke exception is planned. Any discovered exception requires an umbrella d
 - **[Mouse work collides with Queue/list migration]** -> Record D6 in both umbrella and `restore-mouse-support`; make canonical list row hits slice-owned.
 - **[The abstraction becomes a callback framework]** -> Hold the model to prepared data plus opaque targets and require an umbrella update for callbacks.
 - **[A slice crosses the file cap]** -> Split named near-limit files before or with wiring and run the gate in every slice.
-- **[Superseded #640 implementation remains present]** -> Revert that implementation and absorb the required Audiobookshelf Books/Podcasts repairs in slice 3; require user live visual approval before changing or adding regression tests.
+- **[Superseded standalone Audiobookshelf implementation remains present]** -> Revert that implementation and absorb the required Audiobookshelf Books/Podcasts repairs in slice 3; require user live visual approval before changing or adding regression tests.
 
 ## Migration Plan
 
 1. Land the revised umbrella planning artifacts; keep PR #606 blocked.
-2. Narrow and land #634/#637 independently, land #640 independently, reconcile `restore-mouse-support` with D6, and land `restore-feeds-service-wide-list` before the Home/Feeds slice.
+2. Narrow and land #634/#637 independently, reconcile `restore-mouse-support` with D6, and land `restore-feeds-service-wide-list` before the Home/Feeds slice. Audiobookshelf Books/Podcasts repairs belong to the canonical Music/Audiobookshelf slice rather than a standalone prerequisite.
 3. Create and approve all five slice OpenSpec changes, each naming its branch dependency, exact destination inventory, file splits, automated evidence, and manual checks.
 4. Land slice 1 through slice 4 as separate PRs against `feat/migrate-tui-to-tuirealm`; do not cross-squash slices.
 5. Land slice 5 cleanup/reconciliation after all destination slices are green.
