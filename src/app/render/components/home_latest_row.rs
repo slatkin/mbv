@@ -376,7 +376,8 @@ pub(in crate::app::render) fn render_home_latest_detail_content(
     Some(super::home_hero::HomeImagePaint::AudiobookshelfCover {
         area: Rect {
             x: area.x,
-            y: area.y + area.height - image_height,
+            // Wide hero-on-left reserves artwork above metadata.
+            y: area.y,
             width: img_w,
             height: image_height,
         },
@@ -507,6 +508,29 @@ mod tests {
             lines[2..].iter().all(|l| !l.contains("0:00")),
             "no fabricated duration: {out:?}"
         );
+    }
+
+    #[test]
+    fn detail_places_podcast_artwork_at_hero_top() {
+        let item = abs_item("top", None, None);
+        let backend = TestBackend::new(80, 30);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut paint = None;
+        term.draw(|f| {
+            paint = render_home_latest_detail_content(f, Rect::new(3, 4, 40, 20), &item, true, 0);
+        })
+        .unwrap();
+        match paint {
+            Some(
+                crate::app::render::components::home_hero::HomeImagePaint::AudiobookshelfCover {
+                    area,
+                    ..
+                },
+            ) => {
+                assert_eq!(area.y, 4);
+            }
+            _ => panic!("expected podcast artwork paint"),
+        }
     }
 
     /// Long ABS descriptions are capped at 600 display columns with an
