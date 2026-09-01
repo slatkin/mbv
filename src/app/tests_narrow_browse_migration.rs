@@ -532,22 +532,56 @@ fn feed_snapshot(width: u16, height: u16) -> String {
     draw(&mut model, &mut term)
 }
 
+fn selected_feed_row_region(output: &str, title: &str) -> String {
+    let lines: Vec<_> = output.lines().collect();
+    let row = lines
+        .iter()
+        .position(|line| line.contains('▎') && line.contains(title))
+        .unwrap_or_else(|| panic!("selected feed row must be rendered: {output}"));
+    lines[row..row + 1].join("\n")
+}
+
+fn selected_feed_detail_region(output: &str) -> String {
+    let lines: Vec<_> = output.lines().collect();
+    let row = lines
+        .iter()
+        .position(|line| line.contains("Family") && line.contains("1h"))
+        .expect("selected feed detail must be rendered");
+    let start = row.saturating_sub(2);
+    let end = (row + 8).min(lines.len());
+    lines[start..end].join("\n")
+}
+
 #[test]
 fn feed_home_video_group_narrow_snapshot_matches_fbc6888e_baseline() {
     let output = feed_snapshot(60, 20);
-    assert!(output.contains("Family"));
-    assert!(output.contains("1h"));
-    assert!(output.contains("Distinctive wrapping"));
-    assert!(output.contains("▁"));
+    let region = selected_feed_detail_region(&output);
+    assert_eq!(
+        region
+            .lines()
+            .filter(|line| line.contains("Video Two") && !line.contains('▁') && !line.contains('▔'))
+            .count(),
+        1
+    );
+    assert!(region.contains("Family") && region.contains("1h"));
+    assert!(region.contains("Distinctive wrapping"));
+    assert_eq!(region.lines().filter(|line| line.contains('▁')).count(), 1);
+    assert_eq!(region.lines().filter(|line| line.contains('▔')).count(), 1);
 }
 
 #[test]
 fn feed_home_video_group_wide_snapshot_matches_fbc6888e_baseline() {
     let output = feed_snapshot(140, 40);
-    assert!(output.contains("Family"));
-    assert!(output.contains("1h"));
-    assert!(output.contains("Distinctive wrapping"));
-    assert!(output.contains("▔"));
+    let region = selected_feed_detail_region(&output);
+    assert_eq!(
+        region
+            .lines()
+            .filter(|line| line.contains("Video Two") && !line.contains('▁') && !line.contains('▔'))
+            .count(),
+        1
+    );
+    assert!(region.contains("Family") && region.contains("1h"));
+    assert_eq!(region.lines().filter(|line| line.contains('▔')).count(), 2);
 }
 
 #[test]
@@ -564,8 +598,10 @@ fn feed_home_video_group_metadata_free_selected_row_stays_ordinary() {
     model.sync_mounted_surfaces();
     let mut term = Terminal::new(TestBackend::new(60, 20)).unwrap();
     let output = draw(&mut model, &mut term);
-    assert_eq!(output.matches("Video Two").count(), 1);
-    assert_eq!(output.matches('▔').count(), 0);
+    let region = selected_feed_row_region(&output, "Video One");
+    assert_eq!(region.matches("Video One").count(), 1);
+    assert!(region.contains('▎'));
+    assert!(!region.contains('▁') && !region.contains('▔'));
 }
 
 #[test]
@@ -576,7 +612,10 @@ fn feed_home_video_group_paints_each_row_once() {
     ] {
         let output = feed_snapshot(width, height);
         let _ = baseline;
-        assert!(output.contains("Video Two"), "feed {width}x{height} keeps unselected row visible");
+        let rows = output.lines().filter(|line| {
+            line.contains("Video Two") && !line.contains('▁') && !line.contains('▔')
+        });
+        assert_eq!(rows.count(), 1, "feed {width}x{height} paints the row once");
     }
 }
 
