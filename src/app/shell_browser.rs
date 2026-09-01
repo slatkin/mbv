@@ -56,8 +56,7 @@ impl Model {
             // content derives from the shell's own tab state (`lib_idx` just
             // guards that this is an EmbyLibrary tab), never a `BrowseLevel`
             // cursor re-read.
-            ShellRequest::BrowserContextMenu { item }
-            | ShellRequest::EmbyLibraryContextMenu { item } => self.app.open_context_menu_for(item),
+            ShellRequest::BrowserContextMenu { item } => self.app.open_context_menu_for(item),
             // Ctrl+S shuffles the supplied item with the preserved
             // `shuffle_play` tail: a folder item shuffles the folder itself;
             // a non-folder item shuffles the current browse level's parent
