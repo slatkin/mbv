@@ -5,9 +5,7 @@ use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::hero::{self, HERO_BLOCK_EXTRA_ROWS};
 use crate::app::render::components::home_hero;
-use crate::app::render::components::home_hero::{
-    HeroData, HomeImagePaint, KeepWatchingHeroLayout, WIDE_OVERVIEW_PAD,
-};
+use crate::app::render::components::home_hero::{HeroData, HomeImagePaint, KeepWatchingHeroLayout};
 use crate::app::render::components::home_list_rows::{render_home_list_rows, DisplayRow};
 use crate::app::render::components::home_pills::{home_pill_labels, render_home_pills};
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
@@ -245,7 +243,7 @@ pub(in crate::app) fn render_home_content(
                     // The recessed overview box applies the shared pane
                     // padding twice (panel and content), so measure against
                     // its actual text width.
-                    let ov_w = text_w.saturating_sub(WIDE_OVERVIEW_PAD * 4);
+                    let ov_w = text_w;
                     let text =
                         crate::app::render::components::home_latest_row::home_latest_detail_text(
                             &item, text_w, ov_w,

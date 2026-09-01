@@ -1,4 +1,6 @@
-use super::hero::{paint_hero_content, HeroContent, HeroImage, HeroLine};
+use super::hero::{
+    paint_hero_content, render_home_hero_meta_block, HeroContent, HeroImage, HeroLine,
+};
 use crate::app::palette;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -50,4 +52,33 @@ fn inline_hero_image_has_shared_top_right_and_gutter_geometry() {
         " ",
         "text did not resume full width"
     );
+}
+
+#[test]
+fn hero_on_left_overview_reflows_at_recessed_content_width() {
+    let backend = TestBackend::new(12, 8);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| {
+            render_home_hero_meta_block(
+                frame,
+                Rect::new(0, 0, 12, 8),
+                Rect::new(0, 0, 12, 8),
+                &[],
+                "",
+                None,
+                vec![],
+                &[("ABC DEF GHI JKL".to_string(), false)],
+                2,
+                true,
+            );
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let rendered: String = (2..8)
+        .flat_map(|y| (0..12).map(move |x| buffer[(x, y)].symbol()))
+        .collect();
+    for word in ["ABC", "DEF", "GHI", "JKL"] {
+        assert!(rendered.contains(word), "missing {word} in {rendered:?}");
+    }
 }

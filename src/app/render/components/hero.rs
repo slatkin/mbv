@@ -596,7 +596,15 @@ pub(in crate::app::render) fn render_home_hero_meta_block(
         };
         // hero-on-left: paint recessed box behind overview.
         let recessed = if overview_pad > 0 {
-            let ov_height = overview_lines.len().min((max_y - row) as usize) as u16 + 2; // top and bottom padding rows
+            // Measure against the recessed box's final content width. The input
+            // lines were prepared upstream, but this is the authoritative paint
+            // rect and may be narrower after both padding insets.
+            let content_width = area.width.saturating_sub(overview_pad * 4).max(1) as usize;
+            let wrapped_rows: usize = overview_lines
+                .iter()
+                .map(|(line, _)| wrap_overview_lines(line, |_| content_width).len())
+                .sum();
+            let ov_height = wrapped_rows.min((max_y - row) as usize) as u16 + 2; // top and bottom padding rows
             let ov_area = Rect {
                 x: area.x,
                 y: row.saturating_sub(1), // start 1 row earlier for top padding
@@ -615,9 +623,6 @@ pub(in crate::app::render) fn render_home_hero_meta_block(
             None
         };
         for (line, wide) in overview_lines {
-            if row >= max_y {
-                break;
-            }
             let base = if *wide { wide_area } else { area };
             let text_r = match &recessed {
                 Some((_, content)) => Rect {
@@ -633,14 +638,24 @@ pub(in crate::app::render) fn render_home_hero_meta_block(
                     height: 1,
                 },
             };
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    line.clone(),
-                    Style::default().fg(ov_color),
-                ))),
-                text_r,
-            );
-            row += 1;
+            // Reflow at the final painted rect; upstream wrapping can be wider
+            // than this recessed content area.
+            for wrapped in wrap_overview_lines(line, |_| text_r.width.max(1) as usize) {
+                if row >= max_y {
+                    break;
+                }
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        wrapped,
+                        Style::default().fg(ov_color),
+                    ))),
+                    Rect { y: row, ..text_r },
+                );
+                row += 1;
+            }
+            if row >= max_y {
+                break;
+            }
         }
     }
 }
