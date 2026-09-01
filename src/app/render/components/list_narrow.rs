@@ -322,7 +322,7 @@ pub(in crate::app) fn render_wide_feed_layer(
                 1
             };
             if selected_row
-                && matches!(&extras.inline_hero, Some(NarrowInlineHero::Movie { layout, .. }) if layout.content_rows_with_title(0) > 0)
+                && matches!(&extras.inline_hero, Some(NarrowInlineHero::Movie { layout, .. }) if layout.has_detail_text())
             {
                 selected_detail_shell(
                     f,
@@ -482,7 +482,7 @@ fn render_feed_group_picker_content(
         }
         let h = if idx == selected { selected_h } else { 1 };
         if idx != selected
-            || !matches!(&extras.inline_hero, Some(NarrowInlineHero::Movie { layout, .. }) if layout.content_rows_with_title(0) > 0)
+            || !matches!(&extras.inline_hero, Some(NarrowInlineHero::Movie { layout, .. }) if layout.has_detail_text())
         {
             render_home_video_item(
                 f,

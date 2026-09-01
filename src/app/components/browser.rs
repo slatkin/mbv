@@ -282,6 +282,14 @@ impl BrowserComponent {
         }
 
         hero_on_left_list_panel_border(f, list_panel, self.focused);
+        if self.narrow_extras.feed_items.is_some() && right_panel.height > 10 {
+            crate::app::render::render_wide_feed_layer(
+                f,
+                right_panel,
+                &self.narrow_extras,
+                &mut self.layout,
+            );
+        }
         final_scroll
     }
 
