@@ -89,7 +89,7 @@
 - [x] 7.2 Re-read `render/components/help.rs` `.` "Context menu" (Global) and
       `/` "Search library" (Library) lines — confirm they now read correctly
       for Music/TV. Adjust only if wrong.
-- [ ] 7.3 Verify: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
+- [x] 7.3 Verify: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
       `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`
       (`no-raw-fallback-variants`, `no-second-router-site` green),
       `rtk cargo fmt`, `rtk make check-code-file-lines` all pass.
