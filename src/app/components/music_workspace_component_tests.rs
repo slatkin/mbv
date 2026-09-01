@@ -481,6 +481,92 @@ fn ctrl_s_with_track_focus_does_not_shuffle() {
 }
 
 #[test]
+fn dot_on_album_emits_library_context_menu() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+    assert!(matches!(
+        component.on(&Event::Keyboard(KeyEvent { code: Key::Char('.'), modifiers: KeyModifiers::NONE })),
+        Some(Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item }))
+            if item.name == "First Album"
+    ));
+}
+
+#[test]
+fn dot_with_track_focus_emits_track_context_menu() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+    component.set_inline_track_focus_enabled(true);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Char('.'),
+            modifiers: KeyModifiers::NONE
+        })),
+        Some(Msg::Shell(ShellRequest::MusicTrackContextMenu))
+    );
+}
+
+#[test]
+fn slash_on_album_emits_open_inline_search() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+    assert_eq!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Char('/'),
+            modifiers: KeyModifiers::NONE
+        })),
+        Some(Msg::Shell(ShellRequest::OpenInlineSearch))
+    );
+}
+
+#[test]
+fn slash_with_track_focus_is_unclaimed() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(None));
+    component.set_inline_track_focus_enabled(true);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Char('/'),
+            modifiers: KeyModifiers::NONE
+        })),
+        None
+    );
+}
+
+#[test]
+fn dot_empty_list_is_unclaimed() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(Vec::new(), 0, 0),
+        None,
+        "Artist".into(),
+        Vec::new(),
+        0,
+        Vec::new(),
+        Vec::new(),
+        true,
+        true,
+        None,
+        false,
+        None,
+    ));
+    assert_eq!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Char('.'),
+            modifiers: KeyModifiers::NONE
+        })),
+        None
+    );
+}
+
+#[test]
 fn ctrl_p_empty_list_is_unclaimed() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_content(MusicWideRenderCtx::new(

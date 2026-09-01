@@ -353,6 +353,80 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
 }
 
 #[test]
+fn dot_emits_library_context_menu() {
+    let mut component = TvWorkspaceComponent::new();
+    let series = make_item("Series", "Series");
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series], 0, 0),
+        None,
+        None,
+        0,
+        None,
+        true,
+        false,
+    ));
+    assert!(matches!(
+        component.on(&Event::Keyboard(KeyEvent { code: Key::Char('.'), modifiers: KeyModifiers::NONE })),
+        Some(Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item })) if item.name == "Series"
+    ));
+}
+
+#[test]
+fn slash_emits_open_inline_search() {
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
+        None,
+        None,
+        0,
+        None,
+        true,
+        false,
+    ));
+    assert_eq!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Char('/'),
+            modifiers: KeyModifiers::NONE
+        })),
+        Some(Msg::Shell(ShellRequest::OpenInlineSearch))
+    );
+}
+
+#[test]
+fn dot_with_episode_focus_targets_series() {
+    let mut series = make_item("Series", "Series");
+    series.id = "series-id".into();
+    let mut season = make_item("Season", "Season");
+    season.id = "season-id".into();
+    let mut episode = make_item("Episode", "Episode");
+    episode.id = "episode-id".into();
+    episode.series_id = series.id.clone();
+    let detail = crate::app::SeriesDetail {
+        seasons: vec![season],
+        episodes: [("season-id".into(), vec![episode])].into_iter().collect(),
+    };
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        Some(series),
+        Some(detail),
+        0,
+        None,
+        true,
+        false,
+    ));
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Right,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        component.on(&Event::Keyboard(KeyEvent { code: Key::Char('.'), modifiers: KeyModifiers::NONE })),
+        Some(Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item }))
+            if item.id == "series-id" && item.item_type == "Series"
+    ));
+}
+
+#[test]
 fn ctrl_r_emits_library_rescan() {
     let mut component = TvWorkspaceComponent::new();
     component.set_content(TvWideRenderCtx::new(

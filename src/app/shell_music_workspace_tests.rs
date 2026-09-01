@@ -77,6 +77,49 @@ fn music_mouse_album_click_emits_and_shell_applies_cursor() {
     assert_eq!(model.app.libs[0].nav_stack[1].resting().cursor(), target);
 }
 #[test]
+fn shell_music_shortcuts_use_component_selection() {
+    let mut model = Model::new(make_music_group_app());
+    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+    model.sync_music_workspace();
+    let id = model
+        .music_workspace_id
+        .clone()
+        .expect("Music workspace mounted");
+    let key = |code| {
+        Event::Keyboard(KeyEvent {
+            code,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+    let message = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .on(&key(Key::Char('.')));
+    let Some(Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item })) = message else {
+        panic!("Music '.' must emit a library context-menu request");
+    };
+    assert_eq!(item.item_type, "MusicAlbum");
+    let (mut music_resize, mut tv_resize) = (false, false);
+    model.handle_terminal_message(
+        Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item }),
+        Some(&id),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    assert!(matches!(
+        model.app.pending_overlay,
+        Some(crate::app::types_overlay::OverlayRequest::ContextMenu(_))
+    ));
+    let message = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .on(&key(Key::Char('/')));
+    assert_eq!(message, Some(Msg::Shell(ShellRequest::OpenInlineSearch)));
+}
+
+#[test]
 fn shell_mounts_and_syncs_music_workspace() {
     let mut model = Model::new(make_music_group_app());
     // The mounted browser is in the post-hero right rail, whose width—not
