@@ -93,6 +93,6 @@
       `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`
       (`no-raw-fallback-variants`, `no-second-router-site` green),
       `rtk cargo fmt`, `rtk make check-code-file-lines` all pass.
-- [ ] 7.4 Sync the `service-browse-dispatch` delta into
+- [x] 7.4 Sync the `service-browse-dispatch` delta into
       `openspec/specs/service-browse-dispatch/spec.md` and archive the
       change. Comment the outcome on #636 and close it.
