@@ -246,6 +246,27 @@ fn podcast_wide_rendering_covers_threshold_and_larger_width() {
 }
 
 #[test]
+fn podcast_wide_layout_stays_narrow_below_threshold() {
+    let width = crate::app::TWO_COLUMN_THRESHOLD - 1;
+    let (model, terminal) = render_podcast_shell(audiobookshelf_app(), width, 20, true);
+    let layout = &model.app.layout.main;
+
+    assert_eq!(terminal.backend().buffer().area().width, width);
+    assert!(!layout.is_wide_podcast_active());
+    assert_eq!(layout.audiobookshelf_podcast_right_area, Rect::default());
+    assert!(
+        layout.hero_area.width > 0,
+        "81-column render must keep the narrow hero"
+    );
+    assert_eq!(layout.inline_hero_area, layout.hero_area);
+    assert_eq!(
+        terminal.backend().buffer()[(layout.hero_area.x, layout.hero_area.y)].symbol(),
+        "▁",
+        "below-threshold render must paint the narrow hero shell"
+    );
+}
+
+#[test]
 fn podcast_wide_minimum_height_falls_back_to_narrow_painting() {
     let (mut model, terminal) = render_podcast_shell(audiobookshelf_app(), 82, 6, true);
     let component_id = model
