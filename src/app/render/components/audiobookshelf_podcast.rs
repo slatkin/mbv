@@ -275,7 +275,7 @@ fn render_narrow_podcast(
     render_show_rows(
         frame,
         list_area,
-        None,
+        Some(list_area),
         focused,
         state,
         geometry.columns,
@@ -493,27 +493,6 @@ fn render_show_rows(
                                     );
                                     geometry.selected_panel_rect = Some(panel);
                                 }
-                                let x = area.x
-                                    + column as u16
-                                        * (cell_width as u16
-                                            + library_column_width::LIBRARY_COLUMN_GAP);
-                                let width = if column + 1 < rows[source_row].len() {
-                                    cell_width as u16 + library_column_width::LIBRARY_COLUMN_GAP
-                                } else {
-                                    cell_width as u16
-                                };
-                                frame.render_widget(
-                                    Block::default().style(
-                                        Style::default()
-                                            .bg(palette::resolve_surface_focus(focused)),
-                                    ),
-                                    ratatui::layout::Rect {
-                                        x,
-                                        y: area.y + screen_row as u16,
-                                        width,
-                                        height: 1,
-                                    },
-                                );
                             }
                             let marker = if selected && focused { "> " } else { "  " };
                             let title_width = cell_width.saturating_sub(marker.width());

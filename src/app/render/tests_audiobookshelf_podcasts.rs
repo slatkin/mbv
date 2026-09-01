@@ -222,6 +222,14 @@ fn assert_wide_podcast_render(width: u16) {
     let selected_panel = selected_panel.expect("wide selected show panel must be painted");
     assert_eq!(selected_panel.x, pill_bar_area.x);
     assert_eq!(selected_panel.width, pill_bar_area.width);
+    assert_eq!(selected_panel.right(), pill_bar_area.right());
+    for x in [selected_panel.x, selected_panel.right() - 1] {
+        assert_eq!(
+            buffer[(x, selected_panel.y)].style().bg,
+            Some(palette::resolve_surface_focus(true)),
+            "selected panel edge must use the focused surface"
+        );
+    }
     assert!(selected_panel.x <= show_row.x);
     assert!(show_row.x + 2 <= selected_panel.right());
     assert_eq!(buffer[(show_row.x, show_row.y)].symbol(), ">");
