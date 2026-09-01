@@ -16,7 +16,7 @@ The explicit revert/absorption rule prevents this cancelled change from being im
 
 ## Historical Capability References
 
-The retained spec files record the capabilities that the cancelled plan had considered:
+The former spec paths identify the capabilities that the cancelled plan had considered; their normative delta files have been removed:
 
 - `right-panel-arrangements` — the historical Podcast Wide placement and rail presentation.
 - `ui-design-system` — the historical shared geometry, semantic framing, and Narrow-preservation considerations.
