@@ -114,7 +114,7 @@ pub(in crate::app::render) fn render_home_list_rows(
                         selected_item_rect = Some(row_rect);
                     }
 
-                    if selected_row && focused {
+                    if selected_row {
                         f.render_widget(
                             Block::default().style(Style::default().bg(selection_bg)),
                             Rect {
@@ -124,6 +124,8 @@ pub(in crate::app::render) fn render_home_list_rows(
                                 height: 1,
                             },
                         );
+                    }
+                    if selected_row && focused {
                         let gutter_x = if list_area.x > row_x {
                             row_x
                         } else {

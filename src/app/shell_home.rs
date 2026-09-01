@@ -224,6 +224,12 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
+        let focused = !matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
+        if let Some(comp) = self.application.get_component_mut(&ComponentId::Home) {
+            if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
+                home.set_focused(focused);
+            }
+        }
         self.application.view(&ComponentId::Home, f, area);
         let image_paint = self
             .application

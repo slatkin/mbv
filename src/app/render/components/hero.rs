@@ -280,7 +280,7 @@ pub(in crate::app::render) fn inline_hero_text_width(
     image_height: u16,
     row_from_top: u16,
 ) -> u16 {
-    if image_height > 0 && row_from_top <= image_height {
+    if image_height > 0 && row_from_top < image_height {
         area_width.saturating_sub(image_width.saturating_add(1))
     } else {
         area_width
