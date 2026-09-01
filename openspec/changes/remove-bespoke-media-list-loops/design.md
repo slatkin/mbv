@@ -25,11 +25,12 @@ here.
    before deletion. Track test and documentation references separately; do not
    treat their presence as production use.
 3. Delete only candidates whose production gate passes. Re-run the inventory
-   after each deletion. After explicit user live visual approval, update stale
-   UI tests and docs, then run a final whole-tree zero-reference check.
-4. Reconcile ADR 0022, `docs/architecture/interactive-surface-ledger.md`,
+   after each deletion. Obtain explicit user live visual approval at the
+   required breakpoints before changing any UI tests or documentation.
+4. After approval, reconcile ADR 0022, `docs/architecture/interactive-surface-ledger.md`,
    `CONTEXT.md`, and `.agents/skills/mbv-frontend/SKILL.md` to final
-   `WideMediaList`/`InlineMediaBrowser` ownership and terminology. Preserve
+   `WideMediaList`/`InlineMediaBrowser` ownership and terminology. Then update
+   stale UI tests/docs and run a final whole-tree zero-reference check. Preserve
    canonical controls, the non-hero two-column arrangement, Queue fixed rows,
    and the Feeds Service/homevideos distinction.
 
