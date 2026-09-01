@@ -222,7 +222,9 @@ pub(in crate::app) fn render_feeds_content(
     } else {
         (Rect::default(), list_area, 0)
     };
-    let show_title = library_column_count(post_hero_area.width) > 1;
+    // Wide Feeds is a single-column right rail; the title remains in the row
+    // because the hero is a separate detail pane, not a second row title.
+    let show_title = true;
     let hero_rows = if wide {
         feed_hero_content_rows(show_title)
             .saturating_add(HERO_BLOCK_EXTRA_ROWS)
@@ -263,8 +265,13 @@ pub(in crate::app) fn render_feeds_content(
         return;
     }
     // The selector preserves pane width, so pack rows only after it yields
-    // the final right-list area in wide presentation.
-    let cols = library_column_count(list_area.width);
+    // the final right-list area in wide presentation. Feeds' Wide rail is
+    // intentionally one column; other catalog surfaces retain their policy.
+    let cols = if wide {
+        1
+    } else {
+        library_column_count(list_area.width)
+    };
     let packed = pack_feed_rows(&display_rows, cols);
     let hero_rows = if wide {
         0
@@ -298,6 +305,11 @@ pub(in crate::app) fn render_feeds_content(
     *model.scroll = scroll;
     let cell_w = library_cell_width(list_area, cols);
     let row_w = list_area.width.saturating_sub(1);
+    if wide {
+        // Match Music/TV's semantic recessed right-rail treatment. Paint the
+        // surface before rows so every row, gap, and empty cell is covered.
+        hero_left::hero_on_left_list_panel_border(f, list_area, focused);
+    }
     let visible_count = total_display.saturating_sub(scroll).min(visible);
     let mut row_map: Vec<Option<usize>> = Vec::with_capacity(list_area.height as usize);
     let entries = model.visible_entries;

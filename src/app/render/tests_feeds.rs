@@ -46,10 +46,10 @@ fn terminal_for(component: &mut FeedsComponent, width: u16, height: u16) -> Term
 #[test]
 fn wide_feeds_use_a_left_detail_and_right_entry_workspace() {
     let mut component = feed_component();
-    terminal_for(&mut component, 140, 30);
+    let terminal = terminal_for(&mut component, 82, 30);
     let layout = component.layout();
 
-    assert!(layout.hero_area.width < 140, "hero={:?}", layout.hero_area);
+    assert!(layout.hero_area.width < 82, "hero={:?}", layout.hero_area);
     assert!(
         layout.left_area.x > layout.hero_area.x,
         "hero={:?} list={:?}",
@@ -57,6 +57,27 @@ fn wide_feeds_use_a_left_detail_and_right_entry_workspace() {
         layout.left_area
     );
     assert!(!layout.selector_tabs.is_empty());
+    assert!(
+        layout.left_item_rows.iter().all(|row| row.len() <= 1),
+        "Wide Feeds must pack one entry per row: {:?}",
+        layout.left_item_rows
+    );
+    let buffer = terminal.backend().buffer();
+    let row = layout.left_area.y
+        + layout
+            .left_row_map
+            .iter()
+            .position(|item| item.is_some())
+            .expect("selected entry row") as u16;
+    assert_ne!(
+        buffer[(layout.left_area.x, row)].bg,
+        ratatui::style::Color::Reset,
+        "Wide Feeds rail must paint its semantic surface"
+    );
+    let line = (layout.left_area.x..layout.left_area.right())
+        .map(|x| buffer[(x, row)].symbol())
+        .collect::<String>();
+    assert_eq!(line.matches("Entry One").count(), 1, "row={line:?}");
 }
 
 #[test]
