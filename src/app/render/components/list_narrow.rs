@@ -60,6 +60,9 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     };
 
     let mut inline_hero_rows: u16 = match &extras.inline_hero {
+        Some(NarrowInlineHero::Movie { layout: banner, .. }) if extras.feed_items.is_some() => {
+            extras.feed_selected_height.max(1)
+        }
         Some(NarrowInlineHero::Movie { layout: banner, .. }) => {
             banner.content_rows_with_title(HERO_TITLE_ROWS.saturating_mul((cols > 1) as u16)) as u16
                 + HERO_BLOCK_EXTRA_ROWS
@@ -364,6 +367,22 @@ impl App {
             None
         };
 
+        let feed_selected_height = if feed_group_view {
+            match &inline_hero {
+                Some(NarrowInlineHero::Movie { layout: banner, .. }) => {
+                    let rows = banner.content_rows();
+                    if rows == 0 {
+                        0
+                    } else {
+                        rows as u16 + 5
+                    }
+                }
+                _ => 0,
+            }
+        } else {
+            0
+        };
+
         let hero_placeholder = inline_hero.is_none()
             && crate::app::render::arrangements::hero_left::shared_hero_presentation(
                 self.layout.main.left_area,
@@ -385,6 +404,7 @@ impl App {
             feed_groups,
             feed_group_cursor,
             feed_video_cursor,
+            feed_selected_height,
             inline_hero,
         }
     }
