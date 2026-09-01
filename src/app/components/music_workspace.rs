@@ -316,6 +316,14 @@ impl MusicWorkspaceComponent {
             {
                 Some(Msg::Shell(ShellRequest::EmbyLibraryRefresh))
             }
+            Key::Char('.') if self.track_cursor.is_none() => {
+                Some(Msg::Shell(ShellRequest::EmbyLibraryContextMenu {
+                    item: self.selected_item()?,
+                }))
+            }
+            Key::Char('/') if self.track_cursor.is_none() => {
+                Some(Msg::Shell(ShellRequest::OpenInlineSearch))
+            }
             // `[`/`]` at the album-list level cycle the App-owned group pill.
             // A focused inline track is a track-level context, so guard on
             // `track_cursor.is_none()`; the focus gate is the early return.
