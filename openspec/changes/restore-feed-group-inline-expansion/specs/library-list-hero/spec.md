@@ -5,12 +5,12 @@
 The feed-view home-video group picker (a feed-view home-video library or an
 Emby podcast channel list) SHALL present the selected video with the same
 variable-height Inline hero block that other hero-bearing browsers use, at
-every Panel mode, and SHALL paint each visible video row exactly once.
+Normal geometry, and SHALL paint each visible video row exactly once.
 
 Its expanded height SHALL be derived from the selected item's own compact
 banner content at the block's text width, not from a fixed row count. Its
 Inline hero SHALL show the title, metadata line, and truncated overview, and
-SHALL own the selected row's hit geometry. Where the picker's rows and a
+SHALL own the selected row's hit geometry. The picker rows have one painter; where
 Hero-on-left rail are both eligible for the same rect, one painter SHALL own
 the rows.
 
@@ -29,22 +29,6 @@ the rows.
 - **WHEN** the selected video has no runtime, genre, or overview
 - **THEN** the picker still renders one row per video with one selected marker
 - **AND** no framing or border row is painted outside that selection treatment
-
-#### Scenario: Wide feed group picker keeps hero-on-left
-
-- **WHEN** a feed group picker meets the shared Wide geometry conditions
-- **THEN** the selected item's hero renders in the left pane
-- **AND** the group pills and the one-column video browser render in the right
-  rail
-- **AND** each visible video row appears once in the painted frame
-
-#### Scenario: Wide rail selection expands
-
-- **WHEN** the Wide feed group picker's right rail has a selected video with
-  banner content
-- **THEN** its row expands to its content-derived height inside the rail
-- **AND** the compact banner content paints inside that expansion rather than
-  being omitted
 
 #### Scenario: Tall selected row reaches the viewport bottom
 

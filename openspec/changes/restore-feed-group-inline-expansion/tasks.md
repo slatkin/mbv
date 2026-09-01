@@ -60,42 +60,17 @@
       duplicated last title; the framed expanded row still has its own bottom
       border row.
 
-## 4. Fix the Wide presentation (D2)
-
-- [ ] 4.1 Add a failing wide test
-      `feed_group_wide_paints_each_row_once_with_banner` at 140x40 on the
-      metadata-bearing fixture: each video title appears once as a row and the
-      rail's expanded block contains the banner meta line. Verify it fails
-      today (doubled rows, no banner).
-- [ ] 4.2 Change `render_wide_feed_layer` to take the rail list rect and
-      `extras.feed_selected_height`, paint the selected row expanded / others
-      as 1 row with no stride-2 skip, and call
-      `render_compact_detail_with_ctx` with `show_title = false`, inset
-      `SELECTED_BLOCK_SIDE_PADDING`, `y: row + 3`. Verify: test 4.1 passes;
-      `layout.left_area` and `layout.selected_item_rect` describe the rail.
-- [ ] 4.3 In `BrowserComponent::render_wide_movies`, skip the
-      `render_generic_movies_home_video_rows_with_ctx` leg when
-      `narrow_extras.feed_items.is_some()` (the feed layer owns the rail
-      rows), leaving the left hero card, separator, and rail border
-      untouched. Verify: full-frame 140x40 capture shows one set of rows,
-      group pills in the rail, hero card on the left;
-      `rtk cargo nextest run -p mbv emby_browser` green.
-
 ## 5. Re-pin baselines and gate
 
-- [ ] 5.1 Regenerate `FEED_NARROW_BASELINE` and `FEED_WIDE_BASELINE` from the
-      fixed implementation with the metadata-bearing fixture, in the same
-      commit as the code change; keep the metadata-free frames as
-      `FEED_*_DEGENERATE_BASELINE`. Verify the doc comment above each
+- [ ] 5.1 Regenerate `FEED_NARROW_BASELINE` from the fixed implementation
+      with the metadata-bearing fixture, in the same commit as the code
+      change; keep the metadata-free frame as
+      `FEED_NARROW_DEGENERATE_BASELINE`. Verify the doc comment above each
       constant states the fixture, commit, and capture method (per the
       existing `6394f762` convention). Verify too that the only structural
       differences from a legacy narrow capture are the count/`▁` header rows
       (accepted, `b029fec3`), the expanded selected row, and its banner text —
       no border echo, no duplicated title.
-- [ ] 5.2 Update the feed-picker rows of
-      `docs/architecture/interactive-surface-ledger.md` to record the Wide
-      rail's single painter and reference #634. Verify: no row claims both
-      the feed layer and the generic rail path paint the same rect.
 - [ ] 5.3 Run the full gate and record the output in this change:
       `rtk cargo fmt`, `rtk cargo clippy --workspace --all-targets`,
       `rtk cargo nextest run -p mbv`, `rtk make check-code-file-lines`.

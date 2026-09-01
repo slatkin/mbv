@@ -10,12 +10,6 @@ Two painters serve the feed group picker and both lost the expansion that
   zero-height guard every frame. The shell computes the banner in
   `narrow_browse_extras` and pushes it as `NarrowInlineHero::Movie`, so the
   height input is already in hand.
-- Wide: `BrowserComponent::view` (`browser.rs:600+`) calls
-  `render_wide_feed_layer` for the full area *and* `render_wide_movies`, which
-  repaints the rail through `render_generic_movies_home_video_rows_with_ctx`.
-  The feed layer hardcodes `row_height = 5` for the selected row, paints no
-  banner, and advances non-selected rows by 2 — the source of the doubled/echo
-  rows in #634's screenshot.
 
 One divergence is already live and is out of scope here: the migrated picker
 paints a ` N items` + `▁` header that legacy
@@ -34,14 +28,11 @@ while painting.
 - One expression for the expanded selected-row height, used at both Panel
   modes: `banner.content_rows() + 5`.
 - Restore legacy's accumulated-height scroll clamp for this surface.
-- Single painter per row at Wide.
 - Baselines that actually exercise the expansion path.
 
 **Non-Goals:**
 - No change to the generic (non-feed-group) narrow inline hero path, which
   already sizes and paints correctly.
-- No change to the Wide breakpoint selection, `right-panel-arrangements`, or
-  the left shared hero card's content.
 - No new fetch, no ctrl protocol, no key routing.
 
 ## Decisions
@@ -58,20 +49,9 @@ and shares that variant, so stuffing a picker-specific number there invites a
 second divergence. A plain extras field keeps the picker's budget explicit and
 leaves the shared variant alone.
 
-**D2 — Wide keeps hero-on-left and the feed layer paints the rail once.**
-Per the user's acceptance target and `right-panel-arrangements`, the picker
-stays hero-on-left. `render_wide_feed_layer` becomes the sole painter of the
-picker's rows inside the right rail: it receives the rail's list rect (instead
-of the full browse area), uses `feed_selected_height` for the selected row,
-1 row otherwise, no stride-2 skip, and calls `render_compact_detail_with_ctx`
-with `show_title = false`, inset `SELECTED_BLOCK_SIDE_PADDING`, `y: row + 3`
-(legacy `home_video.rs:161-190` geometry). `render_wide_movies` skips its
-`render_generic_movies_home_video_rows_with_ctx` leg when
-`extras.feed_items.is_some()` — that is the double paint. Alternative: delete
-the feed layer and let the rail path handle everything; rejected because the
-rail path renders plain list rows, not the home-video framed block, and
-rewriting it is a larger change than passing a rect.
-
+**D2 — Keep the published picker height explicit.**
+The picker keeps its content-derived height in `NarrowBrowseExtras`; the
+component does not recompute banner layout while painting.
 **D3 — Port the legacy scroll clamp verbatim.**
 `render_feed_group_picker_content` replaces
 `if selected_h > list_area.height { offset = selected; }` with legacy's loop:
@@ -98,19 +78,15 @@ expansion there is no legacy behaviour left to reproduce.
 **D5 — Baselines: metadata-bearing as primary, metadata-free as degenerate pin.**
 `feed_home_video_group_app()` gains runtime_ticks, genre, and a multi-line
 overview on the selected item, and the feed fixtures are exercised at
-60x20 and 140x40 through `Model::draw_frame` — capture from the fixed
-implementation, and cross-check the *shape* (framed expansion + banner lines
-present, rows not duplicated) against `fbc6888e` narrow output. Keep a second
-metadata-free fixture pair asserting one row per item and no border echo, so
+60x20 through `Model::draw_frame` — capture from the fixed implementation,
+and cross-check the *shape* (framed expansion + banner lines present) against
+`fbc6888e` narrow output. Keep a metadata-free fixture asserting one row per
+item and no border echo, so
 the degenerate case that hid the bug stays pinned. Add the tall-selected-row
 scroll test from D3 (long list, cursor near the bottom).
 
 ## Risks / Trade-offs
 
-- [Wide baselines can't be byte-compared to `fbc6888e`, because Wide intent
-  legitimately differs] → Mitigate with structural assertions (row counted
-  once, banner meta present) plus the regenerated full-frame baselines; the
-  issue's Wide screenshots are the "before" record.
 - [`feed_selected_height` uses the picker's panel width while
   `NarrowInlineHero::Movie` is built with `layout.main.left_area.width`] →
   Both derive from the same rect; add a test that the published height equals

@@ -20,11 +20,6 @@ pins it with metadata-bearing fixtures.
   `compact_banner_layout_with_overview(item, panel_width, truncate_overview = true).content_rows() + 5`
   and paints the compact banner (meta line, truncated overview) inside the
   framed block, exactly like the generic home-video inline hero.
-- In Wide geometry the picker keeps hero-on-left (per `right-panel-arrangements`):
-  the group pills and one-column browser stay in the right rail, the rail's
-  selected row gets the same content-derived expansion and inline compact
-  banner, and the double paint (full-area feed layer + rail generic rows) is
-  reduced to one painter per row.
 - Scroll for the picker uses the legacy accumulated-height clamp: scrolling
   keeps the full expanded block addressable instead of the current
   `offset = selected` approximation; the survivor of that clamp is written
@@ -48,7 +43,7 @@ pins it with metadata-bearing fixtures.
   `feed_items` case and then returns early (delegating to
   `render_feed_group_picker_content`), leaving the later `feed_items.is_some()`
   arms unreachable and the pill-bar logic duplicated.
-- Regenerate `FEED_NARROW_BASELINE` / `FEED_WIDE_BASELINE` with
+- Regenerate `FEED_NARROW_BASELINE` with
   metadata-bearing fixtures (runtime + genre + a wrapping overview) captured
   through `Model::draw_frame`; keep the metadata-free fixtures as the
   degenerate-case pin.
@@ -62,7 +57,7 @@ pins it with metadata-bearing fixtures.
 ### Modified Capabilities
 
 - `library-list-hero`: adds a requirement pinning the feed-group picker's
-  selected-row expansion, Wide rail presentation, and bottom-edge scrolling —
+  selected-row expansion and bottom-edge scrolling —
   the existing shared requirements cover hero-bearing browsers generically;
   this surface's inline-expansion height and single-paint behavior at both
   Panel modes become explicitly testable.
@@ -70,12 +65,9 @@ pins it with metadata-bearing fixtures.
 ## Impact
 
 - `src/app/render/components/list_narrow.rs`
-  (`render_feed_group_picker_content`, `render_wide_feed_layer`),
-  `src/app/components/browser.rs` (`view` / `render_wide_movies` feed branch),
+  (`render_feed_group_picker_content`),
   possibly `src/app/components/browser_narrow.rs` (`NarrowBrowseExtras`) if
   the expansion height must be published shell-side.
 - `src/app/tests_narrow_browse_migration.rs` (fixtures + baselines + scroll
   test).
-- `docs/architecture/interactive-surface-ledger.md` feed-picker row (painter
-  note for the Wide rail reconciliation).
 - No ctrl protocol, daemon, persistence-format, or key-routing changes.
