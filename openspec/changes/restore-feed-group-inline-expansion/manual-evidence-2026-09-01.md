@@ -63,6 +63,37 @@ Observed, with no claims beyond the captures:
 
 The exact limitation is that this environment's live feed data/capture did not expose a metadata-bearing expanded selected row, and the attempted key interactions triggered loading/tab navigation rather than a confirmed selector change. No invented success claim is added.
 
+## Task 5.4 final live check — configured Emby YouTube homevideos (2026-09-01)
+
+The configured Emby library tabs were inspected at 140x40 rather than guessed: `HOME`, `MOVIES`, `MUSIC`, `TV SHOWS`, `YOUTUBE`, `PODCASTS`, `AUDIOBOOKS`, and `FEEDS` were visible. Three `Tab` presses from the selected Movies tab selected the visible `YOUTUBE` tab. The selected library was the configured Emby `homevideos` library; no URLs, credentials, or server identifiers were printed.
+
+Exact redacted commands:
+
+```text
+rtk cargo nextest run -p mbv feed_home_video_group --no-fail-fast
+XDG_CONFIG_HOME=/home/slatkin/Dev/dotfiles tmux new-session -d -s yt-evidence -x 60 -y 20 './target/debug/mbv'
+tmux send-keys -t yt-evidence Escape
+tmux resize-window -t yt-evidence -x 140 -y 40
+tmux send-keys -t yt-evidence Tab Tab Tab
+tmux send-keys -t yt-evidence Right Right Enter
+tmux resize-window -t yt-evidence -x 60 -y 20
+tmux resize-window -t yt-evidence -x 100 -y 30
+tmux send-keys -t yt-evidence PageDown PageDown
+tmux resize-window -t yt-evidence -x 140 -y 40
+tmux capture-pane -pt yt-evidence -S -35
+tmux kill-session -t yt-evidence
+```
+
+Observed captures:
+
+* **60x20:** YouTube was selected and a video row was rendered, but the narrow capture had no visible runtime/genre/overview banner; no metadata-rich expansion can be claimed.
+* **100x30:** YouTube remained selected; the selected video row rendered with duration/progress and no visible long overview or genre line.
+* **140x40 Wide:** the selected YouTube video remained in the left presentation rail while the library list occupied the right rail; no conflicting selected-row expansion was observed.
+* **Group-pill interaction:** the visible pills were `All`, `History Mat…`, and `Nextlander`. No verified tmux mouse-event path was available. The supported key attempt (`Right Right Enter`) changed the selected video rather than providing a confirmed group-pill activation; no successful group selection is claimed.
+* **Bottom-edge scrolling:** `PageDown PageDown` was sent after the 100x30 capture; the final 140x40 capture still showed the YouTube list and selected video, but the available content did not establish a distinct bottom-edge landing. No stronger claim is made.
+
+Focused supplement: `rtk cargo nextest run -p mbv feed_home_video_group --no-fail-fast` — PASS (10 passed, 1234 skipped). Remaining limitation: live metadata-rich Narrow expansion/banner completeness, confirmed group-pill activation, and bottom-edge landing remain unproven by this environment.
+
 Supplementary focused automated check:
 
 ```text
