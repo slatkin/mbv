@@ -1,0 +1,103 @@
+> Tracking issue: [#638](https://github.com/slatkin/mbv/issues/638). Umbrella: #603.
+
+## Why
+
+The TuiRealm migration deleted the legacy global mouse framework (`input_mouse*.rs`,
+the completed-frame hit map, the global router) under design decision **D16** and
+accepted mouse interaction as broken for the alpha build. What survives is
+half-connected: five surfaces (`browser`, `home`, `queue`, `tv_workspace`, and
+partially `music_workspace`) hit-test their own painted geometry and emit typed
+requests, but TuiRealm delivers `Event::Mouse` only to the **focused** component,
+`UiRoot`'s observer drops every mouse event on the floor (`shell.rs:349`), and
+`PlaybackComponent` — which carries a full `mouse()` handler for the seekbar and
+transport buttons — is never made active, so its handler is unreachable. Wheel
+scrolling on Emby/ABS/Feeds browse lists is a stubbed no-op
+(`handle_mouse_scroll_browse(_delta)`). Clicking any surface that does not
+currently hold keyboard focus does nothing.
+
+The rest of the migration is nearly complete and this is the last major piece of
+deferred functionality. It needs the same care the migration itself got — an ADR,
+lettered design decisions, a per-surface ledger, and phased verification gates —
+because mouse is about to become a primary interaction surface, not an
+afterthought: drag-and-drop and hover affordances are planned once this lands, and
+the framework must absorb them additively.
+
+## What Changes
+
+- **New mouse delivery spine.** Every mounted interactive component subscribes to
+  mouse events through TuiRealm's `EventClause::Mouse` subscription clause and
+  hit-tests against its own last-painted geometry. A shell-side arbitration fold
+  (parallel to the existing keyboard router fold) resolves overlapping claims with
+  a fixed priority: topmost overlay > active panel > sibling panel > chrome. A
+  mounted blocking overlay discards all mouse messages from underlying components.
+- **Shared framework primitives.** A `HitRegions<Tag>` collector (fill painted
+  rects + tags during `view()`, resolve a point to a `Tag` during `on()`) and a
+  per-component `MouseGestureState` recognizer (raw events in; `Click`,
+  `DoubleClick`, `RightClick`, `Scroll` out — `DragStart/Move/End` and
+  `HoverEnter/Leave` reserved). These replace the scattered `note_browse_*`
+  helpers and the per-surface `*HitRegion` enums in `msg/hit_regions.rs`.
+- **Gesture recognition moves into components.** The double-click window and
+  scroll throttle move off `App`'s shell-side clock into each component's
+  `MouseGestureState`. This is not the global position-keyed clock D16 forbade;
+  design.md records why they differ, and why the alternative (keep timing
+  shell-side) was rejected as unscalable for drag/hover.
+- **Full per-surface mouse parity.** Every migrated interactive surface — the five
+  partial ones plus every overlay and popup (`settings`, `sessions`, `playlists`,
+  `search_sidebar`, `feeds_manage`, `library_routes`, `multiselect`,
+  `save_playlist`, `context_menu`, `selection_modal`, the blocking modals) and
+  `browser_narrow` — resolves click, double-click, right-click, and wheel against
+  its own geometry, with click-to-focus for panels.
+- **`PlaybackComponent` mouse reachable.** Seekbar scrub and transport-button
+  clicks work regardless of which component holds focus.
+- **Browse wheel un-stubbed.** Emby/ABS/Feeds list wheel scrolling routes to the
+  owning component, mirroring `HomeComponent`'s wheel path.
+- **Ledger and gates.** `docs/architecture/interactive-surface-ledger.md` gains a
+  Mouse ownership/verification column replacing its "Mouse ownership is out of
+  scope" section. The three deferred D16 precedence proofs (simultaneous
+  Queue+Library mouse, blocking-overlay swallow, geometry-cannot-drift) land as
+  tests.
+- **No new dependency.** `ratatui-interact` was evaluated and rejected (ratatui-
+  native, collides with TuiRealm's focus/subscription/`Msg` model, unproven
+  maintenance, unwanted widget set). TuiRealm 4.1 already delivers `Event::Mouse`
+  and models `Drag`/`Moved`; the house layer is ~300 lines.
+- **Out of scope (deliberately, not precluded):** drag-and-drop, hover
+  highlighting, hover previews, `MouseEventKind::Moved`/`Drag` handling. Phase 1's
+  delivery model is chosen so enabling them later is additive.
+
+## Capabilities
+
+### New Capabilities
+- `mouse-input`: how raw terminal mouse events are delivered to interactive
+  components, how overlapping hit claims are arbitrated, how gestures are
+  recognized, and the per-surface parity contract every migrated interactive
+  surface must meet.
+
+### Modified Capabilities
+- `interactive-component-framework`: the "Migration preserves existing contracts"
+  scenario currently limits mouse parity to "the alpha-supported mouse paths"; it
+  changes to require full mouse parity as defined by `mouse-input`. The
+  deliberately-inert request-arm rationale drops "mouse-only under D16" as a
+  standing reason. A scenario is added for mouse delivery through a live `tick()`
+  to subscribed non-focused components.
+- `ui-design-system`: the "Screens use canonical UI ownership boundaries"
+  requirement scopes hit-target ownership to "mouse paths supported by the alpha
+  migration"; it broadens to all mouse paths. The "Deferred mouse support is
+  restored later" scenario is satisfied by this change.
+- `context-menu`: "Mouse-triggered menu" currently fires on a limited set of
+  "supported" items; it broadens to every migrated interactive surface that paints
+  a selectable row.
+
+## Impact
+
+- **Code:** `src/app/shell_run.rs` (mouse fold in the tick loop), `src/app/shell.rs`
+  (component mount sites gain mouse subscriptions; `TerminalObserverEvent::Mouse`
+  retired), `src/app/shell_messages.rs` / `src/app/shell_playback.rs` (mouse
+  request handlers), `src/app/mouse_gestures.rs` (effects retained, recognition
+  removed), new `src/app/components/mouse/` module, and `Event::Mouse` arms across
+  every component under `src/app/components/`.
+- **Docs:** `docs/architecture/interactive-surface-ledger.md` (new column, section
+  replaced); a new or extended ADR fixing the delivery model.
+- **Dependencies:** none added. TuiRealm 4.1 and crossterm 0.29 already present.
+- **Tests:** new integration coverage for cross-panel routing and overlay swallow;
+  per-component mouse tests; the three D16 precedence proofs.
+- **No BREAKING changes** to keyboard, rendering, or protocol surfaces.
