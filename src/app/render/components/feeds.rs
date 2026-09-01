@@ -305,11 +305,6 @@ pub(in crate::app) fn render_feeds_content(
     *model.scroll = scroll;
     let cell_w = library_cell_width(list_area, cols);
     let row_w = list_area.width.saturating_sub(1);
-    if wide {
-        // Match Music/TV's semantic recessed right-rail treatment. Paint the
-        // surface before rows so every row, gap, and empty cell is covered.
-        hero_left::hero_on_left_list_panel_border(f, list_area, focused);
-    }
     let visible_count = total_display.saturating_sub(scroll).min(visible);
     let mut row_map: Vec<Option<usize>> = Vec::with_capacity(list_area.height as usize);
     let entries = model.visible_entries;
@@ -377,6 +372,11 @@ pub(in crate::app) fn render_feeds_content(
         }
     }
     row_map.resize(list_area.height as usize, None);
+    // Paint the semantic rail frame after rows: row backgrounds must not
+    // obscure its edge rows (the Music/TV panel pattern).
+    if wide {
+        hero_left::hero_on_left_list_panel_border(f, list_area, focused);
+    }
     layout.left_row_map = row_map;
     layout.left_item_rows = (0..total_display)
         .map(|display_row| {

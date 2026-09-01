@@ -15,19 +15,34 @@ fn feed_component() -> FeedsComponent {
         url: "https://example.test/feed".into(),
         kind: FeedKind::Audio,
     }];
-    let entries = vec![vec![FeedEntry {
-        guid: "entry-1".into(),
-        title: "Entry One".into(),
-        enclosure_url: None,
-        link: None,
-        mime_type: None,
-        duration_ticks: None,
-        pub_date_secs: None,
-        feed_kind: Some(FeedKind::Audio),
-        feed_id: None,
-        position_ticks: 0,
-        played: false,
-    }]];
+    let entries = vec![vec![
+        FeedEntry {
+            guid: "entry-1".into(),
+            title: "Entry One".into(),
+            enclosure_url: None,
+            link: None,
+            mime_type: None,
+            duration_ticks: None,
+            pub_date_secs: None,
+            feed_kind: Some(FeedKind::Audio),
+            feed_id: None,
+            position_ticks: 0,
+            played: false,
+        },
+        FeedEntry {
+            guid: "entry-2".into(),
+            title: "Played Entry Two".into(),
+            enclosure_url: None,
+            link: None,
+            mime_type: None,
+            duration_ticks: None,
+            pub_date_secs: None,
+            feed_kind: Some(FeedKind::Audio),
+            feed_id: None,
+            position_ticks: 42,
+            played: true,
+        },
+    ]];
     let all_entries = entries[0].clone();
     let mut component = FeedsComponent::new();
     component.set_content(&subscriptions, &entries, &all_entries, false, true);
@@ -45,39 +60,65 @@ fn terminal_for(component: &mut FeedsComponent, width: u16, height: u16) -> Term
 
 #[test]
 fn wide_feeds_use_a_left_detail_and_right_entry_workspace() {
-    let mut component = feed_component();
-    let terminal = terminal_for(&mut component, 82, 30);
-    let layout = component.layout();
+    for width in [82, 120] {
+        let mut component = feed_component();
+        let terminal = terminal_for(&mut component, width, 30);
+        let layout = component.layout();
 
-    assert!(layout.hero_area.width < 82, "hero={:?}", layout.hero_area);
-    assert!(
-        layout.left_area.x > layout.hero_area.x,
-        "hero={:?} list={:?}",
-        layout.hero_area,
-        layout.left_area
-    );
-    assert!(!layout.selector_tabs.is_empty());
-    assert!(
-        layout.left_item_rows.iter().all(|row| row.len() <= 1),
-        "Wide Feeds must pack one entry per row: {:?}",
-        layout.left_item_rows
-    );
-    let buffer = terminal.backend().buffer();
-    let row = layout.left_area.y
-        + layout
-            .left_row_map
-            .iter()
-            .position(|item| item.is_some())
-            .expect("selected entry row") as u16;
-    assert_ne!(
-        buffer[(layout.left_area.x, row)].bg,
-        ratatui::style::Color::Reset,
-        "Wide Feeds rail must paint its semantic surface"
-    );
-    let line = (layout.left_area.x..layout.left_area.right())
-        .map(|x| buffer[(x, row)].symbol())
-        .collect::<String>();
-    assert_eq!(line.matches("Entry One").count(), 1, "row={line:?}");
+        assert!(
+            layout.hero_area.width < width,
+            "hero={:?}",
+            layout.hero_area
+        );
+        assert!(
+            layout.left_area.x > layout.hero_area.x,
+            "hero={:?} list={:?}",
+            layout.hero_area,
+            layout.left_area
+        );
+        assert!(!layout.selector_tabs.is_empty());
+        assert_eq!(
+            layout
+                .left_item_rows
+                .iter()
+                .filter(|row| !row.is_empty())
+                .count(),
+            2
+        );
+        assert!(
+            layout.left_item_rows.iter().all(|row| row.len() <= 1),
+            "rows={:?}",
+            layout.left_item_rows
+        );
+        let buffer = terminal.backend().buffer();
+        let first_row = layout.left_area.y
+            + layout
+                .left_row_map
+                .iter()
+                .position(|item| item == &Some(0))
+                .expect("first row") as u16;
+        let second_row = layout.left_area.y
+            + layout
+                .left_row_map
+                .iter()
+                .position(|item| item == &Some(1))
+                .expect("second row") as u16;
+        assert_ne!(
+            buffer[(layout.left_area.x, first_row)].bg,
+            ratatui::style::Color::Reset
+        );
+        let first = (layout.left_area.x..layout.left_area.right())
+            .map(|x| buffer[(x, first_row)].symbol())
+            .collect::<String>();
+        let second = (layout.left_area.x..layout.left_area.right())
+            .map(|x| buffer[(x, second_row)].symbol())
+            .collect::<String>();
+        assert_eq!(first.matches("Entry One").count(), 1, "row={first:?}");
+        assert!(
+            second.contains("✓") && second.contains("Played Entry Two"),
+            "row={second:?}"
+        );
+    }
 }
 
 #[test]
