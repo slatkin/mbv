@@ -313,7 +313,7 @@ pub(in crate::app) fn render_wide_feed_layer(
                     .inline_hero
                     .as_ref()
                     .and_then(|hero| match hero {
-                        NarrowInlineHero::Movie { layout, .. } => {
+                        NarrowInlineHero::Movie { layout, .. } if layout.has_detail_text() => {
                             Some(layout.content_rows_with_title(0) as u16 + HERO_BLOCK_EXTRA_ROWS)
                         }
                         _ => None,
@@ -457,9 +457,7 @@ fn render_feed_group_picker_content(
     let text_w =
         crate::app::render::content_width(list_area.width, items.len() > list_area.height as usize);
     let selected_h = match extras.inline_hero.as_ref() {
-        Some(NarrowInlineHero::Movie { layout: banner, .. })
-            if banner.content_rows_with_title(0) > 0 =>
-        {
+        Some(NarrowInlineHero::Movie { layout: banner, .. }) if banner.has_detail_text() => {
             banner.content_rows_with_title(0) as u16 + HERO_BLOCK_EXTRA_ROWS
         }
         _ => 1,

@@ -556,13 +556,16 @@ fn feed_home_video_group_metadata_free_selected_row_stays_ordinary() {
     let state = app.libs[0].feed_home_video.as_mut().unwrap();
     state.groups[0].items[0].overview.clear();
     state.groups[0].items[0].genre.clear();
+    state.groups[0].items[0].runtime_ticks = 0;
     state.all_items[0].overview.clear();
     state.all_items[0].genre.clear();
+    state.all_items[0].runtime_ticks = 0;
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
     let mut term = Terminal::new(TestBackend::new(60, 20)).unwrap();
     let output = draw(&mut model, &mut term);
     assert_eq!(output.matches("Video Two").count(), 1);
+    assert_eq!(output.matches('▔').count(), 0);
 }
 
 #[test]
