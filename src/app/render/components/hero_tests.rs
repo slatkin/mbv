@@ -56,29 +56,28 @@ fn inline_hero_image_has_shared_top_right_and_gutter_geometry() {
 
 #[test]
 fn hero_on_left_overview_reflows_at_recessed_content_width() {
-    let backend = TestBackend::new(12, 8);
+    let backend = TestBackend::new(16, 8);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| {
             render_home_hero_meta_block(
                 frame,
-                Rect::new(0, 0, 12, 8),
-                Rect::new(0, 0, 12, 8),
+                Rect::new(0, 0, 16, 8),
+                Rect::new(0, 0, 16, 8),
                 &[],
                 "",
                 None,
                 vec![],
-                &[("ABC DEF GHI JKL".to_string(), false)],
+                &[("ABC".to_string(), false), ("DEF".to_string(), false)],
                 2,
                 true,
             );
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
-    let rendered: String = (2..8)
-        .flat_map(|y| (0..12).map(move |x| buffer[(x, y)].symbol()))
-        .collect();
-    for word in ["ABC", "DEF", "GHI", "JKL"] {
-        assert!(rendered.contains(word), "missing {word} in {rendered:?}");
-    }
+    let row: String = (0..16).map(|x| buffer[(x, 2)].symbol()).collect();
+    assert!(
+        row.contains("ABC") && row.contains("DEF"),
+        "expected joined flow: {row:?}"
+    );
 }
