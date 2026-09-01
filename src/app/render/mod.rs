@@ -38,7 +38,7 @@ pub(in crate::app) use components::library_routes::{
 };
 pub(in crate::app) use components::list::render_generic_movies_home_video_rows_with_ctx;
 pub(in crate::app) use components::list_narrow::{
-    render_narrow_browse_with_ctx, render_wide_feed_layer,
+    paint_feed_group_pills_row, render_narrow_browse_with_ctx,
 };
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
 // Task 5.3d.17a: BrowserComponent paints the wide Movies/home-video

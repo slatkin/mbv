@@ -541,47 +541,76 @@ fn selected_feed_row_region(output: &str, title: &str) -> String {
     lines[row..row + 1].join("\n")
 }
 
-fn selected_feed_detail_region(output: &str) -> String {
-    let lines: Vec<_> = output.lines().collect();
-    let row = lines
-        .iter()
-        .position(|line| line.contains("Family") && line.contains("1h"))
-        .expect("selected feed detail must be rendered");
-    let start = row.saturating_sub(2);
-    let end = (row + 8).min(lines.len());
-    lines[start..end].join("\n")
-}
 
 #[test]
-fn feed_home_video_group_narrow_snapshot_matches_fbc6888e_baseline() {
+fn feed_home_video_group_narrow_uses_shared_inline_hero() {
+    // The picker routes through `render_narrow_browse_with_ctx` now: a
+    // feed-group pill row, then the shared inline-hero replacement for the
+    // selected row (framed, meta line inside) - identical to a generic narrow
+    // home-video library.
     let output = feed_snapshot(60, 20);
-    let region = selected_feed_detail_region(&output);
-    assert_eq!(
-        region
-            .lines()
-            .filter(|line| line.contains("Video Two") && !line.contains('▁') && !line.contains('▔'))
-            .count(),
-        1
+    let lines: Vec<&str> = output.lines().collect();
+    assert!(
+        output.contains("All") && output.contains("Channel A"),
+        "feed-group pills missing:\n{output}"
     );
-    assert!(region.contains("Family") && region.contains("1h"));
-    assert!(region.contains("Distinctive wrapping"));
-    assert_eq!(region.lines().filter(|line| line.contains('▁')).count(), 1);
-    assert_eq!(region.lines().filter(|line| line.contains('▔')).count(), 1);
+    // Framed inline hero: a `▁` top rule above and a `▔` bottom rule below,
+    // with the selected item's meta line between them.
+    let top = lines
+        .iter()
+        .position(|l| l.trim_start().starts_with('\u{2581}'))
+        .expect("inline-hero top rule missing");
+    let bottom = lines
+        .iter()
+        .rposition(|l| l.trim_start().starts_with('\u{2594}'))
+        .expect("inline-hero bottom rule missing");
+    assert!(top < bottom);
+    let framed = lines[top..=bottom].join("\n");
+    assert!(framed.contains("Video One") && framed.contains("Family") && framed.contains("1h"));
+    assert_eq!(
+        output
+            .lines()
+            .filter(|line| line.contains("Video Two")
+                && !line.contains('\u{2581}')
+                && !line.contains('\u{2594}'))
+            .count(),
+        1,
+        "Video Two paints once, outside the frame:\n{output}"
+    );
 }
 
 #[test]
-fn feed_home_video_group_wide_snapshot_matches_fbc6888e_baseline() {
+fn feed_home_video_group_wide_uses_hero_on_left() {
+    // Wide: hero-on-left. Selected item's detail (overview + meta) is the
+    // left hero card; the right rail is a plain one-column list with the
+    // feed-group pills - no inline expansion in the rail.
     let output = feed_snapshot(140, 40);
-    let region = selected_feed_detail_region(&output);
-    assert_eq!(
-        region
-            .lines()
-            .filter(|line| line.contains("Video Two") && !line.contains('▁') && !line.contains('▔'))
-            .count(),
-        1
+    assert!(
+        output.contains("All") && output.contains("Channel A"),
+        "feed-group pills missing:\n{output}"
     );
-    assert!(region.contains("Family") && region.contains("1h"));
-    assert_eq!(region.lines().filter(|line| line.contains('▔')).count(), 2);
+    assert!(
+        output.contains("Distinctive wrapping"),
+        "left hero overview missing:\n{output}"
+    );
+    // Video Two is only ever a rail row (never the selected hero), so it
+    // pins single-paint of the rail without the hero-echo of Video One.
+    assert_eq!(
+        output.lines().filter(|line| line.contains("Video Two")).count(),
+        1,
+        "Video Two paints once in the rail:\n{output}"
+    );
+}
+
+#[test]
+fn feed_home_video_group_paints_each_row_once() {
+    for (width, height) in [(60, 20), (140, 40)] {
+        let output = feed_snapshot(width, height);
+        let rows = output.lines().filter(|line| {
+            line.contains("Video Two") && !line.contains('\u{2581}') && !line.contains('\u{2594}')
+        });
+        assert_eq!(rows.count(), 1, "feed {width}x{height} paints the row once");
+    }
 }
 
 #[test]
@@ -604,86 +633,6 @@ fn feed_home_video_group_metadata_free_selected_row_stays_ordinary() {
     assert!(!region.contains('▁') && !region.contains('▔'));
 }
 
-#[test]
-fn feed_home_video_group_paints_each_row_once() {
-    for (width, height, baseline) in [
-        (60, 20, FEED_NARROW_BASELINE),
-        (140, 40, FEED_WIDE_BASELINE),
-    ] {
-        let output = feed_snapshot(width, height);
-        let _ = baseline;
-        let rows = output.lines().filter(|line| {
-            line.contains("Video Two") && !line.contains('▁') && !line.contains('▔')
-        });
-        assert_eq!(rows.count(), 1, "feed {width}x{height} paints the row once");
-    }
-}
-
-/// Captured from parent `fbc6888e` (legacy `render_feed_home_video_group_view`),
-/// using `feed_home_video_group_app()` with TestBackend at exactly 60x20 and
-/// 140x40; capture method: temporary worktree at `fbc6888e`, copied this test
-/// harness, ran `cargo test -p mbv --bin mbv feed_home_video_group_* -- --nocapture`,
-/// and recorded each assertion's complete TestBackend `left` frame.
-const FEED_NARROW_BASELINE: &str = r###"                                                            
-   HOME  ▐ YOUTUBE                                          
-                                                            
-                                                            
-                                                            
-                                                            
-                                                            
-  ⌘ ◢ All ◤◢ Channel A ◤                                    
-                                                            
-  2 items▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ 
-                                                            
-▎ Video One                                                 
-  Video Two                                                 
- ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ 
- Video Two                                                  
-                                                            
-                                                            
-                                                            
-                                                            
- 🔊  100                                             󰚴  ♥  "###;
-const FEED_WIDE_BASELINE: &str = r###"                                                                                                                                            
-                                           HOME  ▐ YOUTUBE                                                                                  
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                           ⌘ ◢ All ◤◢ Channel A ◤                                                                           
-                                                                                                                                            
-                                          ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ 2 items▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  
-                                                                                                                                            
-                                            Video One                               ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  
-                                                                                    ▎  Video One                                            
-                                          ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ Video Two                                        ▔▔  
-                                          Video Two                                                                                         
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                              Video One ○                                                                                   
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-     🖧  WOIMS                                                                                                                               
-                                                                                                                                            
-    Add items with p from Home or libr                                                                                                      
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-     🖭  none                                                                        ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  
-                                                                                                                                            
-                                         🔊  100                                                                                     󰚴  ♥  "###;
 /// Characterization (task 3.5b template step a): pins the painted WIDE Emby
 /// podcast browse surface through the full `Model::draw_frame` path, at a
 /// wide+tall size where `shared_hero_presentation` returns `Some`. The

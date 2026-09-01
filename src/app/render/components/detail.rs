@@ -87,10 +87,6 @@ impl CompactBannerLayout {
         self.content_rows_with_title(0)
     }
 
-    pub(in crate::app) fn has_detail_text(&self) -> bool {
-        self.meta_line.is_some() || self.show_playing || !self.lines.is_empty()
-    }
-
     pub(in crate::app) fn content_rows_with_title(&self, title_rows: u16) -> usize {
         let text_rows = title_rows as usize
             + self.meta_line.is_some() as usize

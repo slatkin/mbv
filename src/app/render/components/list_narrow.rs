@@ -6,7 +6,6 @@
 //! resolves the `App`/image-cache-backed inputs the shell pushes each frame.
 
 use super::detail::compact_banner_image_cache_key;
-use super::home_video::render_home_video_item;
 use crate::app::components::browser_narrow::{NarrowBrowseExtras, NarrowInlineHero};
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::library_column_count;
@@ -20,9 +19,6 @@ use crate::app::render::components::list_rows::{
 use crate::app::render::HomeImagePaint;
 use crate::app::App;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 /// Full narrow generic/Movies/home-video browse composition
@@ -98,22 +94,12 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             };
     }
 
-    // Feed group pickers retain their dedicated legacy geometry: two rows after
-    // the pills hold the count/divider, then the selected video expands inline.
-    if let Some(items) = extras.feed_items.as_ref() {
-        return render_feed_group_picker_content(
-            f,
-            content_area,
-            ctx,
-            extras,
-            focused,
-            layout,
-            items,
-        );
-    }
-
-    // Letter pickers use the shared pill-bar geometry.
-    let (pills_area, list_area) = if extras.show_letter_pills {
+    // Feed/home-video group pickers and letter pickers both use the shared
+    // pill-bar geometry; the picker just fills the row with feed-group pills
+    // instead of letters (`is_feed_home_video_group_view`). Everything below —
+    // rows, inline-hero replacement, hit maps — is the shared path.
+    let feed_group_pills = extras.feed_items.is_some();
+    let (pills_area, list_area) = if extras.show_letter_pills || feed_group_pills {
         let areas = hero_left::pill_bar_areas(content_area);
         (areas.pills_area, areas.content_area)
     } else {
@@ -134,6 +120,8 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             ctx.letter_filter.as_ref().map(|flt| flt.index).unwrap_or(0),
             layout,
         );
+    } else if feed_group_pills {
+        paint_feed_group_pills_row(f, pills_area, extras, layout);
     }
 
     layout.left_area = list_area;
@@ -207,14 +195,21 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     (final_offset, image_paint)
 }
 
-pub(in crate::app) fn render_wide_feed_layer(
+/// Feed/home-video group-picker pill row: an "All" pill plus one per feed
+/// folder group, selected by `feed_group_cursor`. Mirrors
+/// `paint_letter_pills_row` so the picker reuses the shared narrow browse
+/// composer instead of a bespoke painter.
+pub(in crate::app) fn paint_feed_group_pills_row(
     f: &mut Frame,
-    area: Rect,
+    row_area: Rect,
     extras: &NarrowBrowseExtras,
     layout: &mut LayoutMain,
-) -> Option<HomeImagePaint> {
-    let pills = crate::app::render::arrangements::hero_left::pill_bar_areas(area);
-    let labels: Vec<String> = std::iter::once("All".into())
+) {
+    if row_area.width == 0 {
+        layout.selector_tabs = Vec::new();
+        return;
+    }
+    let labels: Vec<String> = std::iter::once("All".to_string())
         .chain(
             extras
                 .feed_groups
@@ -225,313 +220,14 @@ pub(in crate::app) fn render_wide_feed_layer(
     let ids: Vec<usize> = (0..labels.len()).collect();
     layout.selector_tabs = crate::app::render::render_pill_bar(
         f,
-        pills.pills_area,
+        row_area,
         crate::app::render::PillBar {
             labels: &labels,
             ids: &ids,
             selected_pos: extras.feed_group_cursor,
-            prefix: Some(" ⌘ "),
+            prefix: Some(" \u{2318} "),
         },
     );
-    let divider = Rect {
-        x: area.x,
-        y: pills.content_area.y,
-        width: area.width,
-        height: 1,
-    };
-    f.render_widget(
-        Paragraph::new(Line::from(vec![Span::raw(
-            "▁".repeat(divider.width as usize),
-        )])),
-        divider,
-    );
-    let mut image_paint = None;
-    layout.left_row_map.clear();
-    layout.left_item_rows.clear();
-    if let Some(items) = extras.feed_items.as_ref() {
-        let content_area = Rect {
-            y: divider.y,
-            height: area.bottom().saturating_sub(divider.y),
-            ..area
-        };
-        let text_w = crate::app::render::content_width(content_area.width, false);
-        layout.left_area = content_area;
-        let selected = extras.feed_video_cursor.min(items.len().saturating_sub(1));
-        let mut y = content_area.y;
-        let mut rows = Vec::new();
-        let mut row_map = Vec::new();
-        for (idx, item) in items.iter().enumerate() {
-            if y >= content_area.bottom() {
-                break;
-            }
-            let selected_row = idx == selected;
-            let row_height = if selected_row {
-                extras
-                    .inline_hero
-                    .as_ref()
-                    .and_then(|hero| match hero {
-                        NarrowInlineHero::Movie { layout, .. } if layout.has_detail_text() => {
-                            Some(layout.content_rows_with_title(0) as u16 + HERO_BLOCK_EXTRA_ROWS)
-                        }
-                        _ => None,
-                    })
-                    .unwrap_or(5)
-            } else {
-                1
-            };
-            rows.push(vec![idx]);
-            row_map.push(Some(idx));
-            if selected_row
-                && matches!(&extras.inline_hero, Some(NarrowInlineHero::Movie { layout, .. }) if layout.has_detail_text())
-            {
-                selected_detail_shell(
-                    f,
-                    Rect {
-                        x: content_area.x,
-                        y,
-                        width: text_w as u16,
-                        height: row_height,
-                    },
-                    row_height,
-                    true,
-                );
-                if let Some(NarrowInlineHero::Movie {
-                    item,
-                    layout: banner,
-                }) = extras.inline_hero.as_ref()
-                {
-                    image_paint = super::detail::render_compact_detail_with_ctx(
-                        super::detail::CompactDetailCtx {
-                            item,
-                            layout: banner.clone(),
-                        },
-                        f,
-                        crate::app::render::arrangements::library::selected_detail_content_area(
-                            Rect {
-                                x: content_area.x,
-                                y,
-                                width: text_w as u16,
-                                height: row_height,
-                            },
-                            SELECTED_BLOCK_SIDE_PADDING,
-                            HERO_BLOCK_EXTRA_ROWS,
-                        ),
-                        true,
-                        false,
-                    );
-                }
-            } else {
-                render_home_video_item(
-                    f,
-                    item,
-                    y,
-                    row_height,
-                    content_area,
-                    text_w,
-                    selected_row,
-                    true,
-                );
-            }
-            if selected_row {
-                layout.selected_item_rect = Some(Rect {
-                    x: content_area.x,
-                    y,
-                    width: text_w as u16,
-                    height: row_height,
-                });
-            }
-            let advance = if selected_row { row_height } else { 2 };
-            for _ in 1..advance {
-                rows.push(Vec::new());
-                row_map.push(None);
-            }
-            y = y.saturating_add(advance);
-        }
-        layout.left_item_rows = rows;
-        layout.left_row_map = row_map;
-    } else {
-        layout.left_area = Rect::default();
-    }
-    image_paint
-}
-
-fn render_feed_group_picker_content(
-    f: &mut Frame,
-    area: Rect,
-    ctx: &LibraryListRenderCtx,
-    extras: &NarrowBrowseExtras,
-    focused: bool,
-    layout: &mut LayoutMain,
-    items: &[mbv_core::api::EmbyItem],
-) -> (usize, Option<HomeImagePaint>) {
-    let pills = crate::app::render::arrangements::hero_left::pill_bar_areas(area);
-    let labels: Vec<String> = std::iter::once("All".into())
-        .chain(
-            extras
-                .feed_groups
-                .iter()
-                .map(|s| crate::app::ui_util::trunc_str(s, 12)),
-        )
-        .collect();
-    let ids: Vec<usize> = (0..labels.len()).collect();
-    layout.selector_tabs = crate::app::render::render_pill_bar(
-        f,
-        pills.pills_area,
-        crate::app::render::PillBar {
-            labels: &labels,
-            ids: &ids,
-            selected_pos: extras.feed_group_cursor,
-            prefix: Some(" ⌘ "),
-        },
-    );
-    let mut list_area = pills.content_area;
-    if list_area.height > 0 {
-        let count_area = Rect {
-            height: 1,
-            ..list_area
-        };
-        let label = format!(" {} items", items.len());
-        let divider = "▁".repeat(
-            count_area
-                .width
-                .saturating_sub(label.chars().count() as u16) as usize,
-        );
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(
-                    label,
-                    Style::default().fg(crate::app::palette::TEXT_SECONDARY),
-                ),
-                Span::raw(divider),
-            ])),
-            count_area,
-        );
-        list_area.y += 2;
-        list_area.height = list_area.height.saturating_sub(2);
-    }
-    layout.left_area = list_area;
-    layout.left_row_map.clear();
-    layout.left_item_rows.clear();
-    if items.is_empty() {
-        return (0, None);
-    }
-    let selected = extras
-        .inline_hero
-        .as_ref()
-        .and_then(|hero| match hero {
-            NarrowInlineHero::Movie { item, .. } | NarrowInlineHero::Series { item, .. } => {
-                items.iter().position(|candidate| candidate.id == item.id)
-            }
-        })
-        .unwrap_or(extras.feed_video_cursor.min(items.len() - 1));
-    let text_w =
-        crate::app::render::content_width(list_area.width, items.len() > list_area.height as usize);
-    let selected_h = match extras.inline_hero.as_ref() {
-        Some(NarrowInlineHero::Movie { layout: banner, .. }) if banner.has_detail_text() => {
-            banner.content_rows_with_title(0) as u16 + HERO_BLOCK_EXTRA_ROWS
-        }
-        _ => 1,
-    };
-    let mut row = list_area.y;
-    // Keep the landed selected block at the bottom edge when its real detail
-    // height pushes it below the viewport (the legacy picker clamp).
-    let lower_bound = selected
-        .saturating_add(selected_h as usize)
-        .saturating_sub(list_area.height as usize)
-        .min(selected);
-    let offset = ctx.scroll.clamp(lower_bound, selected);
-    if selected_h > list_area.height {
-        // A block taller than the viewport starts at the selected row.
-        // Its content is clipped by the frame, rather than creating a blank row.
-        row = list_area.y;
-    }
-    let mut image = None;
-    let mut rows = vec![Vec::new(); offset];
-    let mut row_map = Vec::new();
-    for (idx, item) in items.iter().enumerate().skip(offset) {
-        if row >= list_area.bottom() {
-            break;
-        }
-        let h = if idx == selected { selected_h } else { 1 };
-        rows.push(vec![idx]);
-        row_map.push(Some(idx));
-        for _ in 1..h {
-            rows.push(Vec::new());
-            row_map.push(None);
-        }
-        if idx != selected
-            || !matches!(&extras.inline_hero, Some(NarrowInlineHero::Movie { layout, .. }) if layout.has_detail_text())
-        {
-            render_home_video_item(
-                f,
-                item,
-                row,
-                h,
-                if idx == selected {
-                    Rect {
-                        x: list_area.x.saturating_sub(1),
-                        width: list_area.width.saturating_add(1),
-                        ..list_area
-                    }
-                } else {
-                    list_area
-                },
-                text_w,
-                idx == selected,
-                focused,
-            );
-        }
-        if idx == selected {
-            layout.selected_item_rect = Some(Rect {
-                x: list_area.x,
-                y: row,
-                width: text_w as u16,
-                height: h,
-            });
-            if let Some(NarrowInlineHero::Movie {
-                item,
-                layout: banner,
-            }) = extras.inline_hero.as_ref().filter(|hero| match hero {
-                NarrowInlineHero::Movie { layout, .. } => layout.has_detail_text(),
-                _ => false,
-            }) {
-                selected_detail_shell(
-                    f,
-                    Rect {
-                        x: list_area.x,
-                        y: row,
-                        width: text_w as u16,
-                        height: h,
-                    },
-                    h,
-                    focused,
-                );
-                image = super::detail::render_compact_detail_with_ctx(
-                    super::detail::CompactDetailCtx {
-                        item,
-                        layout: banner.clone(),
-                    },
-                    f,
-                    crate::app::render::arrangements::library::selected_detail_content_area(
-                        Rect {
-                            x: list_area.x,
-                            y: row,
-                            width: text_w as u16,
-                            height: h,
-                        },
-                        SELECTED_BLOCK_SIDE_PADDING,
-                        HERO_BLOCK_EXTRA_ROWS,
-                    ),
-                    focused,
-                    false,
-                );
-            }
-        }
-        row = row.saturating_add(h);
-    }
-    layout.left_item_rows = rows;
-    layout.left_row_map = row_map;
-    (offset, image)
 }
 
 fn paint_letter_pills_row(

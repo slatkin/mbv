@@ -234,6 +234,13 @@ impl BrowserComponent {
                 ctx.search_query.as_deref().unwrap_or_default(),
                 ctx.search_loading,
             );
+        } else if self.narrow_extras.feed_items.is_some() {
+            crate::app::render::paint_feed_group_pills_row(
+                f,
+                pills_area,
+                &self.narrow_extras,
+                &mut self.layout,
+            );
         } else if self.wide_movies_home_video {
             render_count_label(f, pills_area, ctx.total_count);
         } else if self.wide_movies_letter_pills {
@@ -249,36 +256,22 @@ impl BrowserComponent {
         }
         let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
 
-        let final_scroll = if self.narrow_extras.feed_items.is_some() {
-            self.image_paint = crate::app::render::render_wide_feed_layer(
-                f,
-                right_panel,
-                &self.narrow_extras,
-                &mut self.layout,
-            );
-            0
-        } else {
-            render_generic_movies_home_video_rows_with_ctx(
-                f,
-                list_area,
-                ctx,
-                self.focused,
-                1,
-                &mut self.layout,
-            )
-        };
+        let final_scroll = render_generic_movies_home_video_rows_with_ctx(
+            f,
+            list_area,
+            ctx,
+            self.focused,
+            1,
+            &mut self.layout,
+        );
 
         // Paint the shared hero text last (after the list); defer the cover
         // image paint to the shell, which owns the image-cache authority.
-        let feed_image_paint = self.image_paint.take();
         if let Some(hero_data) = &hero_data {
             self.image_paint =
                 render_home_hero_content(f, hero_data, true, self.focused, self.use_nerd_fonts);
         } else {
             self.image_paint = None;
-        }
-        if feed_image_paint.is_some() {
-            self.image_paint = feed_image_paint;
         }
 
         hero_on_left_list_panel_border(f, list_panel, self.focused);
