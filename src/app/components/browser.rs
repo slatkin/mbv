@@ -157,21 +157,7 @@ impl BrowserComponent {
         area: Rect,
         ctx: &LibraryListRenderCtx,
     ) -> usize {
-        let body_area = if self.narrow_extras.feed_items.is_some() {
-            crate::app::render::render_wide_feed_layer(
-                f,
-                area,
-                &self.narrow_extras,
-                &mut self.layout,
-            );
-            Rect {
-                y: area.y.saturating_add(2),
-                height: area.height.saturating_sub(2),
-                ..area
-            }
-        } else {
-            area
-        };
+        let body_area = area;
 
         let left_content_area = Rect {
             height: body_area.height.saturating_sub(1),
@@ -263,14 +249,24 @@ impl BrowserComponent {
         }
         let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
 
-        let final_scroll = render_generic_movies_home_video_rows_with_ctx(
-            f,
-            list_area,
-            ctx,
-            self.focused,
-            1,
-            &mut self.layout,
-        );
+        let final_scroll = if self.narrow_extras.feed_items.is_some() {
+            self.image_paint = crate::app::render::render_wide_feed_layer(
+                f,
+                right_panel,
+                &self.narrow_extras,
+                &mut self.layout,
+            );
+            0
+        } else {
+            render_generic_movies_home_video_rows_with_ctx(
+                f,
+                list_area,
+                ctx,
+                self.focused,
+                1,
+                &mut self.layout,
+            )
+        };
 
         // Paint the shared hero text last (after the list); defer the cover
         // image paint to the shell, which owns the image-cache authority.
@@ -282,14 +278,6 @@ impl BrowserComponent {
         }
 
         hero_on_left_list_panel_border(f, list_panel, self.focused);
-        if self.narrow_extras.feed_items.is_some() && right_panel.height > 10 {
-            self.image_paint = crate::app::render::render_wide_feed_layer(
-                f,
-                right_panel,
-                &self.narrow_extras,
-                &mut self.layout,
-            );
-        }
         final_scroll
     }
 
