@@ -59,22 +59,22 @@
 
 ## 6. Tests
 
-- [ ] 6.1 `src/app/components/music_workspace_component_tests.rs`:
+- [x] 6.1 `src/app/components/music_workspace_component_tests.rs`:
       `dot_on_album_emits_library_context_menu`,
       `dot_with_track_focus_emits_track_context_menu`,
       `slash_on_album_emits_open_inline_search`,
       `slash_with_track_focus_is_unclaimed`,
       `dot_empty_list_is_unclaimed`. Verify: `rtk cargo nextest run -p mbv`.
-- [ ] 6.2 `src/app/components/tv_workspace_component_tests.rs`:
+- [x] 6.2 `src/app/components/tv_workspace_component_tests.rs`:
       `dot_emits_library_context_menu`,
       `slash_emits_open_inline_search`,
       `dot_with_episode_focus_targets_series`. Verify:
       `rtk cargo nextest run -p mbv`.
-- [ ] 6.3 Model tests mirroring the #633 `shell_browser`/`shell_library`
+- [x] 6.3 Model tests mirroring the #633 `shell_browser`/`shell_library`
       tests: driving `.` through the mounted Music and TV components opens a
       context menu for the resolved item; driving `/` mounts the inline
       search for the selected library. Verify: `rtk cargo nextest run -p mbv`.
-- [ ] 6.4 Render test: with the inline search mounted over a Music library
+- [x] 6.4 Render test: with the inline search mounted over a Music library
       and over a TV library, the underlying workspace list does not
       underpaint (the `project_inline_search_active` / `inline_search_active`
       flag is honored on both surfaces — see design Risks). Add the one guard
