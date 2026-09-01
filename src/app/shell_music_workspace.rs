@@ -234,6 +234,9 @@ impl Model {
 }
 
 #[cfg(test)]
+#[path = "shell_music_workspace_cursor_tests.rs"]
+mod cursor_tests;
+#[cfg(test)]
 #[path = "shell_music_workspace_image_tests.rs"]
 mod image_tests;
 #[cfg(test)]
