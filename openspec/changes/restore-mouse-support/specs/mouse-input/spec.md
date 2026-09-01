@@ -16,27 +16,34 @@ keyboard focus. Mouse-event delivery SHALL use the component framework's
 subscription mechanism; the shell SHALL NOT introduce a separate mouse event
 loop, a global completed-frame hit map, or a global coordinate router.
 
-A component SHALL decide whether an event is its own by testing the event
-coordinates against the geometry it painted on its most recent render. A
-component SHALL emit a `Msg` for a mouse event only when the coordinates fall
-within a region it painted; otherwise it SHALL ignore the event.
+The mounted destination parent receives every mouse event while it is mounted and
+owns gesture recognition for that surface. The parent SHALL decide whether an
+event is its own by testing the event coordinates against the non-list chrome
+geometry it painted on its most recent render — pills, scope buttons, the seek
+bar and transport, overlay and popup regions. For a canonical media-list row the
+parent SHALL delegate point resolution to the embedded list control's
+view-populated `HitRegions<Target>` rather than re-deriving row coordinates
+itself. The parent SHALL emit a `Msg` for a mouse event only when it resolves to
+a region it painted or to a row the embedded control claims; otherwise it SHALL
+ignore the event.
 
 #### Scenario: A click lands on a panel that does not hold focus
 
 - **WHEN** keyboard focus is on one panel and the user clicks inside a different
   visible panel
-- **THEN** the clicked panel's component receives the event, resolves the target
-  from its own painted geometry, and acts on it
-- **AND** the focused panel's component, receiving the same event with
+- **THEN** the clicked panel's mounted parent receives the event, resolves the
+  target from the non-list chrome geometry it painted or by delegating a list
+  point to its embedded control, and acts on it
+- **AND** the focused panel's mounted parent, receiving the same event with
   coordinates outside its geometry, produces no message
 
 #### Scenario: Mouse events reach a subscribed component through a live tick
 
 - **WHEN** a mouse event is injected into a mounted `Application` through its
   event listener and `tick()` is called
-- **THEN** every subscribed component whose painted geometry contains the event
-  coordinates is given the event
-- **AND** no component's message for that event is produced twice
+- **THEN** every subscribed mounted parent is given the event, and each resolves
+  it against the geometry it painted or its embedded control's regions
+- **AND** no parent's message for that event is produced twice
 
 #### Scenario: Chrome that never holds focus is still clickable
 
@@ -78,17 +85,20 @@ geometry.
 - **THEN** each click is resolved and applied by the component that painted the
   region under it, independently, with focus following the click
 
-### Requirement: Pointer gestures are recognized per component
+### Requirement: Pointer gestures are recognized by the mounted parent
 
-Each interactive component SHALL recognize click, double-click, right-click, and
-wheel gestures from the raw mouse events it receives, using gesture state it owns
-privately. The double-click interval and wheel throttle SHALL NOT be held as
-shell-global state keyed by screen position.
+Each mounted destination parent SHALL recognize click, double-click, right-click,
+and wheel gestures from the raw mouse events it receives, using a private
+`MouseGestureState`. The double-click interval and wheel throttle SHALL NOT be
+held as shell-global state keyed by screen position. An embedded canonical
+media-list control SHALL NOT recognize gestures — it only populates and resolves
+`HitRegions<Target>` for its painted list rows, and the parent delegates
+list-point resolution to it.
 
-A component SHALL translate a recognized gesture into a semantic typed `Msg`
-carrying the resolved target (a row identity, a control, a pill index), never raw
-coordinates for the shell to re-resolve. The shell handler for that `Msg` SHALL
-accept the resolved target as an argument.
+A mounted parent SHALL translate a recognized gesture into a semantic typed `Msg`
+carrying the resolved target (a child-returned row identity, a control, a pill
+index), never raw coordinates for the shell to re-resolve. The shell handler for
+that `Msg` SHALL accept the resolved target as an argument.
 
 The gesture vocabulary SHALL be open to drag (`start`, `move`, `end`) and hover
 (`enter`, `leave`) gestures without changing the delivery or arbitration
@@ -98,15 +108,17 @@ precluded by its design.
 #### Scenario: A double-click activates the pointed row
 
 - **WHEN** the user clicks the same row twice within the double-click interval
-- **THEN** the component recognizes a double-click and emits the activation
-  intent for that row's resolved identity
+- **THEN** the mounted parent recognizes a double-click, delegates row resolution
+  to the embedded list control, and emits the activation intent for that row's
+  child-returned identity
 - **AND** a single click on the same row emits only a focus/selection intent
 
 #### Scenario: A wheel event scrolls the pointed list
 
-- **WHEN** the user turns the wheel over a scrollable list in any panel
-- **THEN** that list's component scrolls its own viewport, subject to its own
-  throttle, whether or not the list holds keyboard focus
+- **WHEN** the user turns the wheel over a scrollable canonical list in any panel
+- **THEN** the mounted parent recognizes the scroll gesture, subject to its own
+  throttle, and the embedded list control scrolls its own viewport and keeps its
+  own row identity, whether or not the list holds keyboard focus
 
 #### Scenario: A right-click opens the context menu at the pointer
 

@@ -24,9 +24,10 @@ the framework must absorb them additively.
 
 ## What Changes
 
-- **New mouse delivery spine.** Every mounted interactive component subscribes to
+- **New mouse delivery spine.** Every mounted destination parent subscribes to
   mouse events through TuiRealm's `EventClause::Mouse` subscription clause and
-  hit-tests against its own last-painted geometry. A shell-side arbitration fold
+  hit-tests the non-list chrome it last painted, delegating canonical list points
+  to its embedded control. A shell-side arbitration fold
   (parallel to the existing keyboard router fold) resolves overlapping claims with
   a fixed priority: topmost overlay > active panel > sibling panel > chrome. A
   mounted blocking overlay discards all mouse messages from underlying components.
@@ -36,9 +37,13 @@ the framework must absorb them additively.
   recognizer (raw events in; `Click`,
   `DoubleClick`, `RightClick`, `Scroll` out — `DragStart/Move/End` and
   `HoverEnter/Leave` reserved). These replace the scattered `note_browse_*`
-  helpers and the per-surface `*HitRegion` enums in `msg/hit_regions.rs`.
-- **Gesture recognition moves into components.** The double-click window and
-  scroll throttle move off `App`'s shell-side clock into each component's
+  helpers, and — for canonical list row hits only — the per-surface row-hit
+  `*HitRegion` enums in `msg/hit_regions.rs` (removed by the canonical media-list
+  slices as they migrate each destination). Parent chrome target types (pills,
+  Queue scope buttons, seekbar/transport) and overlay/popup target enums MAY
+  remain as their own types.
+- **Gesture recognition moves into mounted parents.** The double-click window and
+  scroll throttle move off `App`'s shell-side clock into each mounted parent's
   `MouseGestureState`. This is not the global position-keyed clock D16 forbade;
   design.md records why they differ, and why the alternative (keep timing
   shell-side) was rejected as unscalable for drag/hover.

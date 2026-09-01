@@ -120,7 +120,7 @@ mutable input state.
 `HoverEnter/Leave` reserved. The mounted parent maps the gesture to a semantic
 request, delegating canonical list point resolution to the embedded control's
 `HitRegions<Target>`. The double-click interval
-and wheel throttle live in `MouseGestureState`, per component.
+and wheel throttle live in `MouseGestureState`, per mounted parent.
 
 **A (rejected):** keep all timing in `App`'s shell-side clock; components report
 raw hit regions; the shell coalesces single-vs-double and routes the resolved
@@ -129,16 +129,17 @@ scale to the planned drag/hover work: a drag is inherently a component-local
 interaction (you drag within one surface's rows), and a hover highlight is
 component-local visual state. Under A, every new gesture needs new `*HitRegion`
 variants and new `ShellRequest` plumbing on every surface; under B it is a
-`MouseGestureState` output variant plus one component's `Msg`.
+`MouseGestureState` output variant plus one mounted parent's `Msg`.
 
 **Reconciling with D16's "do not reintroduce a second clock":** D16 forbade the
 *global* completed-frame hit map and a clock keyed by screen position shared
-across surfaces. A `MouseGestureState` owned by one component, keyed by nothing
-but that component's own recent events, is neither — it is the same shape as a
-component's existing private cursor/scroll state. The design.md of
+across surfaces. A `MouseGestureState` owned by one mounted parent, keyed by
+nothing but that parent's own recent events, is neither — it is the same shape as
+a component's existing private cursor/scroll state. The design.md of
 `migrate-tui-to-tuirealm` D16 explicitly says restoration should be "the same
 way the five landed units did — component hit-tests its own geometry, emits a
-typed `Msg::Shell`"; B extends that, A freezes it mid-way.
+typed `Msg::Shell`"; B extends that (the mounted parent is that component), A
+freezes it mid-way.
 
 ### D4 — Components emit semantic `Msg`, never raw coordinates
 
@@ -168,8 +169,12 @@ painted list rectangle; the mounted parent recognizes the gesture and delegates
 point resolution to the child. Parent-owned pills, Queue scope buttons,
 overlays, Playback seekbar, and non-list wheel/chrome retain their own regions.
 Queue/list row-hit migration belongs to the canonical media-list slices and no
-duplicate coordinate path is delivered here. Per-surface row-hit enums and
-shell-side recognition are removed only as those slices migrate them.
+duplicate coordinate path is delivered here. The shared `HitRegions<Tag>`
+primitive replaces the per-surface `*HitRegion` enums for canonical list row
+hits only; parent chrome target types (pills, Queue scope buttons,
+seekbar/transport) and overlay/popup target enums MAY remain as their own types.
+Per-surface row-hit enums and shell-side recognition are removed only as those
+slices migrate them.
 
 ### D7 — Delivery model chosen so drag/hover are additive
 
@@ -203,6 +208,15 @@ in `tasks.md`): 1 delivery spine · 2 shared primitives · 3 main-surface parity
 wheel · 4 overlays & popups · 5 music_workspace + narrow browse · 6 ledger +
 precedence-proof close-out. Phase 1 must land the fold and subscriptions with no
 new gestures, so regressions are isolated to delivery.
+
+**Visual-first ordering (rule).** Any phase that produces an observable pointer,
+cursor, or rendered-UI behaviour change — Phases 3, 4, 5, 6, and any observable
+part of Phase 2 — SHALL get explicit user live visual confirmation BEFORE that
+phase adds or modifies any rendered-UI or characterization-buffer test.
+Non-visual tests — delivery-set, arbitration priority, blocking-overlay swallow,
+`tick()` synchronisation, and gesture-recognition-in-isolation — MAY precede
+confirmation. Each affected phase gate in `tasks.md` references this rule rather
+than restating it.
 
 ## Risks / Trade-offs
 

@@ -8,11 +8,18 @@ keyboard-triggered menu. Right-click SHALL open the context menu on every
 migrated interactive surface that paints a selectable row and has a
 keyboard-triggered context menu, not only on a fixed subset of surfaces.
 
+The mounted destination parent SHALL own right-click gesture recognition, the
+click-position anchor, and menu delivery. For a canonical media-list row the
+embedded list control SHALL resolve which row was clicked; the parent SHALL NOT
+re-derive row coordinates to identify the target.
+
 #### Scenario: Mouse-triggered menu opens
 - **WHEN** a selectable row on any surface with a keyboard context menu is
   right-clicked
-- **THEN** the row is focused and the menu opens from the click position rather
-  than the selected item's keyboard anchor
+- **THEN** the mounted parent recognizes the right-click and opens the menu from
+  the click position rather than the selected item's keyboard anchor
+- **AND** for a canonical media-list the clicked row's identity comes from the
+  embedded list control while the anchor and open remain parent-owned
 
 #### Scenario: Right-click parity across migrated surfaces
 - **WHEN** a surface supports opening its context menu by keyboard
