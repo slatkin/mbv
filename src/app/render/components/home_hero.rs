@@ -94,7 +94,6 @@ pub(in crate::app) enum HeroData {
         Rect,
         KeepWatchingHeroLayout,
     ),
-    GenericBeside(QueueItem, Rect, Rect, Rect, KeepWatchingHeroLayout),
     Generic(QueueItem, Rect),
 }
 
@@ -516,40 +515,6 @@ pub(in crate::app) fn render_home_hero_content(
                 item: item.clone(),
                 centered: two_column,
             })
-        }
-        HeroData::GenericBeside(item, meta_area, wide_area, img_area, meta_layout) => {
-            let meta_block = HeroMetaBlock {
-                title_suffix: None,
-                meta_rows: item
-                    .duration()
-                    .map(|ticks| {
-                        vec![vec![Span::styled(
-                            trunc_str(
-                                &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
-                                meta_area.width as usize,
-                            ),
-                            Style::default().fg(palette::TEXT_SECONDARY),
-                        )]]
-                    })
-                    .unwrap_or_default(),
-            };
-            render_hero_layout_meta_content(
-                f,
-                *meta_area,
-                *wide_area,
-                meta_layout,
-                meta_block,
-                0,
-                focused,
-            );
-            match item {
-                QueueItem::Audiobookshelf(episode) => Some(HomeImagePaint::AudiobookshelfCover {
-                    area: *img_area,
-                    library_item_id: episode.library_item_id.clone(),
-                    show_placeholder: true,
-                }),
-                _ => None,
-            }
         }
         HeroData::Generic(item, area) => super::home_latest_row::render_home_latest_detail_content(
             f,
