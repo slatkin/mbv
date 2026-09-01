@@ -70,3 +70,22 @@ rtk cargo nextest run -p mbv feed_home_video_group --no-fail-fast
 ```
 
 Result: PASS (10 passed, 1234 skipped). This covers the existing fixture assertions for 60x20 Narrow and 140x40 Wide plus metadata/banner, pills, row geometry, and scroll projection; it does not provide real-service manual evidence and does not cover 100x30.
+
+## Task 5.4 live evidence (repeat, 2026-09-01)
+
+The effective configured environment was exercised again with the built binary:
+
+```text
+XDG_CONFIG_HOME=/home/slatkin/Dev/dotfiles tmux new-session -d -s feed-evidence -x 60 -y 20 './target/debug/mbv'
+tmux send-keys -t feed-evidence Escape
+tmux send-keys -t feed-evidence BTab
+tmux resize-window -t feed-evidence -x 100 -y 30
+tmux resize-window -t feed-evidence -x 140 -y 40
+tmux send-keys -t feed-evidence PageDown  # repeated at 140x40
+tmux capture-pane -pt feed-evidence
+tmux kill-session -t feed-evidence
+```
+
+The configured FeedSubscriptions were available as four redacted entries: `Novara Live` (Audio), `Off Menu` (Audio), `Chinese Cooking Demystified` (Video), and `Nextlander` (Video). No URLs, credentials, or identifiers were printed. The available selected FeedEntry was `Patron's Choice for August 2026: Murder Was the Case …` (date `2026-08-28`); its live row exposed duration/progress (`1:06:25 / 4:02:00`) and MIME (`audio/mpeg`) in the 100x30 capture, but no visible long overview or genre metadata. It therefore was not suitable to prove the requested Narrow selected-row expansion/banner content.
+
+Observed captures: at 60x20 and 100x30, Feeds rendered subscription pills, `All · Played · Unplayed`, `Recent`, and entries; at 140x40 the `FEEDS` tab was visible and Wide rendered the feed list in the right rail beside the selected presentation in the left rail, with no conflicting expansion. `PageDown` at 140x40 moved the visible feed selection to later entries (including `Andy Burnham Accepts Labour Leadership`), confirming the supported key path and bottom-edge projection. No direct mouse click was claimed because tmux did not provide a verified mouse-event path. The live data did not expose a metadata-bearing entry, so expansion/banner completeness and group-pill activation remain unproven; user-side input needed is a FeedEntry with a long overview and genre (or an Emby podcast/home-video library containing one).
