@@ -130,6 +130,11 @@ fn wide_feeds_use_a_left_detail_and_right_entry_workspace() {
             "selected title must align after the watched marker"
         );
         assert_eq!(buffer[(panel.x, first_row)].symbol(), "▎");
+        assert_eq!(
+            buffer[(panel.x, first_row)].bg,
+            palette::SURFACE_FOCUSED,
+            "selected-row marker must use the focused semantic surface"
+        );
         assert!(
             second.contains("✓") && second.contains("Played Entry Two"),
             "row={second:?}"

@@ -489,6 +489,27 @@ pub(in crate::app::render) fn draw_column_selection_markers(
     item_rows: &[Vec<usize>],
     row_offset: usize,
 ) {
+    draw_column_selection_markers_with_background(
+        f,
+        content_area,
+        cursor,
+        item_rows,
+        row_offset,
+        palette::SURFACE_RESTING,
+    );
+}
+
+/// Draws selection markers with the selected row's surface. Most catalog
+/// lists use the resting selected-row surface; hero-on-left Feeds rows use
+/// their focus-resolved surface instead.
+pub(in crate::app::render) fn draw_column_selection_markers_with_background(
+    f: &mut Frame,
+    content_area: Rect,
+    cursor: usize,
+    item_rows: &[Vec<usize>],
+    row_offset: usize,
+    background: Color,
+) {
     let Some(cursor_row) = item_rows.iter().position(|row| row.contains(&cursor)) else {
         return;
     };
@@ -504,7 +525,7 @@ pub(in crate::app::render) fn draw_column_selection_markers(
 
     if col_in_row == 0 {
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
+            Block::default().style(Style::default().bg(background)),
             Rect {
                 x: content_area.x.saturating_sub(2),
                 y: row_y,
@@ -523,7 +544,7 @@ pub(in crate::app::render) fn draw_column_selection_markers(
         );
     } else {
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
+            Block::default().style(Style::default().bg(background)),
             Rect {
                 x: content_area.x + content_area.width,
                 y: row_y,

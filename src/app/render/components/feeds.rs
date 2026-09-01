@@ -10,7 +10,7 @@ use crate::app::render::components::hero::{
     selected_detail_shell, HeroContent, InlineDisplayRow, HERO_BLOCK_EXTRA_ROWS,
 };
 use crate::app::render::components::list_rows::{
-    draw_column_selection_markers, SELECTED_BLOCK_SIDE_PADDING,
+    draw_column_selection_markers_with_background, SELECTED_BLOCK_SIDE_PADDING,
 };
 use crate::app::render::components::widgets::{
     render_pill_bar, render_placeholder, render_right_scrollbar_with_viewport, PillBar,
@@ -424,7 +424,14 @@ pub(in crate::app) fn render_feeds_content(
         );
     }
     if wide {
-        draw_column_selection_markers(f, list_area, cursor, &layout.left_item_rows, scroll);
+        draw_column_selection_markers_with_background(
+            f,
+            list_area,
+            cursor,
+            &layout.left_item_rows,
+            scroll,
+            palette::resolve_surface_focus(focused),
+        );
     }
     if !wide {
         if let Some(detail_screen_row) = detail_screen_row {
