@@ -3,7 +3,7 @@ use crate::app::library_column_width::{
     library_cell_width, library_column_count, LIBRARY_COLUMN_GAP,
 };
 use crate::app::palette;
-use crate::app::render::arrangements::hero_left;
+use crate::app::render::arrangements::{hero_left, padded_rect};
 use crate::app::render::components::feed_row::render_feed_entry_cell;
 use crate::app::render::components::hero::{
     inline_detail_flow, inline_display_row, inline_display_row_count, paint_hero_content,
@@ -25,7 +25,7 @@ use mbv_core::playback_queue::FeedEntry;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 
 pub(in crate::app) struct FeedsRenderModel<'a> {
@@ -258,11 +258,26 @@ pub(in crate::app) fn render_feeds_content(
 
     // Paint the post-hero selector content now that layout publication is
     // already complete for this frame's natural checkpoint.
-    let (selector_tabs, list_area) = render_selector_content(f, post_hero_area);
+    let (selector_tabs, list_panel) = render_selector_content(f, post_hero_area);
     layout.selector_tabs = selector_tabs;
-    layout.left_area = list_area;
-    if list_area.height == 0 {
+    if list_panel.height == 0 {
         return;
+    }
+    // Wide Feeds follows the other hero-on-left surfaces: the selector yields
+    // an outer semantic panel, while rows render into its inset content area.
+    // Keeping the border outside the content prevents it from replacing a
+    // grouping heading or the last visible entry at either scroll boundary.
+    let list_area = if wide {
+        padded_rect(list_panel, hero_left::PANE_PAD_X, hero_left::PANE_PAD_Y)
+    } else {
+        list_panel
+    };
+    layout.left_area = list_area;
+    if wide && list_panel.height > 0 {
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::resolve_surface_focus(focused))),
+            list_panel,
+        );
     }
     // The selector preserves pane width, so pack rows only after it yields
     // the final right-list area in wide presentation. Feeds' Wide rail is
@@ -375,7 +390,7 @@ pub(in crate::app) fn render_feeds_content(
     // Paint the semantic rail frame after rows: row backgrounds must not
     // obscure its edge rows (the Music/TV panel pattern).
     if wide {
-        hero_left::hero_on_left_list_panel_border(f, list_area, focused);
+        hero_left::hero_on_left_list_panel_border(f, list_panel, focused);
     }
     layout.left_row_map = row_map;
     layout.left_item_rows = (0..total_display)
