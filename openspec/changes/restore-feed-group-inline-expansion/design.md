@@ -21,6 +21,19 @@ bespoke `render_wide_feed_layer` so Wide falls through to the shared
 Hero-on-left path, and `compose-canonical-media-lists` (slice 2) owns the
 substantive Wide list control.
 
+**As delivered.** The in-place approach recorded in D1–D4 and tasks 3.1–3.4
+(patch `selected_h` inside `render_feed_group_picker_content`, port the scroll
+clamp into that function) was the first landed fix (`27b87423`). It was then
+SUPERSEDED by `051bf75a`, which deleted `render_feed_group_picker_content` and
+`render_wide_feed_layer` entirely (~325 lines) and routed the Emby homevideos
+feed view picker through the shared paths: narrow via
+`render_narrow_browse_with_ctx` → `render_plain_rows` /
+`render_letter_grouped_rows`, Wide via `render_wide_movies` (Hero-on-left).
+Only `paint_feed_group_pills_row` and the `feed_selected_height` field
+(consumed in `render_narrow_browse_with_ctx`) survive from the first approach.
+D1–D4 and tasks 3.x are retained as the record of that first attempt, not the
+end state.
+
 One divergence is already live and is out of scope here: the migrated picker
 paints a ` N items` + `▁` header that legacy
 `render_feed_home_video_group_view` never had (`b029fec3`), shifting every row

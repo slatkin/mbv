@@ -84,6 +84,9 @@ owned by `compose-canonical-media-lists` (slice 2), not respecified.
   (`render_feed_group_picker_content`),
   possibly `src/app/components/browser_narrow.rs` (`NarrowBrowseExtras`) if
   the expansion height must be published shell-side.
+  Note: functions named here as edit sites (`render_feed_group_picker_content`)
+  were subsequently removed by the routing refactor — see design.md
+  "As delivered".
 - `src/app/tests_narrow_browse_migration.rs` (fixtures + baselines + scroll
   test).
 - No ctrl protocol, daemon, persistence-format, or key-routing changes.

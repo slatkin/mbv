@@ -33,6 +33,9 @@
 
 ## 3. Fix the Normal painter
 
+> These rows record the first landed fix (`27b87423`); it was superseded by the
+> routing refactor (`051bf75a`). See design.md "As delivered" for the end state.
+
 - [x] 3.1 Replace `let selected_h = 1;` in `render_feed_group_picker_content`
       with `extras.feed_selected_height.max(1)`, keeping the existing
       `render_compact_detail_with_ctx` call untouched so its
