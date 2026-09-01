@@ -208,7 +208,11 @@ The frontend skill and ledger use the same terms. No slice introduces alternate 
 
 ### D14 — Reconcile completion only after all slices land
 
-The umbrella remains open while slices are implemented. Slice 5 removes obsolete cross-family loops and geometry, updates ADR 0022 and the interactive-surface ledger, syncs the umbrella deltas into main specs, and runs final gates. The umbrella is archived only after all slice PRs, independent fixes, manual evidence, and PR #606 branch checks are complete.
+The umbrella remains open while slices are implemented. Slice 5 removes obsolete cross-family loops and geometry, updates ADR 0022 and the interactive-surface ledger, and runs final gates.
+
+Spec sync at close-out is split by owner. The `canonical-media-lists` and `right-panel-arrangements` capabilities in `openspec/specs/` are populated only by the slice deltas (foundation / home-feeds / music-abs), synced when each slice archives normally. The umbrella `specs/` tree is the campaign contract-of-record and is archived `--skip-specs`; it is not re-synced. The umbrella contributes to `openspec/specs/` only the requirements no slice delta owns — the `ui-design-system` and `interactive-component-framework` requirements — hand-merged using the repo's established `--skip-specs` plus manual-merge workflow (same as change #621). Before any archive, the reconciliation in tasks 5.3a / 5.4 confirms no umbrella-only normative content is stranded and normalizes or hand-merges every base-less slice `## MODIFIED` block.
+
+The umbrella is archived only after all slice PRs, independent fixes, manual evidence, and PR #606 branch checks are complete.
 
 No bespoke exception is planned. Any discovered exception requires an umbrella design/spec update before its slice proceeds.
 
@@ -233,6 +237,6 @@ No bespoke exception is planned. Any discovered exception requires an umbrella d
 3. Create and approve all five slice OpenSpec changes, each naming its branch dependency, exact destination inventory, file splits, automated evidence, and manual checks.
 4. Land slice 1 through slice 4 as separate PRs against `feat/migrate-tui-to-tuirealm`; do not cross-squash slices.
 5. Land slice 5 cleanup/reconciliation after all destination slices are green.
-6. Run `openspec validate --strict` for the umbrella, the five canonical slices (`introduce-canonical-media-list-foundation`, `migrate-home-feeds-to-canonical-lists`, `migrate-music-audiobookshelf-to-canonical-lists`, `migrate-queue-to-canonical-list`, `remove-bespoke-media-list-loops`), `restore-feed-group-inline-expansion`, `restore-feeds-service-wide-list`, `restore-mouse-support`, and the superseded `restore-audiobookshelf-podcast-wide-layout` (#640, expected `apply` inventory 0/0); run final branch gates, sync umbrella deltas, archive the umbrella, and then merge PR #606.
+6. Run `openspec validate --strict` for the umbrella, the five canonical slices (`introduce-canonical-media-list-foundation`, `migrate-home-feeds-to-canonical-lists`, `migrate-music-audiobookshelf-to-canonical-lists`, `migrate-queue-to-canonical-list`, `remove-bespoke-media-list-loops`), `restore-feed-group-inline-expansion`, `restore-feeds-service-wide-list`, `restore-mouse-support`, and the superseded `restore-audiobookshelf-podcast-wide-layout` (#640, expected `apply` inventory 0/0); run final branch gates. Then close out in discrete order per tasks 5.3a and 5.4: (1) manual pre-sync reconciliation; (2) archive the five slices plus the independent `restore-feed-group-inline-expansion` / `restore-feeds-service-wide-list` fixes and the superseded `restore-audiobookshelf-podcast-wide-layout`, whose deltas sync normally; (3) archive the umbrella `--skip-specs`, keeping its `specs/` tree as the contract-of-record reference; (4) hand-merge the umbrella's `ui-design-system` and `interactive-component-framework` requirements into `openspec/specs/`. Then merge PR #606.
 
 Rollback is one slice PR at a time. Reverting a slice must not restore global legacy interaction infrastructure or activate two painters as a fallback.
