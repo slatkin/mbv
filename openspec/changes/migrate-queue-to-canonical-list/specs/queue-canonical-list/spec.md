@@ -4,7 +4,7 @@
 
 ### Requirement: Queue composes canonical fixed-row mechanics
 
-The Queue Interactive Component SHALL embed `WideMediaList` or an equivalent canonical fixed-row child for Queue's fixed-height rows. Queue SHALL NOT duplicate selectable indexing, fixed-row placement, cursor movement, scrolling, scrollbar geometry, or row hit testing in the parent or shell.
+The Queue Interactive Component SHALL embed `WideMediaList<QueueSlotId>` directly for Queue's fixed-height rows. Queue SHALL NOT use `InlineMediaBrowser`, Hero-on-left, Inline hero, or responsive Wide/Inline handoff. Queue SHALL NOT duplicate selectable indexing, fixed-row placement, cursor movement, scrolling, scrollbar geometry, or row hit testing in the parent or shell. Every slot-targeted Queue effect request SHALL identify its stable `QueueSlotId`; only reorder MAY carry a destination position, and that position SHALL be resolved against the same canonical queue.
 
 #### Scenario: Queue renders canonical rows
 
@@ -56,7 +56,7 @@ The mounted Queue parent SHALL own its mouse subscription and `MouseGestureState
 
 ### Requirement: Queue preserves the visual contract before test changes
 
-Implementation SHALL characterize current Queue output and behavior before visual correction. Visual correction SHALL be performed at supported Wide/Normal and narrow/mini widths, with explicit user live confirmation before adding or updating UI tests. Tests SHALL then cover metadata, active progress, focus, Local/Remote scope, reorder state, remote state, and stable target/geometry behavior.
+Implementation SHALL characterize current Queue output and behavior before visual correction. Before explicit user live approval, characterization SHALL use only source trace, existing unchanged evidence, and manual observation; it SHALL NOT modify UI tests or use test-driven appearance. Visual correction SHALL be performed at supported Wide/Normal and narrow/mini widths, with explicit user live confirmation before adding or updating UI tests. Tests SHALL then cover metadata, active progress, focus, Local/Remote scope, reorder state, remote state, and stable target/geometry behavior.
 
 #### Scenario: Verification proves one painter
 

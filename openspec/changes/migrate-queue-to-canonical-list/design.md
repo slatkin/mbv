@@ -6,7 +6,7 @@ The canonical media-list foundation provides a provider-neutral fixed-row contro
 
 ### D1 — Fixed-row child only
 
-Queue embeds `WideMediaList<QueueSlotId>` (or the foundation's equivalent canonical fixed-row child). `InlineMediaBrowser`, Hero-on-left, Inline hero, and responsive Wide/Inline handoff are explicitly out of scope. Queue remains one fixed-row list in each supported Queue presentation.
+Queue embeds `WideMediaList<QueueSlotId>` directly. Queue SHALL NOT use `InlineMediaBrowser`, Hero-on-left, Inline hero, or responsive Wide/Inline handoff. Queue remains one fixed-row list in each supported Queue presentation.
 
 ### D2 — Prepared Queue projection
 
@@ -14,7 +14,7 @@ The parent prepares canonical rows containing stable `QueueSlotId`, title/metada
 
 ### D3 — Authority stays in Queue parent/shell
 
-Local/Remote scope and its controls, reorder, playback, title, Player/queue authority, persistence, and active-state decisions remain in Queue parent/shell code. Child movement is local; typed intents carry resolved targets/indices when an effect is required. Do not add an App mirror or per-frame writeback.
+Local/Remote scope and its controls, reorder, playback, title, Player/queue authority, persistence, and active-state decisions remain in Queue parent/shell code. Child movement is local; every slot-targeted effect uses a stable `QueueSlotId`. A destination position is permitted only for reorder and must be resolved against that same canonical queue. Do not add an App mirror or per-frame writeback.
 
 ### D4 — Mouse ownership
 
@@ -22,11 +22,11 @@ The mounted Queue parent subscribes to mouse events and owns `MouseGestureState`
 
 ### D5 — Verification order
 
-First characterize current Queue rendering and interaction with metadata-bearing Local/Remote, reorder, active-progress, and remote fixtures. Then perform visual correction and obtain explicit user live confirmation at supported widths. Only afterward change/add UI tests. Tests and evidence must prove one painter, child hit geometry, target preservation, and ≤800-line changed source files.
+Before explicit user live approval, characterization is limited to source trace, existing unchanged evidence, and manual observation; it must not modify UI tests or use test-driven appearance. Then perform visual correction at supported widths and obtain explicit user live confirmation. Only afterward change/add UI tests. Tests and evidence must prove one painter, child hit geometry, target preservation, and ≤800-line changed source files.
 
 ### D6 — Stacking and rollback
 
-Stack on PR #606's feature branch and accepted canonical foundation. Keep this Queue slice independent of Home/Feeds, Music/Audiobookshelf, Feeds Service, and Emby homevideos work, with a distinct rollback boundary. No runtime data migration or dependency change.
+At implementation start, record the accepted canonical-foundation merge SHA, then stack on that foundation and PR #606's feature branch. Keep this Queue slice independent of Home/Feeds, Music/Audiobookshelf, Feeds Service, and Emby homevideos work, with a distinct rollback boundary. No runtime data migration or dependency change.
 
 ## Risks and mitigations
 

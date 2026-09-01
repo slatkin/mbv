@@ -4,7 +4,7 @@ Queue still owns destination-specific fixed-row mechanics instead of composing t
 
 ## What Changes
 
-- Characterize the accepted Queue output and interactions, then compose the canonical `WideMediaList` mechanics (or the equivalent canonical fixed-row child) inside the mounted Queue parent.
+- Characterize the accepted Queue output and interactions, then compose `WideMediaList<QueueSlotId>` directly inside the mounted Queue parent.
 - Project Queue rows as provider-neutral selectable items with stable `QueueSlotId` targets, metadata, active state, and bounded `progress_percent` (`0..=100`) as presentation data only.
 - Keep Local/Remote scope, scope controls, reorder, playback, title, Player/queue authority, persistence, and active state in the Queue parent/shell.
 - Make the embedded child own row `HitRegions<QueueSlotId>`; the mounted parent owns mouse subscription and `MouseGestureState` and delegates point resolution.
