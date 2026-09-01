@@ -98,6 +98,7 @@ pub(in crate::app) struct AudiobookshelfPodcastGeometry {
     /// Column count used by the painted show grid and keyboard navigation.
     pub columns: usize,
     pub selector_tabs: Vec<(Rect, usize)>,
+    pub pill_bar_area: Rect,
     pub show_rows: Vec<(Rect, usize)>,
     pub episode_rows: Vec<(Rect, usize)>,
     /// Painted list/browser area: the wide right panel, or the narrow content
@@ -118,6 +119,8 @@ pub(in crate::app) struct AudiobookshelfPodcastGeometry {
     /// shell today; `None` in the wide layout, which has no selected-item
     /// shell). Mirrors the legacy `LayoutMain.selected_item_rect`.
     pub selected_item_rect: Option<Rect>,
+    /// Full-width selected show panel in the wide rail.
+    pub selected_panel_rect: Option<Rect>,
 }
 
 pub(in crate::app) fn render_audiobookshelf_podcast_content(
@@ -178,6 +181,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         .iter()
         .position(|bucket| state.cursor() >= bucket.start && state.cursor() < bucket.end)
         .unwrap_or(0);
+    geometry.pill_bar_area = right_pane.pills_area;
     geometry.selector_tabs = render_pill_bar(
         frame,
         right_pane.pills_area,
@@ -197,7 +201,17 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     if state.selected_show().is_some() {
         geometry.hero_area = hero_panel;
     }
-    render_show_rows(frame, browser, focused, state, 1, 0, *scroll, geometry);
+    render_show_rows(
+        frame,
+        browser,
+        Some(right_pane.list_panel),
+        focused,
+        state,
+        1,
+        0,
+        *scroll,
+        geometry,
+    );
     hero_on_left_list_panel_border(frame, right_pane.list_panel, focused);
     image_paint
 }
@@ -232,6 +246,7 @@ fn render_narrow_podcast(
         .unwrap_or(0);
     let labels: Vec<String> = buckets.iter().map(|bucket| bucket.label.into()).collect();
     let ids: Vec<usize> = (0..labels.len()).collect();
+    geometry.pill_bar_area = parts.pills_area;
     geometry.selector_tabs = render_pill_bar(
         frame,
         parts.pills_area,
@@ -260,6 +275,7 @@ fn render_narrow_podcast(
     render_show_rows(
         frame,
         list_area,
+        None,
         focused,
         state,
         geometry.columns,
@@ -414,6 +430,7 @@ fn render_podcast_hero(
 fn render_show_rows(
     frame: &mut Frame,
     area: Rect,
+    selected_panel: Option<Rect>,
     focused: bool,
     state: &AudiobookshelfBrowseState,
     cols: usize,
@@ -460,6 +477,22 @@ fn render_show_rows(
                         .map(|(column, index)| {
                             let selected = *index == state.cursor();
                             if selected {
+                                let panel = selected_panel.map(|panel| Rect {
+                                    x: panel.x,
+                                    y: area.y + screen_row as u16,
+                                    width: panel.width,
+                                    height: 1,
+                                });
+                                if let Some(panel) = panel {
+                                    frame.render_widget(
+                                        Block::default().style(
+                                            Style::default()
+                                                .bg(palette::resolve_surface_focus(focused)),
+                                        ),
+                                        panel,
+                                    );
+                                    geometry.selected_panel_rect = Some(panel);
+                                }
                                 let x = area.x
                                     + column as u16
                                         * (cell_width as u16

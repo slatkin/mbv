@@ -169,15 +169,27 @@ fn assert_wide_podcast_render(width: u16) {
                 g.list_area,
                 g.columns,
                 g.selector_tabs.clone(),
+                g.pill_bar_area,
                 g.show_rows.clone(),
                 g.episode_rows.clone(),
+                g.selected_panel_rect,
                 terminal.backend().buffer().clone(),
             )
         })
         .expect("podcast component mounted");
 
-    let (hero_area, right_area, list_area, columns, selector_tabs, show_rows, episode_rows, buffer) =
-        geometry;
+    let (
+        hero_area,
+        right_area,
+        list_area,
+        columns,
+        selector_tabs,
+        pill_bar_area,
+        show_rows,
+        episode_rows,
+        selected_panel,
+        buffer,
+    ) = geometry;
     assert!(
         hero_area.width > 0,
         "{width}-column render must have a hero"
@@ -190,8 +202,8 @@ fn assert_wide_podcast_render(width: u16) {
         !episode_rows.is_empty(),
         "wide selected-show workspace must paint episode rows"
     );
-
     let pill = selector_tabs[0].0;
+
     assert_eq!(buffer[(pill.x, pill.y)].symbol(), "◢");
     assert_eq!(
         buffer[(pill.x, pill.y)].style().bg,
@@ -207,6 +219,11 @@ fn assert_wide_podcast_render(width: u16) {
         .find(|(_, index)| *index == 0)
         .expect("selected show row must be painted");
     assert_eq!(*show_index, 0);
+    let selected_panel = selected_panel.expect("wide selected show panel must be painted");
+    assert_eq!(selected_panel.x, pill_bar_area.x);
+    assert_eq!(selected_panel.width, pill_bar_area.width);
+    assert!(selected_panel.x <= show_row.x);
+    assert!(show_row.x + 2 <= selected_panel.right());
     assert_eq!(buffer[(show_row.x, show_row.y)].symbol(), ">");
     assert_eq!(buffer[(show_row.x + 2, show_row.y)].symbol(), "S");
     assert_eq!(show_row.x, list_area.x);
