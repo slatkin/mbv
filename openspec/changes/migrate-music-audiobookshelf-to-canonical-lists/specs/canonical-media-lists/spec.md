@@ -19,7 +19,8 @@ Grouped Music album browsing and Audiobookshelf Podcast show browsing and Book b
 
 #### Scenario: Audiobookshelf books compose without duplicate detail
 - **WHEN** a Book library is shown Wide
-- **THEN** the selected book is represented by the sole canonical selected-row/hero presentation and is not painted again as a detached selected-row replacement
+- **THEN** the selected book's persistent provider detail workspace renders in the left pane and the right rail shows ordinary fixed-height one-column canonical rows
+- **AND** no selected-row replacement and no Inline hero is painted in the Wide right rail
 - **AND** chapter rows remain provider-owned seek targets for the selected book.
 
 ### Requirement: Audiobookshelf geometry has complete breakpoint fallbacks

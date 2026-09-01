@@ -17,3 +17,17 @@ Grouped Music and Audiobookshelf Podcast and Book destinations SHALL use the sam
 - **THEN** it uses the same shared predicate, pane framing, content spacing, and short-height fallback as TV and Movies
 - **AND** it uses the shared Inline fallback, or suppresses detail when the shared minimum cannot fit
 - **AND** it does not define a destination-specific breakpoint or arrangement.
+
+### Requirement: Audiobookshelf Podcast and Book Wide surfaces route through the shared right pane
+
+The Audiobookshelf Podcast and Book Wide surfaces SHALL render through the shared hero-on-left right-pane arrangement rather than a bespoke painter. These are provider-arrangement repairs this slice owns, distinct from the canonical list control itself. The Podcast Wide right rail SHALL present the same pill row it presents at Narrow width. The Book Wide left pane SHALL use the shared provider-detail-workspace framing and content spacing used by grouped Music, and its right rail SHALL show ordinary fixed-height one-column rows with no selected-row replacement and no Inline hero. Neither surface SHALL define a destination-specific breakpoint, column-sizing rule, or fallback.
+
+#### Scenario: Podcast Wide has pill-row parity with Narrow
+- **WHEN** an Audiobookshelf Podcast library meets the shared Wide geometry conditions
+- **THEN** its right rail renders the shared pill row over the one-column show browser
+- **AND** it routes through the shared hero-on-left right pane, not a surface-specific painter.
+
+#### Scenario: Book Wide uses shared workspace framing
+- **WHEN** an Audiobookshelf Book library meets the shared Wide geometry conditions
+- **THEN** the selected book's provider detail workspace renders in the left pane with the shared framing and spacing used by grouped Music
+- **AND** the right rail renders ordinary fixed-height one-column rows with no selected-row replacement or Inline hero.
