@@ -259,7 +259,7 @@ pub(in crate::app) fn render_wide_feed_layer(
     area: Rect,
     extras: &NarrowBrowseExtras,
     layout: &mut LayoutMain,
-) {
+) -> Option<HomeImagePaint> {
     let pills = crate::app::render::arrangements::hero_left::pill_bar_areas(area);
     let labels: Vec<String> = std::iter::once("All".into())
         .chain(
@@ -293,6 +293,7 @@ pub(in crate::app) fn render_wide_feed_layer(
         divider,
     );
     layout.left_area = divider;
+    let mut image_paint = None;
     if let Some(items) = extras.feed_items.as_ref() {
         let content_area = Rect {
             y: divider.y,
@@ -340,7 +341,7 @@ pub(in crate::app) fn render_wide_feed_layer(
                     layout: banner,
                 }) = extras.inline_hero.as_ref()
                 {
-                    let _ = super::detail::render_compact_detail_with_ctx(
+                    image_paint = super::detail::render_compact_detail_with_ctx(
                         super::detail::CompactDetailCtx {
                             item,
                             layout: banner.clone(),
@@ -383,6 +384,7 @@ pub(in crate::app) fn render_wide_feed_layer(
             y = y.saturating_add(if selected_row { row_height } else { 2 });
         }
     }
+    image_paint
 }
 
 fn render_feed_group_picker_content(
