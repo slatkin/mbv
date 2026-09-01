@@ -39,3 +39,18 @@ The mounted Music or Audiobookshelf destination parent SHALL own mouse subscript
 - **WHEN** a pointer gesture lands on a painted canonical row
 - **THEN** the parent delegates the point to the embedded control's `HitRegions<Target>`
 - **AND** the resolved target becomes the typed intent input without a second list hit path.
+
+### Requirement: TV and Movies establish the Wide composition precedent
+
+When grouped Music or an Audiobookshelf Podcast or Book destination meets the shared Wide width and minimum-height predicate, it SHALL follow the TV/Movies composition: its provider-owned detail/workspace SHALL occupy the left pane, and its parent-owned browser-level pills, followed by ordinary one-column canonical rows, SHALL occupy the right rail. The arrangement SHALL use the same shared predicate, pane framing, content spacing, and short-height fallback as TV/Movies. The Wide presentation SHALL NOT use an Inline hero or selected-row replacement in the right rail; when the shared predicate is not met, the destination SHALL use the shared Inline fallback (or suppress detail when the shared minimum cannot fit), not a bespoke arrangement.
+
+#### Scenario: Wide provider workspace and ordinary rail
+- **WHEN** grouped Music or an Audiobookshelf Podcast or Book destination meets the shared Wide geometry conditions
+- **THEN** its provider-owned detail/workspace is on the left
+- **AND** its browser-level pills and ordinary one-column canonical rows are on the right
+- **AND** no Wide Inline hero or selected-row replacement is painted in the right rail.
+
+#### Scenario: Shared predicate and fallback apply
+- **WHEN** the destination crosses the shared width or minimum-height guard
+- **THEN** it uses the same predicate, pane framing, content spacing, and short-height fallback as TV/Movies
+- **AND** it does not introduce a destination-specific arrangement or breakpoint.

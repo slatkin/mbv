@@ -1,14 +1,14 @@
 ## 1. Preconditions and characterization
 
-- [ ] 1.1 Confirm accepted foundation and Home/Feeds prerequisites, clean accepted base 25c6e77, PR #606 feature-branch stacking, and #640 supersession; do not edit umbrella artifacts.
+- [ ] 1.1 Confirm the accepted canonical foundation and its mouse seam, PR #606 feature-branch stacking, and #640 supersession; when implementation is issued, record the accepted canonical-foundation merge tip in the implementation handoff/task evidence; do not edit umbrella artifacts.
 - [ ] 1.2 Read current Music, Podcast, and Book render/component callers and record source-of-truth precedent from working TV/Movies; document no #623/#634/#637 scope.
-- [ ] 1.3 Characterize grouped Music re-anchor before replacement with metadata-bearing Wide/Normal and breakpoint-transition evidence: selected target, cursor, scroll, and selected-row offset.
+- [ ] 1.3 Characterize grouped Music re-anchor before replacement using source/state inspection and live visual evidence only, with metadata-bearing Wide/Normal and breakpoint-transition evidence for selected target, cursor, scroll, and selected-row offset; do not change or add UI tests before explicit user live visual approval.
 
 ## 2. Canonical composition
 
-- [ ] 2.1 Prepare grouped Music album rows for `WideMediaList`/`InlineMediaBrowser`; preserve group headings/buckets, track workspace, images, selectors, and typed intents.
-- [ ] 2.2 Compose Audiobookshelf Podcast show rows with canonical controls; retain selected-show episode workspace, episode/played filter, images, and provider playback authority.
-- [ ] 2.3 Compose Audiobookshelf Book rows with canonical controls and remove Wide selected-row replacement; retain book detail, chapter/audio-file authority, images, surname buckets, and absolute chapter seek intents.
+- [ ] 2.1 Prepare only grouped Music album rows for `WideMediaList`/`InlineMediaBrowser`; preserve group headings/buckets, parent-owned track workspace, images, selectors, and typed intents.
+- [ ] 2.2 Compose only Audiobookshelf Podcast show rows with canonical controls; retain the parent-owned selected-show episode workspace, episode/played filter, images, and provider playback authority.
+- [ ] 2.3 Compose only Audiobookshelf Book rows with canonical controls and remove Wide selected-row replacement; retain parent-owned book detail, chapter/audio-file authority, images, surname buckets, and absolute chapter seek intents.
 - [ ] 2.4 Repair Podcast and Book non-list arrangement/framing defects required for composition using shared placement/rail policies; preserve Wide, Normal/Narrow, and short-height fallback.
 - [ ] 2.5 Preserve stable `ViewportAnchor` target/offset handoff across breakpoint changes and navigation events without shell mirrors or per-frame writeback.
 - [ ] 2.6 Wire parent-owned mouse gesture subscription to child-owned canonical hit regions; ensure child explicit targets precede workspace targets and no duplicate list hit path exists.
@@ -16,8 +16,8 @@
 
 ## 3. Visual-first evidence and tests
 
-- [ ] 3.1 Perform live visual correction at Wide, Normal/Narrow, and short-height layouts for Music, Podcast, and Book, including selection, scrolling, focus, images enabled/disabled, grouping/filter/bucket state, rail framing, and workspace composition; obtain explicit user confirmation before UI test edits.
-- [ ] 3.2 After confirmation, add/update focused rendered buffer and geometry tests with metadata-bearing fixtures covering one-column geometry, selected/active/played states, images, selectors/buckets, chapter/episode targets, breakpoint fallback, and target/offset anchoring.
+- [ ] 3.1 Perform live visual correction at Wide, Normal/Narrow, and short-height layouts for Music, Podcast, and Book, including selection, scrolling, focus, images enabled/disabled, grouping/filter/bucket state, rail framing, and workspace composition; obtain explicit user live visual approval before changing or adding any UI tests.
+- [ ] 3.2 Only after explicit user live visual approval, add/update focused rendered buffer and geometry tests with metadata-bearing fixtures covering one-column geometry, selected/active/played states, images, selectors/buckets, chapter/episode targets, breakpoint fallback, and target/offset anchoring.
 - [ ] 3.3 Prove one painter per destination/breakpoint by source trace and execution counter/assertion; prove no destination-sized duplicate list or Wide Book selected-row replacement remains.
 - [ ] 3.4 Verify mouse parent/child seam with focused hit-region/typed-intent evidence; do not add a global hit map or second router.
 
