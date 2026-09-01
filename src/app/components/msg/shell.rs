@@ -406,6 +406,10 @@ pub enum ShellRequest {
     BrowserContextMenu {
         item: EmbyItem,
     },
+    /// Mirror of [`BrowserContextMenu`] for Emby library workspaces.
+    EmbyLibraryContextMenu {
+        item: EmbyItem,
+    },
     /// Ctrl+S on the mounted generic/Movies/home-video `BrowserComponent`
     /// (task 5.3d, Emby browser shuffle decoupling): the component resolves
     /// its own selected `EmbyItem` from its component-local cursor/content,
