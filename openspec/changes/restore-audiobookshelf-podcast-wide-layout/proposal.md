@@ -1,25 +1,28 @@
 ## Status: Superseded / Cancelled
 
-The standalone #640 implementation is cancelled and must be reverted. Its required Audiobookshelf Books and Podcasts repairs are absorbed by `migrate-music-audiobookshelf-to-canonical-lists`, which owns composition and non-list fixes without bespoke exceptions. This change is retained only as historical planning context; no task is complete.
+The standalone #640 implementation is cancelled and must not proceed. Any work associated with that standalone plan is to be reverted where present; the required Audiobookshelf Books and Podcasts repairs are absorbed by `migrate-music-audiobookshelf-to-canonical-lists`, which is the sole active owner of their composition and required non-list fixes.
 
-## Why
+This change remains only as historical planning context. It does not promise an implementation, tests, delivery, or a separate pull request.
 
-Issue #640 reports that the Audiobookshelf podcast Wide surface bypasses the shared hero-on-left arrangement. It currently reserves a separate `right_panel`/hero panel and uses provider-local column sizing, unlike the shared presentation used by other hero-bearing browse surfaces.
+## Historical Context
 
-## What Changes (superseded; not to implement)
+Issue #640 described an Audiobookshelf podcast Wide surface that bypassed the shared hero-on-left arrangement. The earlier plan recorded a separate right/hero panel, provider-local column sizing, missing shared pills and framing, and the need to preserve the provider episode workspace and existing Narrow behavior.
 
-- Route Audiobookshelf podcast Wide rendering through the shared Hero-on-left placement: hero workspace on the left and one fixed-row show/episode rail on the right.
-- Restore Wide pills and right-rail framing while preserving the provider-specific episode workspace, images, and all Normal/Narrow behavior.
-- Characterize current width-boundary and re-anchor behavior at 81 and 82 columns with Ratatui `TestBackend` before changing geometry.
-- Split `src/app/render/components/audiobookshelf_podcast.rs` if implementation would exceed the 800-line source limit.
+## Supersession and Absorption
 
-## Capabilities
+The canonical Music/Audiobookshelf slice supersedes this plan. Its scope includes the shared composition and the related Audiobookshelf Books and Podcasts repairs, including the Podcast Wide rail and other non-list layout defects needed for canonical composition. Those repairs belong there without a bespoke #640 exception or a second destination-sized list path.
 
-### Modified Capabilities
+The explicit revert/absorption rule prevents this cancelled change from being implemented independently or from creating a competing ownership path. No task in this directory is evidence that the absorbed work is complete; completion is tracked only by `migrate-music-audiobookshelf-to-canonical-lists`.
 
-- `right-panel-arrangements`: Audiobookshelf podcast Wide uses the shared hero-on-left arrangement and a single-column right rail with pills.
-- `ui-design-system`: The podcast rail uses shared semantic framing and geometry; Narrow remains the inline presentation.
+## Historical Capability References
+
+The retained spec files record the capabilities that the cancelled plan had considered:
+
+- `right-panel-arrangements` — the historical Podcast Wide placement and rail presentation.
+- `ui-design-system` — the historical shared geometry, semantic framing, and Narrow-preservation considerations.
+
+They are not active capability deltas for this cancelled change.
 
 ## Impact
 
-Render arrangement/component, interactive component geometry projection, and Audiobookshelf podcast shell layout predicate only. No provider, playback, queue, protocol, canonical-list, keyboard, or mouse changes. This is an independent change stacked on the PR #606 feature branch; it does not alter PR #606's merge rule.
+This cancelled change has no current code, API, dependency, test, implementation, or delivery impact. The canonical Music/Audiobookshelf change owns any resulting implementation and verification. Feeds Service work and the Emby homevideos feed view remain separate and are not absorbed by this change or by the Podcast repair rationale here.

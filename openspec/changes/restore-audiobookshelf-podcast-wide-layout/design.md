@@ -1,36 +1,21 @@
 ## Status: Superseded / Cancelled
 
-The standalone #640 implementation must be reverted. The required Audiobookshelf Books and Podcasts repairs are absorbed by `migrate-music-audiobookshelf-to-canonical-lists`; that canonical slice owns composition and required non-list repairs without bespoke exceptions. No work in this change is complete.
+This design is retained as historical context for the cancelled standalone #640 plan. It is not an implementation direction, does not authorize a separate implementation or pull request, and has no remaining execution decisions.
 
-## Context
+## Historical Context
 
-`render_audiobookshelf_podcast_content` already calls `shared_hero_presentation`, but its Wide branch paints the hero and ordinary browser directly into the returned panes and does not use the shared right-pane pill/framing policy. The shell also retains legacy right-area projection for overlays. The correction is limited to placement and geometry; provider content remains the source of truth.
+The former plan addressed an Audiobookshelf podcast surface whose Wide presentation diverged from the shared hero-on-left geometry. It identified detached detail placement, provider-local rail sizing, missing shared pills/framing, shell geometry projection, and the need to retain the provider episode workspace and Narrow behavior.
 
-## Goals / Non-Goals
+## Supersession Decision
 
-**Goals:** make Audiobookshelf podcast Wide conform to the sole Hero-on-left arrangement; keep one fixed-row right rail; retain Wide pills, semantic framing, provider episode workspace, images, and typed interaction geometry; preserve Narrow.
+The standalone plan was cancelled so that Audiobookshelf Books and Podcasts are repaired together with the canonical Music/Audiobookshelf composition. `migrate-music-audiobookshelf-to-canonical-lists` is the sole owner of those repairs, including the Podcast Wide rail and any non-list layout work needed to make canonical composition correct. This change supplies no parallel arrangement, exception, breakpoint, test plan, or delivery sequence.
 
-**Non-Goals:** canonical media lists, Feeds Service or Emby homevideos feed views, provider fetch/playback semantics, queue/protocol changes, keyboard/mouse routing, or PR #606 merge sequencing.
+The former design's shared-arrangement rationale is preserved only to explain the absorption: canonical controls and the established Hero-on-left/Inline presentations are preferred over a destination-specific detached-detail path; provider episode/chapter workspaces and typed intents remain provider-owned; and the established breakpoint and short-height behavior should not be regressed by the active canonical work.
 
-## Decisions
+## Scope Boundary
 
-### D1 — Use the shared arrangement at the shell/component seam (superseded)
-Keep the shell's existing Wide predicate as the source of the content-area decision, but ensure the component receives the same Wide geometry and uses `hero_on_left_right_pane`/`pill_bar_areas` and the shared rail border painter rather than reconstructing a detached right panel. The arrangement owns breakpoints and rect splitting; the podcast component owns content and provider-native targets.
+The cancelled plan never covered provider fetching or playback semantics, queue or protocol behavior, keyboard or mouse routing, or daemon changes. It also remains distinct from the Feeds Service and its Feeds tab, and from the Emby homevideos feed view. Those surfaces are not evidence for this change and are not folded into its supersession.
 
-### D2 — One fixed-row rail
-Wide show rows use one column regardless of `library_column_count`. The right rail's pill row and list panel are laid out with the shared helpers; selected show detail remains the left hero workspace. Episode pills/table remain in the existing provider workspace and are not replaced by generic list content.
+## Ownership After Supersession
 
-### D3 — Preserve Narrow and characterize the boundary first
-Before replacement, add/retain TestBackend captures and geometry assertions for a metadata/state-bearing fixture at widths 81 and 82 plus a larger Wide size. Record the current threshold transition and re-anchor/scroll behavior, including the existing short-height fallback. Update assertions only for the intended shared placement; use the Narrow capture as a regression guard.
-
-### D4 — Keep the shell projection contract
-Update `AudiobookshelfPodcastGeometry` and shell projection only as needed to describe the shared rects. Do not move App, Service, credentials, fetching, or effectful image work into the render component. If the render component exceeds 800 lines after the smallest implementation, extract a cohesive provider-render helper/test module in the same change.
-
-### D5 — Verification
-Focused TestBackend tests MUST inspect rendered cells/rects, not only construct models: one-column x geometry, pill and rail framing, selected/active/played marker alignment, hero placement, image-enabled and disabled paths, 81/82 threshold, short-height inline fallback, and stable Narrow re-anchor. Run the existing Audiobookshelf podcast tests and source-size gate.
-
-## Risks / Trade-offs
-
-- Shared helpers may expose assumptions about right-pane width → assert exact threshold and rail rects before changing callers.
-- Shell overlay anchoring may depend on legacy right-area fields → preserve compatible geometry projections and test selected/episode targets.
-- Provider file size may exceed the cap → split only the cohesive render section required by the implementation, not unrelated cleanup.
+Any source, geometry, visual verification, and test decisions formerly listed here are historical inputs only. They are to be evaluated and, if still needed, implemented and verified under `migrate-music-audiobookshelf-to-canonical-lists`; no work should be started from this design.
