@@ -188,3 +188,34 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
         "Home must paint exactly one pill bar row"
     );
 }
+
+#[test]
+fn narrow_home_list_surface_tracks_panel_focus() {
+    let render = |focus| {
+        let mut app = home_app();
+        app.panel_focus = focus;
+        let (model, terminal) = render_home_shell_with(app, 60, 20, |m| {
+            m.home_content.continue_items = vec![emby_cw_item()];
+        });
+        let home = model
+            .application
+            .get_component(&ComponentId::Home)
+            .expect("Home component mounted")
+            .as_any()
+            .downcast_ref::<HomeComponent>()
+            .expect("Home component type");
+        let (area, _) = home.menu_placement_geometry();
+        let expected = palette::resolve_surface_focus(focus == PanelFocus::Library);
+        let matches = (area.left()..area.right())
+            .flat_map(|x| (area.top()..area.bottom()).map(move |y| (x, y)))
+            .filter(|&(x, y)| terminal.backend().buffer()[(x, y)].style().bg == Some(expected))
+            .count();
+        assert!(
+            matches > 0,
+            "list surface missing focus background in {focus:?}"
+        );
+    };
+
+    render(PanelFocus::Library);
+    render(PanelFocus::Queue);
+}
