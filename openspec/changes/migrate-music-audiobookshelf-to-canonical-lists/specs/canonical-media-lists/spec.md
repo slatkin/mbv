@@ -1,6 +1,6 @@
 # canonical-media-lists Specification
 
-## Modified Requirements
+## ADDED Requirements
 
 ### Requirement: Provider destinations compose canonical media controls
 
@@ -43,7 +43,7 @@ The mounted Music or Audiobookshelf destination parent SHALL own mouse subscript
 
 ### Requirement: TV and Movies establish the Wide composition precedent
 
-When grouped Music or an Audiobookshelf Podcast or Book destination meets the shared Wide width and minimum-height predicate, it SHALL follow the TV/Movies composition: its provider-owned detail/workspace SHALL occupy the left pane, and its parent-owned browser-level pills, followed by ordinary one-column canonical rows, SHALL occupy the right rail. The arrangement SHALL use the same shared predicate, pane framing, content spacing, and short-height fallback as TV/Movies. The Wide presentation SHALL NOT use an Inline hero or selected-row replacement in the right rail; when the shared predicate is not met, the destination SHALL use the shared Inline fallback (or suppress detail when the shared minimum cannot fit), not a bespoke arrangement.
+When grouped Music or an Audiobookshelf Podcast or Book destination meets the shared Wide width and minimum-height predicate, it SHALL follow the TV/Movies composition: its provider-owned detail/workspace SHALL occupy the left pane, and its parent-owned browser-level pills, followed by ordinary one-column canonical rows, SHALL occupy the right rail. The arrangement SHALL use the same shared predicate, pane framing, content spacing, and short-height fallback as TV/Movies. The Wide presentation SHALL NOT use an Inline hero or selected-row replacement in the right rail; when the shared predicate is not met, the destination SHALL use the shared Inline fallback (or suppress detail when the shared minimum cannot fit), not a bespoke arrangement. The arrangement mechanics of this precedent — shared predicate, pane framing, content spacing, and short-height fallback — are specified by this change's `right-panel-arrangements` delta; this requirement governs only how the canonical controls compose into that arrangement.
 
 #### Scenario: Wide provider workspace and ordinary rail
 - **WHEN** grouped Music or an Audiobookshelf Podcast or Book destination meets the shared Wide geometry conditions
