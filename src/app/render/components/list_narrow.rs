@@ -281,10 +281,6 @@ pub(in crate::app) fn render_wide_feed_layer(
             };
             rows.push(vec![idx]);
             row_map.push(Some(idx));
-            for _ in 1..row_height {
-                rows.push(Vec::new());
-                row_map.push(None);
-            }
             if selected_row
                 && matches!(&extras.inline_hero, Some(NarrowInlineHero::Movie { layout, .. }) if layout.has_detail_text())
             {
