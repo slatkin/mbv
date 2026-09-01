@@ -1,5 +1,7 @@
 # UI design system
 
+> **Superseded / cancelled.** Revert the standalone #640 implementation. Its Audiobookshelf Books and Podcasts requirements are absorbed by `migrate-music-audiobookshelf-to-canonical-lists`; no requirement or scenario here is complete.
+
 ## MODIFIED Requirements
 
 ### Requirement: Podcast Wide rail uses shared geometry and semantic treatment

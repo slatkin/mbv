@@ -1,8 +1,12 @@
+## Status: Superseded / Cancelled
+
+The standalone #640 implementation is cancelled and must be reverted. Its required Audiobookshelf Books and Podcasts repairs are absorbed by `migrate-music-audiobookshelf-to-canonical-lists`, which owns composition and non-list fixes without bespoke exceptions. This change is retained only as historical planning context; no task is complete.
+
 ## Why
 
 Issue #640 reports that the Audiobookshelf podcast Wide surface bypasses the shared hero-on-left arrangement. It currently reserves a separate `right_panel`/hero panel and uses provider-local column sizing, unlike the shared presentation used by other hero-bearing browse surfaces.
 
-## What Changes
+## What Changes (superseded; not to implement)
 
 - Route Audiobookshelf podcast Wide rendering through the shared Hero-on-left placement: hero workspace on the left and one fixed-row show/episode rail on the right.
 - Restore Wide pills and right-rail framing while preserving the provider-specific episode workspace, images, and all Normal/Narrow behavior.

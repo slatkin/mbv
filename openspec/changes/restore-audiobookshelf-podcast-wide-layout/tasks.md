@@ -1,6 +1,8 @@
+> **Superseded / cancelled.** Revert the standalone #640 implementation and absorb its required Audiobookshelf Books/Podcasts repairs into `migrate-music-audiobookshelf-to-canonical-lists`. No task below is complete.
+
 ## 1. Pin current geometry
 
-- [ ] 1.1 Confirm clean accepted base `35df6f6`, PR #606 feature-branch stacking, and issue #640 ownership; record that canonical-list work and other feed-view changes are out of scope.
+- [ ] 1.1 (Cancelled) Confirm clean accepted base `35df6f6`, PR #606 feature-branch stacking, and issue #640 ownership; record that canonical-list work and other feed-view changes are out of scope.
 - [ ] 1.2 Add/retain metadata-bearing Audiobookshelf podcast TestBackend characterization at widths 81, 82, and a larger Wide size. Assert the current threshold transition, right/hero rects, one-vs-provider column behavior, and selected-row scroll/re-anchor behavior before replacing it.
 - [ ] 1.3 Characterize the shared minimum-height fallback at Wide width and preserve the Narrow capture, including images enabled and disabled.
 
@@ -17,4 +19,4 @@
 - [ ] 3.2 Run `rtk cargo fmt --all -- --check`, `rtk cargo check --workspace --all-targets`, relevant Audiobookshelf podcast tests via `rtk cargo nextest`, and `rtk make check-code-file-lines`.
 - [ ] 3.3 Run `rtk openspec validate restore-audiobookshelf-podcast-wide-layout --strict`; resolve implementation-caused failures before delivery.
 - [ ] 3.4 Manually inspect the real Audiobookshelf podcast surface at 81, 82, and larger Wide dimensions plus a short terminal: hero-left, pills, episode workspace, images, selection, and Narrow fallback. Record evidence in the implementation review.
-- [ ] 3.5 Commit as one independent implementation slice on the PR #606 feature branch; do not mark umbrella tasks or fold canonical-list work.
+- [ ] 3.5 (Cancelled) Commit as one independent implementation slice on the PR #606 feature branch; do not mark umbrella tasks or fold canonical-list work.

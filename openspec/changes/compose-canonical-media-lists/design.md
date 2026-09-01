@@ -2,7 +2,7 @@
 
 See `proposal.md` for motivation. PR #606 is open from `feat/migrate-tui-to-tuirealm` and remains blocked by issue #641. This change is the non-implementation architecture and delivery umbrella: it defines the final contract, names the implementation slices, and closes only after every slice has landed on the feature branch. It does not add destination code itself.
 
-The repository already has destination-sized TuiRealm `AppComponent`s, typed `Msg`/`UserEvent` boundaries, central keyboard routing, a shared PillBar painter, Hero-on-left arrangement primitives, and a render-component substrate. The Hero-on-left foundation is not yet universal: issue #640 exists because Audiobookshelf Podcast bypasses it. That focused correction lands independently before its canonical-list slice relies on the arrangement.
+The repository already has destination-sized TuiRealm `AppComponent`s, typed `Msg`/`UserEvent` boundaries, central keyboard routing, a shared PillBar painter, Hero-on-left arrangement primitives, and a render-component substrate. The Hero-on-left foundation is not yet universal: issue #640 identified Audiobookshelf Podcast (and the related Books surface) as broken. The standalone #640 implementation is superseded; its implementation must be reverted and the required Books/Podcasts repairs are absorbed into the canonical Music/Audiobookshelf slice without bespoke exceptions.
 
 Current list state and geometry are split among `BrowserComponent`, `HomeComponent`, `TvWorkspaceComponent`, `MusicWorkspaceComponent`, Audiobookshelf components, `FeedsComponent`, and `QueueComponent`. Generic Emby and TV already share the most reliable existing fixed-row painter path. The new foundation re-homes that working painter behavior rather than rewriting it.
 
@@ -168,7 +168,7 @@ Before implementation slices begin:
 
 - `restore-feed-group-inline-expansion` is narrowed to the #634/#637 Narrow Feed defects and lands independently. It removes its conflicting Wide expansion. Slice 2 later replaces that now-green Narrow implementation without taking ownership of the bug-fix change's acceptance criteria.
 - `restore-feeds-service-wide-list` independently corrects issue #623 in the Feeds Service/tab Wide panel (one column, rail framing, and selected-row geometry) before slice 2. It does not touch the Emby homevideos feed view fixed by #634/#637.
-- issue #640 lands independently as the Audiobookshelf Podcast shared Hero-on-left arrangement correction. Slice 3 later composes canonical controls on that green arrangement baseline.
+- Do not sequence a standalone #640 repair before slice 3. Slice 3 owns Audiobookshelf Books and Podcasts together, including non-list arrangement/geometry defects required for canonical composition, and repairs them without bespoke exceptions.
 - `restore-mouse-support` records D6's parent-gesture/child-hit contract and removes overlapping canonical list row-hit tasks before slice 1 begins.
 
 ### D11 — Verification combines focused automation and explicit manual evidence
@@ -222,7 +222,7 @@ No bespoke exception is planned. Any discovered exception requires an umbrella d
 - **[Mouse work collides with Queue/list migration]** -> Record D6 in both umbrella and `restore-mouse-support`; make canonical list row hits slice-owned.
 - **[The abstraction becomes a callback framework]** -> Hold the model to prepared data plus opaque targets and require an umbrella update for callbacks.
 - **[A slice crosses the file cap]** -> Split named near-limit files before or with wiring and run the gate in every slice.
-- **[Independent fixes drift before replacement]** -> Treat their green output and tests as the slice baseline; do not re-implement the fixes in the umbrella.
+- **[Superseded #640 implementation remains present]** -> Revert that implementation and absorb the required Audiobookshelf Books/Podcasts repairs in slice 3; require user live visual approval before changing or adding regression tests.
 
 ## Migration Plan
 

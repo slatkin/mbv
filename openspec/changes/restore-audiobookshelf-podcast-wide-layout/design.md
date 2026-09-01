@@ -1,3 +1,7 @@
+## Status: Superseded / Cancelled
+
+The standalone #640 implementation must be reverted. The required Audiobookshelf Books and Podcasts repairs are absorbed by `migrate-music-audiobookshelf-to-canonical-lists`; that canonical slice owns composition and required non-list repairs without bespoke exceptions. No work in this change is complete.
+
 ## Context
 
 `render_audiobookshelf_podcast_content` already calls `shared_hero_presentation`, but its Wide branch paints the hero and ordinary browser directly into the returned panes and does not use the shared right-pane pill/framing policy. The shell also retains legacy right-area projection for overlays. The correction is limited to placement and geometry; provider content remains the source of truth.
@@ -10,7 +14,7 @@
 
 ## Decisions
 
-### D1 — Use the shared arrangement at the shell/component seam
+### D1 — Use the shared arrangement at the shell/component seam (superseded)
 Keep the shell's existing Wide predicate as the source of the content-area decision, but ensure the component receives the same Wide geometry and uses `hero_on_left_right_pane`/`pill_bar_areas` and the shared rail border painter rather than reconstructing a detached right panel. The arrangement owns breakpoints and rect splitting; the podcast component owns content and provider-native targets.
 
 ### D2 — One fixed-row rail
