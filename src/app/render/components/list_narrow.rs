@@ -45,23 +45,6 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
 
     // Feed/home-video group pickers share the browser composer, but their
     // cursor and rows live in FeedHomeVideoState rather than BrowseLevel.
-    let feed_ctx = extras
-        .feed_items
-        .as_ref()
-        .map(|items| LibraryListRenderCtx {
-            items: items.clone(),
-            cursor: ctx.cursor.min(items.len().saturating_sub(1)),
-            scroll: ctx.scroll,
-            total_count: items.len(),
-            library_total: Some(items.len()),
-            letter_filter: None,
-            loading: ctx.loading,
-            search_query: None,
-            search_loading: false,
-            group_pills: false,
-        });
-    let ctx = feed_ctx.as_ref().unwrap_or(ctx);
-
     if extras.home_video && extras.feed_items.is_none() && content_area.height > 0 {
         content_area = crate::app::render::render_count_label(f, content_area, ctx.total_count);
         content_area = Rect {
@@ -74,7 +57,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     // Narrow TV season grids keep their own single-column stride
     // (`is_viewing_season_grid`, legacy `list.rs`); every other narrow browse
     // surface derives the column count from the list width.
-    let cols = if extras.season_grid || extras.feed_items.is_some() {
+    let cols = if extras.season_grid {
         1
     } else {
         library_column_count(content_area.width)
@@ -129,9 +112,8 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         );
     }
 
-    // Feed-group and letter pickers share one pill-bar geometry; only the
-    // pills' *contents* differ, which is decided where they are painted.
-    let (pills_area, list_area) = if extras.feed_items.is_some() || extras.show_letter_pills {
+    // Letter pickers use the shared pill-bar geometry.
+    let (pills_area, list_area) = if extras.show_letter_pills {
         let areas = hero_left::pill_bar_areas(content_area);
         (areas.pills_area, areas.content_area)
     } else {
@@ -145,26 +127,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
                 0
             };
     }
-    if extras.feed_items.is_some() {
-        let ids: Vec<usize> = (0..=extras.feed_groups.len()).collect();
-        let mut labels = vec!["All".to_string()];
-        labels.extend(
-            extras
-                .feed_groups
-                .iter()
-                .map(|s| crate::app::ui_util::trunc_str(s, 12).to_string()),
-        );
-        layout.selector_tabs = crate::app::render::render_pill_bar(
-            f,
-            pills_area,
-            crate::app::render::PillBar {
-                labels: &labels,
-                ids: &ids,
-                selected_pos: extras.feed_group_cursor,
-                prefix: Some(" ⌘ "),
-            },
-        );
-    } else if extras.show_letter_pills {
+    if extras.show_letter_pills {
         paint_letter_pills_row(
             f,
             pills_area,
@@ -180,17 +143,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         crate::app::render::render_placeholder(
             f,
             list_area,
-            if extras.feed_items.is_some() {
-                if ctx.loading {
-                    " Loading…"
-                } else {
-                    " (empty)"
-                }
-            } else if ctx.loading {
-                "Loading..."
-            } else {
-                "(empty)"
-            },
+            if ctx.loading { "Loading..." } else { "(empty)" },
         );
         return (0, None);
     }
@@ -292,8 +245,9 @@ pub(in crate::app) fn render_wide_feed_layer(
         )])),
         divider,
     );
-    layout.left_area = divider;
     let mut image_paint = None;
+    layout.left_row_map.clear();
+    layout.left_item_rows.clear();
     if let Some(items) = extras.feed_items.as_ref() {
         let content_area = Rect {
             y: divider.y,
@@ -301,8 +255,11 @@ pub(in crate::app) fn render_wide_feed_layer(
             ..area
         };
         let text_w = crate::app::render::content_width(content_area.width, false);
+        layout.left_area = content_area;
         let selected = extras.feed_video_cursor.min(items.len().saturating_sub(1));
         let mut y = content_area.y;
+        let mut rows = Vec::new();
+        let mut row_map = Vec::new();
         for (idx, item) in items.iter().enumerate() {
             if y >= content_area.bottom() {
                 break;
@@ -322,6 +279,12 @@ pub(in crate::app) fn render_wide_feed_layer(
             } else {
                 1
             };
+            rows.push(vec![idx]);
+            row_map.push(Some(idx));
+            for _ in 1..row_height {
+                rows.push(Vec::new());
+                row_map.push(None);
+            }
             if selected_row
                 && matches!(&extras.inline_hero, Some(NarrowInlineHero::Movie { layout, .. }) if layout.has_detail_text())
             {
@@ -381,8 +344,17 @@ pub(in crate::app) fn render_wide_feed_layer(
                     height: row_height,
                 });
             }
-            y = y.saturating_add(if selected_row { row_height } else { 2 });
+            let advance = if selected_row { row_height } else { 2 };
+            for _ in 1..advance {
+                rows.push(Vec::new());
+                row_map.push(None);
+            }
+            y = y.saturating_add(advance);
         }
+        layout.left_item_rows = rows;
+        layout.left_row_map = row_map;
+    } else {
+        layout.left_area = Rect::default();
     }
     image_paint
 }
@@ -442,6 +414,8 @@ fn render_feed_group_picker_content(
         list_area.height = list_area.height.saturating_sub(2);
     }
     layout.left_area = list_area;
+    layout.left_row_map.clear();
+    layout.left_item_rows.clear();
     if items.is_empty() {
         return (0, None);
     }
@@ -476,11 +450,19 @@ fn render_feed_group_picker_content(
         row = list_area.y;
     }
     let mut image = None;
+    let mut rows = vec![Vec::new(); offset];
+    let mut row_map = Vec::new();
     for (idx, item) in items.iter().enumerate().skip(offset) {
         if row >= list_area.bottom() {
             break;
         }
         let h = if idx == selected { selected_h } else { 1 };
+        rows.push(vec![idx]);
+        row_map.push(Some(idx));
+        for _ in 1..h {
+            rows.push(Vec::new());
+            row_map.push(None);
+        }
         if idx != selected
             || !matches!(&extras.inline_hero, Some(NarrowInlineHero::Movie { layout, .. }) if layout.has_detail_text())
         {
@@ -493,12 +475,6 @@ fn render_feed_group_picker_content(
                     Rect {
                         x: list_area.x.saturating_sub(1),
                         width: list_area.width.saturating_add(1),
-                        ..list_area
-                    }
-                } else if idx == selected.saturating_add(1) {
-                    Rect {
-                        x: list_area.x + 1,
-                        width: list_area.width.saturating_sub(1),
                         ..list_area
                     }
                 } else {
@@ -557,6 +533,8 @@ fn render_feed_group_picker_content(
         }
         row = row.saturating_add(h);
     }
+    layout.left_item_rows = rows;
+    layout.left_row_map = row_map;
     (offset, image)
 }
 
