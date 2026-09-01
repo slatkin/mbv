@@ -171,7 +171,6 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
             .style(crate::app::palette::resolve_surface_focus(focused)),
         right_panel,
     );
-    hero_on_left_list_panel_border(frame, right_pane.list_panel, focused);
     let buckets = build_show_title_buckets(&state.shows);
     let labels: Vec<String> = buckets.iter().map(|bucket| bucket.label.into()).collect();
     let ids: Vec<usize> = (0..labels.len()).collect();
@@ -199,6 +198,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         geometry.hero_area = hero_panel;
     }
     render_show_rows(frame, browser, focused, state, 1, 0, *scroll, geometry);
+    hero_on_left_list_panel_border(frame, right_pane.list_panel, focused);
     image_paint
 }
 

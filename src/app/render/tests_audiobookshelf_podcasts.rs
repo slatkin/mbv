@@ -134,6 +134,78 @@ fn narrow_podcast_show_paint_matches_each_grid_hit_rect() {
 }
 
 #[test]
+fn podcast_wide_threshold_and_rail_are_painted_at_82_columns() {
+    let mut app = audiobookshelf_app();
+    app.audiobookshelf_browse[0]
+        .shows
+        .extend((1..4).map(|index| AudiobookshelfShow {
+            library_item_id: format!("show-{index}"),
+            title: format!("Show {index}"),
+            author: None,
+            description: None,
+            cover_path: None,
+        }));
+    let (mut model, terminal) = render_podcast_shell(app, 82, 20, true);
+    let component_id = model
+        .abs_podcast_id
+        .as_ref()
+        .expect("podcast component mounted");
+    let geometry = model
+        .application
+        .get_component_mut(component_id)
+        .and_then(|comp| {
+            comp.as_any_mut()
+                .downcast_mut::<AudiobookshelfPodcastComponent>()
+        })
+        .map(|component| {
+            let g = component.geometry();
+            (
+                g.hero_area,
+                g.list_area,
+                g.columns,
+                g.selector_tabs.clone(),
+                g.show_rows.clone(),
+                terminal.backend().buffer().clone(),
+            )
+        })
+        .expect("podcast component mounted");
+
+    let (hero_area, list_area, columns, selector_tabs, show_rows, buffer) = geometry;
+    assert!(hero_area.width > 0);
+    assert_eq!(columns, 1);
+    assert!(!selector_tabs.is_empty());
+    assert!(list_area.x > hero_area.x);
+    assert!(show_rows.windows(2).all(|rows| rows[0].0.x == rows[1].0.x));
+    assert_eq!(buffer[(list_area.x - 2, list_area.y - 1)].symbol(), "▔");
+}
+
+#[test]
+fn podcast_wide_minimum_height_falls_back_to_narrow_painting() {
+    let (mut model, terminal) = render_podcast_shell(audiobookshelf_app(), 82, 6, true);
+    let component_id = model
+        .abs_podcast_id
+        .as_ref()
+        .expect("podcast component mounted");
+    let geometry = model
+        .application
+        .get_component_mut(component_id)
+        .and_then(|comp| {
+            comp.as_any_mut()
+                .downcast_mut::<AudiobookshelfPodcastComponent>()
+        })
+        .map(|component| {
+            let g = component.geometry();
+            (g.hero_area, g.right_area, g.selector_tabs.clone())
+        })
+        .expect("podcast component mounted");
+    let (hero_area, right_area, selector_tabs) = geometry;
+    assert_eq!(hero_area.width, 0);
+    assert_eq!(right_area.width, 0);
+    assert!(!selector_tabs.is_empty());
+    assert!(terminal.backend().buffer().area().height == 6);
+}
+
+#[test]
 fn wide_podcasts_use_a_left_hero_and_right_show_workspace() {
     let app = audiobookshelf_app();
     let (model, _terminal) = render_podcast_shell(app, 100, 30, true);
