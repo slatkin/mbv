@@ -18,7 +18,7 @@ use crate::app::tests::*;
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
 fn saved_level(
     parent_id: &str,
@@ -611,6 +611,56 @@ fn feed_home_video_group_paints_each_row_once() {
         });
         assert_eq!(rows.count(), 1, "feed {width}x{height} paints the row once");
     }
+}
+
+#[test]
+fn feed_home_video_group_metadata_bearing_hero_keeps_complete_frame() {
+    let mut app = feed_home_video_group_app();
+    app.terminal_height = 30;
+    let overview = "First overview line with enough detail to wrap across the narrow hero.\nSecond overview line remains visible.\nFINAL OVERVIEW LINE";
+    let state = app.libs[0].feed_home_video.as_mut().unwrap();
+    state.groups[0].items[0].overview = overview.into();
+    state.all_items[0].overview = overview.into();
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+    let mut term = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    let output = draw(&mut model, &mut term);
+    let lines: Vec<_> = output.lines().collect();
+    let top = lines.iter().position(|line| line.trim_start().starts_with('▁')).unwrap();
+    let bottom = lines.iter().rposition(|line| line.trim_start().starts_with('▔')).unwrap();
+    let final_line = lines.iter().position(|line| line.contains("FINAL OVERVIEW LINE")).unwrap();
+    assert!(top < final_line && final_line < bottom, "hero frame clips overview:\n{output}");
+}
+
+#[test]
+fn feed_home_video_group_browser_scroll_updates_video_scroll() {
+    let mut app = feed_home_video_group_app();
+    let state = app.libs[0].feed_home_video.as_mut().unwrap();
+    for i in 0..30 {
+        let mut item = make_item(&format!("Video extra {i}"), "Movie");
+        item.id = format!("video-extra-{i}");
+        state.groups[0].items.push(item.clone());
+        state.all_items.push(item);
+    }
+    state.groups[0].folder.is_folder = true;
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+    let id = model.emby_browser_id.clone().expect("feed browser mounted");
+    let mut term = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    draw(&mut model, &mut term);
+    let area = model.application.get_component(&id).unwrap().as_any()
+        .downcast_ref::<BrowserComponent>().unwrap().test_layout().left_area;
+    let focused = model.application.focus().cloned();
+    let msg = model.application.get_component_mut(&id).unwrap().on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: area.x + 1,
+        row: area.y + 1,
+        modifiers: KeyModifiers::NONE,
+    })).expect("scroll emits typed request");
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    model.handle_terminal_message(msg, focused.as_ref(), &mut music_resize, &mut tv_resize);
+    assert_eq!(model.app.libs[0].feed_home_video.as_ref().unwrap().video_scroll, 1);
 }
 
 #[test]
