@@ -80,10 +80,12 @@
       `["Shuffle", "Rescan", "Search library"]` "Emby-only" gate — confirm it
       still reads correctly now that Music/TV honor the chords. Adjust only
       if the gate text is now wrong.
-- [ ] 7.3 Verify: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
+- [x] 7.3 Verify at 3c3f5dfc: `rtk cargo check -p mbv`,
+      `rtk cargo nextest run -p mbv --no-fail-fast` (1226 passed / 0 failed),
       `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`
-      (`no-raw-fallback-variants` green), `rtk cargo fmt`,
-      `rtk make check-code-file-lines` all pass.
-- [ ] 7.4 Sync the `service-browse-dispatch` delta into
+      (`no-raw-fallback-variants` green; the 52 legacy `queue.rs`/`root.rs`
+      findings recorded when this row was blocked are now gone),
+      `rtk cargo fmt --all -- --check`, `rtk make check-code-file-lines` — all pass.
+- [x] 7.4 Sync the `service-browse-dispatch` delta into
       `openspec/specs/service-browse-dispatch/spec.md` and archive the change.
       Comment the outcome on #633 and close it.
