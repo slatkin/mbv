@@ -1,8 +1,9 @@
 ## 1. Contract and baseline
 
 - [ ] 1.1 Add `WideMediaList` and `InlineMediaBrowser` terminology to `CONTEXT.md` before implementation; use the exact names and distinguish Inline Search.
-- [ ] 1.2 Record current TV Wide→Narrow→Wide cursor, selected target, scroll, and selected-row screen offset with a metadata-bearing characterization fixture; do not alter tests before live visual confirmation.
-- [ ] 1.3 Confirm the revised `restore-mouse-support` contract and PR #606 stacking rule; this slice is a distinct PR targeting `feat/migrate-tui-to-tuirealm`.
+  - Also add `Emby podcast channel list` to `CONTEXT.md` alongside the control terms (`Emby homevideos feed view` is already defined); this term is coined by this slice.
+- [ ] 1.2 Record current TV Wide→Narrow→Wide cursor, selected target, scroll, and selected-row screen offset by source-reading and manual observation of the running app only; do not add or edit any test or fixture. The metadata-bearing characterization fixture is added later, after task 4.1's explicit user live visual approval (see tasks 4.1 and 4.2).
+- [ ] 1.3 Require the `restore-mouse-support` mouse delivery/gesture spine to be landed (merged on `feat/migrate-tui-to-tuirealm`) before this slice's mouse wiring; confirm the PR #606 stacking rule; this slice is a distinct PR targeting `feat/migrate-tui-to-tuirealm`.
 
 ## 2. Shared foundation
 
@@ -16,10 +17,10 @@
 
 - [ ] 3.1 Split `src/app/components/browser.rs` ownership-preservingly before or with wiring; keep it at or below 800 lines.
 - [ ] 3.2 Split `src/app/components/tv_workspace.rs` ownership-preservingly before or with wiring; keep it at or below 800 lines.
-- [ ] 3.3 Compose `InlineMediaBrowser` for generic Emby catalog browsing, Movies, Emby homevideos/podcast libraries, and narrow TV Series browsing.
+- [ ] 3.3 Compose `InlineMediaBrowser` for hero-bearing generic Emby catalog browsing, Movies, the Emby homevideos feed view, the Emby podcast channel list, and narrow TV Series browsing; leave non-hero two-column Emby catalogs on their existing two-column arrangement policy.
 - [ ] 3.4 Compose `WideMediaList` for the Wide TV right rail; preserve TV workspace, hero, pills, image handoff, effects, and parent message translation.
 - [ ] 3.5 Preserve non-hero two-column browsers and prove no second list painter runs at an applicable breakpoint.
-- [ ] 3.6 Wire parent-owned mouse subscription/`MouseGestureState` and delegate list points to child `HitRegions<Target>`; retain parent-owned pills, workspaces, overlays, and central keyboard routing.
+- [ ] 3.6 Delegate list points to the child's view-populated `HitRegions<Target>` and remove the old row-coordinate path; retain parent-owned pills, workspaces, overlays, and central keyboard routing. The mouse subscription, raw gesture recognition/delivery, arbitration, blocking-overlay behavior, and `MouseGestureState` are owned by the landed `restore-mouse-support` mouse spine and are not re-implemented or re-wired here.
 
 ## 4. Visual-first evidence and gates
 

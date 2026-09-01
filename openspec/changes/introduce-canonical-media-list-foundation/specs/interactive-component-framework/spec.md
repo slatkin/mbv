@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Embedded canonical controls remain under the mounted parent
-A canonical media-list control SHALL be a plain embedded TuiRealm `Component`, not an independently mounted component. It SHALL have no registry identity, subscription, focus-stack entry, second router, global mouse map, callback/provider framework, or effect execution. The mounted destination parent remains the application event boundary, owns mouse subscription and `MouseGestureState`, and delegates child list hits through the child's view-populated `HitRegions<Target>`.
+A canonical media-list control SHALL be a plain embedded TuiRealm `Component`, not an independently mounted component. It SHALL have no registry identity, subscription, focus-stack entry, second router, global mouse map, callback/provider framework, or effect execution. The mounted destination parent remains the application event boundary; its mouse subscription and `MouseGestureState` are owned by the landed `restore-mouse-support` mouse spine, not established by this slice, and under that spine it delegates child list hits through the child's view-populated `HitRegions<Target>`.
 
 #### Scenario: Parent translates a child intent
 - **WHEN** a canonical control resolves activation or movement
