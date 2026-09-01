@@ -307,17 +307,71 @@ pub(in crate::app) fn render_wide_feed_layer(
                 break;
             }
             let selected_row = idx == selected;
-            let row_height = if selected_row { 5 } else { 1 };
-            render_home_video_item(
-                f,
-                item,
-                y,
-                row_height,
-                content_area,
-                text_w,
-                selected_row,
-                true,
-            );
+            let row_height = if selected_row {
+                extras
+                    .inline_hero
+                    .as_ref()
+                    .and_then(|hero| match hero {
+                        NarrowInlineHero::Movie { layout, .. } => {
+                            Some(layout.content_rows_with_title(0) as u16 + HERO_BLOCK_EXTRA_ROWS)
+                        }
+                        _ => None,
+                    })
+                    .unwrap_or(5)
+            } else {
+                1
+            };
+            if selected_row
+                && matches!(&extras.inline_hero, Some(NarrowInlineHero::Movie { layout, .. }) if layout.content_rows_with_title(0) > 0)
+            {
+                selected_detail_shell(
+                    f,
+                    Rect {
+                        x: content_area.x,
+                        y,
+                        width: text_w as u16,
+                        height: row_height,
+                    },
+                    row_height,
+                    true,
+                );
+                if let Some(NarrowInlineHero::Movie {
+                    item,
+                    layout: banner,
+                }) = extras.inline_hero.as_ref()
+                {
+                    let _ = super::detail::render_compact_detail_with_ctx(
+                        super::detail::CompactDetailCtx {
+                            item,
+                            layout: banner.clone(),
+                        },
+                        f,
+                        crate::app::render::arrangements::library::selected_detail_content_area(
+                            Rect {
+                                x: content_area.x,
+                                y,
+                                width: text_w as u16,
+                                height: row_height,
+                            },
+                            SELECTED_BLOCK_SIDE_PADDING,
+                            HERO_BLOCK_EXTRA_ROWS,
+                        ),
+                        true,
+                        false,
+                    );
+                }
+            } else {
+                render_home_video_item(
+                    f,
+                    item,
+                    y,
+                    row_height,
+                    content_area,
+                    text_w,
+                    selected_row,
+                    true,
+                );
+            }
             if selected_row {
                 layout.selected_item_rect = Some(Rect {
                     x: content_area.x,
@@ -400,15 +454,26 @@ fn render_feed_group_picker_content(
         .unwrap_or(extras.feed_video_cursor.min(items.len() - 1));
     let text_w =
         crate::app::render::content_width(list_area.width, items.len() > list_area.height as usize);
-    let panel_w = text_w.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING as usize) as u16;
-    let selected_h = 1;
+    let selected_h = match extras.inline_hero.as_ref() {
+        Some(NarrowInlineHero::Movie { layout: banner, .. })
+            if banner.content_rows_with_title(0) > 0 =>
+        {
+            banner.content_rows_with_title(0) as u16 + HERO_BLOCK_EXTRA_ROWS
+        }
+        _ => 1,
+    };
     let mut row = list_area.y;
-    let mut offset = ctx.scroll.min(selected);
-    if selected < offset {
-        offset = selected;
-    }
+    // Keep the landed selected block at the bottom edge when its real detail
+    // height pushes it below the viewport (the legacy picker clamp).
+    let lower_bound = selected
+        .saturating_add(selected_h as usize)
+        .saturating_sub(list_area.height as usize)
+        .min(selected);
+    let offset = ctx.scroll.clamp(lower_bound, selected);
     if selected_h > list_area.height {
-        offset = selected;
+        // A block taller than the viewport starts at the selected row.
+        // Its content is clipped by the frame, rather than creating a blank row.
+        row = list_area.y;
     }
     let mut image = None;
     for (idx, item) in items.iter().enumerate().skip(offset) {
@@ -416,30 +481,34 @@ fn render_feed_group_picker_content(
             break;
         }
         let h = if idx == selected { selected_h } else { 1 };
-        render_home_video_item(
-            f,
-            item,
-            row,
-            h,
-            if idx == selected {
-                Rect {
-                    x: list_area.x.saturating_sub(1),
-                    width: list_area.width.saturating_add(1),
-                    ..list_area
-                }
-            } else if idx == selected.saturating_add(1) {
-                Rect {
-                    x: list_area.x + 1,
-                    width: list_area.width.saturating_sub(1),
-                    ..list_area
-                }
-            } else {
-                list_area
-            },
-            text_w,
-            idx == selected,
-            focused,
-        );
+        if idx != selected
+            || !matches!(&extras.inline_hero, Some(NarrowInlineHero::Movie { layout, .. }) if layout.content_rows_with_title(0) > 0)
+        {
+            render_home_video_item(
+                f,
+                item,
+                row,
+                h,
+                if idx == selected {
+                    Rect {
+                        x: list_area.x.saturating_sub(1),
+                        width: list_area.width.saturating_add(1),
+                        ..list_area
+                    }
+                } else if idx == selected.saturating_add(1) {
+                    Rect {
+                        x: list_area.x + 1,
+                        width: list_area.width.saturating_sub(1),
+                        ..list_area
+                    }
+                } else {
+                    list_area
+                },
+                text_w,
+                idx == selected,
+                focused,
+            );
+        }
         if idx == selected {
             layout.selected_item_rect = Some(Rect {
                 x: list_area.x,
@@ -452,45 +521,39 @@ fn render_feed_group_picker_content(
                 layout: banner,
             }) = extras.inline_hero.as_ref()
             {
+                selected_detail_shell(
+                    f,
+                    Rect {
+                        x: list_area.x,
+                        y: row,
+                        width: text_w as u16,
+                        height: h,
+                    },
+                    h,
+                    focused,
+                );
                 image = super::detail::render_compact_detail_with_ctx(
                     super::detail::CompactDetailCtx {
                         item,
                         layout: banner.clone(),
                     },
                     f,
-                    Rect {
-                        x: list_area.x + SELECTED_BLOCK_SIDE_PADDING,
-                        y: row + 3,
-                        width: panel_w,
-                        height: h.saturating_sub(5),
-                    },
+                    crate::app::render::arrangements::library::selected_detail_content_area(
+                        Rect {
+                            x: list_area.x,
+                            y: row,
+                            width: text_w as u16,
+                            height: h,
+                        },
+                        SELECTED_BLOCK_SIDE_PADDING,
+                        HERO_BLOCK_EXTRA_ROWS,
+                    ),
                     focused,
                     false,
                 );
             }
         }
         row = row.saturating_add(h);
-    }
-    if let Some(item) = items.last() {
-        let y = row;
-        f.render_widget(
-            Paragraph::new("▔".repeat(text_w)),
-            Rect {
-                x: list_area.x,
-                y,
-                width: text_w as u16,
-                height: 1,
-            },
-        );
-        f.render_widget(
-            Paragraph::new(item.display_name()),
-            Rect {
-                x: list_area.x,
-                y: y + 1,
-                width: text_w as u16 - 1,
-                height: 1,
-            },
-        );
     }
     (offset, image)
 }
