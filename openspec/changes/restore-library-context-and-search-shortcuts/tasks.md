@@ -38,13 +38,13 @@
 
 ## 4. Claim `.` and `/` in the Music component (D2, D3)
 
-- [ ] 4.1 In `MusicWorkspaceComponent::handle_key`, add album-level arms
+- [x] 4.1 In `MusicWorkspaceComponent::handle_key`, add album-level arms
       (guarded `track_cursor.is_none()`, placed next to the `EmbyLibrary*`
       `Ctrl+*` arms, before the `[`/`]` group-pill arms): `.` →
       `Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item: self.selected_item()? })`;
       `/` → `Msg::Shell(ShellRequest::OpenInlineSearch)`. Verify:
       `rtk cargo check -p mbv`.
-- [ ] 4.2 Confirm the existing focused-track `.` arm
+- [x] 4.2 Confirm the existing focused-track `.` arm
       (`music_workspace.rs:278`, `MusicTrackContextMenu`) still wins when
       `track_cursor.is_some()`, and `/` is unclaimed while a track is
       focused. Verify: test 6.1.
