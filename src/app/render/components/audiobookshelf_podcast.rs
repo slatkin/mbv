@@ -2,7 +2,6 @@ use crate::app::render::arrangements::hero_left;
 use crate::app::render::arrangements::hero_left::{
     hero_on_left_list_panel_border, PANE_PAD_X, PANE_PAD_Y,
 };
-use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::detail_series_view::{
     SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
@@ -80,7 +79,7 @@ use crate::app::{library_column_width, palette};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, List, ListItem, Paragraph};
+use ratatui::widgets::{List, ListItem, Paragraph};
 use ratatui::Frame;
 
 /// The component-owned interaction values the podcast renderer needs, passed
@@ -99,7 +98,6 @@ pub(in crate::app) struct AudiobookshelfPodcastGeometry {
     /// Column count used by the painted show grid and keyboard navigation.
     pub columns: usize,
     pub selector_tabs: Vec<(Rect, usize)>,
-    pub pill_bar_area: Rect,
     pub show_rows: Vec<(Rect, usize)>,
     pub episode_rows: Vec<(Rect, usize)>,
     /// Painted list/browser area: the wide right panel, or the narrow content
@@ -120,8 +118,6 @@ pub(in crate::app) struct AudiobookshelfPodcastGeometry {
     /// shell today; `None` in the wide layout, which has no selected-item
     /// shell). Mirrors the legacy `LayoutMain.selected_item_rect`.
     pub selected_item_rect: Option<Rect>,
-    /// Full-width selected show panel in the wide rail.
-    pub selected_panel_rect: Option<Rect>,
 }
 
 pub(in crate::app) fn render_audiobookshelf_podcast_content(
@@ -135,7 +131,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
     *geometry = AudiobookshelfPodcastGeometry::default();
-    let Some(panes) = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y) else {
+    let Some((hero_panel, right_panel)) = hero_left::shared_hero_presentation(area) else {
         return render_narrow_podcast(
             frame,
             area,
@@ -153,22 +149,9 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     // `render_audiobookshelf_hero` `show_title = false`). Persistent-
     // mode episode pills + table are wide-only (narrow routes Enter to
     // the selection modal instead).
-    frame.render_widget(
-        Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
-        Rect {
-            x: panes.left_panel.x,
-            y: panes.left_panel.bottom(),
-            width: panes.left_panel.width,
-            height: 1,
-        },
-    );
-    frame.render_widget(
-        Block::default().style(palette::resolve_surface_focus(focused)),
-        panes.left_panel,
-    );
     let image_paint = render_podcast_hero(
         frame,
-        panes.left_area,
+        hero_panel,
         state,
         interaction,
         focused,
@@ -180,14 +163,15 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     // Wide layout: the list/browser occupies the right panel; the hero panel
     // is the painted hero. No inline hero and no selected-item shell exist in
     // this layout (the right panel paints an ordinary show grid).
-    geometry.right_area = panes.right_area;
+    geometry.right_area = right_panel;
     geometry.columns = 1;
-    let right_pane =
-        hero_left::hero_on_left_right_pane(panes.right_panel, panes.right_area, PANE_PAD_Y);
+    let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_panel, PANE_PAD_Y);
     frame.render_widget(
-        Block::default().style(palette::resolve_surface_focus(focused)),
-        panes.right_panel,
+        ratatui::widgets::Block::default()
+            .style(crate::app::palette::resolve_surface_focus(focused)),
+        right_panel,
     );
+    hero_on_left_list_panel_border(frame, right_pane.list_panel, focused);
     let buckets = build_show_title_buckets(&state.shows);
     let labels: Vec<String> = buckets.iter().map(|bucket| bucket.label.into()).collect();
     let ids: Vec<usize> = (0..labels.len()).collect();
@@ -195,7 +179,6 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         .iter()
         .position(|bucket| state.cursor() >= bucket.start && state.cursor() < bucket.end)
         .unwrap_or(0);
-    geometry.pill_bar_area = right_pane.pills_area;
     geometry.selector_tabs = render_pill_bar(
         frame,
         right_pane.pills_area,
@@ -213,20 +196,9 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         return image_paint;
     }
     if state.selected_show().is_some() {
-        geometry.hero_area = panes.left_area;
+        geometry.hero_area = hero_panel;
     }
-    render_show_rows(
-        frame,
-        browser,
-        Some(right_pane.list_panel),
-        focused,
-        state,
-        1,
-        0,
-        *scroll,
-        geometry,
-    );
-    hero_on_left_list_panel_border(frame, right_pane.list_panel, focused);
+    render_show_rows(frame, browser, focused, state, 1, 0, *scroll, geometry);
     image_paint
 }
 
@@ -260,7 +232,6 @@ fn render_narrow_podcast(
         .unwrap_or(0);
     let labels: Vec<String> = buckets.iter().map(|bucket| bucket.label.into()).collect();
     let ids: Vec<usize> = (0..labels.len()).collect();
-    geometry.pill_bar_area = parts.pills_area;
     geometry.selector_tabs = render_pill_bar(
         frame,
         parts.pills_area,
@@ -289,7 +260,6 @@ fn render_narrow_podcast(
     render_show_rows(
         frame,
         list_area,
-        Some(list_area),
         focused,
         state,
         geometry.columns,
@@ -444,7 +414,6 @@ fn render_podcast_hero(
 fn render_show_rows(
     frame: &mut Frame,
     area: Rect,
-    selected_panel: Option<Rect>,
     focused: bool,
     state: &AudiobookshelfBrowseState,
     cols: usize,
@@ -475,8 +444,7 @@ fn render_show_rows(
     };
     let items: Vec<ListItem> = (scroll..total_display)
         .take(area.height as usize)
-        .enumerate()
-        .map(|(screen_row, display_row)| {
+        .map(|display_row| {
             match inline_display_row(rows.len(), cursor_row, hero_rows, display_row) {
                 Some(crate::app::render::components::hero::InlineDisplayRow::Replacement) => {
                     ListItem::new(Line::default())
@@ -489,26 +457,11 @@ fn render_show_rows(
                         .iter()
                         .enumerate()
                         .map(|(column, index)| {
-                            let selected = *index == state.cursor();
-                            if selected {
-                                let panel = selected_panel.map(|panel| Rect {
-                                    x: panel.x,
-                                    y: area.y + screen_row as u16,
-                                    width: panel.width,
-                                    height: 1,
-                                });
-                                if let Some(panel) = panel {
-                                    frame.render_widget(
-                                        Block::default().style(
-                                            Style::default()
-                                                .bg(palette::resolve_surface_focus(focused)),
-                                        ),
-                                        panel,
-                                    );
-                                    geometry.selected_panel_rect = Some(panel);
-                                }
-                            }
-                            let marker = if selected && focused { "> " } else { "  " };
+                            let marker = if *index == state.cursor() && focused {
+                                "> "
+                            } else {
+                                "  "
+                            };
                             let title_width = cell_width.saturating_sub(marker.width());
                             let cell = format!(
                                 "{marker}{}",
