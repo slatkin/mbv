@@ -133,9 +133,10 @@ fn narrow_podcast_show_paint_matches_each_grid_hit_rect() {
     }
 }
 
-#[test]
-fn podcast_wide_threshold_and_rail_are_painted_at_82_columns() {
+fn assert_wide_podcast_render(width: u16) {
     let mut app = audiobookshelf_app();
+    app.audiobookshelf_browse[0].shows[0].author = Some("Author A".into());
+    app.audiobookshelf_browse[0].shows[0].description = Some("Description A".into());
     app.audiobookshelf_browse[0]
         .shows
         .extend((1..4).map(|index| AudiobookshelfShow {
@@ -145,7 +146,10 @@ fn podcast_wide_threshold_and_rail_are_painted_at_82_columns() {
             description: None,
             cover_path: None,
         }));
-    let (mut model, terminal) = render_podcast_shell(app, 82, 20, true);
+    let (mut model, terminal) = render_podcast_shell_with(app, width, 20, true, |model| {
+        let component = model.abs_podcast_component_mut(0).expect("podcast mounted");
+        component.set_episode_selection(Some(0));
+    });
     let component_id = model
         .abs_podcast_id
         .as_ref()
@@ -161,22 +165,84 @@ fn podcast_wide_threshold_and_rail_are_painted_at_82_columns() {
             let g = component.geometry();
             (
                 g.hero_area,
+                g.right_area,
                 g.list_area,
                 g.columns,
                 g.selector_tabs.clone(),
                 g.show_rows.clone(),
+                g.episode_rows.clone(),
                 terminal.backend().buffer().clone(),
             )
         })
         .expect("podcast component mounted");
 
-    let (hero_area, list_area, columns, selector_tabs, show_rows, buffer) = geometry;
-    assert!(hero_area.width > 0);
-    assert_eq!(columns, 1);
-    assert!(!selector_tabs.is_empty());
+    let (hero_area, right_area, list_area, columns, selector_tabs, show_rows, episode_rows, buffer) =
+        geometry;
+    assert!(
+        hero_area.width > 0,
+        "{width}-column render must have a hero"
+    );
+    assert_eq!(columns, 1, "wide podcast workspace remains one column");
     assert!(list_area.x > hero_area.x);
-    assert!(show_rows.windows(2).all(|rows| rows[0].0.x == rows[1].0.x));
-    assert_eq!(buffer[(list_area.x - 2, list_area.y - 1)].symbol(), "▔");
+    assert!(!selector_tabs.is_empty());
+    assert!(!show_rows.is_empty(), "wide show workspace must paint rows");
+    assert!(
+        !episode_rows.is_empty(),
+        "wide selected-show workspace must paint episode rows"
+    );
+
+    let pill = selector_tabs[0].0;
+    assert_eq!(buffer[(pill.x, pill.y)].symbol(), "◢");
+    assert_eq!(
+        buffer[(pill.x, pill.y)].style().bg,
+        Some(palette::PILL_ROW_BG)
+    );
+
+    let hero_content = (hero_area.x + SELECTED_BLOCK_SIDE_PADDING, hero_area.y + 2);
+    assert_eq!(buffer[hero_content].symbol(), "A");
+    assert_eq!(buffer[hero_content].style().fg, Some(palette::TEXT_STRONG));
+
+    let (show_row, show_index) = show_rows
+        .iter()
+        .find(|(_, index)| *index == 0)
+        .expect("selected show row must be painted");
+    assert_eq!(*show_index, 0);
+    assert_eq!(buffer[(show_row.x, show_row.y)].symbol(), ">");
+    assert_eq!(buffer[(show_row.x + 2, show_row.y)].symbol(), "S");
+    assert_eq!(show_row.x, list_area.x);
+
+    let (episode_row, episode_index) = episode_rows[0];
+    assert_eq!(episode_index, 0);
+    assert_eq!(buffer[(episode_row.x, episode_row.y)].symbol(), ">");
+    assert_eq!(buffer[(episode_row.x + 2, episode_row.y)].symbol(), "E");
+    assert!(episode_row.x >= hero_area.x && episode_row.right() <= hero_area.right());
+
+    let rail_cell = (right_area.x + 1, right_area.y + 10);
+    assert_eq!(
+        buffer[rail_cell].style().bg,
+        Some(palette::resolve_surface_focus(true)),
+        "wide rail uses its focused semantic surface"
+    );
+    assert_eq!(
+        buffer[(list_area.x - SELECTED_BLOCK_SIDE_PADDING, list_area.y - 1)].symbol(),
+        "▔"
+    );
+    assert_eq!(
+        buffer[(
+            list_area.x - SELECTED_BLOCK_SIDE_PADDING,
+            list_area.bottom()
+        )]
+            .symbol(),
+        "▁",
+        "wide rail bottom border must be painted"
+    );
+}
+
+#[test]
+fn podcast_wide_rendering_covers_threshold_and_larger_width() {
+    for width in [82, 100] {
+        assert_wide_podcast_render(width);
+    }
 }
 
 #[test]
