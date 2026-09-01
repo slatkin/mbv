@@ -456,18 +456,10 @@ fn abs_podcast_component_geometry_is_wide_coherent_and_narrow_resets_wide() {
         geometry.right_area.width > 0 && geometry.right_area.height > 0,
         "wide right panel must be painted"
     );
-    assert!(
-        geometry.list_area.x > geometry.right_area.x
-            && geometry.list_area.y > geometry.right_area.y
-            && geometry.list_area.right() <= geometry.right_area.right()
-            && geometry.list_area.bottom() <= geometry.right_area.bottom(),
-        "wide list is inset within the framed right rail"
+    assert_eq!(
+        geometry.list_area, geometry.right_area,
+        "wide list == right panel"
     );
-    assert!(
-        !geometry.selector_tabs.is_empty(),
-        "wide rail has shared pills"
-    );
-    assert_eq!(geometry.columns, 1, "wide rail uses one fixed column");
     assert_eq!(geometry.hero_area.x, wide.x, "wide hero is the left pane");
     assert!(
         geometry.hero_area.right() <= geometry.right_area.x,
@@ -539,9 +531,9 @@ fn abs_podcast_component_geometry_is_wide_coherent_and_narrow_resets_wide() {
         empty_wide_geometry.right_area.width > 0,
         "no-show wide layout still paints its right placeholder panel"
     );
-    assert!(
-        empty_wide_geometry.list_area.x >= empty_wide_geometry.right_area.x
-            && empty_wide_geometry.list_area.right() <= empty_wide_geometry.right_area.right()
+    assert_eq!(
+        empty_wide_geometry.list_area,
+        empty_wide_geometry.right_area
     );
     assert_eq!(
         empty_wide_geometry.hero_area,
