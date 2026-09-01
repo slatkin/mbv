@@ -29,10 +29,18 @@ SUPERSEDED by `051bf75a`, which deleted `render_feed_group_picker_content` and
 feed view picker through the shared paths: narrow via
 `render_narrow_browse_with_ctx` → `render_plain_rows` /
 `render_letter_grouped_rows`, Wide via `render_wide_movies` (Hero-on-left).
-Only `paint_feed_group_pills_row` and the `feed_selected_height` field
-(consumed in `render_narrow_browse_with_ctx`) survive from the first approach.
-D1–D4 and tasks 3.x are retained as the record of that first attempt, not the
-end state.
+`051bf75a` also replaced the buffer-baseline FEED tests with structural
+assertions.
+
+No code from the first attempt survives: `051bf75a` removed `27b87423`'s
+`selected_h` match and its ported scroll clamp wholesale. The current
+inline-expansion behaviour was re-established on the shared path by the later
+follow-up `2fdecb24`, which added `feed_selected_height` to `NarrowBrowseExtras`
+(read as `feed_selected_height.max(1)` in `render_narrow_browse_with_ctx`).
+`paint_feed_group_pills_row` is a refactor-introduced helper on the shared path
+(`051bf75a`, mirroring `paint_letter_pills_row`), not a survivor of the first
+attempt. D1–D4 and tasks 3.x are retained as the record of that first attempt,
+not the end state.
 
 One divergence is already live and is out of scope here: the migrated picker
 paints a ` N items` + `▁` header that legacy

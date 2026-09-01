@@ -1,5 +1,13 @@
 ## 1. Pin the defect before fixing it
 
+> The test names below (`feed_home_video_group_expands_selected_row_narrow`,
+> `FEED_NARROW_BASELINE`) are from the first attempt (`27b87423`). `051bf75a`
+> replaced the buffer-baseline FEED tests with structural assertions — at HEAD
+> the relevant tests are `feed_home_video_group_narrow_uses_shared_inline_hero`,
+> `feed_home_video_group_metadata_bearing_hero_keeps_complete_frame`,
+> `feed_home_video_group_paints_each_row_once`, and
+> `feed_home_video_group_metadata_free_selected_row_stays_ordinary`.
+
 - [x] 1.1 In `src/app/tests_narrow_browse_migration.rs`, extend
       `feed_home_video_group_app()` with a metadata-bearing variant: give the
       selected video `runtime_ticks`, `genre`, and an `overview` long enough to
@@ -37,11 +45,14 @@
 > routing refactor (`051bf75a`). See design.md "As delivered" for the end state.
 
 - [x] 3.1 Replace `let selected_h = 1;` in `render_feed_group_picker_content`
-      with `extras.feed_selected_height.max(1)`, keeping the existing
+      with a `match extras.inline_hero { … banner.content_rows_with_title(0) +
+      HERO_BLOCK_EXTRA_ROWS … _ => 1 }` expression, keeping the existing
       `render_compact_detail_with_ctx` call untouched so its
-      `h.saturating_sub(5)` becomes live again. Verify: test 1.2's row-count
-      and meta-line assertions pass; `Video Two` appears at most as often as
-      legacy geometry allows and the frame contains the overview fragment.
+      `h.saturating_sub(5)` becomes live again. (The `feed_selected_height` /
+      `.max(1)` form was introduced later, on the shared path, by `2fdecb24`.)
+      Verify: the row-count and meta-line assertions pass; `Video Two` appears
+      at most as often as legacy geometry allows and the frame contains the
+      overview fragment.
 - [x] 3.2 Port the legacy scroll clamp (`design.md` D3): replace
       `if selected_h > list_area.height { offset = selected; }` with the
       accumulated-height loop from
@@ -78,8 +89,9 @@
 - [x] 4.2 Drop the one-column right shift of the row at index `selected + 1`
       (`x + 1`, `width - 1`) in the picker painter. Verify: no non-selected row
       is indented and the selected row's framed expansion owns its own border
-      — the `idx == selected + 1` rect branch was removed in commit `27b87423`
-      and the whole bespoke painter deleted in `051bf75a`.
+      — `27b87423` kept the `idx == selected + 1` rect branch (only relocated
+      it inside an `if idx != selected` guard); it was removed when `051bf75a`
+      deleted the bespoke painter.
 - [x] 4.3 Remove the dead `feed_items` early return in
       `render_narrow_browse_with_ctx` that computed `inline_hero_rows` /
       `feed_ctx` / pills branches and then delegated to
