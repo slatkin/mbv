@@ -51,7 +51,7 @@
 
 ## 5. Claim `.` and `/` in the TV component (D2)
 
-- [ ] 5.1 In `TvWorkspaceComponent::handle_key`, add `.` and `/` arms before
+- [x] 5.1 In `TvWorkspaceComponent::handle_key`, add `.` and `/` arms before
       the letter-pill arm: `.` → `EmbyLibraryContextMenu { item }` from
       `self.selected_item()` (series-list selection authoritative even with
       the Episodes pane focused, per #633's `EmbyLibrary*` arms); `/` →
