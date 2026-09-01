@@ -1,0 +1,40 @@
+## 1. Establish Independent Prerequisites
+
+- [x] 1.1 Revise `restore-feed-group-inline-expansion` into the focused #634/#637 Narrow Feed fix, remove its conflicting Wide expansion, and verify its proposal/design/specs/tasks are coherent with `rtk openspec validate restore-feed-group-inline-expansion --strict`.
+- [ ] 1.2 Complete and land the focused #634/#637 change on `feat/migrate-tui-to-tuirealm` before the Home/Feeds slice starts; verify its metadata-bearing Narrow fixture, framing, and picker-row hit behavior are green and record the merge commit as the slice baseline.
+- [ ] 1.3 Create or complete the independent #640 Audiobookshelf Podcast Hero-on-left correction and land it on `feat/migrate-tui-to-tuirealm` before the Music/Audiobookshelf slice starts; verify the shared arrangement and Wide pill/right-rail behavior are green and record the merge commit.
+- [ ] 1.4 Revise `restore-mouse-support` to state that mounted parents own mouse subscription plus `MouseGestureState`, embedded canonical controls own view-populated `HitRegions<Target>`, and Queue/list row-hit migration belongs to the canonical slices; verify no task in that change still claims canonical row-hit ownership and strict validation passes.
+- [ ] 1.5 Verify PR #606 remains blocked and all implementation PRs target `feat/migrate-tui-to-tuirealm`; record the branch and review-stack rule in every slice proposal before approving any implementation task.
+
+## 2. Create the Five Implementation Slice Changes
+
+- [ ] 2.1 Create `introduce-canonical-media-list-foundation` with complete proposal/spec/design/tasks for shared types and controls plus generic Emby, Movies, Emby home-video/podcast browsing, narrow TV Series browsing, and the Wide TV right rail; require `CONTEXT.md` terminology first, re-home `render_plain_rows` instead of rewriting it, characterize TV re-anchor behavior, split `browser.rs`/`tv_workspace.rs` before or with wiring, and verify strict OpenSpec validation.
+- [ ] 2.2 Create `migrate-home-feeds-to-canonical-lists` with complete artifacts that depend on the landed #634/#637 baseline, cover Home stable section identity and Feed Heading/Spacer rows, correct Wide Feeds to one column, preserve the independently fixed Narrow behavior, require focused plus manual evidence, and verify strict OpenSpec validation.
+- [ ] 2.3 Create `migrate-music-audiobookshelf-to-canonical-lists` with complete artifacts that depend on landed #640, characterize Music re-anchor behavior before replacement, preserve Music/Podcast/Book workspaces and images, remove Wide Book replacement, split `audiobookshelf_podcast.rs` before or with wiring, and verify strict OpenSpec validation.
+- [ ] 2.4 Create `migrate-queue-to-canonical-list` with complete artifacts that mark Hero-on-left and `InlineMediaBrowser` not applicable, use bounded prepared progress percentage, keep Queue scope/reorder/playback/title authority in the parent, implement the parent-gesture/child-row-hit seam, and verify strict OpenSpec validation.
+- [ ] 2.5 Create `remove-bespoke-media-list-loops` with complete artifacts that depend on all four destination slices, delete only cross-family obsolete painters/geometry, reconcile ADR 0022/ledger/frontend guidance, run the exact surface inventory and final gates, and verify strict OpenSpec validation.
+
+## 3. Deliver the Stacked Slice PRs
+
+- [ ] 3.1 Complete and merge `introduce-canonical-media-list-foundation` as its own PR into `feat/migrate-tui-to-tuirealm`; verify its automated checks, manual Emby/Movies/HomeVideos/TV evidence, file-size gate, and one-painter evidence are attached before merge.
+- [ ] 3.2 Complete and merge `migrate-home-feeds-to-canonical-lists` as its own PR after task 1.2 and slice 1; verify Home and Feeds Wide/Narrow manual evidence, the non-vacuous metadata fixture, Feeds one-column Wide behavior, file-size gate, and one-painter evidence are attached before merge.
+- [ ] 3.3 Complete and merge `migrate-music-audiobookshelf-to-canonical-lists` as its own PR after task 1.3 and slice 1; verify Music and Audiobookshelf Wide/Narrow manual evidence, Music re-anchor characterization, #640 baseline preservation, Wide Book ordinary rows, file-size gate, and one-painter evidence are attached before merge.
+- [ ] 3.4 Complete and merge `migrate-queue-to-canonical-list` as its own PR after slice 1 and the mouse contract revision; verify Local/Remote Queue behavior, bounded progress, scope/reorder/playback authority, parent-gesture/child-hit resolution, file-size gate, and one-painter evidence are attached before merge.
+- [ ] 3.5 Complete and merge `remove-bespoke-media-list-loops` as its own PR after all destination slices; verify no destination-family implementation is silently folded into cleanup and that source searches prove every deleted loop/geometry field has no remaining caller.
+- [ ] 3.6 Verify each slice remains a distinct PR and rollback boundary even if commits inside that slice are squashed; fail the umbrella gate if any merge combines multiple slices into one review unit.
+
+## 4. Verify the Umbrella Contract
+
+- [ ] 4.1 Reconcile the exact destination inventory against source and slice evidence: Home; generic Emby catalog; Movies; TV Series; grouped Music albums; Emby home-video and podcast libraries; Audiobookshelf Podcast shows; Audiobookshelf Books; Feeds; and Queue fixed rows; verify each composes its applicable canonical control or has an approved umbrella exception.
+- [ ] 4.2 Verify non-hero two-column browsers retain their existing policy and Queue never enters Hero-on-left or selected-row replacement; record direct Wide/Narrow/fixed-row evidence rather than inferring compliance from shared types.
+- [ ] 4.3 Verify the defined selected-target plus selected-row-offset handoff against the TV and Music before/after characterization, including Wide -> Narrow -> Wide, and reject the umbrella if a scroll jump lacks an approved behavior change.
+- [ ] 4.4 Verify mouse ownership matches the joint contract in source and both changes: parent subscription/gesture state, child row hit regions, parent-owned pills/scope controls, and no duplicate Queue/list coordinate path.
+- [ ] 4.5 Verify every affected destination has representative automated evidence and recorded manual end-to-end evidence for movement, focus, relevant Wide/Narrow presentation, and image behavior; do not accept a metadata-free or state-free baseline for a path that requires that data.
+
+## 5. Reconcile and Close the Campaign
+
+- [ ] 5.1 Update ADR 0022, `docs/architecture/interactive-surface-ledger.md`, `CONTEXT.md`, and the `mbv-frontend` guidance to use `WideMediaList` and `InlineMediaBrowser`, distinguish Inline Search, preserve the non-hero two-column carve-out, and identify the child owner/painter for every named primary destination.
+- [ ] 5.2 Run `rtk cargo fmt`, `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace --all-targets`, `rtk make check-code-file-lines`, and the repository architecture-boundary scan on the fully stacked `feat/migrate-tui-to-tuirealm` branch; fix change-owned failures and replace rather than troubleshoot flaky tests.
+- [ ] 5.3 Run `rtk openspec validate compose-canonical-media-lists --strict` plus strict validation for all five slice changes and both revised overlapping changes; verify no artifact still describes folded Feed/Podcast fixes, monolithic implementation, undefined viewport anchoring, payload-free Queue progress, or overlapping mouse row-hit ownership.
+- [ ] 5.4 Sync the umbrella deltas into the main specs only after all slice changes are complete, archive the slice changes and then this umbrella through their OpenSpec archive workflows, and verify issue #641's inventory has no unresolved row.
+- [ ] 5.5 Merge PR #606 only after tasks 1–5 are complete and the stacked branch gates are green; verify the final PR description cites the five slice PRs, independent #634/#637 and #640 fixes, manual evidence, and issue #641 closure.
