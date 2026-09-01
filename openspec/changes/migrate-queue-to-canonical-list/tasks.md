@@ -7,7 +7,7 @@
 ## 2. Canonical Queue composition
 
 - [ ] 2.1 Define the Queue prepared projection in the canonical `Item` vocabulary with stable `QueueSlotId` targets, title/metadata, semantic state, and `progress_percent` clamped to `0..=100`; keep domain/effect authority outside the child.
-- [ ] 2.2 Embed the canonical fixed-row child in the mounted Queue parent and route local cursor, scroll, viewport, scrollbar, and fixed-row placement through it; preserve refresh target retention and clamping without an App mirror.
+- [ ] 2.2 Embed `WideMediaList<QueueSlotId>` directly in the mounted Queue parent and route local cursor, scroll, viewport, scrollbar, and fixed-row placement through it; preserve refresh target retention and clamping without an App mirror.
 - [ ] 2.3 Preserve Queue parent/shell ownership of Local/Remote scope and controls, reorder, playback, title, Player/queue authority, persistence, and active-state policy; carry stable `QueueSlotId` in every slot-targeted effect, allowing a destination position only for reorder and resolving it against the same canonical queue.
 - [ ] 2.4 Remove Queue's duplicate list painter, movement/scroll arithmetic, and row coordinate path while retaining parent-owned scope/chrome geometry. Do not introduce InlineMediaBrowser, Hero-on-left, Inline hero, responsive Wide/Inline handoff, Feeds, or Audiobookshelf work.
 
