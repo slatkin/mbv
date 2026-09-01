@@ -301,16 +301,12 @@ impl App {
         area: Rect,
         cache_key: &str,
         show_placeholder: bool,
+        centered: bool,
     ) {
         if show_placeholder {
-            self.render_keep_watching_hero_image(f, area, cache_key, false);
-        } else if let Some(image) = self.cached_image_protocol_mut(cache_key) {
-            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-            f.render_stateful_widget(
-                SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
-                area,
-                image,
-            );
+            self.render_keep_watching_hero_image(f, area, cache_key, centered);
+        } else {
+            self.render_keep_watching_hero_image(f, area, cache_key, centered);
         }
     }
 
@@ -396,7 +392,7 @@ impl App {
                 show_placeholder,
             }) => {
                 if let Some(cache_key) = self.audiobookshelf_cover_key(&library_item_id) {
-                    self.paint_audiobookshelf_cover(f, area, &cache_key, show_placeholder);
+                    self.paint_audiobookshelf_cover(f, area, &cache_key, show_placeholder, true);
                 }
             }
             Some(HomeImagePaint::AudiobookshelfBookCover {
@@ -405,7 +401,7 @@ impl App {
                 show_placeholder,
             }) => {
                 if let Some(cache_key) = self.audiobookshelf_book_cover_key(&library_item_id) {
-                    self.paint_audiobookshelf_cover(f, area, &cache_key, show_placeholder);
+                    self.paint_audiobookshelf_cover(f, area, &cache_key, show_placeholder, false);
                 }
             }
             None => {}

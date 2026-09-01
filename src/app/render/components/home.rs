@@ -242,7 +242,10 @@ pub(in crate::app) fn render_home_content(
                     // at the bottom of `area` by `render_home_latest_detail`
                     // -- ends up stranded far below the text.
                     let text_w = hero_content.width as usize;
-                    let ov_w = text_w.saturating_sub(WIDE_OVERVIEW_PAD * 2);
+                    // The recessed overview box applies the shared pane
+                    // padding twice (panel and content), so measure against
+                    // its actual text width.
+                    let ov_w = text_w.saturating_sub(WIDE_OVERVIEW_PAD * 4);
                     let text =
                         crate::app::render::components::home_latest_row::home_latest_detail_text(
                             &item, text_w, ov_w,
