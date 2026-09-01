@@ -22,6 +22,7 @@ pub mod help;
 pub mod home;
 pub mod inline_search;
 pub mod library_routes;
+pub mod mouse;
 pub mod msg;
 pub mod multiselect;
 pub mod music_workspace;
