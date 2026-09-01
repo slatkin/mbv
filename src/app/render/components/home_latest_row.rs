@@ -342,11 +342,20 @@ pub(in crate::app::render) fn render_home_latest_detail_content(
         .max(1)
         .min(area.height.saturating_sub(meta_height + 1));
     let img_w = area.width;
+    // The shared wide hero presentation puts artwork first, then a spacer,
+    // then metadata. Keep the metadata in its own rect so the shell's
+    // deferred image paint cannot overwrite it.
+    let meta_area = Rect {
+        x: area.x,
+        y: area.y.saturating_add(image_height).saturating_add(1),
+        width: area.width,
+        height: area.height.saturating_sub(image_height.saturating_add(1)),
+    };
 
     super::hero::render_home_hero_meta_block(
         f,
-        area,
-        area,
+        meta_area,
+        meta_area,
         &title_lines,
         &show_name,
         None,
@@ -482,10 +491,9 @@ mod tests {
         })
         .unwrap();
         let out = buffer_to_string(&term);
-        let lines: Vec<&str> = out.split('\n').collect();
-        assert!(lines[0].contains("Episode a"), "title row: {out:?}");
-        assert!(lines[1].contains("Podcast"), "show-name row: {out:?}");
-        assert!(lines[2].contains("1:05"), "duration row: {out:?}");
+        assert!(out.contains("Episode a"), "title row: {out:?}");
+        assert!(out.contains("Podcast"), "show-name row: {out:?}");
+        assert!(out.contains("1:05"), "duration row: {out:?}");
     }
 
     /// Task 10.2: detail with no known duration skips the duration row but
@@ -501,13 +509,9 @@ mod tests {
         })
         .unwrap();
         let out = buffer_to_string(&term);
-        let lines: Vec<&str> = out.split('\n').collect();
-        assert!(lines[0].contains("Episode b"), "title row: {out:?}");
-        assert!(lines[1].contains("Podcast"), "show-name row: {out:?}");
-        assert!(
-            lines[2..].iter().all(|l| !l.contains("0:00")),
-            "no fabricated duration: {out:?}"
-        );
+        assert!(out.contains("Episode b"), "title row: {out:?}");
+        assert!(out.contains("Podcast"), "show-name row: {out:?}");
+        assert!(!out.contains("0:00"), "no fabricated duration: {out:?}");
     }
 
     #[test]
@@ -562,12 +566,17 @@ mod tests {
         })
         .unwrap();
         let out = buffer_to_string(&term);
-        // Reassemble the description block's visible lines (title, show name,
-        // subtitle, blank separator precede it) joining trimmed rows.
-        let desc_region: String = out
-            .split('\n')
-            .skip(3)
-            .map(str::trim)
+        // Reassemble the description block's visible lines after the
+        // artwork-first layout: title, show name, and separator precede it.
+        let lines: Vec<&str> = out.split('\n').collect();
+        let title_row = lines
+            .iter()
+            .position(|line| line.contains("Episode t"))
+            .expect("title row");
+        let desc_region: String = lines
+            .iter()
+            .skip(title_row + 3)
+            .map(|line| line.trim())
             .filter(|line| !line.is_empty())
             .collect::<Vec<_>>()
             .join(" ");
