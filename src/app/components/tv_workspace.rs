@@ -481,6 +481,10 @@ impl TvWorkspaceComponent {
             {
                 Some(ShellRequest::EmbyLibraryRefresh)
             }
+            Key::Char('.') => Some(ShellRequest::EmbyLibraryContextMenu {
+                item: self.selected_item()?,
+            }),
+            Key::Char('/') => Some(ShellRequest::OpenInlineSearch),
             Key::Char(c @ ('[' | ']'))
                 if !key
                     .modifiers
