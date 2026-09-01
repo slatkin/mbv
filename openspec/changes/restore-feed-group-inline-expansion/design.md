@@ -1,15 +1,25 @@
+> Status: complete (2026-09-01), retained as historical context for the
+> canonical media-list campaign. User acceptance is recorded in `tasks.md`. The
+> test-first task ordering is historical fact and MUST NOT be copied into new
+> canonical UI work, which is visual-first — see the historical prerequisite
+> note in `tasks.md`.
+
 ## Context
 
-Two painters serve the feed group picker and both lost the expansion that
-`fbc6888e:src/app/render/components/home_feed.rs:118-127` computed:
+The Normal-geometry Emby homevideos feed view group picker painter lost the
+expansion that `fbc6888e:src/app/render/components/home_feed.rs:118-127`
+computed: `render_feed_group_picker_content` (`list_narrow.rs:334+`) has
+`let selected_h = 1;`, so its own `render_compact_detail_with_ctx` call —
+already present, with `y: row + 3`, `height: h.saturating_sub(5)` and
+`SELECTED_BLOCK_SIDE_PADDING` inset — is rejected by the banner painter's
+zero-height guard every frame. The shell computes the banner in
+`narrow_browse_extras` and pushes it as `NarrowInlineHero::Movie`, so the
+height input is already in hand.
 
-- Normal: `render_feed_group_picker_content` (`list_narrow.rs:334+`) has
-  `let selected_h = 1;`, so its own `render_compact_detail_with_ctx` call —
-  already present, with `y: row + 3`, `height: h.saturating_sub(5)` and
-  `SELECTED_BLOCK_SIDE_PADDING` inset — is rejected by the banner painter's
-  zero-height guard every frame. The shell computes the banner in
-  `narrow_browse_extras` and pushes it as `NarrowInlineHero::Movie`, so the
-  height input is already in hand.
+The Wide-geometry picker is out of scope for this change: it removes the
+bespoke `render_wide_feed_layer` so Wide falls through to the shared
+Hero-on-left path, and `compose-canonical-media-lists` (slice 2) owns the
+substantive Wide list control.
 
 One divergence is already live and is out of scope here: the migrated picker
 paints a ` N items` + `▁` header that legacy
@@ -25,8 +35,8 @@ while painting.
 ## Goals / Non-Goals
 
 **Goals:**
-- One expression for the expanded selected-row height, used at both Panel
-  modes: `banner.content_rows() + 5`.
+- One expression for the expanded selected-row height at Normal geometry:
+  `banner.content_rows() + 5`.
 - Restore legacy's accumulated-height scroll clamp for this surface.
 - Baselines that actually exercise the expansion path.
 
@@ -39,9 +49,10 @@ while painting.
 
 **D1 — Publish the height from the shell, do not recompute it in the painter.**
 Add `feed_selected_height: u16` to `NarrowBrowseExtras`, computed once in
-`App::narrow_browse_extras` as
+`App::narrow_browse_extras` for the Normal-geometry picker as
 `banner.content_rows() + 5` from the same `CompactBannerLayout` already built
-for `NarrowInlineHero::Movie`, using the picker's own panel width.
+for `NarrowInlineHero::Movie`, using the picker's own panel width. It is not
+consumed at Wide geometry.
 Alternative considered: `content_rows: u16` inside
 `NarrowInlineHero::Movie`. Rejected — the generic narrow path derives its rows
 with `content_rows_with_title(HERO_TITLE_ROWS * …) + HERO_BLOCK_EXTRA_ROWS`
@@ -52,6 +63,7 @@ leaves the shared variant alone.
 **D2 — Keep the published picker height explicit.**
 The picker keeps its content-derived height in `NarrowBrowseExtras`; the
 component does not recompute banner layout while painting.
+
 **D3 — Port the legacy scroll clamp verbatim.**
 `render_feed_group_picker_content` replaces
 `if selected_h > list_area.height { offset = selected; }` with legacy's loop:

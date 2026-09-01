@@ -1,18 +1,34 @@
 # Restore feed-group inline expansion
 
+> Status: complete (2026-09-01). Landed historical prerequisite for the
+> canonical media-list campaign (`compose-canonical-media-lists`, umbrella
+> task 1.2). User acceptance is recorded in `tasks.md` (2026-09-01
+> user-authorized exception). Its test-first task ordering is preserved as
+> historical fact and MUST NOT be copied into new canonical UI work, which is
+> visual-first — see the historical prerequisite note in `tasks.md`.
+
 ## Why
 
-Issues #634 and #637. After `BrowserComponent` took over the feed-view home-video group
-picker (`is_feed_home_video_group_view` surfaces: feed-view home-video
-libraries and Emby podcast channels), the selected video row stopped
-expanding into its framed Inline hero: `render_feed_group_picker_content`
-hardcodes `selected_h = 1`, which makes its own `h.saturating_sub(5)` banner
-paint dead, and `render_wide_feed_layer` hardcodes a content-independent
-`row_height = 5` with no banner paint at all. Real Emby home-video items carry
+Issues #634 and #637. After `BrowserComponent` took over the Emby homevideos
+feed view group picker (`is_feed_home_video_group_view` surfaces: an Emby
+homevideos feed view library or an Emby podcast channel list), the selected
+video row stopped expanding into its framed Inline hero at Normal geometry:
+`render_feed_group_picker_content` hardcodes `selected_h = 1`, which makes its
+own `h.saturating_sub(5)` banner paint dead. Real Emby home-video items carry
 runtime/genre, so production hits the broken path on the first selected row;
 the checked-in baselines missed it because their fixtures have no metadata.
 This restores the Selected-row replacement the surface had at `fbc6888e` and
 pins it with metadata-bearing fixtures.
+
+("Emby podcast channel list" is coined by the sibling
+`compose-canonical-media-lists` foundation change and is not yet recorded in
+`CONTEXT.md`; "Emby homevideos feed view" is `CONTEXT.md` vocabulary.)
+
+The bespoke Wide-geometry painter (`render_wide_feed_layer`, a
+content-independent `row_height = 5` with no banner paint at all) is removed by
+this change so the picker's Wide geometry falls through to the shared
+Hero-on-left path. Substantive Wide list behavior is out of scope here and is
+owned by `compose-canonical-media-lists` (slice 2), not respecified.
 
 ## What Changes
 
@@ -59,8 +75,8 @@ pins it with metadata-bearing fixtures.
 - `library-list-hero`: adds a requirement pinning the feed-group picker's
   selected-row expansion and bottom-edge scrolling —
   the existing shared requirements cover hero-bearing browsers generically;
-  this surface's inline-expansion height and single-paint behavior at both
-  Panel modes become explicitly testable.
+  this surface's inline-expansion height and single-paint behavior at Normal
+  geometry become explicitly testable.
 
 ## Impact
 

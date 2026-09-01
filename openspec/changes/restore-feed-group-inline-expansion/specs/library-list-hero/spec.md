@@ -2,21 +2,20 @@
 
 ### Requirement: Feed group picker uses the shared selected-row replacement
 
-The feed-view home-video group picker (a feed-view home-video library or an
-Emby podcast channel list) SHALL present the selected video with the same
-variable-height Inline hero block that other hero-bearing browsers use, at
-Normal geometry, and SHALL paint each visible video row exactly once.
+The Emby homevideos feed view group picker (an Emby homevideos feed view
+library or an Emby podcast channel list) SHALL present the selected video with
+the same variable-height Inline hero block that other hero-bearing browsers
+use, at Normal geometry, and SHALL paint each visible video row exactly once.
 
 Its expanded height SHALL be derived from the selected item's own compact
 banner content at the block's text width, not from a fixed row count. Its
 Inline hero SHALL show the title, metadata line, and truncated overview, and
-SHALL own the selected row's hit geometry. The picker rows have one painter; where
-Hero-on-left rail are both eligible for the same rect, one painter SHALL own
-the rows.
+SHALL own the selected row's hit geometry. The picker rows SHALL have exactly
+one painter.
 
 #### Scenario: Selected video expands in Normal geometry
 
-- **WHEN** a feed group picker is displayed in Normal geometry and the
+- **WHEN** the picker is displayed in Normal geometry and the
   selected video carries runtime, genre, and an overview that wraps
 - **THEN** its ordinary row is replaced by a framed Inline hero block whose
   height is the banner's content rows plus its fixed framing rows
