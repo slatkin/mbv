@@ -75,14 +75,17 @@ Rejected — the adaptation surface (bridging two focus models, two event-result
 models) is larger than the code it saves, and it couples a core interaction path
 to an unproven external crate.
 
-### D1 — Delivery: any-position mouse subscription + component-owned hit-test
+### D1 — Delivery: mounted parents subscribe and recognize mouse
 
-Every mounted interactive component subscribes with
+Every mounted destination parent subscribes with
 `EventClause::Mouse(MouseEventClause { kind: <any>, column: 0..=u16::MAX,
 row: 0..=u16::MAX })` + `SubClause::Always` (helper `mouse_sub()`), so it
-receives every mouse event while mounted. The component decides ownership in
-`on()` by testing coordinates against the geometry it captured in its last
-`view()`.
+receives every mouse event while mounted. The mounted parent owns the
+`MouseGestureState` and maps recognized gestures to its controls. An embedded
+canonical media-list control owns the `HitRegions<Target>` populated by its
+latest view for its painted list rectangle; the parent delegates point
+resolution to that child. Parent-owned pills, Queue scope buttons, overlays,
+Playback seekbar, and non-list wheel/chrome retain their own hit geometry.
 
 **Alternative considered:** dynamic position-scoped subscriptions, re-registered
 each frame to match current geometry. Rejected — subscriptions are set at mount
@@ -109,13 +112,14 @@ resolves is overlay-vs-underlying.
 Rejected — spreads the blocking rule across N components and re-introduces shared
 mutable input state.
 
-### D3 — Gesture recognition moves into components (the A/B fork, resolved B)
+### D3 — Gesture recognition moves into mounted parents (the A/B fork, resolved B)
 
-**B (chosen):** each interactive component owns a private `MouseGestureState`.
-It feeds raw `MouseEvent`s in and gets a recognized gesture out — `Click`,
+**B (chosen):** each mounted destination parent owns a private
+`MouseGestureState`. It feeds raw `MouseEvent`s in and gets a recognized gesture out — `Click`,
 `DoubleClick`, `RightClick`, `Scroll` now; `DragStart/Move/End`,
-`HoverEnter/Leave` reserved. The component maps the gesture + its resolved
-`HitRegions<Tag>` target to a semantic typed `Msg`. The double-click interval
+`HoverEnter/Leave` reserved. The mounted parent maps the gesture to a semantic
+request, delegating canonical list point resolution to the embedded control's
+`HitRegions<Target>`. The double-click interval
 and wheel throttle live in `MouseGestureState`, per component.
 
 **A (rejected):** keep all timing in `App`'s shell-side clock; components report
@@ -138,9 +142,10 @@ typed `Msg::Shell`"; B extends that, A freezes it mid-way.
 
 ### D4 — Components emit semantic `Msg`, never raw coordinates
 
-A component's mouse `Msg` carries the resolved target — a row identity, a
-`QueueSlotId`, a pill index, a transport control — not `col`/`row` for the shell
-to re-resolve. This is the `interactive-component-framework` "own only
+A mounted parent emits a mouse `Msg` with a resolved semantic target — a pill
+index, `QueueSlotId` scope action, transport control, or child-returned row
+identity — not `col`/`row` for the shell to re-resolve. Canonical list row
+identity is resolved only by the embedded child. This is the `interactive-component-framework` "own only
 presentation authority" rule (no shell field written to be read back) applied to
 mouse. The one apparent exception, the context-menu anchor, is a click position
 that is display geometry the component legitimately owns and forwards; it is not
@@ -153,15 +158,18 @@ a `set_panel_focus` for that panel before the semantic effect runs — exactly h
 `handle_mouse_single_click_emby` already calls `self.set_panel_focus(...)`. The
 shell applies focus first so a subsequent effect sees the right focused surface.
 
-### D6 — `HitRegions<Tag>` consolidates the per-surface hit enums
+### D6 — `HitRegions<Target>` belongs to embedded canonical lists
 
-New `src/app/components/mouse/hit.rs`: `HitRegions<Tag>` — a component clears it
+New `src/app/components/mouse/hit.rs`: `HitRegions<Tag>` — a control clears it
 at the top of `view()`, calls `push(rect, tag)` as it paints, and calls
-`resolve(point) -> Option<Tag>` in `on()` (last-pushed-wins for overlap, or
-z-ordered explicitly). The per-surface `BrowserHitRegion` / `QueueHitRegion` /
-`HomeHitRegion` / `TvHit` enums in `msg/hit_regions.rs` become the `Tag` types
-for each surface; the file's shell-side "the shell decides single vs double"
-contract is deleted along with the `note_browse_*` helpers.
+`resolve(point) -> Option<Tag>` (last-pushed-wins for overlap, or z-ordered
+explicitly). Canonical media-list controls use `HitRegions<Target>` for their
+painted list rectangle; the mounted parent recognizes the gesture and delegates
+point resolution to the child. Parent-owned pills, Queue scope buttons,
+overlays, Playback seekbar, and non-list wheel/chrome retain their own regions.
+Queue/list row-hit migration belongs to the canonical media-list slices and no
+duplicate coordinate path is delivered here. Per-surface row-hit enums and
+shell-side recognition are removed only as those slices migrate them.
 
 ### D7 — Delivery model chosen so drag/hover are additive
 
@@ -177,8 +185,9 @@ that do not want it. No change to `mouse_sub()`, the fold, or the priority order
 The `impl App` effect handlers in `mouse_gestures.rs` (`handle_mouse_single_click_emby`,
 `seek_to_col`, the queue/tv handlers) stay — they are shell-owned effects keyed
 off typed `Msg`. What leaves is the recognition glue (`note_browse_double_click`,
-`note_browse_scroll`) and the stubbed `handle_mouse_scroll_browse`, which is
-replaced by real per-component wheel routing mirroring `Model::handle_home_scroll`.
+`note_browse_scroll`) and the stubbed `handle_mouse_scroll_browse`; parent wheel handling remains
+for non-list chrome while canonical list scrolling is returned by the embedded
+control.
 
 ### D9 — An ADR records the delivery model
 

@@ -31,8 +31,9 @@ the framework must absorb them additively.
   a fixed priority: topmost overlay > active panel > sibling panel > chrome. A
   mounted blocking overlay discards all mouse messages from underlying components.
 - **Shared framework primitives.** A `HitRegions<Tag>` collector (fill painted
-  rects + tags during `view()`, resolve a point to a `Tag` during `on()`) and a
-  per-component `MouseGestureState` recognizer (raw events in; `Click`,
+  rects + tags during `view()`, resolve a point to a `Tag` during `on()`) for
+  embedded canonical list controls, and a mounted-parent `MouseGestureState`
+  recognizer (raw events in; `Click`,
   `DoubleClick`, `RightClick`, `Scroll` out — `DragStart/Move/End` and
   `HoverEnter/Leave` reserved). These replace the scattered `note_browse_*`
   helpers and the per-surface `*HitRegion` enums in `msg/hit_regions.rs`.
@@ -41,16 +42,18 @@ the framework must absorb them additively.
   `MouseGestureState`. This is not the global position-keyed clock D16 forbade;
   design.md records why they differ, and why the alternative (keep timing
   shell-side) was rejected as unscalable for drag/hover.
-- **Full per-surface mouse parity.** Every migrated interactive surface — the five
-  partial ones plus every overlay and popup (`settings`, `sessions`, `playlists`,
-  `search_sidebar`, `feeds_manage`, `library_routes`, `multiselect`,
-  `save_playlist`, `context_menu`, `selection_modal`, the blocking modals) and
-  `browser_narrow` — resolves click, double-click, right-click, and wheel against
-  its own geometry, with click-to-focus for panels.
+- **Parent-owned mouse parity.** Every mounted destination parent recognizes
+  gestures. Parent-owned pills, Queue scope buttons, overlays, Playback seekbar,
+  and non-list wheel/chrome retain their own geometry. Embedded canonical
+  media-list controls own view-populated `HitRegions<Target>` for painted list
+  rectangles; parents delegate point resolution. Queue/list row-hit migration
+  belongs to the canonical media-list slices, with no duplicate coordinate path
+  delivered here.
 - **`PlaybackComponent` mouse reachable.** Seekbar scrub and transport-button
   clicks work regardless of which component holds focus.
-- **Browse wheel un-stubbed.** Emby/ABS/Feeds list wheel scrolling routes to the
-  owning component, mirroring `HomeComponent`'s wheel path.
+- **Browse wheel ownership.** Parent-owned non-list wheel/chrome behavior is
+  restored here; Emby/ABS/Feeds canonical list scrolling belongs to the
+  canonical media-list slices and is reached through parent gesture delivery.
 - **Ledger and gates.** `docs/architecture/interactive-surface-ledger.md` gains a
   Mouse ownership/verification column replacing its "Mouse ownership is out of
   scope" section. The three deferred D16 precedence proofs (simultaneous

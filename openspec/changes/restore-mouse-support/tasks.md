@@ -17,17 +17,17 @@
 
 - [ ] 3.1 Create `src/app/components/mouse/hit.rs` with `HitRegions<Tag>` (`clear`, `push(rect, tag)`, `resolve(point) -> Option<Tag>`, last-push-wins); unit-test overlap resolution and empty/out-of-bounds cases.
 - [ ] 3.2 Create `src/app/components/mouse/gesture.rs` with `MouseGestureState` consuming raw `MouseEvent`s and emitting `Click`/`DoubleClick`/`RightClick`/`Scroll` (reserve `DragStart`/`DragMove`/`DragEnd`/`HoverEnter`/`HoverLeave`); unit-test the double-click window and wheel throttle in isolation.
-- [ ] 3.3 Migrate `BrowserComponent` onto `HitRegions<BrowserHitRegion>` + `MouseGestureState`; verify `rtk cargo nextest run -p mbv emby_browser` stays green with characterization buffers unchanged.
-- [ ] 3.4 Migrate `HomeComponent` and `QueueComponent` onto the primitives; verify `rtk cargo nextest run -p mbv home queue` green.
-- [ ] 3.5 Migrate `TvWorkspaceComponent` and the partial `MusicWorkspaceComponent` mouse paths onto the primitives; verify `rtk cargo nextest run -p mbv tv_workspace music_workspace` green.
+- [ ] 3.3 Migrate the mounted Browser parent onto `MouseGestureState`; delegate canonical list row hit-testing to the embedded control's `HitRegions<Target>` (row migration belongs to the canonical media-list slice); verify delivery and parent-owned controls without adding a duplicate row-coordinate path.
+- [ ] 3.4 Migrate Home and Queue mounted parents onto `MouseGestureState`; retain parent-owned controls (including Queue scope buttons) and delegate canonical list row hits to embedded controls; verify no duplicate Queue/list coordinate path is added.
+- [ ] 3.5 Migrate TV/Music mounted parents onto `MouseGestureState`; delegate canonical list row hits to embedded controls and retain parent-owned pills/chrome; verify no duplicate row-hit ownership.
 - [ ] 3.6 Delete the shell-side recognition glue (`note_browse_double_click`, `note_browse_scroll`, `App.last_click_time`/`last_click_pos`/`last_scroll_at` if now unused) and the "shell decides single vs double" contract text in `msg/hit_regions.rs`; verify `rtk cargo clippy --workspace --all-targets` reports no dead code and `rtk cargo check -p mbv` passes.
 - [ ] 3.7 Phase-2 gate: full `rtk cargo nextest run -p mbv` green with zero characterization-buffer changes; confirm this phase added no observable behaviour.
 
 ## 4. Phase 3 — Main-surface parity + wheel
 
-- [ ] 4.1 Replace the stubbed `handle_mouse_scroll_browse` with real per-component wheel routing for Emby, ABS, and Feeds browse lists, mirroring `Model::handle_home_scroll`'s throttle/readiness gates; verify each list scrolls under the wheel via component tests.
-- [ ] 4.2 Ensure click-to-focus, click-to-select, and double-click-to-activate are wired for every main panel (`browser`, `home`, `queue`, `tv_workspace`, `music_workspace`); verify per-surface integration tests through `tick()`.
-- [ ] 4.3 Wire right-click → context menu on every main panel that paints selectable rows, anchored at the click position; verify against the `context-menu` "Right-click parity across migrated surfaces" scenario.
+- [ ] 4.1 Route parent-owned non-list wheel/chrome behavior; canonical Emby, ABS, and Feeds list scrolling and row hits belong to their canonical media-list slices, with parent gesture recognition and child resolution only (no duplicate coordinate path).
+- [ ] 4.2 Ensure parent click-to-focus and parent-owned controls are wired for main panels; canonical list click/select/activate is delivered through the embedded control seam and its slice, not reimplemented here.
+- [ ] 4.3 Wire parent-owned right-click/context-menu behavior and preserve the anchor contract; canonical list row context targets are resolved by the embedded control's slice, with no duplicate row-hit path.
 - [ ] 4.4 Update the ledger Mouse column for the five main-panel rows with owner, supported gestures, and the test names that verify them.
 - [ ] 4.5 Phase-3 gate: `rtk cargo nextest run -p mbv`, clippy, fmt.
 
@@ -41,8 +41,8 @@
 
 ## 6. Phase 5 — music_workspace completion + narrow browse
 
-- [ ] 6.1 Complete `MusicWorkspaceComponent` hit geometry for the narrow branch and the wide right-rail track table (the D16-partial areas); verify component TestBackend tests cover album rows, track rows, and group pills under the pointer.
-- [ ] 6.2 Add row hit-testing to `browser_narrow.rs` so narrow generic/Movies/home-video/TV/Music bodies resolve clicks; verify narrow-width integration tests.
+- [ ] 6.1 Complete Music parent-owned hit geometry for narrow/wide controls and group pills; wide/narrow canonical list row hit regions and track-table row migration belong to the canonical media-list slices.
+- [ ] 6.2 Keep `browser_narrow` parent gesture delivery and non-list controls; narrow canonical list row hit-testing is owned and delivered by the canonical media-list slices, not this change.
 - [ ] 6.3 Update the ledger Mouse column for the music-workspace and narrow-browse rows; confirm no row still reads `pending`.
 - [ ] 6.4 Phase-5 gate: `rtk cargo nextest run -p mbv`, clippy, fmt.
 
