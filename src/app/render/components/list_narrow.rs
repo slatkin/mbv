@@ -374,7 +374,7 @@ impl App {
                     if rows == 0 {
                         0
                     } else {
-                        rows as u16 + 5
+                        banner.content_rows_with_title(1) as u16 + 5
                     }
                 }
                 _ => 0,

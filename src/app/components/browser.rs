@@ -471,7 +471,19 @@ impl BrowserComponent {
                     1
                 };
                 if self.layout.left_area.contains(position) {
-                    return Some(Msg::Shell(ShellRequest::BrowserScroll { delta }));
+                    let rows = self.layout.left_item_rows.len();
+                    let viewport = self.layout.left_area.height as usize;
+                    let max_offset = rows.saturating_sub(viewport);
+                    self.scroll = self
+                        .scroll
+                        .saturating_add_signed(
+                            delta.clamp(isize::MIN as i64, isize::MAX as i64) as isize
+                        )
+                        .min(max_offset);
+                    return Some(Msg::Shell(ShellRequest::BrowserScroll {
+                        delta,
+                        offset: self.scroll,
+                    }));
                 }
             }
             MouseEventKind::Down(MouseButton::Left) => {

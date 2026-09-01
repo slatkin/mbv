@@ -315,6 +315,7 @@ pub enum ShellRequest {
     /// the component holds no timing state.
     BrowserScroll {
         delta: i64,
+        offset: usize,
     },
     /// A browse-surface click the component resolved to a region of its own
     /// geometry (task 5.3d correction). The component reports *where* it

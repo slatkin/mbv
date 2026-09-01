@@ -284,9 +284,20 @@ impl Model {
                 // `BrowserComponent`, which forwards the hit region; the
                 // shell decides *when* it counts via `App`'s 400ms
                 // double-click / 30ms wheel fields (task 5.3d, correction to b5799185).
-                ShellRequest::BrowserScroll { delta } => {
+                ShellRequest::BrowserScroll { delta, offset } => {
                     if self.app.note_browse_scroll() {
-                        self.app.handle_mouse_scroll_browse(delta);
+                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                            let feed_group_view = self.app.is_feed_home_video_group_view(lib_idx);
+                            if feed_group_view {
+                                if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut()
+                                {
+                                    state.video_scroll = offset;
+                                    self.app.save_default_library_position(lib_idx);
+                                }
+                            } else {
+                                self.app.handle_mouse_scroll_browse(delta);
+                            }
+                        }
                     }
                 }
                 // Browser selected-item typed effects (task 5.3d, Emby
