@@ -533,6 +533,19 @@ _Avoid_: session, playback run, Emby session
 
 ## Feeds
 
+**Feeds Service / Feeds tab**:
+mbv's built-in Feeds Service and its Feeds tab, which manage RSS/Atom
+FeedSubscriptions and their FeedEntries. This is distinct from an Emby
+homevideos feed view.
+_Avoid_: feed view, Emby feed, homevideos feed
+
+**Emby homevideos feed view**:
+The grouped, feed-like browse surface of an Emby homevideos library, such as a
+configured YouTube tab. It is distinct from the Feeds Service/tab;
+`restore-feed-group-inline-expansion` concerns this Emby homevideos feed view,
+not the Feeds Service tab.
+_Avoid_: Feeds tab, Feeds Service, RSS subscription
+
 **FeedSubscription**:
 A user's subscription to one RSS/Atom feed: display name, URL, and FeedKind.
 Stored per-user in local `config.toml` as `[[feeds]]`; fetched entries and
