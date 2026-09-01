@@ -83,10 +83,10 @@
 
 ## 7. Close out
 
-- [ ] 7.1 Update the Music and TV workspace rows in
+- [x] 7.1 Update the Music and TV workspace rows in
       `docs/architecture/interactive-surface-ledger.md` (`.` and `/` now
       owned).
-- [ ] 7.2 Re-read `render/components/help.rs` `.` "Context menu" (Global) and
+- [x] 7.2 Re-read `render/components/help.rs` `.` "Context menu" (Global) and
       `/` "Search library" (Library) lines — confirm they now read correctly
       for Music/TV. Adjust only if wrong.
 - [ ] 7.3 Verify: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`,
