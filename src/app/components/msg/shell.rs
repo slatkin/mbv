@@ -8,6 +8,7 @@
 //! the click region; the shell owns the matching `App` side effect.
 
 use mbv_core::api::EmbyItem;
+use mbv_core::playback_queue::FeedEntry;
 
 use super::hit_regions::{BrowserHitRegion, HomeHitRegion, QueueHitRegion, TvHitRegion};
 use super::intents::{
@@ -101,12 +102,12 @@ pub enum ShellRequest {
     DetachSessions,
     /// Refresh the Feeds subscriptions through the shell-owned worker.
     RefreshFeeds,
-    /// Play the Feeds component's selected entry through the existing shell
-    /// action path, identified by its Feed guid.
-    FeedsPlay(String),
-    /// Enqueue the Feeds component's selected entry through the existing shell
-    /// action path, identified by its Feed guid.
-    FeedsEnqueue(String),
+    /// Play the exact entry selected by the Feeds component; `None` reports
+    /// that there is no visible selection so the shell can provide feedback.
+    FeedsPlay(Option<FeedEntry>),
+    /// Enqueue the exact entry selected by the Feeds component; `None` reports
+    /// that there is no visible selection so the shell can provide feedback.
+    FeedsEnqueue(Option<FeedEntry>),
     /// Dismiss the blocking Selection modal.
     DismissSelectionModal,
     /// Select a source-specific filter in the Selection modal.

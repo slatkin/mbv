@@ -128,6 +128,10 @@ impl FeedsComponent {
     }
 
     fn rebuild_visible_entries(&mut self) {
+        // Navigation uses rows produced by the previous render; invalidate
+        // them whenever filtering/group content changes.
+        self.layout.left_item_rows.clear();
+        self.layout.left_row_map.clear();
         let source = if self.selected_group == 0 {
             &self.all_entries
         } else {
@@ -278,11 +282,13 @@ impl FeedsComponent {
             Key::Enter => self
                 .visible_entries
                 .get(self.cursor)
-                .map(|entry| Msg::Shell(ShellRequest::FeedsPlay(entry.guid.clone()))),
+                .map(|entry| Msg::Shell(ShellRequest::FeedsPlay(Some(entry.clone()))))
+                .or_else(|| Some(Msg::Shell(ShellRequest::FeedsPlay(None)))),
             Key::Char('e') => self
                 .visible_entries
                 .get(self.cursor)
-                .map(|entry| Msg::Shell(ShellRequest::FeedsEnqueue(entry.guid.clone()))),
+                .map(|entry| Msg::Shell(ShellRequest::FeedsEnqueue(Some(entry.clone()))))
+                .or_else(|| Some(Msg::Shell(ShellRequest::FeedsEnqueue(None)))),
             _ => None,
         }
     }

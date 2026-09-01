@@ -163,9 +163,6 @@ pub(in crate::app) fn render_feeds_content(
     if list_area.height == 0 {
         return;
     }
-    if will_show_hero {
-        layout.hero_area = area;
-    }
     // Empty / help state.
     if !has_subs {
         render_placeholder(
@@ -206,8 +203,6 @@ pub(in crate::app) fn render_feeds_content(
     // index in `visible_entries()`.
     let cursor = (*model.cursor).min(n.saturating_sub(1));
     let display_rows = feed_display_rows(model.visible_entries, current_time_secs());
-    let cols = library_column_count(list_area.width);
-    let packed = pack_feed_rows(&display_rows, cols);
 
     // Hero: the cursor-selected entry's title + metadata, painted above
     // the (now packed) list -- feeds' inline presentation
@@ -217,22 +212,23 @@ pub(in crate::app) fn render_feeds_content(
     // out of the hero's own leftover space rather than `placement-neutral geometry`'s
     // built-in single-pill-row slot, which is too short for both rows.
     let selected_entry = model.visible_entries[cursor].clone();
-    let show_title = cols > 1;
     let wide_panes = hero_left::shared_hero_presentation(area);
     let wide = wide_panes.is_some();
-    let hero_rows_desired =
-        feed_hero_content_rows(if wide { show_title } else { true }) + HERO_BLOCK_EXTRA_ROWS;
-    let (hero_area, post_hero_area, hero_rows) = if wide {
+    let (hero_area, post_hero_area, _) = if wide {
         let Some((hero_panel, right_panel)) = wide_panes else {
             unreachable!("wide_panes is present when wide is true");
         };
-        (
-            hero_panel,
-            right_panel,
-            hero_rows_desired.min(hero_panel.height),
-        )
+        (hero_panel, right_panel, 0)
     } else {
-        (Rect::default(), list_area, hero_rows_desired)
+        (Rect::default(), list_area, 0)
+    };
+    let show_title = library_column_count(post_hero_area.width) > 1;
+    let hero_rows = if wide {
+        feed_hero_content_rows(show_title)
+            .saturating_add(HERO_BLOCK_EXTRA_ROWS)
+            .min(hero_area.height)
+    } else {
+        feed_hero_content_rows(true).saturating_add(HERO_BLOCK_EXTRA_ROWS)
     };
     layout.hero_area = hero_area;
     if wide && hero_rows > 0 {
@@ -266,8 +262,12 @@ pub(in crate::app) fn render_feeds_content(
     if list_area.height == 0 {
         return;
     }
+    // The selector preserves pane width, so pack rows only after it yields
+    // the final right-list area in wide presentation.
+    let cols = library_column_count(list_area.width);
+    let packed = pack_feed_rows(&display_rows, cols);
     let hero_rows = if wide {
-        hero_rows
+        0
     } else {
         if hero_rows >= HERO_BLOCK_EXTRA_ROWS && hero_rows < list_area.height {
             hero_rows

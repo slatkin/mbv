@@ -153,45 +153,10 @@ fn set_library_tab_to_feeds_does_not_corrupt_library_state() {
     assert_eq!(app.libs[0].nav_stack[0].resting().scroll(), 2);
 }
 
-/// A guid request for an empty or stale Feed snapshot must return without
-/// dispatching.
+/// An entry with neither an enclosure URL nor a link has no playable source;
+/// `play_feed_entry` must flash and not dispatch.
 #[test]
-fn feed_tab_play_guid_missing_entry_is_noop() {
-    let mut app = make_app_stub();
-
-    // Empty list: cursor 0 is already out of range.
-    app.feed_tab_play_guid("missing");
-    assert!(
-        app.status.is_empty(),
-        "empty list must not flash or dispatch"
-    );
-
-    // Non-empty list with a stale cursor past the end.
-    app.feed_tab.entries = vec![vec![FeedEntry {
-        guid: "a".into(),
-        title: "Entry A".into(),
-        enclosure_url: Some("https://example.test/a.mp3".into()),
-        link: None,
-        mime_type: Some("audio/mpeg".into()),
-        duration_ticks: None,
-        pub_date_secs: None,
-        feed_kind: Some(mbv_core::config::FeedKind::Audio),
-        feed_id: None,
-        position_ticks: 0,
-        played: false,
-    }]];
-    app.feed_tab.rebuild_all_entries();
-    app.feed_tab_play_guid("missing");
-    assert!(
-        app.status.is_empty(),
-        "out-of-range cursor must not flash or dispatch"
-    );
-}
-
-/// An entry with neither an enclosure URL nor a link has no playable
-/// source; `feed_tab_play_guid` must flash and not dispatch.
-#[test]
-fn feed_tab_play_guid_no_source_entry_does_not_dispatch() {
+fn feed_tab_play_entry_no_source_does_not_dispatch() {
     let mut app = make_app_stub();
     app.feed_tab.entries = vec![vec![FeedEntry {
         guid: "a".into(),
@@ -207,7 +172,7 @@ fn feed_tab_play_guid_no_source_entry_does_not_dispatch() {
         played: false,
     }]];
     app.feed_tab.rebuild_all_entries();
-    app.feed_tab_play_guid("a");
+    app.play_feed_entry(app.feed_tab.entries[0][0].clone());
 
     assert!(
         app.status.contains("no playable source"),
@@ -228,7 +193,7 @@ fn direct_remote_feed_play_submits_the_selected_entry() {
     app.feed_tab.entries = vec![vec![playable_feed_entry("feed-play")]];
     app.feed_tab.rebuild_all_entries();
 
-    app.feed_tab_play_guid("feed-play");
+    app.play_feed_entry(app.feed_tab.entries[0][0].clone());
 
     match cmd_rx.try_recv().unwrap() {
         mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace {
@@ -251,7 +216,7 @@ fn direct_remote_feed_enqueue_uses_unified_append() {
     app.feed_tab.entries = vec![vec![playable_feed_entry("feed-append")]];
     app.feed_tab.rebuild_all_entries();
 
-    app.feed_tab_enqueue_guid("feed-append");
+    app.enqueue_feed_entry(app.feed_tab.entries[0][0].clone());
 
     assert!(matches!(
         cmd_rx.try_recv().unwrap(),

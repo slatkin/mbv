@@ -153,22 +153,8 @@ impl App {
         }
     }
 
-    /// Resolve a component request against the shell-owned, newest-first
-    /// combined Feed snapshot.
-    pub(super) fn feed_tab_play_guid(&mut self, guid: &str) {
-        let Some(entry) = self
-            .feed_tab
-            .all_entries
-            .iter()
-            .find(|entry| entry.guid == guid)
-            .cloned()
-        else {
-            return;
-        };
-        self.play_feed_entry(entry);
-    }
-
-    fn play_feed_entry(&mut self, entry: mbv_core::playback_queue::FeedEntry) {
+    /// Play the exact entry selected by the Feeds Interactive Component.
+    pub(super) fn play_feed_entry(&mut self, entry: mbv_core::playback_queue::FeedEntry) {
         if entry.primary_source().is_none() {
             self.flash(
                 "Feed entry has no playable source".into(),
@@ -181,22 +167,8 @@ impl App {
         self.submit_queue_item(QueueItem::Feed(entry), true);
     }
 
-    /// Resolve a component request against the shell-owned, newest-first
-    /// combined Feed snapshot.
-    pub(super) fn feed_tab_enqueue_guid(&mut self, guid: &str) {
-        let Some(entry) = self
-            .feed_tab
-            .all_entries
-            .iter()
-            .find(|entry| entry.guid == guid)
-            .cloned()
-        else {
-            return;
-        };
-        self.enqueue_feed_entry(entry);
-    }
-
-    fn enqueue_feed_entry(&mut self, entry: mbv_core::playback_queue::FeedEntry) {
+    /// Enqueue the exact entry selected by the Feeds Interactive Component.
+    pub(super) fn enqueue_feed_entry(&mut self, entry: mbv_core::playback_queue::FeedEntry) {
         if entry.primary_source().is_none() {
             self.flash(
                 "Feed entry has no playable source".into(),

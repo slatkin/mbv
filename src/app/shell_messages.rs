@@ -209,11 +209,21 @@ impl Model {
                 ShellRequest::RefreshFeeds => {
                     self.app.refresh_feeds();
                 }
-                ShellRequest::FeedsPlay(guid) => {
-                    self.app.feed_tab_play_guid(&guid);
+                ShellRequest::FeedsPlay(entry) => {
+                    if let Some(entry) = entry {
+                        self.app.play_feed_entry(entry);
+                    } else {
+                        self.app
+                            .flash("No feed entry selected".into(), ToastSeverity::Neutral);
+                    }
                 }
-                ShellRequest::FeedsEnqueue(guid) => {
-                    self.app.feed_tab_enqueue_guid(&guid);
+                ShellRequest::FeedsEnqueue(entry) => {
+                    if let Some(entry) = entry {
+                        self.app.enqueue_feed_entry(entry);
+                    } else {
+                        self.app
+                            .flash("No feed entry selected".into(), ToastSeverity::Neutral);
+                    }
                 }
                 request @ ShellRequest::DismissSelectionModal
                 | request @ ShellRequest::SelectionModalFilterSelected

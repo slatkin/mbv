@@ -360,15 +360,135 @@ fn playback_requests_use_the_selected_entry_guid() {
             code: Key::Enter,
             modifiers: KeyModifiers::NONE,
         })),
-        Some(Msg::Shell(ShellRequest::FeedsPlay("Third".into())))
+        Some(Msg::Shell(ShellRequest::FeedsPlay(Some(entry(
+            "Third", true
+        )))))
     );
     assert_eq!(
         component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
             code: Key::Char('e'),
             modifiers: KeyModifiers::NONE,
         })),
-        Some(Msg::Shell(ShellRequest::FeedsEnqueue("Third".into())))
+        Some(Msg::Shell(ShellRequest::FeedsEnqueue(Some(entry(
+            "Third", true
+        )))))
     );
+}
+
+#[test]
+fn feed_actions_preserve_the_selected_entry_when_guids_collide() {
+    let subscriptions = [
+        FeedSubscription {
+            name: "A".into(),
+            url: "https://example.test/a".into(),
+            kind: FeedKind::Audio,
+        },
+        FeedSubscription {
+            name: "B".into(),
+            url: "https://example.test/b".into(),
+            kind: FeedKind::Audio,
+        },
+    ];
+    let mut first = entry("First", false);
+    first.guid = "shared-guid".into();
+    first.feed_id = Some("https://example.test/a".into());
+    let mut second = entry("Second", false);
+    second.guid = "shared-guid".into();
+    second.feed_id = Some("https://example.test/b".into());
+    let entries = vec![vec![first.clone()], vec![second.clone()]];
+    let all_entries = entries.iter().flatten().cloned().collect::<Vec<_>>();
+    let mut component = FeedsComponent::new();
+    component.set_content(&subscriptions, &entries, &all_entries, false, true);
+    for _ in 0..2 {
+        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+            code: Key::Char(']'),
+            modifiers: KeyModifiers::NONE,
+        }));
+    }
+
+    assert_eq!(
+        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE,
+        })),
+        Some(Msg::Shell(ShellRequest::FeedsPlay(Some(second.clone()))))
+    );
+    assert_eq!(
+        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+            code: Key::Char('e'),
+            modifiers: KeyModifiers::NONE,
+        })),
+        Some(Msg::Shell(ShellRequest::FeedsEnqueue(Some(second))))
+    );
+}
+
+#[test]
+fn empty_feed_actions_request_shell_feedback() {
+    let mut component = FeedsComponent::new();
+    component.set_content(&[], &[], &[], false, true);
+
+    assert_eq!(
+        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE,
+        })),
+        Some(Msg::Shell(ShellRequest::FeedsPlay(None)))
+    );
+    assert_eq!(
+        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+            code: Key::Char('e'),
+            modifiers: KeyModifiers::NONE,
+        })),
+        Some(Msg::Shell(ShellRequest::FeedsEnqueue(None)))
+    );
+}
+
+#[test]
+fn changing_group_invalidates_previous_row_geometry() {
+    let mut component = grouped_component();
+    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
+        .unwrap();
+    assert!(!component.layout().left_item_rows.is_empty());
+
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Char(']'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(component.layout().left_item_rows.is_empty());
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.cursor(), 1);
+}
+
+#[test]
+fn wide_feeds_keep_the_list_out_of_the_inline_hero_flow() {
+    let mut wide = component();
+    let mut wide_terminal =
+        Terminal::new(TestBackend::new(crate::app::TWO_COLUMN_THRESHOLD, 20)).unwrap();
+    wide_terminal
+        .draw(|frame| wide.view(frame, Rect::new(0, 0, crate::app::TWO_COLUMN_THRESHOLD, 20)))
+        .unwrap();
+    assert_eq!(wide.layout().inline_hero_area, Rect::default());
+    let wide_item_rows = wide
+        .layout()
+        .left_item_rows
+        .iter()
+        .filter(|row| !row.is_empty())
+        .cloned()
+        .collect::<Vec<_>>();
+    assert_eq!(wide_item_rows, vec![vec![0], vec![1]]);
+
+    let mut narrow = component();
+    let width = crate::app::TWO_COLUMN_THRESHOLD - 1;
+    let mut narrow_terminal = Terminal::new(TestBackend::new(width, 20)).unwrap();
+    narrow_terminal
+        .draw(|frame| narrow.view(frame, Rect::new(0, 0, width, 20)))
+        .unwrap();
+    assert!(narrow.layout().inline_hero_area.height > 0);
 }
 
 #[test]
