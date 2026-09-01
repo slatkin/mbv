@@ -270,11 +270,15 @@ impl BrowserComponent {
 
         // Paint the shared hero text last (after the list); defer the cover
         // image paint to the shell, which owns the image-cache authority.
+        let feed_image_paint = self.image_paint.take();
         if let Some(hero_data) = &hero_data {
             self.image_paint =
                 render_home_hero_content(f, hero_data, true, self.focused, self.use_nerd_fonts);
         } else {
             self.image_paint = None;
+        }
+        if feed_image_paint.is_some() {
+            self.image_paint = feed_image_paint;
         }
 
         hero_on_left_list_panel_border(f, list_panel, self.focused);
