@@ -15,6 +15,7 @@ use tuirealm::state::State;
 
 use super::browser_narrow::NarrowBrowseExtras;
 use super::component_id::BrowserKind;
+use super::media_list::ViewportAnchor;
 use super::msg::{BrowserHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
@@ -54,6 +55,7 @@ pub struct BrowserComponent {
     /// movie/series hero) for the `browser_narrow` composer, pushed each frame
     /// by `render_emby_browser_component` (task 3.3).
     narrow_extras: NarrowBrowseExtras,
+    pending_anchor: Option<ViewportAnchor<String>>,
 }
 
 impl BrowserComponent {
@@ -75,6 +77,7 @@ impl BrowserComponent {
             use_nerd_fonts: false,
             image_paint: None,
             narrow_extras: NarrowBrowseExtras::default(),
+            pending_anchor: None,
         }
     }
 
@@ -111,6 +114,24 @@ impl BrowserComponent {
     /// first paint.
     pub(in crate::app) fn scroll(&self) -> usize {
         self.scroll
+    }
+
+    pub(in crate::app) fn viewport_anchor(
+        &self,
+        viewport_height: usize,
+    ) -> Option<ViewportAnchor<String>> {
+        let item = self.context.items.get(self.cursor)?;
+        Some(ViewportAnchor {
+            selected_target: item.id.clone(),
+            selected_row_offset: self
+                .cursor
+                .saturating_sub(self.scroll)
+                .min(viewport_height.saturating_sub(1)),
+        })
+    }
+
+    pub(in crate::app) fn apply_viewport_anchor(&mut self, anchor: ViewportAnchor<String>) {
+        self.pending_anchor = Some(anchor);
     }
 
     /// Records the wide layout's pill-row presentation from validated shell
@@ -289,6 +310,22 @@ impl Default for BrowserComponent {
 impl Component for BrowserComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = LayoutMain::default();
+        if let Some(anchor) = self.pending_anchor.take() {
+            if let Some(cursor) = self
+                .context
+                .items
+                .iter()
+                .position(|item| item.id == anchor.selected_target)
+            {
+                self.cursor = cursor;
+                self.scroll = cursor.saturating_sub(anchor.selected_row_offset).min(
+                    self.context
+                        .items
+                        .len()
+                        .saturating_sub(area.height as usize),
+                );
+            }
+        }
         let mut context = self
             .context
             .clone()

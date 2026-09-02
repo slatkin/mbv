@@ -3,8 +3,8 @@ use std::time::{Duration, Instant};
 use super::action::{playback_command_for_key, Command};
 use super::components::msg::{AlbumCursorKind, BrowserHitRegion, QueueHitRegion, TvHitRegion};
 use super::components::{
-    ComponentId, Msg, OverlayId, PlaybackComponent, ShellRequest, TerminalObserverEvent,
-    UiRootComponent, UserEvent,
+    media_list::ViewportAnchor, ComponentId, Msg, OverlayId, PlaybackComponent, ShellRequest,
+    TerminalObserverEvent, UiRootComponent, UserEvent,
 };
 use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
@@ -79,6 +79,7 @@ pub struct Model {
     /// resting position the narrow browser left behind instead of its stale
     /// local cursor.
     pub(super) tv_workspace_reanchor: bool,
+    pub(super) tv_viewport_anchor: Option<ViewportAnchor<String>>,
     /// Shell-owned mirror of the feeds-management popup's interaction state
     /// plus its background add-feed channel (task 5.3c). The
     /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
@@ -291,6 +292,7 @@ impl Model {
             music_track_focus_request: None,
             music_workspace_reanchor: false,
             tv_workspace_reanchor: false,
+            tv_viewport_anchor: None,
             feeds_manage: None,
             home_content: HomeContent::new(),
             home_section_pref_semantic: home_section.clone(),

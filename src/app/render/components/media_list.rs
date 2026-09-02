@@ -233,7 +233,6 @@ pub(in crate::app) fn render_wide_media_list<Target>(
     let viewport = list.resolve_viewport(area.height as usize);
     let rows = list.rows();
     let selected_row = list.selected_display_row();
-    layout.left_sorted_indices = (0..list.selectable_len()).collect();
     layout.left_item_rows = rows
         .iter()
         .enumerate()

@@ -149,14 +149,21 @@ impl Model {
             // to the resting level so the narrow browser's `set_content`
             // adopts it on the same tick.
             (false, Some(id), _) => {
-                let Some((cursor, scroll)) = self
+                let Some(anchor) = self
+                    .application
+                    .get_component(&id)
+                    .and_then(|comp| comp.as_any().downcast_ref::<TvWorkspaceComponent>())
+                    .and_then(|tv| tv.viewport_anchor(usize::MAX))
+                else {
+                    return;
+                };
+                self.tv_viewport_anchor = Some(anchor.clone());
+                let (cursor, scroll) = self
                     .application
                     .get_component(&id)
                     .and_then(|comp| comp.as_any().downcast_ref::<TvWorkspaceComponent>())
                     .map(|tv| (tv.cursor(), tv.scroll()))
-                else {
-                    return;
-                };
+                    .unwrap_or((0, 0));
                 if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
                     level.set_resting_cursor(cursor);
                     level.set_resting_scroll(scroll);
@@ -175,6 +182,15 @@ impl Model {
                     .map(BrowserComponent::scroll)
                 {
                     self.app.persist_library_scroll(lib_idx, scroll);
+                }
+                if let Some(anchor) = self.tv_viewport_anchor.take() {
+                    if let Some(component) = self
+                        .application
+                        .get_component_mut(&id)
+                        .and_then(|comp| comp.as_any_mut().downcast_mut::<BrowserComponent>())
+                    {
+                        component.apply_viewport_anchor(anchor);
+                    }
                 }
                 self.tv_workspace_reanchor = true;
             }
@@ -214,6 +230,15 @@ impl Model {
         // instead of this kept-mounted component's stale local cursor.
         let reanchor =
             std::mem::take(&mut self.tv_workspace_reanchor).then(|| (list.cursor(), list.scroll()));
+        if let Some(anchor) = self.tv_viewport_anchor.take() {
+            if let Some(component) = self
+                .application
+                .get_component_mut(id)
+                .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
+            {
+                component.apply_viewport_anchor(anchor);
+            }
+        }
         // The TV component owns the selection cursor. Derive the pushed Series
         // snapshot from the component's authoritative selection (its own cursor
         // over its cached list), not the App browse cursor (which the removed

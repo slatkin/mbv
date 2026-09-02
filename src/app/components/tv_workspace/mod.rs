@@ -44,6 +44,7 @@ pub struct TvWorkspaceComponent {
     last_series_id: Option<String>,
     layout: crate::app::layout::LayoutMain,
     image_paint: Option<HomeImagePaint>,
+    pending_anchor: Option<super::media_list::ViewportAnchor<String>>,
 }
 
 impl TvWorkspaceComponent {
@@ -69,25 +70,46 @@ impl TvWorkspaceComponent {
             last_series_id: None,
             layout: Default::default(),
             image_paint: None,
+            pending_anchor: None,
         }
     }
 
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
-        let rows = context
-            .list
-            .items
-            .iter()
-            .map(|item| MediaListRow::Item {
-                target: item.id.clone(),
-                primary: item.display_name(),
-                trailing: (item.production_year > 0).then(|| item.production_year.to_string()),
-                semantic_state: if item.played {
-                    MediaSemanticState::Played
-                } else {
-                    MediaSemanticState::Ordinary
-                },
-            })
-            .collect();
+        let grouped = context.show_letter_pills || context.list.items.len() >= 50;
+        let mut sorted_items: Vec<&EmbyItem> = context.list.items.iter().collect();
+        sorted_items.sort_by_key(|item| item.display_name().to_lowercase());
+        let rows = sorted_items.iter().enumerate().flat_map(|(index, item)| {
+            let heading = grouped
+                .then(|| {
+                    let current = item
+                        .display_name()
+                        .chars()
+                        .next()
+                        .unwrap_or('#')
+                        .to_ascii_uppercase();
+                    let previous = index
+                        .checked_sub(1)
+                        .and_then(|i| sorted_items[i].display_name().chars().next())
+                        .map(|c| c.to_ascii_uppercase());
+                    (previous != Some(current)).then(|| MediaListRow::Heading {
+                        text: current.to_string(),
+                    })
+                })
+                .flatten();
+            heading
+                .into_iter()
+                .chain(std::iter::once(MediaListRow::Item {
+                    target: item.id.clone(),
+                    primary: item.display_name(),
+                    trailing: (item.production_year > 0).then(|| item.production_year.to_string()),
+                    semantic_state: if item.played {
+                        MediaSemanticState::Played
+                    } else {
+                        MediaSemanticState::Ordinary
+                    },
+                }))
+        });
+        let rows = rows.collect::<Vec<_>>();
         self.list.set_content(rows);
         let series_changed =
             context.selected_series.as_ref().map(|item| &item.id) != self.last_series_id.as_ref();
@@ -156,6 +178,13 @@ impl TvWorkspaceComponent {
         self.list.cursor()
     }
 
+    pub(in crate::app) fn viewport_anchor(
+        &self,
+        viewport_height: usize,
+    ) -> Option<super::media_list::ViewportAnchor<String>> {
+        self.list.viewport_anchor(viewport_height)
+    }
+
     /// Whether letter pills are enabled in the pushed context.
     pub(in crate::app) fn show_letter_pills(&self) -> bool {
         self.context.show_letter_pills
@@ -174,6 +203,13 @@ impl TvWorkspaceComponent {
     /// `set_content` keeps the component's divergent local cursor, so the
     /// shell re-anchors explicitly when the active-destination pointer flips
     /// back to this kept-mounted component.
+    pub(in crate::app) fn apply_viewport_anchor(
+        &mut self,
+        anchor: super::media_list::ViewportAnchor<String>,
+    ) {
+        self.pending_anchor = Some(anchor);
+    }
+
     pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
         self.list.select_first();
         self.cursor = cursor.min(self.list.selectable_len().saturating_sub(1));
@@ -375,6 +411,10 @@ impl Component for TvWorkspaceComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = Default::default();
         self.image_paint = None;
+        if let Some(anchor) = self.pending_anchor.take() {
+            self.list
+                .apply_viewport_anchor(&anchor, area.height as usize);
+        }
         let context = self.context.clone().with_local_state(
             self.list.cursor(),
             self.list.scroll(),
