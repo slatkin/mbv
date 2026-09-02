@@ -24,7 +24,7 @@
 
 ## 4. Visual-first evidence and gates
 
-- [ ] 4.1 Reproduce and correct visuals through live verification at Wide and Narrow widths, including selection, movement, focus, scrolling, images-enabled/disabled behaviour, and TV rail/Inline replacement; obtain explicit user confirmation before UI test edits.
+- [x] 4.1 Reproduce and correct visuals through live verification at Wide and Narrow widths, including selection, movement, focus, scrolling, images-enabled/disabled behaviour, and TV rail/Inline replacement; obtain explicit user confirmation before UI test edits.
 - [ ] 4.2 After confirmation, add/update focused rendered characterization/composition tests with representative metadata, grouping, active progress, focus, breakpoint, and image fixtures; add one display-row/selectable-index test.
 - [ ] 4.3 Record one-painter evidence for every migrated destination and manual/live evidence in the slice PR; do not accept metadata-free or inferred screenshot evidence.
 - [ ] 4.4 Run `rtk make check-code-file-lines` and verify all changed source files are ≤800 lines.
