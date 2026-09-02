@@ -26,7 +26,7 @@
 
 - [x] 4.1 Reproduce and correct visuals through live verification at Wide and Narrow widths, including selection, movement, focus, scrolling, images-enabled/disabled behaviour, and TV rail/Inline replacement; obtain explicit user confirmation before UI test edits.
 - [x] 4.2 After confirmation, add/update focused rendered characterization/composition tests with representative metadata, grouping, active progress, focus, breakpoint, and image fixtures; add one display-row/selectable-index test.
-- [ ] 4.3 Record one-painter evidence for every migrated destination and manual/live evidence in the slice PR; do not accept metadata-free or inferred screenshot evidence.
+- [x] 4.3 Record one-painter evidence for every migrated destination and manual/live evidence in the slice PR; do not accept metadata-free or inferred screenshot evidence.
 - [ ] 4.4 Run `rtk make check-code-file-lines` and verify all changed source files are ≤800 lines.
 - [ ] 4.5 Run `rtk openspec validate introduce-canonical-media-list-foundation --strict`.
 - [ ] 4.6 Run `rtk cargo fmt --all -- --check`, `rtk cargo check --workspace --all-targets`, and the relevant `rtk cargo nextest run` suite; fix only failures caused by this slice.
