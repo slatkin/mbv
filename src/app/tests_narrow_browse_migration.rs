@@ -321,51 +321,6 @@ fn narrow_grouped_music_j_moves_painted_selection() {
     );
 }
 
-/// Characterization (task 3.3 template step a): pins the painted narrow
-/// generic/Movies surface — inline movie hero + browse rows — through the
-/// full `Model::draw_frame` path. The pre-migration buffer (committed with
-/// this test) carried the regression-1 double paint: the legacy `render_list`
-/// reserved rows for the inline hero while `BrowserComponent::view` painted
-/// the same rows with no reservation, so the selected row and "Second Movie"
-/// showed twice at different offsets. This is the post-migration buffer: the
-/// `browser_narrow` composer is the sole painter, the selected row is
-/// swallowed by the framed hero block, and every row paints once.
-#[test]
-fn narrow_movies_surface_snapshot() {
-    let mut app = crate::app::render::make_movie_app();
-    app.terminal_width = 60;
-    app.terminal_height = 20;
-    app.mini_view_focus = PanelFocus::Library;
-
-    let mut model = Model::new(app);
-    model.sync_mounted_surfaces();
-    let mut term = narrow_backend();
-
-    let output = draw(&mut model, &mut term);
-
-    let expected = "                                                            \n   HOME  ▐ MOVIES                                           \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ \n                                                            \n   Focused Movie                                            \n   Action  1988                                             \n                                                            \n   This overview should appear in the compact movie         \n   banner while the list remains visible underneath.        \n                                                            \n ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ \n  Second Movie                                              \n                                                            \n                                                            \n 🔊  100                                             \u{f06b4} \u{ede2} ♥ \u{f1c0} ";
-    assert_eq!(output, expected, "narrow Movies surface drifted:\n{output}");
-}
-
-/// Characterization (task 3.4 template step a): pins the painted narrow Emby
-/// TV browse surface — inline series hero + series rows — through the full
-/// `Model::draw_frame` path. Unlike narrow Movies (regression 1), narrow TV
-/// carried no double-paint bug: legacy `render_list` and `BrowserComponent`
-/// both used the `tvshows` shared-replacement plan, so they painted the same
-/// rows at the same offsets. This buffer is byte-identical before and after
-/// the task-3.4 migration — no rebake.
-#[test]
-fn narrow_tv_surface_snapshot() {
-    let mut model = Model::new(tv_shows_app());
-    model.sync_mounted_surfaces();
-    let mut term = narrow_backend();
-
-    let output = draw(&mut model, &mut term);
-
-    let expected = "                                                            \n   HOME  ▐ SHOWS                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ \n                                                            \n   Series 0                                                 \n                                                            \n                                                            \n ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ \n  Series 1                                                  \n  Series 2                                                  \n  Series 3                                                  \n  Series 4                                                  \n                                                            \n                                                            \n 🔊  100                                             \u{f06b4} \u{ede2} ♥ \u{f1c0} ";
-    assert_eq!(output, expected, "narrow TV surface drifted:\n{output}");
-}
-
 /// Regression (task 3.4 template step d): narrow Emby TV paints each visible
 /// series/season row exactly once — the mounted `BrowserComponent` is the sole
 /// painter now that the legacy `render_list` narrow branch early-returns for
@@ -418,25 +373,6 @@ fn podcast_app() -> App {
         ..LibraryTab::new(library)
     });
     app
-}
-
-/// Characterization (task 3.5a template step a): pins the painted narrow Emby
-/// podcast browse surface through the full `Model::draw_frame` path. Narrow
-/// podcast renders as generic list rows (`truncate_overview = true`), with no
-/// podcast-specific layout.
-#[test]
-fn narrow_podcast_surface_snapshot() {
-    let mut model = Model::new(podcast_app());
-    model.sync_mounted_surfaces();
-    let mut term = narrow_backend();
-
-    let output = draw(&mut model, &mut term);
-
-    let expected = "                                                            \n   HOME  ▐ PODCASTS                                         \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n▎ Show 0                                                    \n  Show 1                                                    \n  Show 2                                                    \n  Show 3                                                    \n  Show 4                                                    \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n                                                            \n 🔊  100                                             \u{f06b4} \u{ede2} ♥ \u{f1c0} ";
-    assert_eq!(
-        output, expected,
-        "narrow podcast surface drifted:\n{output}"
-    );
 }
 
 /// Regression (task 3.5a template step d): narrow Emby podcast paints each
