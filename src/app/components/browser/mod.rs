@@ -89,6 +89,18 @@ impl BrowserComponent {
 
     pub(in crate::app) fn set_content(&mut self, context: LibraryListRenderCtx, focused: bool) {
         self.context = context;
+        self.focused = focused;
+        if let Some(anchor) = self.pending_anchor.as_ref() {
+            if let Some(cursor) = self
+                .context
+                .items
+                .iter()
+                .position(|item| item.id == anchor.selected_target)
+            {
+                self.cursor = cursor;
+                return;
+            }
+        }
         // Sync component cursor/scroll from App cursor. In the new architecture,
         // `set_content` is always called after the App cursor has been updated
         // (either by the component's own request or by an external change like
@@ -98,7 +110,6 @@ impl BrowserComponent {
             .cursor()
             .min(self.context.item_count().saturating_sub(1));
         self.scroll = self.context.scroll();
-        self.focused = focused;
     }
 
     pub(in crate::app) fn cursor(&self) -> usize {
@@ -132,6 +143,10 @@ impl BrowserComponent {
 
     pub(in crate::app) fn apply_viewport_anchor(&mut self, anchor: ViewportAnchor<String>) {
         self.pending_anchor = Some(anchor);
+    }
+
+    pub(in crate::app) fn painted_viewport_height(&self) -> usize {
+        self.layout.left_area.height as usize
     }
 
     /// Records the wide layout's pill-row presentation from validated shell

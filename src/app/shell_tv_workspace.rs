@@ -111,11 +111,18 @@ impl Model {
                 }
             }
         }
-
         if self.tv_workspace_id.is_none() {
-            // No wide TV workspace mounted: a pending breakpoint-hand-off
-            // re-anchor cannot be delivered and must not fire later.
-            self.tv_workspace_reanchor = false;
+            if let Some(anchor) = self.tv_viewport_anchor.take() {
+                if let Some(browser_id) = self.emby_browser_id.clone() {
+                    if let Some(component) = self
+                        .application
+                        .get_component_mut(&browser_id)
+                        .and_then(|comp| comp.as_any_mut().downcast_mut::<BrowserComponent>())
+                    {
+                        component.apply_viewport_anchor(anchor);
+                    }
+                }
+            }
         }
     }
 
@@ -168,20 +175,18 @@ impl Model {
                     }
                 }
             }
-            // narrow -> wide: the narrow browser already writes `level.cursor`
-            // on every move; persist its painted scroll too, then arm the
-            // kept-mounted wide workspace's one-shot re-anchor to that
-            // resting position.
+            // narrow -> wide: capture the Browser's painted anchor and deliver
+            // it to the kept-mounted wide workspace on its next paint.
             (true, _, Some(id)) => {
-                if let Some(scroll) = self
+                let Some(anchor) = self
                     .application
                     .get_component(&id)
                     .and_then(|comp| comp.as_any().downcast_ref::<BrowserComponent>())
-                    .map(BrowserComponent::scroll)
-                {
-                    self.app.persist_library_scroll(lib_idx, scroll);
-                }
-                self.tv_workspace_reanchor = true;
+                    .and_then(|browser| browser.viewport_anchor(browser.painted_viewport_height()))
+                else {
+                    return;
+                };
+                self.tv_viewport_anchor = Some(anchor);
             }
             _ => {}
         }
@@ -213,12 +218,6 @@ impl Model {
                 .last()
                 .map_or(0, |l| l.resting().scroll()),
         );
-        // Consume the one-shot breakpoint hand-off re-anchor (task 2.3 / D5):
-        // when the active-destination pointer just flipped from the narrow
-        // BrowserComponent, adopt the resting cursor/scroll it left behind
-        // instead of this kept-mounted component's stale local cursor.
-        let reanchor =
-            std::mem::take(&mut self.tv_workspace_reanchor).then(|| (list.cursor(), list.scroll()));
         if let Some(anchor) = self.tv_viewport_anchor.take() {
             if let Some(component) = self
                 .application
@@ -272,9 +271,6 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(tv) = comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>() {
                 tv.set_content(context);
-                if let Some((cursor, scroll)) = reanchor {
-                    tv.re_anchor(cursor, scroll);
-                }
             }
         }
     }

@@ -80,15 +80,15 @@ impl TvWorkspaceComponent {
     }
 
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
-        let seed_target = (!self.initialized)
-            .then(|| {
+        let restore_target = self.list.selected_target().cloned().or_else(|| {
+            (!self.initialized).then(|| {
                 context
                     .list
                     .items
                     .get(context.list.cursor())
                     .map(|item| item.id.clone())
-            })
-            .flatten();
+            })?
+        });
         let grouped = !context.list.is_search_active()
             && (context.show_letter_pills
                 || context.list.has_letter_filter()
@@ -126,7 +126,7 @@ impl TvWorkspaceComponent {
         });
         let rows = rows.collect::<Vec<_>>();
         self.list.set_content(rows);
-        if let Some(target) = seed_target {
+        if let Some(target) = restore_target {
             if let Some(cursor) = self
                 .list
                 .rows()
@@ -149,7 +149,6 @@ impl TvWorkspaceComponent {
             self.last_series_id = context.selected_series.as_ref().map(|item| item.id.clone());
         }
         if !self.initialized {
-            self.cursor = context.list.cursor();
             self.scroll = context.list.scroll();
             if !series_changed {
                 self.season_cursor = context.season_cursor;
@@ -163,15 +162,6 @@ impl TvWorkspaceComponent {
             self.initialized = true;
         }
         self.context = context;
-        if self.cursor != self.list.cursor() {
-            self.cursor = self
-                .cursor
-                .min(self.list.selectable_len().saturating_sub(1));
-            self.list.select_first();
-            for _ in 0..self.cursor {
-                self.list.move_selection(1);
-            }
-        }
         self.cursor = self.list.cursor();
         self.scroll = self.list.scroll();
         let season_count = self

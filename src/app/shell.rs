@@ -78,7 +78,6 @@ pub struct Model {
     /// to `TvWorkspaceComponent`, so the kept-mounted workspace adopts the
     /// resting position the narrow browser left behind instead of its stale
     /// local cursor.
-    pub(super) tv_workspace_reanchor: bool,
     pub(super) tv_viewport_anchor: Option<ViewportAnchor<String>>,
     /// Shell-owned mirror of the feeds-management popup's interaction state
     /// plus its background add-feed channel (task 5.3c). The
@@ -291,7 +290,6 @@ impl Model {
             mounted_destinations: std::collections::HashSet::new(),
             music_track_focus_request: None,
             music_workspace_reanchor: false,
-            tv_workspace_reanchor: false,
             tv_viewport_anchor: None,
             feeds_manage: None,
             home_content: HomeContent::new(),
