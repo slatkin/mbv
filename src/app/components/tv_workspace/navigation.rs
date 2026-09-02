@@ -63,12 +63,10 @@ impl TvWorkspaceComponent {
     /// using raw item indices here would make the local cursor disagree with
     /// the App's letter-group navigation.
     pub(super) fn move_rows(&mut self, rows: i64) {
-        if !self.layout.left_sorted_indices.is_empty() {
-            if let Some(delta) = self.letter_vertical_delta(rows) {
-                self.move_cursor_delta(delta);
-                return;
-            }
-        }
+        // WideMediaList is the sole source of truth for the one-column rail.
+        // The legacy layout row map contains display-row indices (including
+        // headings), not selectable cursor indices; consulting it made Down
+        // jump across grouped rows.
         self.move_cursor_delta(rows);
     }
 
