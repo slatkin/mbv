@@ -142,7 +142,11 @@ impl Model {
     /// defaulting to `TabSelection::Home`).
     pub(super) fn mount_home(&mut self) {
         self.application
-            .mount(ComponentId::Home, Box::new(HomeComponent::new()), vec![])
+            .mount(
+                ComponentId::Home,
+                Box::new(HomeComponent::new()),
+                vec![crate::app::components::mouse::mouse_sub()],
+            )
             .expect("mount Home");
     }
 
@@ -303,7 +307,9 @@ mod tests {
         model.home_content.latest = vec![(
             "Books".into(),
             crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()),
-            vec![],
+            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
+                make_item("Books", "Movie"),
+            ))],
             0,
         )];
         model.push_home_content();

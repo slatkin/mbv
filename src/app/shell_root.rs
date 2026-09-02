@@ -84,7 +84,11 @@ mod tests {
 
         model
             .application
-            .mount(help.clone(), Box::new(HelpComponent::new()), vec![])
+            .mount(
+                help.clone(),
+                Box::new(HelpComponent::new()),
+                vec![crate::app::components::mouse::mouse_sub()],
+            )
             .unwrap();
         model.application.active(&help).unwrap();
         model
@@ -92,7 +96,7 @@ mod tests {
             .mount(
                 confirm.clone(),
                 Box::new(crate::app::components::ConfirmComponent::new()),
-                vec![],
+                vec![crate::app::components::mouse::mouse_sub()],
             )
             .unwrap();
         model.application.active(&confirm).unwrap();

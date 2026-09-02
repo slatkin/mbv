@@ -11,7 +11,11 @@ impl Model {
         let id = ComponentId::Queue;
         if !self.application.mounted(&id) {
             self.application
-                .mount(id.clone(), Box::new(QueueComponent::new()), vec![])
+                .mount(
+                    id.clone(),
+                    Box::new(QueueComponent::new()),
+                    vec![crate::app::components::mouse::mouse_sub()],
+                )
                 .expect("mount Queue");
         }
 

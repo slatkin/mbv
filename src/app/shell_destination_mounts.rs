@@ -141,7 +141,7 @@ mod tests {
                 Box::new(crate::app::components::BrowserComponent::new_for_kind(
                     BrowserKind::Generic,
                 )),
-                vec![],
+                vec![crate::app::components::mouse::mouse_sub()],
             )
             .expect("mount lib-movies browser");
         model
@@ -151,7 +151,7 @@ mod tests {
                 Box::new(crate::app::components::BrowserComponent::new_for_kind(
                     BrowserKind::TvShows,
                 )),
-                vec![],
+                vec![crate::app::components::mouse::mouse_sub()],
             )
             .expect("mount lib-series browser");
         model.register_destination(&browser_id("lib-movies", BrowserKind::Generic));
@@ -231,7 +231,7 @@ mod tests {
             .mount(
                 inline_id.clone(),
                 Box::new(crate::app::components::InlineSearchComponent::new()),
-                vec![],
+                vec![crate::app::components::mouse::mouse_sub()],
             )
             .expect("mount inline search");
         model.register_destination(&inline_id);
@@ -261,7 +261,7 @@ mod tests {
             .mount(
                 stale_inline.clone(),
                 Box::new(crate::app::components::InlineSearchComponent::new()),
-                vec![],
+                vec![crate::app::components::mouse::mouse_sub()],
             )
             .expect("mount stale inline search");
         model.register_destination(&stale_inline);
@@ -406,7 +406,7 @@ mod tests {
                 Box::new(crate::app::components::BrowserComponent::new_for_kind(
                     BrowserKind::Generic,
                 )),
-                vec![],
+                vec![crate::app::components::mouse::mouse_sub()],
             )
             .expect("mount generic fallback browser");
         model.register_destination(&generic_id);

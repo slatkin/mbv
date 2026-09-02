@@ -3,6 +3,41 @@ use crate::app::components::{BrowserComponent, MusicWorkspaceComponent, TvWorksp
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+/// Keep one mouse claim per terminal event, using the shell's fixed surface order.
+/// Blocking overlays suppress all underlying surface claims.
+pub(super) fn apply_mouse_fold(messages: Vec<Msg>, blocking_overlay: bool) -> Vec<Msg> {
+    fn rank(msg: &Msg) -> Option<u8> {
+        match msg {
+            Msg::Shell(crate::app::components::ShellRequest::BrowserClick { .. })
+            | Msg::Shell(crate::app::components::ShellRequest::HomeClick { .. })
+            | Msg::Shell(crate::app::components::ShellRequest::QueueClick { .. })
+            | Msg::Shell(crate::app::components::ShellRequest::TvClick { .. })
+            | Msg::Playback(_) => Some(1),
+            Msg::Shell(crate::app::components::ShellRequest::BrowserScroll { .. })
+            | Msg::Shell(crate::app::components::ShellRequest::HomeScroll { .. })
+            | Msg::Shell(crate::app::components::ShellRequest::QueueScroll { .. })
+            | Msg::Shell(crate::app::components::ShellRequest::TvScroll { .. }) => Some(1),
+            _ => None,
+        }
+    }
+    let winner = if blocking_overlay {
+        None
+    } else {
+        messages
+            .iter()
+            .enumerate()
+            .filter_map(|(i, msg)| rank(msg).map(|r| (r, i)))
+            .max_by_key(|(r, i)| (*r, *i))
+            .map(|(_, i)| i)
+    };
+    messages
+        .into_iter()
+        .enumerate()
+        .filter(|(i, msg)| rank(msg).is_none() || Some(*i) == winner)
+        .map(|(_, msg)| msg)
+        .collect()
+}
+
 impl Model {
     /// Project inline-search visibility from mounted component state.
     /// Mount state is the only source of truth.
@@ -487,7 +522,7 @@ impl Model {
                 Duration::from_millis(50)
             };
             let messages = match self.application.tick(PollStrategy::Once(poll_timeout)) {
-                Ok(msgs) => msgs,
+                Ok(msgs) => apply_mouse_fold(msgs, self.blocking_overlay_active()),
                 Err(_) => break,
             };
             if !messages.is_empty() {

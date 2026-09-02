@@ -53,7 +53,11 @@ impl Model {
                 Some(id) => {
                     if !self.application.mounted(&id) {
                         self.application
-                            .mount(id.clone(), Box::new(MusicWorkspaceComponent::new()), vec![])
+                            .mount(
+                                id.clone(),
+                                Box::new(MusicWorkspaceComponent::new()),
+                                vec![crate::app::components::mouse::mouse_sub()],
+                            )
                             .expect("mount Music workspace");
                         self.register_destination(&id);
                         // First projection into a freshly mounted workspace:

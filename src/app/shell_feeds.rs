@@ -5,7 +5,11 @@ use super::PanelFocus;
 impl Model {
     pub(super) fn mount_feeds(&mut self) {
         self.application
-            .mount(ComponentId::Feeds, Box::new(FeedsComponent::new()), vec![])
+            .mount(
+                ComponentId::Feeds,
+                Box::new(FeedsComponent::new()),
+                vec![crate::app::components::mouse::mouse_sub()],
+            )
             .expect("mount Feeds");
     }
 
