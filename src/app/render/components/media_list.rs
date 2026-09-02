@@ -1,12 +1,14 @@
 use super::hero::InlineDisplayRow;
 use super::list_rows::{
-    focused_or_subtle, item_cell_spans, selected_cell_rect, DisplayRow, InlineReplacementPlan,
-    ListRenderCtx,
+    build_list_row_spans, focused_or_subtle, item_cell_spans, selected_cell_rect, selection_marker,
+    DisplayRow, InlineReplacementPlan, ListRenderCtx, MarkerEdge,
 };
+use crate::app::components::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::palette;
 use crate::app::ui_util::*;
+use ratatui::layout::Rect;
 use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
@@ -208,4 +210,91 @@ pub(in crate::app) fn render_plain_rows(
     }
 
     final_offset
+}
+
+/// Paint entry point for the embedded plain `WideMediaList` (design.md D1):
+/// a fixed-height, one-column list with no inline-detail replacement flow.
+/// Reuses the shared list-row span and scrollbar primitives rather than the
+/// `EmbyItem`-typed `render_plain_rows` above (which stays the path for the
+/// inline browsers until it is parameterised). Returns the resolved scroll
+/// offset for the caller to store via `WideMediaList::set_scroll`.
+///
+/// Unused until task 3.4 composes it onto the Wide TV right rail.
+#[allow(dead_code)]
+pub(in crate::app) fn render_wide_media_list<Target>(
+    f: &mut Frame,
+    area: Rect,
+    list: &WideMediaList<Target>,
+    focused: bool,
+) -> usize {
+    let viewport = list.resolve_viewport(area.height as usize);
+    let rows = list.rows();
+    let selected_row = list.selected_display_row();
+
+    let list_items: Vec<ListItem> = (viewport.offset..viewport.total_rows)
+        .take(viewport.height)
+        .map(|row| wide_media_row(&rows[row], Some(row) == selected_row, focused))
+        .collect();
+    f.render_widget(List::new(list_items), area);
+
+    if focused && viewport.overflows() {
+        crate::app::render::render_right_scrollbar(
+            f,
+            area,
+            viewport.max_offset(),
+            viewport.offset,
+            palette::SCROLLBAR,
+        );
+    }
+
+    viewport.offset
+}
+
+/// One painted row of a `WideMediaList`. Semantic state drives the row
+/// colour and, for active rows, an appended progress percentage; the
+/// selection background/marker come from the shared list-row primitives.
+fn wide_media_row<Target>(
+    row: &MediaListRow<Target>,
+    selected: bool,
+    focused: bool,
+) -> ListItem<'static> {
+    match row {
+        MediaListRow::Spacer => ListItem::new(Line::default()),
+        MediaListRow::Heading { text } => ListItem::new(Line::from(Span::styled(
+            format!(" {text}"),
+            Style::default()
+                .fg(palette::TEXT_MUTED)
+                .add_modifier(Modifier::BOLD),
+        ))),
+        MediaListRow::Item {
+            primary,
+            trailing,
+            semantic_state,
+            ..
+        } => {
+            let (fg, progress) = match semantic_state {
+                MediaSemanticState::Ordinary => (focused_or_subtle(focused), None),
+                MediaSemanticState::Played => (palette::TEXT_MUTED, None),
+                MediaSemanticState::Active { progress } => (
+                    palette::TEXT_FOCUS_ACCENT,
+                    (*progress).map(|value| format!("{}%", value.percent())),
+                ),
+                MediaSemanticState::Disabled => (palette::TEXT_MUTED, None),
+            };
+            let trailing = match (trailing.as_deref(), progress) {
+                (Some(text), Some(pct)) => format!("{text} {pct}"),
+                (Some(text), None) => text.to_string(),
+                (None, Some(pct)) => pct,
+                (None, None) => String::new(),
+            };
+            let mut spans = vec![selection_marker(selected, MarkerEdge::Left)];
+            spans.extend(build_list_row_spans(
+                primary.clone(),
+                trailing,
+                selected,
+                fg,
+            ));
+            ListItem::new(Line::from(spans))
+        }
+    }
 }

@@ -1,3 +1,5 @@
+use crate::app::ui_util::move_cursor;
+
 /// A bounded percentage used by active canonical media-list rows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ActiveProgress(u8);
@@ -53,5 +55,179 @@ impl<Target> MediaListRow<Target> {
             Self::Item { target, .. } => Some(target),
             Self::Heading { .. } | Self::Spacer => None,
         }
+    }
+}
+
+/// The clamped one-column viewport of a [`WideMediaList`] for a given painted
+/// height: `offset` is the display-row index at the viewport top, so display
+/// row `i` paints at screen row `i - offset`. `total_rows` counts every
+/// display row (items, headings, spacers alike).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WideViewport {
+    pub offset: usize,
+    pub height: usize,
+    pub total_rows: usize,
+}
+
+impl WideViewport {
+    /// The largest `offset` that still fills the viewport.
+    pub fn max_offset(&self) -> usize {
+        self.total_rows.saturating_sub(self.height)
+    }
+
+    /// Whether the content is taller than the viewport (scrollbar territory).
+    pub fn overflows(&self) -> bool {
+        self.total_rows > self.height
+    }
+}
+
+/// Embedded plain fixed-height, one-column media list: owns the display-row
+/// list, the selectable index over it, the cursor, and the resting scroll
+/// offset. It has no mouse hit-resolution API and accepts no column-count or
+/// inline-detail options (design.md D1). Painting is
+/// `crate::app::render::components::media_list::render_wide_media_list`.
+pub struct WideMediaList<Target> {
+    /// Every display row in paint order.
+    rows: Vec<MediaListRow<Target>>,
+    /// Indices into `rows` that are selectable `Item`s, ascending. Kept
+    /// separate from `rows` so `Heading`/`Spacer` can never be selected
+    /// (design.md D2). Rebuilt only by `set_content`.
+    selectable: Vec<usize>,
+    /// Index into `selectable`; `0` when nothing is selectable.
+    cursor: usize,
+    /// Display-row index parked at the viewport top. Height-aware clamping
+    /// happens in `resolve_viewport` at paint time.
+    scroll: usize,
+}
+
+impl<Target> Default for WideMediaList<Target> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<Target> WideMediaList<Target> {
+    pub fn new() -> Self {
+        Self {
+            rows: Vec::new(),
+            selectable: Vec::new(),
+            cursor: 0,
+            scroll: 0,
+        }
+    }
+
+    pub fn rows(&self) -> &[MediaListRow<Target>] {
+        &self.rows
+    }
+
+    /// Number of selectable rows.
+    pub fn selectable_len(&self) -> usize {
+        self.selectable.len()
+    }
+
+    /// No selectable rows at all.
+    pub fn is_empty(&self) -> bool {
+        self.selectable.is_empty()
+    }
+
+    /// The cursor as an index into the selectable rows.
+    pub fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    /// The display-row index the cursor currently points at.
+    pub fn selected_display_row(&self) -> Option<usize> {
+        self.selectable.get(self.cursor).copied()
+    }
+
+    /// The stable identity under the cursor.
+    pub fn selected_target(&self) -> Option<&Target> {
+        self.selectable
+            .get(self.cursor)
+            .and_then(|&row| self.rows[row].selectable_target())
+    }
+
+    /// The resting scroll offset (pre height-aware clamp).
+    pub fn scroll(&self) -> usize {
+        self.scroll
+    }
+
+    /// Store the offset a painter resolved, so the next frame resumes from it.
+    pub fn set_scroll(&mut self, offset: usize) {
+        self.scroll = offset.min(self.rows.len().saturating_sub(1));
+    }
+
+    /// Move the cursor by `delta` selectable rows, clamped to the ends.
+    pub fn move_selection(&mut self, delta: i64) {
+        if !self.selectable.is_empty() {
+            self.cursor = move_cursor(self.cursor, delta, self.selectable.len());
+        }
+    }
+
+    pub fn select_first(&mut self) {
+        self.cursor = 0;
+    }
+
+    pub fn select_last(&mut self) {
+        self.cursor = self.selectable.len().saturating_sub(1);
+    }
+
+    /// The clamped viewport for a painted `viewport_height`, keeping the
+    /// selected row on screen.
+    pub fn resolve_viewport(&self, viewport_height: usize) -> WideViewport {
+        let total_rows = self.rows.len();
+        let height = viewport_height.max(1);
+        let mut offset = self.scroll.min(total_rows.saturating_sub(height));
+        if let Some(row) = self.selected_display_row() {
+            if row < offset {
+                offset = row;
+            } else if row >= offset + height {
+                offset = row + 1 - height;
+            }
+        }
+        WideViewport {
+            offset,
+            height,
+            total_rows,
+        }
+    }
+
+    /// Zero-based screen-row offset from the viewport top to the selected
+    /// row, for the responsive `ViewportAnchor` hand-off (design.md D3,
+    /// implemented in task 2.5). `None` when nothing is selectable.
+    pub fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
+        let row = self.selected_display_row()?;
+        Some(row.saturating_sub(self.resolve_viewport(viewport_height).offset))
+    }
+}
+
+impl<Target: Clone + PartialEq> WideMediaList<Target> {
+    /// Replace the display rows. The selected target is preserved when it is
+    /// still present; otherwise the cursor and scroll are locally clamped
+    /// (design.md D3). Structural rows are filtered out of the selectable
+    /// index here so they can never become selected.
+    pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
+        let previous = self.selected_target().cloned();
+        let selectable: Vec<usize> = rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| row.selectable_target().is_some())
+            .map(|(index, _)| index)
+            .collect();
+        let cursor = previous
+            .and_then(|target| {
+                selectable
+                    .iter()
+                    .position(|&row| rows[row].selectable_target() == Some(&target))
+            })
+            .unwrap_or_else(|| self.cursor.min(selectable.len().saturating_sub(1)));
+        self.rows = rows;
+        self.selectable = selectable;
+        self.cursor = if self.selectable.is_empty() {
+            0
+        } else {
+            cursor.min(self.selectable.len() - 1)
+        };
+        self.scroll = self.scroll.min(self.rows.len().saturating_sub(1));
     }
 }
