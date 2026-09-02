@@ -5,7 +5,10 @@ use crate::app::ui_util::move_cursor;
 impl BrowserComponent {
     /// Return the column count used by the painted browse geometry.
     pub(super) fn columns(&self) -> usize {
-        if self.wide_movies {
+        if self.wide_movies
+            || self.narrow_extras.inline_hero.is_some()
+            || self.narrow_extras.hero_placeholder
+        {
             1
         } else {
             library_column_count(self.layout.left_area.width)

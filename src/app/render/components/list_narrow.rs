@@ -1,8 +1,6 @@
-//! Narrow generic/Movies/home-video browse composition
-//! Canonical narrow generic/Movies/home-video browse composition. The
-//! `BrowserComponent` owns this surface's inputs while this render module
-//! remains responsible for painting and publishing the replacement-flow
-//! geometry used by its callers.
+//! Canonical narrow browse composition for generic, Movies, and home-video
+//! destinations. `BrowserComponent` owns inputs; this module paints and
+//! publishes replacement-flow geometry for its callers.
 
 use super::detail::compact_banner_image_cache_key;
 use crate::app::components::browser_narrow::{NarrowBrowseExtras, NarrowInlineHero};
@@ -156,7 +154,12 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         for &index in &sorted_indices {
             let item = &ctx.items[index];
             if use_letter_groups {
-                let group = letter_bucket(item, ctx.true_total());
+                let bucket_total = if ctx.letter_filter.is_some() {
+                    usize::MAX
+                } else {
+                    ctx.true_total()
+                };
+                let group = letter_bucket(item, bucket_total);
                 if last_group.as_deref() != Some(group.as_str()) {
                     if last_group.is_some() {
                         rows.push(MediaListRow::Spacer);
@@ -509,12 +512,14 @@ impl App {
             0
         };
 
+        // Every hero-capable browse destination, including folder/channel
+        // selections without a resolved leaf hero, uses the inline
+        // replacement flow. Non-hero catalogs keep their width-derived grid.
         let hero_placeholder = inline_hero.is_none()
             && crate::app::render::arrangements::hero_left::shared_hero_presentation(
                 self.layout.main.left_area,
             )
             .is_none()
-            && self.libs[lib_idx].nav_stack.len() == 1
             && matches!(
                 coll.as_str(),
                 "movies" | "homevideos" | "podcasts" | "tvshows" | "music"
