@@ -153,22 +153,20 @@ impl Model {
                     .application
                     .get_component(&id)
                     .and_then(|comp| comp.as_any().downcast_ref::<TvWorkspaceComponent>())
-                    .and_then(|tv| tv.viewport_anchor(usize::MAX))
+                    .and_then(|tv| tv.viewport_anchor(tv.painted_viewport_height()))
                 else {
                     return;
                 };
                 self.tv_viewport_anchor = Some(anchor.clone());
-                let (cursor, scroll) = self
-                    .application
-                    .get_component(&id)
-                    .and_then(|comp| comp.as_any().downcast_ref::<TvWorkspaceComponent>())
-                    .map(|tv| (tv.cursor(), tv.scroll()))
-                    .unwrap_or((0, 0));
-                if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
-                    level.set_resting_cursor(cursor);
-                    level.set_resting_scroll(scroll);
+                if let Some(browser_id) = self.emby_browser_id.clone() {
+                    if let Some(component) = self
+                        .application
+                        .get_component_mut(&browser_id)
+                        .and_then(|comp| comp.as_any_mut().downcast_mut::<BrowserComponent>())
+                    {
+                        component.apply_viewport_anchor(anchor);
+                    }
                 }
-                self.app.save_default_library_position(lib_idx);
             }
             // narrow -> wide: the narrow browser already writes `level.cursor`
             // on every move; persist its painted scroll too, then arm the
@@ -182,15 +180,6 @@ impl Model {
                     .map(BrowserComponent::scroll)
                 {
                     self.app.persist_library_scroll(lib_idx, scroll);
-                }
-                if let Some(anchor) = self.tv_viewport_anchor.take() {
-                    if let Some(component) = self
-                        .application
-                        .get_component_mut(&id)
-                        .and_then(|comp| comp.as_any_mut().downcast_mut::<BrowserComponent>())
-                    {
-                        component.apply_viewport_anchor(anchor);
-                    }
                 }
                 self.tv_workspace_reanchor = true;
             }

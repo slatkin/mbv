@@ -19,7 +19,10 @@ use super::msg::{Msg, ShellRequest, TvHit, TvHitRegion};
 use super::user_event::UserEvent;
 #[cfg(test)]
 use crate::app::layout::LayoutMain;
-use crate::app::render::{render_wide_tv_with_ctx, HomeImagePaint, TvWideRenderCtx};
+use crate::app::render::{
+    effective_sort_str, letter_bucket, render_wide_tv_with_ctx, HomeImagePaint, TvWideRenderCtx,
+};
+use crate::app::ui_util::natural_sort_key;
 #[cfg(test)]
 use tuirealm::event::Key;
 
@@ -45,6 +48,7 @@ pub struct TvWorkspaceComponent {
     layout: crate::app::layout::LayoutMain,
     image_paint: Option<HomeImagePaint>,
     pending_anchor: Option<super::media_list::ViewportAnchor<String>>,
+    viewport_height: usize,
 }
 
 impl TvWorkspaceComponent {
@@ -71,29 +75,40 @@ impl TvWorkspaceComponent {
             layout: Default::default(),
             image_paint: None,
             pending_anchor: None,
+            viewport_height: 1,
         }
     }
 
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
-        let grouped = context.show_letter_pills || context.list.items.len() >= 50;
+        let seed_target = (!self.initialized)
+            .then(|| {
+                context
+                    .list
+                    .items
+                    .get(context.list.cursor())
+                    .map(|item| item.id.clone())
+            })
+            .flatten();
+        let grouped = !context.list.is_search_active()
+            && (context.show_letter_pills
+                || context.list.has_letter_filter()
+                || context.list.true_total() >= 50);
+        let bucket_total = if context.list.has_letter_filter() {
+            usize::MAX
+        } else {
+            context.list.true_total()
+        };
         let mut sorted_items: Vec<&EmbyItem> = context.list.items.iter().collect();
-        sorted_items.sort_by_key(|item| item.display_name().to_lowercase());
+        sorted_items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
         let rows = sorted_items.iter().enumerate().flat_map(|(index, item)| {
             let heading = grouped
                 .then(|| {
-                    let current = item
-                        .display_name()
-                        .chars()
-                        .next()
-                        .unwrap_or('#')
-                        .to_ascii_uppercase();
+                    let current = letter_bucket(item, bucket_total);
                     let previous = index
                         .checked_sub(1)
-                        .and_then(|i| sorted_items[i].display_name().chars().next())
-                        .map(|c| c.to_ascii_uppercase());
-                    (previous != Some(current)).then(|| MediaListRow::Heading {
-                        text: current.to_string(),
-                    })
+                        .map(|i| letter_bucket(sorted_items[i], bucket_total));
+                    (previous.as_deref() != Some(current.as_str()))
+                        .then(|| MediaListRow::Heading { text: current })
                 })
                 .flatten();
             heading
@@ -111,6 +126,20 @@ impl TvWorkspaceComponent {
         });
         let rows = rows.collect::<Vec<_>>();
         self.list.set_content(rows);
+        if let Some(target) = seed_target {
+            if let Some(cursor) = self
+                .list
+                .rows()
+                .iter()
+                .filter_map(|row| row.selectable_target())
+                .position(|item| item == &target)
+            {
+                self.list.select_first();
+                for _ in 0..cursor {
+                    self.list.move_selection(1);
+                }
+            }
+        }
         let series_changed =
             context.selected_series.as_ref().map(|item| &item.id) != self.last_series_id.as_ref();
         if series_changed {
@@ -185,6 +214,10 @@ impl TvWorkspaceComponent {
         self.list.viewport_anchor(viewport_height)
     }
 
+    pub(in crate::app) fn painted_viewport_height(&self) -> usize {
+        self.viewport_height
+    }
+
     /// Whether letter pills are enabled in the pushed context.
     pub(in crate::app) fn show_letter_pills(&self) -> bool {
         self.context.show_letter_pills
@@ -226,11 +259,12 @@ impl TvWorkspaceComponent {
     }
 
     pub(in crate::app) fn selected_item_id(&self) -> Option<String> {
+        let target = self.list.selected_target()?;
         self.context
             .list
-            .clone()
-            .with_cursor_scroll(self.cursor, self.scroll)
-            .selected_item()
+            .items
+            .iter()
+            .find(|item| &item.id == target)
             .map(|item| item.id.clone())
     }
 
@@ -239,11 +273,12 @@ impl TvWorkspaceComponent {
     /// `ShellRequest::TvActivate` so the shell effect targets the component
     /// selection instead of the mirrored App browse cursor.
     pub(in crate::app) fn selected_item(&self) -> Option<EmbyItem> {
+        let target = self.list.selected_target()?;
         self.context
             .list
-            .clone()
-            .with_cursor_scroll(self.cursor, self.scroll)
-            .selected_item()
+            .items
+            .iter()
+            .find(|item| &item.id == target)
             .cloned()
     }
 
@@ -409,6 +444,7 @@ impl Default for TvWorkspaceComponent {
 
 impl Component for TvWorkspaceComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
+        self.viewport_height = area.height as usize;
         self.layout = Default::default();
         self.image_paint = None;
         if let Some(anchor) = self.pending_anchor.take() {

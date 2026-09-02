@@ -347,8 +347,12 @@ impl LibraryListRenderCtx {
         self.search_query.is_some()
     }
 
-    pub(in crate::app::render) fn true_total(&self) -> usize {
+    pub(in crate::app) fn true_total(&self) -> usize {
         self.library_total.unwrap_or(self.total_count)
+    }
+
+    pub(in crate::app) fn has_letter_filter(&self) -> bool {
+        self.letter_filter.is_some()
     }
 }
 
