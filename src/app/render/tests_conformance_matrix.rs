@@ -451,7 +451,13 @@ fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
             layout.hero_area.height > 0,
             "{surface} bottom selection should admit a hero:\n{output}"
         );
-        assert_eq!(layout.selected_item_rect, Some(layout.hero_area));
+        let selected_rect = layout
+            .selected_item_rect
+            .expect("selected item keeps a parent-owned target");
+        assert_eq!(selected_rect.x, layout.hero_area.x);
+        assert_eq!(selected_rect.y, layout.hero_area.y);
+        assert_eq!(selected_rect.width, layout.hero_area.width);
+        assert!(selected_rect.height > 0);
         assert_eq!(
             output.matches(title).count(),
             1,
