@@ -124,7 +124,6 @@ pub(in crate::app::render) fn render_series_inline_detail(
             actual_w: img_actual_w,
             height: img_height,
         }),
-        overview_inset_box: false,
     };
     let result =
         crate::app::render::components::hero::paint_hero_content(f, area, &hero_content, focused);

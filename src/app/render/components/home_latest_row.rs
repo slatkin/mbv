@@ -322,7 +322,6 @@ pub(in crate::app::render) fn render_home_latest_detail_content(
             unconditional_spacer_after_meta: false,
             lines: &[],
             image: None,
-            overview_inset_box: false,
         };
         paint_hero_content(f, area, &content, focused);
         return None;

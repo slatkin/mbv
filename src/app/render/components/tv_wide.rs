@@ -321,17 +321,9 @@ fn render_tv_series_selection(
         })
     };
     let lines: Vec<HeroLine> = overview_lines.into_iter().map(HeroLine::Plain).collect();
-    // Reserve the lower part of the pane for the season row + episode list so
-    // the recessed overview panel (wide Home/Movies parity) can't crowd them
-    // out. Movies has nothing below its overview; the TV pane does.
-    let episode_reserve = (area.height / 2).clamp(6, 14);
-    let hero_area = Rect {
-        height: area.height.saturating_sub(episode_reserve),
-        ..area
-    };
     let result = crate::app::render::components::hero::paint_hero_content(
         f,
-        hero_area,
+        area,
         &HeroContent {
             title: Some(title.as_str()),
             meta_line: (!meta.is_empty()).then_some(meta.as_str()),
@@ -343,7 +335,6 @@ fn render_tv_series_selection(
                 actual_w: SERIES_IMAGE_COLS,
                 height: SERIES_IMAGE_ROWS,
             }),
-            overview_inset_box: true,
         },
         focused,
     );

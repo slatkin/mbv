@@ -33,7 +33,6 @@ fn inline_hero_image_has_shared_top_right_and_gutter_geometry() {
                         actual_w: 3,
                         height: 2,
                     }),
-                    overview_inset_box: false,
                 },
                 true,
             )

@@ -391,7 +391,6 @@ fn render_book_hero(
                 actual_w: plan.image_width,
                 height: plan.image_height,
             }),
-            overview_inset_box: false,
         },
         focused,
     );

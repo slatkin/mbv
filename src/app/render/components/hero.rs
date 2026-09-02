@@ -311,11 +311,6 @@ pub(in crate::app::render) struct HeroContent<'a> {
     pub unconditional_spacer_after_meta: bool,
     pub lines: &'a [HeroLine],
     pub image: Option<HeroImage>,
-    /// Paint the hero-on-left recessed `SURFACE_BACKDROP` panel behind the
-    /// overview `lines` (filling to the area bottom), matching the wide
-    /// Home/Movies hero. Callers that want the flat, per-row overview leave
-    /// this `false`. Only honoured when `lines` are `HeroLine::Plain`.
-    pub overview_inset_box: bool,
 }
 
 pub(in crate::app::render) struct HeroPaintResult {
@@ -427,56 +422,6 @@ pub(in crate::app::render) fn paint_hero_content(
             },
         );
         row += 1;
-    }
-
-    // Hero-on-left recessed overview panel (wide Home/Movies parity): one
-    // `SURFACE_BACKDROP` box behind the wrapped overview, filling to the
-    // area bottom. Callers that want flat per-row text leave the flag off.
-    if content.overview_inset_box && row < max_y {
-        let overview: String = content
-            .lines
-            .iter()
-            .filter_map(|line| match line {
-                HeroLine::Plain(text) if !text.is_empty() => Some(text.as_str()),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join(" ");
-        if !overview.is_empty() {
-            // Size the box to the wrapped overview (one padding row top and
-            // bottom), capped at the area bottom so callers that reserve
-            // space below the hero still get it. `content.lines` are wrapped
-            // to the un-inset width; the box insets by `PANE_PAD_X` each
-            // side, so allow a couple of extra rows for the tighter wrap.
-            let text_rows = content
-                .lines
-                .iter()
-                .filter(|l| matches!(l, HeroLine::Plain(t) if !t.is_empty()))
-                .count() as u16;
-            let box_h = (text_rows + 4).min((max_y - row).saturating_add(2)).max(3);
-            let box_area = Rect {
-                x: area.x,
-                y: row.saturating_sub(1),
-                width: inner_w16,
-                height: box_h,
-            };
-            let (_, text_area) =
-                crate::app::render::arrangements::hero_left::hero_on_left_recessed_box(
-                    f,
-                    box_area,
-                    crate::app::render::arrangements::hero_left::PANE_PAD_X,
-                    1,
-                );
-            f.render_widget(
-                Paragraph::new(Span::styled(overview, Style::default().fg(text_color)))
-                    .wrap(Wrap { trim: true }),
-                text_area,
-            );
-            return HeroPaintResult {
-                next_row: box_area.y.saturating_add(box_h),
-                img_rect,
-            };
-        }
     }
 
     for line in content.lines {
