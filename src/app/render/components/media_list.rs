@@ -256,7 +256,6 @@ pub(in crate::app) fn render_wide_media_list<Target>(
 /// caller stores via `InlineMediaBrowser::set_scroll`, and the screen rect of
 /// the admitted detail block (the caller paints the hero into it), or `None`
 /// when the block did not fit and the ordinary selected row was painted.
-#[allow(dead_code)]
 pub(in crate::app) struct InlinePaintResult {
     pub offset: usize,
     pub hero_area: Option<Rect>,
@@ -269,8 +268,6 @@ pub(in crate::app) struct InlinePaintResult {
 /// ordinary rows around the reserved detail block, reusing the shared
 /// `wide_media_row` primitive and `hero::inline_display_row` mapping.
 ///
-/// Unused until task 3.3 composes it onto the hero-bearing browsers.
-#[allow(dead_code)]
 pub(in crate::app) fn render_inline_media_browser<Target>(
     f: &mut Frame,
     area: Rect,

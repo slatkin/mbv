@@ -7,6 +7,7 @@
 
 use super::detail::compact_banner_image_cache_key;
 use crate::app::components::browser_narrow::{NarrowBrowseExtras, NarrowInlineHero};
+use crate::app::components::media_list::{InlineMediaBrowser, MediaListRow};
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::library_column_count;
 use crate::app::render::arrangements::{hero_left, library};
@@ -141,17 +142,50 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
 
     let use_letter_groups =
         !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some());
-    let row_ctx = ctx.rows(list_area, cols, focused, inline_hero_rows);
-    let final_offset = if use_letter_groups {
-        super::list_letter_groups::render_letter_grouped_rows(
+    // Hero-bearing narrow surfaces use the canonical inline control. The
+    // legacy two-column policy remains for non-hero catalogs.
+    let final_offset = if extras.inline_hero.is_some() {
+        let mut browser = InlineMediaBrowser::new();
+        browser.set_content(
+            ctx.items
+                .iter()
+                .enumerate()
+                .map(|(index, item)| MediaListRow::Item {
+                    target: index,
+                    primary: item.name.clone(),
+                    trailing: None,
+                    semantic_state:
+                        crate::app::components::media_list::MediaSemanticState::Ordinary,
+                })
+                .collect(),
+        );
+        for _ in 0..ctx.cursor() {
+            browser.move_selection(1);
+        }
+        browser.set_scroll(ctx.scroll());
+        let desired_rows = inline_hero_rows as usize;
+        let result = super::media_list::render_inline_media_browser(
             f,
-            row_ctx,
-            ctx.letter_filter.clone(),
-            ctx.true_total(),
-            layout,
-        )
+            list_area,
+            &browser,
+            desired_rows,
+            focused,
+        );
+        layout.hero_area = result.hero_area.unwrap_or_default();
+        result.offset
     } else {
-        super::media_list::render_plain_rows(f, row_ctx, layout)
+        let row_ctx = ctx.rows(list_area, cols, focused, inline_hero_rows);
+        if use_letter_groups {
+            super::list_letter_groups::render_letter_grouped_rows(
+                f,
+                row_ctx,
+                ctx.letter_filter.clone(),
+                ctx.true_total(),
+                layout,
+            )
+        } else {
+            super::media_list::render_plain_rows(f, row_ctx, layout)
+        }
     };
 
     let mut image_paint = None;
