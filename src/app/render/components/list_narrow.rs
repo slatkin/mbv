@@ -54,7 +54,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     // Narrow TV season grids keep their own single-column stride
     // (`is_viewing_season_grid`, legacy `list.rs`); every other narrow browse
     // surface derives the column count from the list width.
-    let cols = if extras.season_grid {
+    let cols = if extras.season_grid || extras.inline_hero.is_some() {
         1
     } else {
         library_column_count(content_area.width)
@@ -146,19 +146,58 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     // legacy two-column policy remains for non-hero catalogs.
     let final_offset = if extras.inline_hero.is_some() {
         let mut browser = InlineMediaBrowser::new();
-        browser.set_content(
-            ctx.items
-                .iter()
-                .enumerate()
-                .map(|(index, item)| MediaListRow::Item {
-                    target: index,
-                    primary: item.name.clone(),
-                    trailing: None,
-                    semantic_state:
-                        crate::app::components::media_list::MediaSemanticState::Ordinary,
-                })
-                .collect(),
-        );
+        let mut rows = Vec::with_capacity(ctx.items.len());
+        let mut last_group = None;
+        for (index, item) in ctx.items.iter().enumerate() {
+            if use_letter_groups {
+                let group = item
+                    .display_name()
+                    .chars()
+                    .next()
+                    .unwrap_or('#')
+                    .to_ascii_uppercase();
+                if last_group != Some(group) {
+                    if last_group.is_some() {
+                        rows.push(MediaListRow::Spacer);
+                    }
+                    rows.push(MediaListRow::Heading {
+                        text: group.to_string(),
+                    });
+                    last_group = Some(group);
+                }
+            }
+            let primary = if item.is_folder && item.item_type == "Folder" && item.total_count > 0 {
+                format!("{} · {} items", item.display_name(), item.total_count)
+            } else if item.is_folder && item.unplayed_item_count > 0 && item.item_type != "Series" {
+                format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+            } else {
+                item.display_name()
+            };
+            let trailing = (!item.is_folder && item.production_year > 0)
+                .then(|| item.production_year.to_string());
+            let state = if item.playback_position_ticks > 0 && !item.played {
+                let progress = if item.runtime_ticks > 0 {
+                    Some(
+                        ((item.playback_position_ticks as u64 * 100) / item.runtime_ticks as u64)
+                            .min(100) as u16,
+                    )
+                } else {
+                    None
+                };
+                crate::app::components::media_list::MediaSemanticState::active(progress)
+            } else if item.played {
+                crate::app::components::media_list::MediaSemanticState::Played
+            } else {
+                crate::app::components::media_list::MediaSemanticState::Ordinary
+            };
+            rows.push(MediaListRow::Item {
+                target: index,
+                primary,
+                trailing,
+                semantic_state: state,
+            });
+        }
+        browser.set_content(rows);
         for _ in 0..ctx.cursor() {
             browser.move_selection(1);
         }
@@ -172,6 +211,27 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             focused,
         );
         layout.hero_area = result.hero_area.unwrap_or_default();
+        layout.inline_hero_area = layout.hero_area;
+        let rows = browser.rows();
+        layout.left_sorted_indices = (0..ctx.items.len()).collect();
+        layout.left_item_rows = rows
+            .iter()
+            .map(|row| row.selectable_target().copied().into_iter().collect())
+            .collect();
+        layout.left_row_map = (result.offset..result.offset + list_area.height as usize)
+            .map(|row| rows.get(row).and_then(|r| r.selectable_target().copied()))
+            .collect();
+        layout.selected_item_rect = layout
+            .left_item_rows
+            .iter()
+            .position(|r| r.contains(&ctx.cursor))
+            .and_then(|row| row.checked_sub(result.offset))
+            .map(|y| Rect {
+                x: list_area.x,
+                y: list_area.y + y as u16,
+                width: list_area.width,
+                height: 1,
+            });
         result.offset
     } else {
         let row_ctx = ctx.rows(list_area, cols, focused, inline_hero_rows);
