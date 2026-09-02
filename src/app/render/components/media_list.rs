@@ -225,6 +225,7 @@ pub(in crate::app) fn render_wide_media_list<Target>(
     area: Rect,
     list: &WideMediaList<Target>,
     focused: bool,
+    selected_bg: Color,
     layout: &mut LayoutMain,
 ) -> usize {
     let viewport = list.resolve_viewport(area.height as usize);
@@ -248,7 +249,15 @@ pub(in crate::app) fn render_wide_media_list<Target>(
         .saturating_sub(u16::from(focused && viewport.overflows())) as usize;
     let list_items: Vec<ListItem> = (viewport.offset..viewport.total_rows)
         .take(viewport.height)
-        .map(|row| wide_media_row(&rows[row], Some(row) == selected_row, focused, inner_width))
+        .map(|row| {
+            wide_media_row(
+                &rows[row],
+                Some(row) == selected_row,
+                focused,
+                selected_bg,
+                inner_width,
+            )
+        })
         .collect();
     f.render_widget(List::new(list_items), area);
 
@@ -287,6 +296,7 @@ pub(in crate::app) fn render_inline_media_browser<Target>(
     list: &InlineMediaBrowser<Target>,
     desired_detail_rows: usize,
     focused: bool,
+    selected_bg: Color,
 ) -> InlinePaintResult {
     let layout: InlineLayout =
         list.resolve_inline_layout(area.height as usize, desired_detail_rows);
@@ -300,7 +310,15 @@ pub(in crate::app) fn render_inline_media_browser<Target>(
     let window = (layout.offset..layout.total_display_rows).take(layout.height);
     let list_items: Vec<ListItem> = if layout.detail_rows == 0 {
         window
-            .map(|row| wide_media_row(&rows[row], Some(row) == selected_row, focused, inner_width))
+            .map(|row| {
+                wide_media_row(
+                    &rows[row],
+                    Some(row) == selected_row,
+                    focused,
+                    selected_bg,
+                    inner_width,
+                )
+            })
             .collect()
     } else {
         let sel = selected_row.expect("an admitted detail block requires a selection");
@@ -308,7 +326,7 @@ pub(in crate::app) fn render_inline_media_browser<Target>(
             .map(|display_row| {
                 match inline_display_row(source_rows, sel, layout.detail_rows as u16, display_row) {
                     Some(InlineDisplayRow::Source(source_row)) => {
-                        wide_media_row(&rows[source_row], false, focused, inner_width)
+                        wide_media_row(&rows[source_row], false, focused, selected_bg, inner_width)
                     }
                     Some(InlineDisplayRow::Replacement) | None => ListItem::new(Line::default()),
                 }
@@ -342,12 +360,15 @@ pub(in crate::app) fn render_inline_media_browser<Target>(
 /// colour and, for active rows, an appended progress percentage; `primary`
 /// is truncated with an ellipsis to fit; `duration` is a distinct
 /// right-aligned green element ending two columns before the content edge
-/// (`inner_width` already excludes the scrollbar column); the selection
-/// background/marker come from the shared list-row primitives.
+/// (`inner_width` already excludes the scrollbar column). `selected_bg` is
+/// the focused-panel's parent surface — the colour the selected row takes so
+/// it reads against the panel body (Queue: `SURFACE_FOCUSED`; hero-on-left
+/// rails: `SURFACE_RESTING`, matching the legacy painters they replace).
 fn wide_media_row<Target>(
     row: &MediaListRow<Target>,
     selected: bool,
     focused: bool,
+    selected_bg: Color,
     inner_width: usize,
 ) -> ListItem<'static> {
     match row {
@@ -437,7 +458,7 @@ fn wide_media_row<Target>(
                 ));
             }
             ListItem::new(Line::from(spans)).style(if selected {
-                Style::default().bg(palette::SURFACE_FOCUSED)
+                Style::default().bg(selected_bg)
             } else {
                 Style::default()
             })

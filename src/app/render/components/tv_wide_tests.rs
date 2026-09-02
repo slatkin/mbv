@@ -287,29 +287,35 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
     // (selected) series row, `y - 1` the panel top edge.
     let (focused_buffer, focused_layout) = render(true);
     let fla = focused_layout.tv_wide_list_area;
-    // Focused rail: the selected row sits on the focused list-panel surface
-    // (#3c4841), not the library backdrop.
-    assert_eq!(
-        focused_buffer[(fla.x, fla.y + 1)].bg,
-        palette::SURFACE_FOCUSED
-    );
-    // Focused rail panel is painted with the focused surface.
+    // Focused rail: panel body is the focused surface, and the selected row
+    // takes the resting surface (legacy `item_cell_spans` parity) so it
+    // reads against the green panel body.
     assert_eq!(
         focused_buffer[(fla.x.saturating_sub(1), fla.y.saturating_sub(1))].bg,
         palette::resolve_surface_focus(true)
     );
+    assert_eq!(
+        focused_buffer[(fla.x, fla.y + 1)].bg,
+        palette::SURFACE_RESTING
+    );
+    assert_ne!(
+        focused_buffer[(fla.x, fla.y + 1)].bg,
+        focused_buffer[(fla.x, fla.y + 2)].bg,
+        "selected row must be distinct from the panel body"
+    );
 
     let (unfocused_buffer, unfocused_layout) = render(false);
     let ula = unfocused_layout.tv_wide_list_area;
-    // Unfocused rail: no selection highlight — the selected row sits on the
-    // resting panel surface like every other row.
-    assert_eq!(
-        unfocused_buffer[(ula.x, ula.y + 1)].bg,
-        palette::resolve_surface_focus(false)
-    );
-    // Unfocused rail panel drops to the resting surface.
+    // Unfocused rail: panel drops to the resting surface and there is no
+    // selection highlight — the selected row is indistinguishable from the
+    // body.
     assert_eq!(
         unfocused_buffer[(ula.x.saturating_sub(1), ula.y.saturating_sub(1))].bg,
         palette::resolve_surface_focus(false)
+    );
+    assert_eq!(
+        unfocused_buffer[(ula.x, ula.y + 1)].bg,
+        unfocused_buffer[(ula.x, ula.y + 2)].bg,
+        "unfocused rail shows no selection highlight"
     );
 }

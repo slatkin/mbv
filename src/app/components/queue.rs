@@ -418,7 +418,16 @@ impl Component for QueueComponent {
         // geometry into a `LayoutMain`; Queue keeps its own `QueueHitRegion`
         // geometry (rebuilt below) so the untouched mouse path still resolves.
         let mut published = LayoutMain::default();
-        let offset = render_wide_media_list(frame, area, &self.list, self.focused, &mut published);
+        // Legacy `render_queue_content` parity: the selected row takes the
+        // focused queue-column surface (its parent panel).
+        let offset = render_wide_media_list(
+            frame,
+            area,
+            &self.list,
+            self.focused,
+            palette::SURFACE_FOCUSED,
+            &mut published,
+        );
         self.list.set_scroll(offset);
         let viewport = self.list.resolve_viewport(area.height as usize);
         self.geometry.rows = (viewport.offset..viewport.total_rows)

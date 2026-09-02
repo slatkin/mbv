@@ -235,8 +235,16 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         ..list_area
     };
     hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
-    let final_scroll =
-        super::media_list::render_wide_media_list(f, paint_area, media_list, right_focused, layout);
+    // Legacy rail parity (`item_cell_spans`): the selected row takes the
+    // resting surface so it reads against the focused green panel body.
+    let final_scroll = super::media_list::render_wide_media_list(
+        f,
+        paint_area,
+        media_list,
+        right_focused,
+        palette::SURFACE_RESTING,
+        layout,
+    );
     // Same key the component sorts the rail rows by, so `left_sorted_indices`
     // matches the painted order; `sort_by_cached_key` computes each key once.
     let mut order: Vec<usize> = (0..ctx.list.items.len()).collect();
