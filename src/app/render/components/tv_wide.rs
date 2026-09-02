@@ -227,7 +227,10 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         );
     }
     let final_scroll =
-        super::media_list::render_wide_media_list(f, list_area, media_list, right_focused);
+        super::media_list::render_wide_media_list(f, list_area, media_list, right_focused, layout);
+    let mut order: Vec<usize> = (0..ctx.list.items.len()).collect();
+    order.sort_by_key(|&index| ctx.list.items[index].display_name().to_lowercase());
+    layout.left_sorted_indices = order;
     hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     (final_scroll, image_paint)
 }

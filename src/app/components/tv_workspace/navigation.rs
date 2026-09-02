@@ -73,16 +73,12 @@ impl TvWorkspaceComponent {
     }
 
     pub(super) fn move_cursor_delta(&mut self, delta: i64) {
-        if !self.layout.left_sorted_indices.is_empty() {
-            let sorted = &self.layout.left_sorted_indices;
-            let position = sorted
-                .iter()
-                .position(|&index| index == self.cursor)
-                .unwrap_or(0);
-            self.cursor = sorted[move_cursor(position, delta, sorted.len())];
-        } else if self.context.list.item_count() > 0 {
-            self.cursor = move_cursor(self.cursor, delta, self.context.list.item_count());
+        let count = self.list.selectable_len();
+        if count == 0 {
+            return;
         }
+        self.list.move_selection(delta);
+        self.cursor = self.list.cursor();
     }
 
     pub(super) fn letter_vertical_delta(&self, rows: i64) -> Option<i64> {
@@ -120,16 +116,11 @@ impl TvWorkspaceComponent {
     }
 
     pub(super) fn jump_cursor(&mut self, to_end: bool) {
-        if let Some(sorted) = (!self.layout.left_sorted_indices.is_empty())
-            .then_some(&self.layout.left_sorted_indices)
-        {
-            self.cursor = sorted[if to_end { sorted.len() - 1 } else { 0 }];
-        } else if self.context.list.item_count() > 0 {
-            self.cursor = if to_end {
-                self.context.list.item_count() - 1
-            } else {
-                0
-            };
+        if to_end {
+            self.list.select_last();
+        } else {
+            self.list.select_first();
         }
+        self.cursor = self.list.cursor();
     }
 }

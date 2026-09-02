@@ -112,7 +112,7 @@ impl TvWorkspaceComponent {
             self.initialized = true;
         }
         self.context = context;
-        if !self.initialized {
+        if self.cursor != self.list.cursor() {
             self.cursor = self
                 .cursor
                 .min(self.list.selectable_len().saturating_sub(1));
@@ -120,9 +120,9 @@ impl TvWorkspaceComponent {
             for _ in 0..self.cursor {
                 self.list.move_selection(1);
             }
-        } else {
-            self.cursor = self.list.cursor();
         }
+        self.cursor = self.list.cursor();
+        self.scroll = self.list.scroll();
         let season_count = self
             .context
             .series_detail
@@ -175,13 +175,14 @@ impl TvWorkspaceComponent {
     /// shell re-anchors explicitly when the active-destination pointer flips
     /// back to this kept-mounted component.
     pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
-        self.cursor = cursor.min(self.list.selectable_len().saturating_sub(1));
         self.list.select_first();
+        self.cursor = cursor.min(self.list.selectable_len().saturating_sub(1));
         for _ in 0..self.cursor {
             self.list.move_selection(1);
         }
         self.list.set_scroll(scroll);
-        self.scroll = scroll;
+        self.cursor = self.list.cursor();
+        self.scroll = self.list.scroll();
     }
 
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<HomeImagePaint> {
@@ -375,14 +376,16 @@ impl Component for TvWorkspaceComponent {
         self.layout = Default::default();
         self.image_paint = None;
         let context = self.context.clone().with_local_state(
-            self.cursor,
-            self.scroll,
+            self.list.cursor(),
+            self.list.scroll(),
             self.season_cursor,
             self.episode_cursor,
         );
         let (scroll, image_paint) =
             render_wide_tv_with_ctx(frame, area, &context, &mut self.layout, &self.list);
-        self.scroll = scroll;
+        self.list.set_scroll(scroll);
+        self.scroll = self.list.scroll();
+        self.cursor = self.list.cursor();
         self.image_paint = image_paint;
     }
 

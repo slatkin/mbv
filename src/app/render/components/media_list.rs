@@ -228,10 +228,24 @@ pub(in crate::app) fn render_wide_media_list<Target>(
     area: Rect,
     list: &WideMediaList<Target>,
     focused: bool,
+    layout: &mut LayoutMain,
 ) -> usize {
     let viewport = list.resolve_viewport(area.height as usize);
     let rows = list.rows();
     let selected_row = list.selected_display_row();
+    layout.left_sorted_indices = (0..list.selectable_len()).collect();
+    layout.left_item_rows = rows
+        .iter()
+        .enumerate()
+        .filter_map(|(row, item)| match item {
+            MediaListRow::Item { .. } => Some(vec![row]),
+            _ => None,
+        })
+        .collect();
+    layout.left_row_map = (viewport.offset..viewport.total_rows)
+        .take(viewport.height)
+        .map(|row| matches!(rows[row], MediaListRow::Item { .. }).then_some(row))
+        .collect();
 
     let list_items: Vec<ListItem> = (viewport.offset..viewport.total_rows)
         .take(viewport.height)
