@@ -1,5 +1,6 @@
-//! Narrow generic/Movies/home-video browse composer inputs
-//! (`migrate-narrow-browse-to-components` task 3.3).
+//! Narrow hero-bearing Emby browse composer inputs: generic catalogs,
+//! Movies, home-video feeds, podcast channel lists, and TV Series
+//! (`introduce-canonical-media-list-foundation` task 3.3).
 //!
 //! `BrowserComponent` owns the narrow generic/Movies/home-video surface's
 //! paint. The shell resolves everything that needs `App`/image-cache
