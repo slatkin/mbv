@@ -200,7 +200,8 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     let episode_focused = ctx.focused && ctx.episode_cursor.is_some();
     let right_focused = ctx.focused && !episode_focused;
     f.render_widget(
-        Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+        Block::default()
+            .style(Style::default().bg(palette::resolve_surface_focus(episode_focused))),
         left_panel,
     );
     let (selection_rendered, image_paint) = render_tv_series_selection(
@@ -343,18 +344,50 @@ fn render_tv_series_selection(
         item: Box::new(item.clone()),
         show_placeholder: image_loading,
     });
+    let detail_top = if images_enabled {
+        result
+            .next_row
+            .max(area.y.saturating_add(SERIES_IMAGE_ROWS))
+    } else {
+        result.next_row
+    }
+    .saturating_add(1);
+    if detail_top >= area.bottom() {
+        return (true, image_paint);
+    }
     let Some(detail) = detail else {
-        render_placeholder(
-            f,
-            Rect::new(area.x, result.next_row, area.width, 1),
-            " Loading\u{2026}",
+        let box_area = Rect::new(
+            area.x.saturating_sub(PANE_PAD_X),
+            detail_top,
+            area.width.saturating_add(PANE_PAD_X * 2),
+            3.min(area.bottom().saturating_sub(detail_top)),
         );
+        let (_, content) =
+            hero_left::hero_on_left_recessed_box(f, box_area, PANE_PAD_X, PANE_PAD_Y);
+        render_placeholder(f, content, " Loading\u{2026}");
         return (true, image_paint);
     };
     let Some(season) = detail.seasons.get(season_cursor) else {
         return (true, image_paint);
     };
-    if result.next_row >= area.bottom() {
+    let episodes = detail
+        .episodes
+        .get(&season.id)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let detail_rows = 1usize.saturating_add(episodes.len().max(1));
+    let detail_height = (detail_rows as u16)
+        .saturating_add(PANE_PAD_Y * 2)
+        .min(area.bottom().saturating_sub(detail_top));
+    let box_area = Rect::new(
+        area.x.saturating_sub(PANE_PAD_X),
+        detail_top,
+        area.width.saturating_add(PANE_PAD_X * 2),
+        detail_height,
+    );
+    let (_, detail_area) =
+        hero_left::hero_on_left_recessed_box(f, box_area, PANE_PAD_X, PANE_PAD_Y);
+    if detail_area.height == 0 || detail_area.width == 0 {
         return (true, image_paint);
     }
     let labels: Vec<String> = detail
@@ -363,15 +396,9 @@ fn render_tv_series_selection(
         .map(|season| season.display_name())
         .collect();
     let ids: Vec<usize> = (0..labels.len()).collect();
-    let row_width = inline_hero_text_width(
-        area.width,
-        SERIES_IMAGE_COLS,
-        SERIES_IMAGE_ROWS,
-        result.next_row.saturating_sub(area.y),
-    );
     layout.tv_wide_season_tabs = render_pill_bar(
         f,
-        Rect::new(area.x, result.next_row, row_width, 1),
+        Rect::new(detail_area.x, detail_area.y, detail_area.width, 1),
         PillBar {
             labels: &labels,
             ids: &ids,
@@ -379,27 +406,12 @@ fn render_tv_series_selection(
             prefix: Some(" Series: "),
         },
     );
-    let episodes = detail
-        .episodes
-        .get(&season.id)
-        .map(Vec::as_slice)
-        .unwrap_or(&[]);
-    let first_row = result.next_row.saturating_add(1);
-    let visible = area.bottom().saturating_sub(first_row).saturating_sub(1) as usize;
+    let first_row = detail_area.y.saturating_add(1);
+    let visible = detail_area.height.saturating_sub(1) as usize;
     if episodes.is_empty() {
         render_placeholder(
             f,
-            Rect::new(
-                area.x,
-                first_row,
-                inline_hero_text_width(
-                    area.width,
-                    SERIES_IMAGE_COLS,
-                    SERIES_IMAGE_ROWS,
-                    first_row.saturating_sub(area.y),
-                ),
-                1,
-            ),
+            Rect::new(detail_area.x, first_row, detail_area.width, 1),
             if detail.episodes.contains_key(&season.id) {
                 " (no episodes)"
             } else {
@@ -451,14 +463,9 @@ fn render_tv_series_selection(
     {
         layout.tv_wide_episode_rows.push((
             Rect::new(
-                area.x,
+                detail_area.x,
                 first_row + visible_index as u16,
-                inline_hero_text_width(
-                    area.width,
-                    SERIES_IMAGE_COLS,
-                    SERIES_IMAGE_ROWS,
-                    first_row + visible_index as u16 - area.y,
-                ),
+                detail_area.width,
                 1,
             ),
             index,
@@ -466,17 +473,7 @@ fn render_tv_series_selection(
     }
     f.render_widget(
         Table::new(rows, [Constraint::Min(10), Constraint::Length(7)]).column_spacing(1),
-        Rect::new(
-            area.x,
-            first_row,
-            inline_hero_text_width(
-                area.width,
-                SERIES_IMAGE_COLS,
-                SERIES_IMAGE_ROWS,
-                first_row.saturating_sub(area.y),
-            ),
-            visible as u16,
-        ),
+        Rect::new(detail_area.x, first_row, detail_area.width, visible as u16),
     );
     (true, image_paint)
 }

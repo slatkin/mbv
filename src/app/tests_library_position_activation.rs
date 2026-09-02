@@ -21,8 +21,8 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
-                    letter_filter_index: None,
-                    library_total: None,
+                    letter_filter_index: Some(2),
+                    library_total: Some(673),
                 },
                 crate::config::LibraryPositionLevel {
                     parent_id: "folder-b".into(),
@@ -50,6 +50,8 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
     assert!(level.loading);
     assert!(level.items.is_empty());
     assert_eq!(level.item_types.as_deref(), Some("Movie"));
+    assert_eq!(app.libs[0].library_total, Some(673));
+    assert_eq!(level.letter_filter.as_ref().map(|filter| filter.index), Some(2));
 }
 
 #[test]

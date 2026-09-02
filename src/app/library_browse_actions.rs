@@ -134,6 +134,7 @@ impl App {
         if self.libs[idx].nav_stack.is_empty() {
             if let Some(saved) = self.saved_library_position(idx) {
                 if let Some(root) = saved.levels.first() {
+                    self.libs[idx].library_total = root.library_total;
                     self.libs[idx].nav_stack.push(BrowseLevel {
                         parent_id: root.parent_id.clone(),
                         title: root.title.clone(),
@@ -147,7 +148,9 @@ impl App {
                         loading: true,
 
                         all_items: None,
-                        letter_filter: None,
+                        letter_filter: root
+                            .letter_filter_index
+                            .and_then(super::render::LetterFilter::for_index),
                         music_grouping: None,
                     });
                     self.spawn_restore_library_position(idx, saved);

@@ -176,7 +176,9 @@ impl App {
                     loading: true,
 
                     all_items: None,
-                    letter_filter: None,
+                    letter_filter: root
+                        .letter_filter_index
+                        .and_then(crate::app::render::LetterFilter::for_index),
                     music_grouping: None,
                 };
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
