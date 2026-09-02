@@ -8,14 +8,14 @@
 
 - [ ] 2.1 Prepare the active Home section's rows for canonical `Item`/`Heading`/`Spacer` vocabulary without changing section identity, `pref_key`, `restore_section`, images, or workspace effects; only the active section is projected into the control.
 - [ ] 2.2 Compose `InlineMediaBrowser` for the inline Home section and `WideMediaList` for the approved Wide rail; carry the single active-section cursor/scroll through the control and preserve `ViewportAnchor` transitions for refresh and breakpoint handoff, with no per-section cursor cache and no App-wide interaction mirror.
-- [ ] 2.3 Remove Home destination list duplication and retain parent-owned effects, overlays, mouse subscription, and typed message translation.
+- [ ] 2.3 Remove Home destination list duplication and retain existing parent-owned effects, overlays, and typed message translation. Leave the bespoke `*HitRegion` path wired and untouched — do not remove it as "duplication"; `restore-mouse-support` (#638) owns its migration. Add no new mouse wiring.
 
 ## 3. Feeds Service/tab composition
 
 - [ ] 3.1 Prepare grouped FeedEntries as selectable `Item` rows and project FeedAgeGroup/date labels to `Heading` rows and separators to `Spacer` rows as canonical-list content, preserving stable targets and watched semantic state.
 - [ ] 3.2 Compose `InlineMediaBrowser`/`WideMediaList` by named arrangement; keep the subscription/group selector pills and the watched selector as parent-owned chrome outside the canonical control, and preserve group selection, images, focus, and scroll semantics.
 - [ ] 3.3 Retain the accepted #623 Wide one-column/framing baseline and implement the deferred two-space row-indent correction in canonical model/painter source-of-truth.
-- [ ] 3.4 Remove bespoke Feeds list mechanics and prove one painter/one hit-geometry path; leave the Emby homevideos feed view (#634/#637) and non-hero two-column policies untouched. The Music/Audiobookshelf canonical slice is out of scope; standalone #640 is superseded.
+- [ ] 3.4 Remove bespoke Feeds list mechanics and prove one list painter runs; leave the Emby homevideos feed view (#634/#637) and non-hero two-column policies untouched. Mouse/hit geometry is out of scope: the bespoke `*HitRegion` path stays wired and untouched and `restore-mouse-support` (#638) owns its migration. The Music/Audiobookshelf canonical slice is out of scope; standalone #640 is superseded.
 
 ## 4. Tests and gates (after visual approval)
 

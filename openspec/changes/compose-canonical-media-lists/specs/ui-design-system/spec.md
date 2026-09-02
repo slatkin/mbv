@@ -2,7 +2,7 @@
 
 ### Requirement: Named primary media browsers reuse the canonical list controls
 
-Home, the hero-bearing generic Emby library catalog browser, Movies, TV Series browsing, grouped Music album browsing, the Emby homevideos feed view, the Emby podcast channel list, Audiobookshelf Podcast show browsing, Audiobookshelf Book browsing, Feeds, and Queue's fixed-row list SHALL compose the applicable canonical control for shared cursor, scroll, viewport, movement, fixed-row painting, selection, truncation, scrollbar, and hit-geometry behavior.
+Home, the hero-bearing generic Emby library catalog browser, Movies, TV Series browsing, grouped Music album browsing, the Emby homevideos feed view, the Emby podcast channel list, Audiobookshelf Podcast show browsing, Audiobookshelf Book browsing, Feeds, and Queue's fixed-row list SHALL compose the applicable canonical control for shared cursor, scroll, viewport, movement, fixed-row painting, selection, truncation, and scrollbar behavior.
 
 A destination SHALL NOT copy those mechanics into its own painter merely because its content comes from another provider or has different metadata. Queue composes fixed-row behavior only; non-hero two-column browsers remain governed by their existing column policy.
 
@@ -15,7 +15,7 @@ A destination SHALL NOT copy those mechanics into its own painter merely because
 
 #### Scenario: A shared list behavior changes
 
-- **WHEN** canonical row placement, truncation, selection, scrolling, or hit geometry changes
+- **WHEN** canonical row placement, truncation, selection, or scrolling changes
 - **THEN** every composing destination receives the change through the shared control
 - **AND** no destination-local copy requires the same edit
 
@@ -37,7 +37,7 @@ A named primary media browser that cannot use the canonical controls SHALL be re
 
 #### Scenario: A bespoke surface duplicates canonical mechanics
 
-- **WHEN** an exception independently implements cursor visibility, fixed-row placement, truncation, selection, scrollbar, or hit geometry that the canonical control already provides
+- **WHEN** an exception independently implements cursor visibility, fixed-row placement, truncation, selection, or scrollbar behavior that the canonical control already provides
 - **THEN** the exception is non-conforming
 - **AND** those mechanics are moved back to the canonical control or reused from it
 
@@ -82,17 +82,17 @@ Each destination-family slice SHALL be delivered as its own PR against the migra
 
 ### Requirement: Canonical controls are the sole list painter
 
-Each migrated primary media-list surface SHALL have exactly one canonical list painter for its body at each layout breakpoint and no destination-specific duplicate row geometry or second hit-coordinate path. A slice SHALL NOT treat a surface as migrated while a legacy list painter still runs for that surface body in the same frame.
+Each migrated primary media-list surface SHALL have exactly one canonical list painter for its body at each layout breakpoint and no destination-specific duplicate row geometry. A slice SHALL NOT treat a surface as migrated while a legacy list painter still runs for that surface body in the same frame.
 
 #### Scenario: Painter ownership is reviewable
 
 - **WHEN** a reviewer traces a migrated surface's render path at a given breakpoint
 - **THEN** the path reaches the embedded canonical control exactly once
-- **AND** no legacy list painter and no second hit-coordinate calculation runs for that surface body
+- **AND** no legacy list painter runs for that surface body
 
 ### Requirement: Visual verification precedes UI tests
 
-For every slice that changes a rendered media-list surface, the controlling order SHALL be: characterize current behavior by source reading and manual observation only; perform the production visual correction at the affected Wide and Narrow widths; obtain explicit user live visual approval of the running result; and only then add or modify any UI fixture, characterization buffer, or rendered/geometry test for that surface. Characterization performed before that approval SHALL be read-only — source trace, unchanged existing evidence, and manual observation — and SHALL NOT add or edit a test or fixture or drive appearance from a test. Non-visual tests such as delivery, arbitration, selectable-index, and gesture recognition in isolation MAY precede approval.
+For every slice that changes a rendered media-list surface, the controlling order SHALL be: characterize current behavior by source reading and manual observation only; perform the production visual correction at the affected Wide and Narrow widths; obtain explicit user live visual approval of the running result; and only then add or modify any UI fixture, characterization buffer, or rendered/geometry test for that surface. Characterization performed before that approval SHALL be read-only — source trace, unchanged existing evidence, and manual observation — and SHALL NOT add or edit a test or fixture or drive appearance from a test. Non-visual tests such as delivery, arbitration, and selectable-index MAY precede approval.
 
 #### Scenario: Tests follow approval
 

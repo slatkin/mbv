@@ -18,7 +18,9 @@ here.
 ## Cleanup method
 
 1. Inventory the exact obsolete `render_*_rows` loops and bespoke painters,
-   old selection/scroll/row-hit/cursor geometry, and `AppLayout::main`
+   old selection/scroll/cursor geometry (NOT row-hit / `*HitRegion`
+   geometry, which #638 owns; and NOT component-owned viewport geometry,
+   which the canonical controls keep), and `AppLayout::main`
    left/hero/selector/wide-family fields. Record symbols plus callers/readers/
    writers with ast-grep and grep.
 2. For each candidate, prove staged zero production callers/readers/writers

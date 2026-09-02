@@ -25,9 +25,12 @@ for each migrated destination. Non-hero two-column arrangements SHALL remain.
 each reachable destination has exactly one canonical body painter
 
 ### Requirement: obsolete interaction geometry is removed safely
-The implementation SHALL delete old selection, scrolling, row-hit, and cursor
+The implementation SHALL delete old selection, scrolling, and cursor
 geometry only after zero production consumers are proven. Canonical controls
-retain local viewport and hit-region ownership. Queue SHALL remain fixed-row-only.
+retain local viewport geometry. Every per-surface `*HitRegion` enum and bespoke
+hit-test path SHALL be retained pending `restore-mouse-support` (#638), which
+owns migrating them onto the canonical controls. Queue SHALL remain
+fixed-row-only.
 
 #### Scenario: Queue stays fixed-row-only
 - **WHEN** Queue is rendered at any supported breakpoint

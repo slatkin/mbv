@@ -12,18 +12,18 @@ The target boundary is:
 shell Model
   -> mounted destination AppComponent
        -> arrangement (outer placement and breakpoint)
-            -> embedded plain Component (list state, view, hit regions)
+            -> embedded plain Component (list state, view, paint geometry)
                  -> render component (painting within supplied Rect)
 ```
 
-The mounted parent owns event subscription and application-level `Event -> Msg`. For mouse input, it also owns gesture recognition and `MouseGestureState`; the embedded child owns list-row `HitRegions<Target>` populated by its own view, resolves points the parent delegates, and its explicit list targets are resolved before the parent's workspace targets.
+The mounted parent owns event subscription and application-level `Event -> Msg`. Mouse input is out of scope for this campaign and owned by `restore-mouse-support` (#638), which lands last; no canonical slice touches mouse, and the existing bespoke `*HitRegion` paths stay wired and untouched.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
 - Define the reusable Wide fixed-row and Narrow selected-row-replacement controls without adding registry identities or another routing mechanism.
-- Make one-column Hero-on-left rails, selection visibility, movement, scrolling, scrollbar, truncation, semantic states, and hit geometry shared behavior.
+- Make one-column Hero-on-left rails, selection visibility, movement, scrolling, scrollbar, truncation, and semantic states shared behavior.
 - Preserve one selected stable target and a defined viewport-row offset across responsive presentation changes without rebuilding an `App` mirror.
 - Deliver the work as five independently reviewed, independently reversible implementation slices stacked on PR #606's feature branch.
 - Preserve provider workspaces, effects, persistence, keyboard precedence, image behavior, and proven output, while requiring stronger evidence where existing fixtures are vacuous.
@@ -32,7 +32,7 @@ The mounted parent owns event subscription and application-level `Event -> Msg`.
 
 - Implementing destination code directly in this umbrella change.
 - Replacing the TuiRealm registry, destination `AppComponent`s, central keyboard router, render tree, theme, Hero, or Pill components.
-- Restoring all mouse behavior. `restore-mouse-support` owns delivery, gestures, overlays, and precedence; the slice changes own canonical list hit regions and parent delegation.
+- Any mouse behavior. `restore-mouse-support` (#638) owns all of it (delivery, gestures, overlays, precedence, `HitRegions<Target>` on the canonical controls, and per-surface row-hit migration) and lands last. No canonical slice builds or wires mouse.
 - Changing Service, Player, Queue authority, provider protocols, daemon boundaries, persistence formats, or content fetching.
 - Applying the one-column control to non-hero browsers whose existing contract permits two columns.
 - Creating a generic widget framework, renderer callback API, provider trait hierarchy, or independently mounted component per list child or row.
@@ -48,7 +48,7 @@ Five separate OpenSpec changes and PRs implement the work:
 1. **Foundation + Emby/TV:** shared row/viewport types, both controls, hero-bearing generic Emby catalog browsing, Movies, the Emby homevideos feed view, the Emby podcast channel list, narrow TV Series browsing, and the Wide TV right rail.
 2. **Home + Feeds:** Home sections and Feeds grouping on the shared controls.
 3. **Music + Audiobookshelf:** grouped Music albums plus Audiobookshelf Podcast shows and Books.
-4. **Queue:** fixed-row-only adoption, including Queue row hit ownership and bounded progress presentation.
+4. **Queue:** fixed-row-only adoption and bounded progress presentation.
 5. **Cleanup + reconciliation:** cross-family obsolete-loop and geometry deletion, exact inventory verification, docs/spec synchronization, and final campaign gates.
 
 Each implementation PR targets `feat/migrate-tui-to-tuirealm`. PR #606 merges only after all five are merged into that branch and this umbrella's gates pass. A squash may combine commits inside one slice but never combines slices; each PR remains a review and rollback boundary.
@@ -130,19 +130,11 @@ Before a slice replaces TV or Music handoff logic, it characterizes the current 
 - **Keep two live variants synchronized every frame.** Rejected as a cursor mirror with two owners.
 - **Move cursor/scroll back to `App`.** Rejected because the reusable control owns the state its geometry resolves.
 
-### D6 — Parent recognizes events; child resolves list geometry
+### D6 — Parent maps keyboard; mouse is deferred to #638
 
 The parent maps destination-local keyboard input to the embedded control's update API. Global chords remain owned by `router.rs`/`key_policy.rs`.
 
-For mouse input:
-
-1. the mounted parent receives `Event::Mouse` through its existing TuiRealm subscription;
-2. the parent's `MouseGestureState` recognizes click, double click, context click, or scroll;
-3. the embedded control owns and queries `HitRegions<Target>` populated by its latest view;
-4. the child returns a stable target or list-local scroll result;
-5. the parent emits the destination-specific typed request when work crosses authority.
-
-Parent-owned pills, workspace children, Queue scope buttons, and overlays keep their own regions; when a recognized point falls within the embedded list rectangle, the child's explicit list targets are resolved before any parent workspace target. An embedded control never subscribes or owns a second gesture recognizer. `restore-mouse-support` is revised to remove Queue/list row-hit ownership that would collide with slices; it retains delivery, primitives, overlays, and precedence. The per-surface canonical row-hit enum to `HitRegions<Target>` migration is owned by each canonical slice as it migrates its destination, not by `restore-mouse-support`.
+Mouse input is entirely out of campaign scope. No canonical slice adds a mouse subscription, `MouseGestureState`, `HitRegions<Target>`, or parent-to-child point delegation, and no canonical slice touches the existing bespoke `*HitRegion` enums or hit-test code, which stay wired and untouched. `restore-mouse-support` (#638) lands as the final change on `feat/migrate-tui-to-tuirealm`, after every canonical slice, and owns all mouse work end to end: the delivery spine, gestures, arbitration, overlays, precedence, adding `HitRegions<Target>` to the landed `WideMediaList`/`InlineMediaBrowser`, and the per-surface (Queue included) row-hit migration onto those controls.
 
 ### D7 — Arrangements place; child geometry stays local
 
@@ -169,13 +161,13 @@ Before implementation slices begin:
 - `restore-feed-group-inline-expansion` is narrowed to the #634/#637 Emby homevideos feed view (and Emby podcast channel list) Narrow inline-expansion defect and lands independently. It removes its conflicting Wide expansion. That feed view is a separate surface from the Feeds Service: slice 1 — not slice 2 — later composes it with the canonical `InlineMediaBrowser`, without taking ownership of the bug-fix change's acceptance criteria. The Home/Feeds slice depends on `restore-feeds-service-wide-list` (#623, task 1.3a) plus the foundation, not on #634/#637.
 - `restore-feeds-service-wide-list` independently corrects issue #623 in the Feeds Service/tab Wide panel (one column, rail framing, and selected-row geometry) before slice 2, and that accepted one-column baseline plus the foundation is the Home/Feeds slice's baseline. It does not touch the Emby homevideos feed view fixed by #634/#637.
 - Slice 3 owns Audiobookshelf Books and Podcasts together, including non-list arrangement/geometry defects required for canonical composition, and repairs them without bespoke exceptions; no standalone prerequisite is sequenced.
-- `restore-mouse-support` records D6's parent-gesture/child-hit contract and removes overlapping canonical list row-hit tasks before slice 1 begins.
+- `restore-mouse-support` (#638) is not a prerequisite and is not revised by this campaign. It lands as the final change on the feature branch, after all five canonical slices, and owns all mouse work end to end.
 
 ### D11 — Verification combines focused automation and explicit manual evidence
 
 Issue #641 demonstrated that some passing characterization was vacuous because fixtures lacked metadata or relevant state. Existing tests are reused only when their fixtures exercise the migrated path.
 
-**Controlling order for any rendered media-list surface:** production visual correction first; then explicit user live visual approval of the running result; then — and only then — any UI fixture, characterization-buffer, or rendered/geometry test change for that surface. Characterization performed before that approval is read-only: source reading, unchanged existing evidence, and manual observation only, adding or editing no test or fixture. Non-visual tests (delivery, arbitration, selectable-index, gesture recognition in isolation) MAY precede approval. This order is the `ui-design-system` "Visual verification precedes UI tests" requirement this change adds; every slice inherits it.
+**Controlling order for any rendered media-list surface:** production visual correction first; then explicit user live visual approval of the running result; then — and only then — any UI fixture, characterization-buffer, or rendered/geometry test change for that surface. Characterization performed before that approval is read-only: source reading, unchanged existing evidence, and manual observation only, adding or editing no test or fixture. Non-visual tests (delivery, arbitration, selectable-index) MAY precede approval. This order is the `ui-design-system` "Visual verification precedes UI tests" requirement this change adds; every slice inherits it.
 
 Each slice must provide:
 
@@ -216,6 +208,19 @@ The umbrella is archived only after all slice PRs, independent fixes, manual evi
 
 No bespoke exception is planned. Any discovered exception requires an umbrella design/spec update before its slice proceeds.
 
+### D15 — Slices 2–4 develop concurrently; integrate sequentially
+
+After slice 1 (foundation) merges, slices 2 (Home/Feeds), 3 (Music/Audiobookshelf), and 4 (Queue) have no dependency on each other and MAY be developed in parallel, each in its own worktree branched from the post-slice-1 `feat/migrate-tui-to-tuirealm`. They touch disjoint destination components.
+
+Integration stays sequential: each merges as its own PR and rollback boundary, rebased on `feat/migrate-tui-to-tuirealm` as the prior slice lands. Slices are never combined into one merge or squash. Slice 5 (cleanup) merges only after 2–4 are all green.
+
+Concurrent branches contend only on shared glue — `src/app/shell.rs` mount sites, `src/app/layout.rs`, arrangement primitives, `CONTEXT.md`, and the interactive-surface ledger; the last slice to merge absorbs that rebase. `LayoutMain` field deletion stays in slice 5 (D7) so concurrent slices only read those fields.
+
+**Alternatives considered:**
+
+- **One combined merge of 2–4.** Rejected: issue #641 requires distinct PR/rollback boundaries and forbids cross-squashing slices.
+- **Strict serial development of 2–4.** Rejected: they are destination-disjoint; serializing adds calendar time for no isolation benefit.
+
 ## Risks / Trade-offs
 
 - **[PR #606 grows while blocked]** -> Review five stacked slice PRs independently; never combine family slices into one squash or review unit.
@@ -225,7 +230,7 @@ No bespoke exception is planned. Any discovered exception requires an umbrella d
 - **[Images disappear after composition]** -> Require per-slice image-enabled and images-disabled evidence for affected destinations.
 - **[Structural headings become selectable]** -> Keep display rows separate from selectable targets and cover the mapping with one focused table.
 - **[Queue expands the shared API]** -> Admit only a bounded prepared progress percentage; keep Queue scope, reorder, playback, and title behavior parent-owned.
-- **[Mouse work collides with Queue/list migration]** -> Record D6 in both umbrella and `restore-mouse-support`; make canonical list row hits slice-owned.
+- **[Mouse work creeps into the canonical slices]** -> All mouse work is `restore-mouse-support`-owned and lands last; no slice task, spec, or dependency references mouse, `HitRegions`, or gestures.
 - **[The abstraction becomes a callback framework]** -> Hold the model to prepared data plus opaque targets and require an umbrella update for callbacks.
 - **[A slice crosses the file cap]** -> Split named near-limit files before or with wiring and run the gate in every slice.
 - **[Superseded standalone Audiobookshelf `#640` work remains present]** -> `restore-audiobookshelf-podcast-wide-layout` is archived without execution; revert any standalone implementation still present and absorb the required Audiobookshelf Books/Podcasts repairs in slice 3; require user live visual approval before changing or adding regression tests.
@@ -233,10 +238,10 @@ No bespoke exception is planned. Any discovered exception requires an umbrella d
 ## Migration Plan
 
 1. Land the revised umbrella planning artifacts; keep PR #606 blocked.
-2. Land `restore-feed-group-inline-expansion` (#634/#637) independently as the Emby homevideos feed view Narrow inline-expansion fix — a separate surface from the Feeds Service, later composed by slice 1, not a Home/Feeds-slice dependency. Reconcile `restore-mouse-support` with D6. Land `restore-feeds-service-wide-list` (#623, task 1.3a) before the Home/Feeds slice; it plus the foundation is that slice's baseline. Audiobookshelf Books/Podcasts repairs belong to the canonical Music/Audiobookshelf slice; `restore-audiobookshelf-podcast-wide-layout` (#640) is superseded and archived without execution.
+2. Land `restore-feed-group-inline-expansion` (#634/#637) independently as the Emby homevideos feed view Narrow inline-expansion fix — a separate surface from the Feeds Service, later composed by slice 1, not a Home/Feeds-slice dependency. Land `restore-feeds-service-wide-list` (#623, task 1.3a) before the Home/Feeds slice; it plus the foundation is that slice's baseline. Audiobookshelf Books/Podcasts repairs belong to the canonical Music/Audiobookshelf slice; `restore-audiobookshelf-podcast-wide-layout` (#640) is superseded and archived without execution.
 3. Create and approve all five slice OpenSpec changes, each naming its branch dependency, exact destination inventory, file splits, automated evidence, and manual checks.
-4. Land slice 1 through slice 4 as separate PRs against `feat/migrate-tui-to-tuirealm`; do not cross-squash slices.
+4. Land slice 1 through slice 4 as separate PRs against `feat/migrate-tui-to-tuirealm`; do not cross-squash slices. Slices 2–4 MAY be built concurrently in separate worktrees off post-slice-1 `feat/migrate-tui-to-tuirealm` (D15); they still integrate as separate sequential PRs, each rebased as the prior lands.
 5. Land slice 5 cleanup/reconciliation after all destination slices are green.
-6. Run `openspec validate --strict` for the umbrella, the five canonical slices (`introduce-canonical-media-list-foundation`, `migrate-home-feeds-to-canonical-lists`, `migrate-music-audiobookshelf-to-canonical-lists`, `migrate-queue-to-canonical-list`, `remove-bespoke-media-list-loops`), `restore-feed-group-inline-expansion`, `restore-feeds-service-wide-list`, `restore-mouse-support`, and the superseded `restore-audiobookshelf-podcast-wide-layout` (#640, expected `apply` inventory 0/0); run final branch gates. Then close out in discrete order per tasks 5.3a and 5.4: (1) manual pre-sync reconciliation; (2) archive the five slices plus the independent `restore-feed-group-inline-expansion` / `restore-feeds-service-wide-list` fixes and the superseded `restore-audiobookshelf-podcast-wide-layout`, whose deltas sync normally; (3) archive the umbrella `--skip-specs`, keeping its `specs/` tree as the contract-of-record reference; (4) hand-merge the umbrella's `ui-design-system` and `interactive-component-framework` requirements into `openspec/specs/`. Then merge PR #606.
+6. Run `openspec validate --strict` for the umbrella, the five canonical slices (`introduce-canonical-media-list-foundation`, `migrate-home-feeds-to-canonical-lists`, `migrate-music-audiobookshelf-to-canonical-lists`, `migrate-queue-to-canonical-list`, `remove-bespoke-media-list-loops`), `restore-feed-group-inline-expansion`, `restore-feeds-service-wide-list`, `restore-mouse-support`, and the superseded `restore-audiobookshelf-podcast-wide-layout` (#640, expected `apply` inventory 0/0); run final branch gates. After all five canonical slices land, and before the close-out below, land `restore-mouse-support` (#638) as the final change on the feature branch — it archives with its own umbrella (#603), not this campaign, but #641's gate and the PR #606 merge both wait for it. Then close out in discrete order per tasks 5.3a and 5.4: (1) manual pre-sync reconciliation; (2) archive the five slices plus the independent `restore-feed-group-inline-expansion` / `restore-feeds-service-wide-list` fixes and the superseded `restore-audiobookshelf-podcast-wide-layout`, whose deltas sync normally; (3) archive the umbrella `--skip-specs`, keeping its `specs/` tree as the contract-of-record reference; (4) hand-merge the umbrella's `ui-design-system` and `interactive-component-framework` requirements into `openspec/specs/`. Then merge PR #606.
 
 Rollback is one slice PR at a time. Reverting a slice must not restore global legacy interaction infrastructure or activate two painters as a fallback.

@@ -68,7 +68,7 @@ The active Queue state MAY carry a prepared `progress_percent` payload bounded t
 
 - **WHEN** Music artist groups or Feed date groups are projected into a canonical media list
 - **THEN** group labels use heading rows and visual separation uses spacer rows
-- **AND** movement and pointer resolution skip those structural rows
+- **AND** movement skips those structural rows
 
 #### Scenario: Queue displays its active item
 

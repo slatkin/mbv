@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Embedded canonical controls remain under the mounted parent
-A canonical media-list control SHALL be a plain embedded TuiRealm `Component`, not an independently mounted component. It SHALL have no registry identity, subscription, focus-stack entry, second router, global mouse map, callback/provider framework, or effect execution. The mounted destination parent remains the application event boundary; its mouse subscription and `MouseGestureState` are owned by the landed `restore-mouse-support` mouse spine, not established by this slice, and under that spine it delegates child list hits through the child's view-populated `HitRegions<Target>`.
+A canonical media-list control SHALL be a plain embedded TuiRealm `Component`, not an independently mounted component. It SHALL have no registry identity, subscription, focus-stack entry, second router, callback/provider framework, or effect execution. The mounted destination parent remains the application event boundary. Mouse is out of scope for this slice: no mouse subscription, `MouseGestureState`, `HitRegions<Target>`, or parent-to-child point delegation is added, and existing bespoke `*HitRegion` paths stay wired and untouched; `restore-mouse-support` (#638) lands after every canonical slice and owns all mouse work.
 
 #### Scenario: Parent translates a child intent
 - **WHEN** a canonical control resolves activation or movement
@@ -11,7 +11,7 @@ A canonical media-list control SHALL be a plain embedded TuiRealm `Component`, n
 - **AND** Service, Player, persistence, and effects remain shell-owned.
 
 ### Requirement: Component-local values are not mirrored
-The embedded control SHALL own live cursor, scroll, selection, viewport, and render-derived hit geometry. Shell projections SHALL carry content only; responsive transitions use explicit selected-target plus selected-row-offset handoff, and persisted resting position is written only at navigation events.
+The embedded control SHALL own live cursor, scroll, selection, viewport, and internal row geometry for painting and scrolling. Shell projections SHALL carry content only; responsive transitions use explicit selected-target plus selected-row-offset handoff, and persisted resting position is written only at navigation events.
 
 #### Scenario: A refresh does not overwrite local position
 - **WHEN** the shell pushes ordinary refreshed content

@@ -16,13 +16,13 @@ The parent prepares canonical rows containing stable `QueueSlotId`, title/metada
 
 Local/Remote scope and its controls, reorder, playback, title, Player/queue authority, persistence, and active-state decisions remain in Queue parent/shell code. Child movement is local; every slot-targeted effect uses a stable `QueueSlotId`. A destination position is permitted only for reorder and must be resolved against that same canonical queue. Do not add an App mirror or per-frame writeback.
 
-### D4 — Mouse ownership
+### D4 — Mouse is out of scope
 
-The mounted Queue parent subscribes to mouse events and owns `MouseGestureState`. The child records and resolves `HitRegions<QueueSlotId>` while painting. The parent delegates row point resolution and translates it to a semantic request; scope controls and other Queue chrome remain parent-owned. Do not restore the legacy global hit map or duplicate coordinate arithmetic from restore-mouse-support.
+Mouse is out of scope for this slice. Queue's existing hit-region path stays wired and untouched. `restore-mouse-support` (#638), landing after this slice, adds `HitRegions<QueueSlotId>` to the embedded `WideMediaList` and migrates Queue's row hits. This slice adds no mouse subscription, `MouseGestureState`, or parent-to-child point delegation.
 
 ### D5 — Verification order
 
-Before explicit user live approval, characterization is limited to source trace, existing unchanged evidence, and manual observation; it must not modify UI tests or use test-driven appearance. Then perform visual correction at supported widths and obtain explicit user live confirmation. Only afterward change/add UI tests. Tests and evidence must prove one painter, child hit geometry, target preservation, and ≤800-line changed source files.
+Before explicit user live approval, characterization is limited to source trace, existing unchanged evidence, and manual observation; it must not modify UI tests or use test-driven appearance. Then perform visual correction at supported widths and obtain explicit user live confirmation. Only afterward change/add UI tests. Tests and evidence must prove one painter, child row geometry, target preservation, and ≤800-line changed source files.
 
 ### D6 — Stacking and rollback
 
@@ -32,5 +32,4 @@ At implementation start, record the accepted canonical-foundation merge SHA, the
 
 - Cursor/scroll drift on refresh: preserve stable target and clamp only when content changes invalidate it.
 - Progress or domain leakage: keep the projection closed and bounded.
-- Scope/row hit overlap: child resolves only painted rows; parent resolves scope/chrome.
 - Underpainting: source-trace and execution evidence for one Queue body painter per reachable breakpoint.

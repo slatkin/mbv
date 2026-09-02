@@ -5,7 +5,7 @@ The canonical media-list foundation introduces two embedded controls: `InlineMed
 ## Decisions
 
 ### D1 — Compose, do not duplicate
-Home sections and Feeds SHALL prepare provider-neutral rows and embed the canonical controls. Existing parent components retain Service effects, selection restoration, images, workspaces, group/filter state, and typed message translation. Controls retain cursor, scroll, replacement admission, geometry, and `HitRegions`.
+Home sections and Feeds SHALL prepare provider-neutral rows and embed the canonical controls. Existing parent components retain Service effects, selection restoration, images, workspaces, group/filter state, and typed message translation. Controls retain cursor, scroll, replacement admission, and internal paint/scroll geometry.
 
 ### D2 — Home identity and state
 Home section preparation preserves stable `pref_key` and `restore_section` identity. Home has exactly one active section and one flat cursor/scroll position at a time; only the active section's rows are projected into the canonical control. That single active-section cursor/scroll is carried through the canonical control and preserved on refresh and breakpoint handoff using `ViewportAnchor`. No per-section cursor cache and no App-wide interaction mirror are added.
@@ -17,11 +17,7 @@ As canonical-list content: FeedAgeGroup / date labels become non-selectable `Hea
 The accepted Feeds Wide one-column/framing baseline is a prerequisite, not reimplemented here. The outstanding two-space row-indent correction is applied in the canonical source-of-truth painter/model so Home and Feeds cannot drift.
 
 ### D5 — Ownership and verification
-Mouse ownership split:
-
-- The mounted destination parent / AppComponent owns the mouse subscription, raw gesture recognition and delivery, arbitration, blocking-overlay behavior, and `MouseGestureState`.
-- The embedded canonical control owns only view-populated `HitRegions<Target>` and list-local updates (it also retains cursor, scroll, and replacement geometry per D1).
-- The parent delegates point resolution to the child; there is no second gesture recognizer in the child.
+Mouse: out of scope; `restore-mouse-support` (#638) owns it and lands last. This slice adds no mouse subscription, `MouseGestureState`, `HitRegions<Target>`, or parent-to-child point delegation, and existing bespoke `*HitRegion` paths stay wired and untouched.
 
 Keyboard resolution stays solely in `router.rs`/`key_policy.rs`. Characterize current output and behavior first by source-reading and manual observation only. Perform live Wide/Narrow visual correction and obtain explicit user live visual approval before changing or adding any UI test or fixture; then add focused buffer/geometry tests with metadata, groups, focus, progress, images, and watched states.
 
@@ -32,5 +28,5 @@ Do not change non-hero two-column policies or Emby homevideos feed-view work. Th
 
 - State jumps at variant transitions: record and assert target/offset anchors.
 - Structural rows becoming selectable: test display-row versus selectable-index mapping.
-- Duplicate painting/hit geometry: source-trace one-painter evidence per destination.
+- Duplicate list painting: source-trace one-painter evidence per destination.
 - Visual regressions: user live verification precedes UI test edits.

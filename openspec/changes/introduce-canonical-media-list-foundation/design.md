@@ -14,7 +14,7 @@ The parent supplies prepared content and receives typed intents; it retains Serv
 
 ### D1 — Two embedded controls, not a framework
 
-`WideMediaList<Target>` owns fixed row placement, selectable indexing, cursor, scroll, viewport, scrollbar, semantic row rendering, and render-derived `HitRegions<Target>`. It is one-column and fixed-height; it is used by Hero-on-left rails and may later serve Queue fixed rows. It does not accept column-count or Inline detail options. `InlineMediaBrowser<Target>` owns the same list mechanics plus selected-row replacement, variable-height admission, fallback to the ordinary row, and replacement hit geometry. Shared private helpers are allowed; no third public widget abstraction is.
+`WideMediaList<Target>` owns fixed row placement, selectable indexing, cursor, scroll, viewport, scrollbar, semantic row rendering, and internal row geometry for painting and scrolling (no mouse hit-resolution API; `restore-mouse-support` adds that later). It is one-column and fixed-height; it is used by Hero-on-left rails and may later serve Queue fixed rows. It does not accept column-count or Inline detail options. `InlineMediaBrowser<Target>` owns the same list mechanics plus selected-row replacement, variable-height admission, fallback to the ordinary row, and replacement paint geometry. Shared private helpers are allowed; no third public widget abstraction is.
 
 ### D2 — Provider-neutral prepared model
 
@@ -24,9 +24,9 @@ The public model is a small closed vocabulary: selectable `Item { target, primar
 
 The active variant alone owns live cursor/scroll. At a breakpoint transition the parent passes `ViewportAnchor { selected_target, selected_row_offset }`, where offset is the zero-based screen-row offset from viewport top to the selected ordinary row. The receiving control preserves it where possible and clamps it otherwise. Ordinary content refresh preserves target and locally clamps; persisted resting position remains shell-owned and is written only at navigation events. Characterize current TV behaviour before replacement by source-reading and manual observation only, adding no test or fixture, and match it absent an approved correction. The metadata-bearing characterization fixture is added only after user live visual approval (tasks 4.1/4.2).
 
-### D4 — Mouse seam and authority
+### D4 — Mouse is out of scope for this slice
 
-The full mouse seam is a CONTRACT this slice composes, not one it builds. The landed `restore-mouse-support` mouse spine owns the mounted parent's mouse subscription, raw gesture recognition and delivery, arbitration, blocking-overlay behavior, and `MouseGestureState`. Under that spine the mounted parent recognizes parent-owned pills/workspace/overlays; the child populates and resolves its own `HitRegions<Target>` during view; the parent delegates list point resolution and translates results to destination-specific typed messages. This slice adds only that child delegation and removes the old row-coordinate path. No global map, second router, child subscription, or duplicate row coordinate path exists. Keyboard precedence remains solely in `router.rs`/`key_policy.rs`.
+This slice adds no mouse subscription, `MouseGestureState`, `HitRegions<Target>`, or parent-to-child point delegation, and it does not touch the existing bespoke `*HitRegion` paths, which stay wired and untouched. `restore-mouse-support` (#638) lands after every canonical slice and owns all mouse work, including adding `HitRegions<Target>` to `WideMediaList`/`InlineMediaBrowser` and the per-surface row-hit migration. Keyboard precedence remains solely in `router.rs`/`key_policy.rs`.
 
 ### D5 — Composition and visual proof
 

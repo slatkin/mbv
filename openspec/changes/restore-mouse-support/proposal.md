@@ -24,6 +24,11 @@ the framework must absorb them additively.
 
 ## What Changes
 
+- **Final change on the feature branch.** This is the FINAL change on
+  `feat/migrate-tui-to-tuirealm`. It depends on all five
+  `compose-canonical-media-lists` slices being merged. PR #606 merges only after
+  this lands. It is not revised as a prerequisite by that campaign and is not a
+  dependency of any canonical slice.
 - **New mouse delivery spine.** Every mounted destination parent subscribes to
   mouse events through TuiRealm's `EventClause::Mouse` subscription clause and
   hit-tests the non-list chrome it last painted, delegating canonical list points
@@ -37,9 +42,10 @@ the framework must absorb them additively.
   recognizer (raw events in; `Click`,
   `DoubleClick`, `RightClick`, `Scroll` out — `DragStart/Move/End` and
   `HoverEnter/Leave` reserved). These replace the scattered `note_browse_*`
-  helpers, and — for canonical list row hits only — the per-surface row-hit
-  `*HitRegion` enums in `msg/hit_regions.rs` (removed by the canonical media-list
-  slices as they migrate each destination). Parent chrome target types (pills,
+  helpers. This change adds `HitRegions<Target>` to the already-landed
+  `WideMediaList`/`InlineMediaBrowser`, migrates every per-surface `*HitRegion`
+  enum in `msg/hit_regions.rs` onto it (Queue included), and deletes those enums.
+  Parent chrome target types (pills,
   Queue scope buttons, seekbar/transport) and overlay/popup target enums MAY
   remain as their own types.
 - **Gesture recognition moves into mounted parents.** The double-click window and
@@ -51,14 +57,13 @@ the framework must absorb them additively.
   gestures. Parent-owned pills, Queue scope buttons, overlays, Playback seekbar,
   and non-list wheel/chrome retain their own geometry. Embedded canonical
   media-list controls own view-populated `HitRegions<Target>` for painted list
-  rectangles; parents delegate point resolution. Queue/list row-hit migration
-  belongs to the canonical media-list slices, with no duplicate coordinate path
-  delivered here.
+  rectangles; parents delegate point resolution. Queue/list row-hit migration is
+  owned here, onto the landed canonical controls' `HitRegions<Target>`.
 - **`PlaybackComponent` mouse reachable.** Seekbar scrub and transport-button
   clicks work regardless of which component holds focus.
 - **Browse wheel ownership.** Parent-owned non-list wheel/chrome behavior is
-  restored here; Emby/ABS/Feeds canonical list scrolling belongs to the
-  canonical media-list slices and is reached through parent gesture delivery.
+  restored here; Emby/ABS/Feeds canonical list scrolling is wired here onto the
+  landed canonical controls through parent gesture delivery.
 - **Ledger and gates.** `docs/architecture/interactive-surface-ledger.md` gains a
   Mouse ownership/verification column replacing its "Mouse ownership is out of
   scope" section. The three deferred D16 precedence proofs (simultaneous

@@ -20,7 +20,7 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 - **AND** it cannot be selected or activated
 
 ### Requirement: WideMediaList owns fixed-row mechanics
-`WideMediaList<Target>` SHALL be an embedded plain TuiRealm `Component` that owns cursor, scroll, viewport, fixed-height one-column row placement, semantic painting delegation, scrollbar, movement, clamping, and view-populated `HitRegions<Target>`. It SHALL support Hero-on-left rails and later Queue fixed rows, but SHALL NOT implement Inline replacement or a non-hero two-column policy.
+`WideMediaList<Target>` SHALL be an embedded plain TuiRealm `Component` that owns cursor, scroll, viewport, fixed-height one-column row placement, semantic painting delegation, scrollbar, movement, clamping, and internal row geometry for painting and scrolling. It SHALL support Hero-on-left rails and later Queue fixed rows, but SHALL NOT implement Inline replacement or a non-hero two-column policy. It SHALL expose no mouse hit-resolution API; `restore-mouse-support` (#638) adds `HitRegions<Target>` later.
 
 #### Scenario: Wide TV rail composes the control
 - **WHEN** the TV surface is Hero-on-left
@@ -28,7 +28,7 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 - **AND** the parent retains workspace, hero, images, and effects
 
 ### Requirement: InlineMediaBrowser owns selected-row replacement
-`InlineMediaBrowser<Target>` SHALL be an embedded plain TuiRealm `Component` owning one-column placement, selection visibility, variable-height selected-row replacement admission, ordinary-row fallback when replacement cannot fit, and matching parent/child hit geometry. It SHALL be distinct from Inline Search and SHALL not become a second mounted identity or router.
+`InlineMediaBrowser<Target>` SHALL be an embedded plain TuiRealm `Component` owning one-column placement, selection visibility, variable-height selected-row replacement admission, ordinary-row fallback when replacement cannot fit, and its internal row and replacement geometry for painting and scrolling. It SHALL be distinct from Inline Search and SHALL not become a second mounted identity or router. It SHALL expose no mouse hit-resolution API; `restore-mouse-support` (#638) adds `HitRegions<Target>` later.
 
 #### Scenario: A selected row is replaced
 - **WHEN** the selected item fits the Inline presentation
@@ -42,14 +42,6 @@ At Wide↔Narrow transitions the parent SHALL hand off `ViewportAnchor { selecte
 - **WHEN** TV changes Wide→Narrow→Wide
 - **THEN** characterization records the existing selected target, cursor, scroll, and screen-row offset
 - **AND** replacement matches that evidence unless separately approved
-
-### Requirement: Parent owns mouse delivery and child owns row hits
-The mounted parent's TuiRealm mouse subscription and `MouseGestureState` are owned by the landed `restore-mouse-support` mouse spine and SHALL NOT be established or re-implemented by this slice. Under that spine the mounted parent SHALL deliver gestures and the embedded control SHALL populate and resolve `HitRegions<Target>` from its latest view. This slice SHALL add only the parent's delegation of list points to the child and the removal of the old row-coordinate path, and SHALL translate the result to typed destination requests. No child subscription, global hit map, second router, or duplicate row-coordinate path is permitted. Parent-owned pills, workspace controls, overlays, and keyboard precedence remain parent/router-owned.
-
-#### Scenario: A list click resolves painted geometry
-- **WHEN** a mouse gesture lands on a painted list row
-- **THEN** the parent delegates to the embedded control's regions
-- **AND** the stable target is returned without recomputing row coordinates
 
 ### Requirement: Named destinations compose without changing provider authority
 The slice SHALL compose hero-bearing generic Emby catalogs, Movies, the Emby homevideos feed view, the Emby podcast channel list, narrow TV Series browsing, and Wide TV's right rail. Non-hero two-column Emby catalogs SHALL keep their existing two-column arrangement policy and SHALL NOT be forced onto `InlineMediaBrowser`. Provider workspaces, images, effects, persistence, Service and Player authority, and typed message translation SHALL remain in their existing parents/shell. Non-hero two-column browsers SHALL retain their policy.

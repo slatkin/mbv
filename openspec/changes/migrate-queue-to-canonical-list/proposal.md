@@ -7,12 +7,11 @@ Queue still owns destination-specific fixed-row mechanics instead of composing t
 - Characterize the accepted Queue output and interactions, then compose `WideMediaList<QueueSlotId>` directly inside the mounted Queue parent.
 - Project Queue rows as provider-neutral selectable items with stable `QueueSlotId` targets, metadata, active state, and bounded `progress_percent` (`0..=100`) as presentation data only.
 - Keep Local/Remote scope, scope controls, reorder, playback, title, Player/queue authority, persistence, and active state in the Queue parent/shell.
-- Make the embedded child own row `HitRegions<QueueSlotId>`; the mounted parent owns mouse subscription and `MouseGestureState` and delegates point resolution.
 - Preserve visual output after live user verification, then update focused tests; include one-painter and file-size evidence.
 
 ## Scope
 
-Queue only. Hero-on-left, InlineMediaBrowser, Inline hero, responsive Wide/Inline handoff, Feeds, and Audiobookshelf are not applicable. The work stacks on PR #606's feature branch and remains independently reversible from sibling slices.
+Queue only. Hero-on-left, InlineMediaBrowser, Inline hero, responsive Wide/Inline handoff, Feeds, and Audiobookshelf are not applicable. Mouse (subscription, gestures, `HitRegions<QueueSlotId>`) is out of scope and owned by `restore-mouse-support` (#638); Queue's existing `QueueHitRegion` path stays wired and untouched. The work stacks on PR #606's feature branch and remains independently reversible from sibling slices.
 
 ## Impact
 

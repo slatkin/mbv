@@ -4,7 +4,7 @@
 
 ### Requirement: Queue composes canonical fixed-row mechanics
 
-The Queue Interactive Component SHALL embed `WideMediaList<QueueSlotId>` directly for Queue's fixed-height rows. Queue SHALL NOT use `InlineMediaBrowser`, Hero-on-left, Inline hero, or responsive Wide/Inline handoff. Queue SHALL NOT duplicate selectable indexing, fixed-row placement, cursor movement, scrolling, scrollbar geometry, or row hit testing in the parent or shell. Every slot-targeted Queue effect request SHALL identify its stable `QueueSlotId`; only reorder MAY carry a destination position, and that position SHALL be resolved against the same canonical queue.
+The Queue Interactive Component SHALL embed `WideMediaList<QueueSlotId>` directly for Queue's fixed-height rows. Queue SHALL NOT use `InlineMediaBrowser`, Hero-on-left, Inline hero, or responsive Wide/Inline handoff. Queue SHALL NOT duplicate selectable indexing, fixed-row placement, cursor movement, scrolling, or scrollbar geometry in the parent or shell. Every slot-targeted Queue effect request SHALL identify its stable `QueueSlotId`; only reorder MAY carry a destination position, and that position SHALL be resolved against the same canonical queue.
 
 #### Scenario: Queue renders canonical rows
 
@@ -36,23 +36,6 @@ Queue SHALL project selectable rows with stable opaque `QueueSlotId` targets and
 - **THEN** the child preserves its local cursor and scroll where the selected `QueueSlotId` remains present
 - **AND** it clamps or resets only when the target is absent or content no longer permits the position
 - **AND** the shell does not mirror the child cursor or scroll per frame
-
-### Requirement: Queue owns the mouse seam without duplicate geometry
-
-The mounted Queue parent SHALL own its mouse subscription and `MouseGestureState`. The embedded child SHALL populate and resolve `HitRegions<QueueSlotId>` from the geometry it paints. The parent SHALL delegate list-point resolution to the child and translate the result to a semantic Queue request; no restore-mouse-support global hit map or second coordinate path SHALL be introduced.
-
-#### Scenario: A Queue row click resolves once
-
-- **WHEN** the user clicks a painted Queue row
-- **THEN** the child resolves the point to one `QueueSlotId`
-- **AND** the parent handles gesture timing/focus and emits a typed semantic request
-- **AND** the shell does not re-resolve screen coordinates
-
-#### Scenario: Queue scope controls remain parent-owned
-
-- **WHEN** the user clicks Local or Remote scope controls
-- **THEN** the Queue parent resolves those parent-owned targets and applies existing scope rules
-- **AND** the canonical child is used only for Queue row geometry
 
 ### Requirement: Queue preserves the visual contract before test changes
 

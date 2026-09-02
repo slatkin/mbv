@@ -4,13 +4,13 @@
 
 - [ ] 1.1 Confirm the clean accepted starting point and PR `feat/migrate-tui-to-tuirealm` targeting/rollback boundary at implementation time; record accepted SHAs for the canonical foundation and all three sibling destination slices in the implementation issue, not in this plan.
 - [ ] 1.2 Confirm dependency order: canonical foundation first; Home/Feeds, Music/Audiobookshelf, and Queue are independent siblings; cleanup waits for all four accepted slices.
-- [ ] 1.3 Inventory exact obsolete `render_*_rows` loops and bespoke painters; old selection/scroll/row-hit/cursor geometry; and `AppLayout::main` left/hero/selector/wide-family fields. Record ast-grep/grep callers, readers, and writers.
+- [ ] 1.3 Inventory exact obsolete `render_*_rows` loops and bespoke painters; old selection/scroll/cursor geometry; and `AppLayout::main` left/hero/selector/wide-family fields. Record ast-grep/grep callers, readers, and writers.
 - [ ] 1.4 Confirm #640 is superseded; preserve the Feeds Service/tab versus Emby homevideos feed-view distinction. Do not edit umbrella artifacts.
 
 ## 2. Zero-reference cleanup
 
 - [ ] 2.1 Prove zero production callers/readers/writers for each obsolete loop/painter, tracking test and docs references separately, then delete only cross-family obsolete loops and painters.
-- [ ] 2.2 Prove zero production consumers for obsolete selection, scroll, row-hit, and cursor geometry, then delete it; retain component-owned viewport and hit regions.
+- [ ] 2.2 Prove zero production consumers for obsolete selection, scroll, and cursor geometry, then delete it; retain component-owned viewport geometry and retain all row-hit / `*HitRegion` geometry for `restore-mouse-support` (#638).
 - [ ] 2.3 Prove zero production readers/writers/geometry-dependent callers for `AppLayout::main` left/hero/selector/wide-family fields, then delete them.
 - [ ] 2.4 Preserve Queue fixed-row-only behavior and make no destination-family, Service, Player, provider, protocol, persistence, dependency, or visual corrections. Route defects to the owning slice.
 

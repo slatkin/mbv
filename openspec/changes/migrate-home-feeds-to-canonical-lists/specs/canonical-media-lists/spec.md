@@ -20,10 +20,3 @@ Migrated Home and Feeds rows SHALL use the canonical row model and painter. The 
 #### Scenario: Wide Feeds remains one column
 - **WHEN** the Feeds Service/tab is rendered at an accepted Wide breakpoint
 - **THEN** it uses one column with the accepted #623 framing/background and selected-row semantics.
-
-### Requirement: Parent and embedded control ownership is explicit
-The mounted destination parent / AppComponent SHALL own the mouse subscription, raw gesture recognition and delivery, arbitration, blocking-overlay behavior, and `MouseGestureState`, in addition to application effects, section/group state, images/workspaces, and overlays. The embedded canonical control SHALL own only view-populated `HitRegions<Target>` and list-local updates, and it also retains cursor, scroll, and replacement geometry. The parent SHALL delegate point resolution to the child; there SHALL be no second gesture recognizer in the child. Keyboard resolution stays solely in `router.rs`/`key_policy.rs`.
-
-#### Scenario: Mouse target is translated once
-- **WHEN** the parent receives a point in a list
-- **THEN** it delegates to the embedded control's hit regions and translates the resulting typed target exactly once.

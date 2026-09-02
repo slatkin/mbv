@@ -164,17 +164,17 @@ shell applies focus first so a subsequent effect sees the right focused surface.
 New `src/app/components/mouse/hit.rs`: `HitRegions<Tag>` — a control clears it
 at the top of `view()`, calls `push(rect, tag)` as it paints, and calls
 `resolve(point) -> Option<Tag>` (last-pushed-wins for overlap, or z-ordered
-explicitly). Canonical media-list controls use `HitRegions<Target>` for their
-painted list rectangle; the mounted parent recognizes the gesture and delegates
-point resolution to the child. Parent-owned pills, Queue scope buttons,
-overlays, Playback seekbar, and non-list wheel/chrome retain their own regions.
-Queue/list row-hit migration belongs to the canonical media-list slices and no
-duplicate coordinate path is delivered here. The shared `HitRegions<Tag>`
-primitive replaces the per-surface `*HitRegion` enums for canonical list row
-hits only; parent chrome target types (pills, Queue scope buttons,
-seekbar/transport) and overlay/popup target enums MAY remain as their own types.
-Per-surface row-hit enums and shell-side recognition are removed only as those
-slices migrate them.
+explicitly). This change adds a `HitRegions<Target>` field, `view()` population,
+and a `resolve(point) -> Option<Target>` method to the already-landed
+`WideMediaList` and `InlineMediaBrowser`; the mounted parent recognizes the
+gesture and delegates point resolution to the child. Parent-owned pills, Queue
+scope buttons, overlays, Playback seekbar, and non-list wheel/chrome retain
+their own regions. This change owns the full per-surface row-hit migration: for
+every surface (Queue included) it swaps the bespoke `*HitRegion` enum for the
+embedded control's `HitRegions<Target>` and deletes the enum. Nothing is
+deferred to another change. Parent chrome target types (pills, Queue scope
+buttons, seekbar/transport) and overlay/popup target enums MAY remain as their
+own types.
 
 ### D7 — Delivery model chosen so drag/hover are additive
 
@@ -229,8 +229,10 @@ than restating it.
   Phase 6 lands `tick()`-level tests for simultaneous panels and
   blocking-overlay swallow, and Phase 1 lands the overlay-vs-panel case.
 - **Phase 2 refactor of the five landed surfaces regresses working clicks** →
-  Phase 2 is a pure refactor gated on the existing per-surface mouse tests
-  staying green; characterization buffers unchanged.
+  Phase 2 is a representation-only path swap: the existing per-surface mouse
+  tests are ported to the new `resolve(point) -> Option<Target>` API and stay
+  green, and characterization buffers are unchanged (hit regions are never
+  painted).
 - **B (D3) is more upfront work than A** → accepted deliberately; A's cost is
   paid back with interest on the first drag-and-drop surface (proposal — Why).
 - **Spec deltas touch three large migration requirements** → the deltas
@@ -238,6 +240,12 @@ than restating it.
   carve-out lines; no other behaviour in those requirements moves.
 
 ## Migration Plan
+
+`restore-mouse-support` is the final change on `feat/migrate-tui-to-tuirealm`. It
+depends on all five `compose-canonical-media-lists` slices being merged; it is
+not revised as a prerequisite by that campaign and is not a dependency of any
+slice. PR #606 merges only after this change lands. It archives with its own
+umbrella (#603).
 
 Additive within one branch; each phase is a commit group that leaves the app
 runnable. No runtime data migration. Rollback = revert the phase commit; Phase 1
