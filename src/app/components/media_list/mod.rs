@@ -10,6 +10,8 @@ use crate::app::ui_util::move_cursor;
 
 mod anchor;
 mod inline;
+#[cfg(test)]
+mod tests;
 mod wide;
 
 pub use anchor::ViewportAnchor;

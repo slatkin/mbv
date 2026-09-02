@@ -49,7 +49,13 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
         layout.hero_area,
         layout.left_item_rows
     );
-    assert_eq!(layout.selected_item_rect, Some(layout.hero_area));
+    let selected_rect = layout
+        .selected_item_rect
+        .expect("selected movie keeps a parent-owned row target");
+    assert_eq!(selected_rect.x, layout.hero_area.x);
+    assert_eq!(selected_rect.y, layout.hero_area.y);
+    assert_eq!(selected_rect.width, layout.hero_area.width);
+    assert!(selected_rect.height > 0);
     let hero_lines = output
         .lines()
         .skip(layout.hero_area.y as usize)

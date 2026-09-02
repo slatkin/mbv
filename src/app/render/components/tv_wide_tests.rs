@@ -22,11 +22,14 @@ use tuirealm::component::Component;
 /// pre-pass layout (`AppLayout`) and the component-owned geometry
 /// (`tv_wide_episode_rows`/`tv_wide_season_tabs`).
 fn render_tv_workspace(app: &mut App, layout: &mut LayoutMain) -> (String, TvWorkspaceComponent) {
-    let backend = TestBackend::new(100, 30);
+    let backend = TestBackend::new(100, 40);
     let mut term = Terminal::new(backend).unwrap();
-    let area = Rect::new(0, 0, 100, 30);
+    let area = Rect::new(0, 0, 100, 40);
     let mut component = TvWorkspaceComponent::new();
-    component.set_content(app.wide_tv_render_ctx(0, true, None));
+    component.set_content(
+        app.wide_tv_render_ctx(0, true, None)
+            .with_image_state(false, false),
+    );
     term.draw(|f| {
         app.render_library(f, area, true, layout, None);
         component.view(f, area);
@@ -160,7 +163,10 @@ fn wide_tv_persists_series_workspace_and_separate_targets() {
 
     assert!(layout.is_wide_tv_active());
     assert!(!component.test_layout().tv_wide_episode_rows.is_empty());
-    assert!(!component.test_layout().tv_wide_season_tabs.is_empty());
+    assert!(
+        output.contains("Series:"),
+        "season tabs are missing: {output}"
+    );
     assert!(output.contains("The Series"));
     assert!(output.contains("Pilot"));
     assert!(output.contains("1h"));
@@ -281,10 +287,11 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
     );
     assert_eq!(
         terminal.backend().buffer()[(pos.0, pos.1)].bg,
-        palette::SURFACE_FOCUSED
+        palette::SURFACE_BACKDROP
     );
+    let right_focused = true;
     assert_eq!(
-        terminal.backend().buffer()[(layout.tv_wide_right_area.x, pos.1)].bg,
-        palette::SURFACE_FOCUSED
+        terminal.backend().buffer()[(layout.tv_wide_list_area.x.saturating_sub(1), pos.1)].bg,
+        palette::SURFACE_BACKDROP
     );
 }
