@@ -41,11 +41,7 @@ impl Model {
         }
         if !self.application.mounted(&id) {
             self.application
-                .mount(
-                    id.clone(),
-                    Self::sidebar_component(sidebar),
-                    vec![crate::app::components::mouse::mouse_sub()],
-                )
+                .mount(id.clone(), Self::sidebar_component(sidebar), vec![])
                 .expect("mount sidebar");
         }
         self.application.active(&id).expect("activate sidebar");
@@ -91,7 +87,7 @@ impl Model {
             .mount(
                 ComponentId::Overlay(OverlayId::Help),
                 Box::new(HelpComponent::new()),
-                vec![crate::app::components::mouse::mouse_sub()],
+                vec![],
             )
             .expect("mount Help");
         self.application

@@ -319,7 +319,7 @@ impl Model {
             .mount(
                 ComponentId::Playback,
                 Box::new(PlaybackComponent::new()),
-                vec![crate::app::components::mouse::mouse_sub()],
+                vec![],
             )
             .expect("mount Playback");
         model.update_settings_content();
@@ -346,7 +346,9 @@ fn apply_terminal_observer(
         }
         TerminalObserverEvent::FocusGained => model.app.note_focus_gained(),
         TerminalObserverEvent::FocusLost => model.app.note_focus_lost(),
-        TerminalObserverEvent::Key(_) | TerminalObserverEvent::NoOp => {}
+        TerminalObserverEvent::Key(_)
+        | TerminalObserverEvent::Mouse
+        | TerminalObserverEvent::NoOp => {}
     }
 }
 

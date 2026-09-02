@@ -251,7 +251,7 @@ impl Model {
                             .mount(
                                 id.clone(),
                                 Box::new(BrowserComponent::new_for_kind(kind)),
-                                vec![crate::app::components::mouse::mouse_sub()],
+                                vec![],
                             )
                             .expect("mount Emby browser");
                         self.register_destination(&id);

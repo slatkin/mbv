@@ -24,11 +24,7 @@ impl super::shell::Model {
         let id = ComponentId::Popup(PopupId::FeedManage);
         if !self.application.mounted(&id) {
             self.application
-                .mount(
-                    id.clone(),
-                    Box::new(FeedsManageComponent::new()),
-                    vec![crate::app::components::mouse::mouse_sub()],
-                )
+                .mount(id.clone(), Box::new(FeedsManageComponent::new()), vec![])
                 .expect("mount FeedManage");
             self.application.active(&id).expect("activate FeedManage");
         }

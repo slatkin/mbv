@@ -99,11 +99,7 @@ impl Model {
                 Some(id) => {
                     if !self.application.mounted(&id) {
                         self.application
-                            .mount(
-                                id.clone(),
-                                Box::new(TvWorkspaceComponent::new()),
-                                vec![crate::app::components::mouse::mouse_sub()],
-                            )
+                            .mount(id.clone(), Box::new(TvWorkspaceComponent::new()), vec![])
                             .expect("mount TV workspace");
                         self.register_destination(&id);
                     }

@@ -62,11 +62,7 @@ impl Model {
                 self.dismiss_modal(&Self::confirm_id());
                 let id = Self::confirm_id();
                 self.application
-                    .mount(
-                        id.clone(),
-                        Box::new(ConfirmComponent::new()),
-                        vec![crate::app::components::mouse::mouse_sub()],
-                    )
+                    .mount(id.clone(), Box::new(ConfirmComponent::new()), vec![])
                     .expect("mount Confirm");
                 self.application.active(&id).expect("activate Confirm");
                 if let Some(comp) = self.application.get_component_mut(&id) {
@@ -80,11 +76,7 @@ impl Model {
                 self.dismiss_blocking_modals();
                 let id = Self::daemon_lost_id();
                 self.application
-                    .mount(
-                        id.clone(),
-                        Box::new(DaemonLostComponent::new()),
-                        vec![crate::app::components::mouse::mouse_sub()],
-                    )
+                    .mount(id.clone(), Box::new(DaemonLostComponent::new()), vec![])
                     .expect("mount DaemonLost");
                 self.application.active(&id).expect("activate DaemonLost");
                 if let Some(comp) = self.application.get_component_mut(&id) {
@@ -102,11 +94,7 @@ impl Model {
                 self.dismiss_blocking_modals();
                 let id = Self::remote_reanchor_id();
                 self.application
-                    .mount(
-                        id.clone(),
-                        Box::new(RemoteReanchorComponent::new()),
-                        vec![crate::app::components::mouse::mouse_sub()],
-                    )
+                    .mount(id.clone(), Box::new(RemoteReanchorComponent::new()), vec![])
                     .expect("mount RemoteReanchor");
                 self.application
                     .active(&id)
@@ -122,11 +110,7 @@ impl Model {
                 self.dismiss_blocking_modals();
                 let id = ComponentId::Modal(ModalId::SavePlaylist);
                 self.application
-                    .mount(
-                        id.clone(),
-                        Box::new(SavePlaylistComponent::new()),
-                        vec![crate::app::components::mouse::mouse_sub()],
-                    )
+                    .mount(id.clone(), Box::new(SavePlaylistComponent::new()), vec![])
                     .expect("mount SavePlaylist");
                 self.application.active(&id).expect("activate SavePlaylist");
                 if let Some(comp) = self.application.get_component_mut(&id) {
@@ -140,11 +124,7 @@ impl Model {
                 self.dismiss_blocking_modals();
                 let id = ComponentId::Overlay(OverlayId::SelectionModal);
                 self.application
-                    .mount(
-                        id.clone(),
-                        Box::new(SelectionModalComponent::new()),
-                        vec![crate::app::components::mouse::mouse_sub()],
-                    )
+                    .mount(id.clone(), Box::new(SelectionModalComponent::new()), vec![])
                     .expect("mount SelectionModal");
                 self.application
                     .active(&id)
@@ -203,11 +183,7 @@ impl Model {
                 let id = ComponentId::Overlay(OverlayId::ContextMenu);
                 if !self.application.mounted(&id) {
                     self.application
-                        .mount(
-                            id.clone(),
-                            Box::new(ContextMenuComponent::new()),
-                            vec![crate::app::components::mouse::mouse_sub()],
-                        )
+                        .mount(id.clone(), Box::new(ContextMenuComponent::new()), vec![])
                         .expect("mount ContextMenu");
                     self.application.active(&id).expect("activate ContextMenu");
                 }

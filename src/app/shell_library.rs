@@ -483,7 +483,7 @@ mod tests {
             .mount(
                 ComponentId::Modal(ModalId::Confirm),
                 Box::new(ConfirmComponent::new()),
-                vec![crate::app::components::mouse::mouse_sub()],
+                vec![],
             )
             .expect("mount Confirm");
         model

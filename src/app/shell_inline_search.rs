@@ -141,11 +141,7 @@ impl Model {
         }
         self.unmount_stale_inline_searches(Some(&id));
         self.application
-            .mount(
-                id.clone(),
-                Box::new(InlineSearchComponent::new()),
-                vec![crate::app::components::mouse::mouse_sub()],
-            )
+            .mount(id.clone(), Box::new(InlineSearchComponent::new()), vec![])
             .expect("mount inline library Search");
         self.register_destination(&id);
         self.application

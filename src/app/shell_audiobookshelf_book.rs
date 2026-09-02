@@ -101,7 +101,7 @@ impl Model {
                             .mount(
                                 id.clone(),
                                 Box::new(AudiobookshelfBookComponent::new()),
-                                vec![crate::app::components::mouse::mouse_sub()],
+                                vec![],
                             )
                             .expect("mount Audiobookshelf book browser");
                         self.register_destination(&id);

@@ -7,11 +7,7 @@ impl Model {
         let id = super::components::ComponentId::Playback;
         if !self.application.mounted(&id) {
             self.application
-                .mount(
-                    id.clone(),
-                    Box::new(PlaybackComponent::new()),
-                    vec![crate::app::components::mouse::mouse_sub()],
-                )
+                .mount(id.clone(), Box::new(PlaybackComponent::new()), vec![])
                 .expect("mount Playback");
         }
         let state = self.app.effective_playback_state();

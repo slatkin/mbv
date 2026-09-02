@@ -434,11 +434,7 @@ impl Model {
         let id = Self::multiselect_id();
         if !self.application.mounted(&id) {
             self.application
-                .mount(
-                    id.clone(),
-                    Box::new(MultiselectComponent::new()),
-                    vec![crate::app::components::mouse::mouse_sub()],
-                )
+                .mount(id.clone(), Box::new(MultiselectComponent::new()), vec![])
                 .expect("mount Multiselect");
             self.application.active(&id).expect("activate Multiselect");
         }
@@ -527,11 +523,7 @@ impl Model {
         let id = Self::library_routes_id();
         if !self.application.mounted(&id) {
             self.application
-                .mount(
-                    id.clone(),
-                    Box::new(LibraryRoutesComponent::new()),
-                    vec![crate::app::components::mouse::mouse_sub()],
-                )
+                .mount(id.clone(), Box::new(LibraryRoutesComponent::new()), vec![])
                 .expect("mount LibraryRoutes");
             self.application
                 .active(&id)

@@ -69,7 +69,7 @@ impl AppComponent<Msg, UserEvent> for UiRootComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         let observed = match event {
             Event::Keyboard(key) => TerminalObserverEvent::Key(*key),
-            Event::Mouse(_) => TerminalObserverEvent::NoOp,
+            Event::Mouse(_) => TerminalObserverEvent::Mouse,
             Event::WindowResize(_, _) => TerminalObserverEvent::Resize,
             Event::FocusGained => TerminalObserverEvent::FocusGained,
             Event::FocusLost => TerminalObserverEvent::FocusLost,
