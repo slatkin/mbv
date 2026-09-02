@@ -12,8 +12,8 @@ The shell folds simultaneous mouse messages with fixed priority: topmost
 mounted overlay/modal, active panel, other visible panel, then chrome. A
 blocking overlay swallows messages from components beneath it.
 
-This records the mouse counterpart to [ADR 0022](0022-migrate-existing-tui-framework-to-tuirealm.md)
-and [ADR 0023](0023-one-central-keyboard-router.md). It forbids a global hit map or
+This records the mouse counterpart to [ADR 0022](0022-tui-realm-component-migration.md)
+and [ADR 0023](0023-one-keyboard-router.md). It forbids a global hit map or
 router and keeps coordinate resolution in the component that paints the
 geometry.
 
