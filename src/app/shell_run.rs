@@ -352,8 +352,10 @@ impl Model {
 
             had_events |= self.drain_feed_add_results();
 
+            let mut tv_image_changed = false;
             while let Ok((item_id, img_opt)) = self.app.card_image_rx.try_recv() {
                 had_events = true;
+                tv_image_changed |= item_id.ends_with(":ser_primary");
                 self.app.card_image_loading.remove(&item_id);
                 self.app.image_fetches_active = self.app.image_fetches_active.saturating_sub(1);
                 let entry = self.app.build_cached_image(&item_id, img_opt);
@@ -367,6 +369,9 @@ impl Model {
                     }
                 }
                 self.app.card_image_states.insert(item_id, entry);
+            }
+            if tv_image_changed {
+                self.push_tv_workspace_content();
             }
             self.app.drain_image_fetches();
 
