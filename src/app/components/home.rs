@@ -21,6 +21,7 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
 use super::msg::{HomeHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::HomeImagePaint;
@@ -32,6 +33,8 @@ use mbv_core::playback_queue::QueueItem;
 pub struct HomeComponent {
     continue_items: Vec<QueueItem>,
     latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
+    /// Canonical projection of the active section; the parent retains section identity.
+    canonical_list: WideMediaList<String>,
     loading: bool,
     section: usize,
     cursor: usize,
@@ -79,6 +82,7 @@ impl HomeComponent {
         Self {
             continue_items: Vec::new(),
             latest: Vec::new(),
+            canonical_list: WideMediaList::new(),
             loading: false,
             section: 0,
             cursor: 0,
@@ -115,7 +119,32 @@ impl HomeComponent {
         self.continue_items = continue_items;
         self.latest = latest;
         self.loading = loading;
+        self.project_active_section();
         self.clamp_section_and_cursor();
+    }
+
+    fn project_active_section(&mut self) {
+        let items = if self.section == 0 {
+            &self.continue_items
+        } else {
+            self.latest
+                .get(self.section - 1)
+                .map(|(_, _, items)| items)
+                .unwrap_or(&self.continue_items)
+        };
+        self.canonical_list.set_content(
+            items
+                .iter()
+                .cloned()
+                .map(|item| MediaListRow::Item {
+                    primary: item.title().to_owned(),
+                    target: item.title().to_owned(),
+                    trailing: None,
+                    duration: None,
+                    semantic_state: MediaSemanticState::Ordinary,
+                })
+                .collect(),
+        );
     }
 
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {

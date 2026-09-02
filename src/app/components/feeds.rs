@@ -15,6 +15,7 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
@@ -29,6 +30,8 @@ pub struct FeedsComponent {
     entries: Vec<Vec<FeedEntry>>,
     all_entries: Vec<FeedEntry>,
     visible_entries: Vec<FeedEntry>,
+    /// Canonical structural projection; selectors remain parent chrome.
+    canonical_list: WideMediaList<String>,
     watched_filter: WatchedFilter,
     selected_group: usize,
     cursor: usize,
@@ -46,6 +49,7 @@ impl FeedsComponent {
             entries: Vec::new(),
             all_entries: Vec::new(),
             visible_entries: Vec::new(),
+            canonical_list: WideMediaList::new(),
             watched_filter: WatchedFilter::default(),
             selected_group: 0,
             cursor: 0,
@@ -145,6 +149,32 @@ impl FeedsComponent {
             .filter(|entry| self.watched_filter.matches(entry.played))
             .cloned()
             .collect();
+        let mut rows = Vec::new();
+        let mut last_date = None;
+        for entry in &self.visible_entries {
+            let date = entry.pub_date_secs.map(|value| value / 86_400);
+            if date != last_date {
+                if last_date.is_some() {
+                    rows.push(MediaListRow::Spacer);
+                }
+                rows.push(MediaListRow::Heading {
+                    text: date.map_or_else(|| "Unknown".into(), |day| day.to_string()),
+                });
+                last_date = date;
+            }
+            rows.push(MediaListRow::Item {
+                target: entry.guid.clone(),
+                primary: entry.title.clone(),
+                trailing: None,
+                duration: None,
+                semantic_state: if entry.played {
+                    MediaSemanticState::Played
+                } else {
+                    MediaSemanticState::Ordinary
+                },
+            });
+        }
+        self.canonical_list.set_content(rows);
     }
 
     fn clamp_cursor(&mut self) {
