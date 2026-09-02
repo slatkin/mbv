@@ -24,7 +24,7 @@ _This change owns the full mouse migration. It adds `HitRegions<Target>` (field,
 - [ ] 3.4 Migrate the Home and Queue mounted parents onto `MouseGestureState` and migrate their row hit-testing onto the embedded canonical control's `HitRegions<Target>`, delete the `*HitRegion` enums (Queue's `QueueHitRegion` included), and wire the parent→child delegation call; wire parent-owned non-list chrome (including Queue scope buttons and wheel-for-chrome) and parent click-to-focus; verify row click/select/activate/scroll and parent-owned control delivery.
 - [ ] 3.5 Migrate the TV and Music mounted parents onto `MouseGestureState`. Migrate TV's row hit-testing onto the embedded canonical control's `HitRegions<Target>` and delete the TV `*HitRegion` enums; migrate Music's Wide right-rail row hits onto `HitRegions<Target>` (Music has no `*HitRegion` enum to delete). Wire the parent→child delegation call, parent-owned pills and non-list chrome, and parent click-to-focus; verify row gestures and parent-owned control delivery. Music's narrow list and track-table row paths are completed in Phase 5 (task 6.1).
 - [ ] 3.6 Delete the shell-side recognition glue (`note_browse_double_click`, `note_browse_scroll`, `App.last_click_time`/`last_click_pos`/`last_scroll_at` if now unused) and the "shell decides single vs double" contract text in `msg/hit_regions.rs`; delete each per-surface `*HitRegion` row enum as its surface is migrated onto `HitRegions<Target>` in the tasks above; verify `rtk cargo clippy --workspace --all-targets` reports no dead code and `rtk cargo check -p mbv` passes.
-- [ ] 3.7 Phase-2 gate: full `rtk cargo nextest run -p mbv` green with zero characterization-buffer changes; confirm this phase added no observable behaviour. Per design D10 visual-first ordering, any observable pointer/rendered-UI change in this phase requires user live visual confirmation before a rendered-UI or characterization-buffer test is added or modified.
+- [ ] 3.7 Phase-2 gate: full `rtk cargo nextest run -p mbv` green with zero characterization-buffer changes; confirm this phase added no observable behaviour. If review finds an observable pointer/rendered-UI change, treat it as a bug and rerun the affected tests and gate before phase acceptance.
 
 ## 4. Phase 3 — Main-surface parity + wheel
 
@@ -32,7 +32,7 @@ _This change owns the full mouse migration. It adds `HitRegions<Target>` (field,
 - [ ] 4.2 Ensure parent click-to-focus and parent-owned controls are wired for main panels; ABS/Feeds list click/select/activate is wired onto the canonical control's `HitRegions<Target>` here (Emby's via task 3.3) — not duplicated.
 - [ ] 4.3 Wire parent-owned right-click/context-menu recognition and preserve the click-position anchor contract; menu row identity comes from the canonical control's `HitRegions<Target>` (Emby established in 3.3, ABS/Feeds wired here) — no duplicate row-hit path is added.
 - [ ] 4.4 Update the ledger Mouse column for the five main-panel rows with owner, supported gestures, and the test names that verify them.
-- [ ] 4.5 Phase-3 gate: `rtk cargo nextest run -p mbv`, clippy, fmt. Per design D10 visual-first ordering, this phase's observable pointer/rendered-UI changes require user live visual confirmation before any rendered-UI or characterization-buffer test is added or modified for them.
+- [ ] 4.5 Phase-3 gate: run `rtk cargo nextest run -p mbv`, clippy, and fmt; then live-review the observable pointer/rendered-UI behavior. Treat defects as bugs and rerun affected tests and the gate before phase acceptance.
 
 ## 5. Phase 4 — Overlays & popups
 
@@ -40,14 +40,14 @@ _This change owns the full mouse migration. It adds `HitRegions<Target>` (field,
 - [ ] 5.2 Confirm `confirm`, `daemon_lost`, and `remote_reanchor` blocking modals swallow all mouse events and never let a click reach obscured content; verify a `tick()`-level test that a click outside the modal produces no underlying message.
 - [ ] 5.3 Verify `context_menu` and `selection_modal` mouse behaviour matches their specs (menu-click executes/closes, outside-click dismisses, wheel does not mutate the obscured view); run `rtk cargo nextest run -p mbv context_menu selection_modal`.
 - [ ] 5.4 Update the ledger Mouse column for every overlay/popup/modal row.
-- [ ] 5.5 Phase-4 gate: `rtk cargo nextest run -p mbv`, clippy, fmt. Per design D10 visual-first ordering, this phase's observable overlay/popup pointer changes require user live visual confirmation before any rendered-UI or characterization-buffer test is added or modified for them.
+- [ ] 5.5 Phase-4 gate: run `rtk cargo nextest run -p mbv`, clippy, and fmt; then live-review observable overlay/popup pointer behavior. Treat defects as bugs and rerun affected tests and the gate before phase acceptance.
 
 ## 6. Phase 5 — music_workspace completion + narrow browse
 
 - [ ] 6.1 Migrate the Music mounted parent onto `MouseGestureState` and migrate its narrow list row regions and the track-table row path onto `HitRegions<Target>` (Music has no `*HitRegion` enum; its Wide right-rail row hits were wired in task 3.5), wiring the parent→child delegation call; complete parent-owned non-list hit geometry for narrow/wide chrome and group pills; verify row and chrome gestures.
 - [ ] 6.2 Keep `browser_narrow` parent `MouseGestureState` gesture recognition and non-list controls; migrate its narrow list-row hit-testing onto the embedded control's `HitRegions<Target>` and delete the enum here.
 - [ ] 6.3 Update the ledger Mouse column for the music-workspace and narrow-browse rows; confirm no row still reads `pending`.
-- [ ] 6.4 Phase-5 gate: `rtk cargo nextest run -p mbv`, clippy, fmt. Per design D10 visual-first ordering, this phase's observable pointer/rendered-UI changes require user live visual confirmation before any rendered-UI or characterization-buffer test is added or modified for them.
+- [ ] 6.4 Phase-5 gate: run `rtk cargo nextest run -p mbv`, clippy, and fmt; then live-review observable pointer/rendered-UI behavior. Treat defects as bugs and rerun affected tests and the gate before phase acceptance.
 
 ## 7. Phase 6 — Precedence proofs + close-out
 
@@ -55,4 +55,4 @@ _This change owns the full mouse migration. It adds `HitRegions<Target>` (field,
 - [ ] 7.2 Land the "blocking overlay swallows mouse" precedence proof through `tick()`.
 - [ ] 7.3 Land the "geometry cannot drift" precedence proof: a component resolves a click from the same `HitRegions` it populated during `view()`.
 - [ ] 7.4 Verify the three modified capability deltas match the implementation: no code path uses a global hit map / global mouse router; the mouse-emitted `ShellRequest` variants have real handlers (no "mouse-only" no-op arms remain); `rtk ast-grep scan` clean.
-- [ ] 7.5 Final close-out: `rtk cargo nextest run -p mbv` full suite, `rtk cargo clippy --workspace --all-targets`, `rtk cargo fmt --check`, `rtk make check-code-file-lines`; confirm every ledger row has a filled Mouse column and `openspec validate restore-mouse-support --strict` passes. Per design D10 visual-first ordering, the precedence proofs (7.1–7.3) are non-visual and may precede confirmation; any observable pointer/rendered-UI change closed out here still requires user live visual confirmation before a rendered-UI or characterization-buffer test is added or modified for it.
+- [ ] 7.5 Final close-out: run `rtk cargo nextest run -p mbv` full suite, `rtk cargo clippy --workspace --all-targets`, `rtk cargo fmt --check`, and `rtk make check-code-file-lines`; confirm every ledger row has a filled Mouse column and `openspec validate restore-mouse-support --strict` passes. Then complete live review and acceptance; treat any observable pointer/rendered-UI defect as a bug and rerun affected tests and gates before accepting the change.

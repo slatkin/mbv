@@ -1,11 +1,13 @@
 ## ADDED Requirements
 
 ### Requirement: Home composes canonical list controls
-Home SHALL compose `InlineMediaBrowser` for the inline section and `WideMediaList` where the approved Wide arrangement requires a fixed one-column rail. Section identity SHALL remain keyed by `pref_key` and restored through `restore_section`. Home SHALL keep exactly one active section with one flat cursor and scroll position at a time; only the active section's rows SHALL be projected into the canonical control. The active-section cursor and scroll SHALL be carried through the control with a `ViewportAnchor` for refresh and breakpoint handoff, with no per-section cursor cache and no App-wide interaction mirror.
+Home SHALL compose a persistent `InlineMediaBrowser` for the inline section and a persistent `WideMediaList` where the approved Wide arrangement requires a fixed one-column rail. Section identity SHALL remain keyed by `pref_key` and restored through `restore_section`. Home SHALL keep exactly one active section with one flat cursor and scroll position owned by the active control; only the active section's rows SHALL be projected into that control. Ordinary refresh SHALL preserve stable target and locally clamp without adopting parent cursor/scroll. Breakpoint or discrete navigation transitions SHALL use one `ViewportAnchor`, with no per-section cursor cache and no App-wide interaction mirror.
 
 #### Scenario: Home refresh preserves section state
 - **WHEN** the active Home section refreshes or the active variant changes
-- **THEN** the single active-section selected target, cursor, and scroll are preserved or clamped by the canonical control via `ViewportAnchor`, while `pref_key`/`restore_section`, images, and workspace effects remain shell/parent-owned.
+- **THEN** refresh preserves or clamps the control-owned stable target locally
+- **AND** a variant transition performs one target/offset `ViewportAnchor` handoff
+- **AND** `pref_key`/`restore_section`, images, and workspace effects remain shell/parent-owned.
 
 ### Requirement: Feeds projects structural rows
 The Feeds Service/tab SHALL project FeedAgeGroup/date labels as non-selectable `Heading` rows and separators as non-selectable `Spacer` rows as canonical-list content. Only media `Item` rows SHALL enter selectable indexing. The subscription/group selector pills and the watched selector SHALL remain parent-owned chrome outside the canonical control and SHALL NOT be projected as canonical rows.

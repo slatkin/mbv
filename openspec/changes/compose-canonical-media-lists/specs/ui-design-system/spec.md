@@ -43,14 +43,14 @@ A named primary media browser that cannot use the canonical controls SHALL be re
 
 ### Requirement: Each implementation slice proves composition before deleting loops
 
-Every implementation slice SHALL identify the exact destinations it migrates, preserve or improve relevant existing characterization, add focused structural checks for realistic uncovered drift, and record manual end-to-end evidence for that slice's destinations before deleting their old loops. Existing characterization alone SHALL NOT be treated as sufficient when its fixture omits the metadata, grouping, active state, breakpoint transition, or image behavior being migrated.
+Every implementation slice SHALL identify the exact destinations it migrates, preserve or improve relevant existing characterization, add focused structural checks for realistic uncovered drift, and record manual end-to-end evidence for that slice's destinations before acceptance. Old loops SHALL be removed during the implementation so tests and source-level one-painter review exercise the actual replacement. Existing characterization alone SHALL NOT be treated as sufficient when its fixture omits the metadata, grouping, active state, breakpoint transition, or image behavior being migrated.
 
 #### Scenario: A destination slice migrates
 
 - **WHEN** a slice replaces a destination's bespoke fixed-row loop
 - **THEN** focused automated evidence confirms the destination composes the correct canonical control and preserves its structural behavior
 - **AND** manual evidence covers the destination's affected Wide and Narrow presentations, focus, movement, and prepared image behavior
-- **AND** the old loop is deleted only after both forms of evidence exist
+- **AND** the old loop is absent from the implementation exercised by both forms of evidence
 
 #### Scenario: An existing baseline is vacuous
 
@@ -90,17 +90,18 @@ Each migrated primary media-list surface SHALL have exactly one canonical list p
 - **THEN** the path reaches the embedded canonical control exactly once
 - **AND** no legacy list painter runs for that surface body
 
-### Requirement: Visual verification precedes UI tests
+### Requirement: Implementation and acceptance form one verified slice
 
-For every slice that changes a rendered media-list surface, the controlling order SHALL be: characterize current behavior by source reading and manual observation only; perform the production visual correction at the affected Wide and Narrow widths; obtain explicit user live visual approval of the running result; and only then add or modify any UI fixture, characterization buffer, or rendered/geometry test for that surface. Characterization performed before that approval SHALL be read-only — source trace, unchanged existing evidence, and manual observation — and SHALL NOT add or edit a test or fixture or drive appearance from a test. Non-visual tests such as delivery, arbitration, and selectable-index MAY precede approval.
+For every slice that changes a rendered media-list surface, implementation, representative stateful and rendered tests, automated gates, review, and acceptance SHALL form one uninterrupted slice. There SHALL be no pre-test visual-approval checkpoint. Live Wide/Narrow review remains required before acceptance; a visual defect found during review or acceptance SHALL be treated as a bug, fixed, and followed by rerunning the affected tests and gates.
 
-#### Scenario: Tests follow approval
+#### Scenario: Tests and gates precede acceptance
 
-- **WHEN** a slice has corrected a media-list surface's visuals and the user has explicitly approved the live result
-- **THEN** focused rendered and geometry tests may be added or updated using metadata-, group-, state-, image-, and breakpoint-bearing fixtures
+- **WHEN** a slice changes a media-list surface
+- **THEN** focused stateful, rendered, and geometry evidence uses metadata-, group-, state-, image-, and breakpoint-bearing fixtures where applicable
+- **AND** automated gates run before review and acceptance
 
-#### Scenario: Characterization stays read-only before approval
+#### Scenario: Live review finds a defect
 
-- **WHEN** a slice characterizes a surface's current behavior before visual approval
-- **THEN** it uses only source reading, unchanged existing evidence, and manual observation
-- **AND** it does not add or modify a UI test or fixture and does not drive appearance from a test
+- **WHEN** Wide/Narrow live review reveals incorrect output or interaction after tests pass
+- **THEN** the defect is fixed as part of the same slice
+- **AND** the affected tests and gates are rerun before acceptance

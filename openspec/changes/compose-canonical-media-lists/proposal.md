@@ -9,7 +9,7 @@ Issue #641 found that the TuiRealm migration stopped at destination-sized `AppCo
 - Keep this change as the architecture and delivery umbrella for issue #641; it defines the target contracts and tracks completion but does not directly implement destination code.
 - Keep PR #606 blocked. Each implementation slice is reviewed as its own PR targeting `feat/migrate-tui-to-tuirealm`; PR #606 merges only after every required slice has landed on that branch and the umbrella completion gates pass.
 - Deliver five implementation slices:
-  1. canonical row/viewport foundation plus hero-bearing generic Emby, Movies, the Emby homevideos feed view, the Emby podcast channel list, narrow TV, and the Wide TV right rail;
+  1. canonical row/viewport foundation plus persistent Wide and Narrow controls for hero-bearing generic Emby, Movies, the Emby homevideos feed view, the Emby podcast channel list, and TV Series browsing;
   2. Home and Feeds;
   3. grouped Music and Audiobookshelf Podcasts/Books;
   4. Queue's fixed-row-only adoption; and
@@ -35,12 +35,12 @@ Issue #641 found that the TuiRealm migration stopped at destination-sized `AppCo
 ### Modified Capabilities
 
 - `right-panel-arrangements`: Requires Hero-on-left rails to compose `WideMediaList` and Narrow selected-row replacement to compose `InlineMediaBrowser`, while preserving the non-hero two-column carve-out.
-- `ui-design-system`: Requires the named primary media-list surfaces to use the canonical controls, makes any exception explicit and verified, requires one canonical list painter per migrated surface, and fixes the verification order so a production visual correction and explicit user live visual approval precede any UI fixture or test change.
+- `ui-design-system`: Requires the named primary media-list surfaces to use persistent canonical controls, makes any exception explicit and verified, requires one canonical list painter per migrated surface, and makes implementation, representative tests/gates, review, and acceptance one uninterrupted slice without a pre-test approval checkpoint.
 - `interactive-component-framework`: Defines how an embedded plain TuiRealm `Component` owns reusable interaction state beneath a mounted destination `AppComponent` without an independent registry identity, subscription, gesture recognizer, or second event-routing boundary. Hit state is added later by `restore-mouse-support` (#638).
 
 ## Impact
 
-- **PR relationship:** PR #606 remains blocked; the implementation slices stack onto its feature branch and are reviewed independently. Squashing a family slice does not combine it with another family; each slice remains a distinct PR and rollback boundary.
+- **PR relationship:** PR #606 remains blocked; the implementation slices stack onto its feature branch and are reviewed independently. The invalid Home/Feeds commit chain remains unaccepted evidence while foundation correction resumes from accepted baseline `d426e057` or equivalent isolation. Squashing a family slice does not combine it with another family; each slice remains a distinct PR and rollback boundary.
 - **Umbrella lifecycle:** this change remains open and unarchived until all five implementation slices, the independent `restore-feed-group-inline-expansion` and `restore-feeds-service-wide-list` fixes, the `restore-audiobookshelf-podcast-wide-layout` supersession, `restore-mouse-support` (#638) merged, and final gates are complete.
 - **Primary code areas:** `src/app/components/`, `src/app/render/components/`, `src/app/render/arrangements/`, `src/app/shell_*.rs`, `src/app/layout.rs`, component tests, and render characterization tests.
 - **Likely file splits:** `src/app/components/tv_workspace.rs`, `src/app/components/audiobookshelf_podcast.rs`, and `src/app/components/browser.rs` are near the 800-line cap. Their slice plans SHALL split them before or with new wiring rather than discovering over-limit files at final verification.

@@ -11,7 +11,7 @@ Home and the Feeds Service/tab still compose destination-sized list mechanics in
 - Make canonical list rows the source of truth for the deferred #623 two-space row-indent follow-up.
 - Keep non-hero two-column policies and the Emby homevideos feed view (#634/#637) out of scope as boundary notes. The Music/Audiobookshelf canonical slice is out of scope; standalone #640 is superseded.
 
-This stacks on PR #606's feature branch and depends on the landed canonical-list foundation and the accepted #623 `restore-feeds-service-wide-list` prerequisite (umbrella task 1.3a).
+This stacks on PR #606's feature branch and depends on the corrected, accepted canonical-list foundation and the accepted #623 `restore-feeds-service-wide-list` prerequisite (umbrella task 1.3a). Home implementation remains paused until foundation reacceptance; the invalid Home/Feeds commit chain and dirty worktree are evidence, not its implementation baseline.
 
 ## Impact
 

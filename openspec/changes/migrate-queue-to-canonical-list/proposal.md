@@ -7,7 +7,7 @@ Queue still owns destination-specific fixed-row mechanics instead of composing t
 - Characterize the accepted Queue output and interactions, then compose `WideMediaList<QueueSlotId>` directly inside the mounted Queue parent.
 - Project Queue rows as provider-neutral selectable items with stable `QueueSlotId` targets, metadata, active state, and bounded `progress_percent` (`0..=100`) as presentation data only.
 - Keep Local/Remote scope, scope controls, reorder, playback, title, Player/queue authority, persistence, and active state in the Queue parent/shell.
-- Preserve visual output after live user verification, then update focused tests; include one-painter and file-size evidence.
+- Keep implementation, focused tests/gates, review, and live acceptance in one uninterrupted slice; include one-painter and file-size evidence.
 
 ## Scope
 

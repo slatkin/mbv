@@ -6,7 +6,7 @@ Defines the shared fixed-row Wide media list and selected-row-replacement Inline
 
 ### Requirement: Wide media lists use one fixed-row control
 
-Every hero-bearing primary media browser SHALL use `WideMediaList` when it appears in a Hero-on-left right rail. The control SHALL remain one column regardless of available rail width and SHALL own its live cursor, scroll offset, viewport, previous/next/page/home/end movement, selection visibility clamp, row placement, scrollbar, semantic selected/focused/active treatment, trailing metadata placement, truncation, and render-derived item geometry.
+Every hero-bearing primary media browser SHALL use a persistent `WideMediaList` when it appears in a Hero-on-left right rail. The control SHALL remain one column regardless of available rail width and SHALL own its live cursor, scroll offset, viewport, previous/next/page/home/end movement, selection visibility clamp, row placement, scrollbar, semantic selected/focused/active treatment, trailing metadata placement, truncation, and render-derived item geometry. An applicable Wide path SHALL NOT delegate its list body to a legacy plain-row painter.
 
 `WideMediaList` SHALL NOT govern non-hero catalog browsers whose existing contract permits two columns.
 
@@ -37,7 +37,7 @@ Every hero-bearing primary media browser SHALL use `WideMediaList` when it appea
 
 ### Requirement: Inline media browsers own selected-row replacement
 
-Every named hero-bearing primary media browser that does not meet the shared Wide geometry conditions SHALL use `InlineMediaBrowser`. The term is distinct from Inline Search. The control SHALL remain one column and replace the selected item's ordinary row with one variable-height Inline hero at the same flow position. It SHALL budget replacement height once, keep the replacement visible through row-based scrolling, and restore the ordinary row when detail cannot fit.
+Every named hero-bearing primary media browser that does not meet the shared Wide geometry conditions SHALL use a persistent `InlineMediaBrowser`. The term is distinct from Inline Search. The control SHALL be owned for the mounted destination's lifetime rather than constructed while painting. It SHALL remain one column and replace the selected item's ordinary row with one variable-height Inline hero at the same flow position. It SHALL budget replacement height once, keep the replacement visible through row-based scrolling, and restore the ordinary row when detail cannot fit.
 
 #### Scenario: Selected detail fits
 

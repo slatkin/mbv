@@ -11,7 +11,7 @@ Use the existing Hero-on-left and Inline arrangements and embedded `WideMediaLis
 Only Music album rows, Podcast show rows, and Book rows are canonicalized. Music grouping and tracks; Podcast show selection, episode list/filter, images; and Book details, chapters, audio files, and chapter seeking remain provider-owned. The canonical controls receive prepared rows and opaque targets and emit typed intents. Shell retains Service/effects/playback/persistence authority.
 
 ### D3 — Characterize Music before re-anchor
-Before replacing Music handoff, use source/state inspection and live visual evidence only to capture metadata-bearing grouped Music at Wide/Normal and breakpoint transitions, including selected target, cursor, scroll, and selected-row offset. Do not change or add UI tests during this characterization; re-anchor only after the existing behavior is recorded and the user has explicitly approved the live visual result.
+Before replacing Music handoff, record metadata-bearing grouped Music at Wide/Normal and breakpoint transitions, including selected target, cursor, scroll, and selected-row offset. The replacement must match that evidence unless an approved behavior correction says otherwise. Representative stateful tests then protect target/offset handoff and prove ordinary content pushes do not adopt stale shell cursor/scroll.
 
 ### D4 — Geometry and fallback
 Music, Podcast, and Book Wide explicitly follow the TV/Movies canonical precedent: provider workspace left; parent-owned pills then ordinary fixed-height one-column canonical rows right; shared width/minimum-height predicate, pane framing, content spacing, and short-height fallback; no Inline hero and no selected-row replacement in the Wide right rail. Preserve the established Narrow/Normal inline presentation and short-height fallback. Stable `ViewportAnchor` is the only breakpoint handoff; no App mirror or per-frame painted-state writeback.
@@ -19,8 +19,8 @@ Music, Podcast, and Book Wide explicitly follow the TV/Movies canonical preceden
 ### D5 — One painter
 Mouse is out of scope; `restore-mouse-support` (#638) owns it and lands last. This slice adds no mouse subscription, `MouseGestureState`, `HitRegions<Target>`, or parent-to-child point delegation, and existing bespoke `*HitRegion` paths stay wired and untouched. Each reachable breakpoint has one body painter, proven by source trace and a focused execution counter/assertion where practical.
 
-### D6 — Visual-first verification
-Correct visuals in a live run at Wide, Normal/Narrow, and short height; obtain explicit user live visual confirmation. UI tests may be changed or added only after that approval. Evidence must include representative metadata, group/selector/bucket states, images on/off, focus, active progress, framing, and target/viewport handoff.
+### D6 — Continuous verification and acceptance
+Implementation, representative stateful and rendered tests, automated gates, review, and acceptance form one uninterrupted slice. There is no pre-test visual-approval checkpoint. Live Wide, Normal/Narrow, and short-height review remains required; defects found there are fixed as bugs before rerunning affected tests and gates. Evidence includes metadata, group/selector/bucket states, images on/off, focus, active progress, framing, and target/viewport handoff.
 
 ### D7 — File limits and splits
 Split `src/app/components/audiobookshelf_podcast.rs` into cohesive ownership modules before/with wiring if required, and inspect Music/Book/browser/render files for the 800-line limit. No unrelated cleanup.

@@ -131,8 +131,7 @@
 > (`compose-canonical-media-lists`, umbrella task 1.2). It was delivered
 > test-first — tasks 1.1/1.2 commit a failing characterization test, then
 > tasks 2.x/3.x make it pass — and that ordering is preserved AS HISTORICAL
-> FACT. It MUST NOT be cited as precedent for new canonical UI work, which
-> follows visual-first ordering: implement, obtain explicit user live visual
-> approval, then add or change UI buffer/geometry tests. Do not rewrite the
-> completed task history above to claim visual-first was followed; the
+> FACT. It is not precedent for new canonical UI work, which follows whichever
+> campaign workflow is in force when that work is done. Do not rewrite the
+> completed task history above to claim any later workflow was followed; the
 > user-authorized-exception acceptance note stands as written.

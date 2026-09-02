@@ -20,7 +20,7 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 - **AND** it cannot be selected or activated
 
 ### Requirement: WideMediaList owns fixed-row mechanics
-`WideMediaList<Target>` SHALL be an embedded plain TuiRealm `Component` that owns cursor, scroll, viewport, fixed-height one-column row placement, semantic painting delegation, scrollbar, movement, clamping, and internal row geometry for painting and scrolling. It SHALL support Hero-on-left rails and later Queue fixed rows, but SHALL NOT implement Inline replacement or a non-hero two-column policy. It SHALL expose no mouse hit-resolution API; `restore-mouse-support` (#638) adds `HitRegions<Target>` later.
+`WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm `Component` that owns cursor, scroll, viewport, fixed-height one-column row placement, semantic painting delegation, scrollbar, movement, clamping, and internal row geometry for painting and scrolling. It SHALL support Hero-on-left rails and later Queue fixed rows, but SHALL NOT implement Inline replacement or a non-hero two-column policy. It SHALL express letter grouping through `MediaListRow::Heading`/`Spacer` rows. An applicable Wide Browser path SHALL delegate to this control and SHALL NOT reach `render_generic_movies_home_video_rows_with_ctx` or either painter it routes to (`render_letter_grouped_rows`, `render_plain_rows`); the absence of a `render_plain_rows` call alone SHALL NOT be accepted as compliance. It SHALL expose no mouse hit-resolution API; `restore-mouse-support` (#638) adds `HitRegions<Target>` later.
 
 #### Scenario: Wide TV rail composes the control
 - **WHEN** the TV surface is Hero-on-left
@@ -28,7 +28,7 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 - **AND** the parent retains workspace, hero, images, and effects
 
 ### Requirement: InlineMediaBrowser owns selected-row replacement
-`InlineMediaBrowser<Target>` SHALL be an embedded plain TuiRealm `Component` owning one-column placement, selection visibility, variable-height selected-row replacement admission, ordinary-row fallback when replacement cannot fit, and its internal row and replacement geometry for painting and scrolling. It SHALL be distinct from Inline Search and SHALL not become a second mounted identity or router. It SHALL expose no mouse hit-resolution API; `restore-mouse-support` (#638) adds `HitRegions<Target>` later.
+`InlineMediaBrowser<Target>` SHALL be a persistent embedded plain TuiRealm `Component` owning one-column placement, selection visibility, variable-height selected-row replacement admission, ordinary-row fallback when replacement cannot fit, and its internal row and replacement geometry for painting and scrolling. It SHALL be distinct from Inline Search, SHALL NOT be constructed during a render pass, and SHALL not become a second mounted identity or router. It SHALL expose no mouse hit-resolution API; `restore-mouse-support` (#638) adds `HitRegions<Target>` later.
 
 #### Scenario: A selected row is replaced
 - **WHEN** the selected item fits the Inline presentation
@@ -44,17 +44,18 @@ At Wide↔Narrow transitions the parent SHALL hand off `ViewportAnchor { selecte
 - **AND** replacement matches that evidence unless separately approved
 
 ### Requirement: Named destinations compose without changing provider authority
-The slice SHALL compose hero-bearing generic Emby catalogs, Movies, the Emby homevideos feed view, the Emby podcast channel list, narrow TV Series browsing, and Wide TV's right rail. Non-hero two-column Emby catalogs SHALL keep their existing two-column arrangement policy and SHALL NOT be forced onto `InlineMediaBrowser`. Provider workspaces, images, effects, persistence, Service and Player authority, and typed message translation SHALL remain in their existing parents/shell. Non-hero two-column browsers SHALL retain their policy.
+The slice SHALL compose persistent `WideMediaList` controls in the applicable Hero-on-left paths and persistent `InlineMediaBrowser` controls in the applicable Narrow paths for hero-bearing generic Emby catalogs, Movies, the Emby homevideos feed view, the Emby podcast channel list, and TV Series browsing. Non-hero two-column Emby catalogs SHALL keep their existing two-column arrangement policy and SHALL NOT be forced onto either canonical control. Provider workspaces, images, effects, persistence, Service and Player authority, and typed message translation SHALL remain in their existing parents/shell.
 
 #### Scenario: One painter is active
 - **WHEN** a listed destination is rendered at its applicable breakpoint
 - **THEN** exactly one list painter runs
 - **AND** the old loop is not run as an underpaint
 
-### Requirement: Migration is evidence-gated
-Before wiring, the implementation SHALL characterize current TV Wide→Narrow→Wide handoff by source-reading and manual observation only — adding no test or fixture — and re-home `render_plain_rows` without unapproved output changes. Visual correction and user live confirmation SHALL precede any UI test or fixture modification or addition, including the metadata-bearing characterization fixture. After confirmation, affected surfaces SHALL provide focused rendered evidence with representative metadata/state/image fixtures, manual/live Wide/Narrow evidence, one-painter evidence, and the 800-line file-size gate.
+### Requirement: Migration is accepted as one verified slice
+The implementation, representative stateful and rendered tests, automated gates, review, and acceptance SHALL form one uninterrupted slice. There SHALL be no pre-test visual-approval checkpoint. Affected surfaces SHALL provide metadata/state/image-bearing rendered evidence, stateful target-and-anchor evidence, source-level one-painter evidence, manual/live Wide/Narrow evidence, and the 800-line file-size gate before acceptance. A visual defect found during review or acceptance SHALL be treated as a bug, fixed, and followed by rerunning the affected tests and gates.
 
-#### Scenario: Visual approval precedes tests
+#### Scenario: Evidence precedes acceptance
 - **WHEN** the implementation changes a visual surface
-- **THEN** the user confirms the live result first
-- **AND** only afterward are UI tests or fixtures, including the characterization fixture, added or modified
+- **THEN** representative tests and automated gates run before review and acceptance
+- **AND** live Wide/Narrow review remains part of acceptance
+- **AND** any defect found there is fixed before the slice is accepted

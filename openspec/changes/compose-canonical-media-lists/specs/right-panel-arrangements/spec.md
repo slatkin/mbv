@@ -2,7 +2,7 @@
 
 ### Requirement: Responsive hero presentations compose canonical browsers
 
-Every named hero-bearing right-panel destination SHALL compose `WideMediaList` inside its Hero-on-left right rail and `InlineMediaBrowser` inside its selected-row-replacement presentation. The arrangement SHALL supply the child rectangles and shared breakpoint decision. Pills and provider-specific hero or workspace content SHALL remain adjacent parent content and SHALL NOT be absorbed into the media-list control.
+Every named hero-bearing right-panel destination SHALL compose a persistent `WideMediaList` inside its Hero-on-left right rail and a persistent `InlineMediaBrowser` inside its selected-row-replacement presentation. The arrangement SHALL supply the child rectangles and shared breakpoint decision. Pills and provider-specific hero or workspace content SHALL remain adjacent parent content and SHALL NOT be absorbed into the media-list control.
 
 This requirement applies to Home, the generic Emby hero-bearing catalog browser, Movies, TV Series browsing, grouped Music album browsing, the Emby homevideos feed view, the Emby podcast channel list, Audiobookshelf Podcast show browsing, Audiobookshelf Book browsing, and Feeds. It does not change the existing two-column policy for non-hero browsers and does not apply the Hero-on-left or Inline presentation contract to Queue.
 

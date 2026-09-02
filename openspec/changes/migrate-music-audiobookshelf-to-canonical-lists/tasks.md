@@ -1,8 +1,8 @@
 ## 1. Preconditions and characterization
 
 - [ ] 1.1 Confirm the two predecessors (canonical media-list foundation — an accepted prerequisite slice that must merge first; the landed #640 Home podcast hero-on-left correction), PR #606 feature-branch stacking, and that `migrate-home-feeds-to-canonical-lists` is a sibling slice not a dependency; when implementation is issued, record the feature-branch baseline SHA in the implementation handoff/task evidence (no SHA pinned in this plan); do not edit umbrella artifacts.
-- [ ] 1.2 Read current Music, Podcast, and Book render/component callers — including the bespoke `render_book_browser` Wide path that reuses Narrow selected-row-replacement logic — and record source-of-truth precedent from working TV/Movies; document that the Emby podcast channel list, the Emby homevideos feed view, and #623/#634/#637 are out of scope. Read-only: source-reading and manual observation only, no test or fixture changes.
-- [ ] 1.3 Characterize grouped Music re-anchor before replacement using source/state inspection and live visual evidence only, with metadata-bearing Wide/Normal and breakpoint-transition evidence for selected target, cursor, scroll, and selected-row offset; do not change or add UI tests before explicit user live visual approval.
+- [ ] 1.2 Read current Music, Podcast, and Book render/component callers — including the bespoke `render_book_browser` Wide path that reuses Narrow selected-row-replacement logic — and record source-of-truth precedent from working TV/Movies; document that the Emby podcast channel list, the Emby homevideos feed view, and #623/#634/#637 are out of scope.
+- [ ] 1.3 Record grouped Music re-anchor behavior before replacement with metadata-bearing Wide/Normal and breakpoint-transition evidence for selected target, cursor, scroll, and selected-row offset.
 
 ## 2. Canonical composition
 
@@ -14,17 +14,16 @@
 - (2.6 removed: mouse deferred to #638. `restore-mouse-support` lands after every canonical slice and owns the parent/child point-resolution seam; this slice adds no mouse wiring and leaves existing bespoke `*HitRegion` paths untouched.)
 - [ ] 2.7 Split `src/app/components/audiobookshelf_podcast.rs` and any other near-limit changed files into cohesive modules before/with wiring; enforce every changed source file ≤800 lines.
 
-## 3. Visual-first evidence and tests
+## 3. Implementation evidence
 
-- [ ] 3.1 Perform live visual correction at Wide, Normal/Narrow, and short-height layouts for Music, Podcast, and Book, including selection, scrolling, focus, images enabled/disabled, grouping/filter/bucket state, rail framing, and workspace composition; obtain explicit user live visual approval before changing or adding any UI tests.
-- [ ] 3.2 Only after explicit user live visual approval, add/update focused rendered buffer and geometry tests with metadata-bearing fixtures covering one-column geometry, selected/active/played states, images, selectors/buckets, chapter/episode targets, breakpoint fallback, and target/offset anchoring.
-- [ ] 3.3 Prove one painter per destination/breakpoint by source trace and execution counter/assertion; prove no destination-sized duplicate list or Wide Book selected-row replacement remains.
-- (3.4 removed: mouse deferred to #638. This slice adds no mouse parent/child seam; `restore-mouse-support` owns it and lands last.)
+- [ ] 3.1 Add/update the smallest focused stateful, rendered-buffer, and geometry tests with metadata-bearing fixtures covering one-column geometry, selected/active/played states, images, selectors/buckets, chapter/episode targets, breakpoint fallback, ordinary-refresh target retention, and target/offset anchoring.
+- [ ] 3.2 Prove one painter per destination/breakpoint by source trace and execution counter/assertion; prove no destination-sized duplicate list or Wide Book selected-row replacement remains.
+- (3.3 removed: mouse deferred to #638. This slice adds no mouse parent/child seam; `restore-mouse-support` owns it and lands last.)
 
-## 4. Verification and acceptance
+## 4. Verification, review, and acceptance
 
 - [ ] 4.1 Run `rtk make check-code-file-lines` and ensure changed source files are ≤800 lines.
 - [ ] 4.2 Run `rtk openspec validate migrate-music-audiobookshelf-to-canonical-lists --strict`.
 - [ ] 4.3 Run `rtk cargo fmt --all -- --check`, `rtk cargo check --workspace --all-targets`, and relevant `rtk cargo nextest run` suites; fix only slice-caused failures.
-- [ ] 4.4 Confirm no Service, provider, playback, daemon, protocol, persistence, dependency, Feeds Service, Emby homevideos feed view, or Emby podcast channel list behavior changed; attach exact command outputs and live user confirmation to the slice PR.
-- [ ] 4.5 Keep this slice independently reviewable/reversible and do not mark umbrella tasks complete.
+- [ ] 4.4 Review the complete slice, then perform live Wide, Normal/Narrow, and short-height acceptance for Music, Podcast, and Book covering selection, scrolling, focus, images enabled/disabled, grouping/filter/bucket state, rail framing, and workspace composition. Treat defects as bugs, fix them, and rerun affected tests and gates before acceptance.
+- [ ] 4.5 Confirm no Service, provider, playback, daemon, protocol, persistence, dependency, Feeds Service, Emby homevideos feed view, or Emby podcast channel list behavior changed; attach stateful, rendered, source-level, command, and live evidence to the independently reviewable slice PR. Do not mark umbrella tasks complete.
