@@ -27,10 +27,13 @@ the framework must absorb them additively.
 - **New mouse delivery spine.** Every mounted destination parent subscribes to
   mouse events through TuiRealm's `EventClause::Mouse` subscription clause and
   hit-tests the non-list chrome it last painted, delegating canonical list points
-  to its embedded control. A shell-side arbitration fold
+  to its embedded control. Each parent-produced mouse message crosses the
+  component boundary in a runtime-only typed envelope carrying its originating
+  mounted surface/source tag and semantic message. A shell-side arbitration fold
   (parallel to the existing keyboard router fold) resolves overlapping claims with
   a fixed priority: topmost overlay > active panel > sibling panel > chrome. A
-  mounted blocking overlay discards all mouse messages from underlying components.
+  mounted blocking overlay discards all mouse messages from underlying components;
+  the envelope is unwrapped only after the winner is selected.
 - **Shared framework primitives.** A `HitRegions<Tag>` collector (fill painted
   rects + tags during `view()`, resolve a point to a `Tag` during `on()`) for
   embedded canonical list controls, and a mounted-parent `MouseGestureState`

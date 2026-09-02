@@ -116,6 +116,9 @@ in the loop body.
 - **AND** the shell applies at most one component's resulting message, chosen by
   the `mouse-input` arbitration priority
 - **AND** no component's message for that event is produced twice
+- **AND** each parent-produced mouse message carries a runtime-only originating
+  mounted surface/source tag and semantic message envelope that the shell fold
+  arbitrates before unwrapping the winner
 
 #### Scenario: Focus after the synchronisation pass is asserted in its real order
 

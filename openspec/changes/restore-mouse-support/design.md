@@ -95,13 +95,16 @@ in-`on()` hit-test is what the five landed surfaces already do informally.
 
 ### D2 — Arbitration: a shell-side mouse fold with fixed surface priority
 
-`shell_run.rs` gains a mouse-message fold beside the keyboard router fold. When
-`tick()` returns more than one mouse-derived message, the shell keeps at most
-one, chosen by priority: **topmost mounted overlay/modal > active panel >
-other visible panel > chrome**. Overlay order comes from `root.rs`
-`OVERLAY_IDS` (already the canonical z-order). While a blocking overlay is
-mounted, all mouse messages from components beneath it are discarded — the fold
-does this centrally, so components never need a "am I blocked" flag.
+`shell_run.rs` gains a mouse-message fold beside the keyboard router fold. Each
+parent-produced mouse message carries a runtime-only typed envelope with its
+originating mounted surface/source tag and semantic message. When `tick()`
+returns more than one mouse-derived envelope, the shell keeps at most one,
+chosen by source-tag priority: **topmost mounted overlay/modal > active panel >
+other visible panel > chrome**. Overlay order comes from `root.rs` `OVERLAY_IDS`
+(already the canonical z-order). While a blocking overlay is mounted, all
+mouse envelopes from components beneath it are discarded — the fold does this
+centrally, so components never need a "am I blocked" flag. The winning envelope
+is unwrapped only after arbitration and then follows the existing dispatch.
 
 This is the keyboard router fold's shape (`RouterOutcome` →
 `apply_router_outcome`) applied to mouse, not a second event loop or a global
@@ -119,8 +122,11 @@ mutable input state.
 `DoubleClick`, `RightClick`, `Scroll` now; `DragStart/Move/End`,
 `HoverEnter/Leave` reserved. The mounted parent maps the gesture to a semantic
 request, delegating canonical list point resolution to the embedded control's
-`HitRegions<Target>`. The double-click interval
-and wheel throttle live in `MouseGestureState`, per mounted parent.
+`HitRegions<Target>`. Each parent-produced mouse message crosses the boundary
+in a runtime-only typed envelope carrying its originating mounted surface/source
+tag and semantic message. The shell fold arbitrates that source tag before
+unwrapping the winning semantic message. The double-click interval and wheel
+throttle live in `MouseGestureState`, per mounted parent.
 
 **A (rejected):** keep all timing in `App`'s shell-side clock; components report
 raw hit regions; the shell coalesces single-vs-double and routes the resolved
