@@ -156,9 +156,6 @@ impl Model {
             // to the resting level so the narrow browser's `set_content`
             // adopts it on the same tick.
             (false, Some(id), _) => {
-                // Discard any anchor captured before the breakpoint flip; it
-                // belongs to the kept-mounted wide component, not Browser.
-                self.tv_viewport_anchor = None;
                 let Some(anchor) = self
                     .application
                     .get_component(&id)
@@ -167,15 +164,9 @@ impl Model {
                 else {
                     return;
                 };
-                if let Some(browser_id) = self.emby_browser_id.clone() {
-                    if let Some(component) = self
-                        .application
-                        .get_component_mut(&browser_id)
-                        .and_then(|comp| comp.as_any_mut().downcast_mut::<BrowserComponent>())
-                    {
-                        component.apply_viewport_anchor(anchor);
-                    }
-                }
+                // Deliver after destination sync so Browser adopts the target
+                // without mirroring component-local cursor state.
+                self.tv_viewport_anchor = Some(anchor);
             }
             // narrow -> wide: capture the Browser's painted anchor and deliver
             // it to the kept-mounted wide workspace on its next paint.

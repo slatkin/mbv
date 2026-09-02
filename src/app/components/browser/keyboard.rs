@@ -23,6 +23,23 @@ impl BrowserComponent {
         // Unfocused browsers leave every chord untouched; the central router
         // handles destination-independent behavior.
         if self.focused {
+            if matches!(
+                key.code,
+                Key::Up
+                    | Key::Down
+                    | Key::Char('j')
+                    | Key::Char('k')
+                    | Key::PageUp
+                    | Key::PageDown
+                    | Key::Home
+                    | Key::End
+                    | Key::Left
+                    | Key::Right
+                    | Key::Char('h')
+                    | Key::Char('l')
+            ) {
+                self.pending_anchor = None;
+            }
             match key.code {
                 Key::Up | Key::Char('k') => {
                     let index = self.move_rows(-1);

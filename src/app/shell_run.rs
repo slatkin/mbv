@@ -28,9 +28,9 @@ impl Model {
         self.sync_audiobookshelf_book();
         self.sync_queue();
         self.update_playlists_content();
+        self.hand_off_tv_breakpoint();
         self.sync_emby_browser();
         self.sync_tv_workspace();
-        self.hand_off_tv_breakpoint();
         self.sync_music_workspace();
         // Retire destination components whose Service library left the
         // catalog before the focus pass routes to the active destination

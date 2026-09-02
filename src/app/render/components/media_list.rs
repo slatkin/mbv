@@ -346,7 +346,7 @@ fn wide_media_row<Target>(
     match row {
         MediaListRow::Spacer => ListItem::new(Line::default()),
         MediaListRow::Heading { text } => ListItem::new(Line::from(Span::styled(
-            format!(" {text}"),
+            text.clone(),
             Style::default()
                 .fg(palette::TEXT_MUTED)
                 .add_modifier(Modifier::BOLD),
@@ -373,13 +373,17 @@ fn wide_media_row<Target>(
                 (None, None) => String::new(),
             };
             let mut spans = vec![selection_marker(selected, MarkerEdge::Left)];
-            spans.extend(build_list_row_spans(
-                primary.clone(),
-                trailing,
-                selected,
-                fg,
-            ));
-            ListItem::new(Line::from(spans))
+            let mut content = build_list_row_spans(primary.clone(), trailing, selected, fg);
+            // The marker is the sole gutter for this one-column rail; the
+            // shared builder's generic leading pad would shift rows right.
+            content.remove(0);
+            spans.extend(content);
+            let item = ListItem::new(Line::from(spans));
+            if selected {
+                item.style(Style::default().bg(palette::SURFACE_RESTING))
+            } else {
+                item
+            }
         }
     }
 }
