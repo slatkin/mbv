@@ -1,5 +1,5 @@
 //! Narrow generic/Movies/home-video browse composer inputs
-//! (`migrate-narrow-browse-to-components` task 3.3).
+//! Canonical narrow browse inputs for the inline media-browser composition.
 //!
 //! `BrowserComponent` owns the narrow generic/Movies/home-video surface's
 //! paint. The shell resolves everything that needs `App`/image-cache

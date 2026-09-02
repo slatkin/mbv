@@ -1,9 +1,8 @@
 //! Narrow generic/Movies/home-video browse composition
-//! (`migrate-narrow-browse-to-components` task 3.3), split out of `list.rs`
-//! for the file-size cap. `render_narrow_browse_with_ctx` is the surface's
-//! sole painter now that `BrowserComponent` owns it; the legacy `render_list`
-//! narrow branch only publishes geometry (see its guard). `narrow_browse_extras`
-//! resolves the `App`/image-cache-backed inputs the shell pushes each frame.
+//! Canonical narrow generic/Movies/home-video browse composition. The
+//! `BrowserComponent` owns this surface's inputs while this render module
+//! remains responsible for painting and publishing the replacement-flow
+//! geometry used by its callers.
 
 use super::detail::compact_banner_image_cache_key;
 use crate::app::components::browser_narrow::{NarrowBrowseExtras, NarrowInlineHero};
@@ -18,6 +17,8 @@ use crate::app::render::components::list_rows::{
     LibraryListRenderCtx, SELECTED_BLOCK_SIDE_PADDING,
 };
 use crate::app::render::HomeImagePaint;
+use crate::app::render::{effective_sort_str, letter_bucket};
+use crate::app::ui_util::natural_sort_key;
 use crate::app::App;
 use ratatui::layout::Rect;
 use ratatui::Frame;
@@ -54,7 +55,8 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     // Narrow TV season grids keep their own single-column stride
     // (`is_viewing_season_grid`, legacy `list.rs`); every other narrow browse
     // surface derives the column count from the list width.
-    let cols = if extras.season_grid || extras.inline_hero.is_some() {
+    let hero_presentation = extras.inline_hero.is_some() || extras.hero_placeholder;
+    let cols = if extras.season_grid || hero_presentation {
         1
     } else {
         library_column_count(content_area.width)
@@ -144,24 +146,23 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some());
     // Hero-bearing narrow surfaces use the canonical inline control. The
     // legacy two-column policy remains for non-hero catalogs.
-    let final_offset = if extras.inline_hero.is_some() {
+    let final_offset = if hero_presentation {
         let mut browser = InlineMediaBrowser::new();
+        let mut sorted_indices: Vec<usize> = (0..ctx.items.len()).collect();
+        sorted_indices
+            .sort_by_key(|&index| natural_sort_key(effective_sort_str(&ctx.items[index])));
         let mut rows = Vec::with_capacity(ctx.items.len());
         let mut last_group = None;
-        for (index, item) in ctx.items.iter().enumerate() {
+        for &index in &sorted_indices {
+            let item = &ctx.items[index];
             if use_letter_groups {
-                let group = item
-                    .display_name()
-                    .chars()
-                    .next()
-                    .unwrap_or('#')
-                    .to_ascii_uppercase();
-                if last_group != Some(group) {
+                let group = letter_bucket(item, ctx.true_total());
+                if last_group.as_deref() != Some(group.as_str()) {
                     if last_group.is_some() {
                         rows.push(MediaListRow::Spacer);
                     }
                     rows.push(MediaListRow::Heading {
-                        text: group.to_string(),
+                        text: group.clone(),
                     });
                     last_group = Some(group);
                 }
@@ -198,7 +199,11 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             });
         }
         browser.set_content(rows);
-        for _ in 0..ctx.cursor() {
+        let selected_position = sorted_indices
+            .iter()
+            .position(|&index| index == ctx.cursor())
+            .unwrap_or(0);
+        for _ in 0..selected_position {
             browser.move_selection(1);
         }
         browser.set_scroll(ctx.scroll());
@@ -213,13 +218,40 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         layout.hero_area = result.hero_area.unwrap_or_default();
         layout.inline_hero_area = layout.hero_area;
         let rows = browser.rows();
-        layout.left_sorted_indices = (0..ctx.items.len()).collect();
-        layout.left_item_rows = rows
+        layout.left_sorted_indices = sorted_indices;
+        // These maps are in replacement-flow space, including headings, spacers,
+        // and the admitted hero block; consumers must share the painter's plan.
+        let display_rows: Vec<crate::app::render::components::list_rows::DisplayRow> = rows
             .iter()
-            .map(|row| row.selectable_target().copied().into_iter().collect())
+            .map(|row| match row {
+                MediaListRow::Item { target, .. } => {
+                    crate::app::render::components::list_rows::DisplayRow::Item(vec![*target])
+                }
+                MediaListRow::Heading { text } => {
+                    crate::app::render::components::list_rows::DisplayRow::LetterHeader(
+                        text.clone(),
+                    )
+                }
+                MediaListRow::Spacer => {
+                    crate::app::render::components::list_rows::DisplayRow::Spacer
+                }
+            })
             .collect();
-        layout.left_row_map = (result.offset..result.offset + list_area.height as usize)
-            .map(|row| rows.get(row).and_then(|r| r.selectable_target().copied()))
+        let selected_display = display_rows.iter().position(|row| matches!(row, crate::app::render::components::list_rows::DisplayRow::Item(ids) if ids.contains(&ctx.cursor))).unwrap_or(0);
+        let plan = crate::app::render::components::list_rows::InlineReplacementPlan::new(
+            &display_rows,
+            selected_display,
+            ctx.cursor,
+            desired_rows as u16,
+            list_area.height,
+            browser.scroll(),
+        );
+        layout.left_item_rows = plan.item_rows();
+        layout.left_row_map = plan
+            .row_targets()
+            .into_iter()
+            .skip(result.offset)
+            .take(list_area.height as usize)
             .collect();
         layout.selected_item_rect = layout
             .left_item_rows
