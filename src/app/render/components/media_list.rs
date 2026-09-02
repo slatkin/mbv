@@ -339,10 +339,11 @@ pub(in crate::app) fn render_inline_media_browser<Target>(
 }
 
 /// One painted row of a `WideMediaList`. Semantic state drives the row
-/// colour and, for active rows, an appended progress percentage; `duration`
-/// is a distinct right-aligned green element flush to `inner_width` (the row
-/// width less the scrollbar column); the selection background/marker come
-/// from the shared list-row primitives.
+/// colour and, for active rows, an appended progress percentage; `primary`
+/// is truncated with an ellipsis to fit; `duration` is a distinct
+/// right-aligned green element ending two columns before the content edge
+/// (`inner_width` already excludes the scrollbar column); the selection
+/// background/marker come from the shared list-row primitives.
 fn wide_media_row<Target>(
     row: &MediaListRow<Target>,
     selected: bool,
@@ -367,6 +368,14 @@ fn wide_media_row<Target>(
             semantic_state,
             ..
         } => {
+            // Canonical row geometry (legacy `render_queue_content`,
+            // de4a079c): `[marker][space][title…]  [FOAM trailing]  [green
+            // duration]` with a 2-col inset on the left (marker + space) and
+            // the right, and a quiet gap before the right-aligned duration.
+            const LEFT_INSET: usize = 2;
+            const RIGHT_INSET: usize = 2;
+            const QUIET_GAP: usize = 2;
+
             let (fg, progress) = match semantic_state {
                 MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None),
                 MediaSemanticState::Played => (palette::TEXT_MUTED, None),
@@ -376,17 +385,33 @@ fn wide_media_row<Target>(
                 ),
                 MediaSemanticState::Disabled => (palette::TEXT_MUTED, None),
             };
-            let trailing = match (trailing.as_deref(), progress) {
+            let trailing = match (
+                trailing.as_deref().filter(|text| !text.is_empty()),
+                progress,
+            ) {
                 (Some(text), Some(pct)) => format!("{text} {pct}"),
-                (Some(text), None) if !text.is_empty() => format!(" {text}"),
-                (Some(_), None) => String::new(),
+                (Some(text), None) => text.to_owned(),
                 (None, Some(pct)) => pct,
                 (None, None) => String::new(),
             };
+            let duration = duration.as_deref().filter(|dur| !dur.is_empty());
+
+            let content_w = inner_width.saturating_sub(RIGHT_INSET);
+            let trailing_w = if trailing.is_empty() {
+                0
+            } else {
+                1 + trailing.width()
+            };
+            let dur_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
+            let title = trunc_str(
+                primary,
+                content_w.saturating_sub(LEFT_INSET + trailing_w + dur_reserve),
+            );
+
             let selected = selected && focused;
             let mut spans = vec![selection_marker(selected, MarkerEdge::Left), Span::raw(" ")];
             spans.push(Span::styled(
-                primary.clone(),
+                title,
                 Style::default().fg(
                     if selected && !matches!(semantic_state, MediaSemanticState::Active { .. }) {
                         palette::TEXT_EMPHASIS
@@ -396,14 +421,15 @@ fn wide_media_row<Target>(
                 ),
             ));
             if !trailing.is_empty() {
+                spans.push(Span::raw(" "));
                 spans.push(Span::styled(
                     trailing,
                     Style::default().fg(palette::TEXT_METADATA),
                 ));
             }
-            if let Some(dur) = duration.as_deref().filter(|dur| !dur.is_empty()) {
+            if let Some(dur) = duration {
                 let used: usize = spans.iter().map(|span| span.content.width()).sum();
-                let pad = inner_width.saturating_sub(used + dur.width());
+                let pad = content_w.saturating_sub(used + dur.width());
                 spans.push(Span::raw(" ".repeat(pad)));
                 spans.push(Span::styled(
                     dur.to_owned(),

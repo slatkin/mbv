@@ -19,7 +19,7 @@ use crate::app::render::{
     render_queue_title_content, render_wide_media_list, QueueRenderGeometry, QueueTitleModel,
 };
 use crate::app::types_playback::{PlaybackState, QueueScope};
-use crate::app::ui_util::fmt_duration_short;
+use crate::app::ui_util::{fmt_duration_short, fmt_playback_pct};
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::{QueueItem, QueueSlot, QueueSlotId};
 
@@ -476,19 +476,29 @@ fn queue_media_rows(
             let (title, pos_ticks, duration_ticks) =
                 queue_row_fields(&slot.item, playback, is_active);
             let time_text = queue_row_time_text(pos_ticks, duration_ticks, is_active);
-            let semantic_state = if is_active {
+            let (semantic_state, trailing) = if is_active {
                 let progress = (pos_ticks > 0 && duration_ticks > 0)
                     .then(|| (pos_ticks * 100 / duration_ticks).clamp(0, 100) as u16);
-                MediaSemanticState::active(progress)
+                // The active-row `%` comes from the Active progress path.
+                (MediaSemanticState::active(progress), None)
             } else {
-                MediaSemanticState::Ordinary
+                // Non-active video rows carry a watch-% badge as FOAM metadata
+                // (legacy queue painter); audio/feed/audiobookshelf rows do not.
+                let pct = match &slot.item {
+                    QueueItem::Emby(item) if !item.is_audio() => {
+                        let pct =
+                            fmt_playback_pct(item.playback_position_ticks, item.runtime_ticks);
+                        (!pct.is_empty()).then_some(pct)
+                    }
+                    _ => None,
+                };
+                (MediaSemanticState::Ordinary, pct)
             };
             MediaListRow::Item {
                 target: slot.slot_id,
                 primary: title,
-                trailing: None,
-                // Duration/elapsed is a right-aligned green element, not FOAM
-                // metadata; the active-row `%` stays in `trailing` (foam).
+                trailing,
+                // Duration/elapsed is a right-aligned green element, not FOAM.
                 duration: (!time_text.is_empty()).then_some(time_text),
                 semantic_state,
             }
