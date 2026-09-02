@@ -317,6 +317,7 @@ fn render_podcast_hero(
                 actual_w: SERIES_IMAGE_COLS,
                 height: SERIES_IMAGE_ROWS,
             }),
+            overview_inset_box: false,
         },
         focused,
     );

@@ -416,6 +416,7 @@ pub(in crate::app) fn render_compact_detail_with_ctx(
             actual_w: content.img_actual_w,
             height: content.img_height,
         }),
+        overview_inset_box: false,
     };
     let result =
         crate::app::render::components::hero::paint_hero_content(f, area, &hero_content, focused);

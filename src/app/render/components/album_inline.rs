@@ -175,6 +175,7 @@ pub(in crate::app::render) fn render_grouped_album_rows_inline_plan(
                     unconditional_spacer_after_meta: true,
                     lines: &[],
                     image,
+                    overview_inset_box: false,
                 };
                 let result = crate::app::render::components::hero::paint_hero_content(
                     f,

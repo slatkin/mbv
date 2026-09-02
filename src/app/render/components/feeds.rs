@@ -252,6 +252,7 @@ pub(in crate::app) fn render_feeds_content(
             unconditional_spacer_after_meta: false,
             lines: &[],
             image: None,
+            overview_inset_box: false,
         };
         paint_hero_content(f, content_rect, &hero_content, focused);
     }
@@ -464,6 +465,7 @@ pub(in crate::app) fn render_feeds_content(
                     unconditional_spacer_after_meta: false,
                     lines: &[],
                     image: None,
+                    overview_inset_box: false,
                 },
                 focused,
             );

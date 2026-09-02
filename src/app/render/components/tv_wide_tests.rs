@@ -127,6 +127,45 @@ fn wide_tv_series_overview_wraps_around_portrait_in_real_painter() {
 }
 
 #[test]
+fn wide_tv_series_overview_sits_in_a_recessed_panel_without_crowding_episodes() {
+    let mut app = tv_app();
+    app.libs[0].nav_stack[0].items[0].overview =
+        "one two three four five six seven eight nine ten \
+         eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen"
+            .into();
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(
+        app.wide_tv_render_ctx(0, true, None)
+            .with_image_state(false, false),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+    terminal.draw(|f| component.view(f, f.area())).unwrap();
+    let buffer = terminal.backend().buffer();
+
+    // The overview text sits on the hero-on-left recessed SURFACE_BACKDROP
+    // panel (wide Home/Movies parity), not flat on the pane.
+    let overview_cell = buffer
+        .content()
+        .iter()
+        .find(|cell| cell.symbol() == "o" && cell.bg == palette::SURFACE_BACKDROP);
+    assert!(
+        overview_cell.is_some(),
+        "overview should be painted on a recessed SURFACE_BACKDROP panel"
+    );
+
+    // The season row and episode list still render below the panel.
+    let text = buffer_to_string(&terminal);
+    assert!(
+        text.contains("Series:"),
+        "season row still painted: {text:?}"
+    );
+    assert!(
+        text.contains("Pilot"),
+        "episode row still painted: {text:?}"
+    );
+}
+
+#[test]
 fn wide_tv_series_placeholder_paints_the_full_portrait_budget() {
     let mut app = tv_app();
     let item = app.libs[0].nav_stack[0].items[0].clone();
