@@ -80,15 +80,6 @@ impl TvWorkspaceComponent {
     }
 
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
-        let restore_target = self.list.selected_target().cloned().or_else(|| {
-            (!self.initialized).then(|| {
-                context
-                    .list
-                    .items
-                    .get(context.list.cursor())
-                    .map(|item| item.id.clone())
-            })?
-        });
         let grouped = !context.list.is_search_active()
             && (context.show_letter_pills
                 || context.list.has_letter_filter()
@@ -125,8 +116,23 @@ impl TvWorkspaceComponent {
                 }))
         });
         let rows = rows.collect::<Vec<_>>();
+        // The canonical cursor is in the rendered (natural-sort) order. Seed
+        // the local list from that order on first mount; thereafter preserve
+        // the stable target already owned by the component.
+        let restore_target = self.list.selected_target().cloned().or_else(|| {
+            (!self.initialized).then(|| {
+                sorted_items
+                    .get(context.list.cursor())
+                    .map(|item| item.id.clone())
+            })?
+        });
         self.list.set_content(rows);
-        if let Some(target) = restore_target {
+        if !self.initialized {
+            self.list.select_first();
+            for _ in 0..context.list.cursor() {
+                self.list.move_selection(1);
+            }
+        } else if let Some(target) = restore_target {
             if let Some(cursor) = self
                 .list
                 .rows()
