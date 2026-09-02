@@ -1,5 +1,6 @@
+use super::media_list::{MediaListRow, MediaSemanticState};
 use super::msg::{Msg, QueueColumnResize, QueueHitRegion, QueueIntent, QueueRequest, ShellRequest};
-use super::queue::{QueueComponent, QueueCursorUpdate};
+use super::queue::{queue_media_rows, QueueComponent, QueueCursorUpdate};
 use crate::app::render::QueueTitleModel;
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use mbv_core::playback_queue::{PlaybackQueue, QueueItem};
@@ -311,6 +312,94 @@ fn queue_component_instances_isolate_viewport_state() {
     assert!(bottom.test_scroll() > 0);
     assert_eq!(untouched.test_scroll(), 0);
     assert_eq!(untouched.test_cursor(), 0);
+}
+
+#[test]
+fn queue_projection_clamps_active_progress_to_presentation_bounds() {
+    let mut item = crate::app::tests::make_item("bounded", "Audio");
+    item.runtime_ticks = 100;
+    let slots = PlaybackQueue::from_queue_items(vec![QueueItem::Emby(Box::new(item))], None)
+        .slots()
+        .to_vec();
+
+    for position_ticks in [0, 250] {
+        let rows = queue_media_rows(
+            &slots,
+            PlaybackState {
+                active: true,
+                active_idx: 0,
+                position_ticks,
+                runtime_ticks: 100,
+                paused: false,
+            },
+        );
+        let Some(MediaListRow::Item { semantic_state, .. }) = rows.first() else {
+            panic!("queue projection must produce an item row")
+        };
+        let MediaSemanticState::Active { progress } = semantic_state else {
+            panic!("active queue row must use active semantic state")
+        };
+        assert_eq!(
+            progress.as_ref().map(|value| value.percent()),
+            if position_ticks == 0 { None } else { Some(100) }
+        );
+    }
+}
+
+#[test]
+fn queue_refresh_retains_selected_target_and_scrolls_to_it() {
+    let slots = long_queue();
+    let selected = slots[20].slot_id;
+    let mut component = QueueComponent::new();
+    component.set_content(
+        slots.clone(),
+        QueueCursorUpdate::Set(20),
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    component.set_content(
+        slots,
+        QueueCursorUpdate::Preserve,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    assert_eq!(component.test_cursor(), 20);
+    assert_eq!(component.test_selected_target(), Some(selected));
+    assert!(component.test_scroll() > 0);
+}
+
+#[test]
+fn queue_movement_uses_single_row_stride_and_follows_focus() {
+    let mut component = QueueComponent::new();
+    component.set_content(
+        long_queue(),
+        QueueCursorUpdate::Set(0),
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    assert!(matches!(
+        component.on(&Event::Keyboard(key(Key::Down))),
+        Some(Msg::Queue(QueueRequest::Cursor { .. }))
+    ));
+    assert_eq!(component.test_cursor(), 1);
+    assert!(matches!(
+        component.on(&Event::Keyboard(key(Key::PageDown))),
+        Some(Msg::Queue(QueueRequest::Cursor { .. }))
+    ));
+    assert_eq!(component.test_cursor(), 2);
 }
 
 #[test]

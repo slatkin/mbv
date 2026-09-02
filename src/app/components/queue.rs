@@ -368,6 +368,11 @@ impl QueueComponent {
     }
 
     #[cfg(test)]
+    pub(crate) fn test_selected_target(&self) -> Option<QueueSlotId> {
+        self.list.selected_target().copied()
+    }
+
+    #[cfg(test)]
     pub(crate) fn test_cursor(&self) -> usize {
         self.list.cursor()
     }
@@ -473,7 +478,7 @@ impl AppComponent<Msg, UserEvent> for QueueComponent {
 /// slot title, duration/elapsed metadata, and semantic active state whose
 /// progress is clamped to `0..=100` at this projection boundary. No ticks,
 /// runtime, source, credentials, callbacks, or effects cross the child edge.
-fn queue_media_rows(
+pub(in crate::app) fn queue_media_rows(
     slots: &[QueueSlot],
     playback: PlaybackState,
 ) -> Vec<MediaListRow<QueueSlotId>> {
