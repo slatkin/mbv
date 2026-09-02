@@ -114,11 +114,10 @@ impl TvWorkspaceComponent {
                     primary: item.display_name(),
                     trailing: (item.production_year > 0).then(|| item.production_year.to_string()),
                     duration: None,
-                    semantic_state: if item.played {
-                        MediaSemanticState::Played
-                    } else {
-                        MediaSemanticState::Ordinary
-                    },
+                    // TV series rows are never dimmed on watched/played state
+                    // (legacy rail parity): the canonical row colour follows
+                    // panel focus only.
+                    semantic_state: MediaSemanticState::Ordinary,
                 }))
         });
         let rows = rows.collect::<Vec<_>>();

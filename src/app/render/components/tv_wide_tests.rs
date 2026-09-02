@@ -283,39 +283,33 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
         (terminal.backend().buffer().clone(), layout)
     }
 
-    let (library_buffer, library_layout) = render(true);
+    // `tv_wide_list_area.y` is the letter heading; `y + 1` is the first
+    // (selected) series row, `y - 1` the panel top edge.
+    let (focused_buffer, focused_layout) = render(true);
+    let fla = focused_layout.tv_wide_list_area;
+    // Focused rail: the selected row sits on the focused list-panel surface
+    // (#3c4841), not the library backdrop.
     assert_eq!(
-        library_buffer[(
-            library_layout.tv_wide_list_area.x,
-            library_layout.tv_wide_list_area.y + 1
-        )]
-            .bg,
-        palette::SURFACE_BACKDROP
+        focused_buffer[(fla.x, fla.y + 1)].bg,
+        palette::SURFACE_FOCUSED
     );
+    // Focused rail panel is painted with the focused surface.
     assert_eq!(
-        library_buffer[(
-            library_layout.tv_wide_list_area.x.saturating_sub(1),
-            library_layout.tv_wide_list_area.y.saturating_sub(1)
-        )]
-            .bg,
-        palette::resolve_surface_focus(false)
+        focused_buffer[(fla.x.saturating_sub(1), fla.y.saturating_sub(1))].bg,
+        palette::resolve_surface_focus(true)
     );
 
-    let (queue_buffer, queue_layout) = render(false);
-    assert_ne!(
-        queue_buffer[(
-            queue_layout.tv_wide_list_area.x,
-            queue_layout.tv_wide_list_area.y + 1
-        )]
-            .bg,
-        palette::SURFACE_BACKDROP
-    );
+    let (unfocused_buffer, unfocused_layout) = render(false);
+    let ula = unfocused_layout.tv_wide_list_area;
+    // Unfocused rail: no selection highlight — the selected row sits on the
+    // resting panel surface like every other row.
     assert_eq!(
-        queue_buffer[(
-            queue_layout.tv_wide_list_area.x.saturating_sub(1),
-            queue_layout.tv_wide_list_area.y.saturating_sub(1)
-        )]
-            .bg,
-        palette::resolve_surface_focus(true)
+        unfocused_buffer[(ula.x, ula.y + 1)].bg,
+        palette::resolve_surface_focus(false)
+    );
+    // Unfocused rail panel drops to the resting surface.
+    assert_eq!(
+        unfocused_buffer[(ula.x.saturating_sub(1), ula.y.saturating_sub(1))].bg,
+        palette::resolve_surface_focus(false)
     );
 }

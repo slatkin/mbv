@@ -222,7 +222,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     layout.tv_wide_list_area = list_area;
     if list_panel.height > 0 {
         f.render_widget(
-            Block::default().style(palette::resolve_surface_focus(!right_focused)),
+            Block::default().style(palette::resolve_surface_focus(right_focused)),
             list_panel,
         );
     }
@@ -234,7 +234,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         width: list_panel.width,
         ..list_area
     };
-    hero_left::hero_on_left_list_panel_border(f, list_panel, !right_focused);
+    hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     let final_scroll =
         super::media_list::render_wide_media_list(f, paint_area, media_list, right_focused, layout);
     // Same key the component sorts the rail rows by, so `left_sorted_indices`
