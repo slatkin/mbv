@@ -1,7 +1,8 @@
 use super::hero::{inline_display_row, InlineDisplayRow};
 use super::list_rows::{
-    build_list_row_spans, focused_or_subtle, item_cell_spans, selected_cell_rect, selection_marker,
-    DisplayRow, InlineReplacementPlan, ListRenderCtx, MarkerEdge,
+    build_list_row_spans, focused_or_muted_soft_white, focused_or_subtle, item_cell_spans,
+    selected_cell_rect, selection_marker, DisplayRow, InlineReplacementPlan, ListRenderCtx,
+    MarkerEdge,
 };
 use crate::app::components::media_list::{
     InlineLayout, InlineMediaBrowser, MediaListRow, MediaSemanticState, WideMediaList,
@@ -348,7 +349,7 @@ fn wide_media_row<Target>(
         MediaListRow::Heading { text } => ListItem::new(Line::from(Span::styled(
             text.clone(),
             Style::default()
-                .fg(palette::TEXT_MUTED)
+                .fg(palette::TEXT_FOCUS_ACCENT)
                 .add_modifier(Modifier::BOLD),
         ))),
         MediaListRow::Item {
@@ -358,7 +359,7 @@ fn wide_media_row<Target>(
             ..
         } => {
             let (fg, progress) = match semantic_state {
-                MediaSemanticState::Ordinary => (focused_or_subtle(focused), None),
+                MediaSemanticState::Ordinary => (focused_or_muted_soft_white(focused), None),
                 MediaSemanticState::Played => (palette::TEXT_MUTED, None),
                 MediaSemanticState::Active { progress } => (
                     palette::TEXT_FOCUS_ACCENT,
@@ -368,7 +369,8 @@ fn wide_media_row<Target>(
             };
             let trailing = match (trailing.as_deref(), progress) {
                 (Some(text), Some(pct)) => format!("{text} {pct}"),
-                (Some(text), None) => text.to_string(),
+                (Some(text), None) if !text.is_empty() => format!(" {text}"),
+                (Some(_), None) => String::new(),
                 (None, Some(pct)) => pct,
                 (None, None) => String::new(),
             };

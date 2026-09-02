@@ -104,6 +104,11 @@ impl TvWorkspaceComponent {
                 .flatten();
             heading
                 .into_iter()
+                .flat_map(|heading| {
+                    [Some(MediaListRow::Spacer), Some(heading)]
+                        .into_iter()
+                        .flatten()
+                })
                 .chain(std::iter::once(MediaListRow::Item {
                     target: item.id.clone(),
                     primary: item.display_name(),

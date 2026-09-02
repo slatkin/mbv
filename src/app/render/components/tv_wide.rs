@@ -226,8 +226,16 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
             list_panel,
         );
     }
+    // The canonical rail owns the full panel row: selection markers and
+    // selected backgrounds must reach the panel border, while the layout
+    // area remains the padded hit/scroll geometry.
+    let paint_area = Rect {
+        x: list_panel.x,
+        width: list_panel.width,
+        ..list_area
+    };
     let final_scroll =
-        super::media_list::render_wide_media_list(f, list_area, media_list, right_focused, layout);
+        super::media_list::render_wide_media_list(f, paint_area, media_list, right_focused, layout);
     let mut order: Vec<usize> = (0..ctx.list.items.len()).collect();
     order.sort_by_key(|&index| ctx.list.items[index].display_name().to_lowercase());
     layout.left_sorted_indices = order;
@@ -310,9 +318,15 @@ fn render_tv_series_selection(
         .map(|season| season.display_name())
         .collect();
     let ids: Vec<usize> = (0..labels.len()).collect();
+    let row_width = inline_hero_text_width(
+        area.width,
+        SERIES_IMAGE_COLS,
+        SERIES_IMAGE_ROWS,
+        result.next_row.saturating_sub(area.y),
+    );
     layout.tv_wide_season_tabs = render_pill_bar(
         f,
-        Rect::new(area.x, result.next_row, area.width, 1),
+        Rect::new(area.x, result.next_row, row_width, 1),
         PillBar {
             labels: &labels,
             ids: &ids,
@@ -330,7 +344,17 @@ fn render_tv_series_selection(
     if episodes.is_empty() {
         render_placeholder(
             f,
-            Rect::new(area.x, first_row, area.width, 1),
+            Rect::new(
+                area.x,
+                first_row,
+                inline_hero_text_width(
+                    area.width,
+                    SERIES_IMAGE_COLS,
+                    SERIES_IMAGE_ROWS,
+                    first_row.saturating_sub(area.y),
+                ),
+                1,
+            ),
             if detail.episodes.contains_key(&season.id) {
                 " (no episodes)"
             } else {
@@ -381,13 +405,33 @@ fn render_tv_series_selection(
         .enumerate()
     {
         layout.tv_wide_episode_rows.push((
-            Rect::new(area.x, first_row + visible_index as u16, area.width, 1),
+            Rect::new(
+                area.x,
+                first_row + visible_index as u16,
+                inline_hero_text_width(
+                    area.width,
+                    SERIES_IMAGE_COLS,
+                    SERIES_IMAGE_ROWS,
+                    first_row + visible_index as u16 - area.y,
+                ),
+                1,
+            ),
             index,
         ));
     }
     f.render_widget(
         Table::new(rows, [Constraint::Min(10), Constraint::Length(7)]).column_spacing(1),
-        Rect::new(area.x, first_row, area.width, visible as u16),
+        Rect::new(
+            area.x,
+            first_row,
+            inline_hero_text_width(
+                area.width,
+                SERIES_IMAGE_COLS,
+                SERIES_IMAGE_ROWS,
+                first_row.saturating_sub(area.y),
+            ),
+            visible as u16,
+        ),
     );
     (true, image_paint)
 }

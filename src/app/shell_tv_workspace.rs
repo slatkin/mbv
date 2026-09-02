@@ -244,6 +244,17 @@ impl Model {
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
+        if let Some(item) = selected_series
+            .as_ref()
+            .filter(|_| self.app.images_enabled())
+        {
+            self.app.fetch_card_image(
+                format!("{}:ser_primary", item.id),
+                item.id.clone(),
+                String::new(),
+                &["Primary"],
+            );
+        }
         let image_loading = selected_series.as_ref().is_some_and(|item| {
             self.app.images_enabled()
                 && !self
