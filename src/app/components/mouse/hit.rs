@@ -13,12 +13,15 @@ impl<Tag> HitRegions<Tag> {
     pub fn push(&mut self, rect: Rect, tag: Tag) {
         self.regions.push((rect, tag));
     }
-    pub fn resolve(&self, point: Position) -> Option<&Tag> {
+    pub fn resolve(&self, point: Position) -> Option<Tag>
+    where
+        Tag: Clone,
+    {
         self.regions
             .iter()
             .rev()
             .find(|(rect, _)| rect.contains(point))
-            .map(|(_, tag)| tag)
+            .map(|(_, tag)| tag.clone())
     }
 }
 
@@ -30,7 +33,7 @@ mod tests {
         let mut h = HitRegions::default();
         h.push(Rect::new(0, 0, 4, 4), 1);
         h.push(Rect::new(1, 1, 2, 2), 2);
-        assert_eq!(h.resolve(Position::new(1, 1)), Some(&2));
+        assert_eq!(h.resolve(Position::new(1, 1)), Some(2));
         assert_eq!(h.resolve(Position::new(9, 9)), None);
     }
 }
