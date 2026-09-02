@@ -43,7 +43,10 @@ fn sync_projects_inline_search_visibility_before_tv_content() {
         item.item_type = "Series".into();
     }
     app.libs.push(second);
-    app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
+    // Wide breakpoint is now driven synchronously by terminal size
+    // (`prime_wide_tv_geometry`), not a previous-frame paint rect.
+    app.terminal_width = 160;
+    app.terminal_height = 40;
     let mut model = Model::new(app);
 
     // Simulate the stale projection left by a previous tick while A was active.
@@ -308,8 +311,13 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     app.tab = TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Library;
     app.panel_mode = PanelMode::Both;
-    let wide = Rect::new(40, 0, 60, 20);
-    app.layout.main.tv_wide_right_area = wide;
+    // Wide/narrow is driven synchronously by terminal size now
+    // (`prime_wide_tv_geometry`, the narrow→wide flash fix).
+    let widen = |model: &mut Model, wide: bool| {
+        model.app.terminal_width = if wide { 160 } else { 80 };
+    };
+    app.terminal_width = 160;
+    app.terminal_height = 40;
     let mut model = Model::new(app);
 
     // Wide: move the TV workspace selection to row 1 (movie-second).
@@ -330,7 +338,7 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
 
     // Flip to narrow: the pointer moves to the BrowserComponent, which must
     // adopt the series the wide workspace had selected (row 1).
-    model.app.layout.main.tv_wide_right_area = Rect::default();
+    widen(&mut model, false);
     model.sync_mounted_surfaces();
     let browser_id = model.emby_browser_id.clone().expect("narrow TV browser id");
     let browser_cursor = model
@@ -362,7 +370,7 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     // Flip back to wide: the kept-mounted workspace must re-anchor to the
     // resting position the narrow browser left (row 0), not its stale
     // local cursor (row 1).
-    model.app.layout.main.tv_wide_right_area = wide;
+    widen(&mut model, true);
     model.sync_mounted_surfaces();
     assert_eq!(model.tv_workspace_id.as_ref(), Some(&tv_id));
     let tv_cursor = model
@@ -375,6 +383,52 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
         Some(0),
         "wide workspace must re-anchor to the series selected while narrow"
     );
+}
+
+/// Entering a wide TV library must route straight to `TvWorkspaceComponent`
+/// on the *first* `sync_mounted_surfaces()` after the tab flips — no
+/// one-frame narrow `BrowserComponent` flash. `is_wide_tv_active()` alone is
+/// a previous-frame paint signal; `prime_wide_tv_geometry` publishes the
+/// wide geometry synchronously from terminal size so the mount gate is
+/// correct immediately.
+#[test]
+fn entering_wide_tv_library_does_not_flash_the_narrow_browser() {
+    use crate::app::PanelMode;
+
+    let mut app = make_movie_app();
+    // Second library is the wide TV one; start focused on the first (Movies).
+    let mut tv_app = make_movie_app();
+    let mut tv = tv_app.libs.remove(0);
+    tv.library.collection_type = "tvshows".into();
+    tv.library.id = "tv-library".into();
+    for item in &mut tv.nav_stack[0].items {
+        item.item_type = "Series".into();
+    }
+    app.libs.push(tv);
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::Both;
+    app.terminal_width = 160;
+    app.terminal_height = 40;
+    app.tab = TabSelection::EmbyLibrary(0);
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+    assert_eq!(model.tv_workspace_id, None, "Movies tab: no TV workspace");
+
+    // Flip to the wide TV library — the very next sync must land on the
+    // workspace, never the narrow browser.
+    model.app.tab = TabSelection::EmbyLibrary(1);
+    model.sync_mounted_surfaces();
+
+    let tv_id = model
+        .tv_workspace_id
+        .clone()
+        .expect("wide TV workspace mounted on the first sync after entry");
+    assert!(matches!(tv_id, ComponentId::TvWorkspace(_)));
+    assert_eq!(
+        model.emby_browser_id, None,
+        "no narrow browser flash for the wide TV library"
+    );
+    assert_eq!(model.application.focus(), Some(&tv_id));
 }
 
 /// Build a two-level stack: a Series parent list whose cursor is parked

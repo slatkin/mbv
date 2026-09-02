@@ -310,7 +310,6 @@ mod tests {
     #[test]
     fn tv_library_wide_narrow_wide_transition_routes_and_focuses_correctly() {
         use crate::app::components::TvWorkspaceComponent;
-        use ratatui::layout::Rect;
 
         let mut app = make_movie_app();
         app.libs[0].library.collection_type = "tvshows".into();
@@ -320,14 +319,19 @@ mod tests {
         app.tab = TabSelection::EmbyLibrary(0);
         app.panel_focus = PanelFocus::Library;
         app.panel_mode = PanelMode::Both;
-        app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
+        app.terminal_width = 160;
+        app.terminal_height = 40;
         let mut model = Model::new(app);
 
-        let wide = Rect::new(40, 0, 60, 20);
-        let narrow = Rect::default();
+        // The breakpoint is now driven synchronously by terminal size (the
+        // flash fix): `prime_wide_tv_geometry` in `sync_mounted_surfaces`
+        // recomputes `tv_wide_*` before the mount gates read it.
+        let widen = |model: &mut Model, wide: bool| {
+            model.app.terminal_width = if wide { 160 } else { 80 };
+        };
 
         // Wide: TvWorkspaceComponent owns the surface and focus.
-        model.app.layout.main.tv_wide_right_area = wide;
+        widen(&mut model, true);
         model.sync_mounted_surfaces();
         let tv_id = model.tv_workspace_id.clone().expect("wide TV workspace id");
         assert!(matches!(tv_id, ComponentId::TvWorkspace(_)));
@@ -343,7 +347,7 @@ mod tests {
 
         // Narrow: BrowserComponent owns the surface and focus; the TV
         // workspace stays mounted (keep-mounted) but is no longer the pointer.
-        model.app.layout.main.tv_wide_right_area = narrow;
+        widen(&mut model, false);
         model.sync_mounted_surfaces();
         let browser_id = model.emby_browser_id.clone().expect("narrow TV browser id");
         assert!(matches!(browser_id, ComponentId::Browser(_)));
@@ -362,7 +366,7 @@ mod tests {
             .is_some());
 
         // Wide again: the same TvWorkspaceComponent is re-pointed and focused.
-        model.app.layout.main.tv_wide_right_area = wide;
+        widen(&mut model, true);
         model.sync_mounted_surfaces();
         assert_eq!(model.tv_workspace_id.as_ref(), Some(&tv_id));
         assert_eq!(model.emby_browser_id, None);

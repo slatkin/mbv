@@ -92,6 +92,36 @@ impl Model {
         }))
     }
 
+    /// Populate `tv_wide_*` layout geometry *before* the mount/focus gates in
+    /// `sync_mounted_surfaces` read it. `LayoutMain::is_wide_tv_active` is a
+    /// previous-frame paint signal, so without this the first frame after
+    /// entering a wide TV library mounts the narrow `BrowserComponent`, then
+    /// the next frame swaps to `TvWorkspaceComponent` — a visible narrow→wide
+    /// flash. This recomputes exactly what `render_library` publishes, but
+    /// paint-free from the current terminal size (mirrors Music's
+    /// `render_music_workspace_component` priming its own `publish_geometry`).
+    pub(super) fn prime_wide_tv_geometry(&mut self) {
+        use ratatui::layout::Rect;
+        match self
+            .app
+            .tab
+            .emby_library_index()
+            .and_then(|idx| self.app.wide_tv_library_area(idx).map(|area| (idx, area)))
+        {
+            Some((idx, lib_area)) => {
+                let ctx = self.app.wide_tv_render_ctx(idx, false, None);
+                ctx.publish_geometry(lib_area, &mut self.app.layout.main);
+            }
+            None => {
+                // Clear any stale wide rect so the mount gate does not stay
+                // wide after leaving the workspace or narrowing the terminal.
+                self.app.layout.main.tv_wide_area = Rect::default();
+                self.app.layout.main.tv_wide_left_area = Rect::default();
+                self.app.layout.main.tv_wide_right_area = Rect::default();
+            }
+        }
+    }
+
     pub(super) fn sync_tv_workspace(&mut self) {
         let next_id = self.tv_workspace_component_id();
         if self.tv_workspace_id != next_id {

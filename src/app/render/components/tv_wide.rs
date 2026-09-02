@@ -10,7 +10,7 @@ use crate::app::render::components::hero::{
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::HomeImagePaint;
 use crate::app::render::{render_pill_bar, render_placeholder, MarkerEdge, PillBar};
-use crate::app::{palette, App, PanelFocus, SeriesDetail};
+use crate::app::{palette, App, PanelFocus, PanelMode, SeriesDetail};
 use mbv_core::api::EmbyItem;
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::Constraint;
@@ -111,7 +111,38 @@ impl App {
         })
     }
 
-    pub(in crate::app::render) fn wide_tv_render_ctx(
+    /// The finalized library content rect when the wide hero-on-left TV
+    /// workspace owns `lib_idx`, computed paint-free from the current
+    /// terminal size — `None` when the library is not a wide-TV series list
+    /// or the breakpoint is narrow. Mirrors the exact gate `render_library`
+    /// applies (`is_wide_tv_library` + `shared_hero_presentation` on the
+    /// finalized area), so component mount/focus can be routed a frame
+    /// earlier than `LayoutMain::is_wide_tv_active` (a previous-frame paint
+    /// signal that flashes the narrow browser on entry).
+    pub(in crate::app) fn wide_tv_library_area(&self, lib_idx: usize) -> Option<Rect> {
+        if !self.is_wide_tv_library(lib_idx) {
+            return None;
+        }
+        let chrome = crate::app::render::arrangements::chrome::chrome_geometry(
+            crate::app::render::arrangements::chrome::ChromeGeometryInput {
+                area: Rect::new(0, 0, self.terminal_width, self.terminal_height),
+                panel_mode: self.effective_panel_mode(),
+                panel_focus: self.effective_panel_focus(),
+                queue_column_width: self.queue_column_width,
+                terminal_width: self.terminal_width,
+            },
+        );
+        if !chrome.right_visible {
+            return None;
+        }
+        let lib_area = crate::app::render::components::widgets::right_panel_content_area(
+            chrome.right_area,
+            self.effective_panel_mode() != PanelMode::Both,
+        );
+        hero_left::shared_hero_presentation(lib_area).map(|_| lib_area)
+    }
+
+    pub(in crate::app) fn wide_tv_render_ctx(
         &self,
         lib_idx: usize,
         focused: bool,
