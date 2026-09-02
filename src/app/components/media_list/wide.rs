@@ -75,6 +75,11 @@ impl<Target> WideMediaList<Target> {
         self.core.select_last();
     }
 
+    /// Place the cursor at selectable index `index`, clamped to the last row.
+    pub fn select_index(&mut self, index: usize) {
+        self.core.select_index(index);
+    }
+
     /// The clamped viewport for a painted `viewport_height`, keeping the
     /// selected row on screen.
     pub fn resolve_viewport(&self, viewport_height: usize) -> WideViewport {
@@ -93,6 +98,11 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
     /// and locally clamping otherwise (design.md D3).
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
         self.core.set_content(rows);
+    }
+
+    /// Move the cursor to `target` when it is present; returns whether it was.
+    pub fn select_target(&mut self, target: &Target) -> bool {
+        self.core.select_target(target)
     }
 
     /// Produce a [`ViewportAnchor`] from the current selection for a painted

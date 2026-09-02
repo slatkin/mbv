@@ -184,6 +184,11 @@ impl<Target> ListCore<Target> {
         self.cursor = self.selectable.len().saturating_sub(1);
     }
 
+    /// Place the cursor at selectable index `index`, clamped to the last row.
+    fn select_index(&mut self, index: usize) {
+        self.cursor = index.min(self.selectable.len().saturating_sub(1));
+    }
+
     /// The clamped viewport for a painted `viewport_height`, keeping the
     /// selected row on screen.
     fn resolve_viewport(&self, viewport_height: usize) -> WideViewport {
@@ -218,6 +223,17 @@ impl<Target: PartialEq> ListCore<Target> {
         self.selectable
             .iter()
             .position(|&row| self.rows[row].selectable_target() == Some(target))
+    }
+
+    /// Move the cursor to `target` when it is present; returns whether it was.
+    fn select_target(&mut self, target: &Target) -> bool {
+        match self.position_of(target) {
+            Some(index) => {
+                self.cursor = index;
+                true
+            }
+            None => false,
+        }
     }
 }
 

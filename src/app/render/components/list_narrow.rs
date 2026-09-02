@@ -148,17 +148,17 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         let mut browser = InlineMediaBrowser::new();
         let mut sorted_indices: Vec<usize> = (0..ctx.items.len()).collect();
         sorted_indices
-            .sort_by_key(|&index| natural_sort_key(effective_sort_str(&ctx.items[index])));
+            .sort_by_cached_key(|&index| natural_sort_key(effective_sort_str(&ctx.items[index])));
+        let bucket_total = if ctx.letter_filter.is_some() {
+            usize::MAX
+        } else {
+            ctx.true_total()
+        };
         let mut rows = Vec::with_capacity(ctx.items.len());
         let mut last_group = None;
         for &index in &sorted_indices {
             let item = &ctx.items[index];
             if use_letter_groups {
-                let bucket_total = if ctx.letter_filter.is_some() {
-                    usize::MAX
-                } else {
-                    ctx.true_total()
-                };
                 let group = letter_bucket(item, bucket_total);
                 if last_group.as_deref() != Some(group.as_str()) {
                     if last_group.is_some() {
@@ -206,9 +206,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             .iter()
             .position(|&index| index == ctx.cursor())
             .unwrap_or(0);
-        for _ in 0..selected_position {
-            browser.move_selection(1);
-        }
+        browser.select_index(selected_position);
         browser.set_scroll(ctx.scroll());
         let desired_rows = inline_hero_rows as usize;
         let result = super::media_list::render_inline_media_browser(

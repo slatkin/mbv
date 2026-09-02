@@ -220,9 +220,6 @@ pub(in crate::app) fn render_plain_rows(
 /// `EmbyItem`-typed `render_plain_rows` above (which stays the path for the
 /// inline browsers until it is parameterised). Returns the resolved scroll
 /// offset for the caller to store via `WideMediaList::set_scroll`.
-///
-/// Unused until task 3.4 composes it onto the Wide TV right rail.
-#[allow(dead_code)]
 pub(in crate::app) fn render_wide_media_list<Target>(
     f: &mut Frame,
     area: Rect,

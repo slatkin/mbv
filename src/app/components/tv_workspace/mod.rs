@@ -39,7 +39,6 @@ pub struct TvWorkspaceComponent {
     context: TvWideRenderCtx,
     list: WideMediaList<String>,
     cursor: usize,
-    scroll: usize,
     season_cursor: usize,
     episode_cursor: Option<usize>,
     pane: Pane,
@@ -66,7 +65,6 @@ impl TvWorkspaceComponent {
             context,
             list: WideMediaList::new(),
             cursor: 0,
-            scroll: 0,
             season_cursor: 0,
             episode_cursor: None,
             pane: Pane::Series,
@@ -126,32 +124,12 @@ impl TvWorkspaceComponent {
         // The canonical cursor is in the rendered (natural-sort) order. Seed
         // the local list from that order on first mount; thereafter preserve
         // the stable target already owned by the component.
-        let restore_target = self.list.selected_target().cloned().or_else(|| {
-            (!self.initialized).then(|| {
-                sorted_items
-                    .get(context.list.cursor())
-                    .map(|item| item.id.clone())
-            })?
-        });
+        let restore_target = self.list.selected_target().cloned();
         self.list.set_content(rows);
         if !self.initialized {
-            self.list.select_first();
-            for _ in 0..context.list.cursor() {
-                self.list.move_selection(1);
-            }
+            self.list.select_index(context.list.cursor());
         } else if let Some(target) = restore_target {
-            if let Some(cursor) = self
-                .list
-                .rows()
-                .iter()
-                .filter_map(|row| row.selectable_target())
-                .position(|item| item == &target)
-            {
-                self.list.select_first();
-                for _ in 0..cursor {
-                    self.list.move_selection(1);
-                }
-            }
+            self.list.select_target(&target);
         }
         let series_changed =
             context.selected_series.as_ref().map(|item| &item.id) != self.last_series_id.as_ref();
@@ -162,7 +140,6 @@ impl TvWorkspaceComponent {
             self.last_series_id = context.selected_series.as_ref().map(|item| item.id.clone());
         }
         if !self.initialized {
-            self.scroll = context.list.scroll();
             if !series_changed {
                 self.season_cursor = context.season_cursor;
                 self.episode_cursor = context.episode_cursor;
@@ -176,7 +153,6 @@ impl TvWorkspaceComponent {
         }
         self.context = context;
         self.cursor = self.list.cursor();
-        self.scroll = self.list.scroll();
         let season_count = self
             .context
             .series_detail
@@ -243,31 +219,10 @@ impl TvWorkspaceComponent {
         &mut self,
         anchor: super::media_list::ViewportAnchor<String>,
     ) {
-        if let Some(cursor) = self
-            .list
-            .rows()
-            .iter()
-            .filter_map(|row| row.selectable_target())
-            .position(|target| target == &anchor.selected_target)
-        {
-            self.list.select_first();
-            for _ in 0..cursor {
-                self.list.move_selection(1);
-            }
+        if self.list.select_target(&anchor.selected_target) {
             self.cursor = self.list.cursor();
         }
         self.pending_anchor = Some(anchor);
-    }
-
-    pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
-        self.list.select_first();
-        self.cursor = cursor.min(self.list.selectable_len().saturating_sub(1));
-        for _ in 0..self.cursor {
-            self.list.move_selection(1);
-        }
-        self.list.set_scroll(scroll);
-        self.cursor = self.list.cursor();
-        self.scroll = self.list.scroll();
     }
 
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<HomeImagePaint> {
@@ -476,7 +431,6 @@ impl Component for TvWorkspaceComponent {
         let (scroll, image_paint) =
             render_wide_tv_with_ctx(frame, area, &context, &mut self.layout, &self.list);
         self.list.set_scroll(scroll);
-        self.scroll = self.list.scroll();
         self.cursor = self.list.cursor();
         self.image_paint = image_paint;
     }

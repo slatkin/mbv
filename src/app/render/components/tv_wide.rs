@@ -237,8 +237,14 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     hero_left::hero_on_left_list_panel_border(f, list_panel, !right_focused);
     let final_scroll =
         super::media_list::render_wide_media_list(f, paint_area, media_list, right_focused, layout);
+    // Same key the component sorts the rail rows by, so `left_sorted_indices`
+    // matches the painted order; `sort_by_cached_key` computes each key once.
     let mut order: Vec<usize> = (0..ctx.list.items.len()).collect();
-    order.sort_by_key(|&index| ctx.list.items[index].display_name().to_lowercase());
+    order.sort_by_cached_key(|&index| {
+        crate::app::ui_util::natural_sort_key(crate::app::render::effective_sort_str(
+            &ctx.list.items[index],
+        ))
+    });
     layout.left_sorted_indices = order;
     (final_scroll, image_paint)
 }

@@ -95,6 +95,11 @@ impl<Target> InlineMediaBrowser<Target> {
         self.core.select_last();
     }
 
+    /// Place the cursor at selectable index `index`, clamped to the last row.
+    pub fn select_index(&mut self, index: usize) {
+        self.core.select_index(index);
+    }
+
     /// The clamped ordinary-row viewport for a painted `viewport_height`,
     /// keeping the selected row on screen. This is the fallback flow and the
     /// geometry the [`ViewportAnchor`] is measured against.
