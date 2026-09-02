@@ -1,3 +1,4 @@
+use crate::app::components::media_list::WideMediaList;
 use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
@@ -148,6 +149,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     area: Rect,
     ctx: &TvWideRenderCtx,
     layout: &mut LayoutMain,
+    media_list: &WideMediaList<String>,
 ) -> (usize, Option<HomeImagePaint>) {
     layout.tv_wide_episode_rows.clear();
     layout.tv_wide_season_tabs.clear();
@@ -224,14 +226,8 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
             list_panel,
         );
     }
-    let final_scroll = super::list::render_generic_movies_home_video_rows_with_ctx(
-        f,
-        list_area,
-        &ctx.list,
-        right_focused,
-        crate::app::library_column_width::library_column_count(list_area.width),
-        layout,
-    );
+    let final_scroll =
+        super::media_list::render_wide_media_list(f, list_area, media_list, right_focused);
     hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     (final_scroll, image_paint)
 }

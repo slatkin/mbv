@@ -14,6 +14,7 @@ use tuirealm::state::State;
 
 use mbv_core::api::EmbyItem;
 
+use super::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
 use super::msg::{Msg, ShellRequest, TvHit, TvHitRegion};
 use super::user_event::UserEvent;
 #[cfg(test)]
@@ -33,6 +34,7 @@ enum Pane {
 
 pub struct TvWorkspaceComponent {
     context: TvWideRenderCtx,
+    list: WideMediaList<String>,
     cursor: usize,
     scroll: usize,
     season_cursor: usize,
@@ -57,6 +59,7 @@ impl TvWorkspaceComponent {
         );
         Self {
             context,
+            list: WideMediaList::new(),
             cursor: 0,
             scroll: 0,
             season_cursor: 0,
@@ -70,6 +73,22 @@ impl TvWorkspaceComponent {
     }
 
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
+        let rows = context
+            .list
+            .items
+            .iter()
+            .map(|item| MediaListRow::Item {
+                target: item.id.clone(),
+                primary: item.display_name(),
+                trailing: (item.production_year > 0).then(|| item.production_year.to_string()),
+                semantic_state: if item.played {
+                    MediaSemanticState::Played
+                } else {
+                    MediaSemanticState::Ordinary
+                },
+            })
+            .collect();
+        self.list.set_content(rows);
         let series_changed =
             context.selected_series.as_ref().map(|item| &item.id) != self.last_series_id.as_ref();
         if series_changed {
@@ -93,9 +112,17 @@ impl TvWorkspaceComponent {
             self.initialized = true;
         }
         self.context = context;
-        self.cursor = self
-            .cursor
-            .min(self.context.list.item_count().saturating_sub(1));
+        if !self.initialized {
+            self.cursor = self
+                .cursor
+                .min(self.list.selectable_len().saturating_sub(1));
+            self.list.select_first();
+            for _ in 0..self.cursor {
+                self.list.move_selection(1);
+            }
+        } else {
+            self.cursor = self.list.cursor();
+        }
         let season_count = self
             .context
             .series_detail
@@ -126,7 +153,7 @@ impl TvWorkspaceComponent {
     }
 
     pub(in crate::app) fn cursor(&self) -> usize {
-        self.cursor
+        self.list.cursor()
     }
 
     /// Whether letter pills are enabled in the pushed context.
@@ -138,7 +165,7 @@ impl TvWorkspaceComponent {
     /// the breakpoint hand-off so the resting `BrowseLevel` scroll matches
     /// the wide workspace before the narrow `BrowserComponent` adopts it.
     pub(in crate::app) fn scroll(&self) -> usize {
-        self.scroll
+        self.list.scroll()
     }
 
     /// One-shot re-anchor of the series cursor/scroll to a shell-owned
@@ -148,7 +175,12 @@ impl TvWorkspaceComponent {
     /// shell re-anchors explicitly when the active-destination pointer flips
     /// back to this kept-mounted component.
     pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
-        self.cursor = cursor.min(self.context.list.item_count().saturating_sub(1));
+        self.cursor = cursor.min(self.list.selectable_len().saturating_sub(1));
+        self.list.select_first();
+        for _ in 0..self.cursor {
+            self.list.move_selection(1);
+        }
+        self.list.set_scroll(scroll);
         self.scroll = scroll;
     }
 
@@ -349,7 +381,7 @@ impl Component for TvWorkspaceComponent {
             self.episode_cursor,
         );
         let (scroll, image_paint) =
-            render_wide_tv_with_ctx(frame, area, &context, &mut self.layout);
+            render_wide_tv_with_ctx(frame, area, &context, &mut self.layout, &self.list);
         self.scroll = scroll;
         self.image_paint = image_paint;
     }
