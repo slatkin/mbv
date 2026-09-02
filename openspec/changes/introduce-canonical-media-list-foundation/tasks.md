@@ -10,8 +10,8 @@
 - [x] 2.1 Define provider-neutral `MediaListRow<Target>` item/heading/spacer model and semantic states, with stable opaque targets and bounded `0..=100` active progress.
 - [x] 2.2 Re-home `render_plain_rows` into the canonical fixed-row render path without changing accepted generic Emby/TV output; retain semantic theme ownership.
 - [x] 2.3 Implement embedded plain `WideMediaList<Target>` with selectable indexing, movement, clamping, viewport/scrollbar, fixed-height one-column geometry, and internal row geometry for painting and scrolling.
-- [ ] 2.4 Implement embedded plain `InlineMediaBrowser<Target>` with selected-row replacement, fit admission, fallback, anchor, and matching paint geometry; share only private mechanics with Wide.
-- [ ] 2.5 Implement `ViewportAnchor { selected_target, selected_row_offset }`; preserve target/offset across breakpoint transitions and clamp receiving geometry without shell mirrors.
+- [x] 2.4 Implement embedded plain `InlineMediaBrowser<Target>` with selected-row replacement, fit admission, fallback, anchor, and matching paint geometry; share only private mechanics with Wide.
+- [x] 2.5 Implement `ViewportAnchor { selected_target, selected_row_offset }`; preserve target/offset across breakpoint transitions and clamp receiving geometry without shell mirrors.
 
 ## 3. Foundation destinations
 
