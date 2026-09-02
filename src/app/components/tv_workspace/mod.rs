@@ -113,6 +113,7 @@ impl TvWorkspaceComponent {
                     target: item.id.clone(),
                     primary: item.display_name(),
                     trailing: (item.production_year > 0).then(|| item.production_year.to_string()),
+                    duration: None,
                     semantic_state: if item.played {
                         MediaSemanticState::Played
                     } else {

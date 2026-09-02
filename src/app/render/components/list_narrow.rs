@@ -198,6 +198,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
                 target: index,
                 primary,
                 trailing,
+                duration: None,
                 semantic_state: state,
             });
         }

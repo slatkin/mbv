@@ -57,7 +57,11 @@ pub enum MediaListRow<Target> {
     Item {
         target: Target,
         primary: String,
+        /// Left-aligned FOAM metadata rendered right after `primary`.
         trailing: Option<String>,
+        /// A duration/time string. Rendered as a distinct right-aligned
+        /// green (`STATUS_AVAILABLE`) element, never as FOAM `trailing`.
+        duration: Option<String>,
         semantic_state: MediaSemanticState,
     },
     Heading {

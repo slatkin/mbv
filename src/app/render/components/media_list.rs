@@ -243,9 +243,12 @@ pub(in crate::app) fn render_wide_media_list<Target>(
         .map(|row| matches!(rows[row], MediaListRow::Item { .. }).then_some(row))
         .collect();
 
+    let inner_width = area
+        .width
+        .saturating_sub(u16::from(focused && viewport.overflows())) as usize;
     let list_items: Vec<ListItem> = (viewport.offset..viewport.total_rows)
         .take(viewport.height)
-        .map(|row| wide_media_row(&rows[row], Some(row) == selected_row, focused))
+        .map(|row| wide_media_row(&rows[row], Some(row) == selected_row, focused, inner_width))
         .collect();
     f.render_widget(List::new(list_items), area);
 
@@ -291,10 +294,13 @@ pub(in crate::app) fn render_inline_media_browser<Target>(
     let source_rows = rows.len();
     let selected_row = list.selected_display_row();
 
+    let inner_width = area.width.saturating_sub(u16::from(
+        focused && layout.total_display_rows > layout.height,
+    )) as usize;
     let window = (layout.offset..layout.total_display_rows).take(layout.height);
     let list_items: Vec<ListItem> = if layout.detail_rows == 0 {
         window
-            .map(|row| wide_media_row(&rows[row], Some(row) == selected_row, focused))
+            .map(|row| wide_media_row(&rows[row], Some(row) == selected_row, focused, inner_width))
             .collect()
     } else {
         let sel = selected_row.expect("an admitted detail block requires a selection");
@@ -302,7 +308,7 @@ pub(in crate::app) fn render_inline_media_browser<Target>(
             .map(|display_row| {
                 match inline_display_row(source_rows, sel, layout.detail_rows as u16, display_row) {
                     Some(InlineDisplayRow::Source(source_row)) => {
-                        wide_media_row(&rows[source_row], false, focused)
+                        wide_media_row(&rows[source_row], false, focused, inner_width)
                     }
                     Some(InlineDisplayRow::Replacement) | None => ListItem::new(Line::default()),
                 }
@@ -333,12 +339,15 @@ pub(in crate::app) fn render_inline_media_browser<Target>(
 }
 
 /// One painted row of a `WideMediaList`. Semantic state drives the row
-/// colour and, for active rows, an appended progress percentage; the
-/// selection background/marker come from the shared list-row primitives.
+/// colour and, for active rows, an appended progress percentage; `duration`
+/// is a distinct right-aligned green element flush to `inner_width` (the row
+/// width less the scrollbar column); the selection background/marker come
+/// from the shared list-row primitives.
 fn wide_media_row<Target>(
     row: &MediaListRow<Target>,
     selected: bool,
     focused: bool,
+    inner_width: usize,
 ) -> ListItem<'static> {
     match row {
         MediaListRow::Spacer => ListItem::new(Line::default()),
@@ -354,6 +363,7 @@ fn wide_media_row<Target>(
         MediaListRow::Item {
             primary,
             trailing,
+            duration,
             semantic_state,
             ..
         } => {
@@ -391,8 +401,17 @@ fn wide_media_row<Target>(
                     Style::default().fg(palette::TEXT_METADATA),
                 ));
             }
+            if let Some(dur) = duration.as_deref().filter(|dur| !dur.is_empty()) {
+                let used: usize = spans.iter().map(|span| span.content.width()).sum();
+                let pad = inner_width.saturating_sub(used + dur.width());
+                spans.push(Span::raw(" ".repeat(pad)));
+                spans.push(Span::styled(
+                    dur.to_owned(),
+                    Style::default().fg(palette::STATUS_AVAILABLE),
+                ));
+            }
             ListItem::new(Line::from(spans)).style(if selected {
-                Style::default().bg(palette::SURFACE_BACKDROP)
+                Style::default().bg(palette::SURFACE_FOCUSED)
             } else {
                 Style::default()
             })

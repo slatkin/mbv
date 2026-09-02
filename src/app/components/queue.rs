@@ -486,7 +486,10 @@ fn queue_media_rows(
             MediaListRow::Item {
                 target: slot.slot_id,
                 primary: title,
-                trailing: (!time_text.is_empty()).then_some(time_text),
+                trailing: None,
+                // Duration/elapsed is a right-aligned green element, not FOAM
+                // metadata; the active-row `%` stays in `trailing` (foam).
+                duration: (!time_text.is_empty()).then_some(time_text),
                 semantic_state,
             }
         })
