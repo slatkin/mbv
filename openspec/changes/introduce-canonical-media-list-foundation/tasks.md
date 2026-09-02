@@ -34,4 +34,4 @@
 ## 5. Slice acceptance
 
 - [x] 5.1 Verify no registry identity, second router, callback/provider framework, global hit map, duplicate row coordinate path, protocol/provider/daemon/persistence change, or bespoke exception was introduced.
-- [ ] 5.2 Attach rendered evidence, live user confirmation, characterization results, file-size and verification outputs; keep this slice independently reviewable/reversible and do not mark umbrella tasks complete.
+- [x] 5.2 Attach rendered evidence, live user confirmation, characterization results, file-size and verification outputs; keep this slice independently reviewable/reversible and do not mark umbrella tasks complete.

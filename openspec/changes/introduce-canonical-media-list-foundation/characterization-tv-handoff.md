@@ -1,7 +1,7 @@
 # TV breakpoint handoff characterization
 
-Date: 2026-09-02  
-Change: `introduce-canonical-media-list-foundation`  
+Date: 2026-09-02
+Change: `introduce-canonical-media-list-foundation`
 Baseline: accepted HEAD `74bd1ce4`
 
 ## Source characterization
