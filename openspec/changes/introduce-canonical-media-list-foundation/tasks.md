@@ -15,8 +15,8 @@
 
 ## 3. Foundation destinations
 
-- [ ] 3.1 Split `src/app/components/browser.rs` ownership-preservingly before or with wiring; keep it at or below 800 lines.
-- [ ] 3.2 Split `src/app/components/tv_workspace.rs` ownership-preservingly before or with wiring; keep it at or below 800 lines.
+- [x] 3.1 Split `src/app/components/browser.rs` ownership-preservingly before or with wiring; keep it at or below 800 lines.
+- [x] 3.2 Split `src/app/components/tv_workspace.rs` ownership-preservingly before or with wiring; keep it at or below 800 lines.
 - [ ] 3.3 Compose `InlineMediaBrowser` for hero-bearing generic Emby catalog browsing, Movies, the Emby homevideos feed view, the Emby podcast channel list, and narrow TV Series browsing; leave non-hero two-column Emby catalogs on their existing two-column arrangement policy.
 - [ ] 3.4 Compose `WideMediaList` for the Wide TV right rail; preserve TV workspace, hero, pills, image handoff, effects, and parent message translation.
 - [ ] 3.5 Preserve non-hero two-column browsers and prove no second list painter runs at an applicable breakpoint.
