@@ -1,4 +1,6 @@
 use ratatui::layout::{Position, Rect};
+use ratatui::style::Style;
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
@@ -6,15 +8,20 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseButton, MouseEvent, MouseEventK
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
 use super::msg::{
     Msg, QueueColumnResize, QueueHitRegion, QueueIntent, QueueMove, QueueRequest, ShellRequest,
 };
 use super::user_event::UserEvent;
+use crate::app::layout::LayoutMain;
+use crate::app::palette;
 use crate::app::render::{
-    render_queue_content, render_queue_title_content, QueueRenderGeometry, QueueTitleModel,
+    render_queue_title_content, render_wide_media_list, QueueRenderGeometry, QueueTitleModel,
 };
 use crate::app::types_playback::{PlaybackState, QueueScope};
-use mbv_core::playback_queue::QueueSlot;
+use crate::app::ui_util::fmt_duration_short;
+use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::playback_queue::{QueueItem, QueueSlot, QueueSlotId};
 
 /// Why the shell is pushing a cursor. `Preserve` keeps the user's selection
 /// pinned to its slot across a content refresh; `Set` is an authoritative
@@ -26,12 +33,13 @@ pub(in crate::app) enum QueueCursorUpdate {
 }
 
 pub struct QueueComponent {
-    slots: Vec<QueueSlot>,
-    cursor: usize,
-    scroll: usize,
+    /// The canonical fixed-row control owns the Queue rows, the local cursor,
+    /// the resting scroll offset, and viewport/scrollbar geometry
+    /// (migrate-queue-to-canonical-list D1/D2). The parent keeps only the
+    /// prepared projection and shell-owned chrome below.
+    list: WideMediaList<QueueSlotId>,
     scope: QueueScope,
     focused: bool,
-    playback: PlaybackState,
     empty_text: String,
     title: Option<QueueTitleModel>,
     title_area: Option<Rect>,
@@ -41,25 +49,19 @@ pub struct QueueComponent {
 
 impl QueueComponent {
     pub(crate) fn selected_row_rect(&self) -> Option<Rect> {
+        let selected = self.list.selected_target()?;
         self.geometry
             .rows
             .iter()
-            .find(|(_, slot_id)| {
-                self.slots
-                    .get(self.cursor)
-                    .is_some_and(|slot| slot.slot_id == *slot_id)
-            })
+            .find(|(_, slot_id)| slot_id == selected)
             .map(|(rect, _)| *rect)
     }
 
     pub fn new() -> Self {
         Self {
-            slots: Vec::new(),
-            cursor: 0,
-            scroll: 0,
+            list: WideMediaList::new(),
             scope: QueueScope::Local,
             focused: false,
-            playback: PlaybackState::default(),
             empty_text: String::new(),
             title: None,
             title_area: None,
@@ -78,30 +80,25 @@ impl QueueComponent {
         title: QueueTitleModel,
     ) {
         // Scroll is component-owned (split-queue-cursor-ownership D3): a new
-        // scope's content starts at the top. Reset before cursor-identity
-        // reconciliation so the clamp below never reuses an old viewport.
+        // scope's content starts at the top. Reset before the canonical child
+        // reconciles so its viewport never reuses an old offset.
         if scope != self.scope {
-            self.scroll = 0;
+            self.list.set_scroll(0);
         }
-        let selected_slot = self.slots.get(self.cursor).map(|slot| slot.slot_id);
-        let previous_cursor = self.cursor;
-        self.slots = slots;
-        self.cursor = match cursor {
-            // Reconcile by slot identity so the user's selection stays
-            // pinned to its row across a routine content refresh; fall back
-            // to clamping the old cursor only when that slot is gone.
-            QueueCursorUpdate::Preserve => selected_slot
-                .and_then(|slot_id| self.slots.iter().position(|slot| slot.slot_id == slot_id))
-                .unwrap_or_else(|| previous_cursor.min(self.slots.len().saturating_sub(1))),
-            // An authoritative move: skip identity reconciliation entirely.
-            QueueCursorUpdate::Set(idx) => idx.min(self.slots.len().saturating_sub(1)),
-        };
-        // Clamp against the component's own scroll/cursor/slot count only;
-        // no scroll value is pushed from the shell anymore.
-        self.scroll = self.scroll.min(self.cursor);
+        // The canonical child re-pins its cursor to the selected `QueueSlotId`
+        // and locally clamps when the target is gone (D3 / D2); no App mirror.
+        self.list.set_content(queue_media_rows(&slots, playback));
+        if let QueueCursorUpdate::Set(idx) = cursor {
+            // An authoritative move (follow-the-playhead, jump-to-now-playing,
+            // wheel scroll, scope switch): skip identity reconciliation.
+            self.list.select_index(idx);
+        }
+        // Keep the resting offset from running ahead of the cursor row; the
+        // painter's height-aware clamp finishes the job every frame.
+        self.list
+            .set_scroll(self.list.scroll().min(self.list.cursor()));
         self.scope = scope;
         self.focused = focused;
-        self.playback = playback;
         self.empty_text = if scope == QueueScope::Local {
             "  Add items with p from Home or library tabs".into()
         } else {
@@ -119,27 +116,24 @@ impl QueueComponent {
     }
 
     fn cursor_message(&self) -> Option<Msg> {
-        self.slots.get(self.cursor).map(|slot| {
+        self.list.selected_target().map(|&slot_id| {
             Msg::Queue(QueueRequest::Cursor {
                 scope: self.scope,
-                slot_id: slot.slot_id,
+                slot_id,
             })
         })
     }
 
-    fn move_cursor(&mut self, delta: isize) -> Option<Msg> {
-        let last = self.slots.len().saturating_sub(1) as isize;
-        if last >= 0 {
-            self.cursor = (self.cursor as isize + delta).clamp(0, last) as usize;
-        }
+    fn move_cursor(&mut self, delta: i64) -> Option<Msg> {
+        self.list.move_selection(delta);
         self.cursor_message()
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let selected = || {
-            self.slots
-                .get(self.cursor)
-                .map(|slot| (self.scope, slot.slot_id))
+            self.list
+                .selected_target()
+                .map(|&slot_id| (self.scope, slot_id))
         };
         match key.code {
             Key::Char('[')
@@ -152,7 +146,7 @@ impl QueueComponent {
                 // Scope is preassigned here, before the request reaches the
                 // shell, so the set_content scope-change reset would not fire;
                 // the component resets its own scroll itself (D3).
-                self.scroll = 0;
+                self.list.set_scroll(0);
                 return Some(Msg::Queue(QueueRequest::Scope(self.scope)));
             }
             Key::Char(']')
@@ -165,7 +159,7 @@ impl QueueComponent {
                 // Scope is preassigned here, before the request reaches the
                 // shell, so the set_content scope-change reset would not fire;
                 // the component resets its own scroll itself (D3).
-                self.scroll = 0;
+                self.list.set_scroll(0);
                 return Some(Msg::Queue(QueueRequest::Scope(self.scope)));
             }
             Key::Left | Key::Right if key.modifiers == tuirealm::event::KeyModifiers::SHIFT => {
@@ -178,29 +172,29 @@ impl QueueComponent {
                 )));
             }
             Key::Up if key.modifiers.is_empty() => {
-                if self.cursor == 0 {
+                if self.list.cursor() == 0 {
                     return None;
                 }
                 return self.move_cursor(-1);
             }
             Key::Down if key.modifiers.is_empty() => {
-                if self.cursor + 1 >= self.slots.len() {
+                if self.list.cursor() + 1 >= self.list.selectable_len() {
                     return None;
                 }
                 return self.move_cursor(1);
             }
             Key::PageUp if key.modifiers.is_empty() => {
-                return self.move_cursor(-(self.area.height.saturating_sub(1).max(1) as isize));
+                return self.move_cursor(-(self.area.height.saturating_sub(1).max(1) as i64));
             }
             Key::PageDown if key.modifiers.is_empty() => {
-                return self.move_cursor(self.area.height.saturating_sub(1).max(1) as isize);
+                return self.move_cursor(self.area.height.saturating_sub(1).max(1) as i64);
             }
             Key::Home if key.modifiers.is_empty() => {
-                self.cursor = 0;
+                self.list.select_first();
                 return self.cursor_message();
             }
             Key::End if key.modifiers.is_empty() => {
-                self.cursor = self.slots.len().saturating_sub(1);
+                self.list.select_last();
                 return self.cursor_message();
             }
             Key::Enter => {
@@ -295,7 +289,7 @@ impl QueueComponent {
                         self.scope = QueueScope::Local;
                         // Same preassignment caveat as the '['/']' keys: reset
                         // the component's own scroll on scope switch (D3).
-                        self.scroll = 0;
+                        self.list.set_scroll(0);
                         return Some(Msg::Shell(ShellRequest::QueueClick {
                             region: QueueHitRegion::ScopeLocal,
                             col: mouse.column,
@@ -306,7 +300,7 @@ impl QueueComponent {
                         self.scope = QueueScope::Remote;
                         // Same preassignment caveat as the '['/']' keys: reset
                         // the component's own scroll on scope switch (D3).
-                        self.scroll = 0;
+                        self.list.set_scroll(0);
                         return Some(Msg::Shell(ShellRequest::QueueClick {
                             region: QueueHitRegion::ScopeRemote,
                             col: mouse.column,
@@ -320,17 +314,12 @@ impl QueueComponent {
                         .rows
                         .iter()
                         .find(|(rect, _)| rect.contains(position))
+                        .copied()
                     {
-                        if let Some(index) =
-                            self.slots.iter().position(|slot| slot.slot_id == *slot_id)
-                        {
-                            self.cursor = index;
-                        }
+                        self.list.select_target(&slot_id);
                     }
                     return Some(Msg::Shell(ShellRequest::QueueClick {
-                        region: QueueHitRegion::Row(
-                            self.slots.get(self.cursor).map(|slot| slot.slot_id),
-                        ),
+                        region: QueueHitRegion::Row(self.list.selected_target().copied()),
                         col: mouse.column,
                         row: mouse.row,
                     }));
@@ -347,14 +336,11 @@ impl QueueComponent {
                         .find(|(rect, _)| rect.contains(position))
                         .map(|(_, slot_id)| *slot_id);
                     if let Some(id) = slot_id {
-                        if let Some(index) = self.slots.iter().position(|slot| slot.slot_id == id) {
-                            self.cursor = index;
-                        }
+                        self.list.select_target(&id);
                     }
                     return Some(Msg::Shell(ShellRequest::QueueClick {
                         region: QueueHitRegion::ContextMenu(
-                            slot_id
-                                .or_else(|| self.slots.get(self.cursor).map(|slot| slot.slot_id)),
+                            slot_id.or_else(|| self.list.selected_target().copied()),
                         ),
                         col: mouse.column,
                         row: mouse.row,
@@ -383,12 +369,12 @@ impl QueueComponent {
 
     #[cfg(test)]
     pub(crate) fn test_cursor(&self) -> usize {
-        self.cursor
+        self.list.cursor()
     }
 
     #[cfg(test)]
     pub(crate) fn test_scroll(&self) -> usize {
-        self.scroll
+        self.list.scroll()
     }
 
     #[cfg(test)]
@@ -416,17 +402,39 @@ impl Component for QueueComponent {
         if let (Some(title_area), Some(title)) = (self.title_area, self.title.as_ref()) {
             render_queue_title_content(frame, title_area, title, &mut self.geometry);
         }
-        render_queue_content(
-            frame,
-            area,
-            self.focused,
-            &self.slots,
-            &mut self.cursor,
-            &mut self.scroll,
-            self.playback,
-            &self.empty_text,
-            &mut self.geometry,
-        );
+        if area.height < 1 {
+            return;
+        }
+        if self.list.is_empty() {
+            frame.render_widget(
+                Paragraph::new(self.empty_text.clone())
+                    .style(Style::default().fg(palette::TEXT_MUTED)),
+                area,
+            );
+            return;
+        }
+        // The canonical child is the sole Queue body painter
+        // (migrate-queue-to-canonical-list D4). It publishes its row/scroll
+        // geometry into a `LayoutMain`; Queue keeps its own `QueueHitRegion`
+        // geometry (rebuilt below) so the untouched mouse path still resolves.
+        let mut published = LayoutMain::default();
+        let offset = render_wide_media_list(frame, area, &self.list, self.focused, &mut published);
+        self.list.set_scroll(offset);
+        let viewport = self.list.resolve_viewport(area.height as usize);
+        self.geometry.rows = (viewport.offset..viewport.total_rows)
+            .take(viewport.height)
+            .enumerate()
+            .filter_map(|(line, row)| {
+                let slot_id = *self.list.rows()[row].selectable_target()?;
+                let rect = Rect {
+                    x: area.x,
+                    y: area.y + line as u16,
+                    width: area.width,
+                    height: 1,
+                };
+                Some((rect, slot_id))
+            })
+            .collect();
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
@@ -448,5 +456,108 @@ impl AppComponent<Msg, UserEvent> for QueueComponent {
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }
+    }
+}
+
+/// Project Queue slots into the canonical provider-neutral row vocabulary
+/// (migrate-queue-to-canonical-list D2): a stable `QueueSlotId` target, the
+/// slot title, duration/elapsed metadata, and semantic active state whose
+/// progress is clamped to `0..=100` at this projection boundary. No ticks,
+/// runtime, source, credentials, callbacks, or effects cross the child edge.
+fn queue_media_rows(
+    slots: &[QueueSlot],
+    playback: PlaybackState,
+) -> Vec<MediaListRow<QueueSlotId>> {
+    slots
+        .iter()
+        .enumerate()
+        .map(|(index, slot)| {
+            let is_active = playback.active && playback.active_idx == index;
+            let (title, pos_ticks, duration_ticks) =
+                queue_row_fields(&slot.item, playback, is_active);
+            let time_text = queue_row_time_text(pos_ticks, duration_ticks, is_active);
+            let semantic_state = if is_active {
+                let progress = (pos_ticks > 0 && duration_ticks > 0)
+                    .then(|| (pos_ticks * 100 / duration_ticks).clamp(0, 100) as u16);
+                MediaSemanticState::active(progress)
+            } else {
+                MediaSemanticState::Ordinary
+            };
+            MediaListRow::Item {
+                target: slot.slot_id,
+                primary: title,
+                trailing: (!time_text.is_empty()).then_some(time_text),
+                semantic_state,
+            }
+        })
+        .collect()
+}
+
+/// The title and (position, duration) ticks a Queue row paints, resolved per
+/// item kind and overridden with live playback ticks for the active row.
+fn queue_row_fields(
+    item: &QueueItem,
+    playback: PlaybackState,
+    is_active: bool,
+) -> (String, i64, i64) {
+    match item {
+        QueueItem::Emby(item) => {
+            let (pos, runtime) = if is_active {
+                (
+                    if playback.position_ticks > 0 {
+                        playback.position_ticks
+                    } else {
+                        item.playback_position_ticks
+                    },
+                    playback.runtime_ticks,
+                )
+            } else {
+                (item.playback_position_ticks, item.runtime_ticks)
+            };
+            (item.name.clone(), pos, runtime)
+        }
+        QueueItem::Feed(entry) => (
+            entry.title.clone(),
+            if is_active {
+                playback.position_ticks
+            } else {
+                0
+            },
+            entry.duration_ticks.unwrap_or(0) as i64,
+        ),
+        QueueItem::Audiobookshelf(ep) => (
+            ep.title.clone(),
+            if is_active {
+                playback.position_ticks
+            } else {
+                0
+            },
+            ep.duration_ticks.unwrap_or(0) as i64,
+        ),
+        QueueItem::AudiobookshelfBook(book) => (
+            book.title.clone(),
+            if is_active {
+                playback.position_ticks
+            } else {
+                0
+            },
+            book.duration_ticks.unwrap_or(0) as i64,
+        ),
+    }
+}
+
+fn queue_row_time_text(pos_ticks: i64, dur_ticks: i64, show_elapsed: bool) -> String {
+    let dur_s = dur_ticks / TICKS_PER_SECOND;
+    if dur_s <= 0 {
+        return String::new();
+    }
+    if show_elapsed {
+        format!(
+            "{} / {}",
+            fmt_duration_short(pos_ticks / TICKS_PER_SECOND),
+            fmt_duration_short(dur_s)
+        )
+    } else {
+        fmt_duration_short(dur_s)
     }
 }

@@ -63,7 +63,6 @@ pub const PLAYBACK_META_FG: Color = primitives::PLAYBACK_META_FG; // captions/ti
 
 // Progress and queue
 pub const PROGRESS_TRACK: Color = primitives::SEEK_TRACK; // unplayed seek/progress track
-pub const QUEUE_ROW_FG: Color = primitives::QUEUE_UNFOCUSED_FG;
 
 // Chrome
 pub const SCROLLBAR: Color = primitives::SCROLLBAR;

@@ -56,6 +56,7 @@ pub(in crate::app) use components::home_hero::{
     prepare_wide_emby_hero_card, render_home_hero_content, HeroData,
 };
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
+pub(in crate::app) use components::media_list::render_wide_media_list;
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };
@@ -67,7 +68,7 @@ pub(in crate::app) use components::playlists::{
     PlaylistsViewState,
 };
 pub(in crate::app) use components::queue::{
-    render_queue_content, render_queue_title_content, QueueRenderGeometry, QueueTitleModel,
+    render_queue_title_content, QueueRenderGeometry, QueueTitleModel,
 };
 pub(in crate::app) use components::remote_reanchor::render_remote_reanchor_popup_content;
 pub(in crate::app) use components::search_sidebar::render_search_sidebar;
@@ -122,7 +123,7 @@ pub(crate) use theme::{
     resolve_surface_focus, ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, BORDER_UNFOCUSED,
     INDICATOR_AUDIO_FG, INDICATOR_RESOLUTION_FG, PILL_BG, PILL_FG, PILL_OVERFLOW_FG, PILL_ROW_BG,
     PILL_SELECTED_BG, PILL_SELECTED_FG, PLAYBACK_META_FG, PLAYBACK_VALUE_FG, PROGRESS_TRACK,
-    QUEUE_ROW_FG, SCROLLBAR, STATUS_AVAILABLE, STATUS_ERROR, SURFACE_ACCENT_SOFT, SURFACE_BACKDROP,
+    SCROLLBAR, STATUS_AVAILABLE, STATUS_ERROR, SURFACE_ACCENT_SOFT, SURFACE_BACKDROP,
     SURFACE_CHROME, SURFACE_FOCUSED, SURFACE_ITEM_FOCUSED, SURFACE_PLAYBACK, SURFACE_RESTING,
     SURFACE_SIDEBAR, SURFACE_STATUS_PILL, TEXT_ACCENT_MUTED, TEXT_DETAIL_META, TEXT_EMPHASIS,
     TEXT_FOCUS_ACCENT, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY,

@@ -8,7 +8,6 @@ pub(super) const SUBTLE: Color = Color::Rgb(158, 158, 158); // secondary text
 pub(super) const TEXT: Color = Color::Rgb(230, 230, 230); // primary text
 pub(super) const WHITE: Color = Color::Rgb(253, 246, 227); // warm white (#fdf6e3)
 pub(super) const BG_GREEN_SOFT: Color = Color::Rgb(72, 88, 78); // softer green-grey (#48584e)
-pub(super) const QUEUE_UNFOCUSED_FG: Color = BG_GREEN_SOFT; // queue row text
 pub(super) const YELLOW: Color = Color::Rgb(219, 188, 127); // muted gold (#dbbc7f)
 pub(super) const AQUA: Color = Color::Rgb(53, 167, 124); // emby green — folders, watched (#35a77c)
 pub(super) const AMBER: Color = Color::Rgb(199, 152, 71); // audiobookshelf gold (#c79847)

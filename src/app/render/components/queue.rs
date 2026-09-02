@@ -1,19 +1,11 @@
-use crate::app::render::components::chrome::thin_vertical_thumb;
-use crate::app::render::components::list_rows::{selection_marker, MarkerEdge};
-use crate::app::render::components::widgets::render_scrollbar_with_viewport_at;
-use crate::app::types_playback::PlaybackState;
-use crate::app::ui_util::*;
 use crate::app::{palette, App, QueueScope, RemoteSlotState};
-use mbv_core::api::TICKS_PER_SECOND;
-use mbv_core::playback_queue::{QueueSlot, QueueSlotId};
+use mbv_core::playback_queue::QueueSlotId;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
+use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
-
-const QUEUE_TITLE_QUIET_COLUMNS: usize = 2;
 
 #[derive(Default)]
 pub(in crate::app) struct QueueRenderGeometry {
@@ -262,22 +254,6 @@ pub(in crate::app) fn render_queue_title_content(
     );
 }
 
-fn queue_row_time_text(pos_ticks: i64, dur_ticks: i64, show_elapsed: bool) -> String {
-    let dur_s = dur_ticks / TICKS_PER_SECOND;
-    if dur_s <= 0 {
-        return String::new();
-    }
-    if show_elapsed {
-        format!(
-            "{} / {}",
-            fmt_duration_short(pos_ticks / TICKS_PER_SECOND),
-            fmt_duration_short(dur_s)
-        )
-    } else {
-        fmt_duration_short(dur_s)
-    }
-}
-
 pub(in crate::app) fn render_queue_status(
     frame: &mut Frame,
     area: Rect,
@@ -306,186 +282,5 @@ pub(in crate::app) fn render_queue_status(
                 },
             );
         }
-    }
-}
-
-pub(in crate::app) fn render_queue_content(
-    frame: &mut Frame,
-    area: Rect,
-    focused: bool,
-    slots: &[QueueSlot],
-    cursor: &mut usize,
-    scroll: &mut usize,
-    playback: PlaybackState,
-    empty_text: &str,
-    geometry: &mut QueueRenderGeometry,
-) {
-    geometry.rows.clear();
-    if area.height < 1 {
-        return;
-    }
-    if slots.is_empty() {
-        *scroll = 0;
-        frame.render_widget(
-            Paragraph::new(empty_text).style(Style::default().fg(palette::TEXT_MUTED)),
-            area,
-        );
-        return;
-    }
-
-    *cursor = (*cursor).min(slots.len() - 1);
-    let visible = area.height as usize;
-    let max_offset = slots.len().saturating_sub(visible);
-    *scroll = (*scroll).min(max_offset);
-    if *cursor < *scroll {
-        *scroll = *cursor;
-    } else if *cursor >= *scroll + visible {
-        *scroll = cursor.saturating_sub(visible.saturating_sub(1));
-    }
-    let offset = *scroll;
-    let has_sb = slots.len() > visible;
-    let need_sb = has_sb && focused;
-    let render_w = area.width.saturating_sub(u16::from(has_sb)) as usize;
-    let show_length = render_w > 30;
-    let mut list_items = Vec::new();
-    for (visible_index, slot) in slots.iter().enumerate().skip(offset) {
-        if visible_index - offset >= visible {
-            break;
-        }
-        let is_active = playback.active && playback.active_idx == visible_index;
-        let is_cursor = visible_index == *cursor && focused;
-        let fg = if is_cursor || focused {
-            palette::TEXT_STRONG
-        } else {
-            palette::QUEUE_ROW_FG
-        };
-        let row_y = area.y + (visible_index - offset) as u16;
-        let row = Rect {
-            x: area.x,
-            y: row_y,
-            width: area.width,
-            height: 1,
-        };
-        geometry.rows.push((row, slot.slot_id));
-        let (title_raw, pos_ticks, duration_ticks, pct_str) = match &slot.item {
-            mbv_core::playback_queue::QueueItem::Emby(item) => {
-                let (pos, runtime) = if is_active {
-                    (
-                        if playback.position_ticks > 0 {
-                            playback.position_ticks
-                        } else {
-                            item.playback_position_ticks
-                        },
-                        playback.runtime_ticks,
-                    )
-                } else {
-                    (item.playback_position_ticks, item.runtime_ticks)
-                };
-                let pct = if item.is_audio() {
-                    String::new()
-                } else {
-                    fmt_playback_pct(pos, runtime)
-                };
-                (item.name.as_str(), pos, runtime, pct)
-            }
-            mbv_core::playback_queue::QueueItem::Feed(entry) => (
-                entry.title.as_str(),
-                if is_active {
-                    playback.position_ticks
-                } else {
-                    0
-                },
-                entry.duration_ticks.unwrap_or(0) as i64,
-                String::new(),
-            ),
-            mbv_core::playback_queue::QueueItem::Audiobookshelf(ep) => (
-                ep.title.as_str(),
-                if is_active {
-                    playback.position_ticks
-                } else {
-                    0
-                },
-                ep.duration_ticks.unwrap_or(0) as i64,
-                String::new(),
-            ),
-            mbv_core::playback_queue::QueueItem::AudiobookshelfBook(book) => (
-                book.title.as_str(),
-                if is_active {
-                    playback.position_ticks
-                } else {
-                    0
-                },
-                book.duration_ticks.unwrap_or(0) as i64,
-                String::new(),
-            ),
-        };
-        let dur = queue_row_time_text(pos_ticks, duration_ticks, is_active);
-        let dur_visible = show_length && !dur.is_empty();
-        let pct_visible = !pct_str.is_empty();
-        let pct_w = if pct_visible { 1 + pct_str.width() } else { 0 };
-        let right_w = if dur_visible { dur.width() } else { 0 };
-        let track_content_w = render_w.saturating_sub(2);
-        let indent = 2;
-        let title_w =
-            track_content_w.saturating_sub(indent + pct_w + right_w + QUEUE_TITLE_QUIET_COLUMNS);
-        let title = trunc_str(title_raw, title_w);
-        if is_cursor {
-            frame.render_widget(
-                Block::default().style(Style::default().bg(palette::SURFACE_FOCUSED)),
-                row,
-            );
-        }
-        let title_color = if is_active {
-            palette::ACCENT
-        } else if !focused {
-            palette::TEXT_MUTED
-        } else {
-            fg
-        };
-        let title_w_actual = title.width();
-        let mut spans = vec![
-            selection_marker(is_cursor, MarkerEdge::Left),
-            Span::raw(" "),
-        ];
-        spans.push(Span::styled(title, Style::default().fg(title_color)));
-        if pct_visible {
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(
-                pct_str,
-                Style::default().fg(palette::TEXT_METADATA),
-            ));
-        }
-        if dur_visible {
-            let used = indent + title_w_actual + pct_w;
-            let pad = track_content_w.saturating_sub(used + right_w);
-            spans.push(Span::raw(" ".repeat(pad)));
-            spans.push(Span::styled(
-                dur,
-                Style::default().fg(palette::STATUS_AVAILABLE),
-            ));
-        }
-        list_items.push(ListItem::new(Line::from(spans)).style(Style::default().fg(fg)));
-    }
-    let mut state = ListState::default();
-    state.select(Some(cursor.saturating_sub(offset)));
-    frame.render_stateful_widget(
-        List::new(list_items).highlight_style(Style::default()),
-        Rect {
-            width: render_w as u16,
-            ..area
-        },
-        &mut state,
-    );
-    if need_sb {
-        render_scrollbar_with_viewport_at(
-            frame,
-            area,
-            slots.len(),
-            visible,
-            offset,
-            area.x + area.width.saturating_sub(1),
-            thin_vertical_thumb(tui_scrollbar::GlyphSet::minimal()),
-            palette::TEXT_EMPHASIS,
-        );
     }
 }
