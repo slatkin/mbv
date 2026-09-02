@@ -1,0 +1,175 @@
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
+use ratatui::Frame;
+
+use super::BrowserComponent;
+use crate::app::components::component_id::BrowserKind;
+use crate::app::palette;
+use crate::app::render::{
+    hero_on_left_list_panel_border, hero_on_left_right_pane, padded_rect,
+    prepare_wide_emby_hero_card, render_count_label,
+    render_generic_movies_home_video_rows_with_ctx, render_home_hero_content, render_pill_bar,
+    render_search_box, wide_library_panes, HeroData, LetterFilter, LibraryListRenderCtx, PillBar,
+    PANE_PAD_X, PANE_PAD_Y,
+};
+
+impl BrowserComponent {
+    /// Paints the wide Movies/home-video hero-on-left layout: a read-only
+    /// shared Emby hero card on the left and the letter-pill/count/search
+    /// row plus the one-column list in the right rail. Mirrors the deleted
+    /// legacy wide renderer so the picture is unchanged.
+    /// Returns the final list scroll (the component owns its cursor/scroll,
+    /// so it records it instead of writing the App nav level).
+    pub(super) fn render_wide_movies(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        ctx: &LibraryListRenderCtx,
+    ) -> usize {
+        let body_area = area;
+
+        let left_content_area = Rect {
+            height: body_area.height.saturating_sub(1),
+            ..body_area
+        };
+        let Some(panes) = wide_library_panes(body_area, PANE_PAD_X, PANE_PAD_Y) else {
+            // Breakpoint no longer fits: fall back to the plain list rows.
+            return render_generic_movies_home_video_rows_with_ctx(
+                f,
+                body_area,
+                ctx,
+                self.focused,
+                crate::app::library_column_width::library_column_count(area.width),
+                &mut self.layout,
+            );
+        };
+        let mut left_panel = panes.left_panel;
+        let right_panel = panes.right_panel;
+        left_panel.height = left_content_area.height;
+
+        // Library-side separator row below the left pane, matching Music and
+        // Home's wide layout.
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+            Rect {
+                x: left_panel.x,
+                y: left_panel.bottom(),
+                width: left_panel.width,
+                height: 1,
+            },
+        );
+
+        let left_area = panes.left_area;
+        let right_area = panes.right_area;
+        self.layout.movies_wide_right_area = right_area;
+
+        // Left pane: read-only shared hero card (not an interactive hero —
+        // `layout.hero_area` stays unset so the left pane is outside mouse
+        // geometry, mirroring the legacy wide renderer).
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
+            left_panel,
+        );
+        let hero_content = padded_rect(left_area, PANE_PAD_X, 0);
+        let hero_data = ctx
+            .selected_item()
+            .filter(|item| {
+                !item.is_folder
+                    && (!matches!(self.kind, BrowserKind::Movies) || item.item_type == "Movie")
+            })
+            .and_then(|item| {
+                prepare_wide_emby_hero_card(item, hero_content).map(
+                    |(meta_layout, meta_area, img_area)| {
+                        HeroData::Emby(
+                            Box::new(item.clone()),
+                            meta_area,
+                            meta_area,
+                            img_area,
+                            meta_layout,
+                        )
+                    },
+                )
+            });
+
+        // Right rail: pill row + one-column list.
+        let right_pane = hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
+        let pills_area = right_pane.pills_area;
+        let list_panel = right_pane.list_panel;
+
+        if ctx.is_search_active() {
+            render_search_box(
+                f,
+                pills_area,
+                ctx.search_query.as_deref().unwrap_or_default(),
+                ctx.search_loading,
+            );
+        } else if self.narrow_extras.feed_items.is_some() {
+            crate::app::render::paint_feed_group_pills_row(
+                f,
+                pills_area,
+                &self.narrow_extras,
+                &mut self.layout,
+            );
+        } else if self.wide_movies_home_video {
+            render_count_label(f, pills_area, ctx.total_count);
+        } else if self.wide_movies_letter_pills {
+            self.render_letter_pills_row(f, pills_area, ctx);
+        }
+
+        if list_panel.height > 0 {
+            let list_bg = palette::resolve_surface_focus(self.focused);
+            f.render_widget(
+                Block::default().style(Style::default().bg(list_bg)),
+                list_panel,
+            );
+        }
+        let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
+
+        let final_scroll = render_generic_movies_home_video_rows_with_ctx(
+            f,
+            list_area,
+            ctx,
+            self.focused,
+            1,
+            &mut self.layout,
+        );
+
+        // Paint the shared hero text last (after the list); defer the cover
+        // image paint to the shell, which owns the image-cache authority.
+        if let Some(hero_data) = &hero_data {
+            self.image_paint =
+                render_home_hero_content(f, hero_data, true, self.focused, self.use_nerd_fonts);
+        } else {
+            self.image_paint = None;
+        }
+
+        hero_on_left_list_panel_border(f, list_panel, self.focused);
+        final_scroll
+    }
+
+    fn render_letter_pills_row(
+        &mut self,
+        f: &mut Frame,
+        row_area: Rect,
+        ctx: &LibraryListRenderCtx,
+    ) {
+        if row_area.width == 0 {
+            self.layout.selector_tabs = Vec::new();
+            return;
+        }
+        let selected_pos = ctx.letter_filter.as_ref().map(|flt| flt.index).unwrap_or(0);
+        let labels = LetterFilter::labels();
+        let ids: Vec<usize> = (0..labels.len()).collect();
+        self.layout.selector_tabs = render_pill_bar(
+            f,
+            row_area,
+            PillBar {
+                labels: &labels,
+                ids: &ids,
+                selected_pos,
+                prefix: Some(" ⌘ "),
+            },
+        );
+    }
+}
