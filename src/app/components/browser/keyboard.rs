@@ -39,6 +39,7 @@ impl BrowserComponent {
                     | Key::Char('l')
             ) {
                 self.pending_anchor = None;
+                self.preserved_anchor = None;
             }
             match key.code {
                 Key::Up | Key::Char('k') => {

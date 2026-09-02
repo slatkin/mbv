@@ -56,6 +56,7 @@ pub struct BrowserComponent {
     /// by `render_emby_browser_component` (task 3.3).
     narrow_extras: NarrowBrowseExtras,
     pending_anchor: Option<ViewportAnchor<String>>,
+    preserved_anchor: Option<ViewportAnchor<String>>,
 }
 
 impl BrowserComponent {
@@ -78,6 +79,7 @@ impl BrowserComponent {
             image_paint: None,
             narrow_extras: NarrowBrowseExtras::default(),
             pending_anchor: None,
+            preserved_anchor: None,
         }
     }
 
@@ -90,7 +92,7 @@ impl BrowserComponent {
     pub(in crate::app) fn set_content(&mut self, context: LibraryListRenderCtx, focused: bool) {
         self.context = context;
         self.focused = focused;
-        if let Some(anchor) = self.pending_anchor.as_ref() {
+        if let Some(anchor) = self.preserved_anchor.as_ref() {
             if let Some(cursor) = self
                 .context
                 .items
@@ -152,6 +154,7 @@ impl BrowserComponent {
         {
             self.cursor = cursor;
         }
+        self.preserved_anchor = Some(anchor.clone());
         self.pending_anchor = Some(anchor);
     }
 
