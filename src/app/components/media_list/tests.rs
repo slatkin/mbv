@@ -34,6 +34,28 @@ fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
 
     assert_eq!(list.selectable_len(), 4);
     assert_eq!(list.selected_display_row(), Some(1));
+    assert_eq!(
+        list.rows()
+            .iter()
+            .filter_map(|row| match row {
+                MediaListRow::Item { semantic_state, .. } => Some(semantic_state),
+                MediaListRow::Heading { .. } | MediaListRow::Spacer => None,
+            })
+            .collect::<Vec<_>>(),
+        vec![
+            &MediaSemanticState::Ordinary,
+            &MediaSemanticState::active(Some(100)),
+            &MediaSemanticState::Played,
+            &MediaSemanticState::Disabled,
+        ]
+    );
+    assert_eq!(
+        match &list.rows()[3] {
+            MediaListRow::Item { semantic_state, .. } => semantic_state,
+            _ => panic!("expected active item"),
+        },
+        &MediaSemanticState::active(Some(100))
+    );
     list.move_selection(3);
     assert_eq!(list.selected_display_row(), Some(5));
     let viewport = list.resolve_viewport(3);

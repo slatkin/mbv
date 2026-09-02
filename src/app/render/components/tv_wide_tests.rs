@@ -263,34 +263,59 @@ fn wide_tv_selected_series_follows_inline_search_cursor() {
 
 #[test]
 fn wide_tv_focused_series_browser_uses_focused_surface() {
-    let mut app = tv_app();
-    let backend = TestBackend::new(100, 30);
-    let mut terminal = Terminal::new(backend).unwrap();
-    let mut layout = crate::app::layout::LayoutMain::default();
-    let area = Rect::new(0, 0, 100, 30);
-    let mut component = TvWorkspaceComponent::new();
-    component.set_content(app.wide_tv_render_ctx(0, true, None));
-    terminal
-        .draw(|f| {
-            f.render_widget(
-                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
-                area,
-            );
-            app.render_library(f, area, true, &mut layout, None);
-            component.view(f, area);
-        })
-        .unwrap();
+    fn render(focused: bool) -> (ratatui::buffer::Buffer, LayoutMain) {
+        let mut app = tv_app();
+        let area = Rect::new(0, 0, 100, 30);
+        let mut layout = LayoutMain::default();
+        let mut component = TvWorkspaceComponent::new();
+        component.set_content(app.wide_tv_render_ctx(0, focused, None));
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+        terminal
+            .draw(|f| {
+                f.render_widget(
+                    Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+                    area,
+                );
+                app.render_library(f, area, focused, &mut layout, None);
+                component.view(f, area);
+            })
+            .unwrap();
+        (terminal.backend().buffer().clone(), layout)
+    }
 
-    let pos = (
-        layout.tv_wide_right_area.x + 2,
-        layout.tv_wide_right_area.y + 3,
-    );
+    let (library_buffer, library_layout) = render(true);
     assert_eq!(
-        terminal.backend().buffer()[(pos.0, pos.1)].bg,
+        library_buffer[(
+            library_layout.tv_wide_list_area.x,
+            library_layout.tv_wide_list_area.y + 1
+        )]
+            .bg,
         palette::SURFACE_BACKDROP
     );
     assert_eq!(
-        terminal.backend().buffer()[(layout.tv_wide_list_area.x.saturating_sub(1), pos.1)].bg,
+        library_buffer[(
+            library_layout.tv_wide_list_area.x.saturating_sub(1),
+            library_layout.tv_wide_list_area.y.saturating_sub(1)
+        )]
+            .bg,
+        palette::resolve_surface_focus(false)
+    );
+
+    let (queue_buffer, queue_layout) = render(false);
+    assert_ne!(
+        queue_buffer[(
+            queue_layout.tv_wide_list_area.x,
+            queue_layout.tv_wide_list_area.y + 1
+        )]
+            .bg,
         palette::SURFACE_BACKDROP
+    );
+    assert_eq!(
+        queue_buffer[(
+            queue_layout.tv_wide_list_area.x.saturating_sub(1),
+            queue_layout.tv_wide_list_area.y.saturating_sub(1)
+        )]
+            .bg,
+        palette::resolve_surface_focus(true)
     );
 }
