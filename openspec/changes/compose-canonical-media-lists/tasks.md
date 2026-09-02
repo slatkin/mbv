@@ -16,7 +16,7 @@
 
 ## 3. Deliver the Stacked Slice PRs
 
-- [ ] 3.1 Complete and merge `introduce-canonical-media-list-foundation` as its own PR into `feat/migrate-tui-to-tuirealm`; verify its automated checks, manual Emby / Movies / Emby-homevideos-feed-view / Emby-podcast-channel-list / TV evidence, file-size gate, and one-painter evidence are attached before merge.
+- [x] 3.1 Complete and merge `introduce-canonical-media-list-foundation` as its own PR into `feat/migrate-tui-to-tuirealm`; verify its automated checks, manual Emby / Movies / Emby-homevideos-feed-view / Emby-podcast-channel-list / TV evidence, file-size gate, and one-painter evidence are attached before merge.
 - [ ] 3.2 Complete and merge `migrate-home-feeds-to-canonical-lists` as its own PR after task 1.2 and slice 1; verify Home and Feeds Wide/Narrow manual evidence, the non-vacuous metadata fixture, Feeds one-column Wide behavior, file-size gate, and one-painter evidence are attached before merge.
 - [ ] 3.3 Complete and merge `migrate-music-audiobookshelf-to-canonical-lists` as its own PR after slice 1; verify Music plus both Audiobookshelf Books and Podcasts Wide/Narrow manual evidence, Music re-anchor characterization, required non-list repairs without bespoke exceptions, user live visual approval before regression-test changes, Wide Book ordinary rows, file-size gate, and one-painter evidence are attached before merge.
 - [ ] 3.4 Complete and merge `migrate-queue-to-canonical-list` as its own PR after slice 1; verify Local/Remote Queue behavior, bounded progress, scope/reorder/playback authority, file-size gate, and one-painter evidence are attached before merge. Queue's `QueueHitRegion` path is left wired and untouched here.
