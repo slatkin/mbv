@@ -289,7 +289,6 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
         terminal.backend().buffer()[(pos.0, pos.1)].bg,
         palette::SURFACE_BACKDROP
     );
-    let right_focused = true;
     assert_eq!(
         terminal.backend().buffer()[(layout.tv_wide_list_area.x.saturating_sub(1), pos.1)].bg,
         palette::SURFACE_BACKDROP
