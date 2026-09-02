@@ -2,8 +2,8 @@
 
 - [x] 1.1 Add `WideMediaList` and `InlineMediaBrowser` terminology to `CONTEXT.md` before implementation; use the exact names and distinguish Inline Search.
   - Also add `Emby podcast channel list` to `CONTEXT.md` alongside the control terms (`Emby homevideos feed view` is already defined); this term is coined by this slice.
-- [ ] 1.2 Record current TV Wide→Narrow→Wide cursor, selected target, scroll, and selected-row screen offset by source-reading and manual observation of the running app only; do not add or edit any test or fixture. The metadata-bearing characterization fixture is added later, after task 4.1's explicit user live visual approval (see tasks 4.1 and 4.2).
-- [ ] 1.3 Confirm the PR #606 stacking rule; this slice is a distinct PR targeting `feat/migrate-tui-to-tuirealm`. Mouse is out of scope and not a dependency: `restore-mouse-support` (#638) lands after every canonical slice.
+- [x] 1.2 Record current TV Wide→Narrow→Wide cursor, selected target, scroll, and selected-row screen offset by source-reading and manual observation of the running app only; do not add or edit any test or fixture. The metadata-bearing characterization fixture is added later, after task 4.1's explicit user live visual approval (see tasks 4.1 and 4.2).
+- [x] 1.3 Confirm the PR #606 stacking rule; this slice is a distinct PR targeting `feat/migrate-tui-to-tuirealm`. Mouse is out of scope and not a dependency: `restore-mouse-support` (#638) lands after every canonical slice.
 
 ## 2. Shared foundation
 
