@@ -156,6 +156,9 @@ impl Model {
             // to the resting level so the narrow browser's `set_content`
             // adopts it on the same tick.
             (false, Some(id), _) => {
+                // Discard any anchor captured before the breakpoint flip; it
+                // belongs to the kept-mounted wide component, not Browser.
+                self.tv_viewport_anchor = None;
                 let Some(anchor) = self
                     .application
                     .get_component(&id)
@@ -164,7 +167,6 @@ impl Model {
                 else {
                     return;
                 };
-                self.tv_viewport_anchor = Some(anchor.clone());
                 if let Some(browser_id) = self.emby_browser_id.clone() {
                     if let Some(component) = self
                         .application

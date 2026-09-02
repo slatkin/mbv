@@ -269,13 +269,13 @@ impl TvWorkspaceComponent {
     /// `ShellRequest::TvActivate` so the shell effect targets the component
     /// selection instead of the mirrored App browse cursor.
     pub(in crate::app) fn selected_item(&self) -> Option<EmbyItem> {
-        let target = self.list.selected_target()?;
-        self.context
-            .list
-            .items
-            .iter()
-            .find(|item| &item.id == target)
-            .cloned()
+        // Resolve through the same natural/effective order used to build the
+        // rail. Stable IDs normally make this equivalent to target lookup;
+        // ordinal resolution also keeps malformed duplicate-ID payloads from
+        // collapsing two visibly distinct rows onto the first item.
+        let mut items: Vec<&EmbyItem> = self.context.list.items.iter().collect();
+        items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
+        items.get(self.list.cursor()).cloned().cloned()
     }
 
     /// The Series snapshot the shell pushed for this frame (`context
