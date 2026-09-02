@@ -14,7 +14,7 @@ Ledger verification: all interactive-surface rows were fully migrated on 2026-08
 
 ## Mouse owner / gestures / verification
 
-Mouse ownership is tracked per row; values are `pending` until the restore-mouse-support phases verify delivery and gestures.
+Mouse ownership is tracked per row in the ledger table; values are `pending` until the restore-mouse-support phases verify delivery and gestures.
 
 Per **D16** in `openspec/changes/migrate-tui-to-tuirealm/design.md`, the legacy
 mouse framework is deleted rather than migrated, and mouse interaction is
