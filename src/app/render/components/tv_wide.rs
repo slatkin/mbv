@@ -234,7 +234,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         width: list_panel.width,
         ..list_area
     };
-    hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
+    hero_left::hero_on_left_list_panel_border(f, list_panel, !right_focused);
     let final_scroll =
         super::media_list::render_wide_media_list(f, paint_area, media_list, right_focused, layout);
     let mut order: Vec<usize> = (0..ctx.list.items.len()).collect();
