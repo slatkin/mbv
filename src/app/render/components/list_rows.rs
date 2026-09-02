@@ -1,7 +1,7 @@
 //! The `List` component (design.md "Component catalogue"): row rendering,
 //! the shared `SelectionMarker`, and the row/cell padding it composes with,
 //! extracted from and shared by movies/TV's list renderers
-//! (`list_letter_groups.rs`, `list_plain.rs`, both consumers of
+//! (`list_letter_groups.rs`, `media_list.rs`, both consumers of
 //! `item_cell_spans`/`draw_column_selection_markers` below) and reused by
 //! the audiobookshelf show grid. `ListRenderCtx`/`DisplayRow` are its row
 //! model; `render_right_scrollbar` (`widgets.rs`) is its `Scrollbar`.
@@ -224,7 +224,7 @@ impl<'a> InlineReplacementPlan<'a> {
 }
 
 /// Shared inputs to the per-kind row-rendering bodies of `render_list`
-/// (`render_letter_grouped_rows`, `render_plain_rows`): the
+/// (`render_letter_grouped_rows`, `media_list::render_plain_rows`): the
 /// prelude values both kinds' bodies read, factored out so each callee takes
 /// one struct instead of the same six-plus positional arguments.
 pub(in crate::app::render) struct ListRenderCtx<'a> {

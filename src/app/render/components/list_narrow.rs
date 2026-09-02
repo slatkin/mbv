@@ -151,7 +151,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             layout,
         )
     } else {
-        super::list_plain::render_plain_rows(f, row_ctx, layout)
+        super::media_list::render_plain_rows(f, row_ctx, layout)
     };
 
     let mut image_paint = None;

@@ -34,7 +34,7 @@ pub(in crate::app) fn render_generic_movies_home_video_rows_with_ctx(
                 layout,
             )
         } else {
-            super::list_plain::render_plain_rows(f, row_ctx, layout)
+            super::media_list::render_plain_rows(f, row_ctx, layout)
         }
     }
 }

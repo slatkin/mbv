@@ -423,7 +423,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     if browser_area.height > 0 && browser_area.width > 0 {
         if ctx.list.is_search_active() {
             let cols = crate::app::library_column_width::library_column_count(browser_area.width);
-            output.final_scroll = super::list_plain::render_plain_rows(
+            output.final_scroll = super::media_list::render_plain_rows(
                 f,
                 ctx.list.rows(browser_area, cols, right_focused, 0),
                 layout,

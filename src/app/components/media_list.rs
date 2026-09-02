@@ -1,9 +1,24 @@
+/// A bounded percentage used by active canonical media-list rows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ActiveProgress(u8);
+
+impl ActiveProgress {
+    /// Clamps a percentage into the permitted `0..=100` range.
+    pub fn new(percent: u16) -> Self {
+        Self(percent.min(100) as u8)
+    }
+
+    pub fn percent(self) -> u8 {
+        self.0
+    }
+}
+
 /// Provider-neutral semantic state used by canonical media-list rows.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaSemanticState {
     Ordinary,
     Played,
-    Active { progress: Option<u8> },
+    Active { progress: Option<ActiveProgress> },
     Disabled,
 }
 
@@ -11,7 +26,7 @@ impl MediaSemanticState {
     /// Constructs active state, clamping prepared progress to the permitted range.
     pub fn active(progress: Option<u16>) -> Self {
         Self::Active {
-            progress: progress.map(|value| value.min(100) as u8),
+            progress: progress.map(ActiveProgress::new),
         }
     }
 }

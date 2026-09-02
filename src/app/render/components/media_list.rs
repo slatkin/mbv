@@ -13,6 +13,9 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+/// Canonical fixed-row render path for the canonical media-list controls.
+/// Semantic theme ownership stays in `theme`/`palette` and `list_rows`.
+///
 /// Plain list kind of `render_list`: the catch-all covering the Home
 /// "Continue Watching" tab, search result sets, small libraries, and
 /// non-album music levels, all of which render identically without letter
