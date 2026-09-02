@@ -19,7 +19,7 @@ pub enum Gesture {
 /// Per-mounted-parent mouse recognizer. Drag and hover variants are reserved.
 #[derive(Debug, Default)]
 pub struct MouseGestureState {
-    last_click: Option<(Instant, u16, u16)>,
+    last_click: Option<Instant>,
     last_scroll: Option<Instant>,
 }
 
@@ -30,12 +30,10 @@ impl MouseGestureState {
     pub fn recognize(&mut self, event: &MouseEvent, now: Instant) -> Option<Gesture> {
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                let double = self.last_click.is_some_and(|(at, c, r)| {
-                    now.duration_since(at) <= DOUBLE_CLICK_WINDOW
-                        && c == event.column
-                        && r == event.row
-                });
-                self.last_click = Some((now, event.column, event.row));
+                let double = self
+                    .last_click
+                    .is_some_and(|at| now.duration_since(at) <= DOUBLE_CLICK_WINDOW);
+                self.last_click = Some(now);
                 Some(if double {
                     Gesture::DoubleClick
                 } else {
@@ -59,7 +57,8 @@ impl MouseGestureState {
                     },
                 ))
             }
-            MouseEventKind::Drag(_) | MouseEventKind::Moved => None,
+            MouseEventKind::Drag(_) => Some(Gesture::DragMove),
+            MouseEventKind::Moved => Some(Gesture::HoverEnter),
             _ => None,
         }
     }
