@@ -20,9 +20,9 @@ Local/Remote scope and its controls, reorder, playback, title, Player/queue auth
 
 Mouse is out of scope for this slice. Queue's existing hit-region path stays wired and untouched. `restore-mouse-support` (#638), landing after this slice, adds `HitRegions<QueueSlotId>` to the embedded `WideMediaList` and migrates Queue's row hits. This slice adds no mouse subscription, `MouseGestureState`, or parent-to-child point delegation.
 
-### D5 — Verification order
+### D5 — Continuous verification and acceptance
 
-Before explicit user live approval, characterization is limited to source trace, existing unchanged evidence, and manual observation; it must not modify UI tests or use test-driven appearance. Then perform visual correction at supported widths and obtain explicit user live confirmation. Only afterward change/add UI tests. Tests and evidence must prove one painter, child row geometry, target preservation, and ≤800-line changed source files.
+Implementation, focused tests and automated gates, review, and acceptance form one uninterrupted slice without a pre-test visual-approval checkpoint. Tests and evidence prove one painter, child row geometry, target preservation, and ≤800-line changed source files. Live review covers supported widths; defects found there are fixed as bugs before rerunning affected tests and gates.
 
 ### D6 — Stacking and rollback
 

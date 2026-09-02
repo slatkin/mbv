@@ -58,13 +58,17 @@ work SHALL be folded into this change.
 - **THEN** they name `WideMediaList` and `InlineMediaBrowser` owners consistently
   and distinguish both feed meanings
 
-### Requirement: visual and staged verification gates are explicit
-Before changing UI tests or stale UI docs, a user SHALL explicitly verify live
-output at narrow 60x20 and Wide 120x40/140x30. The implementation plan SHALL
-require ast-grep, grep, cargo checks, file-size, formatting, relevant tests, and
-a final whole-tree zero-reference check after those updates.
+### Requirement: cleanup and acceptance form one verified slice
+Cleanup, UI test/documentation updates, automated gates, review, and acceptance
+SHALL form one uninterrupted slice without a pre-test visual-approval checkpoint.
+The implementation plan SHALL require ast-grep, grep, cargo checks, file-size,
+formatting, relevant tests, and a final whole-tree zero-reference check before
+live acceptance at narrow 60x20 and Wide 120x40/140x30.
 
 #### Scenario: visual evidence covers breakpoints
 - **WHEN** cleanup acceptance is sought
-- **THEN** live evidence covers 60x20, 120x40, and 140x30 and confirms no
+- **THEN** automated gates and zero-reference evidence are complete
+- **AND** live evidence covers 60x20, 120x40, and 140x30 and confirms no
 underpaint, geometry drift, or lost canonical list behavior
+- **AND** any defect is routed to its owning slice and the affected cleanup gates
+are rerun before acceptance

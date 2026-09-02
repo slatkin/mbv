@@ -37,7 +37,7 @@ No Narrow behavior is intentionally changed. Tests cover the existing Narrow fix
 
 Add focused render/buffer tests at width 82 (threshold) and a larger Wide width. Fixtures include enough FeedEntries and metadata to exercise selected, played, and active states, with a first visible heading and a final visible FeedEntry/marker at both widths. Assert one-column x geometry, rail background/border cells, exactly one selected title, marker alignment, and that the semantic border/background never overwrites the first visible heading or the final visible FeedEntry/marker at the 82-column threshold or a larger Wide width. The tests must inspect rendered geometry/output rather than only construct models.
 
-This change was delivered test-first (fixtures written alongside the render correction, with live visual confirmation recorded at acceptance). That ordering predates the visual-first rule now in force and MUST NOT be copied into future canonical Feeds work — see the historical ordering note in `tasks.md`.
+This change was delivered test-first (fixtures written alongside the render correction, with live visual confirmation recorded at acceptance). That ordering is recorded as historical fact and is not precedent for future canonical Feeds work — see the historical ordering note in `tasks.md`.
 
 ### D6 — Stacked delivery
 

@@ -37,9 +37,9 @@ Queue SHALL project selectable rows with stable opaque `QueueSlotId` targets and
 - **AND** it clamps or resets only when the target is absent or content no longer permits the position
 - **AND** the shell does not mirror the child cursor or scroll per frame
 
-### Requirement: Queue preserves the visual contract before test changes
+### Requirement: Queue preserves the visual contract through continuous verification
 
-Implementation SHALL characterize current Queue output and behavior before visual correction. Before explicit user live approval, characterization SHALL use only source trace, existing unchanged evidence, and manual observation; it SHALL NOT modify UI tests or use test-driven appearance. Visual correction SHALL be performed at supported Wide/Normal and narrow/mini widths, with explicit user live confirmation before adding or updating UI tests. Tests SHALL then cover metadata, active progress, focus, Local/Remote scope, reorder state, remote state, and stable target/geometry behavior.
+Implementation, focused tests and automated gates, review, and acceptance SHALL form one uninterrupted slice without a pre-test visual-approval checkpoint. Tests SHALL cover metadata, active progress, focus, Local/Remote scope, reorder state, remote state, and stable target/geometry behavior. Live review SHALL cover supported Wide/Normal and narrow/mini widths; any defect found there SHALL be fixed as a bug and followed by rerunning the affected tests and gates.
 
 #### Scenario: Verification proves one painter
 

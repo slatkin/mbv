@@ -4,7 +4,7 @@ See `proposal.md` for motivation. PR #606 is open from `feat/migrate-tui-to-tuir
 
 The repository already has destination-sized TuiRealm `AppComponent`s, typed `Msg`/`UserEvent` boundaries, central keyboard routing, a shared PillBar painter, Hero-on-left arrangement primitives, and a render-component substrate. The Hero-on-left foundation is not yet universal: Audiobookshelf Podcast (and the related Books surface) is broken. `restore-audiobookshelf-podcast-wide-layout` (#640) is superseded and archived without execution; only the separately landed #640 Home podcast sub-view hero-placement fix stays. The Audiobookshelf Podcast library Wide repair and the Books repair are absorbed into the canonical Music/Audiobookshelf slice without bespoke exceptions.
 
-Current list state and geometry are split among `BrowserComponent`, `HomeComponent`, `TvWorkspaceComponent`, `MusicWorkspaceComponent`, Audiobookshelf components, `FeedsComponent`, and `QueueComponent`. Generic Emby and TV already share the most reliable existing fixed-row painter path. The new foundation re-homes that working painter behavior rather than rewriting it.
+Current list state and geometry are split among `BrowserComponent`, `HomeComponent`, `TvWorkspaceComponent`, `MusicWorkspaceComponent`, Audiobookshelf components, `FeedsComponent`, and `QueueComponent`. The first foundation attempt established shared controls and genuine Wide TV/Queue composition, but applicable Browser paths still own cursor/scroll, use the legacy plain-row painter at Wide, and construct an Inline control while painting at Narrow. Foundation acceptance is reopened until those paths use persistent embedded controls.
 
 The target boundary is:
 
@@ -45,7 +45,7 @@ The mounted parent owns event subscription and application-level `Event -> Msg`.
 
 Five separate OpenSpec changes and PRs implement the work:
 
-1. **Foundation + Emby/TV:** shared row/viewport types, both controls, hero-bearing generic Emby catalog browsing, Movies, the Emby homevideos feed view, the Emby podcast channel list, narrow TV Series browsing, and the Wide TV right rail.
+1. **Foundation + Emby/TV:** shared row/viewport types, both controls, persistent Wide and Narrow composition for hero-bearing generic Emby catalog browsing, Movies, the Emby homevideos feed view, the Emby podcast channel list, and TV Series browsing.
 2. **Home + Feeds:** Home sections and Feeds grouping on the shared controls.
 3. **Music + Audiobookshelf:** grouped Music albums plus Audiobookshelf Podcast shows and Books.
 4. **Queue:** fixed-row-only adoption and bounded progress presentation.
@@ -101,9 +101,9 @@ The model carries no `App`, Service client, source URL/header, renderer callback
 
 ### D4 — Wide and Inline are separate controls with explicit scope
 
-`WideMediaList` always paints fixed-height, one-column rows. It accepts neither a column-count option nor an Inline-detail plan. It applies to Hero-on-left right rails. Queue may compose the same fixed-row mechanics outside the hero presentation contract. Existing non-hero two-column catalogs remain outside its scope.
+`WideMediaList` is persistent for its destination's lifetime and always paints fixed-height, one-column rows. It accepts neither a column-count option nor an Inline-detail plan. It applies to Hero-on-left right rails. Queue may compose the same fixed-row mechanics outside the hero presentation contract. Existing non-hero two-column catalogs remain outside its scope.
 
-`InlineMediaBrowser` always paints one browser column and may replace its selected item row with one variable-height Inline hero. The term is distinct from Inline Search. It owns height admission, display-row expansion, visibility clamp, selected-parent geometry, and ordinary-row fallback. Structured child lists remain in the selection modal.
+`InlineMediaBrowser` is persistent for its destination's lifetime, is never constructed while painting, and always paints one browser column; it may replace its selected item row with one variable-height Inline hero. The term is distinct from Inline Search. It owns height admission, display-row expansion, visibility clamp, selected-parent geometry, and ordinary-row fallback. Structured child lists remain in the selection modal.
 
 The two controls may share a private selectable-row/index/viewport implementation. That private code is not a third public component.
 
@@ -120,9 +120,9 @@ ViewportAnchor<Target> {
 
 `selected_row_offset` is the zero-based screen-row offset from the top of the list viewport to the top of the selected item's ordinary row before Inline replacement. The receiving control preserves that offset when possible and clamps it when its viewport cannot.
 
-Ordinary content pushes preserve selection by stable target and otherwise clamp locally; they do not carry cursor or scroll. Persisted resting position remains shell-owned and is written only by the existing navigation event path.
+Ordinary content pushes preserve selection by stable target and otherwise clamp locally; their canonical projection type excludes cursor and scroll rather than carrying ignored mirror fields. Any position input retained for the non-hero two-column carve-out is isolated from canonical paths. Persisted resting position remains shell-owned and is written only by the existing navigation event path.
 
-Before a slice replaces TV or Music handoff logic, it characterizes the current cursor, scroll, and selected-row screen position across Wide -> Narrow -> Wide. That characterization is read-only — source reading, unchanged existing evidence, and manual observation only — because it precedes the explicit user live visual approval that D11 requires before any UI fixture or test change. The replacement must match that evidence unless a separately approved behavior correction says otherwise.
+Before a slice replaces TV or Music handoff logic, it records the current cursor, scroll, and selected-row screen position across Wide -> Narrow -> Wide. The replacement must match that evidence unless a separately approved behavior correction says otherwise. Representative stateful tests then prove selected target and selected-row offset across the round trip and prove ordinary content pushes do not adopt stale shell cursor/scroll.
 
 **Alternatives considered:**
 
@@ -146,9 +146,9 @@ The parent passes only the list rectangle to the active child. The child view de
 
 ### D8 — Re-home the working generic painter before generalizing
 
-Slice 1 uses the existing generic Emby/TV fixed-row path, especially the body and output of `render_plain_rows`, as the source implementation for the new Wide render component. It moves and parameterizes that proven behavior; it does not start with a greenfield painter rewrite.
+Slice 1 may use the existing generic Emby/TV fixed-row behavior as source material for the canonical render component, but applicable Hero-on-left paths must finish at the persistent `WideMediaList`, which absorbs letter grouping through `MediaListRow::Heading`/`Spacer`; the bespoke Wide painters reached through `render_generic_movies_home_video_rows_with_ctx` — `render_letter_grouped_rows` and `render_plain_rows` — remain only for the unchanged non-hero two-column policy. The slice does not start with a greenfield painter rewrite.
 
-Characterization for the generic Emby and TV path must remain unchanged through the re-home except for an explicitly named contract correction. Heading/Spacer support and other new vocabulary are added around that baseline in focused commits.
+Characterization for generic Emby and TV must remain unchanged except for an explicitly named contract correction. Heading/Spacer support and other new vocabulary are added around that baseline in focused commits.
 
 ### D9 — Image and effect work stays outside painting
 
@@ -167,7 +167,7 @@ Before implementation slices begin:
 
 Issue #641 demonstrated that some passing characterization was vacuous because fixtures lacked metadata or relevant state. Existing tests are reused only when their fixtures exercise the migrated path.
 
-**Controlling order for any rendered media-list surface:** production visual correction first; then explicit user live visual approval of the running result; then — and only then — any UI fixture, characterization-buffer, or rendered/geometry test change for that surface. Characterization performed before that approval is read-only: source reading, unchanged existing evidence, and manual observation only, adding or editing no test or fixture. Non-visual tests (delivery, arbitration, selectable-index) MAY precede approval. This order is the `ui-design-system` "Visual verification precedes UI tests" requirement this change adds; every slice inherits it.
+**Controlling workflow for any rendered media-list surface:** implementation, representative stateful and rendered tests, automated gates, review, and acceptance form one uninterrupted slice. There is no pre-test visual-approval checkpoint. Live Wide/Narrow review remains required; defects found there are bugs fixed within the same slice, followed by the affected tests and gates. Every slice inherits the `ui-design-system` requirement for this workflow.
 
 Each slice must provide:
 
@@ -233,11 +233,11 @@ Concurrent branches contend only on shared glue — `src/app/shell.rs` mount sit
 - **[Mouse work creeps into the canonical slices]** -> All mouse work is `restore-mouse-support`-owned and lands last; no slice task, spec, or dependency references mouse, `HitRegions`, or gestures.
 - **[The abstraction becomes a callback framework]** -> Hold the model to prepared data plus opaque targets and require an umbrella update for callbacks.
 - **[A slice crosses the file cap]** -> Split named near-limit files before or with wiring and run the gate in every slice.
-- **[Superseded standalone Audiobookshelf `#640` work remains present]** -> `restore-audiobookshelf-podcast-wide-layout` is archived without execution; revert any standalone implementation still present and absorb the required Audiobookshelf Books/Podcasts repairs in slice 3; require user live visual approval before changing or adding regression tests.
+- **[Superseded standalone Audiobookshelf `#640` work remains present]** -> `restore-audiobookshelf-podcast-wide-layout` is archived without execution; revert any standalone implementation still present and absorb the required Audiobookshelf Books/Podcasts repairs in slice 3 with representative tests, gates, review, and acceptance in the same slice.
 
 ## Migration Plan
 
-1. Land the revised umbrella planning artifacts; keep PR #606 blocked.
+1. Land the revised umbrella planning artifacts; keep PR #606 blocked, preserve the invalid Home/Feeds commits and dirty worktree as unaccepted evidence, and correct the foundation from `d426e057` or equivalent isolation before Home resumes.
 2. Land `restore-feed-group-inline-expansion` (#634/#637) independently as the Emby homevideos feed view Narrow inline-expansion fix — a separate surface from the Feeds Service, later composed by slice 1, not a Home/Feeds-slice dependency. Land `restore-feeds-service-wide-list` (#623, task 1.3a) before the Home/Feeds slice; it plus the foundation is that slice's baseline. Audiobookshelf Books/Podcasts repairs belong to the canonical Music/Audiobookshelf slice; `restore-audiobookshelf-podcast-wide-layout` (#640) is superseded and archived without execution.
 3. Create and approve all five slice OpenSpec changes, each naming its branch dependency, exact destination inventory, file splits, automated evidence, and manual checks.
 4. Land slice 1 through slice 4 as separate PRs against `feat/migrate-tui-to-tuirealm`; do not cross-squash slices. Slices 2–4 MAY be built concurrently in separate worktrees off post-slice-1 `feat/migrate-tui-to-tuirealm` (D15); they still integrate as separate sequential PRs, each rebased as the prior lands.

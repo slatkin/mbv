@@ -1,8 +1,8 @@
 > Status: complete (2026-09-01), retained as historical context for the
 > canonical media-list campaign. User acceptance is recorded in `tasks.md`. The
-> test-first task ordering is historical fact and MUST NOT be copied into new
-> canonical UI work, which is visual-first — see the historical prerequisite
-> note in `tasks.md`.
+> test-first task ordering is recorded as historical fact and is not precedent
+> for new canonical UI work, which follows the campaign workflow in force at the
+> time it is done — see the historical prerequisite note in `tasks.md`.
 
 ## Context
 

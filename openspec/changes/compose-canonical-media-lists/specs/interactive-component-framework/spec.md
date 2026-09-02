@@ -2,7 +2,7 @@
 
 ### Requirement: Destination components may embed reusable interaction controls
 
-A destination `AppComponent` MAY own a reusable plain TuiRealm `Component` as an embedded interaction control when the control is not an independently mounted surface. The embedded control SHALL share the parent's mount, activation, focus, subscription, and lifetime; it SHALL NOT receive a `ComponentId`, register independently with the application, or create another event-precedence boundary.
+A destination `AppComponent` MAY own a reusable plain TuiRealm `Component` as an embedded interaction control when the control is not an independently mounted surface. The embedded control SHALL be persistent for the parent's lifetime and share its mount, activation, focus, and subscription; it SHALL NOT be constructed during each render pass, receive a `ComponentId`, register independently with the application, or create another event-precedence boundary.
 
 The embedded control MAY own the delegated live cursor, scroll, viewport, movement, painting entry point, and the render-derived row geometry its painting and scrolling need for its region. The destination parent SHALL remain the application-level `Event` to `Msg` boundary, own provider-specific presentation and workspace state, and translate the embedded control's resolved opaque target into the destination's typed request.
 
@@ -28,7 +28,7 @@ The embedded control MAY own the delegated live cursor, scroll, viewport, moveme
 
 ### Requirement: Embedded controls have one state owner and one painter
 
-For each rectangle and reachable presentation, exactly one embedded control or parent-owned workspace SHALL own the interaction state and painting for that region. The parent SHALL NOT mirror an embedded control's live cursor or scroll, repaint the control's body, or overwrite the control's state during an ordinary content push. A discrete navigation or breakpoint transition MAY explicitly re-anchor the control using the selected stable target and the selected ordinary row's zero-based offset from the top of the list viewport.
+For each rectangle and reachable presentation, exactly one persistent embedded control or parent-owned workspace SHALL own the interaction state and painting for that region. The parent SHALL NOT mirror an embedded control's live cursor or scroll, repaint the control's body, rebuild its row or replacement geometry, or overwrite the control's state during an ordinary content push. Canonical content projection types SHALL exclude cursor and scroll; carrying those values but ignoring them is not sufficient. Position input retained for an explicit non-canonical carve-out SHALL be isolated from canonical paths. A discrete navigation or breakpoint transition MAY explicitly re-anchor the control using the selected stable target and the selected ordinary row's zero-based offset from the top of the list viewport.
 
 #### Scenario: Content refreshes in place
 

@@ -209,14 +209,14 @@ wheel · 4 overlays & popups · 5 music_workspace + narrow browse · 6 ledger +
 precedence-proof close-out. Phase 1 must land the fold and subscriptions with no
 new gestures, so regressions are isolated to delivery.
 
-**Visual-first ordering (rule).** Any phase that produces an observable pointer,
-cursor, or rendered-UI behaviour change — Phases 3, 4, 5, 6, and any observable
-part of Phase 2 — SHALL get explicit user live visual confirmation BEFORE that
-phase adds or modifies any rendered-UI or characterization-buffer test.
-Non-visual tests — delivery-set, arbitration priority, blocking-overlay swallow,
-`tick()` synchronisation, and gesture-recognition-in-isolation — MAY precede
-confirmation. Each affected phase gate in `tasks.md` references this rule rather
-than restating it.
+**Continuous verification and acceptance (rule).** Each phase's implementation,
+representative tests and automated gate, review, and acceptance form one
+uninterrupted slice without a pre-test visual-approval checkpoint. Any phase
+that changes observable pointer, cursor, or rendered-UI behaviour — Phases 3,
+4, 5, 6, and any observable part of Phase 2 — receives live review after its
+automated gate and before phase acceptance. A defect found there is fixed as a
+bug and the affected tests and gate are rerun. Each affected phase gate in
+`tasks.md` references this rule.
 
 ## Risks / Trade-offs
 

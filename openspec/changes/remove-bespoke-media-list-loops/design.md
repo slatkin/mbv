@@ -27,14 +27,15 @@ here.
    before deletion. Track test and documentation references separately; do not
    treat their presence as production use.
 3. Delete only candidates whose production gate passes. Re-run the inventory
-   after each deletion. Obtain explicit user live visual approval at the
-   required breakpoints before changing any UI tests or documentation.
-4. After approval, reconcile ADR 0022, `docs/architecture/interactive-surface-ledger.md`,
+   after each deletion.
+4. Reconcile ADR 0022, `docs/architecture/interactive-surface-ledger.md`,
    `CONTEXT.md`, and `.agents/skills/mbv-frontend/SKILL.md` to final
-   `WideMediaList`/`InlineMediaBrowser` ownership and terminology. Then update
-   stale UI tests/docs and run a final whole-tree zero-reference check. Preserve
+   `WideMediaList`/`InlineMediaBrowser` ownership and terminology. Update stale
+   UI tests/docs and run automated gates plus a final whole-tree zero-reference
+   check. Then perform live acceptance at the required breakpoints. Preserve
    canonical controls, the non-hero two-column arrangement, Queue fixed rows,
-   and the Feeds Service/homevideos distinction.
+   and the Feeds Service/homevideos distinction. Route any discovered visual
+   defect to its owning slice and rerun affected cleanup gates before acceptance.
 
 No new abstraction, painter, dependency, protocol, Service, Player,
 persistence, provider API, destination behavior, or visual variant is allowed.
@@ -43,8 +44,7 @@ persistence, provider API, destination behavior, or visual variant is allowed.
 
 Run strict OpenSpec validation, ast-grep symbol/caller checks, `rtk grep`
 zero-reference checks for every deleted candidate, file-size validation,
-formatting, workspace checks, and relevant tests. The live visual gate is user
-verification at narrow 60x20 and Wide 120x40 and 140x30, covering selection,
-scrolling, hero/rail framing, non-hero two columns, Queue fixed rows, and both
-feed meanings; it is not inferred from screenshots. UI test edits occur only
-after that approval.
+formatting, workspace checks, and relevant tests. Live acceptance follows the automated gates at narrow 60x20 and Wide 120x40
+and 140x30, covering selection, scrolling, hero/rail framing, non-hero two
+columns, Queue fixed rows, and both feed meanings; it is not inferred from
+screenshots. There is no pre-test visual-approval checkpoint.

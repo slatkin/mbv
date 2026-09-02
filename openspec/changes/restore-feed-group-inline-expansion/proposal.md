@@ -3,9 +3,9 @@
 > Status: complete (2026-09-01). Landed historical prerequisite for the
 > canonical media-list campaign (`compose-canonical-media-lists`, umbrella
 > task 1.2). User acceptance is recorded in `tasks.md` (2026-09-01
-> user-authorized exception). Its test-first task ordering is preserved as
-> historical fact and MUST NOT be copied into new canonical UI work, which is
-> visual-first — see the historical prerequisite note in `tasks.md`.
+> user-authorized exception). Its test-first task ordering is recorded as
+> historical fact and is not precedent for new canonical UI work; see the
+> historical prerequisite note in `tasks.md`.
 
 ## Why
 
