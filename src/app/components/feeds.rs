@@ -15,7 +15,7 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
+use super::media_list::{InlineMediaBrowser, MediaListRow, MediaSemanticState, WideMediaList};
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
@@ -32,6 +32,7 @@ pub struct FeedsComponent {
     visible_entries: Vec<FeedEntry>,
     /// Canonical structural projection; selectors remain parent chrome.
     canonical_list: WideMediaList<String>,
+    inline_list: InlineMediaBrowser<String>,
     watched_filter: WatchedFilter,
     selected_group: usize,
     cursor: usize,
@@ -50,6 +51,7 @@ impl FeedsComponent {
             all_entries: Vec::new(),
             visible_entries: Vec::new(),
             canonical_list: WideMediaList::new(),
+            inline_list: InlineMediaBrowser::new(),
             watched_filter: WatchedFilter::default(),
             selected_group: 0,
             cursor: 0,
@@ -174,7 +176,8 @@ impl FeedsComponent {
                 },
             });
         }
-        self.canonical_list.set_content(rows);
+        self.canonical_list.set_content(rows.clone());
+        self.inline_list.set_content(rows);
     }
 
     fn clamp_cursor(&mut self) {
@@ -431,6 +434,31 @@ impl Component for FeedsComponent {
                 scroll: &mut self.scroll,
             },
         );
+        let wide = crate::app::library_column_width::library_column_count(layout.left_area.width)
+            == 1
+            && layout.left_area.width > 0;
+        if wide {
+            let offset = crate::app::render::render_wide_media_list(
+                frame,
+                layout.left_area,
+                &self.canonical_list,
+                self.focused,
+                crate::app::palette::SURFACE_FOCUSED,
+                &mut layout,
+            );
+            self.canonical_list.set_scroll(offset);
+        } else {
+            let offset = crate::app::render::render_inline_media_browser(
+                frame,
+                layout.left_area,
+                &self.inline_list,
+                0,
+                self.focused,
+                crate::app::palette::SURFACE_FOCUSED,
+            )
+            .offset;
+            self.inline_list.set_scroll(offset);
+        }
         self.layout = layout;
     }
 

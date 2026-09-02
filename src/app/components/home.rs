@@ -21,7 +21,7 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
+use super::media_list::{InlineMediaBrowser, MediaListRow, MediaSemanticState, WideMediaList};
 use super::msg::{HomeHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::HomeImagePaint;
@@ -35,6 +35,7 @@ pub struct HomeComponent {
     latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
     /// Canonical projection of the active section; the parent retains section identity.
     canonical_list: WideMediaList<String>,
+    inline_list: InlineMediaBrowser<String>,
     loading: bool,
     section: usize,
     cursor: usize,
@@ -83,6 +84,7 @@ impl HomeComponent {
             continue_items: Vec::new(),
             latest: Vec::new(),
             canonical_list: WideMediaList::new(),
+            inline_list: InlineMediaBrowser::new(),
             loading: false,
             section: 0,
             cursor: 0,
@@ -132,7 +134,20 @@ impl HomeComponent {
                 .map(|(_, _, items)| items)
                 .unwrap_or(&self.continue_items)
         };
-        self.canonical_list.set_content(
+        let rows: Vec<MediaListRow<String>> = items
+            .iter()
+            .cloned()
+            .map(|item| MediaListRow::Item {
+                primary: item.title().to_owned(),
+                target: item.title().to_owned(),
+                trailing: None,
+                duration: None,
+                semantic_state: MediaSemanticState::Ordinary,
+            })
+            .collect();
+        self.canonical_list.set_content(rows.clone());
+        self.inline_list.set_content(rows);
+        /* self.canonical_list.set_content(
             items
                 .iter()
                 .cloned()
@@ -144,7 +159,7 @@ impl HomeComponent {
                     semantic_state: MediaSemanticState::Ordinary,
                 })
                 .collect(),
-        );
+        ); */
     }
 
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
@@ -535,6 +550,33 @@ impl Component for HomeComponent {
         self.selected_item_rect = result.selected_item_rect;
         self.image_paint = result.image_paint;
         self.hero_area = result.hero_area;
+        // The canonical control is the list mount; the legacy orchestration
+        // supplies Home-only chrome and hero geometry.
+        let offset = if crate::app::render::shared_hero_presentation(area).is_some() {
+            crate::app::render::render_wide_media_list(
+                f,
+                self.list_area,
+                &self.canonical_list,
+                self.focused,
+                crate::app::palette::SURFACE_RESTING,
+                &mut crate::app::layout::LayoutMain::default(),
+            )
+        } else {
+            crate::app::render::render_inline_media_browser(
+                f,
+                self.list_area,
+                &self.inline_list,
+                0,
+                self.focused,
+                crate::app::palette::SURFACE_RESTING,
+            )
+            .offset
+        };
+        if crate::app::render::shared_hero_presentation(area).is_some() {
+            self.canonical_list.set_scroll(offset);
+        } else {
+            self.inline_list.set_scroll(offset);
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
