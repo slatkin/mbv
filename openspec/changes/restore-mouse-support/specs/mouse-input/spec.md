@@ -14,12 +14,7 @@ A mounted interactive component that paints a region the user can point at SHALL
 receive every terminal mouse event while it is mounted, not only while it holds
 keyboard focus. Mouse-event delivery SHALL use the component framework's
 subscription mechanism; the shell SHALL NOT introduce a separate mouse event
-loop, a global completed-frame hit map, or a global coordinate router. Every
-parent-produced mouse message crossing the component boundary SHALL use a
-runtime-only typed envelope carrying its originating mounted surface/source tag
-and semantic message; the shell SHALL unwrap only the message selected by its
-arbitration fold. This metadata SHALL not be persisted, exposed on a protocol,
-or become a second router.
+loop, a global completed-frame hit map, or a global coordinate router.
 
 The mounted destination parent receives every mouse event while it is mounted and
 owns gesture recognition for that surface. The parent SHALL decide whether an
@@ -60,10 +55,10 @@ ignore the event.
 ### Requirement: Overlapping hit claims are arbitrated by a fixed surface priority
 
 When more than one mounted component's painted geometry contains a mouse event's
-coordinates, the shell SHALL resolve the conflict by a fixed priority order
-using each envelope's originating mounted surface/source tag: topmost overlay
-or modal, then the active panel, then any other visible panel, then chrome. At
-most one component's mouse message SHALL be applied for a single event.
+coordinates, the shell SHALL resolve the conflict by a fixed priority order:
+topmost overlay or modal, then the active panel, then any other visible panel,
+then chrome. At most one component's mouse message SHALL be applied for a single
+event.
 
 While a blocking overlay or modal is mounted, mouse messages from components
 beneath it SHALL be discarded, so a click on obscured content cannot mutate or

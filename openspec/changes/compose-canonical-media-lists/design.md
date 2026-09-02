@@ -16,7 +16,7 @@ shell Model
                  -> render component (painting within supplied Rect)
 ```
 
-The mounted parent owns event subscription and application-level `Event -> Msg`. For mouse input, it also owns gesture recognition and `MouseGestureState`; the embedded child owns list-row `HitRegions<Target>` populated by its own view, resolves points the parent delegates, and its explicit list targets are resolved before the parent's workspace targets. Parent-produced mouse messages cross the boundary in the runtime-only typed origin envelope defined by `restore-mouse-support`; the shell arbitrates that source tag before unwrapping the winning semantic message.
+The mounted parent owns event subscription and application-level `Event -> Msg`. For mouse input, it also owns gesture recognition and `MouseGestureState`; the embedded child owns list-row `HitRegions<Target>` populated by its own view, resolves points the parent delegates, and its explicit list targets are resolved before the parent's workspace targets.
 
 ## Goals / Non-Goals
 
@@ -140,8 +140,7 @@ For mouse input:
 2. the parent's `MouseGestureState` recognizes click, double click, context click, or scroll;
 3. the embedded control owns and queries `HitRegions<Target>` populated by its latest view;
 4. the child returns a stable target or list-local scroll result;
-5. the parent wraps its semantic mouse request in the runtime-only origin envelope required by `restore-mouse-support`;
-6. the parent emits the destination-specific typed request when work crosses authority.
+5. the parent emits the destination-specific typed request when work crosses authority.
 
 Parent-owned pills, workspace children, Queue scope buttons, and overlays keep their own regions; when a recognized point falls within the embedded list rectangle, the child's explicit list targets are resolved before any parent workspace target. An embedded control never subscribes or owns a second gesture recognizer. `restore-mouse-support` is revised to remove Queue/list row-hit ownership that would collide with slices; it retains delivery, primitives, overlays, and precedence. The per-surface canonical row-hit enum to `HitRegions<Target>` migration is owned by each canonical slice as it migrates its destination, not by `restore-mouse-support`.
 
