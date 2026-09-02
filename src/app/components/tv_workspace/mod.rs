@@ -98,17 +98,19 @@ impl TvWorkspaceComponent {
                     let previous = index
                         .checked_sub(1)
                         .map(|i| letter_bucket(sorted_items[i], bucket_total));
-                    (previous.as_deref() != Some(current.as_str()))
-                        .then(|| MediaListRow::Heading { text: current })
+                    (previous.as_deref() != Some(current.as_str())).then(|| {
+                        let heading = MediaListRow::Heading { text: current };
+                        if previous.is_some() {
+                            vec![MediaListRow::Spacer, heading]
+                        } else {
+                            vec![heading]
+                        }
+                    })
                 })
                 .flatten();
             heading
                 .into_iter()
-                .flat_map(|heading| {
-                    [Some(MediaListRow::Spacer), Some(heading)]
-                        .into_iter()
-                        .flatten()
-                })
+                .flatten()
                 .chain(std::iter::once(MediaListRow::Item {
                     target: item.id.clone(),
                     primary: item.display_name(),
