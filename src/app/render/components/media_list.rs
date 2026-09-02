@@ -395,7 +395,7 @@ fn wide_media_row<Target>(
                 ));
             }
             ListItem::new(Line::from(spans)).style(if selected {
-                Style::default().bg(palette::SURFACE_ITEM_FOCUSED)
+                Style::default().bg(palette::SURFACE_BACKDROP)
             } else {
                 Style::default()
             })
