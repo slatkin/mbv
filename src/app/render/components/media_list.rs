@@ -1,9 +1,11 @@
-use super::hero::InlineDisplayRow;
+use super::hero::{inline_display_row, InlineDisplayRow};
 use super::list_rows::{
     build_list_row_spans, focused_or_subtle, item_cell_spans, selected_cell_rect, selection_marker,
     DisplayRow, InlineReplacementPlan, ListRenderCtx, MarkerEdge,
 };
-use crate::app::components::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
+use crate::app::components::media_list::{
+    InlineLayout, InlineMediaBrowser, MediaListRow, MediaSemanticState, WideMediaList,
+};
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::palette;
@@ -248,6 +250,79 @@ pub(in crate::app) fn render_wide_media_list<Target>(
     }
 
     viewport.offset
+}
+
+/// Resolved paint output for [`render_inline_media_browser`]: the offset the
+/// caller stores via `InlineMediaBrowser::set_scroll`, and the screen rect of
+/// the admitted detail block (the caller paints the hero into it), or `None`
+/// when the block did not fit and the ordinary selected row was painted.
+#[allow(dead_code)]
+pub(in crate::app) struct InlinePaintResult {
+    pub offset: usize,
+    pub hero_area: Option<Rect>,
+}
+
+/// Paint entry point for the embedded plain `InlineMediaBrowser` (design.md
+/// D1): the one-column `render_wide_media_list` flow plus selected-row
+/// replacement. The component owns the fit admission, fallback, and geometry
+/// (`InlineMediaBrowser::resolve_inline_layout`); this function paints the
+/// ordinary rows around the reserved detail block, reusing the shared
+/// `wide_media_row` primitive and `hero::inline_display_row` mapping.
+///
+/// Unused until task 3.3 composes it onto the hero-bearing browsers.
+#[allow(dead_code)]
+pub(in crate::app) fn render_inline_media_browser<Target>(
+    f: &mut Frame,
+    area: Rect,
+    list: &InlineMediaBrowser<Target>,
+    desired_detail_rows: usize,
+    focused: bool,
+) -> InlinePaintResult {
+    let layout: InlineLayout =
+        list.resolve_inline_layout(area.height as usize, desired_detail_rows);
+    let rows = list.rows();
+    let source_rows = rows.len();
+    let selected_row = list.selected_display_row();
+
+    let window = (layout.offset..layout.total_display_rows).take(layout.height);
+    let list_items: Vec<ListItem> = if layout.detail_rows == 0 {
+        window
+            .map(|row| wide_media_row(&rows[row], Some(row) == selected_row, focused))
+            .collect()
+    } else {
+        let sel = selected_row.expect("an admitted detail block requires a selection");
+        window
+            .map(|display_row| {
+                match inline_display_row(source_rows, sel, layout.detail_rows as u16, display_row) {
+                    Some(InlineDisplayRow::Source(source_row)) => {
+                        wide_media_row(&rows[source_row], false, focused)
+                    }
+                    Some(InlineDisplayRow::Replacement) | None => ListItem::new(Line::default()),
+                }
+            })
+            .collect()
+    };
+    f.render_widget(List::new(list_items), area);
+
+    if focused && layout.total_display_rows > layout.height {
+        crate::app::render::render_right_scrollbar(
+            f,
+            area,
+            layout.total_display_rows.saturating_sub(layout.height),
+            layout.offset,
+            palette::SCROLLBAR,
+        );
+    }
+
+    let hero_area = layout.detail_screen_row.map(|screen_row| Rect {
+        y: area.y + screen_row as u16,
+        height: layout.detail_rows as u16,
+        ..area
+    });
+    InlinePaintResult {
+        offset: layout.offset,
+        hero_area,
+    }
 }
 
 /// One painted row of a `WideMediaList`. Semantic state drives the row
