@@ -142,6 +142,16 @@ impl BrowserComponent {
     }
 
     pub(in crate::app) fn apply_viewport_anchor(&mut self, anchor: ViewportAnchor<String>) {
+        // Apply the explicit target immediately when content is already loaded;
+        // the painted view still consumes the pending anchor to place the row.
+        if let Some(cursor) = self
+            .context
+            .items
+            .iter()
+            .position(|item| item.id == anchor.selected_target)
+        {
+            self.cursor = cursor;
+        }
         self.pending_anchor = Some(anchor);
     }
 

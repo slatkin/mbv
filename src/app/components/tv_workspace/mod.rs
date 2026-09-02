@@ -236,6 +236,19 @@ impl TvWorkspaceComponent {
         &mut self,
         anchor: super::media_list::ViewportAnchor<String>,
     ) {
+        if let Some(cursor) = self
+            .list
+            .rows()
+            .iter()
+            .filter_map(|row| row.selectable_target())
+            .position(|target| target == &anchor.selected_target)
+        {
+            self.list.select_first();
+            for _ in 0..cursor {
+                self.list.move_selection(1);
+            }
+            self.cursor = self.list.cursor();
+        }
         self.pending_anchor = Some(anchor);
     }
 
