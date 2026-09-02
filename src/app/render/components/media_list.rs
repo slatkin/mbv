@@ -401,7 +401,9 @@ fn wide_media_row<Target>(
             // de4a079c): `[marker][space][title…]  [FOAM trailing]  [green
             // duration]` with a 2-col inset on the left (marker + space) and
             // the right, and a quiet gap before the right-aligned duration.
-            const LEFT_INSET: usize = 2;
+            // Canonical Feeds/Home rows share the two-column rail indent;
+            // keep it here so destinations cannot drift.
+            const LEFT_INSET: usize = 4;
             const QUIET_GAP: usize = 2;
             let right_inset = if focused && has_scrollbar { 1 } else { 2 };
 
@@ -438,7 +440,11 @@ fn wide_media_row<Target>(
             );
 
             let selected = selected && focused;
-            let mut spans = vec![selection_marker(selected, MarkerEdge::Left), Span::raw(" ")];
+            let mut spans = vec![
+                Span::raw("  "),
+                selection_marker(selected, MarkerEdge::Left),
+                Span::raw(" "),
+            ];
             spans.push(Span::styled(
                 title,
                 Style::default().fg(
