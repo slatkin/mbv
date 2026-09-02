@@ -29,7 +29,7 @@
 - [x] 4.3 Record one-painter evidence for every migrated destination and manual/live evidence in the slice PR; do not accept metadata-free or inferred screenshot evidence.
 - [x] 4.4 Run `rtk make check-code-file-lines` and verify all changed source files are ≤800 lines.
 - [x] 4.5 Run `rtk openspec validate introduce-canonical-media-list-foundation --strict`.
-- [ ] 4.6 Run `rtk cargo fmt --all -- --check`, `rtk cargo check --workspace --all-targets`, and the relevant `rtk cargo nextest run` suite; fix only failures caused by this slice.
+- [x] 4.6 Run `rtk cargo fmt --all -- --check`, `rtk cargo check --workspace --all-targets`, and the relevant `rtk cargo nextest run` suite; fix only failures caused by this slice.
 
 ## 5. Slice acceptance
 
