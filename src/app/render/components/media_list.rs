@@ -256,6 +256,7 @@ pub(in crate::app) fn render_wide_media_list<Target>(
                 focused,
                 selected_bg,
                 inner_width,
+                focused && viewport.overflows(),
             )
         })
         .collect();
@@ -317,6 +318,7 @@ pub(in crate::app) fn render_inline_media_browser<Target>(
                     focused,
                     selected_bg,
                     inner_width,
+                    focused && layout.total_display_rows > layout.height,
                 )
             })
             .collect()
@@ -325,9 +327,14 @@ pub(in crate::app) fn render_inline_media_browser<Target>(
         window
             .map(|display_row| {
                 match inline_display_row(source_rows, sel, layout.detail_rows as u16, display_row) {
-                    Some(InlineDisplayRow::Source(source_row)) => {
-                        wide_media_row(&rows[source_row], false, focused, selected_bg, inner_width)
-                    }
+                    Some(InlineDisplayRow::Source(source_row)) => wide_media_row(
+                        &rows[source_row],
+                        false,
+                        focused,
+                        selected_bg,
+                        inner_width,
+                        focused && layout.total_display_rows > layout.height,
+                    ),
                     Some(InlineDisplayRow::Replacement) | None => ListItem::new(Line::default()),
                 }
             })
@@ -370,6 +377,7 @@ fn wide_media_row<Target>(
     focused: bool,
     selected_bg: Color,
     inner_width: usize,
+    has_scrollbar: bool,
 ) -> ListItem<'static> {
     match row {
         MediaListRow::Spacer => ListItem::new(Line::default()),
@@ -394,8 +402,8 @@ fn wide_media_row<Target>(
             // duration]` with a 2-col inset on the left (marker + space) and
             // the right, and a quiet gap before the right-aligned duration.
             const LEFT_INSET: usize = 2;
-            const RIGHT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;
+            let right_inset = if focused && has_scrollbar { 1 } else { 2 };
 
             let (fg, progress) = match semantic_state {
                 MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None),
@@ -417,7 +425,7 @@ fn wide_media_row<Target>(
             };
             let duration = duration.as_deref().filter(|dur| !dur.is_empty());
 
-            let content_w = inner_width.saturating_sub(RIGHT_INSET);
+            let content_w = inner_width.saturating_sub(right_inset);
             let trailing_w = if trailing.is_empty() {
                 0
             } else {
