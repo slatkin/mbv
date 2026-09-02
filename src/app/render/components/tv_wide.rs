@@ -385,8 +385,14 @@ fn render_tv_series_selection(
         area.width.saturating_add(PANE_PAD_X * 2),
         detail_height,
     );
-    let (_, detail_area) =
+    let (detail_panel, detail_area) =
         hero_left::hero_on_left_recessed_box(f, box_area, PANE_PAD_X, PANE_PAD_Y);
+    if focused {
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::SURFACE_ACCENT_SOFT)),
+            detail_panel,
+        );
+    }
     if detail_area.height == 0 || detail_area.width == 0 {
         return (true, image_paint);
     }

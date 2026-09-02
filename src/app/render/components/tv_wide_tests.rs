@@ -12,7 +12,7 @@ use ratatui::style::Style;
 use ratatui::widgets::Block;
 use ratatui::Terminal;
 use std::collections::HashMap;
-use tuirealm::component::Component;
+use tuirealm::component::{AppComponent, Component};
 
 /// Paints the wide TV workspace exactly as the live shell does: draw the
 /// legacy `App` base frame (which now only publishes the `tv_wide_*`
@@ -249,7 +249,6 @@ fn wide_tv_selected_series_follows_inline_search_cursor() {
         false,
         true,
     );
-    use tuirealm::component::AppComponent;
     for key in "search".chars() {
         component.on(&tuirealm::event::Event::Keyboard(
             tuirealm::event::KeyEvent {
@@ -259,6 +258,30 @@ fn wide_tv_selected_series_follows_inline_search_cursor() {
         ));
     }
     assert_eq!(component.selected_item().unwrap().id, second.id);
+}
+
+#[test]
+fn wide_tv_episode_list_uses_soft_accent_when_focused() {
+    let app = tv_app();
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(
+        app.wide_tv_render_ctx(0, true, None)
+            .with_image_state(false, false),
+    );
+    component.on(&tuirealm::event::Event::Keyboard(
+        tuirealm::event::KeyEvent {
+            code: tuirealm::event::Key::Right,
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        },
+    ));
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal.draw(|f| component.view(f, f.area())).unwrap();
+
+    let episode_row = component.test_layout().tv_wide_episode_rows[0].0;
+    assert_eq!(
+        terminal.backend().buffer()[(episode_row.x.saturating_sub(PANE_PAD_X), episode_row.y)].bg,
+        palette::SURFACE_ACCENT_SOFT
+    );
 }
 
 #[test]
