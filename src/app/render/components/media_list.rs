@@ -341,12 +341,12 @@ pub(in crate::app) fn render_inline_media_browser<Target>(
 fn wide_media_row<Target>(
     row: &MediaListRow<Target>,
     selected: bool,
-    _focused: bool,
+    focused: bool,
 ) -> ListItem<'static> {
     match row {
         MediaListRow::Spacer => ListItem::new(Line::default()),
         MediaListRow::Heading { text } => ListItem::new(Line::from(vec![
-            Span::raw(" "),
+            Span::raw("  "),
             Span::styled(
                 text.clone(),
                 Style::default()
@@ -376,6 +376,7 @@ fn wide_media_row<Target>(
                 (None, Some(pct)) => pct,
                 (None, None) => String::new(),
             };
+            let selected = selected && focused;
             let mut spans = vec![selection_marker(selected, MarkerEdge::Left), Span::raw(" ")];
             spans.push(Span::styled(
                 primary.clone(),
@@ -393,7 +394,11 @@ fn wide_media_row<Target>(
                     Style::default().fg(palette::TEXT_METADATA),
                 ));
             }
-            ListItem::new(Line::from(spans))
+            ListItem::new(Line::from(spans)).style(if selected {
+                Style::default().bg(palette::SURFACE_ITEM_FOCUSED)
+            } else {
+                Style::default()
+            })
         }
     }
 }
