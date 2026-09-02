@@ -1,8 +1,7 @@
 use super::hero::{inline_display_row, InlineDisplayRow};
 use super::list_rows::{
-    build_list_row_spans, focused_or_muted_soft_white, focused_or_subtle, item_cell_spans,
-    selected_cell_rect, selection_marker, DisplayRow, InlineReplacementPlan, ListRenderCtx,
-    MarkerEdge,
+    focused_or_subtle, item_cell_spans, selected_cell_rect, selection_marker, DisplayRow,
+    InlineReplacementPlan, ListRenderCtx, MarkerEdge,
 };
 use crate::app::components::media_list::{
     InlineLayout, InlineMediaBrowser, MediaListRow, MediaSemanticState, WideMediaList,
@@ -342,16 +341,19 @@ pub(in crate::app) fn render_inline_media_browser<Target>(
 fn wide_media_row<Target>(
     row: &MediaListRow<Target>,
     selected: bool,
-    focused: bool,
+    _focused: bool,
 ) -> ListItem<'static> {
     match row {
         MediaListRow::Spacer => ListItem::new(Line::default()),
-        MediaListRow::Heading { text } => ListItem::new(Line::from(Span::styled(
-            text.clone(),
-            Style::default()
-                .fg(palette::TEXT_FOCUS_ACCENT)
-                .add_modifier(Modifier::BOLD),
-        ))),
+        MediaListRow::Heading { text } => ListItem::new(Line::from(vec![
+            Span::raw(" "),
+            Span::styled(
+                text.clone(),
+                Style::default()
+                    .fg(palette::TEXT_FOCUS_ACCENT)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ])),
         MediaListRow::Item {
             primary,
             trailing,
@@ -359,7 +361,7 @@ fn wide_media_row<Target>(
             ..
         } => {
             let (fg, progress) = match semantic_state {
-                MediaSemanticState::Ordinary => (focused_or_muted_soft_white(focused), None),
+                MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None),
                 MediaSemanticState::Played => (palette::TEXT_MUTED, None),
                 MediaSemanticState::Active { progress } => (
                     palette::TEXT_FOCUS_ACCENT,
@@ -374,18 +376,24 @@ fn wide_media_row<Target>(
                 (None, Some(pct)) => pct,
                 (None, None) => String::new(),
             };
-            let mut spans = vec![selection_marker(selected, MarkerEdge::Left)];
-            let mut content = build_list_row_spans(primary.clone(), trailing, selected, fg);
-            // The marker is the sole gutter for this one-column rail; the
-            // shared builder's generic leading pad would shift rows right.
-            content.remove(0);
-            spans.extend(content);
-            let item = ListItem::new(Line::from(spans));
-            if selected {
-                item.style(Style::default().bg(palette::SURFACE_RESTING))
-            } else {
-                item
+            let mut spans = vec![selection_marker(selected, MarkerEdge::Left), Span::raw(" ")];
+            spans.push(Span::styled(
+                primary.clone(),
+                Style::default().fg(
+                    if selected && !matches!(semantic_state, MediaSemanticState::Active { .. }) {
+                        palette::TEXT_EMPHASIS
+                    } else {
+                        fg
+                    },
+                ),
+            ));
+            if !trailing.is_empty() {
+                spans.push(Span::styled(
+                    trailing,
+                    Style::default().fg(palette::TEXT_METADATA),
+                ));
             }
+            ListItem::new(Line::from(spans))
         }
     }
 }
