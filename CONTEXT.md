@@ -279,6 +279,18 @@ _Avoid_: continue threshold, resume percent, watched threshold
 
 ## Browsing and tabs
 
+**WideMediaList**:
+A provider-neutral, one-column fixed-row TuiRealm Component embedded by a parent that owns the content authority. It provides shared list mechanics without choosing a Service or destination.
+_Avoid_: generic list, two-column list, Inline Search
+
+**InlineMediaBrowser**:
+A provider-neutral, one-column TuiRealm Component that supports selected-row replacement while its parent owns content authority. It is distinct from **Inline Search**, which is the global search surface and not a media-list control.
+_Avoid_: Inline Search, detail panel, generic list
+
+**Emby podcast channel list**:
+The Emby-side list for browsing podcast channels. It is distinct from the Feeds Service tab and from the Emby homevideos feed view.
+_Avoid_: podcast library, Feeds tab, Emby homevideos feed view
+
 **Tab selection**:
 The single selected destination in the left panel: Home, EmbyLibrary(index),
 AudiobookshelfLibrary(index), or Feeds. Tab positions are count-aware
