@@ -270,6 +270,39 @@ fn wide_feeds_reserve_borders_at_the_scrolled_bottom_boundary() {
     assert_eq!(buffer[(panel.x, panel.bottom() - 1)].symbol(), "▁");
 }
 
+/// migrate-home-feeds 4.6 regression: the Wide Feeds list panel and left hero
+/// panel must bottom out at least one row above `area.bottom()`, matching every
+/// sibling tab's 1-row gap above the status bar (`library.rs` reserves the same
+/// row via `area.height.saturating_sub(1)`).
+#[test]
+fn wide_feeds_reserve_a_bottom_row_above_the_status_bar() {
+    let height: u16 = 30;
+    let mut component = feed_component();
+    let terminal = terminal_for(&mut component, 120, height);
+    let layout = component.layout();
+
+    let list_panel_bottom = layout.left_area.bottom() + hero_left::PANE_PAD_Y;
+    assert!(
+        list_panel_bottom < height,
+        "list panel bottom {list_panel_bottom} must leave a row above {height}"
+    );
+    assert!(
+        layout.hero_area.bottom() < height,
+        "hero panel bottom {} must leave a row above {height}",
+        layout.hero_area.bottom()
+    );
+
+    let buffer = terminal.backend().buffer();
+    let focus = crate::app::palette::resolve_surface_focus(true);
+    for x in [layout.hero_area.x, layout.left_area.x] {
+        assert_ne!(
+            buffer[(x, height - 1)].bg,
+            focus,
+            "bottom row must not be painted by a Feeds panel at x={x}"
+        );
+    }
+}
+
 #[test]
 fn narrow_feeds_insert_selected_entry_detail_into_the_list_flow() {
     let mut component = feed_component();
