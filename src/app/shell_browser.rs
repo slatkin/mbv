@@ -3,6 +3,7 @@ use super::components::{
 };
 use super::shell::Model;
 use super::{ConfirmAction, ConfirmModal, PanelFocus, TabSelection};
+use crate::app::components::browser::{BrowserContent, BrowserIdentity};
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use crate::app::render::{shared_hero_presentation, LibraryListRenderCtx};
 use mbv_core::config::ServiceKind;
@@ -287,7 +288,7 @@ impl Model {
         // reads/writes `feed_home_video.{video_cursor,video_scroll}`. Project
         // the selected group's items with that cursor/scroll and flag the
         // group-pill row so the component's `[`/`]` chord means group cycling.
-        let mut context = if self.app.is_feed_home_video_group_view(index) {
+        let (mut context, cursor, scroll) = if self.app.is_feed_home_video_group_view(index) {
             let (cursor, scroll) = self.app.libs[index]
                 .feed_home_video
                 .as_ref()
@@ -304,25 +305,28 @@ impl Model {
                         .map(|root| root.loading)
                 })
                 .unwrap_or(false);
-            LibraryListRenderCtx::from_items(
+            let ctx = LibraryListRenderCtx::from_items(
                 self.app.feed_home_video_selected_items(index),
                 cursor,
                 scroll,
             )
             .with_group_pills(true)
-            .with_loading(loading)
+            .with_loading(loading);
+            (ctx, cursor, scroll)
         } else {
-            self.app.library_list_render_ctx(
-                index,
-                false,
-                self.app.libs[index]
-                    .nav_stack
-                    .last()
-                    .map_or(0, |l| l.resting().cursor()),
-                self.app.libs[index]
-                    .nav_stack
-                    .last()
-                    .map_or(0, |l| l.resting().scroll()),
+            let cursor = self.app.libs[index]
+                .nav_stack
+                .last()
+                .map_or(0, |l| l.resting().cursor());
+            let scroll = self.app.libs[index]
+                .nav_stack
+                .last()
+                .map_or(0, |l| l.resting().scroll());
+            (
+                self.app
+                    .library_list_render_ctx(index, false, cursor, scroll),
+                cursor,
+                scroll,
             )
         };
         // The mounted search owns the query/loading state; project it onto the
@@ -335,11 +339,40 @@ impl Model {
                 }
             }
         }
+        let content = BrowserContent::from_render_ctx(context);
+        let identity = self.browse_identity(index);
         let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {
-                browser.set_content(context, focused);
+                browser.set_content(content, focused);
+                // Position re-seeds only on a browse-identity change; within one
+                // identity (pagination, loading completion, refresh, the
+                // component's own cursor echo) the control keeps its cursor.
+                if browser.note_browse_identity(identity) {
+                    browser.apply_position(cursor, scroll);
+                }
             }
+        }
+    }
+
+    /// The browse identity of library `index`'s current level (task 3.7):
+    /// nav-stack depth, level `parent_id`, `letter_filter`, sort, `unplayed_only`,
+    /// and the selected feed/home-video group. `push_emby_browser_content`
+    /// re-seeds position only when this differs from the previous push.
+    fn browse_identity(&self, index: usize) -> BrowserIdentity {
+        let lib = &self.app.libs[index];
+        let level = lib.nav_stack.last();
+        BrowserIdentity {
+            depth: lib.nav_stack.len(),
+            parent_id: level.map(|l| l.parent_id.clone()).unwrap_or_default(),
+            letter_filter: level.and_then(|l| l.letter_filter.as_ref().map(|f| f.index)),
+            sort_by: level.map(|l| l.sort_by.clone()).unwrap_or_default(),
+            sort_order: level.map(|l| l.sort_order.clone()).unwrap_or_default(),
+            unplayed_only: level.is_some_and(|l| l.unplayed_only),
+            feed_group: lib
+                .feed_home_video
+                .as_ref()
+                .map(|s| s.selected_group_index()),
         }
     }
 

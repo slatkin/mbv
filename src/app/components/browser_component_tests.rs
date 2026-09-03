@@ -1,8 +1,8 @@
 use super::browser::BrowserComponent;
 use super::component_id::BrowserKind;
+use crate::app::components::browser::BrowserContent;
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
-use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::{make_item, make_items};
 
 use ratatui::backend::TestBackend;
@@ -45,7 +45,7 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
     ];
     for (key, from, expected) in cases {
         let mut browser = BrowserComponent::new();
-        browser.set_content(LibraryListRenderCtx::from_items(make_items(40), 0, 0), true);
+        browser.set_content(BrowserContent::from_items(make_items(40)), true);
         browser.set_cursor_for_test(from);
         let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
         terminal
@@ -70,10 +70,7 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
     // Unfocused (Queue/playback own panel focus): movement keys do not
     // mutate the component cursor and remain unclaimed by this component.
     let mut browser = BrowserComponent::new();
-    browser.set_content(
-        LibraryListRenderCtx::from_items(make_items(40), 0, 0),
-        false,
-    );
+    browser.set_content(BrowserContent::from_items(make_items(40)), false);
     browser.set_cursor_for_test(7);
     let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
     terminal
@@ -165,7 +162,7 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
     ];
     for (key, from, expected) in cases {
         let mut browser = BrowserComponent::new();
-        browser.set_content(LibraryListRenderCtx::from_items(items.clone(), 0, 0), true);
+        browser.set_content(BrowserContent::from_items(items.clone()), true);
         browser.set_cursor_for_test(from);
         let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
         terminal
@@ -191,7 +188,7 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
 #[test]
 fn browser_local_navigation_strides_one_column_for_wide_movies() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(LibraryListRenderCtx::from_items(make_items(12), 0, 0), true);
+    browser.set_content(BrowserContent::from_items(make_items(12)), true);
     browser.set_wide_movies(false, false);
     let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
     terminal
@@ -241,7 +238,7 @@ fn browser_local_navigation_strides_one_column_for_wide_movies() {
 #[test]
 fn browser_alt_navigation_stays_unclaimed() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(LibraryListRenderCtx::from_items(make_items(2), 0, 0), true);
+    browser.set_content(BrowserContent::from_items(make_items(2)), true);
 
     for code in [Key::Left, Key::Right, Key::Up, Key::Down] {
         let message = browser.on(&Event::Keyboard(TuiKeyEvent {
@@ -259,7 +256,7 @@ fn browser_alt_navigation_stays_unclaimed() {
 #[test]
 fn browser_alt_refresh_stays_component_owned() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(LibraryListRenderCtx::from_items(make_items(1), 0, 0), true);
+    browser.set_content(BrowserContent::from_items(make_items(1)), true);
 
     let message = browser.on(&Event::Keyboard(TuiKeyEvent {
         code: Key::Char('r'),
@@ -276,7 +273,7 @@ fn browser_alt_refresh_stays_component_owned() {
 #[test]
 fn browser_context_menu_requires_bare_dot() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(LibraryListRenderCtx::from_items(make_items(1), 0, 0), true);
+    browser.set_content(BrowserContent::from_items(make_items(1)), true);
 
     let modified = browser.on(&Event::Keyboard(TuiKeyEvent {
         code: Key::Char('.'),
@@ -301,11 +298,7 @@ fn browser_context_menu_requires_bare_dot() {
 fn browser_syncs_cursor_from_context_on_set_content() {
     let mut browser = BrowserComponent::new();
     browser.set_content(
-        LibraryListRenderCtx::from_items(
-            vec![make_item("one", "Movie"), make_item("two", "Movie")],
-            0,
-            0,
-        ),
+        BrowserContent::from_items(vec![make_item("one", "Movie"), make_item("two", "Movie")]),
         true,
     );
 
@@ -318,11 +311,7 @@ fn browser_syncs_cursor_from_context_on_set_content() {
 
     // set_content with App cursor at 1 (as it would be after the shell handles the request)
     browser.set_content(
-        LibraryListRenderCtx::from_items(
-            vec![make_item("one", "Movie"), make_item("two", "Movie")],
-            1, // App cursor updated to match component
-            0,
-        ),
+        BrowserContent::from_items(vec![make_item("one", "Movie"), make_item("two", "Movie")]),
         true,
     );
     // Component cursor syncs from context
@@ -330,11 +319,7 @@ fn browser_syncs_cursor_from_context_on_set_content() {
 
     // set_content with App cursor at 0 (external change like tab switch)
     browser.set_content(
-        LibraryListRenderCtx::from_items(
-            vec![make_item("one", "Movie"), make_item("two", "Movie")],
-            0, // App cursor changed externally
-            0,
-        ),
+        BrowserContent::from_items(vec![make_item("one", "Movie"), make_item("two", "Movie")]),
         true,
     );
     // Component cursor follows App cursor
@@ -345,7 +330,7 @@ fn browser_syncs_cursor_from_context_on_set_content() {
 fn browser_renders_the_shared_generic_rows() {
     let mut browser = BrowserComponent::new();
     browser.set_content(
-        LibraryListRenderCtx::from_items(vec![make_item("Movie one", "Movie")], 0, 0),
+        BrowserContent::from_items(vec![make_item("Movie one", "Movie")]),
         true,
     );
     let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
@@ -363,11 +348,10 @@ fn browser_renders_the_shared_generic_rows() {
 fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
     let mut browser = BrowserComponent::new();
     browser.set_content(
-        LibraryListRenderCtx::from_items(
-            vec![make_item("first", "Movie"), make_item("second", "Movie")],
-            0,
-            0,
-        ),
+        BrowserContent::from_items(vec![
+            make_item("first", "Movie"),
+            make_item("second", "Movie"),
+        ]),
         true,
     );
     let mut terminal = Terminal::new(TestBackend::new(100, 6)).unwrap();

@@ -24,17 +24,26 @@ use super::msg::{BrowserHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
-use crate::app::render::{
-    effective_sort_str, shared_hero_presentation, HomeImagePaint, LibraryListRenderCtx,
-};
+use crate::app::render::{effective_sort_str, shared_hero_presentation, HomeImagePaint};
 
+mod content;
 mod keyboard;
 mod navigation;
 mod paint;
 
+pub(in crate::app) use content::{BrowserContent, BrowserIdentity};
+
 pub struct BrowserComponent {
     kind: BrowserKind,
-    context: LibraryListRenderCtx,
+    /// Position-free content the shell pushed (task 3.7). The legacy
+    /// `LibraryListRenderCtx` is rebuilt on demand from this plus the
+    /// control-owned `cursor`/`scroll` at a single private site.
+    context: BrowserContent,
+    /// The browse identity the last shell content push carried (task 3.7).
+    /// `push_emby_browser_content` re-seeds position through `apply_position`
+    /// only when this changes; within one identity (pagination, loading
+    /// completion, refresh, cursor echo) no position crosses the boundary.
+    last_identity: Option<BrowserIdentity>,
     cursor: usize,
     scroll: usize,
     focused: bool,
@@ -83,7 +92,8 @@ impl BrowserComponent {
     pub fn new_for_kind(kind: BrowserKind) -> Self {
         Self {
             kind,
-            context: LibraryListRenderCtx::from_items(Vec::new(), 0, 0),
+            context: BrowserContent::default(),
+            last_identity: None,
             cursor: 0,
             scroll: 0,
             focused: false,
@@ -107,30 +117,50 @@ impl BrowserComponent {
         self.narrow_extras = extras;
     }
 
-    pub(in crate::app) fn set_content(&mut self, context: LibraryListRenderCtx, focused: bool) {
-        self.context = context;
+    /// Records the position-free content push (task 3.7). Carries no cursor or
+    /// scroll: an ordinary push never moves the control. Position is re-seeded
+    /// only through the identity-gated `apply_position`. The one exception is
+    /// the `ViewportAnchor` breakpoint seam, whose preserved target is
+    /// re-resolved against the new item list here.
+    pub(in crate::app) fn set_content(&mut self, content: BrowserContent, focused: bool) {
+        self.context = content;
         self.focused = focused;
         let anchor_target = self
             .preserved_anchor
             .as_ref()
             .map(|anchor| anchor.selected_target.clone());
-        let anchored = anchor_target
-            .and_then(|target| self.context.items.iter().position(|item| item.id == target));
-        if let Some(cursor) = anchored {
+        if let Some(cursor) = anchor_target
+            .and_then(|target| self.context.items.iter().position(|item| item.id == target))
+        {
             self.cursor = cursor;
-        } else {
-            // Sync component cursor/scroll from App cursor. In the new
-            // architecture, `set_content` is always called after the App cursor
-            // has been updated (either by the component's own request or by an
-            // external change like tab switch or go_back), so we can always
-            // sync from the context.
-            self.cursor = self
-                .context
-                .cursor()
-                .min(self.context.item_count().saturating_sub(1));
-            self.scroll = self.context.scroll();
         }
+        // Clamp the control-owned cursor to the new item count (a within-identity
+        // refresh may return fewer items, e.g. inline search). This keeps the
+        // invariant, not a position re-seed: `BrowserContent` has no cursor.
+        self.cursor = self.cursor.min(self.context.item_count().saturating_sub(1));
         self.feed_wide_list();
+    }
+
+    /// Explicit, identity-gated resting-position re-seed (task 3.7). The shell
+    /// calls this from `push_emby_browser_content` ONLY when the browse
+    /// identity changed (drill-in, go-back parent restore, letter-filter
+    /// reset, sort change, feed/home-video group switch). Within one identity
+    /// no position crosses the boundary, so pagination, loading completion,
+    /// ordinary refresh, and the component's own `BrowserCursorIndex` echo
+    /// leave the control-owned cursor and scroll untouched.
+    pub(in crate::app) fn apply_position(&mut self, cursor: usize, scroll: usize) {
+        self.cursor = cursor.min(self.context.item_count().saturating_sub(1));
+        self.scroll = scroll;
+        self.feed_wide_list();
+    }
+
+    /// Records the browse identity of the current shell content push and
+    /// reports whether it differs from the previous push for this browser
+    /// (task 3.7). A `true` result gates the `apply_position` re-seed.
+    pub(in crate::app) fn note_browse_identity(&mut self, identity: BrowserIdentity) -> bool {
+        let changed = self.last_identity.as_ref() != Some(&identity);
+        self.last_identity = Some(identity);
+        changed
     }
 
     /// Rebuild the persistent `WideMediaList` from the mirrored content for the
@@ -198,13 +228,13 @@ impl BrowserComponent {
         self.cursor
     }
 
-    /// The scroll offset the last `view()` painted the list at. The shell
-    /// reads this after `application.view()` and persists it back into the
-    /// App nav level (task 5.3d.17b): the legacy wide renderer wrote
-    /// `level.scroll = final_scroll`, and `set_content` overwrites the
-    /// component's own `self.scroll` next frame from the App nav level, so
-    /// without the write-back the rendered scroll would be lost on resize /
-    /// first paint.
+    /// The scroll offset the last `view()` painted the list at. The control
+    /// owns it: `set_content` carries no position, so an ordinary content
+    /// push never overwrites it. The shell reads this back only at navigation
+    /// events (folder drill-in, `BrowserBack`) and teardown, through
+    /// `persist_emby_browser_scroll` -> `persist_library_scroll`, to record
+    /// the shell-owned resting position (design D3). It is not a per-frame
+    /// mirror.
     pub(in crate::app) fn scroll(&self) -> usize {
         self.scroll
     }
@@ -439,13 +469,15 @@ impl Component for BrowserComponent {
             .clone()
             .with_cursor_scroll(self.cursor, self.scroll);
         if let Some(items) = self.narrow_extras.feed_items.as_ref() {
-            context = LibraryListRenderCtx::from_items(
-                items.clone(),
-                self.cursor.min(items.len().saturating_sub(1)),
-                self.scroll,
-            )
-            .with_group_pills(true)
-            .with_loading(context.loading);
+            let feed = BrowserContent {
+                items: items.clone(),
+                total_count: items.len(),
+                group_pills: true,
+                loading: context.loading,
+                ..BrowserContent::default()
+            };
+            context = feed
+                .with_cursor_scroll(self.cursor.min(items.len().saturating_sub(1)), self.scroll);
         }
         // Task 5.3d.17a: when the wide Movies/home-video hero-on-left layout
         // is active (this component's own `kind` AND the area is wide enough
