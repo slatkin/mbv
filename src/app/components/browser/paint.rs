@@ -126,14 +126,47 @@ impl BrowserComponent {
         }
         let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
 
-        let final_scroll = render_generic_movies_home_video_rows_with_ctx(
-            f,
-            list_area,
-            ctx,
-            self.focused,
-            1,
-            &mut self.layout,
-        );
+        self.layout.left_area = list_area;
+        let final_scroll = if self.wide_list.is_empty() {
+            crate::app::render::components::widgets::render_placeholder(
+                f,
+                list_area,
+                if ctx.loading {
+                    " Loading…"
+                } else {
+                    " (empty)"
+                },
+            );
+            0
+        } else {
+            let offset = crate::app::render::render_wide_media_list(
+                f,
+                list_area,
+                &self.wide_list,
+                self.focused,
+                palette::SURFACE_RESTING,
+                &mut self.layout,
+            );
+            self.wide_list.set_scroll(offset);
+            // Republish the sorted display order the rail was built from so the
+            // parent's letter-aware keyboard navigation keeps resolving targets
+            // against `self.layout` (mirrors `render_wide_tv_with_ctx`; task
+            // 3.5c re-points navigation onto the control itself).
+            let grouped =
+                !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some());
+            self.layout.left_sorted_indices = if grouped {
+                let mut order: Vec<usize> = (0..ctx.items.len()).collect();
+                order.sort_by_cached_key(|&index| {
+                    crate::app::ui_util::natural_sort_key(crate::app::render::effective_sort_str(
+                        &ctx.items[index],
+                    ))
+                });
+                order
+            } else {
+                (0..ctx.items.len()).collect()
+            };
+            offset
+        };
 
         // Paint the shared hero text last (after the list); defer the cover
         // image paint to the shell, which owns the image-cache authority.

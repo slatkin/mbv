@@ -36,6 +36,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     extras: &NarrowBrowseExtras,
     focused: bool,
     layout: &mut LayoutMain,
+    browser: &mut InlineMediaBrowser<usize>,
 ) -> (usize, Option<HomeImagePaint>) {
     let mut content_area = area;
 
@@ -145,7 +146,6 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     // Hero-bearing narrow surfaces use the canonical inline control. The
     // legacy two-column policy remains for non-hero catalogs.
     let final_offset = if hero_presentation {
-        let mut browser = InlineMediaBrowser::new();
         let mut sorted_indices: Vec<usize> = (0..ctx.items.len()).collect();
         sorted_indices
             .sort_by_cached_key(|&index| natural_sort_key(effective_sort_str(&ctx.items[index])));
@@ -213,7 +213,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         let result = super::media_list::render_inline_media_browser(
             f,
             list_area,
-            &browser,
+            &*browser,
             desired_rows,
             focused,
             // Legacy `item_cell_spans` parity: selected row on the resting

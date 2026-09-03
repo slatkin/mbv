@@ -13,14 +13,20 @@ use tuirealm::event::{Event, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use mbv_core::api::EmbyItem;
+
 use super::browser_narrow::NarrowBrowseExtras;
 use super::component_id::BrowserKind;
-use super::media_list::ViewportAnchor;
+use super::media_list::{
+    InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+};
 use super::msg::{BrowserHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
-use crate::app::render::{shared_hero_presentation, HomeImagePaint, LibraryListRenderCtx};
+use crate::app::render::{
+    effective_sort_str, shared_hero_presentation, HomeImagePaint, LibraryListRenderCtx,
+};
 
 mod keyboard;
 mod navigation;
@@ -57,6 +63,16 @@ pub struct BrowserComponent {
     narrow_extras: NarrowBrowseExtras,
     pending_anchor: Option<ViewportAnchor<String>>,
     preserved_anchor: Option<ViewportAnchor<String>>,
+    /// Persistent canonical control for the applicable Hero-on-left Wide rails
+    /// (Movies, home-video feed view). Fed from `set_content`, painted by
+    /// `render_wide_movies`. Targets are item indices into `context.items`
+    /// (Browser's existing typed row identity); task 3.7 removes the mirrored
+    /// cursor/scroll, task 3.5c re-points navigation onto this control.
+    wide_list: WideMediaList<usize>,
+    /// Persistent canonical control for the applicable Narrow hero-bearing
+    /// browse paths. Driven by `render_narrow_browse_with_ctx` instead of a
+    /// per-frame `InlineMediaBrowser::new()`.
+    inline_browser: InlineMediaBrowser<usize>,
 }
 
 impl BrowserComponent {
@@ -80,6 +96,8 @@ impl BrowserComponent {
             narrow_extras: NarrowBrowseExtras::default(),
             pending_anchor: None,
             preserved_anchor: None,
+            wide_list: WideMediaList::new(),
+            inline_browser: InlineMediaBrowser::new(),
         }
     }
 
@@ -92,26 +110,88 @@ impl BrowserComponent {
     pub(in crate::app) fn set_content(&mut self, context: LibraryListRenderCtx, focused: bool) {
         self.context = context;
         self.focused = focused;
-        if let Some(anchor) = self.preserved_anchor.as_ref() {
-            if let Some(cursor) = self
+        let anchor_target = self
+            .preserved_anchor
+            .as_ref()
+            .map(|anchor| anchor.selected_target.clone());
+        let anchored = anchor_target
+            .and_then(|target| self.context.items.iter().position(|item| item.id == target));
+        if let Some(cursor) = anchored {
+            self.cursor = cursor;
+        } else {
+            // Sync component cursor/scroll from App cursor. In the new
+            // architecture, `set_content` is always called after the App cursor
+            // has been updated (either by the component's own request or by an
+            // external change like tab switch or go_back), so we can always
+            // sync from the context.
+            self.cursor = self
                 .context
+                .cursor()
+                .min(self.context.item_count().saturating_sub(1));
+            self.scroll = self.context.scroll();
+        }
+        self.feed_wide_list();
+    }
+
+    /// Rebuild the persistent `WideMediaList` from the mirrored content for the
+    /// applicable Wide rails (Movies, home-video, feed-group view), mirroring
+    /// the routing `render_generic_movies_home_video_rows_with_ctx` applied:
+    /// letter-grouped rows for a search-free library at or above 50 items (or
+    /// with an active letter pill), plain rows otherwise. Non-applicable
+    /// kinds (non-hero two-column Generic, Music, books) leave the control
+    /// untouched; `view()` never paints it for them.
+    fn feed_wide_list(&mut self) {
+        if !(matches!(self.kind, BrowserKind::Movies | BrowserKind::HomeVideos)
+            || self.context.has_group_pills())
+        {
+            return;
+        }
+        let ctx = &self.context;
+        let row_for = |index: usize, item: &EmbyItem| -> MediaListRow<usize> {
+            let primary = if item.is_folder && item.item_type == "Folder" && item.total_count > 0 {
+                format!("{} \u{b7} {} items", item.display_name(), item.total_count)
+            } else if item.is_folder && item.unplayed_item_count > 0 && item.item_type != "Series" {
+                format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+            } else {
+                item.display_name()
+            };
+            MediaListRow::Item {
+                target: index,
+                primary,
+                trailing: (!item.is_folder && item.production_year > 0)
+                    .then(|| item.production_year.to_string()),
+                duration: None,
+                // The legacy Wide rail painters colour every row through
+                // `focused_or_subtle` with no played/active dimming.
+                semantic_state: MediaSemanticState::Ordinary,
+            }
+        };
+        let grouped =
+            !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some());
+        if grouped {
+            let items = ctx
                 .items
                 .iter()
-                .position(|item| item.id == anchor.selected_target)
-            {
-                self.cursor = cursor;
-                return;
-            }
+                .enumerate()
+                .map(|(index, item)| (effective_sort_str(item).to_string(), row_for(index, item)))
+                .collect();
+            self.wide_list.set_letter_grouped_content(
+                items,
+                ctx.true_total(),
+                ctx.letter_filter.is_some(),
+            );
+        } else {
+            let rows = ctx
+                .items
+                .iter()
+                .enumerate()
+                .map(|(index, item)| row_for(index, item))
+                .collect();
+            self.wide_list.set_content(rows);
         }
-        // Sync component cursor/scroll from App cursor. In the new architecture,
-        // `set_content` is always called after the App cursor has been updated
-        // (either by the component's own request or by an external change like
-        // tab switch or go_back), so we can always sync from the context.
-        self.cursor = self
-            .context
-            .cursor()
-            .min(self.context.item_count().saturating_sub(1));
-        self.scroll = self.context.scroll();
+        let cursor = self.cursor.min(ctx.item_count().saturating_sub(1));
+        self.wide_list.select_target(&cursor);
+        self.wide_list.set_scroll(self.scroll);
     }
 
     pub(in crate::app) fn cursor(&self) -> usize {
@@ -391,6 +471,7 @@ impl Component for BrowserComponent {
                 &self.narrow_extras,
                 self.focused,
                 &mut self.layout,
+                &mut self.inline_browser,
             );
             self.image_paint = image_paint;
             scroll
