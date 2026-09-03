@@ -336,6 +336,20 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
         Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
     ));
 
+    let (wide_anchor, wide_scroll) = model
+        .application
+        .get_component(&tv_id)
+        .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
+        .map(|component| {
+            (
+                component
+                    .viewport_anchor(component.painted_viewport_height())
+                    .expect("wide TV workspace has a selected series"),
+                component.scroll(),
+            )
+        })
+        .expect("TV workspace component");
+
     // Flip to narrow: the pointer moves to the BrowserComponent, which must
     // adopt the series the wide workspace had selected (row 1).
     widen(&mut model, false);
@@ -350,6 +364,31 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
         browser_cursor,
         Some(1),
         "narrow browser must adopt the series selected in the wide workspace"
+    );
+    let (narrow_anchor, narrow_scroll) = model
+        .application
+        .get_component(&browser_id)
+        .and_then(|component| component.as_any().downcast_ref::<BrowserComponent>())
+        .map(|component| {
+            (
+                component
+                    .viewport_anchor(component.painted_viewport_height())
+                    .expect("narrow browser has a selected series"),
+                component.scroll(),
+            )
+        })
+        .expect("browser component");
+    assert_eq!(
+        narrow_anchor.selected_target, wide_anchor.selected_target,
+        "wide→narrow hand-off must preserve the selected series target"
+    );
+    assert_eq!(
+        narrow_anchor.selected_row_offset, wide_anchor.selected_row_offset,
+        "wide→narrow hand-off must preserve the selected row offset"
+    );
+    assert_eq!(
+        narrow_scroll, wide_scroll,
+        "wide→narrow hand-off must preserve the list scroll"
     );
 
     // Narrow: move the browser selection back to row 0 (movie-focused).
@@ -366,6 +405,19 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     };
     model.handle_browser_request(request);
     assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
+    let (narrow_return_anchor, narrow_return_scroll) = model
+        .application
+        .get_component(&browser_id)
+        .and_then(|component| component.as_any().downcast_ref::<BrowserComponent>())
+        .map(|component| {
+            (
+                component
+                    .viewport_anchor(component.painted_viewport_height())
+                    .expect("narrow browser has a selected series after move"),
+                component.scroll(),
+            )
+        })
+        .expect("browser component");
 
     // Flip back to wide: the kept-mounted workspace must re-anchor to the
     // resting position the narrow browser left (row 0), not its stale
@@ -382,6 +434,31 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
         tv_cursor,
         Some(0),
         "wide workspace must re-anchor to the series selected while narrow"
+    );
+    let (final_wide_anchor, final_wide_scroll) = model
+        .application
+        .get_component(&tv_id)
+        .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
+        .map(|component| {
+            (
+                component
+                    .viewport_anchor(component.painted_viewport_height())
+                    .expect("wide TV workspace has a selected series after return"),
+                component.scroll(),
+            )
+        })
+        .expect("TV workspace component");
+    assert_eq!(
+        final_wide_anchor.selected_target, narrow_return_anchor.selected_target,
+        "narrow→wide hand-off must preserve the selected series target"
+    );
+    assert_eq!(
+        final_wide_anchor.selected_row_offset, narrow_return_anchor.selected_row_offset,
+        "narrow→wide hand-off must preserve the selected row offset"
+    );
+    assert_eq!(
+        final_wide_scroll, narrow_return_scroll,
+        "narrow→wide hand-off must preserve the list scroll"
     );
 }
 

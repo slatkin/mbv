@@ -1,9 +1,10 @@
 use super::browser::BrowserComponent;
 use super::browser_narrow::NarrowBrowseExtras;
 use super::component_id::BrowserKind;
-use crate::app::components::browser::BrowserContent;
+use crate::app::components::browser::{BrowserContent, BrowserIdentity};
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
+use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::{make_item, make_items};
 
 use ratatui::backend::TestBackend;
@@ -189,7 +190,8 @@ fn browser_control_transition_preserves_the_selected_viewport_offset() {
         hero_placeholder: true,
         ..NarrowBrowseExtras::default()
     });
-    browser.set_cursor_for_test(20);
+    // Seed a nontrivial resting viewport before the first breakpoint paint.
+    browser.apply_position(20, 8);
 
     let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
     terminal
@@ -347,22 +349,112 @@ fn browser_context_menu_requires_bare_dot() {
 #[test]
 fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
     let mut browser = BrowserComponent::new();
-    let items = || vec![make_item("one", "Movie"), make_item("two", "Movie")];
+    let items = || make_items(4);
     browser.set_content(BrowserContent::from_items(items()), true);
 
-    browser.handle_tui_key(TuiKeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    });
+    browser.apply_position(1, 2);
     assert_eq!(browser.cursor(), 1);
+    assert_eq!(browser.scroll(), 2);
 
-    // An ordinary content push carries no position: the control keeps its cursor.
-    browser.set_content(BrowserContent::from_items(items()), true);
+    // Position in the render context is deliberately stripped before content
+    // reaches the control, so a nonzero incoming cursor/scroll cannot replace
+    // its current position.
+    browser.set_content(
+        BrowserContent::from_render_ctx(LibraryListRenderCtx::from_items(items(), 3, 7)),
+        true,
+    );
     assert_eq!(browser.cursor(), 1);
+    assert_eq!(browser.scroll(), 2);
 
-    // Only the identity-gated re-seed moves the control.
-    browser.apply_position(0, 0);
-    assert_eq!(browser.cursor(), 0);
+    let identity = BrowserIdentity::default();
+    assert!(browser.note_browse_identity(identity.clone()));
+    let content = |ctx| BrowserContent::from_render_ctx(ctx);
+    for (label, content) in [
+        (
+            "pagination",
+            content(LibraryListRenderCtx::from_items(make_items(3), 2, 6)),
+        ),
+        (
+            "loading",
+            content(LibraryListRenderCtx::from_items(items(), 3, 7).with_loading(true)),
+        ),
+        (
+            "refresh",
+            content(LibraryListRenderCtx::from_items(items(), 0, 0)),
+        ),
+    ] {
+        // Unchanged browse identity means pagination, loading completion, and
+        // refresh content pushes cannot re-seed the component's position.
+        assert!(!browser.note_browse_identity(identity.clone()), "{label}");
+        browser.set_content(content, true);
+        assert_eq!(browser.cursor(), 1, "{label} cursor");
+        assert_eq!(browser.scroll(), 2, "{label} scroll");
+    }
+
+    let changed_identities = [
+        (
+            "depth",
+            BrowserIdentity {
+                depth: 1,
+                ..identity.clone()
+            },
+        ),
+        (
+            "parent",
+            BrowserIdentity {
+                parent_id: "parent".into(),
+                ..identity.clone()
+            },
+        ),
+        ("back restore", identity.clone()),
+        (
+            "letter reset",
+            BrowserIdentity {
+                letter_filter: Some(1),
+                ..identity.clone()
+            },
+        ),
+        (
+            "sort",
+            BrowserIdentity {
+                sort_by: "DateCreated".into(),
+                ..identity.clone()
+            },
+        ),
+        (
+            "saved restore",
+            BrowserIdentity {
+                unplayed_only: true,
+                ..identity.clone()
+            },
+        ),
+        (
+            "feed group",
+            BrowserIdentity {
+                feed_group: Some(1),
+                ..identity.clone()
+            },
+        ),
+    ];
+    for (label, changed_identity) in changed_identities {
+        // Start every changed-identity case from a known position. The
+        // identity change itself does not move the control; the explicit
+        // apply_position push is the only position re-seed.
+        browser.apply_position(1, 2);
+        assert!(
+            browser.note_browse_identity(changed_identity),
+            "{label} must be a new browse identity"
+        );
+        browser.set_content(
+            content(LibraryListRenderCtx::from_items(items(), 0, 0)),
+            true,
+        );
+        assert_eq!(browser.cursor(), 1, "{label} before explicit position");
+        assert_eq!(browser.scroll(), 2, "{label} before explicit position");
+        browser.apply_position(2, 3);
+        assert_eq!(browser.cursor(), 2, "{label} cursor");
+        assert_eq!(browser.scroll(), 3, "{label} scroll");
+    }
 }
 
 #[test]
