@@ -243,13 +243,15 @@ impl BrowserComponent {
         &self,
         viewport_height: usize,
     ) -> Option<ViewportAnchor<String>> {
-        let item = self.context.items.get(self.cursor)?;
-        Some(ViewportAnchor {
-            selected_target: item.id.clone(),
-            selected_row_offset: self
-                .cursor
-                .saturating_sub(self.scroll)
-                .min(viewport_height.saturating_sub(1)),
+        self.active_viewport_anchor(viewport_height).or_else(|| {
+            let item = self.context.items.get(self.cursor)?;
+            Some(ViewportAnchor {
+                selected_target: item.id.clone(),
+                selected_row_offset: self
+                    .cursor
+                    .saturating_sub(self.scroll)
+                    .min(viewport_height.saturating_sub(1)),
+            })
         })
     }
 
@@ -449,19 +451,21 @@ impl Component for BrowserComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = LayoutMain::default();
         if let Some(anchor) = self.pending_anchor.take() {
-            if let Some(cursor) = self
-                .context
-                .items
-                .iter()
-                .position(|item| item.id == anchor.selected_target)
-            {
-                self.cursor = cursor;
-                self.scroll = cursor.saturating_sub(anchor.selected_row_offset).min(
-                    self.context
-                        .items
-                        .len()
-                        .saturating_sub(area.height as usize),
-                );
+            if !self.apply_active_viewport_anchor(&anchor, area.height as usize) {
+                if let Some(cursor) = self
+                    .context
+                    .items
+                    .iter()
+                    .position(|item| item.id == anchor.selected_target)
+                {
+                    self.cursor = cursor;
+                    self.scroll = cursor.saturating_sub(anchor.selected_row_offset).min(
+                        self.context
+                            .items
+                            .len()
+                            .saturating_sub(area.height as usize),
+                    );
+                }
             }
         }
         let mut context = self
@@ -506,6 +510,12 @@ impl Component for BrowserComponent {
                 &mut self.inline_browser,
             );
             self.image_paint = image_paint;
+            // Keep the active control's resting viewport in lockstep with the
+            // painter's resolved flow; the parent field remains only the
+            // shell's navigation/teardown persistence seam.
+            if self.uses_inline_control() {
+                self.inline_browser.set_scroll(scroll);
+            }
             scroll
         };
     }

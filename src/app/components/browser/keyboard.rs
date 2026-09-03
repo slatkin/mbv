@@ -43,21 +43,21 @@ impl BrowserComponent {
             }
             match key.code {
                 Key::Up | Key::Char('k') => {
-                    let index = self.move_rows(-1);
+                    let index = self.move_by_item_rows(-1);
                     return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 Key::Down | Key::Char('j') => {
-                    let index = self.move_rows(1);
+                    let index = self.move_by_item_rows(1);
                     return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 Key::PageUp => {
                     let rows = -self.page_rows();
-                    let index = self.move_rows(rows);
+                    let index = self.move_by_item_rows(rows);
                     return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 Key::PageDown => {
                     let rows = self.page_rows();
-                    let index = self.move_rows(rows);
+                    let index = self.move_by_item_rows(rows);
                     return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 Key::Home => {
