@@ -324,6 +324,7 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
     ctx: &MusicWideRenderCtx,
     layout: &mut LayoutMain,
     browser: &mut InlineMediaBrowser<String>,
+    pending_anchor: Option<&crate::app::components::media_list::ViewportAnchor<String>>,
 ) -> MusicWideRenderOutput {
     // Group pill bar above the album rows, mirroring the narrow browser
     // (`list_narrow.rs`) and the wide sibling's right-pane pill slot. Album
@@ -367,6 +368,14 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
             image_paint: None,
             viewport_height: visible,
         };
+    }
+
+    // §2.5: a breakpoint-flip anchor is applied here, against the same content
+    // viewport height the read side (`viewport_anchor`) measured its offset
+    // against, so the round trip lands the selected row at the identical
+    // screen offset without relying on the painter's downstream re-clamp.
+    if let Some(anchor) = pending_anchor {
+        browser.apply_viewport_anchor(anchor, visible);
     }
 
     let images_enabled = ctx.images_enabled;

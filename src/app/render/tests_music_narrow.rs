@@ -350,6 +350,70 @@ fn narrow_music_reused_model_paints_after_a_wide_to_narrow_resize() {
     assert!(wide.contains("First Album") || wide.contains("Alpha Album"));
 }
 
+#[test]
+fn narrow_music_applies_the_flip_anchor_at_the_content_viewport_height() {
+    // The write side (`render_narrow_music_group_with_ctx` applying a pending
+    // `ViewportAnchor`) must use the *content* viewport height -- the same
+    // height the read side (`viewport_anchor`) measures its offset against --
+    // not the full `area.height`. Geometry chosen so the two heights clamp the
+    // resting scroll to different values, and the painter's downstream
+    // re-clamp does not mask the difference.
+    use crate::app::components::media_list::{InlineMediaBrowser, ViewportAnchor};
+    use crate::app::layout::LayoutMain;
+    use crate::app::render::arrangements::hero_left::pill_bar_areas;
+
+    let app = multi_artist_app();
+    let lib_idx = app.tab.emby_library_index().unwrap();
+    let ctx = app
+        .wide_music_render_ctx(lib_idx, None)
+        .with_local_state(27, 0, None);
+
+    let rows = ctx.grouped_rows();
+    let target = ctx.list.items[27].id.clone();
+    let display_row = rows
+        .iter()
+        .position(|row| row.selectable_target() == Some(&target))
+        .expect("selected album is in the flow");
+
+    let mut browser: InlineMediaBrowser<String> = InlineMediaBrowser::new();
+    browser.set_content(rows);
+    browser.select_target(&target);
+
+    let area = Rect::new(0, 0, 60, 26);
+    let content_h = pill_bar_areas(area).content_area.height as usize;
+    let want_offset = 4usize;
+    let anchor = ViewportAnchor {
+        selected_target: target,
+        selected_row_offset: want_offset,
+    };
+    // Sanity: the two candidate heights really do clamp differently here.
+    let n_rows = browser.rows().len();
+    assert!(display_row - want_offset > n_rows - area.height as usize);
+    assert!(display_row - want_offset <= n_rows - content_h);
+
+    let mut layout = LayoutMain::default();
+    let mut terminal = Terminal::new(TestBackend::new(60, 26)).unwrap();
+    let mut output = None;
+    terminal
+        .draw(|f| {
+            output = Some(render_narrow_music_group_with_ctx(
+                f,
+                area,
+                &ctx,
+                &mut layout,
+                &mut browser,
+                Some(&anchor),
+            ));
+        })
+        .unwrap();
+
+    assert_eq!(
+        display_row - output.unwrap().final_scroll,
+        want_offset,
+        "the anchor landed the selected row at its requested content-viewport offset"
+    );
+}
+
 /// The wide selected-row screen offset the component published this frame
 /// (index of the selected album row below the artist header + earlier albums).
 fn wide_anchor_offset(model: &Model, id: &ComponentId) -> usize {

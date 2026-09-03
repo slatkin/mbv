@@ -558,7 +558,6 @@ impl Component for MusicWorkspaceComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = LayoutMain::default();
         let wide = shared_hero_presentation(area).is_some();
-        let height = area.height as usize;
 
         // §2.5: at a breakpoint flip carry the outgoing control's anchor into
         // the incoming one so the selected album keeps its screen-row offset.
@@ -569,7 +568,8 @@ impl Component for MusicWorkspaceComponent {
                 self.pending_anchor = self.viewport_anchor(self.painted_viewport_height());
             }
         }
-        if let Some(anchor) = self.pending_anchor.take() {
+        let flip_anchor = self.pending_anchor.take();
+        if let Some(anchor) = &flip_anchor {
             if let Some(idx) = self
                 .context
                 .list
@@ -579,10 +579,13 @@ impl Component for MusicWorkspaceComponent {
             {
                 self.album_cursor = idx;
             }
+            // The write side uses the same *content* viewport height the read
+            // side (`viewport_anchor`) measured against: for Wide that is the
+            // last painted browser-area height (unchanged across a flip at a
+            // fixed terminal size); for Narrow the painter applies it itself
+            // at its own content-area height.
             if wide {
-                self.apply_wide_anchor(&anchor, height);
-            } else {
-                self.narrow_list.apply_viewport_anchor(&anchor, height);
+                self.apply_wide_anchor(anchor, self.wide_viewport_height.max(1));
             }
         }
         self.sync_narrow_selection();
@@ -599,6 +602,7 @@ impl Component for MusicWorkspaceComponent {
                 &context,
                 &mut self.layout,
                 &mut self.narrow_list,
+                flip_anchor.as_ref(),
             );
             self.album_scroll = output.final_scroll;
             self.narrow_list.set_scroll(output.final_scroll);
