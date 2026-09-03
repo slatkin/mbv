@@ -24,7 +24,10 @@ use super::msg::{BrowserHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
-use crate::app::render::{effective_sort_str, shared_hero_presentation, HomeImagePaint};
+use crate::app::render::{
+    effective_sort_str, letter_bucket, shared_hero_presentation, HomeImagePaint,
+};
+use crate::app::ui_util::natural_sort_key;
 
 mod content;
 mod keyboard;
@@ -138,6 +141,7 @@ impl BrowserComponent {
         // refresh may return fewer items, e.g. inline search). This keeps the
         // invariant, not a position re-seed: `BrowserContent` has no cursor.
         self.cursor = self.cursor.min(self.context.item_count().saturating_sub(1));
+        self.feed_inline_browser();
         self.feed_wide_list();
     }
 
@@ -151,6 +155,9 @@ impl BrowserComponent {
     pub(in crate::app) fn apply_position(&mut self, cursor: usize, scroll: usize) {
         self.cursor = cursor.min(self.context.item_count().saturating_sub(1));
         self.scroll = scroll;
+        self.feed_inline_browser();
+        self.inline_browser.select_target(&self.cursor);
+        self.inline_browser.set_scroll(self.scroll);
         self.feed_wide_list();
     }
 
@@ -161,6 +168,73 @@ impl BrowserComponent {
         let changed = self.last_identity.as_ref() != Some(&identity);
         self.last_identity = Some(identity);
         changed
+    }
+
+    /// Rebuild the persistent `InlineMediaBrowser` from position-free content.
+    /// The control retains its selected target across ordinary content pushes;
+    /// `apply_position` is the only path that seeds its target and scroll from
+    /// the shell-owned resting position.
+    fn feed_inline_browser(&mut self) {
+        let ctx = &self.context;
+        let mut sorted_indices: Vec<usize> = (0..ctx.items.len()).collect();
+        sorted_indices
+            .sort_by_cached_key(|&index| natural_sort_key(effective_sort_str(&ctx.items[index])));
+        let grouped =
+            !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some());
+        let mut rows = Vec::with_capacity(ctx.items.len());
+        let mut last_group = None;
+        for &index in &sorted_indices {
+            let item = &ctx.items[index];
+            if grouped {
+                let bucket_total = if ctx.letter_filter.is_some() {
+                    usize::MAX
+                } else {
+                    ctx.true_total()
+                };
+                let group = letter_bucket(item, bucket_total);
+                if last_group.as_deref() != Some(group.as_str()) {
+                    if last_group.is_some() {
+                        rows.push(MediaListRow::Spacer);
+                    }
+                    rows.push(MediaListRow::Heading {
+                        text: group.clone(),
+                    });
+                    last_group = Some(group);
+                }
+            }
+            let primary = if item.is_folder && item.item_type == "Folder" && item.total_count > 0 {
+                format!("{} · {} items", item.display_name(), item.total_count)
+            } else if item.is_folder && item.unplayed_item_count > 0 && item.item_type != "Series" {
+                format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+            } else {
+                item.display_name()
+            };
+            let trailing = (!item.is_folder && item.production_year > 0)
+                .then(|| item.production_year.to_string());
+            let semantic_state = if item.playback_position_ticks > 0 && !item.played {
+                let progress = if item.runtime_ticks > 0 {
+                    Some(
+                        ((item.playback_position_ticks as u64 * 100) / item.runtime_ticks as u64)
+                            .min(100) as u16,
+                    )
+                } else {
+                    None
+                };
+                MediaSemanticState::active(progress)
+            } else if item.played {
+                MediaSemanticState::Played
+            } else {
+                MediaSemanticState::Ordinary
+            };
+            rows.push(MediaListRow::Item {
+                target: index,
+                primary,
+                trailing,
+                duration: None,
+                semantic_state,
+            });
+        }
+        self.inline_browser.set_content(rows);
     }
 
     /// Rebuild the persistent `WideMediaList` from the mirrored content for the

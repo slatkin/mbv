@@ -4,7 +4,7 @@
 
 use super::detail::compact_banner_image_cache_key;
 use crate::app::components::browser_narrow::{NarrowBrowseExtras, NarrowInlineHero};
-use crate::app::components::media_list::{InlineMediaBrowser, MediaListRow};
+use crate::app::components::media_list::InlineMediaBrowser;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::library_column_count;
 use crate::app::render::arrangements::{hero_left, library};
@@ -15,8 +15,6 @@ use crate::app::render::components::list_rows::{
     LibraryListRenderCtx, SELECTED_BLOCK_SIDE_PADDING,
 };
 use crate::app::render::HomeImagePaint;
-use crate::app::render::{effective_sort_str, letter_bucket};
-use crate::app::ui_util::natural_sort_key;
 use crate::app::App;
 use ratatui::layout::Rect;
 use ratatui::Frame;
@@ -146,75 +144,14 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     // Hero-bearing narrow surfaces use the canonical inline control. The
     // legacy two-column policy remains for non-hero catalogs.
     let final_offset = if hero_presentation {
-        let mut sorted_indices: Vec<usize> = (0..ctx.items.len()).collect();
-        sorted_indices
-            .sort_by_cached_key(|&index| natural_sort_key(effective_sort_str(&ctx.items[index])));
-        let bucket_total = if ctx.letter_filter.is_some() {
-            usize::MAX
-        } else {
-            ctx.true_total()
-        };
-        let mut rows = Vec::with_capacity(ctx.items.len());
-        let mut last_group = None;
-        for &index in &sorted_indices {
-            let item = &ctx.items[index];
-            if use_letter_groups {
-                let group = letter_bucket(item, bucket_total);
-                if last_group.as_deref() != Some(group.as_str()) {
-                    if last_group.is_some() {
-                        rows.push(MediaListRow::Spacer);
-                    }
-                    rows.push(MediaListRow::Heading {
-                        text: group.clone(),
-                    });
-                    last_group = Some(group);
-                }
-            }
-            let primary = if item.is_folder && item.item_type == "Folder" && item.total_count > 0 {
-                format!("{} · {} items", item.display_name(), item.total_count)
-            } else if item.is_folder && item.unplayed_item_count > 0 && item.item_type != "Series" {
-                format!("{} [{}]", item.display_name(), item.unplayed_item_count)
-            } else {
-                item.display_name()
-            };
-            let trailing = (!item.is_folder && item.production_year > 0)
-                .then(|| item.production_year.to_string());
-            let state = if item.playback_position_ticks > 0 && !item.played {
-                let progress = if item.runtime_ticks > 0 {
-                    Some(
-                        ((item.playback_position_ticks as u64 * 100) / item.runtime_ticks as u64)
-                            .min(100) as u16,
-                    )
-                } else {
-                    None
-                };
-                crate::app::components::media_list::MediaSemanticState::active(progress)
-            } else if item.played {
-                crate::app::components::media_list::MediaSemanticState::Played
-            } else {
-                crate::app::components::media_list::MediaSemanticState::Ordinary
-            };
-            rows.push(MediaListRow::Item {
-                target: index,
-                primary,
-                trailing,
-                duration: None,
-                semantic_state: state,
-            });
-        }
-        browser.set_content(rows);
-        let selected_position = sorted_indices
-            .iter()
-            .position(|&index| index == ctx.cursor())
-            .unwrap_or(0);
-        browser.select_index(selected_position);
-        browser.set_scroll(ctx.scroll());
-        let desired_rows = inline_hero_rows as usize;
+        // The persistent InlineMediaBrowser is fed by BrowserComponent before
+        // this painter runs. Its rows, selection, and scroll are authoritative;
+        // this function only paints and exports the control's flow geometry.
         let result = super::media_list::render_inline_media_browser(
             f,
             list_area,
             &*browser,
-            desired_rows,
+            inline_hero_rows as usize,
             focused,
             // Legacy `item_cell_spans` parity: selected row on the resting
             // surface, read against the focused panel body.
@@ -222,14 +159,8 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         );
         layout.hero_area = result.hero_area.unwrap_or_default();
         layout.inline_hero_area = layout.hero_area;
-        layout.left_sorted_indices = sorted_indices;
-        // These maps come directly from the painter's replacement flow,
-        // including headings, spacers, and targetless hero continuation rows.
-        layout.left_item_rows = result
-            .row_geometry
-            .targets()
-            .map(|target| target.map(|target| vec![*target]).unwrap_or_default())
-            .collect();
+        // Keep this one map as pre-#638 mouse compatibility. It is copied from
+        // the painter's replacement flow rather than rebuilt here.
         layout.left_row_map = result
             .row_geometry
             .targets()

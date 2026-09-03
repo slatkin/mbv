@@ -187,6 +187,11 @@ impl<Target: Clone + PartialEq> InlineMediaBrowser<Target> {
         self.core.set_content(rows);
     }
 
+    /// Move the cursor to `target` when it is present; returns whether it was.
+    pub fn select_target(&mut self, target: &Target) -> bool {
+        self.core.select_target(target)
+    }
+
     /// Produce a [`ViewportAnchor`] from the current selection for a painted
     /// viewport height (design.md D3). `None` when nothing is selectable.
     pub fn viewport_anchor(&self, viewport_height: usize) -> Option<ViewportAnchor<Target>> {
