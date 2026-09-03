@@ -36,7 +36,7 @@
 - [x] 4.3 Record source-level one-painter and one-position-channel evidence for every migrated destination: no applicable Wide path reaches `render_generic_movies_home_video_rows_with_ctx` (and therefore neither `render_letter_grouped_rows` nor `render_plain_rows`), no Narrow per-frame canonical-control construction, no duplicate replacement geometry, and exactly one `LibraryListRenderCtx` construction site inside `src/app/components/browser/`, fed by control-owned position. State the evidence as reachability from the canonical paths, not as the absence of one named symbol or field.
 - [x] 4.4 Run `rtk make check-code-file-lines` and verify all changed source files are ≤800 lines.
 - [x] 4.5 Run `rtk openspec validate introduce-canonical-media-list-foundation --strict`.
-- [ ] 4.6 Run `rtk cargo fmt`, `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv` for the relevant component/characterization/render suites, `rtk cargo clippy --workspace --all-targets`, and `rtk ast-grep scan`; fix only failures caused by this slice.
+- [x] 4.6 Run `rtk cargo fmt`, `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv` for the relevant component/characterization/render suites, `rtk cargo clippy --workspace --all-targets`, and `rtk ast-grep scan`; fix only failures caused by this slice.
 
 ## 5. Slice review and acceptance
 
