@@ -375,15 +375,13 @@ fn wide_music_list_panel_leaves_exactly_one_row_above_the_status_bar() {
     let layout = mounted_music_layout(&model);
     let browser_area = layout.wide_music_browser_area;
     assert!(browser_area.height > 0, "wide music browser must paint");
+    // The inset browser content sits PANE_PAD_Y above its framed panel; the
+    // framed panel shares the right pane's bottom edge, which the primitive
+    // holds exactly one row above the destination area's bottom status row.
     assert_eq!(
-        browser_area.bottom() + 1,
-        layout.wide_music_right_area.bottom(),
-        "browser content must sit one padded row above the right pane bottom"
-    );
-    assert_eq!(
-        layout.wide_music_right_area.bottom(),
-        39,
-        "right pane must bottom out one row above the 40-row terminal"
+        browser_area.bottom() + PANE_PAD_Y,
+        layout.wide_music_area.bottom() - 1,
+        "framed list panel must bottom out one row above the status row"
     );
 }
 
@@ -409,11 +407,11 @@ fn wide_book_panes_leave_exactly_one_row_above_the_status_bar() {
             .first()
             .map(|(rect, _)| rect.y)
             .expect("book pills painted"),
-        panes.right_area.y,
-        "book pills must sit at the shared right pane's pill row"
+        panes.right_panel.y,
+        "book pills must sit flush with the right pane's top"
     );
     assert_eq!(
-        panes.right_area.bottom(),
+        panes.right_panel.bottom(),
         area.bottom() - 1,
         "book right pane must bottom out one row above the status row"
     );
