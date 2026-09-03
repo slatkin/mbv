@@ -17,6 +17,17 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+// §3.2 one-painter instrumentation: per-frame execution counters for the two
+// canonical wide list paint entry points. Tests reset these, render one
+// frame, and assert exactly one wide list painter ran for a destination.
+#[cfg(test)]
+thread_local! {
+    pub(in crate::app) static WIDE_MEDIA_LIST_PAINTS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+    pub(in crate::app) static PLAIN_ROWS_PAINTS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
 /// Canonical fixed-row render path for the canonical media-list controls.
 /// Semantic theme ownership stays in `theme`/`palette` and `list_rows`.
 ///
@@ -29,6 +40,8 @@ pub(in crate::app) fn render_plain_rows(
     ctx: ListRenderCtx,
     layout: &mut LayoutMain,
 ) -> usize {
+    #[cfg(test)]
+    PLAIN_ROWS_PAINTS.with(|count| count.set(count.get() + 1));
     let ListRenderCtx {
         content_area,
         items,
@@ -253,6 +266,8 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
     focused: bool,
     selected_bg: Color,
 ) -> MediaListPaint<Target> {
+    #[cfg(test)]
+    WIDE_MEDIA_LIST_PAINTS.with(|count| count.set(count.get() + 1));
     let geometry = list.row_geometry(content_area.height as usize);
     let rows = list.rows();
     let selected_row = geometry.selected_row();

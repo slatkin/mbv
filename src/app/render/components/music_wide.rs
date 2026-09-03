@@ -420,6 +420,11 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
             list_panel,
         );
     }
+    // Paint the rail frame before the rows: `hero_on_left_list_panel_border`
+    // rewrites every panel cell's background, so it must not run after the
+    // canonical list (which owns the selected-row background). Mirrors
+    // `render_wide_tv_with_ctx`.
+    hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     if browser_area.height > 0 && browser_area.width > 0 {
         if ctx.list.is_search_active() {
             let cols = crate::app::library_column_width::library_column_count(browser_area.width);
@@ -441,7 +446,6 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
             );
         }
     }
-    hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     output
 }
 

@@ -240,58 +240,6 @@ pub(in crate::app::render) fn render_album_row(f: &mut Frame, ctx: AlbumRowCtx) 
     f.render_widget(Paragraph::new(Line::from(spans)), album_area);
 }
 
-/// Renders the selected album row in the wide right-pane music
-/// browser. Uses the shared `build_list_row_spans` for consistent
-/// selected-row styling (yellow title, `SURFACE_RESTING` background,
-/// edge marker drawn separately by `draw_column_selection_markers`).
-/// The background rect fills `panel_area.width` so the highlight
-/// extends to the panel edge regardless of content length.
-pub(in crate::app::render) fn render_wide_selected_album_row(
-    f: &mut Frame,
-    row_area: Rect,
-    panel_area: Rect,
-    idx: usize,
-    album_info: &[(String, String, String)],
-    focused: bool,
-) {
-    let (_, year, title) = &album_info[idx];
-
-    // Full-width background highlight for the selected row,
-    // matching every other list's selected-row treatment.
-    f.render_widget(
-        Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
-        Rect {
-            x: panel_area.x,
-            y: row_area.y,
-            width: panel_area.width,
-            height: 1,
-        },
-    );
-
-    let suffix_w = if year.is_empty() {
-        0
-    } else {
-        year.chars().count() + 2
-    };
-    let name_w = (row_area.width as usize)
-        .saturating_sub(2) // leading space + at least 1 char
-        .saturating_sub(suffix_w);
-    let title = trunc_str(title, name_w);
-    let dur_str = if year.is_empty() {
-        String::new()
-    } else {
-        format!(" {year}")
-    };
-    let fg = focused_or_subtle(focused);
-    let spans = super::list_rows::build_list_row_spans(
-        title.to_string(),
-        dur_str,
-        true, // selected
-        fg,
-    );
-    f.render_widget(Paragraph::new(Line::from(spans)), row_area);
-}
-
 pub(in crate::app::render) fn render_album_action_hint(
     f: &mut Frame,
     row_area: Rect,
