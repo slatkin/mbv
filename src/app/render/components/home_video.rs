@@ -8,27 +8,6 @@ use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 
-/// Clamp the panel scroll offset (in terminal rows, content-space) so the grid row
-/// spanning `[cur_top, cur_bot)` is fully visible within a viewport of `view_h` rows,
-/// and never scrolls past the end of `total_h` rows of content.
-pub(in crate::app::render) fn home_panel_scroll(
-    current: u16,
-    cur_top: u16,
-    cur_bot: u16,
-    total_h: u16,
-    view_h: u16,
-) -> u16 {
-    let max_scroll = total_h.saturating_sub(view_h);
-    let mut s = current.min(max_scroll);
-    if cur_top < s {
-        s = cur_top;
-    }
-    if cur_bot > s + view_h {
-        s = cur_bot.saturating_sub(view_h);
-    }
-    s
-}
-
 const MONTHS: [&str; 12] = [
     "January",
     "February",

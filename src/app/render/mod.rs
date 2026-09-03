@@ -105,7 +105,7 @@ use components::chrome::LIST_PLAY_ICON;
 pub use components::indicators;
 use components::list_rows::{selection_marker, MarkerEdge};
 use components::widgets::{
-    content_width, render_placeholder, render_right_scrollbar, render_selected_block_background,
+    render_placeholder, render_right_scrollbar, render_selected_block_background,
     MUSIC_ALBUM_IMAGE_TYPES, RENDER_FILTER,
 };
 pub(in crate::app) use components::widgets::{

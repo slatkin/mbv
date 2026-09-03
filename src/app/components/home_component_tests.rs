@@ -1,4 +1,5 @@
 use super::home::HomeComponent;
+use super::media_list::{MediaListRow, MediaSemanticState};
 use super::msg::{Msg, ShellRequest};
 use mbv_core::playback_queue::QueueItem;
 use ratatui::backend::TestBackend;
@@ -241,6 +242,123 @@ fn dot_emits_home_context_menu_with_component_target() {
             home_cw_selected: true,
             cw_item: Some(target),
         }))
+    );
+}
+
+fn emby_queue_item(id: &str) -> QueueItem {
+    QueueItem::Emby(Box::new(crate::app::tests::make_item(id, "Movie")))
+}
+
+fn cw_home(count: usize) -> HomeComponent {
+    let mut home = HomeComponent::new();
+    home.set_focused(true);
+    home.set_content(
+        (0..count)
+            .map(|i| emby_queue_item(&format!("cw{i}")))
+            .collect(),
+        vec![],
+        false,
+    );
+    home
+}
+
+/// Task 2.1: only the active section's items are projected, as `Item` rows
+/// (Home has no `Heading`/`Spacer`), so the structural-row index equals the
+/// selectable index. Progress-bearing fixtures map to the `Active` semantic
+/// state.
+#[test]
+fn active_section_projects_item_rows_with_parallel_indices() {
+    let mut home = HomeComponent::new();
+    let mut in_progress = crate::app::tests::make_item("cw0", "Movie");
+    in_progress.playback_position_ticks = 50;
+    in_progress.runtime_ticks = 200;
+    home.set_content(
+        vec![
+            QueueItem::Emby(Box::new(in_progress)),
+            emby_queue_item("cw1"),
+        ],
+        vec![(
+            "Movies".into(),
+            crate::app::types_playback::HomeLatestSource::Emby("movies".into()),
+            vec![emby_queue_item("latest0"), emby_queue_item("latest1")],
+        )],
+        false,
+    );
+
+    let rows = home.test_active_rows();
+    assert_eq!(rows.len(), 2, "only the active Continue Watching section");
+    assert!(rows
+        .iter()
+        .all(|row| matches!(row, MediaListRow::Item { .. })));
+    assert_eq!(
+        rows.iter()
+            .filter_map(MediaListRow::selectable_target)
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        vec!["cw0", "cw1"],
+        "row N is selectable row N — no structural offset",
+    );
+    assert!(matches!(
+        rows[0],
+        MediaListRow::Item {
+            semantic_state: MediaSemanticState::Active { progress: Some(_) },
+            ..
+        }
+    ));
+}
+
+/// Task 2.2: an ordinary content refresh keeps the selected target and
+/// locally clamps; it never adopts a parent cursor/scroll.
+#[test]
+fn ordinary_refresh_preserves_target_and_locally_clamps() {
+    let mut home = cw_home(8);
+    for _ in 0..3 {
+        home.on(&key(Key::Down));
+    }
+    assert_eq!(home.cursor(), 3);
+
+    home.set_content(
+        (0..8).map(|i| emby_queue_item(&format!("cw{i}"))).collect(),
+        vec![],
+        false,
+    );
+    assert_eq!(home.cursor(), 3, "same content: selected target retained");
+    assert_eq!(
+        home.test_active_scroll(),
+        0,
+        "refresh adopts no parent scroll"
+    );
+
+    home.set_content(
+        (0..2).map(|i| emby_queue_item(&format!("cw{i}"))).collect(),
+        vec![],
+        false,
+    );
+    assert_eq!(home.cursor(), 1, "shrunk content clamps to the last row");
+}
+
+/// Task 2.2: a breakpoint transition performs exactly one `ViewportAnchor`
+/// handoff — the incoming control keeps the selected target and is seeded
+/// with the outgoing control's screen-row offset (a fresh mount would rest at
+/// the top).
+#[test]
+fn breakpoint_transition_hands_off_one_viewport_anchor() {
+    let mut home = cw_home(40);
+    for _ in 0..35 {
+        home.on(&key(Key::Down));
+    }
+    assert_eq!(home.cursor(), 35);
+
+    let mut wide = Terminal::new(TestBackend::new(200, 30)).unwrap();
+    wide.draw(|frame| home.view(frame, frame.area())).unwrap();
+
+    let mut narrow = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    narrow.draw(|frame| home.view(frame, frame.area())).unwrap();
+
+    assert_eq!(home.cursor(), 35, "selected target survives the transition");
+    assert!(
+        home.test_active_scroll() > 0,
+        "the handoff seeded the incoming control's resting offset from the anchor",
     );
 }
 

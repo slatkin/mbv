@@ -1,15 +1,14 @@
 //! Interactive Component for the cross-Service Home destination.
 //!
-//! Task 3.4's confirmed scope is the render conversion: this component owns
-//! the flat cursor spanning Continue Watching + Newest sections, the
-//! selected section (pill), the list scroll offset, and painted geometry
-//! (row hitmap, pill targets), and paints via the shared
-//! `render_home_content` orchestration (`render/components/home.rs`) so it
-//! cannot drift from the legacy `App::render_home_list` path. Content is
-//! mirrored from the shell, while cursor/section/scroll and Home keyboard
-//! interpretation remain local to this component. It emits typed shell
-//! requests for effects that cross the Model boundary; destination-independent
-//! chords are handled by the central router.
+//! The component owns the selected section (pill) and section identity; the
+//! embedded canonical controls (`WideMediaList` for hero-on-left Wide,
+//! `InlineMediaBrowser` for inline Narrow) own the cursor and scroll over the
+//! active section's projected rows. `render_home_content`
+//! (`render/components/home.rs`) is the parent-owned hero + pill + chrome
+//! painter and mounts the active control into the list area. Content is
+//! mirrored from the shell; Home keyboard interpretation stays local. It emits
+//! typed shell requests for effects that cross the Model boundary;
+//! destination-independent chords are handled by the central router.
 
 use ratatui::layout::Rect;
 use ratatui::Frame;
@@ -21,25 +20,48 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{InlineMediaBrowser, MediaListRow, MediaSemanticState, WideMediaList};
+use super::media_list::{
+    InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+};
 use super::msg::{HomeHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::HomeImagePaint;
 use crate::app::types_playback::HomeLatestSource;
-use crate::app::ui_util::move_cursor;
 use mbv_core::playback_queue::QueueItem;
+
+/// Provider-neutral semantic state for a Home row: in-progress items carry
+/// their resume percentage, finished items read as played, everything else is
+/// ordinary. Mirrors `BrowserComponent::feed_inline_browser`'s mapping.
+fn home_semantic_state(item: &QueueItem) -> MediaSemanticState {
+    let position = item.playback_position_ticks();
+    let runtime = item.runtime_ticks();
+    if position > 0 && !item.played() {
+        let progress = (runtime > 0)
+            .then(|| ((position as i128 * 100 / runtime as i128).clamp(0, 100)) as u16);
+        MediaSemanticState::active(progress)
+    } else if item.played() {
+        MediaSemanticState::Played
+    } else {
+        MediaSemanticState::Ordinary
+    }
+}
 
 /// The Interactive Component for the Home destination.
 pub struct HomeComponent {
     continue_items: Vec<QueueItem>,
     latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
-    /// Canonical projection of the active section; the parent retains section identity.
+    /// Canonical projection of the active section; the parent retains section
+    /// identity. Both controls are fed the same active-section rows every
+    /// `set_content`; only one is painted per breakpoint. They are the sole
+    /// owner of cursor/scroll — the component keeps no mirror.
     canonical_list: WideMediaList<String>,
     inline_list: InlineMediaBrowser<String>,
     loading: bool,
     section: usize,
-    cursor: usize,
-    scroll: usize,
+    /// Which canonical control the last `view()` painted (hero-on-left Wide vs
+    /// inline Narrow). Drives the single `ViewportAnchor` handoff on a
+    /// breakpoint transition and which control `cursor()` reads.
+    wide: bool,
     focused: bool,
     /// Runtime terminal-capability flag (config-derived, not per-render
     /// content); set once by the shell after construction.
@@ -87,8 +109,7 @@ impl HomeComponent {
             inline_list: InlineMediaBrowser::new(),
             loading: false,
             section: 0,
-            cursor: 0,
-            scroll: 0,
+            wide: false,
             focused: false,
             use_nerd_fonts: false,
             panel_area: None,
@@ -121,10 +142,15 @@ impl HomeComponent {
         self.continue_items = continue_items;
         self.latest = latest;
         self.loading = loading;
+        self.clamp_section();
         self.project_active_section();
-        self.clamp_section_and_cursor();
     }
 
+    /// Project only the active Home section's items as canonical `Item` rows
+    /// (Home has no `Heading`/`Spacer` vocabulary, so structural-row index
+    /// equals selectable index). Feeds both persistent controls; an ordinary
+    /// refresh preserves the selected target through `ListCore::set_content`
+    /// and locally clamps without any parent cursor/scroll input.
     fn project_active_section(&mut self) {
         let items = if self.section == 0 {
             &self.continue_items
@@ -136,30 +162,16 @@ impl HomeComponent {
         };
         let rows: Vec<MediaListRow<String>> = items
             .iter()
-            .cloned()
             .map(|item| MediaListRow::Item {
                 primary: item.title().to_owned(),
                 target: item.title().to_owned(),
                 trailing: None,
                 duration: None,
-                semantic_state: MediaSemanticState::Ordinary,
+                semantic_state: home_semantic_state(item),
             })
             .collect();
         self.canonical_list.set_content(rows.clone());
         self.inline_list.set_content(rows);
-        /* self.canonical_list.set_content(
-            items
-                .iter()
-                .cloned()
-                .map(|item| MediaListRow::Item {
-                    primary: item.title().to_owned(),
-                    target: item.title().to_owned(),
-                    trailing: None,
-                    duration: None,
-                    semantic_state: MediaSemanticState::Ordinary,
-                })
-                .collect(),
-        ); */
     }
 
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
@@ -190,15 +202,27 @@ impl HomeComponent {
     pub(in crate::app) fn restore_section(&mut self, source: &HomeLatestSource) -> bool {
         if let Some(idx) = self.latest.iter().position(|(_, s, _)| s == source) {
             self.section = idx + 1;
-            self.clamp_section_and_cursor();
+            self.clamp_section();
+            self.project_active_section();
+            self.canonical_list.select_first();
+            self.inline_list.select_first();
             true
         } else {
             false
         }
     }
 
+    /// The flat cursor (Continue Watching + every latest section) the shell's
+    /// `home_flat_target` resolves. Derived from the active canonical control's
+    /// selectable index over the active section's rows; the component keeps no
+    /// cursor of its own.
     pub(in crate::app) fn cursor(&self) -> usize {
-        self.cursor
+        let index = if self.wide {
+            self.canonical_list.cursor()
+        } else {
+            self.inline_list.cursor()
+        };
+        self.visible_indices().get(index).copied().unwrap_or(0)
     }
 
     pub(in crate::app) fn section(&self) -> usize {
@@ -274,48 +298,40 @@ impl HomeComponent {
             .unwrap_or_default()
     }
 
-    fn clamp_section_and_cursor(&mut self) {
+    fn clamp_section(&mut self) {
         if !self.section_is_valid(self.section) {
             self.section = self.new_sections().first().copied().unwrap_or(0);
         }
-        let indices = self.visible_indices();
-        if let Some(first) = indices.first() {
-            if !indices.contains(&self.cursor) {
-                self.cursor = *first;
-            }
-        } else {
-            self.cursor = 0;
-        }
     }
 
-    /// Move the flat cursor within the currently visible section (clamped to
-    /// its bounds), matching `ui_util::move_cursor`. This is the section-local
-    /// cursor movement the keyboard navigation and the Model-boundary wheel
-    /// scroll both use (task 5.3d, Home wheel-scroll ownership); the shell
-    /// calls it with the same delta semantics as keyboard Up/Down.
+    /// Move the selection within the active section (clamped to its bounds) on
+    /// both canonical controls in lockstep, so they stay cursor-aligned across
+    /// a breakpoint transition. The keyboard navigation and the Model-boundary
+    /// wheel scroll both use this (task 5.3d, Home wheel-scroll ownership) with
+    /// the same delta semantics as keyboard Up/Down.
     pub(in crate::app) fn move_local_cursor(&mut self, delta: i64) {
-        let indices = self.visible_indices();
-        if indices.is_empty() {
-            self.cursor = 0;
-            return;
-        }
-        let pos = indices
-            .iter()
-            .position(|idx| *idx == self.cursor)
-            .unwrap_or(0);
-        let next = move_cursor(pos, delta, indices.len());
-        self.cursor = indices[next];
+        self.canonical_list.move_selection(delta);
+        self.inline_list.move_selection(delta);
     }
 
     fn select_start(&mut self) {
-        if let Some(first) = self.visible_indices().first() {
-            self.cursor = *first;
-        }
+        self.canonical_list.select_first();
+        self.inline_list.select_first();
     }
 
     fn select_end(&mut self) {
-        if let Some(last) = self.visible_indices().last() {
-            self.cursor = *last;
+        self.canonical_list.select_last();
+        self.inline_list.select_last();
+    }
+
+    /// Move both controls' selection to the active-section row carrying flat
+    /// index `flat` (a rebuilt hit-map target), when it is in the active
+    /// section. Pre-#638 mouse compatibility: the bespoke `*HitRegion` path
+    /// stays wired and reads control-exported geometry.
+    fn select_flat(&mut self, flat: usize) {
+        if let Some(index) = self.visible_indices().iter().position(|&idx| idx == flat) {
+            self.canonical_list.select_index(index);
+            self.inline_list.select_index(index);
         }
     }
 
@@ -335,14 +351,12 @@ impl HomeComponent {
             return false;
         }
         self.section = resolved;
-        self.scroll = 0;
-        if let Some((start, len)) = self.section_range(resolved) {
-            self.cursor = if len == 0 {
-                start
-            } else {
-                self.cursor.clamp(start, start + len - 1)
-            };
-        }
+        // A discrete section change re-projects the active section and parks
+        // the selection at its first row on both controls (no per-section
+        // cursor cache).
+        self.project_active_section();
+        self.canonical_list.select_first();
+        self.inline_list.select_first();
         true
     }
 
@@ -410,11 +424,11 @@ impl HomeComponent {
                 home_cw_selected: self.section == 0,
                 cw_item: self.cw_item.clone(),
             })),
-            Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor))),
-            Key::Enter => Some(Msg::Shell(ShellRequest::HomePlay(self.cursor))),
-            Key::Char('a') if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor))),
+            Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor()))),
+            Key::Enter => Some(Msg::Shell(ShellRequest::HomePlay(self.cursor()))),
+            Key::Char('a') if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor()))),
             Key::Char('w') if ctrl => Some(Msg::Shell(ShellRequest::HomeToggleWatched)),
-            Key::Delete => Some(Msg::Shell(ShellRequest::HomeDelete(self.cursor))),
+            Key::Delete => Some(Msg::Shell(ShellRequest::HomeDelete(self.cursor()))),
             _ => None,
         }
     }
@@ -481,15 +495,15 @@ impl HomeComponent {
                 }
                 if self.list_area.contains(pos) {
                     // Local highlight only: the authoritative cursor set
-                    // (row-map resolution, panel focus) stays in
+                    // (row-map resolution, panel focus) stays in the shell.
                     // The `HomeClick` shell arm consumes the resolved cursor.
                     if let Some((_, flat_idx)) =
                         self.hitmap.iter().find(|(rect, _)| rect.contains(pos))
                     {
-                        self.cursor = *flat_idx;
+                        self.select_flat(*flat_idx);
                     }
                     return Some(Msg::Shell(ShellRequest::HomeClick {
-                        region: HomeHitRegion::Row(self.cursor),
+                        region: HomeHitRegion::Row(self.cursor()),
                         col: mouse.column,
                         row: mouse.row,
                     }));
@@ -505,10 +519,10 @@ impl HomeComponent {
                 // on the row under the click.
                 if let Some((_, flat_idx)) = self.hitmap.iter().find(|(rect, _)| rect.contains(pos))
                 {
-                    self.cursor = *flat_idx;
+                    self.select_flat(*flat_idx);
                 }
                 return Some(Msg::Shell(ShellRequest::HomeClick {
-                    region: HomeHitRegion::ContextMenu(self.cursor),
+                    region: HomeHitRegion::ContextMenu(self.cursor()),
                     col: mouse.column,
                     row: mouse.row,
                 }));
@@ -522,6 +536,25 @@ impl HomeComponent {
     pub(crate) fn test_hitmap(&self) -> &[(Rect, usize)] {
         &self.hitmap
     }
+
+    /// The active section's projected canonical rows (both controls hold the
+    /// same vector).
+    #[cfg(test)]
+    pub(crate) fn test_active_rows(&self) -> &[MediaListRow<String>] {
+        self.inline_list.rows()
+    }
+
+    /// The active control's resting scroll offset. `set_content` never seeds
+    /// it and the render pass never writes it back; only a `ViewportAnchor`
+    /// handoff at a breakpoint transition sets it.
+    #[cfg(test)]
+    pub(crate) fn test_active_scroll(&self) -> usize {
+        if self.wide {
+            self.canonical_list.scroll()
+        } else {
+            self.inline_list.scroll()
+        }
+    }
 }
 
 impl Default for HomeComponent {
@@ -532,6 +565,31 @@ impl Default for HomeComponent {
 
 impl Component for HomeComponent {
     fn view(&mut self, f: &mut Frame, area: Rect) {
+        // One `ViewportAnchor` handoff at a breakpoint transition: carry the
+        // outgoing control's selected target and screen-row offset into the
+        // incoming control (design.md D2). The cursors already track in
+        // lockstep; the anchor keeps the offset continuous across the resize.
+        let wide = crate::app::render::shared_hero_presentation(area).is_some();
+        if wide != self.wide {
+            let viewport_height = self.list_area.height.max(1) as usize;
+            let anchor: Option<ViewportAnchor<String>> = if self.wide {
+                self.canonical_list.viewport_anchor(viewport_height)
+            } else {
+                self.inline_list.viewport_anchor(viewport_height)
+            };
+            if let Some(anchor) = anchor {
+                if wide {
+                    self.canonical_list
+                        .apply_viewport_anchor(&anchor, viewport_height);
+                } else {
+                    self.inline_list
+                        .apply_viewport_anchor(&anchor, viewport_height);
+                }
+            }
+            self.wide = wide;
+        }
+
+        let cursor = self.cursor();
         let result = crate::app::render::render_home_content(
             f,
             area,
@@ -539,8 +597,9 @@ impl Component for HomeComponent {
             &self.continue_items,
             &self.latest,
             self.section,
-            &mut self.cursor,
-            &mut self.scroll,
+            cursor,
+            &mut self.canonical_list,
+            &mut self.inline_list,
             self.use_nerd_fonts,
         );
         self.section = result.resolved_section;
@@ -550,34 +609,6 @@ impl Component for HomeComponent {
         self.selected_item_rect = result.selected_item_rect;
         self.image_paint = result.image_paint;
         self.hero_area = result.hero_area;
-        // The canonical control is the list mount; the legacy orchestration
-        // supplies Home-only chrome and hero geometry.
-        let offset = if crate::app::render::shared_hero_presentation(area).is_some() {
-            crate::app::render::render_wide_media_list(
-                f,
-                self.list_area,
-                &self.canonical_list,
-                self.focused,
-                crate::app::palette::SURFACE_RESTING,
-                &mut crate::app::layout::LayoutMain::default(),
-            )
-        } else {
-            crate::app::render::render_inline_media_browser(
-                f,
-                self.list_area,
-                &self.inline_list,
-                0,
-                self.focused,
-                crate::app::palette::SURFACE_RESTING,
-            )
-            .row_geometry
-            .offset()
-        };
-        if crate::app::render::shared_hero_presentation(area).is_some() {
-            self.canonical_list.set_scroll(offset);
-        } else {
-            self.inline_list.set_scroll(offset);
-        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

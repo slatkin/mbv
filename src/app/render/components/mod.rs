@@ -28,7 +28,6 @@ pub(super) mod home;
 pub(super) mod home_feed;
 pub(super) mod home_hero;
 pub(super) mod home_latest_row;
-pub(super) mod home_list_rows;
 pub(super) mod home_pills;
 pub(super) mod home_video;
 pub mod indicators;

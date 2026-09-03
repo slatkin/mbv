@@ -1,12 +1,11 @@
+use crate::app::components::media_list::{InlineMediaBrowser, RowGeometry, WideMediaList};
 use crate::app::palette;
 use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
-use crate::app::render::arrangements::home as home_arrangement;
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::hero::{self, HERO_BLOCK_EXTRA_ROWS};
 use crate::app::render::components::home_hero;
 use crate::app::render::components::home_hero::{HeroData, HomeImagePaint, KeepWatchingHeroLayout};
-use crate::app::render::components::home_list_rows::{render_home_list_rows, DisplayRow};
 use crate::app::render::components::home_pills::{home_pill_labels, render_home_pills};
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::types_playback::HomeLatestSource;
@@ -18,9 +17,8 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 
 /// Output of [`render_home_content`]: painted geometry the caller owns.
-/// `hero_area`/`selected_item_rect` are `None` when the shared logic didn't
-/// touch them this render, matching the legacy `App::render_home_list`'s own
-/// conditional writes into `LayoutMain` exactly (see the wrapper below).
+/// `hero_area`/`selected_item_rect` are `None` when this render touched no
+/// hero / painted no visible selection.
 pub(in crate::app) struct HomeContentOutput {
     pub(in crate::app) hitmap: Vec<(Rect, usize)>,
     pub(in crate::app) pill_targets: Vec<(Rect, usize)>,
@@ -28,9 +26,8 @@ pub(in crate::app) struct HomeContentOutput {
     pub(in crate::app) hero_area: Option<Rect>,
     pub(in crate::app) left_area: Rect,
     pub(in crate::app) selected_item_rect: Option<Rect>,
-    /// The `section` actually rendered, after the invalid-section clamp
-    /// (the single painter's `view` writes it back into `HomeComponent`'s
-    /// section, the component's own state).
+    /// The `section` actually rendered, after the invalid-section clamp.
+    /// `HomeComponent::view()` writes it back into its own section state.
     pub(in crate::app) resolved_section: usize,
 }
 
@@ -59,12 +56,14 @@ fn home_item_at(
     None
 }
 
-/// Renders the Home destination's cross-Service rows and hero presentation
-/// without `App` (design D2, task 3.4's confirmed extraction: share
-/// orchestration, defer only the image pixel paint). `section` is the
-/// already-resolved selected pill; `cursor`/`scroll` are clamped/updated in
-/// place. Shared by the legacy `App::render_home_list` wrapper below and
-/// `HomeComponent::view()` so the two render paths cannot drift apart.
+/// Paints Home's parent-owned hero + section pills + list-surface chrome
+/// without `App` (design D2), then mounts the active canonical control
+/// (`canonical_list` for hero-on-left Wide, `inline_list` for inline Narrow)
+/// into the list area and rebuilds the pre-#638 hit map from its exported row
+/// geometry. `section` is the already-resolved selected pill; `cursor` is the
+/// component's already-clamped flat cursor (used only to pick the hero item
+/// and anchor the replacement block). Only the image pixel paint is deferred
+/// to the shell.
 #[allow(clippy::too_many_arguments)]
 pub(in crate::app) fn render_home_content(
     f: &mut Frame,
@@ -73,8 +72,9 @@ pub(in crate::app) fn render_home_content(
     continue_items: &[QueueItem],
     latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
     section: usize,
-    cursor: &mut usize,
-    scroll: &mut usize,
+    cursor: usize,
+    canonical_list: &WideMediaList<String>,
+    inline_list: &InlineMediaBrowser<String>,
     use_nerd_fonts: bool,
 ) -> HomeContentOutput {
     if area.height == 0 || area.width == 0 {
@@ -94,10 +94,6 @@ pub(in crate::app) fn render_home_content(
         flat_start: usize,
         items: Vec<QueueItem>,
     }
-    // Cross-provider home row. Emby rows keep the full two-column/hero
-    // treatment; non-Emby rows (Audiobookshelf today, Feeds in Part 3) use
-    // the generic `render_home_latest_row`/`render_home_latest_detail`.
-
     let mut flat = continue_items.len();
     let mut new_sections: Vec<Section> = Vec::new();
     for (idx, (_title, _source, items)) in latest.iter().enumerate() {
@@ -138,38 +134,18 @@ pub(in crate::app) fn render_home_content(
     // per-screen declaration).
     let content_area = narrow_pill_areas.content_area;
 
-    let mut rows: Vec<DisplayRow> = Vec::new();
-    if section == 0 {
-        for (idx, item) in continue_items.iter().enumerate() {
-            rows.push(DisplayRow::Item(idx, Box::new(item.clone())));
-        }
-    } else if let Some(section) = selected_new {
-        for (idx, item) in section.items.iter().enumerate() {
-            rows.push(DisplayRow::Item(
-                section.flat_start + idx,
-                Box::new(item.clone()),
-            ));
-        }
-    }
-    if rows.is_empty() {
-        rows.push(DisplayRow::Empty);
-    }
-
-    let visible_flat_indices: Vec<usize> = rows
-        .iter()
-        .filter_map(|row| match row {
-            DisplayRow::Item(flat_idx, _) => Some(*flat_idx),
-            _ => None,
-        })
-        .collect();
-    if let Some(first) = visible_flat_indices.first() {
-        if !visible_flat_indices.contains(cursor) {
-            *cursor = *first;
-        }
+    // The active section's flat indices (Continue Watching is section 0; each
+    // latest pill is section N). Only this section is projected into the
+    // canonical control; the parent keeps section identity. `cursor` is the
+    // already-clamped flat cursor the component derived from the control.
+    let active_flat: Vec<usize> = if section == 0 {
+        (0..continue_items.len()).collect()
+    } else if let Some(sec) = selected_new {
+        (sec.flat_start..sec.flat_start + sec.items.len()).collect()
     } else {
-        *cursor = 0;
-    }
-    let cursor = *cursor;
+        Vec::new()
+    };
+    let control_empty = active_flat.is_empty();
 
     // --- Home hero panel ----------------------------------------------
     // Shared hero above the selected Home list. It reflects the current
@@ -193,7 +169,8 @@ pub(in crate::app) fn render_home_content(
     // one exists, which is the same row the pill-gap fill owns, so the
     // shell must paint last to win that row rather than be painted over.
     let mut narrow_pills_area: Option<Rect> = None;
-    let mut narrow_hero_rows = 0;
+    let mut narrow_dims: Option<HeroContentDims> = None;
+    let mut narrow_desired_hero_rows: u16 = 0;
     let mut hero_area_out: Option<Rect> = None;
 
     if two_column {
@@ -292,19 +269,6 @@ pub(in crate::app) fn render_home_content(
             .width
             .saturating_sub(SELECTED_BLOCK_SIDE_PADDING * 2);
 
-        enum HeroContentDims {
-            Emby(
-                Box<mbv_core::api::EmbyItem>,
-                u16,
-                KeepWatchingHeroLayout,
-                u16,
-            ),
-            // Feed and Audiobookshelf use the shared stacked detail block;
-            // Audiobookshelf artwork is painted above its metadata.
-            // Feed remains text-only in the shared renderer.
-            Generic(QueueItem, u16),
-            None,
-        }
         let dims = if area.width < 24 {
             HeroContentDims::None
         } else {
@@ -377,62 +341,16 @@ pub(in crate::app) fn render_home_content(
             HeroContentDims::Generic(_, rows) => *rows,
             HeroContentDims::None => 0,
         };
-        let desired_hero_rows = if content_rows > 0 {
+        // Size the hero from its content; placement and admission are the
+        // canonical `InlineMediaBrowser`'s replacement-flow decision, resolved
+        // when the control paints below.
+        narrow_desired_hero_rows = if content_rows > 0 {
             content_rows + HERO_BLOCK_EXTRA_ROWS
         } else {
             0
         };
-        let cursor_row = rows
-            .iter()
-            .position(|row| matches!(row, DisplayRow::Item(flat_idx, _) if *flat_idx == cursor))
-            .unwrap_or(0);
-        let flow = (desired_hero_rows > 0)
-            .then(|| {
-                hero::inline_detail_flow(
-                    cursor_row,
-                    desired_hero_rows,
-                    content_area.height,
-                    *scroll,
-                )
-            })
-            .flatten();
-        let hero_rows = flow.as_ref().map(|_| desired_hero_rows).unwrap_or(0);
-        narrow_hero_rows = hero_rows;
-        let hero_area = flow.map(|flow| {
-            home_arrangement::inline_hero_area(content_area, flow.detail_screen_row, hero_rows)
-        });
-        if let Some(hero_area) = hero_area {
-            hero_area_out = Some(hero_area);
-        }
-        let hero_content = hero_area.map(|hero_area| {
-            library_arrangement::selected_detail_content_area(
-                hero_area,
-                SELECTED_BLOCK_SIDE_PADDING,
-                HERO_BLOCK_EXTRA_ROWS,
-            )
-        });
-        hero_data = match (dims, hero_content) {
-            (HeroContentDims::Emby(item, img_w, meta_layout, image_rows), Some(hero_content)) => {
-                let (meta_area, img_area) =
-                    crate::app::render::components::home_hero::beside_image_hero_rects(
-                        hero_content,
-                        img_w,
-                        meta_layout.height,
-                        image_rows,
-                    );
-                Some(HeroData::Emby(
-                    item,
-                    meta_area,
-                    hero_content,
-                    img_area,
-                    meta_layout,
-                ))
-            }
-            (HeroContentDims::Generic(item, _), Some(hero_content)) => {
-                Some(HeroData::Generic(item, hero_content))
-            }
-            _ => None,
-        };
+        narrow_dims = Some(dims);
+        hero_data = None;
         narrow_pills_area = Some(narrow_pill_areas.pills_area);
         list_area = content_area;
     }
@@ -493,7 +411,6 @@ pub(in crate::app) fn render_home_content(
     // single-column layout since it also drives the wide panel's
     // top/bottom border rule, which the single-column layout doesn't
     // have.
-    let selection_bg_full = green_panel_full.unwrap_or(list_area);
     // Selected-row highlight colour: the wide layout's list panel is
     // itself green while focused, so the dark `SURFACE_BACKDROP` bar
     // reads against it. The single-column layout has no such green
@@ -523,51 +440,149 @@ pub(in crate::app) fn render_home_content(
     }
 
     let left_area = list_area;
-    // Render hero (shared between both layout modes).
-    if narrow_hero_rows > 0 {
-        hero::selected_detail_shell(
-            f,
-            hero_area_out.unwrap_or_default(),
-            narrow_hero_rows,
-            focused,
-        );
-    }
     let mut image_paint = None;
-    if let Some(hero_data) = &hero_data {
-        image_paint =
-            home_hero::render_home_hero_content(f, hero_data, two_column, focused, use_nerd_fonts);
+    // Two-column: the hero-on-left card paints independently of the list flow
+    // (its geometry was resolved above, before the pill/list split).
+    if two_column {
+        if let Some(hero_data) = &hero_data {
+            image_paint =
+                home_hero::render_home_hero_content(f, hero_data, true, focused, use_nerd_fonts);
+        }
     }
 
-    let list_rows_output = render_home_list_rows(
-        scroll,
-        f,
-        &rows,
-        list_area,
-        selection_bg_full,
-        selection_bg,
-        cursor,
-        focused,
-        narrow_hero_rows,
-    );
-    if list_rows_output.hero_area.is_some() {
-        hero_area_out = list_rows_output.hero_area;
-    }
+    // Paint the active canonical control into the list area and rebuild the
+    // pre-#638 Home hit map from its exported row geometry.
+    let (hitmap, selected_item_rect) = if control_empty {
+        crate::app::render::render_placeholder(f, list_area, " (empty)");
+        (Vec::new(), None)
+    } else if two_column {
+        let mut scratch = crate::app::layout::LayoutMain::default();
+        super::media_list::render_wide_media_list(
+            f,
+            list_area,
+            canonical_list,
+            focused,
+            selection_bg,
+            &mut scratch,
+        );
+        let geometry = canonical_list.row_geometry(list_area.height as usize);
+        (
+            home_hitmap(&geometry, list_area, &active_flat),
+            geometry.selected_row_rect(list_area),
+        )
+    } else {
+        let result = super::media_list::render_inline_media_browser(
+            f,
+            list_area,
+            inline_list,
+            narrow_desired_hero_rows as usize,
+            focused,
+            selection_bg,
+        );
+        let mut hitmap = home_hitmap(&result.row_geometry, list_area, &active_flat);
+        let selected_item_rect = match result.hero_area {
+            Some(hero_area) => {
+                hitmap.push((hero_area, cursor));
+                hero_area_out = Some(hero_area);
+                hero::selected_detail_shell(f, hero_area, hero_area.height, focused);
+                let hero_content = library_arrangement::selected_detail_content_area(
+                    hero_area,
+                    SELECTED_BLOCK_SIDE_PADDING,
+                    HERO_BLOCK_EXTRA_ROWS,
+                );
+                if let Some(hero_data) = narrow_dims
+                    .take()
+                    .and_then(|dims| narrow_hero_data(dims, hero_content))
+                {
+                    image_paint = home_hero::render_home_hero_content(
+                        f,
+                        &hero_data,
+                        false,
+                        focused,
+                        use_nerd_fonts,
+                    );
+                }
+                Some(hero_area)
+            }
+            None => result.row_geometry.selected_row_rect(list_area),
+        };
+        (hitmap, selected_item_rect)
+    };
 
     if let Some(panel) = green_panel_full {
         hero_left::hero_on_left_list_panel_border(f, panel, focused);
     }
 
     HomeContentOutput {
-        hitmap: list_rows_output.hitmap,
+        hitmap,
         pill_targets,
         image_paint,
         hero_area: hero_area_out,
         left_area,
-        selected_item_rect: list_rows_output.selected_item_rect,
+        selected_item_rect,
         resolved_section: section,
     }
 }
 
-#[cfg(test)]
-#[path = "home_tests.rs"]
-mod tests;
+/// Sized hero content for the narrow inline flow, resolved before the control
+/// admits (or rejects) the replacement block.
+enum HeroContentDims {
+    Emby(
+        Box<mbv_core::api::EmbyItem>,
+        u16,
+        KeepWatchingHeroLayout,
+        u16,
+    ),
+    // Feed and Audiobookshelf use the shared stacked detail block;
+    // Audiobookshelf artwork is painted above its metadata; Feed stays
+    // text-only in the shared renderer.
+    Generic(QueueItem, u16),
+    None,
+}
+
+/// Build the parent-owned narrow `HeroData` once the canonical control has
+/// resolved the on-screen detail-block rect.
+fn narrow_hero_data(dims: HeroContentDims, hero_content: Rect) -> Option<HeroData> {
+    match dims {
+        HeroContentDims::Emby(item, img_w, meta_layout, image_rows) => {
+            let (meta_area, img_area) =
+                crate::app::render::components::home_hero::beside_image_hero_rects(
+                    hero_content,
+                    img_w,
+                    meta_layout.height,
+                    image_rows,
+                );
+            Some(HeroData::Emby(
+                item,
+                meta_area,
+                hero_content,
+                img_area,
+                meta_layout,
+            ))
+        }
+        HeroContentDims::Generic(item, _) => Some(HeroData::Generic(item, hero_content)),
+        HeroContentDims::None => None,
+    }
+}
+
+/// Rebuild the pre-#638 Home hit map from a canonical control's exported
+/// `RowGeometry`: each visible display row that resolves to a source row maps
+/// to that active-section item's flat index. Replacement/continuation rows
+/// (source row `None`) are skipped; the caller adds the selected replacement
+/// block separately.
+fn home_hitmap(
+    geometry: &RowGeometry<String>,
+    area: Rect,
+    active_flat: &[usize],
+) -> Vec<(Rect, usize)> {
+    let offset = geometry.offset();
+    geometry
+        .visible_rows(area)
+        .into_iter()
+        .enumerate()
+        .filter_map(|(row, rect)| {
+            let source = geometry.source_row(offset + row)?;
+            Some((rect, *active_flat.get(source)?))
+        })
+        .collect()
+}

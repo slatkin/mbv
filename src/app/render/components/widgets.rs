@@ -281,17 +281,6 @@ pub(in crate::app) fn render_count_label(f: &mut Frame, area: Rect, count: usize
     }
 }
 
-/// Width in columns reserved for a list's scrollbar gutter.
-pub(in crate::app) const SCROLLBAR_GUTTER: u16 = 1;
-
-/// Usable text width of a list column of the given `width` once the
-/// scrollbar gutter is reserved (when `needs_scrollbar`). Centralizes the
-/// `width - gutter` arithmetic every scrolling list repeats.
-pub(in crate::app) fn content_width(width: u16, needs_scrollbar: bool) -> usize {
-    let gutter = if needs_scrollbar { SCROLLBAR_GUTTER } else { 0 };
-    width.saturating_sub(gutter) as usize
-}
-
 /// A horizontally-scrolling row of selector pills, shared by every
 /// pill selector (Home sections, feed groups, music groups, letter
 /// filters, and series seasons) so their appearance,
