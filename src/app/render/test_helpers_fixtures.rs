@@ -174,10 +174,12 @@ pub fn make_music_group_app_with_second_album() -> App {
     app
 }
 
-/// Shared row-map assertions for the inline album-detail tests: the
+/// Shared control-geometry assertions for the inline album-detail tests: the
 /// selected album's inline detail (loading indicator or rendered tracks)
 /// must sit between the selected album title and the following sibling
-/// album, and every row in between must be non-selectable.
+/// album, and every row in between must be non-selectable. `left_row_map` is
+/// the control-exported `RowGeometry` compatibility map retained for #638;
+/// it is not a legacy replacement-geometry rebuild.
 pub fn assert_inline_detail_frames_between_albums(
     lines: &[&str],
     layout: &LayoutMain,
