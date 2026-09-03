@@ -41,5 +41,5 @@
 ## 5. Slice review and acceptance
 
 - [x] 5.1 Review the complete implementation and evidence, then verify no registry identity, second router, callback/provider framework, global hit map, duplicate row coordinate path, protocol/provider/daemon/persistence change, or bespoke exception was introduced.
-- [ ] 5.2 Perform live Wide/Narrow acceptance covering selection, movement, focus, scrolling, images enabled/disabled, and TV rail/Inline replacement. Treat any visual defect as a bug, fix it, and rerun the affected tests and gates before acceptance.
+- [x] 5.2 Perform live Wide/Narrow acceptance covering selection, movement, focus, scrolling, images enabled/disabled, and TV rail/Inline replacement. Treat any visual defect as a bug, fix it, and rerun the affected tests and gates before acceptance.
 - [ ] 5.3 Attach stateful, rendered, source-level one-painter, live, file-size, and verification evidence; keep this slice independently reviewable/reversible and do not mark umbrella tasks complete until the corrected foundation is accepted.
