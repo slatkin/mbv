@@ -8,8 +8,7 @@ use crate::app::components::component_id::BrowserKind;
 use crate::app::palette;
 use crate::app::render::{
     hero_on_left_list_panel_border, hero_on_left_right_pane, padded_rect,
-    prepare_wide_emby_hero_card, render_count_label,
-    render_generic_movies_home_video_rows_with_ctx, render_home_hero_content, render_pill_bar,
+    prepare_wide_emby_hero_card, render_count_label, render_home_hero_content, render_pill_bar,
     render_search_box, wide_library_panes, HeroData, LetterFilter, LibraryListRenderCtx, PillBar,
     PANE_PAD_X, PANE_PAD_Y,
 };
@@ -34,13 +33,19 @@ impl BrowserComponent {
             ..body_area
         };
         let Some(panes) = wide_library_panes(body_area, PANE_PAD_X, PANE_PAD_Y) else {
-            // Breakpoint no longer fits: fall back to the plain list rows.
-            return render_generic_movies_home_video_rows_with_ctx(
+            // Defensive structure only: unreachable on canonical Wide paths.
+            // `browser/mod.rs` calls `render_wide_movies` solely when
+            // `shared_hero_presentation(area).is_some()`, and
+            // `wide_library_panes` returns `None` only when that same check
+            // fails on the same rect (`body_area == area`). If a degenerate
+            // rect ever reaches here, keep a canonical render rather than
+            // routing to the legacy painter.
+            return crate::app::render::render_wide_media_list(
                 f,
                 body_area,
-                ctx,
+                &self.wide_list,
                 self.focused,
-                crate::app::library_column_width::library_column_count(area.width),
+                palette::SURFACE_RESTING,
                 &mut self.layout,
             );
         };
