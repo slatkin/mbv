@@ -304,3 +304,39 @@ fn wide_movies_selected_row_punches_through_to_the_resting_surface() {
     let (selected, body) = selected_and_body_bg(false);
     assert_eq!(selected, body, "unfocused rail shows no selection bar");
 }
+
+/// migrate-home-feeds 5.1 (§5 geometry test): the shared hero-on-left
+/// primitive owns the one-row status-bar reserve, so wide Movies' framed list
+/// panel paints its `▁` bottom border two rows above the destination area's
+/// bottom, leaving exactly one blank row before the status bar. Asserted
+/// against the painted buffer so a one-row vertical shift is caught.
+#[test]
+fn wide_movies_list_panel_leaves_exactly_one_row_above_the_status_bar() {
+    use crate::app::components::browser::{BrowserComponent, BrowserContent};
+    use crate::app::components::component_id::BrowserKind;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tuirealm::component::Component;
+
+    let items = (0..40)
+        .map(|i| {
+            let mut item = make_item(&format!("Movie {i:02}"), "Movie");
+            item.id = format!("movie-{i}");
+            item
+        })
+        .collect();
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    browser.set_content(BrowserContent::from_items(items), true);
+    browser.apply_position(0, 40);
+
+    let area = ratatui::layout::Rect::new(0, 0, 120, 40);
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal.draw(|frame| browser.view(frame, area)).unwrap();
+    let right = browser.test_layout().movies_wide_right_area;
+    assert!(right.height > 0, "wide movies right pane must paint");
+    super::test_helpers::assert_list_pane_reserves_one_row_above_status(
+        terminal.backend().buffer(),
+        right,
+        area.bottom(),
+    );
+}

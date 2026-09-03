@@ -3,7 +3,6 @@ use super::test_helpers::{
 };
 use super::*;
 use crate::app::components::{ComponentId, HomeComponent};
-use crate::app::render::arrangements::hero_left;
 use crate::app::tests::make_app_stub;
 use crate::app::{palette, PanelFocus, TabSelection};
 
@@ -297,7 +296,7 @@ fn narrow_home_inline_hero_contrasts_with_pane_backdrop() {
 fn wide_home_panes_leave_exactly_one_row_above_the_status_bar() {
     let (width, height) = (200u16, 40u16);
     let app = home_app();
-    let (model, _terminal) = render_home_shell_with(app, width, height, |m| {
+    let (model, terminal) = render_home_shell_with(app, width, height, |m| {
         m.home_content.continue_items = vec![emby_cw_item()];
     });
     let home = model
@@ -317,11 +316,12 @@ fn wide_home_panes_leave_exactly_one_row_above_the_status_bar() {
         home_area.bottom() - 1,
         "hero panel must bottom out one row above the status row"
     );
-    // The inset list content sits PANE_PAD_Y above its framed panel; the
-    // framed panel itself reaches the same one-row-above-bottom edge.
-    assert_eq!(
-        list_area.bottom() + hero_left::PANE_PAD_Y,
-        home_area.bottom() - 1,
-        "framed list panel must bottom out one row above the status row"
+    // Positive buffer check: the framed list panel paints its `▁` bottom border
+    // two rows above the status row, leaving exactly one blank row between the
+    // panel and the status bar. A one-row vertical shift is caught here.
+    crate::app::render::test_helpers::assert_list_pane_reserves_one_row_above_status(
+        terminal.backend().buffer(),
+        list_area,
+        home_area.bottom(),
     );
 }

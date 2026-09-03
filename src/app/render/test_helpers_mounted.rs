@@ -30,6 +30,17 @@ pub fn draw_mounted_frame(model: &mut Model, width: u16, height: u16) -> String 
     buffer_to_string(&term)
 }
 
+/// Like `draw_mounted_frame` but hands back the terminal so a test can read
+/// the painted buffer. `draw_frame` is the live shell paint path, so the
+/// bottom status-bar row is painted (unlike a bare component `view`).
+pub fn draw_mounted_terminal(model: &mut Model, width: u16, height: u16) -> Terminal<TestBackend> {
+    model.sync_mounted_surfaces();
+    let backend = TestBackend::new(width, height);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| model.draw_frame(f, false, false)).unwrap();
+    term
+}
+
 /// The mounted Emby `BrowserComponent`'s own painted geometry (task 3.8: the
 /// legacy `render_library` `EmbyLibrary` arm no longer publishes it).
 pub fn mounted_browser_layout(model: &Model) -> &LayoutMain {

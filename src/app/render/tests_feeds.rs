@@ -293,15 +293,14 @@ fn wide_feeds_reserve_a_bottom_row_above_the_status_bar() {
         "hero panel must bottom out one row above {height}"
     );
 
-    let buffer = terminal.backend().buffer();
-    let focus = crate::app::palette::resolve_surface_focus(true);
-    for x in [layout.hero_area.x, layout.left_area.x] {
-        assert_ne!(
-            buffer[(x, height - 1)].bg,
-            focus,
-            "bottom row must not be painted by a Feeds panel at x={x}"
-        );
-    }
+    // Positive buffer check: the framed list panel paints its `▁` bottom
+    // border on `height - 2` and the reserve row `height - 1` is blank. A
+    // one-row vertical shift moves the border or paints the reserve row.
+    assert_list_pane_reserves_one_row_above_status(
+        terminal.backend().buffer(),
+        layout.left_area,
+        height,
+    );
 }
 
 #[test]

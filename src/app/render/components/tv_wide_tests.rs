@@ -284,6 +284,31 @@ fn wide_tv_episode_list_uses_soft_accent_when_focused() {
     );
 }
 
+/// migrate-home-feeds 5.1 (§5 geometry test): the shared hero-on-left
+/// primitive owns the one-row status-bar reserve, so wide TV's framed series
+/// rail paints its `▁` bottom border two rows above `tv_wide_area`'s bottom,
+/// leaving exactly one blank row before the status bar. Asserted against the
+/// painted buffer so a one-row vertical shift is caught.
+#[test]
+fn wide_tv_series_rail_leaves_exactly_one_row_above_the_status_bar() {
+    let app = tv_app();
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(
+        app.wide_tv_render_ctx(0, true, None)
+            .with_image_state(false, false),
+    );
+    let area = Rect::new(0, 0, 100, 30);
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal.draw(|f| component.view(f, area)).unwrap();
+    let right = component.test_layout().tv_wide_right_area;
+    assert!(right.height > 0, "wide TV right rail must paint");
+    crate::app::render::test_helpers::assert_list_pane_reserves_one_row_above_status(
+        terminal.backend().buffer(),
+        right,
+        area.bottom(),
+    );
+}
+
 /// Library wide view: exactly one of the two panes carries the focus-green
 /// background at a time. When the episode (left) pane takes focus the right
 /// series rail must drop to `SURFACE_RESTING`, never stay green.

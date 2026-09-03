@@ -398,3 +398,35 @@ pub fn render_home_shell_with(
 pub fn render_view(app: &mut App, width: u16, height: u16) -> LayoutMain {
     render_view_to_terminal(app, width, height).1
 }
+
+/// Assert, against a *painted* buffer, that a hero-on-left list pane leaves
+/// exactly one blank row between its framed bottom border and the status-bar
+/// row that `shared_hero_presentation` reserves (migrate-home-feeds slice 3.2
+/// §5.1). This is the per-family §5 geometry check: re-derived layout rects
+/// cannot catch a one-row vertical shift, so it reads the glyphs instead.
+///
+/// `pane` is the list pane's rect; `status_row_y` is the row the status bar
+/// occupies (one below the pane's bottom edge). The framed panel paints its
+/// `▁` bottom border on `status_row_y - 2`, and `status_row_y - 1` must be
+/// blank. A one-row shift up moves the border off `status_row_y - 2`; a shift
+/// down paints the reserve row — either way an assertion here fails.
+pub fn assert_list_pane_reserves_one_row_above_status(
+    buffer: &ratatui::buffer::Buffer,
+    pane: ratatui::layout::Rect,
+    status_row_y: u16,
+) {
+    let border_y = status_row_y - 2;
+    let reserve_y = status_row_y - 1;
+    assert_eq!(
+        buffer[(pane.x, border_y)].symbol(),
+        "▁",
+        "framed list panel must paint its bottom border on row {border_y}"
+    );
+    for x in pane.x..pane.right() {
+        assert_eq!(
+            buffer[(x, reserve_y)].symbol(),
+            " ",
+            "the reserve row {reserve_y} between the list panel and the status bar must be blank (x={x})"
+        );
+    }
+}

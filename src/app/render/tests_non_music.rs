@@ -1,6 +1,5 @@
 use super::test_helpers::*;
 use super::*;
-use crate::app::render::arrangements::hero_left::PANE_PAD_Y;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, TabSelection};
 use ratatui::backend::TestBackend;
@@ -363,30 +362,33 @@ fn narrow_series_inline_hero_shows_only_hero_content_no_season_or_episode_list()
     );
 }
 
-/// migrate-home-feeds 5.1: the shared hero-on-left primitive owns the one-row
-/// status-row reserve, so the wide Music workspace's framed list panel must
-/// bottom out exactly one row above the terminal's bottom status row — the
-/// browser's inset content sits `PANE_PAD_Y` above its framed panel, and the
-/// pane's bottom edge is exactly one row above the terminal bottom.
+/// migrate-home-feeds 5.1 (§5 geometry test): the shared hero-on-left
+/// primitive owns the one-row status-bar reserve, so wide Music's framed list
+/// panel must paint its `▁` bottom border two rows above `wide_music_area`'s
+/// bottom, leaving exactly one blank row between the panel and the status bar.
+/// Asserted against the painted buffer — a re-derived layout rect cannot catch
+/// a one-row vertical shift.
 #[test]
 fn wide_music_list_panel_leaves_exactly_one_row_above_the_status_bar() {
     let mut model = mounted_model_at(make_music_group_app(), 200, 40);
-    draw_mounted_frame(&mut model, 200, 40);
+    let terminal = draw_mounted_terminal(&mut model, 200, 40);
     let layout = mounted_music_layout(&model);
-    let browser_area = layout.wide_music_browser_area;
-    assert!(browser_area.height > 0, "wide music browser must paint");
-    // The inset browser content sits PANE_PAD_Y above its framed panel; the
-    // framed panel shares the right pane's bottom edge, which the primitive
-    // holds exactly one row above the destination area's bottom status row.
-    assert_eq!(
-        browser_area.bottom() + PANE_PAD_Y,
-        layout.wide_music_area.bottom() - 1,
-        "framed list panel must bottom out one row above the status row"
+    let right = layout.wide_music_right_area;
+    assert!(right.height > 0, "wide music right pane must paint");
+    assert_list_pane_reserves_one_row_above_status(
+        terminal.backend().buffer(),
+        right,
+        layout.wide_music_area.bottom(),
     );
 }
 
-/// migrate-home-feeds 5.1: same invariant for the ABS Book tab, painted by
-/// its mounted `AudiobookshelfBookComponent` directly with the full rect.
+/// migrate-home-feeds 5.1 (§5 geometry test): same one-blank-row reserve for
+/// the ABS Book tab. Book paints no framed list border at the pane bottom, so
+/// this checks the painted buffer directly: the last row before the status bar
+/// (`area.bottom() - 1`) is blank across the right pane, and the surname-bucket
+/// pill row the component publishes (`geometry.selector_tabs`) is actually
+/// painted at that row in the buffer. A one-row downward shift of the pane
+/// would paint the reserve row and move the pills off their published row.
 #[test]
 fn wide_book_panes_leave_exactly_one_row_above_the_status_bar() {
     use crate::app::components::AudiobookshelfBookComponent;
@@ -399,20 +401,31 @@ fn wide_book_panes_leave_exactly_one_row_above_the_status_bar() {
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
     terminal.draw(|frame| component.view(frame, area)).unwrap();
     let geometry = component.geometry();
-    let panes = crate::app::render::arrangements::library::wide_library_panes(area, 0, PANE_PAD_Y)
-        .expect("wide book panes");
-    assert_eq!(
-        geometry
-            .selector_tabs
-            .first()
-            .map(|(rect, _)| rect.y)
-            .expect("book pills painted"),
-        panes.right_panel.y,
-        "book pills must sit flush with the right pane's top"
+    let pill_rect = geometry
+        .selector_tabs
+        .first()
+        .map(|(rect, _)| *rect)
+        .expect("book pills painted");
+    let buffer = terminal.backend().buffer();
+
+    // The published pill row is really painted there (non-blank glyphs).
+    let pill_row: String = (pill_rect.x..pill_rect.right())
+        .map(|x| buffer[(x, pill_rect.y)].symbol())
+        .collect();
+    assert!(
+        !pill_row.trim().is_empty(),
+        "book pill row must be painted at its published row {}: {pill_row:?}",
+        pill_rect.y
     );
-    assert_eq!(
-        panes.right_panel.bottom(),
-        area.bottom() - 1,
-        "book right pane must bottom out one row above the status row"
-    );
+
+    // Exactly one blank row between the pane and the status bar: everything on
+    // `area.bottom() - 1` across the right pane is unpainted.
+    let reserve_y = area.bottom() - 1;
+    for x in pill_rect.x..area.right() {
+        assert_eq!(
+            buffer[(x, reserve_y)].symbol(),
+            " ",
+            "book reserve row {reserve_y} must be blank at x={x}"
+        );
+    }
 }
