@@ -251,3 +251,56 @@ fn wide_letter_grouped_row_map_indexes_items_without_counting_headings() {
          not source rows inflated by preceding headings/spacers: {row_map:?}"
     );
 }
+
+/// migrate-home-feeds 4.6 regression: after the full wide-Movies arrangement
+/// paint, the focused selected row's background is the surface *containing*
+/// the list panel (`SURFACE_RESTING`), and the rail-framing helper — which
+/// now runs before the row flow — must not overpaint that bar. Unfocused,
+/// the row must match the panel body (no bar).
+#[test]
+fn wide_movies_selected_row_punches_through_to_the_resting_surface() {
+    use crate::app::components::browser::{BrowserComponent, BrowserContent};
+    use crate::app::components::component_id::BrowserKind;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tuirealm::component::Component;
+
+    fn selected_and_body_bg(focused: bool) -> (ratatui::style::Color, ratatui::style::Color) {
+        let items = (0..10)
+            .map(|i| {
+                let mut item = make_item(&format!("Movie {i:02}"), "Movie");
+                item.id = format!("movie-{i}");
+                item
+            })
+            .collect();
+        let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+        browser.set_content(BrowserContent::from_items(items), focused);
+        browser.apply_position(0, 40);
+        let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
+        terminal
+            .draw(|frame| browser.view(frame, frame.area()))
+            .unwrap();
+        let layout = browser.test_layout();
+        let buffer = terminal.backend().buffer();
+        let row_for = |target: usize| {
+            layout.left_area.y
+                + layout
+                    .left_row_map
+                    .iter()
+                    .position(|item| item == &Some(target))
+                    .expect("row present") as u16
+        };
+        (
+            buffer[(layout.left_area.x, row_for(0))].bg,
+            buffer[(layout.left_area.x, row_for(1))].bg,
+        )
+    }
+
+    let (selected, body) = selected_and_body_bg(true);
+    assert_eq!(selected, crate::app::palette::SURFACE_RESTING);
+    assert_eq!(body, crate::app::palette::resolve_surface_focus(true));
+    assert_ne!(selected, body);
+
+    let (selected, body) = selected_and_body_bg(false);
+    assert_eq!(selected, body, "unfocused rail shows no selection bar");
+}

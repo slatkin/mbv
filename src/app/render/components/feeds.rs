@@ -227,17 +227,20 @@ pub(in crate::app) fn render_feeds_content(
             width: outer_panel.map_or(list_area.width, |panel| panel.width),
             ..list_area
         };
+        // Frame the rail before the row flow: the helper fills the whole
+        // panel background, so it must run before `render_wide_media_list`
+        // paints the selected-row bar (matches TV / Music ordering).
+        if let Some(panel) = outer_panel {
+            hero_left::hero_on_left_list_panel_border(f, panel, focused);
+        }
         let paint = render_wide_media_list(
             f,
             paint_rect,
             list_area,
             canonical_list,
             focused,
-            palette::SURFACE_FOCUSED,
+            palette::list_selected_row_bg(),
         );
-        if let Some(panel) = outer_panel {
-            hero_left::hero_on_left_list_panel_border(f, panel, focused);
-        }
         layout.selected_item_rect = paint.selected_row_rect;
         rebuild_selectable_maps(layout, &paint.row_geometry, list_area);
         layout.inline_hero_area = Rect::default();
@@ -251,7 +254,7 @@ pub(in crate::app) fn render_feeds_content(
             inline_list,
             desired_detail_rows,
             focused,
-            palette::SURFACE_FOCUSED,
+            palette::list_selected_row_bg(),
         );
         let geometry = result.row_geometry;
         let offset = geometry.offset();

@@ -155,7 +155,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             focused,
             // Legacy `item_cell_spans` parity: selected row on the resting
             // surface, read against the focused panel body.
-            crate::app::palette::SURFACE_RESTING,
+            crate::app::palette::list_selected_row_bg(),
         );
         layout.hero_area = result.hero_area.unwrap_or_default();
         layout.inline_hero_area = layout.hero_area;

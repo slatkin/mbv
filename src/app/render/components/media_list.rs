@@ -413,10 +413,15 @@ pub(in crate::app) fn render_inline_media_browser<Target: Clone>(
 /// colour and, for active rows, an appended progress percentage; `primary`
 /// is truncated with an ellipsis to fit; `duration` is a distinct
 /// right-aligned green element ending at the panel text-flow content edge
-/// (`inner_width` already excludes the scrollbar column). `selected_bg` is
-/// the focused-panel's parent surface — the colour the selected row takes so
-/// it reads against the panel body (Queue: `SURFACE_FOCUSED`; hero-on-left
-/// rails: `SURFACE_RESTING`, matching the legacy painters they replace).
+/// (`inner_width` already excludes the scrollbar column).
+///
+/// `selected_bg` is not a free per-caller choice: the focused selected row
+/// "punches through" to the surface *containing* the panel that holds the
+/// list, so it must be that parent container's background. Every library
+/// rail plus Home and Feeds sits inside a resting-surface parent (even while
+/// the list panel itself is focus-green), so they pass
+/// `palette::list_selected_row_bg()` (`SURFACE_RESTING`). Queue's parent is
+/// itself focus-green, so it passes `SURFACE_FOCUSED`.
 ///
 /// Row geometry: the flush edge marker sits at the paint rect's `x` (the
 /// panel border) and the title text is indented `LEFT_INSET` (2) columns in

@@ -151,6 +151,52 @@ fn wide_feeds_use_a_left_detail_and_right_entry_workspace() {
     }
 }
 
+/// migrate-home-feeds 4.6 regression: after the full arrangement paint the
+/// focused selected row's background must be the surface *containing* the
+/// list panel (`SURFACE_RESTING`), not the panel's own focus-green fill, and
+/// the rail-framing helper must not overpaint that bar. Unfocused, the row
+/// must be indistinguishable from the panel body (no bar).
+#[test]
+fn wide_feeds_selected_row_punches_through_to_the_resting_surface() {
+    fn selected_and_body_bg(focused: bool) -> (ratatui::style::Color, ratatui::style::Color) {
+        let subscriptions = vec![FeedSubscription {
+            name: "Test Feed".into(),
+            url: "https://example.test/feed".into(),
+            kind: FeedKind::Audio,
+        }];
+        let entries = vec![vec![
+            feed_entry("entry-1", "Entry One", false),
+            feed_entry("entry-2", "Played Entry Two", true),
+        ]];
+        let all_entries = entries[0].clone();
+        let mut component = FeedsComponent::new();
+        component.set_content(&subscriptions, &entries, &all_entries, false, focused);
+        let terminal = terminal_for(&mut component, 120, 30);
+        let layout = component.layout();
+        let buffer = terminal.backend().buffer();
+        let row_for = |target: usize| {
+            layout.left_area.y
+                + layout
+                    .left_row_map
+                    .iter()
+                    .position(|item| item == &Some(target))
+                    .expect("row present") as u16
+        };
+        (
+            buffer[(layout.left_area.x, row_for(0))].bg,
+            buffer[(layout.left_area.x, row_for(1))].bg,
+        )
+    }
+
+    let (selected, body) = selected_and_body_bg(true);
+    assert_eq!(selected, crate::app::palette::SURFACE_RESTING);
+    assert_eq!(body, crate::app::palette::resolve_surface_focus(true));
+    assert_ne!(selected, body);
+
+    let (selected, body) = selected_and_body_bg(false);
+    assert_eq!(selected, body, "unfocused rail shows no selection bar");
+}
+
 #[test]
 fn wide_feeds_reserve_borders_at_the_scrolled_bottom_boundary() {
     let entries = (0..8)

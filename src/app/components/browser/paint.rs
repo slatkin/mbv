@@ -46,7 +46,7 @@ impl BrowserComponent {
                 body_area,
                 &mut self.wide_list,
                 self.focused,
-                palette::SURFACE_RESTING,
+                palette::list_selected_row_bg(),
             );
             self.layout.left_item_rows = paint.left_item_rows;
             self.layout.left_row_map = paint.left_row_map;
@@ -143,6 +143,10 @@ impl BrowserComponent {
         };
 
         self.layout.left_area = content;
+        // Frame the rail before the row flow: the helper fills the whole
+        // panel background, so it must run before `render_wide_media_list`
+        // paints the selected-row bar (matches TV / Music ordering).
+        hero_on_left_list_panel_border(f, list_panel, self.focused);
         let final_scroll = if self.wide_list.is_empty() {
             crate::app::render::components::widgets::render_placeholder(
                 f,
@@ -161,7 +165,7 @@ impl BrowserComponent {
                 content,
                 &mut self.wide_list,
                 self.focused,
-                palette::SURFACE_RESTING,
+                palette::list_selected_row_bg(),
             );
             self.layout.left_item_rows = painted.left_item_rows;
             self.layout.left_row_map = painted.left_row_map;
@@ -198,7 +202,6 @@ impl BrowserComponent {
             self.image_paint = None;
         }
 
-        hero_on_left_list_panel_border(f, list_panel, self.focused);
         final_scroll
     }
 

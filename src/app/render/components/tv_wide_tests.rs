@@ -284,6 +284,35 @@ fn wide_tv_episode_list_uses_soft_accent_when_focused() {
     );
 }
 
+/// Library wide view: exactly one of the two panes carries the focus-green
+/// background at a time. When the episode (left) pane takes focus the right
+/// series rail must drop to `SURFACE_RESTING`, never stay green.
+#[test]
+fn wide_tv_left_focus_drops_the_right_rail_to_the_resting_surface() {
+    let app = tv_app();
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(
+        app.wide_tv_render_ctx(0, true, None)
+            .with_image_state(false, false),
+    );
+    component.on(&tuirealm::event::Event::Keyboard(
+        tuirealm::event::KeyEvent {
+            code: tuirealm::event::Key::Right,
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        },
+    ));
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal.draw(|f| component.view(f, f.area())).unwrap();
+
+    let rail = component.test_layout().tv_wide_list_area;
+    // A row two below the letter heading is panel body, not the selected row.
+    assert_eq!(
+        terminal.backend().buffer()[(rail.x, rail.y + 2)].bg,
+        palette::SURFACE_RESTING,
+        "right rail must lose focus-green when the episode pane is focused"
+    );
+}
+
 #[test]
 fn wide_tv_focused_series_browser_uses_focused_surface() {
     fn render(focused: bool) -> (ratatui::buffer::Buffer, LayoutMain) {

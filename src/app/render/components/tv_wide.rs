@@ -254,7 +254,8 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     layout.tv_wide_list_area = list_area;
     if list_panel.height > 0 {
         f.render_widget(
-            Block::default().style(palette::resolve_surface_focus(right_focused)),
+            Block::default()
+                .style(Style::default().bg(palette::resolve_surface_focus(right_focused))),
             list_panel,
         );
     }
@@ -275,7 +276,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         list_area,
         media_list,
         right_focused,
-        palette::SURFACE_RESTING,
+        palette::list_selected_row_bg(),
     );
     layout.left_item_rows = paint.left_item_rows;
     layout.left_row_map = paint.left_row_map;

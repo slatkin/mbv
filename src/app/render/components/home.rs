@@ -413,19 +413,10 @@ pub(in crate::app) fn render_home_content(
     // single-column layout since it also drives the wide panel's
     // top/bottom border rule, which the single-column layout doesn't
     // have.
-    // Selected-row highlight colour: the wide layout's list panel is
-    // itself green while focused, so the dark `SURFACE_BACKDROP` bar
-    // reads against it. The single-column layout has no such green
-    // panel (its surrounding surface is the ordinary `SURFACE_BACKDROP`
-    // library background, same as every other inline browser), so it
-    // uses the same lighter `SURFACE_RESTING` highlight movies/TV lists
-    // use (`list_rows.rs`'s `build_list_row_spans`) to stay visible
-    // against that darker backdrop.
-    let selection_bg = if green_panel_full.is_some() {
-        palette::SURFACE_BACKDROP
-    } else {
-        palette::SURFACE_RESTING
-    };
+    // Selected-row highlight colour: the row punches through to the surface
+    // containing the list panel, which is a resting surface in both layouts
+    // (the wide list panel is focus-green, but its parent container is not).
+    let selection_bg = palette::list_selected_row_bg();
 
     // Keep the row immediately below the Home pill bar free of list text.
     // The wide layout uses the list panel surface; the single-column
@@ -450,6 +441,13 @@ pub(in crate::app) fn render_home_content(
             image_paint =
                 home_hero::render_home_hero_content(f, hero_data, true, focused, use_nerd_fonts);
         }
+    }
+
+    // Frame the wide rail before the row flow: the helper fills the whole
+    // panel background, so it must run before the canonical control paints
+    // the selected-row bar (matches TV / Music ordering).
+    if let Some(panel) = green_panel_full {
+        hero_left::hero_on_left_list_panel_border(f, panel, focused);
     }
 
     // Paint the active canonical control into the list area and rebuild the
@@ -516,10 +514,6 @@ pub(in crate::app) fn render_home_content(
         };
         (hitmap, selected_item_rect)
     };
-
-    if let Some(panel) = green_panel_full {
-        hero_left::hero_on_left_list_panel_border(f, panel, focused);
-    }
 
     HomeContentOutput {
         hitmap,

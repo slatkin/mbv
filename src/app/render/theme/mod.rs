@@ -82,3 +82,15 @@ pub fn resolve_surface_focus(focused: bool) -> Color {
         SURFACE_RESTING
     }
 }
+
+/// The focused selected-row background for a canonical media list. The row
+/// "punches through" to the surface *containing* the panel that holds the
+/// list, not the list panel itself. Every library rail plus Home and Feeds
+/// sits inside a resting-surface parent — even while the list panel is
+/// focused-green — so this is the constant [`SURFACE_RESTING`], not
+/// `resolve_surface_focus(focused)`. Queue is the one non-library caller
+/// whose parent is itself focus-green; it passes [`SURFACE_FOCUSED`]
+/// directly instead of calling this.
+pub fn list_selected_row_bg() -> Color {
+    SURFACE_RESTING
+}

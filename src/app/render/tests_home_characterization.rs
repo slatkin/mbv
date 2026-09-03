@@ -189,6 +189,47 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
     );
 }
 
+/// migrate-home-feeds 4.6 regression: after the full wide-Home arrangement
+/// paint the focused selected row's background is the surface *containing*
+/// the list panel (`SURFACE_RESTING`) — not the panel's focus-green fill and
+/// not the old `SURFACE_BACKDROP` — and the rail-framing helper (now run
+/// before the row flow) must not overpaint it. Unfocused: no bar.
+#[test]
+fn wide_home_selected_row_punches_through_to_the_resting_surface() {
+    let bgs = |focused: bool| {
+        let mut app = home_app();
+        if !focused {
+            app.panel_focus = PanelFocus::Queue;
+        }
+        let cw_item = emby_cw_item();
+        let (model, terminal) = render_home_shell_with(app, 160, 40, |m| {
+            m.home_content.continue_items = vec![cw_item];
+        });
+        let home = model
+            .application
+            .get_component(&ComponentId::Home)
+            .expect("Home component mounted")
+            .as_any()
+            .downcast_ref::<HomeComponent>()
+            .expect("Home component type");
+        let (_, selected) = home.menu_placement_geometry();
+        let selected = selected.expect("wide Home publishes a selected-row rect");
+        let buffer = terminal.backend().buffer();
+        (
+            buffer[(selected.x, selected.y)].style().bg,
+            buffer[(selected.x, selected.y + 1)].style().bg,
+        )
+    };
+
+    let (selected, body) = bgs(true);
+    assert_eq!(selected, Some(palette::SURFACE_RESTING));
+    assert_eq!(body, Some(palette::resolve_surface_focus(true)));
+    assert_ne!(selected, body);
+
+    let (selected, body) = bgs(false);
+    assert_eq!(selected, body, "unfocused wide Home shows no selection bar");
+}
+
 #[test]
 fn narrow_home_list_surface_tracks_panel_focus() {
     let render = |focus| {
