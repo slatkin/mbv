@@ -259,15 +259,28 @@ impl BrowserComponent {
             } else {
                 item.display_name()
             };
+            let semantic_state = if item.playback_position_ticks > 0 && !item.played {
+                let progress = if item.runtime_ticks > 0 {
+                    Some(
+                        ((item.playback_position_ticks as u64 * 100) / item.runtime_ticks as u64)
+                            .min(100) as u16,
+                    )
+                } else {
+                    None
+                };
+                MediaSemanticState::active(progress)
+            } else if item.played {
+                MediaSemanticState::Played
+            } else {
+                MediaSemanticState::Ordinary
+            };
             MediaListRow::Item {
                 target: index,
                 primary,
                 trailing: (!item.is_folder && item.production_year > 0)
                     .then(|| item.production_year.to_string()),
                 duration: None,
-                // The legacy Wide rail painters colour every row through
-                // `focused_or_subtle` with no played/active dimming.
-                semantic_state: MediaSemanticState::Ordinary,
+                semantic_state,
             }
         };
         let grouped =
