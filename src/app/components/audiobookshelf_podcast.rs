@@ -14,11 +14,12 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::media_list::{InlineMediaBrowser, ViewportAnchor};
 use super::msg::{Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{
-    render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry, HomeImagePaint,
-    PodcastInteraction,
+    render_audiobookshelf_podcast_content, shared_hero_presentation, AudiobookshelfPodcastGeometry,
+    HomeImagePaint, PodcastInteraction,
 };
 use crate::app::types_audiobookshelf_browse::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
@@ -36,6 +37,18 @@ pub struct AudiobookshelfPodcastComponent {
     images_enabled: bool,
     geometry: AudiobookshelfPodcastGeometry,
     image_paint: Option<HomeImagePaint>,
+    /// Persistent narrow-presentation control, fed the canonical show-row
+    /// projection by the renderer each frame. Never constructed during a
+    /// render pass. The wide rail composes its own per-frame `WideMediaList`.
+    narrow_list: InlineMediaBrowser<String>,
+    /// One-shot `ViewportAnchor` carried across a Wide<->Narrow breakpoint
+    /// flip (§2.5); consumed by the next `view`.
+    pending_anchor: Option<ViewportAnchor<String>>,
+    /// The presentation the last `view` painted; `None` before the first paint.
+    last_wide: Option<bool>,
+    /// Selected-row screen offset captured each `view`, so `viewport_anchor`
+    /// can report the outgoing control's anchor at a flip.
+    painted_row_offset: Option<usize>,
 }
 
 impl AudiobookshelfPodcastComponent {
@@ -56,7 +69,20 @@ impl AudiobookshelfPodcastComponent {
             images_enabled: false,
             geometry: AudiobookshelfPodcastGeometry::default(),
             image_paint: None,
+            narrow_list: InlineMediaBrowser::new(),
+            pending_anchor: None,
+            last_wide: None,
+            painted_row_offset: None,
         }
+    }
+
+    /// The outgoing control's `ViewportAnchor` for the last painted
+    /// presentation (mirrors `MusicWorkspaceComponent::viewport_anchor`).
+    fn viewport_anchor(&self) -> Option<ViewportAnchor<String>> {
+        Some(ViewportAnchor {
+            selected_target: self.state.selected_id.clone()?,
+            selected_row_offset: self.painted_row_offset?,
+        })
     }
 
     pub(in crate::app) fn set_content(
@@ -357,6 +383,26 @@ impl Default for AudiobookshelfPodcastComponent {
 
 impl Component for AudiobookshelfPodcastComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
+        let wide = shared_hero_presentation(area).is_some();
+        // §2.5: at a breakpoint flip carry the outgoing control's anchor into
+        // the incoming one so the selected show keeps its screen-row offset.
+        if let Some(was_wide) = self.last_wide {
+            if was_wide != wide && self.pending_anchor.is_none() {
+                self.pending_anchor = self.viewport_anchor();
+            }
+        }
+        let flip_anchor = self.pending_anchor.take();
+        if let Some(anchor) = &flip_anchor {
+            if let Some(idx) = self
+                .state
+                .shows
+                .iter()
+                .position(|show| show.library_item_id == anchor.selected_target)
+            {
+                self.state.select(idx);
+            }
+        }
+
         self.image_paint = render_audiobookshelf_podcast_content(
             frame,
             area,
@@ -368,8 +414,13 @@ impl Component for AudiobookshelfPodcastComponent {
                 episode_selection: self.episode_selection,
             },
             &mut self.scroll,
+            &mut self.narrow_list,
+            flip_anchor.as_ref(),
             &mut self.geometry,
         );
+
+        self.painted_row_offset = self.geometry.selected_row_offset;
+        self.last_wide = Some(wide);
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

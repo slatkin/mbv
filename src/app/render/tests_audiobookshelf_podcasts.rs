@@ -72,12 +72,14 @@ fn render_podcast_shell_with(
 }
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::tests_podcast::audiobookshelf_app;
-use crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
+use crate::app::types_audiobookshelf_browse::{
+    AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
+};
 use mbv_core::audiobookshelf::AudiobookshelfProgress;
 use mbv_core::audiobookshelf::AudiobookshelfShow;
 
 #[test]
-fn narrow_podcast_show_paint_matches_each_grid_hit_rect() {
+fn narrow_podcast_show_paint_matches_each_one_column_hit_rect() {
     let mut app = audiobookshelf_app();
     app.audiobookshelf_browse[0]
         .shows
@@ -107,15 +109,15 @@ fn narrow_podcast_show_paint_matches_each_grid_hit_rect() {
             )
         })
         .expect("podcast component mounted");
-    let first_row = rows
-        .iter()
-        .filter(|(rect, _)| rect.y == rows[0].0.y)
-        .collect::<Vec<_>>();
-    assert_eq!(first_row.len(), 2);
-    assert_eq!(first_row[0].0.width, 49);
-    assert_eq!(first_row[1].0.width, 49);
-    assert!(first_row[0].0.x + first_row[0].0.width <= first_row[1].0.x);
-    assert_eq!(list_area.width, 100);
+    // One column: at most one show row per screen y, each spanning the list.
+    for (rect, _) in &rows {
+        assert_eq!(
+            rows.iter().filter(|(other, _)| other.y == rect.y).count(),
+            1,
+            "one-column narrow podcast paints a single show per row"
+        );
+        assert_eq!(rect.width, list_area.width);
+    }
     let buffer = terminal.backend().buffer();
     for (rect, index) in rows {
         let title = if index == 0 {
@@ -480,4 +482,107 @@ fn wide_podcast_detail_preserves_episode_rows_and_played_filtering() {
         .expect("podcast component mounted");
     assert!(!episode_rows.is_empty());
     assert!(out.contains("Episode A"));
+}
+
+fn podcast_grid_state() -> AudiobookshelfBrowseState {
+    let library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
+        id: "lib".into(),
+        name: "Podcasts".into(),
+        media_type: "podcast".into(),
+    };
+    let mut state = AudiobookshelfBrowseState::new(library);
+    state.append_page(
+        0,
+        20,
+        12,
+        (0..12)
+            .map(|i| AudiobookshelfShow {
+                library_item_id: format!("show-{i}"),
+                title: format!("Show {i}"),
+                author: None,
+                description: None,
+                cover_path: None,
+            })
+            .collect(),
+    );
+    state.select(2);
+    state
+}
+
+/// §3.2 one-painter proof: the bespoke `render_show_rows` loop is gone. Each
+/// Podcast breakpoint runs exactly one canonical list painter -- the wide
+/// `WideMediaList` rail or the narrow persistent `InlineMediaBrowser` -- and
+/// never the plain-rows path.
+#[test]
+fn podcast_each_breakpoint_runs_exactly_one_canonical_list_painter() {
+    use crate::app::render::components::media_list::{
+        INLINE_MEDIA_BROWSER_PAINTS, PLAIN_ROWS_PAINTS, WIDE_MEDIA_LIST_PAINTS,
+    };
+    use tuirealm::component::Component;
+
+    let state = podcast_grid_state();
+    let reset = || {
+        WIDE_MEDIA_LIST_PAINTS.with(|c| c.set(0));
+        INLINE_MEDIA_BROWSER_PAINTS.with(|c| c.set(0));
+        PLAIN_ROWS_PAINTS.with(|c| c.set(0));
+    };
+
+    let mut wide = AudiobookshelfPodcastComponent::new();
+    wide.set_content(&state, true, false);
+    reset();
+    let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    term.draw(|f| wide.view(f, f.area())).unwrap();
+    assert_eq!(WIDE_MEDIA_LIST_PAINTS.with(std::cell::Cell::get), 1);
+    assert_eq!(INLINE_MEDIA_BROWSER_PAINTS.with(std::cell::Cell::get), 0);
+    assert_eq!(PLAIN_ROWS_PAINTS.with(std::cell::Cell::get), 0);
+
+    let mut narrow = AudiobookshelfPodcastComponent::new();
+    narrow.set_content(&state, true, false);
+    reset();
+    let mut term = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    term.draw(|f| narrow.view(f, f.area())).unwrap();
+    assert_eq!(INLINE_MEDIA_BROWSER_PAINTS.with(std::cell::Cell::get), 1);
+    assert_eq!(WIDE_MEDIA_LIST_PAINTS.with(std::cell::Cell::get), 0);
+    assert_eq!(PLAIN_ROWS_PAINTS.with(std::cell::Cell::get), 0);
+}
+
+/// §2.5: the selected show and its screen-row offset survive a
+/// Wide -> Narrow -> Wide breakpoint round trip through the component's
+/// internal `ViewportAnchor` hand-off.
+#[test]
+fn podcast_viewport_anchor_round_trips_across_wide_narrow_wide() {
+    use tuirealm::component::Component;
+
+    let mut state = podcast_grid_state();
+    state.select(state.shows.len() - 1);
+    let selected_id = state.selected_id.clone().unwrap();
+    let mut component = AudiobookshelfPodcastComponent::new();
+    component.set_content(&state, true, false);
+
+    let wide = Rect::new(0, 0, 120, 12);
+    let narrow = Rect::new(0, 0, 60, 12);
+    let mut term = Terminal::new(TestBackend::new(120, 12)).unwrap();
+
+    term.draw(|f| component.view(f, wide)).unwrap();
+    let wide_offset = component.geometry().selected_row_offset;
+    assert!(
+        wide_offset.is_some(),
+        "the bottom show scrolls the wide rail"
+    );
+    assert_eq!(component.cursor(), state.shows.len() - 1);
+
+    term.draw(|f| component.view(f, narrow)).unwrap();
+    assert_eq!(
+        component.selected_id().as_deref(),
+        Some(selected_id.as_str()),
+        "selection survives the wide -> narrow flip"
+    );
+
+    term.draw(|f| component.view(f, wide)).unwrap();
+    assert_eq!(component.cursor(), state.shows.len() - 1);
+    assert_eq!(
+        component.geometry().selected_row_offset,
+        wide_offset,
+        "the selected-row screen offset returns to the wide arrangement"
+    );
 }

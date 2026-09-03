@@ -225,19 +225,19 @@ fn view_narrow(component: &mut AudiobookshelfPodcastComponent, width: u16, heigh
 }
 
 #[test]
-fn abs_podcast_narrow_grid_navigation_uses_columns_and_page_rows() {
+fn abs_podcast_narrow_one_column_navigation_uses_page_rows() {
     let state = narrow_grid_component_state();
     let mut component = AudiobookshelfPodcastComponent::new();
     component.set_content(&state, true, false);
     view_narrow(&mut component, 100, 6);
-    assert_eq!(component.geometry().columns, 2);
+    assert_eq!(component.geometry().columns, 1);
     assert!(matches!(
         component.on(&Event::Keyboard(KeyEvent {
             code: Key::Down,
             modifiers: KeyModifiers::NONE
         })),
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 4
+            index: 3
         }))
     ));
     assert!(matches!(
@@ -246,7 +246,7 @@ fn abs_podcast_narrow_grid_navigation_uses_columns_and_page_rows() {
             modifiers: KeyModifiers::NONE
         })),
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 5
+            index: 4
         }))
     ));
     let mut page_component = AudiobookshelfPodcastComponent::new();
@@ -262,11 +262,11 @@ fn abs_podcast_narrow_grid_navigation_uses_columns_and_page_rows() {
         code: Key::PageDown,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(page_component.cursor(), 2 + page_rows * 2);
+    assert_eq!(page_component.cursor(), 2 + page_rows);
 }
 
 #[test]
-fn abs_podcast_wheel_moves_three_grid_rows_and_ignores_outside_list() {
+fn abs_podcast_wheel_moves_three_rows_and_ignores_outside_list() {
     let state = narrow_grid_component_state();
     let mut component = AudiobookshelfPodcastComponent::new();
     component.set_content(&state, true, false);
@@ -281,7 +281,7 @@ fn abs_podcast_wheel_moves_three_grid_rows_and_ignores_outside_list() {
     assert!(matches!(
         component.on(&Event::Mouse(inside)),
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 8
+            index: 5
         }))
     ));
     assert!(matches!(
@@ -309,38 +309,29 @@ fn abs_podcast_wheel_moves_three_grid_rows_and_ignores_outside_list() {
 }
 
 #[test]
-fn abs_podcast_grid_mouse_selects_second_column_and_bucket_start() {
+fn abs_podcast_row_mouse_selects_the_clicked_show_and_bucket_start() {
     let state = narrow_grid_component_state();
     let mut component = AudiobookshelfPodcastComponent::new();
     component.set_content(&state, true, false);
     view_narrow(&mut component, 100, 6);
     let rects = component.geometry().show_rows.clone();
-    let second = rects.iter().find(|(_, i)| *i == 1).unwrap().0;
+    let (rect, clicked) = rects
+        .iter()
+        .copied()
+        .find(|(_, i)| *i != component.cursor())
+        .expect("a non-selected show row is painted");
     let msg = component.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
-        column: second.x + second.width / 2,
-        row: second.y,
+        column: rect.x + rect.width / 2,
+        row: rect.y,
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(matches!(
+    assert_eq!(
         msg,
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 1
+            index: clicked
         }))
-    ));
-    let first = rects.iter().find(|(_, i)| *i == 0).unwrap().0;
-    let msg = component.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: first.x + first.width / 2,
-        row: first.y,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert!(matches!(
-        msg,
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 0
-        }))
-    ));
+    );
     let bucket = component.geometry().selector_tabs[0].0;
     let msg = component.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),

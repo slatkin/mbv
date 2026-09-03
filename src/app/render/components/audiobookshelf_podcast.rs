@@ -1,20 +1,28 @@
-use crate::app::render::arrangements::hero_left;
+use crate::app::components::media_list::{
+    InlineMediaBrowser, MediaListRow, MediaSemanticState, RowGeometry, ViewportAnchor,
+    WideMediaList,
+};
+use crate::app::render::arrangements::hero_left::{
+    self, hero_on_left_list_panel_border, hero_on_left_right_pane, PANE_PAD_X, PANE_PAD_Y,
+};
+use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::detail_series_view::{
     SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
     SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS,
 };
 use crate::app::render::components::hero::{
-    inline_detail_flow, inline_display_row, inline_display_row_count, inline_hero_text_width,
-    selected_detail_shell, wrap_overview_lines, HeroContent, HeroImage, HeroLine,
-    HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
+    inline_hero_text_width, selected_detail_shell, wrap_overview_lines, HeroContent, HeroImage,
+    HeroLine, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
+use crate::app::render::components::media_list::{
+    render_inline_media_browser, render_wide_media_list,
+};
 use crate::app::render::{render_pill_bar, render_placeholder, HomeImagePaint, PillBar};
 use crate::app::types_audiobookshelf_browse::{
     build_show_title_buckets, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
 };
-use crate::app::ui_util::trunc_str;
-use unicode_width::UnicodeWidthStr;
+use mbv_core::audiobookshelf::AudiobookshelfShow;
 
 /// Podcast hero content row budget, shared by the legacy `App` narrow
 /// renderer and `AudiobookshelfPodcastComponent`'s narrow path so both admit
@@ -71,11 +79,11 @@ pub(in crate::app::render) fn podcast_hero_content_rows(
     }
     rows
 }
-use crate::app::{library_column_width, palette};
+use crate::app::palette;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{List, ListItem, Paragraph};
+use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 
 /// The component-owned interaction values the podcast renderer needs, passed
@@ -114,8 +122,90 @@ pub(in crate::app) struct AudiobookshelfPodcastGeometry {
     /// shell today; `None` in the wide layout, which has no selected-item
     /// shell). Mirrors the legacy `LayoutMain.selected_item_rect`.
     pub selected_item_rect: Option<Rect>,
+    /// Screen-row offset of the selected list row from the viewport top, for
+    /// the `ViewportAnchor` read side (§2.5). `None` when nothing is
+    /// selected/visible. Not a paint rect; consumed by the component only.
+    pub selected_row_offset: Option<usize>,
 }
 
+/// Canonical row projection for the podcast show list: one selectable `Item`
+/// per show, keyed by its stable `library_item_id`. Podcast shows carry no
+/// in-list letter headings (the alphabetical buckets are a pill row) and no
+/// played/active semantic state.
+fn podcast_show_rows(shows: &[AudiobookshelfShow]) -> Vec<MediaListRow<String>> {
+    shows
+        .iter()
+        .map(|show| MediaListRow::Item {
+            target: show.library_item_id.clone(),
+            primary: show.title.clone(),
+            trailing: None,
+            duration: None,
+            semantic_state: MediaSemanticState::Ordinary,
+        })
+        .collect()
+}
+
+/// Paints the shared alphabetical bucket pill row and records its hit targets.
+fn paint_bucket_pills(
+    frame: &mut Frame,
+    pills_area: Rect,
+    state: &AudiobookshelfBrowseState,
+    geometry: &mut AudiobookshelfPodcastGeometry,
+) {
+    let buckets = build_show_title_buckets(&state.shows);
+    let selected_bucket = buckets
+        .iter()
+        .position(|bucket| state.cursor() >= bucket.start && state.cursor() < bucket.end)
+        .unwrap_or(0);
+    let labels: Vec<String> = buckets.iter().map(|bucket| bucket.label.into()).collect();
+    let ids: Vec<usize> = (0..labels.len()).collect();
+    geometry.selector_tabs = render_pill_bar(
+        frame,
+        pills_area,
+        PillBar {
+            labels: &labels,
+            ids: &ids,
+            selected_pos: selected_bucket,
+            prefix: Some(" \u{2318} "),
+        },
+    );
+}
+
+/// Rebuilds the mouse-compat `show_rows` map from the painted flow geometry:
+/// each visible source row that resolves to a show index gets its screen rect.
+/// Replacement/detail rows (no source row) are skipped, so a selected show
+/// whose row the inline hero swallowed owns no `show_rows` entry.
+fn push_show_rows(
+    geo: &RowGeometry<String>,
+    area: Rect,
+    shows: &[AudiobookshelfShow],
+    geometry: &mut AudiobookshelfPodcastGeometry,
+) {
+    let offset = geo.offset();
+    let targets: Vec<Option<&String>> = geo.targets().collect();
+    for (screen_row, flow_row) in (offset..geo.len()).take(area.height as usize).enumerate() {
+        if geo.source_row(flow_row).is_none() {
+            continue;
+        }
+        let Some(Some(id)) = targets.get(flow_row) else {
+            continue;
+        };
+        let Some(index) = shows.iter().position(|show| &show.library_item_id == *id) else {
+            continue;
+        };
+        geometry.show_rows.push((
+            Rect {
+                x: area.x,
+                y: area.y + screen_row as u16,
+                width: area.width,
+                height: 1,
+            },
+            index,
+        ));
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(in crate::app) fn render_audiobookshelf_podcast_content(
     frame: &mut Frame,
     area: Rect,
@@ -124,6 +214,8 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     state: &mut AudiobookshelfBrowseState,
     interaction: PodcastInteraction,
     scroll: &mut usize,
+    narrow_list: &mut InlineMediaBrowser<String>,
+    flip_anchor: Option<&ViewportAnchor<String>>,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
     *geometry = AudiobookshelfPodcastGeometry::default();
@@ -136,15 +228,27 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
             state,
             interaction,
             scroll,
+            narrow_list,
+            flip_anchor,
             geometry,
         );
     };
 
-    // Wide hero: title lives in the right show-list panel, so the hero
-    // body carries only author/description/image (matches legacy
-    // `render_audiobookshelf_hero` `show_title = false`). Persistent-
-    // mode episode pills + table are wide-only (narrow routes Enter to
-    // the selection modal instead).
+    // Wide layout: the list/browser occupies the right pane; the hero panel is
+    // the painted hero. No inline hero and no selected-item shell exist here.
+    geometry.columns = 1;
+    geometry.list_area = right_panel;
+    geometry.right_area = right_panel;
+    let right_pane = hero_on_left_right_pane(right_panel, right_panel);
+    if !state.shows.is_empty() {
+        // Bucket pills before the hero so its wide-only episode-filter pills
+        // append after them in `selector_tabs`.
+        paint_bucket_pills(frame, right_pane.pills_area, state, geometry);
+    }
+
+    // Wide hero: title lives in the right show-list panel, so the hero body
+    // carries only author/description/image. Persistent-mode episode pills +
+    // table are wide-only.
     let image_paint = render_podcast_hero(
         frame,
         hero_panel,
@@ -156,12 +260,6 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         true,
         geometry,
     );
-    // Wide layout: the list/browser occupies the right panel; the hero panel
-    // is the painted hero. No inline hero and no selected-item shell exist in
-    // this layout (the right panel paints an ordinary show grid).
-    geometry.list_area = right_panel;
-    geometry.right_area = right_panel;
-    geometry.columns = 1;
     if state.shows.is_empty() {
         render_placeholder(frame, right_panel, "No podcast shows");
         return image_paint;
@@ -169,7 +267,47 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     if state.selected_show().is_some() {
         geometry.hero_area = hero_panel;
     }
-    render_show_rows(frame, right_panel, focused, state, 1, 0, *scroll, geometry);
+
+    let list_panel = right_pane.list_panel;
+    let content_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
+    if list_panel.height > 0 {
+        frame.render_widget(
+            Block::default().style(Style::default().bg(palette::resolve_surface_focus(focused))),
+            list_panel,
+        );
+    }
+    // Paint the rail frame before the rows: the border primitive rewrites every
+    // panel cell background, so it must not run after the canonical list.
+    hero_on_left_list_panel_border(frame, list_panel, focused);
+
+    let mut media: WideMediaList<String> = WideMediaList::new();
+    media.set_content(podcast_show_rows(&state.shows));
+    if let Some(id) = state.selected_id.as_ref() {
+        media.select_target(id);
+    }
+    media.set_scroll(*scroll);
+    if let Some(anchor) = flip_anchor {
+        media.apply_viewport_anchor(anchor, content_area.height.max(1) as usize);
+    }
+    let paint_area = Rect {
+        x: list_panel.x,
+        width: list_panel.width,
+        ..content_area
+    };
+    let paint = render_wide_media_list(
+        frame,
+        paint_area,
+        content_area,
+        &mut media,
+        focused,
+        palette::list_selected_row_bg(),
+    );
+    *scroll = media.scroll();
+    geometry.selected_row_offset = paint
+        .row_geometry
+        .selected_row()
+        .map(|row| row.saturating_sub(paint.row_geometry.offset()));
+    push_show_rows(&paint.row_geometry, content_area, &state.shows, geometry);
     image_paint
 }
 
@@ -182,85 +320,72 @@ fn render_narrow_podcast(
     state: &mut AudiobookshelfBrowseState,
     interaction: PodcastInteraction,
     scroll: &mut usize,
+    narrow_list: &mut InlineMediaBrowser<String>,
+    flip_anchor: Option<&ViewportAnchor<String>>,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
+    geometry.columns = 1;
     if state.shows.is_empty() {
         render_placeholder(
             frame,
             area,
             state.error.as_deref().unwrap_or("No podcast shows"),
         );
-        // Narrow with no shows: the whole area is the (empty) browser; no
-        // hero, right panel, or selected-item shell exists.
+        // Narrow with no shows: the whole area is the (empty) browser.
         geometry.list_area = area;
         return None;
     }
     let parts = hero_left::pill_bar_areas(area);
-    let buckets = build_show_title_buckets(&state.shows);
-    let selected_bucket = buckets
-        .iter()
-        .position(|bucket| state.cursor() >= bucket.start && state.cursor() < bucket.end)
-        .unwrap_or(0);
-    let labels: Vec<String> = buckets.iter().map(|bucket| bucket.label.into()).collect();
-    let ids: Vec<usize> = (0..labels.len()).collect();
-    geometry.selector_tabs = render_pill_bar(
-        frame,
-        parts.pills_area,
-        PillBar {
-            labels: &labels,
-            ids: &ids,
-            selected_pos: selected_bucket,
-            prefix: Some(" ⌘ "),
-        },
-    );
+    paint_bucket_pills(frame, parts.pills_area, state, geometry);
 
-    let list_area = parts.content_area;
-    geometry.list_area = list_area;
-    geometry.columns = library_column_width::library_column_count(list_area.width).max(1);
-    let hero_content_width = list_area
+    let content_area = parts.content_area;
+    geometry.list_area = content_area;
+
+    narrow_list.set_content(podcast_show_rows(&state.shows));
+    if let Some(id) = state.selected_id.as_ref() {
+        narrow_list.select_target(id);
+    }
+    narrow_list.set_scroll(*scroll);
+    let visible = content_area.height.max(1) as usize;
+    if let Some(anchor) = flip_anchor {
+        narrow_list.apply_viewport_anchor(anchor, visible);
+    }
+
+    let hero_content_width = content_area
         .width
         .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
-    let desired_rows =
+    let desired_detail_rows =
         podcast_hero_content_rows(state, interaction, true, hero_content_width, images_enabled)
-            + HERO_BLOCK_EXTRA_ROWS;
-    let hero_rows = if desired_rows >= HERO_BLOCK_EXTRA_ROWS && desired_rows < list_area.height {
-        desired_rows
-    } else {
-        0
-    };
-    render_show_rows(
+            as usize
+            + HERO_BLOCK_EXTRA_ROWS as usize;
+
+    let result = render_inline_media_browser(
         frame,
-        list_area,
+        content_area,
+        &*narrow_list,
+        desired_detail_rows,
         focused,
-        state,
-        geometry.columns,
-        hero_rows,
-        *scroll,
-        geometry,
+        palette::list_selected_row_bg(),
     );
-    if hero_rows == 0 {
+    let geo = &result.row_geometry;
+    *scroll = geo.offset();
+    narrow_list.set_scroll(geo.offset());
+    geometry.selected_row_offset = narrow_list.selected_row_offset(visible);
+    push_show_rows(geo, content_area, &state.shows, geometry);
+
+    let Some(hero_area) = result.hero_area else {
+        // Ordinary-row fallback: no inline hero, no selected-item shell.
+        geometry.selected_item_rect = geo.selected_row_rect(content_area);
         return None;
-    }
-    let cursor_row = state.cursor() / geometry.columns.max(1);
-    let flow = inline_detail_flow(cursor_row, hero_rows, list_area.height, *scroll)?;
-    *scroll = flow.offset;
-    let hero_area = Rect {
-        x: list_area.x,
-        y: list_area.y + flow.detail_screen_row as u16,
-        width: list_area.width,
-        height: hero_rows,
     };
-    selected_detail_shell(frame, hero_area, hero_rows, focused);
-    // Narrow inline hero admitted: the painted hero is both the inline hero
-    // and the selected-item shell the shell anchors overlays to.
+    selected_detail_shell(frame, hero_area, hero_area.height, focused);
+    // Narrow inline hero admitted: the painted hero is both the inline hero and
+    // the selected-item shell the shell anchors overlays to.
     geometry.hero_area = hero_area;
     geometry.inline_hero_area = hero_area;
     geometry.selected_item_rect = Some(hero_area);
-    // Narrow inline hero: title is painted (the selected show row is
-    // replaced, so the hero must carry its own title); persistent-
-    // mode episode pills + table are suppressed (Enter opens the
-    // selection modal instead). Matches legacy `show_title = true`,
-    // `persistent = false`.
+    // Narrow inline hero: title is painted (the selected show row is replaced);
+    // persistent-mode episode pills + table are suppressed.
     render_podcast_hero(
         frame,
         hero_area,
@@ -380,105 +505,6 @@ fn render_podcast_hero(
         library_item_id: show.library_item_id.clone(),
         show_placeholder: true,
     })
-}
-
-fn render_show_rows(
-    frame: &mut Frame,
-    area: Rect,
-    focused: bool,
-    state: &AudiobookshelfBrowseState,
-    cols: usize,
-    hero_rows: u16,
-    scroll: usize,
-    geometry: &mut AudiobookshelfPodcastGeometry,
-) {
-    let cols = cols.max(1);
-    let rows: Vec<Vec<usize>> = state
-        .shows
-        .iter()
-        .enumerate()
-        .collect::<Vec<_>>()
-        .chunks(cols)
-        .map(|chunk| chunk.iter().map(|(index, _)| *index).collect())
-        .collect();
-    let cursor_row = rows
-        .iter()
-        .position(|row| row.contains(&state.cursor()))
-        .unwrap_or(0);
-    let total_display = inline_display_row_count(rows.len(), cursor_row, hero_rows);
-    let scroll = if hero_rows > 0 {
-        inline_detail_flow(cursor_row, hero_rows, area.height, scroll)
-            .map(|flow| flow.offset)
-            .unwrap_or(0)
-    } else {
-        scroll.min(total_display.saturating_sub(area.height as usize))
-    };
-    let items: Vec<ListItem> = (scroll..total_display)
-        .take(area.height as usize)
-        .map(|display_row| {
-            match inline_display_row(rows.len(), cursor_row, hero_rows, display_row) {
-                Some(crate::app::render::components::hero::InlineDisplayRow::Replacement) => {
-                    ListItem::new(Line::default())
-                }
-                Some(crate::app::render::components::hero::InlineDisplayRow::Source(
-                    source_row,
-                )) => {
-                    let cell_width = library_column_width::library_cell_width(area, cols) as usize;
-                    let text = rows[source_row]
-                        .iter()
-                        .enumerate()
-                        .map(|(column, index)| {
-                            let marker = if *index == state.cursor() && focused {
-                                "> "
-                            } else {
-                                "  "
-                            };
-                            let title_width = cell_width.saturating_sub(marker.width());
-                            let cell = format!(
-                                "{marker}{}",
-                                trunc_str(&state.shows[*index].title, title_width)
-                            );
-                            let padding = " ".repeat(cell_width.saturating_sub(cell.width()));
-                            if column + 1 < rows[source_row].len() {
-                                format!(
-                                    "{cell}{padding}{}",
-                                    " ".repeat(library_column_width::LIBRARY_COLUMN_GAP as usize)
-                                )
-                            } else {
-                                format!("{cell}{padding}")
-                            }
-                        })
-                        .collect::<String>();
-                    ListItem::new(text)
-                }
-                None => ListItem::new(Line::default()),
-            }
-        })
-        .collect();
-    for (screen_row, display_row) in (scroll..total_display)
-        .take(area.height as usize)
-        .enumerate()
-    {
-        if let Some(crate::app::render::components::hero::InlineDisplayRow::Source(source_row)) =
-            inline_display_row(rows.len(), cursor_row, hero_rows, display_row)
-        {
-            let cell_width = library_column_width::library_cell_width(area, cols);
-            for (column, index) in rows[source_row].iter().enumerate() {
-                geometry.show_rows.push((
-                    Rect {
-                        x: area.x
-                            + column as u16
-                                * (cell_width + library_column_width::LIBRARY_COLUMN_GAP),
-                        y: area.y + screen_row as u16,
-                        width: cell_width,
-                        height: 1,
-                    },
-                    *index,
-                ));
-            }
-        }
-    }
-    frame.render_widget(List::new(items), area);
 }
 
 #[cfg(test)]

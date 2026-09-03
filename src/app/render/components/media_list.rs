@@ -26,6 +26,8 @@ thread_local! {
         const { std::cell::Cell::new(0) };
     pub(in crate::app) static PLAIN_ROWS_PAINTS: std::cell::Cell<usize> =
         const { std::cell::Cell::new(0) };
+    pub(in crate::app) static INLINE_MEDIA_BROWSER_PAINTS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
 }
 
 /// Canonical fixed-row render path for the canonical media-list controls.
@@ -372,6 +374,8 @@ pub(in crate::app) fn render_inline_media_browser<Target: Clone>(
     focused: bool,
     selected_bg: Color,
 ) -> InlinePaintResult<Target> {
+    #[cfg(test)]
+    INLINE_MEDIA_BROWSER_PAINTS.with(|count| count.set(count.get() + 1));
     let layout: InlineLayout<Target> =
         list.resolve_inline_layout(area.height as usize, desired_detail_rows);
     let geometry = layout.row_geometry;
