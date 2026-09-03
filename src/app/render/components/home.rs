@@ -396,13 +396,9 @@ pub(in crate::app) fn render_home_content(
         // painter is handed a full-width, vertically-inset paint rect.
         padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y)
     } else {
-        // Narrow Home (and the empty-wide fallback) still owns a focus-aware
-        // list surface; only wide hero/list layouts have a separate panel.
-        let panel_bg = palette::resolve_surface_focus(focused);
-        f.render_widget(
-            Block::default().style(Style::default().bg(panel_bg)),
-            list_area,
-        );
+        // Narrow Home leaves the `chrome.rs` SURFACE_BACKDROP showing behind
+        // its rows (Movies narrow parity); the inline hero shell then reads as
+        // a recessed card against it. Reverts the 14fb8435 pane flood.
         list_area
     };
     // The selected row's full-width background fill uses this rect in

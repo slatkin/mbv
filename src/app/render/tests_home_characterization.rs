@@ -230,33 +230,60 @@ fn wide_home_selected_row_punches_through_to_the_resting_surface() {
     assert_eq!(selected, body, "unfocused wide Home shows no selection bar");
 }
 
+/// migrate-home-feeds 4.6 regression: narrow Home no longer floods the whole
+/// list pane with `resolve_surface_focus(focused)` (reverts 14fb8435). The
+/// focus-aware surface now lives only on the inline-hero shell. Narrow Home is
+/// only reachable while its mini-view half holds focus, so there is no
+/// unfocused narrow case to characterize — the shell just has to carry the
+/// focused surface.
 #[test]
-fn narrow_home_list_surface_tracks_panel_focus() {
-    let render = |focus| {
-        let mut app = home_app();
-        app.panel_focus = focus;
-        let (model, terminal) = render_home_shell_with(app, 60, 20, |m| {
-            m.home_content.continue_items = vec![emby_cw_item()];
-        });
-        let home = model
-            .application
-            .get_component(&ComponentId::Home)
-            .expect("Home component mounted")
-            .as_any()
-            .downcast_ref::<HomeComponent>()
-            .expect("Home component type");
-        let (area, _) = home.menu_placement_geometry();
-        let expected = palette::resolve_surface_focus(focus == PanelFocus::Library);
-        let matches = (area.left()..area.right())
-            .flat_map(|x| (area.top()..area.bottom()).map(move |y| (x, y)))
-            .filter(|&(x, y)| terminal.backend().buffer()[(x, y)].style().bg == Some(expected))
-            .count();
-        assert!(
-            matches > 0,
-            "list surface missing focus background in {focus:?}"
-        );
-    };
+fn narrow_home_hero_shell_carries_the_focus_surface() {
+    let app = home_app();
+    let (model, terminal) = render_home_shell_with(app, 60, 40, |m| {
+        m.home_content.continue_items = vec![emby_cw_item()];
+    });
+    let home = model
+        .application
+        .get_component(&ComponentId::Home)
+        .expect("Home component mounted")
+        .as_any()
+        .downcast_ref::<HomeComponent>()
+        .expect("Home component type");
+    let hero = home.hero_area().expect("narrow Home paints an inline hero");
+    let expected = palette::resolve_surface_focus(true);
+    let matches = (hero.left()..hero.right())
+        .flat_map(|x| (hero.top()..hero.bottom()).map(move |y| (x, y)))
+        .filter(|&(x, y)| terminal.backend().buffer()[(x, y)].style().bg == Some(expected))
+        .count();
+    assert!(matches > 0, "hero shell missing the focus surface");
+}
 
-    render(PanelFocus::Library);
-    render(PanelFocus::Queue);
+/// migrate-home-feeds 4.6 regression: focused narrow Home with an inline hero
+/// reads as a recessed card — the hero-shell background differs from the pane
+/// backdrop showing behind non-selected rows (Movies narrow parity). Before
+/// the 14fb8435 revert the pane flood made the two identical.
+#[test]
+fn narrow_home_inline_hero_contrasts_with_pane_backdrop() {
+    let app = home_app();
+    let (model, terminal) = render_home_shell_with(app, 60, 40, |m| {
+        m.home_content.continue_items = vec![emby_cw_item()];
+    });
+    let home = model
+        .application
+        .get_component(&ComponentId::Home)
+        .expect("Home component mounted")
+        .as_any()
+        .downcast_ref::<HomeComponent>()
+        .expect("Home component type");
+    let (area, _) = home.menu_placement_geometry();
+    let hero = home.hero_area().expect("narrow Home paints an inline hero");
+    let buffer = terminal.backend().buffer();
+
+    let hero_bg = buffer[(hero.x + 1, hero.y + 1)].style().bg;
+    assert_eq!(hero_bg, Some(palette::resolve_surface_focus(true)));
+
+    // A row cell above the hero: pane backdrop from `chrome.rs`, never flooded.
+    let backdrop_bg = buffer[(area.x, hero.y.saturating_sub(1))].style().bg;
+    assert_eq!(backdrop_bg, Some(palette::SURFACE_BACKDROP));
+    assert_ne!(hero_bg, backdrop_bg, "hero must read as a recessed card");
 }
