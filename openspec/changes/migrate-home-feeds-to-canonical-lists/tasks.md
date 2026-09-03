@@ -20,8 +20,8 @@
 ## 4. Tests, gates, review, and acceptance
 
 - [x] 4.1 Add/update the smallest focused stateful, rendered, and geometry tests with metadata-, grouping-, focus-, progress-, watched-, image-, and breakpoint-bearing fixtures; cover structural-row indexing, ordinary-refresh target retention, and target/offset anchoring.
-- [ ] 4.2 Attach one-painter evidence and source-trace absence proofs scoped against the in-tree `173bdba1`/`400c0b59` starting state; verify no parent underpaint, no render-offset write-back, no parent cursor/scroll mirrors, per-frame child construction, second router, global hit map, callback/provider framework, or authority leak.
-- [ ] 4.3 Run `rtk make check-code-file-lines` and ensure every changed source file is ≤800 lines.
-- [ ] 4.4 Run `rtk openspec validate migrate-home-feeds-to-canonical-lists --strict`.
-- [ ] 4.5 Run `rtk cargo fmt --all -- --check`, `rtk cargo check --workspace --all-targets`, and the relevant `rtk cargo nextest run` suite.
+- [x] 4.2 Attach one-painter evidence and source-trace absence proofs scoped against the in-tree `173bdba1`/`400c0b59` starting state; verify no parent underpaint, no render-offset write-back, no parent cursor/scroll mirrors, per-frame child construction, second router, global hit map, callback/provider framework, or authority leak.
+- [x] 4.3 Run `rtk make check-code-file-lines` and ensure every changed source file is ≤800 lines.
+- [x] 4.4 Run `rtk openspec validate migrate-home-feeds-to-canonical-lists --strict`.
+- [x] 4.5 Run `rtk cargo fmt --all -- --check`, `rtk cargo check --workspace --all-targets`, and the relevant `rtk cargo nextest run` suite.
 - [ ] 4.6 Review the complete slice, then perform live Wide/Narrow acceptance for Home and Feeds covering selection, movement, scrolling, group/filter state, images/workspaces, selected-row replacement, rail framing, and row indent. Treat defects as bugs, fix them, and rerun affected tests and gates before acceptance.
