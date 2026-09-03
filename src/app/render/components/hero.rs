@@ -71,11 +71,9 @@ pub(in crate::app::render) fn wrap_overview_lines(
     lines
 }
 /// The shared display-flow accounting for an inline selected-detail block.
-/// `offset` is the first display row in the viewport and
-/// `detail_screen_row` is the detail block's row relative to that viewport.
+/// `offset` is the first display row in the viewport.
 pub(in crate::app::render) struct InlineDetailFlow {
     pub offset: usize,
-    pub detail_screen_row: usize,
 }
 
 pub(in crate::app::render) enum InlineDisplayRow {
@@ -170,10 +168,7 @@ pub(in crate::app::render) fn inline_detail_flow(
         .saturating_sub(visible_rows)
         .min(cursor_row);
     let offset = stored_offset.clamp(lower_bound, cursor_row);
-    Some(InlineDetailFlow {
-        offset,
-        detail_screen_row: cursor_row - offset,
-    })
+    Some(InlineDetailFlow { offset })
 }
 
 /// Paints the hero block's outer shell -- the colored bg (focused/unfocused
