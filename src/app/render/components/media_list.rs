@@ -419,8 +419,8 @@ pub(in crate::app) fn render_inline_media_browser<Target: Clone>(
 /// rails: `SURFACE_RESTING`, matching the legacy painters they replace).
 ///
 /// Row geometry: the flush edge marker sits at the paint rect's `x` (the
-/// panel border) and the title text is indented `LEFT_INSET` (3) columns in
-/// — `[marker][2 spaces][title…]` — so the title lands at column 3 of the
+/// panel border) and the title text is indented `LEFT_INSET` (2) columns in
+/// — `[marker][1 space][title…]` — so the title lands at column 2 of the
 /// panel; the selected row's background fills the whole row via `List`'s
 /// row-style fill.
 fn wide_media_row<Target>(
@@ -434,7 +434,7 @@ fn wide_media_row<Target>(
         MediaListRow::Spacer => ListItem::new(Line::default()),
         MediaListRow::Heading { text } => ListItem::new(Line::from(vec![
             selection_marker(false, MarkerEdge::Left),
-            Span::raw("  "),
+            Span::raw(" "),
             Span::styled(
                 text.clone(),
                 Style::default()
@@ -450,10 +450,10 @@ fn wide_media_row<Target>(
             ..
         } => {
             // Canonical row geometry:
-            // `[marker][2 spaces][title…]  [FOAM trailing]  [green duration]`
-            // with the flush marker at the panel edge, the title at column 3,
+            // `[marker][1 space][title…]  [FOAM trailing]  [green duration]`
+            // with the flush marker at the panel edge, the title at column 2,
             // and a quiet gap before the right-aligned duration.
-            const LEFT_INSET: usize = 3;
+            const LEFT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;
             const RIGHT_INSET: usize = 2;
 
@@ -490,10 +490,7 @@ fn wide_media_row<Target>(
             );
 
             let selected = selected && focused;
-            let mut spans = vec![
-                selection_marker(selected, MarkerEdge::Left),
-                Span::raw("  "),
-            ];
+            let mut spans = vec![selection_marker(selected, MarkerEdge::Left), Span::raw(" ")];
             spans.push(Span::styled(
                 title,
                 Style::default().fg(
@@ -579,7 +576,7 @@ mod wide_row_regression_tests {
     /// migrate-home-feeds 4.6: the selected row's highlight bar must span the
     /// whole panel width (never just the row text, with or without a duration
     /// string), the edge marker must sit flush at the panel's `x`, and the
-    /// title must land at column 3. These broke together when the painter was
+    /// title must land at column 2. These broke together when the painter was
     /// handed an already-inset content rect.
     #[test]
     fn selected_row_spans_full_width_with_flush_marker_and_three_col_indent() {
@@ -621,8 +618,8 @@ mod wide_row_regression_tests {
                 .map(|x| x - PX);
             assert_eq!(
                 first_text,
-                Some(3),
-                "title text indent must be 3 columns (duration={duration:?})"
+                Some(2),
+                "title text indent must be 2 columns (duration={duration:?})"
             );
             for x in PX..PX + PW {
                 assert_eq!(

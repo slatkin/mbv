@@ -549,8 +549,9 @@ impl HomeComponent {
     }
 
     /// The active control's resting scroll offset. `set_content` never seeds
-    /// it and the render pass never writes it back; only a `ViewportAnchor`
-    /// handoff at a breakpoint transition sets it.
+    /// it, but the render pass persists the resolved scroll offset each frame
+    /// (see `render_wide_media_list`). A `ViewportAnchor` handoff at a
+    /// breakpoint transition can override it for discrete jumps.
     #[cfg(test)]
     pub(crate) fn test_active_scroll(&self) -> usize {
         if self.wide {
