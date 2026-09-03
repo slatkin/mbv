@@ -10,6 +10,7 @@ Home and the Feeds Service/tab still compose destination-sized list mechanics in
 - Retain the accepted `restore-feeds-service-wide-list` (umbrella task 1.3a) Wide one-column/framing baseline and group selection.
 - Make canonical list rows the source of truth for the deferred two-space row-indent follow-up from `restore-feeds-service-wide-list` (umbrella task 1.3a).
 - Keep non-hero two-column policies and the Emby homevideos feed view (#634/#637) out of scope as boundary notes. The Music/Audiobookshelf canonical slice is out of scope; standalone #640 is superseded.
+- Centralize the one-row status-bar reserve in the shared hero-on-left arrangement primitive (surfaced during 4.6 live review, when Feeds Wide panels were found touching the status bar): the shared primitive returns panes that already exclude the status row, the per-tab reserves collapse, the Feeds per-tab stopgap (`89ef789d`) is removed, and the invariant is recorded in the arrangement spec delta (`D7`). Consolidation, not a visual change.
 
 This stacks on PR #606's feature branch on top of the merged and archived canonical-list foundation (merge `a72f60f9`, archive `9122cc1b`) and depends on the accepted `restore-feeds-service-wide-list` prerequisite (umbrella task 1.3a). The slice baseline is the merge-containing HEAD, which includes the unaccepted Home/Feeds wiring — that wiring is acknowledged in-tree material this slice repairs, not a clean baseline and not a silent revert. The stashed `home-wip-paused-during-canonical-merge` work is retained as unaccepted evidence alongside it.
 
