@@ -17,8 +17,8 @@ The Feeds Service/tab SHALL project FeedAgeGroup/date labels as non-selectable `
 - **THEN** cursor movement skips headings and spacers and activation resolves the selected FeedEntry target.
 
 ### Requirement: Canonical source of truth owns row presentation
-Migrated Home and Feeds rows SHALL use the canonical row model and painter. The deferred #623 two-space row-indent correction SHALL be implemented at that source of truth, not by destination-specific offsets.
+Migrated Home and Feeds rows SHALL use the canonical row model and painter. The deferred two-space row-indent correction from `restore-feeds-service-wide-list` (umbrella task 1.3a) SHALL be implemented at that source of truth, not by destination-specific offsets.
 
 #### Scenario: Wide Feeds remains one column
 - **WHEN** the Feeds Service/tab is rendered at an accepted Wide breakpoint
-- **THEN** it uses one column with the accepted #623 framing/background and selected-row semantics.
+- **THEN** it uses one column with the accepted `restore-feeds-service-wide-list` (umbrella task 1.3a) framing/background and selected-row semantics.

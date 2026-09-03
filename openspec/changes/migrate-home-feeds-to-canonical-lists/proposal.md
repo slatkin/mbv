@@ -1,17 +1,17 @@
 ## Why
 
-Home and the Feeds Service/tab still compose destination-sized list mechanics instead of the reviewed canonical controls. This slice applies the foundation to those two distinct destinations without conflating the Feeds Service with an Emby homevideos feed view.
+Home and the Feeds Service/tab still compose destination-sized list mechanics instead of the reviewed canonical controls. The unaccepted Home/Feeds wiring from `173bdba1`/`400c0b59` is in-tree at the slice baseline in the wrong shape (legacy underpaint, render-offset write-back, parent cursor/scroll mirrors). This slice reworks that wiring to the canonical contract for those two distinct destinations without conflating the Feeds Service with an Emby homevideos feed view.
 
 ## What Changes
 
-- Compose `WideMediaList` and `InlineMediaBrowser` for Home sections and the Feeds Service/tab.
+- Rework the in-tree Home/Feeds wiring (`173bdba1`/`400c0b59`) to compose `WideMediaList` and `InlineMediaBrowser` for Home sections and the Feeds Service/tab: remove the legacy underpaint, the render-offset write-back, and the parent cursor/scroll mirrors.
 - Preserve Home section identity (`pref_key`/`restore_section`), the single active-section cursor/scroll, images, and workspace effects.
 - Project Feeds date/age labels as `Heading` rows and separators as `Spacer` rows as canonical-list content, while the subscription/group selector pills and the watched selector stay parent-owned chrome outside the canonical control.
-- Retain the accepted #623 Wide one-column/framing baseline and group selection.
-- Make canonical list rows the source of truth for the deferred #623 two-space row-indent follow-up.
+- Retain the accepted `restore-feeds-service-wide-list` (umbrella task 1.3a) Wide one-column/framing baseline and group selection.
+- Make canonical list rows the source of truth for the deferred two-space row-indent follow-up from `restore-feeds-service-wide-list` (umbrella task 1.3a).
 - Keep non-hero two-column policies and the Emby homevideos feed view (#634/#637) out of scope as boundary notes. The Music/Audiobookshelf canonical slice is out of scope; standalone #640 is superseded.
 
-This stacks on PR #606's feature branch and depends on the corrected, accepted canonical-list foundation and the accepted #623 `restore-feeds-service-wide-list` prerequisite (umbrella task 1.3a). Home implementation remains paused until foundation reacceptance; the invalid Home/Feeds commit chain and dirty worktree are evidence, not its implementation baseline.
+This stacks on PR #606's feature branch on top of the merged and archived canonical-list foundation (merge `a72f60f9`, archive `9122cc1b`) and depends on the accepted `restore-feeds-service-wide-list` prerequisite (umbrella task 1.3a). The slice baseline is the merge-containing HEAD, which includes the unaccepted Home/Feeds wiring — that wiring is acknowledged in-tree material this slice repairs, not a clean baseline and not a silent revert. The stashed `home-wip-paused-during-canonical-merge` work is retained as unaccepted evidence alongside it.
 
 ## Impact
 

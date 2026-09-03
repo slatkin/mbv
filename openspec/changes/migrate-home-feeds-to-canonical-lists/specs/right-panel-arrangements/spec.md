@@ -1,7 +1,7 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Feeds Wide arrangement is canonical
-The Feeds Service/tab Wide panel SHALL use the canonical one-column `WideMediaList` and preserve the accepted #623 rail framing, surface treatment, and selected-row alignment.
+The Feeds Service/tab Wide panel SHALL use the canonical one-column `WideMediaList` and preserve the accepted `restore-feeds-service-wide-list` (umbrella task 1.3a) rail framing, surface treatment, and selected-row alignment.
 
 #### Scenario: Wide and Narrow use approved variants
 - **WHEN** the panel crosses the Wide breakpoint
