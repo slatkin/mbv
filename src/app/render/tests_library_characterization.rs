@@ -102,10 +102,7 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
     );
     assert_eq!(fallback_layout.hero_area.height, 0);
     assert!(
-        fallback_layout
-            .left_row_map
-            .iter()
-            .any(|target| *target == Some(1)),
+        fallback_layout.left_row_map.contains(&Some(1)),
         "ordinary fallback restores the selected row"
     );
 }
