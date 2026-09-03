@@ -190,15 +190,22 @@ pub(in crate::app) fn render_feeds_content(
     // right rail and inset the canonical control inside it so the border can
     // never replace a heading or the last visible entry at a scroll boundary.
     let (list_area, outer_panel) = if let Some((hero_panel, _)) = wide_panes {
-        let hero_rows = feed_hero_content_rows(true)
-            .saturating_add(HERO_BLOCK_EXTRA_ROWS)
-            .min(hero_panel.height);
         layout.hero_area = hero_panel;
-        if hero_rows > HERO_BLOCK_EXTRA_ROWS {
-            if let Some(entry) = model.selected_entry {
-                selected_detail_shell(f, hero_panel, hero_rows, focused);
-                paint_feed_hero(f, hero_panel, hero_rows, entry, focused);
-            }
+        // Wide left hero pane mirrors the sibling media tabs (Movies/Home/TV):
+        // a plain resting-surface background fill, no `▔`/`▁` HeroShell and no
+        // tint from the list panel's focus. The inline/narrow path keeps the
+        // shell (below).
+        if let Some(entry) = model.selected_entry {
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
+                hero_panel,
+            );
+            paint_feed_hero(
+                f,
+                padded_rect(hero_panel, hero_left::PANE_PAD_X, hero_left::PANE_PAD_Y),
+                entry,
+                focused,
+            );
         }
         f.render_widget(
             Block::default().style(Style::default().bg(palette::resolve_surface_focus(focused))),
@@ -266,7 +273,19 @@ pub(in crate::app) fn render_feeds_content(
                 layout.selected_item_rect = Some(hero_area);
                 if let Some(entry) = model.selected_entry {
                     selected_detail_shell(f, hero_area, hero_area.height, focused);
-                    paint_feed_hero(f, hero_area, hero_area.height, entry, focused);
+                    paint_feed_hero(
+                        f,
+                        Rect {
+                            x: hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
+                            y: hero_area.y + 2,
+                            width: hero_area
+                                .width
+                                .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
+                            height: hero_area.height.saturating_sub(HERO_BLOCK_EXTRA_ROWS),
+                        },
+                        entry,
+                        focused,
+                    );
                 }
             }
             None => {
@@ -279,18 +298,15 @@ pub(in crate::app) fn render_feeds_content(
     }
 }
 
-/// Paint the feeds detail hero (title + one metadata line, no artwork) into a
-/// `selected_detail_shell` of `rows` rows anchored at `shell.y`.
-fn paint_feed_hero(f: &mut Frame, shell: Rect, rows: u16, entry: &FeedEntry, focused: bool) {
+/// Paint the feeds detail hero (title + one metadata line, no artwork) into the
+/// already-inset `content` rect. Wide passes the plain pane's padded rect (like
+/// the sibling hero painters); Narrow passes the rect inset inside its `▔`/`▁`
+/// HeroShell.
+fn paint_feed_hero(f: &mut Frame, content: Rect, entry: &FeedEntry, focused: bool) {
     let meta = feed_entry_meta_line(entry);
     paint_hero_content(
         f,
-        Rect {
-            x: shell.x + SELECTED_BLOCK_SIDE_PADDING,
-            y: shell.y + 2,
-            width: shell.width.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
-            height: rows.saturating_sub(HERO_BLOCK_EXTRA_ROWS),
-        },
+        content,
         &HeroContent {
             title: Some(entry.title.as_str()),
             meta_line: Some(meta.as_str()),

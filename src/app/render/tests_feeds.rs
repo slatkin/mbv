@@ -197,6 +197,35 @@ fn wide_feeds_selected_row_punches_through_to_the_resting_surface() {
     assert_eq!(selected, body, "unfocused rail shows no selection bar");
 }
 
+/// migrate-home-feeds 4.6 regression: the Wide left hero pane mirrors the
+/// sibling media tabs -- a plain `SURFACE_RESTING` fill with no `▔`/`▁`
+/// HeroShell border and no focus tint from the list panel. Focusing the list
+/// must not turn the hero pane green.
+#[test]
+fn wide_feeds_left_hero_pane_is_a_plain_resting_surface() {
+    let mut component = feed_component();
+    let terminal = terminal_for(&mut component, 120, 30);
+    let layout = component.layout();
+    let hero = layout.hero_area;
+    assert!(hero.width > 0 && hero.height > 0);
+    let buffer = terminal.backend().buffer();
+
+    for y in hero.y..hero.bottom() {
+        for x in hero.x..hero.right() {
+            let cell = &buffer[(x, y)];
+            assert_ne!(cell.bg, crate::app::palette::resolve_surface_focus(true));
+            assert!(
+                cell.symbol() != "▔" && cell.symbol() != "▁",
+                "hero pane must not carry a shell border at ({x},{y})"
+            );
+        }
+    }
+    assert_eq!(
+        buffer[(hero.x, hero.bottom() - 1)].bg,
+        crate::app::palette::SURFACE_RESTING
+    );
+}
+
 #[test]
 fn wide_feeds_reserve_borders_at_the_scrolled_bottom_boundary() {
     let entries = (0..8)
