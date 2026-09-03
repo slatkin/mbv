@@ -41,6 +41,9 @@ pub(in crate::app) use components::list_narrow::{
     paint_feed_group_pills_row, render_narrow_browse_with_ctx,
 };
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
+pub(in crate::app) use screens::feeds_model::{
+    current_time_secs, feed_display_rows, format_duration, FeedDisplayRow,
+};
 // Task 5.3d.17a: BrowserComponent paints the wide Movies/home-video
 // hero-on-left layout itself (mirroring HomeComponent's image-deferral),
 // so the legacy wide renderer can be deleted in 5.3d.17b. Re-export the
@@ -56,9 +59,7 @@ pub(in crate::app) use components::home_hero::{
     prepare_wide_emby_hero_card, render_home_hero_content, HeroData,
 };
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
-pub(in crate::app) use components::media_list::{
-    render_inline_media_browser, render_wide_media_list,
-};
+pub(in crate::app) use components::media_list::render_wide_media_list;
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };

@@ -525,3 +525,119 @@ fn feeds_render_without_app_state() {
     assert!(output.contains("Test Feed"));
     assert!(output.contains("First"));
 }
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
+
+fn dated_entry(title: &str, played: bool, days_ago: u64) -> FeedEntry {
+    FeedEntry {
+        pub_date_secs: Some(now_secs() - days_ago * 86_400),
+        ..entry(title, played)
+    }
+}
+
+fn dated_component(entries: Vec<FeedEntry>) -> FeedsComponent {
+    let subscriptions = [FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: FeedKind::Audio,
+    }];
+    let grouped = vec![entries.clone()];
+    let mut component = FeedsComponent::new();
+    component.set_content(&subscriptions, &grouped, &entries, false, true);
+    component
+}
+
+#[test]
+fn structural_rows_are_non_selectable_and_cursor_movement_skips_them() {
+    // Three entries in three distinct age groups -> the projected flow is
+    // Heading/Item/Spacer/Heading/Item/Spacer/Heading/Item (8 display rows,
+    // 3 selectable). Cursor movement addresses only the entries.
+    let mut component = dated_component(vec![
+        dated_entry("New One", false, 0),
+        dated_entry("Recent One", false, 5),
+        dated_entry("Old One", true, 40),
+    ]);
+    assert_eq!(
+        component.visible_titles(),
+        ["New One", "Recent One", "Old One"]
+    );
+    assert_eq!(component.cursor(), 0);
+    for expected in [1, 2, 2] {
+        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert_eq!(component.cursor(), expected);
+    }
+    for expected in [1, 0, 0] {
+        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+            code: Key::Up,
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert_eq!(component.cursor(), expected);
+    }
+
+    let mut terminal =
+        Terminal::new(TestBackend::new(crate::app::TWO_COLUMN_THRESHOLD, 30)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, crate::app::TWO_COLUMN_THRESHOLD, 30)))
+        .unwrap();
+    let item_rows = &component.layout().left_item_rows;
+    assert_eq!(
+        item_rows.iter().filter(|row| !row.is_empty()).count(),
+        3,
+        "three selectable entries: {item_rows:?}"
+    );
+    assert!(
+        item_rows.len() > 3,
+        "structural rows occupy display rows without a selectable index: {item_rows:?}"
+    );
+}
+
+#[test]
+fn breakpoint_flip_carries_one_viewport_anchor() {
+    let entries = (0..20)
+        .map(|index| dated_entry(&format!("Entry {index:02}"), index == 15, 0))
+        .collect();
+    let mut component = dated_component(entries);
+    for _ in 0..15 {
+        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+    }
+    assert_eq!(component.cursor(), 15);
+
+    let wide = crate::app::TWO_COLUMN_THRESHOLD;
+    Terminal::new(TestBackend::new(wide, 10))
+        .unwrap()
+        .draw(|frame| component.view(frame, Rect::new(0, 0, wide, 10)))
+        .unwrap();
+    assert!(
+        component.scroll() > 0,
+        "wide viewport scrolled to the selection"
+    );
+
+    // Breakpoint flip Wide -> Narrow: the cursors stay in lockstep and the
+    // single ViewportAnchor keeps the selection on screen.
+    let narrow = wide - 1;
+    Terminal::new(TestBackend::new(narrow, 10))
+        .unwrap()
+        .draw(|frame| component.view(frame, Rect::new(0, 0, narrow, 10)))
+        .unwrap();
+    assert_eq!(component.cursor(), 15);
+    assert!(
+        component
+            .layout()
+            .left_row_map
+            .iter()
+            .any(|slot| *slot == Some(15)),
+        "selected entry stays visible after the flip: {:?}",
+        component.layout().left_row_map
+    );
+}

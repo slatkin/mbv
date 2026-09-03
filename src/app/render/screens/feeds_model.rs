@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::app::render) enum FeedAgeGroup {
+pub(in crate::app) enum FeedAgeGroup {
     New,
     Recent,
     OlderThanTwoWeeks,
@@ -15,7 +15,7 @@ pub(in crate::app::render) enum FeedAgeGroup {
 }
 
 impl FeedAgeGroup {
-    pub(in crate::app::render) fn label(self) -> &'static str {
+    pub(in crate::app) fn label(self) -> &'static str {
         match self {
             Self::New => "New",
             Self::Recent => "Recent",
@@ -27,7 +27,7 @@ impl FeedAgeGroup {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate::app::render) enum FeedDisplayRow {
+pub(in crate::app) enum FeedDisplayRow {
     Spacer,
     Heading(FeedAgeGroup),
     Entry(usize),
@@ -46,7 +46,7 @@ fn feed_age_group(pub_date_secs: Option<u64>, now_secs: u64) -> FeedAgeGroup {
     }
 }
 
-pub(in crate::app::render) fn feed_display_rows(
+pub(in crate::app) fn feed_display_rows(
     entries: &[mbv_core::playback_queue::FeedEntry],
     now_secs: u64,
 ) -> Vec<FeedDisplayRow> {
@@ -68,7 +68,7 @@ pub(in crate::app::render) fn feed_display_rows(
     rows
 }
 
-pub(in crate::app::render) fn current_time_secs() -> u64 {
+pub(in crate::app) fn current_time_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -76,7 +76,7 @@ pub(in crate::app::render) fn current_time_secs() -> u64 {
 }
 
 /// Format a tick count into a human-readable duration string.
-pub(in crate::app::render) fn format_duration(ticks: Option<u64>) -> String {
+pub(in crate::app) fn format_duration(ticks: Option<u64>) -> String {
     match ticks {
         Some(t) if t > 0 => {
             let total_secs = t / TICKS_PER_SECOND as u64;
@@ -145,50 +145,6 @@ pub(in crate::app::render) fn feed_entry_meta_line(entry: &FeedEntry) -> String 
         parts.push("Watched".to_string());
     }
     parts.join("   ")
-}
-
-/// One physical list row after packing `FeedDisplayRow`s into `cols`-wide
-/// rows (design.md's two-column list): headings and spacers always occupy
-/// their own row; entries pack `cols` per row, never crossing a heading/
-/// spacer boundary (same rule `list_letter_groups.rs`'s `push_item_row`
-/// uses for the Emby library list).
-pub(in crate::app::render) enum PackedFeedRow {
-    Spacer,
-    Heading(FeedAgeGroup),
-    Items(Vec<usize>),
-}
-
-pub(in crate::app::render) fn pack_feed_rows(
-    display_rows: &[FeedDisplayRow],
-    cols: usize,
-) -> Vec<PackedFeedRow> {
-    let cols = cols.max(1);
-    let mut packed = Vec::new();
-    let mut current: Vec<usize> = Vec::with_capacity(cols);
-    for row in display_rows {
-        match row {
-            FeedDisplayRow::Entry(idx) => {
-                current.push(*idx);
-                if current.len() >= cols {
-                    packed.push(PackedFeedRow::Items(std::mem::take(&mut current)));
-                }
-            }
-            FeedDisplayRow::Spacer | FeedDisplayRow::Heading(_) => {
-                if !current.is_empty() {
-                    packed.push(PackedFeedRow::Items(std::mem::take(&mut current)));
-                }
-                packed.push(match row {
-                    FeedDisplayRow::Spacer => PackedFeedRow::Spacer,
-                    FeedDisplayRow::Heading(g) => PackedFeedRow::Heading(*g),
-                    FeedDisplayRow::Entry(_) => unreachable!(),
-                });
-            }
-        }
-    }
-    if !current.is_empty() {
-        packed.push(PackedFeedRow::Items(current));
-    }
-    packed
 }
 
 #[cfg(test)]

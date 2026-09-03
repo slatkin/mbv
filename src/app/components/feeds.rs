@@ -1,9 +1,13 @@
 //! Interactive Component for the Feeds destination.
 //!
 //! The shell supplies validated feed snapshots. This component owns the
-//! selector/filter/list cursor, grouping presentation, inline hero painting,
-//! and render geometry. Refresh, playback, enqueue, and the legacy mouse path
-//! remain shell work during the mirror-first stage.
+//! subscription/group selector and the watched filter (parent chrome); the
+//! embedded canonical controls (`WideMediaList` for hero-on-left Wide,
+//! `InlineMediaBrowser` for inline Narrow) own the cursor and scroll over the
+//! grouped-entry projection. `render_feeds_content` is the parent-owned pill
+//! strip + chrome + hero painter and mounts the active control into the list
+//! sub-rect below the pill strip. Refresh, playback, enqueue, and the legacy
+//! `*HitRegion` mouse path remain shell/pre-#638 work.
 
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -15,13 +19,17 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{InlineMediaBrowser, MediaListRow, MediaSemanticState, WideMediaList};
+use super::media_list::{
+    InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+};
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
-use crate::app::render::{render_feeds_content, FeedsRenderModel};
+use crate::app::render::{
+    current_time_secs, feed_display_rows, format_duration, render_feeds_content, FeedDisplayRow,
+    FeedsRenderModel,
+};
 use crate::app::types_feed_tab::WatchedFilter;
-use crate::app::ui_util::move_cursor;
 use mbv_core::config::FeedSubscription;
 use mbv_core::playback_queue::FeedEntry;
 
@@ -30,13 +38,21 @@ pub struct FeedsComponent {
     entries: Vec<Vec<FeedEntry>>,
     all_entries: Vec<FeedEntry>,
     visible_entries: Vec<FeedEntry>,
-    /// Canonical structural projection; selectors remain parent chrome.
+    /// Canonical grouped-entry projection; selectors remain parent chrome.
+    /// Both controls hold the same rows every `rebuild_visible_entries`; only
+    /// one is painted per breakpoint, and they own cursor/scroll — the
+    /// component keeps no mirror.
     canonical_list: WideMediaList<String>,
     inline_list: InlineMediaBrowser<String>,
     watched_filter: WatchedFilter,
     selected_group: usize,
-    cursor: usize,
-    scroll: usize,
+    /// Which canonical control the last `view()` painted (hero-on-left Wide vs
+    /// inline Narrow). Drives the single `ViewportAnchor` handoff on a
+    /// breakpoint flip and which control `cursor()` reads.
+    wide: bool,
+    /// The scroll offset the painter resolved this frame — observability only
+    /// (characterization tests), never fed back into the control.
+    painted_offset: usize,
     loading: bool,
     focused: bool,
     layout: LayoutMain,
@@ -54,8 +70,8 @@ impl FeedsComponent {
             inline_list: InlineMediaBrowser::new(),
             watched_filter: WatchedFilter::default(),
             selected_group: 0,
-            cursor: 0,
-            scroll: 0,
+            wide: false,
+            painted_offset: 0,
             loading: false,
             focused: false,
             layout: LayoutMain::default(),
@@ -85,18 +101,23 @@ impl FeedsComponent {
         self.selected_group = self
             .selected_group
             .min(self.group_count().saturating_sub(1));
-        if subscriptions_changed {
-            self.cursor = 0;
-            self.scroll = 0;
-        }
         self.loading = loading;
         self.focused = focused;
         self.rebuild_visible_entries();
-        self.clamp_cursor();
+        // An ordinary refresh keeps the active control authoritative (the
+        // selected target is preserved by `ListCore::set_content`); only a
+        // subscription-set change resets the selection.
+        if subscriptions_changed {
+            self.reset_selection();
+        }
     }
 
     pub(in crate::app) fn cursor(&self) -> usize {
-        self.cursor
+        if self.wide {
+            self.canonical_list.cursor()
+        } else {
+            self.inline_list.cursor()
+        }
     }
 
     pub(in crate::app) fn watched_filter(&self) -> WatchedFilter {
@@ -108,7 +129,7 @@ impl FeedsComponent {
     }
 
     pub(in crate::app) fn scroll(&self) -> usize {
-        self.scroll
+        self.painted_offset
     }
 
     pub(in crate::app) fn visible_titles(&self) -> Vec<&str> {
@@ -134,7 +155,7 @@ impl FeedsComponent {
     }
 
     fn rebuild_visible_entries(&mut self) {
-        // Navigation uses rows produced by the previous render; invalidate
+        // Navigation uses maps produced by the previous render; invalidate
         // them whenever filtering/group content changes.
         self.layout.left_item_rows.clear();
         self.layout.left_row_map.clear();
@@ -151,93 +172,77 @@ impl FeedsComponent {
             .filter(|entry| self.watched_filter.matches(entry.played))
             .cloned()
             .collect();
-        let mut rows = Vec::new();
-        let mut last_date = None;
-        for entry in &self.visible_entries {
-            let date = entry.pub_date_secs.map(|value| value / 86_400);
-            if date != last_date {
-                if last_date.is_some() {
-                    rows.push(MediaListRow::Spacer);
-                }
-                rows.push(MediaListRow::Heading {
-                    text: date.map_or_else(|| "Unknown".into(), |day| day.to_string()),
-                });
-                last_date = date;
-            }
-            rows.push(MediaListRow::Item {
-                target: entry.guid.clone(),
-                primary: entry.title.clone(),
-                trailing: None,
-                duration: None,
-                semantic_state: if entry.played {
-                    MediaSemanticState::Played
-                } else {
-                    MediaSemanticState::Ordinary
+
+        // Project grouped `FeedEntries` into the canonical row vocabulary:
+        // `FeedAgeGroup` labels become non-selectable `Heading` rows, group
+        // separators become `Spacer` rows, entries become selectable `Item`
+        // rows carrying the stable `entry.guid` target and the watched
+        // semantic state. Structural rows are filtered out of the control's
+        // selectable index, so cursor movement skips them and the control's
+        // `RowGeometry` owns the selectable-index vs display-index mapping.
+        let now = current_time_secs();
+        let rows: Vec<MediaListRow<String>> = feed_display_rows(&self.visible_entries, now)
+            .into_iter()
+            .map(|row| match row {
+                FeedDisplayRow::Spacer => MediaListRow::Spacer,
+                FeedDisplayRow::Heading(group) => MediaListRow::Heading {
+                    text: group.label().to_string(),
                 },
-            });
-        }
+                FeedDisplayRow::Entry(index) => {
+                    let entry = &self.visible_entries[index];
+                    let duration = format_duration(entry.duration_ticks);
+                    MediaListRow::Item {
+                        target: entry.guid.clone(),
+                        primary: entry.title.clone(),
+                        trailing: None,
+                        duration: (!duration.is_empty()).then_some(duration),
+                        semantic_state: if entry.played {
+                            MediaSemanticState::Played
+                        } else {
+                            MediaSemanticState::Ordinary
+                        },
+                    }
+                }
+            })
+            .collect();
         self.canonical_list.set_content(rows.clone());
         self.inline_list.set_content(rows);
     }
 
-    fn clamp_cursor(&mut self) {
-        if self.visible_entries.is_empty() {
-            self.cursor = 0;
-            self.scroll = 0;
-        } else {
-            self.cursor = self.cursor.min(self.visible_entries.len() - 1);
-        }
+    /// Park the selection at the first entry on both controls (a discrete
+    /// group/filter change; there is no per-group cursor cache).
+    fn reset_selection(&mut self) {
+        self.canonical_list.select_first();
+        self.inline_list.select_first();
+        self.painted_offset = 0;
     }
 
-    fn move_cursor(&mut self, delta: i64) {
-        self.cursor = move_cursor(self.cursor, delta, self.visible_entries.len());
+    /// Move the selection by `delta` selectable rows on both controls in
+    /// lockstep, so they stay cursor-aligned across a breakpoint flip.
+    fn move_selection(&mut self, delta: i64) {
+        self.canonical_list.move_selection(delta);
+        self.inline_list.move_selection(delta);
     }
 
-    fn move_cursor_rows(&mut self, delta: i64) {
-        if self.visible_entries.is_empty() {
-            self.cursor = 0;
-            return;
-        }
-        let rows: Vec<&Vec<usize>> = self
-            .layout
-            .left_item_rows
-            .iter()
-            .filter(|row| !row.is_empty())
-            .collect();
-        let Some((current_row, current_column)) =
-            rows.iter().enumerate().find_map(|(row, items)| {
-                items
-                    .iter()
-                    .position(|&index| index == self.cursor)
-                    .map(|column| (row, column))
-            })
-        else {
-            self.move_cursor(delta);
-            return;
-        };
-        let target_row = if delta < 0 {
-            current_row.saturating_sub(delta.unsigned_abs() as usize)
-        } else {
-            current_row
-                .saturating_add(delta as usize)
-                .min(rows.len().saturating_sub(1))
-        };
-        if let Some(index) = rows[target_row]
-            .get(current_column)
-            .copied()
-            .or_else(|| rows[target_row].last().copied())
-        {
-            self.cursor = index;
-        }
+    /// Place the selection at selectable index `index` (which, for Feeds, is
+    /// the `visible_entries` index) on both controls. Pre-#638 mouse
+    /// compatibility: the bespoke `*HitRegion` path reads control-exported
+    /// geometry.
+    fn select_entry(&mut self, index: usize) {
+        self.canonical_list.select_index(index);
+        self.inline_list.select_index(index);
+    }
+
+    fn page_size(&self) -> i64 {
+        self.layout.left_area.height.saturating_sub(1).max(1) as i64
     }
 
     fn cycle_group(&mut self, delta: i64) {
         let count = self.group_count();
         self.selected_group =
             (self.selected_group as i64 + delta).rem_euclid(count as i64) as usize;
-        self.cursor = 0;
-        self.scroll = 0;
         self.rebuild_visible_entries();
+        self.reset_selection();
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -253,55 +258,42 @@ impl FeedsComponent {
             Key::Char('r') => Some(Msg::Shell(ShellRequest::RefreshFeeds)),
             Key::Char('w') => {
                 self.watched_filter = self.watched_filter.cycle();
-                self.cursor = 0;
-                self.scroll = 0;
                 self.rebuild_visible_entries();
+                self.reset_selection();
                 None
             }
             Key::Up | Key::Char('k') => {
-                self.move_cursor_rows(-1);
+                self.move_selection(-1);
                 None
             }
             Key::Down | Key::Char('j') => {
-                self.move_cursor_rows(1);
+                self.move_selection(1);
                 None
             }
-            Key::Left | Key::Char('h')
-                if self.layout.left_area.width > 0
-                    && crate::app::library_column_width::library_column_count(
-                        self.layout.left_area.width,
-                    ) > 1 =>
-            {
-                self.move_cursor(-1);
+            Key::Left | Key::Char('h') => {
+                self.move_selection(-1);
                 None
             }
-            Key::Right | Key::Char('l')
-                if self.layout.left_area.width > 0
-                    && crate::app::library_column_width::library_column_count(
-                        self.layout.left_area.width,
-                    ) > 1 =>
-            {
-                self.move_cursor(1);
+            Key::Right | Key::Char('l') => {
+                self.move_selection(1);
                 None
             }
             Key::PageUp => {
-                self.cursor = self
-                    .cursor
-                    .saturating_sub(self.layout.left_area.height.saturating_sub(1).max(1) as usize);
+                self.move_selection(-self.page_size());
                 None
             }
             Key::PageDown => {
-                self.cursor = (self.cursor
-                    + self.layout.left_area.height.saturating_sub(1).max(1) as usize)
-                    .min(self.visible_entries.len().saturating_sub(1));
+                self.move_selection(self.page_size());
                 None
             }
             Key::Home => {
-                self.cursor = 0;
+                self.canonical_list.select_first();
+                self.inline_list.select_first();
                 None
             }
             Key::End => {
-                self.cursor = self.visible_entries.len().saturating_sub(1);
+                self.canonical_list.select_last();
+                self.inline_list.select_last();
                 None
             }
             Key::Char('[') => {
@@ -314,14 +306,14 @@ impl FeedsComponent {
             }
             Key::Enter => self
                 .visible_entries
-                .get(self.cursor)
+                .get(self.cursor())
                 .map(|entry| Msg::Shell(ShellRequest::FeedsPlay(Some(entry.clone()))))
-                .or_else(|| Some(Msg::Shell(ShellRequest::FeedsPlay(None)))),
+                .or(Some(Msg::Shell(ShellRequest::FeedsPlay(None)))),
             Key::Char('e') => self
                 .visible_entries
-                .get(self.cursor)
+                .get(self.cursor())
                 .map(|entry| Msg::Shell(ShellRequest::FeedsEnqueue(Some(entry.clone()))))
-                .or_else(|| Some(Msg::Shell(ShellRequest::FeedsEnqueue(None)))),
+                .or(Some(Msg::Shell(ShellRequest::FeedsEnqueue(None)))),
             _ => None,
         }
     }
@@ -333,10 +325,10 @@ impl FeedsComponent {
         let position: Position = (mouse.column, mouse.row).into();
         match mouse.kind {
             MouseEventKind::ScrollDown if self.layout.left_area.contains(position) => {
-                self.move_cursor(1);
+                self.move_selection(1);
             }
             MouseEventKind::ScrollUp if self.layout.left_area.contains(position) => {
-                self.move_cursor(-1);
+                self.move_selection(-1);
             }
             MouseEventKind::Down(MouseButton::Left | MouseButton::Right) => {
                 if let Some(target) = self
@@ -348,58 +340,27 @@ impl FeedsComponent {
                 {
                     if target < self.group_count() {
                         self.selected_group = target;
-                        self.cursor = 0;
-                        self.scroll = 0;
                         self.rebuild_visible_entries();
+                        self.reset_selection();
                     }
                     return None;
                 }
                 if self.layout.left_area.contains(position) {
                     let list_area = self.layout.left_area;
-                    let click_y = (mouse.row - list_area.y) as usize;
+                    let click_y = (mouse.row.saturating_sub(list_area.y)) as usize;
                     let n = self.visible_entries.len();
-                    let cell_target = {
-                        let cols =
-                            crate::app::library_column_width::library_column_count(list_area.width);
-                        let cell_width =
-                            crate::app::library_column_width::library_cell_width(list_area, cols)
-                                as usize;
-                        let x = (mouse.column as usize).saturating_sub(list_area.x as usize);
-                        if !self.layout.left_item_rows.is_empty() && cols > 1 && cell_width > 0 {
-                            let cell = x
-                                / (cell_width
-                                    + crate::app::library_column_width::LIBRARY_COLUMN_GAP
-                                        as usize);
-                            (cell < cols)
-                                .then(|| {
-                                    self.layout
-                                        .left_item_rows
-                                        .get(self.scroll + click_y)
-                                        .and_then(|row| row.get(cell).copied())
-                                })
-                                .flatten()
-                        } else {
-                            None
-                        }
-                    };
-                    if let Some(item_idx) = cell_target {
-                        if item_idx < n {
-                            self.cursor = item_idx;
-                        }
-                    } else if let Some(Some(item_idx)) = self.layout.left_row_map.get(click_y) {
+                    if let Some(Some(item_idx)) = self.layout.left_row_map.get(click_y) {
                         if *item_idx < n {
-                            self.cursor = *item_idx;
+                            self.select_entry(*item_idx);
                         }
-                    } else if self.layout.left_row_map.is_empty() {
-                        let visible = list_area.height as usize;
-                        let offset = if self.cursor >= visible {
-                            self.cursor - visible + 1
-                        } else {
-                            0
-                        };
-                        let clicked = offset + click_y;
-                        if clicked < n {
-                            self.cursor = clicked;
+                    } else if let Some(item_idx) = self
+                        .layout
+                        .left_item_rows
+                        .get(self.painted_offset + click_y)
+                        .and_then(|row| row.first().copied())
+                    {
+                        if item_idx < n {
+                            self.select_entry(item_idx);
                         }
                     }
                 }
@@ -418,8 +379,33 @@ impl Default for FeedsComponent {
 
 impl Component for FeedsComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
+        // One `ViewportAnchor` handoff at a breakpoint flip: carry the
+        // outgoing control's selected target + screen-row offset into the
+        // incoming control (design.md D2/D3). The cursors already track in
+        // lockstep.
+        let wide = crate::app::render::shared_hero_presentation(area).is_some();
+        if wide != self.wide {
+            let viewport_height = self.layout.left_area.height.max(1) as usize;
+            let anchor: Option<ViewportAnchor<String>> = if self.wide {
+                self.canonical_list.viewport_anchor(viewport_height)
+            } else {
+                self.inline_list.viewport_anchor(viewport_height)
+            };
+            if let Some(anchor) = anchor {
+                if wide {
+                    self.canonical_list
+                        .apply_viewport_anchor(&anchor, viewport_height);
+                } else {
+                    self.inline_list
+                        .apply_viewport_anchor(&anchor, viewport_height);
+                }
+            }
+            self.wide = wide;
+        }
+
         let mut layout = LayoutMain::default();
-        render_feeds_content(
+        let selected_entry = self.visible_entries.get(self.cursor()).cloned();
+        let offset = render_feeds_content(
             frame,
             area,
             self.focused,
@@ -430,36 +416,12 @@ impl Component for FeedsComponent {
                 watched_filter: self.watched_filter,
                 selected_group: self.selected_group,
                 loading: self.loading,
-                cursor: &mut self.cursor,
-                scroll: &mut self.scroll,
+                selected_entry: selected_entry.as_ref(),
             },
+            &self.canonical_list,
+            &self.inline_list,
         );
-        let wide = crate::app::library_column_width::library_column_count(layout.left_area.width)
-            == 1
-            && layout.left_area.width > 0;
-        if wide {
-            let offset = crate::app::render::render_wide_media_list(
-                frame,
-                layout.left_area,
-                &self.canonical_list,
-                self.focused,
-                crate::app::palette::SURFACE_FOCUSED,
-                &mut layout,
-            );
-            self.canonical_list.set_scroll(offset);
-        } else {
-            let offset = crate::app::render::render_inline_media_browser(
-                frame,
-                layout.left_area,
-                &self.inline_list,
-                0,
-                self.focused,
-                crate::app::palette::SURFACE_FOCUSED,
-            )
-            .row_geometry
-            .offset();
-            self.inline_list.set_scroll(offset);
-        }
+        self.painted_offset = offset;
         self.layout = layout;
     }
 
