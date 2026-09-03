@@ -295,34 +295,23 @@ fn browser_context_menu_requires_bare_dot() {
 }
 
 #[test]
-fn browser_syncs_cursor_from_context_on_set_content() {
+fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(
-        BrowserContent::from_items(vec![make_item("one", "Movie"), make_item("two", "Movie")]),
-        true,
-    );
+    let items = || vec![make_item("one", "Movie"), make_item("two", "Movie")];
+    browser.set_content(BrowserContent::from_items(items()), true);
 
     browser.handle_tui_key(TuiKeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     });
-    // Component cursor moved to 1
     assert_eq!(browser.cursor(), 1);
 
-    // set_content with App cursor at 1 (as it would be after the shell handles the request)
-    browser.set_content(
-        BrowserContent::from_items(vec![make_item("one", "Movie"), make_item("two", "Movie")]),
-        true,
-    );
-    // Component cursor syncs from context
+    // An ordinary content push carries no position: the control keeps its cursor.
+    browser.set_content(BrowserContent::from_items(items()), true);
     assert_eq!(browser.cursor(), 1);
 
-    // set_content with App cursor at 0 (external change like tab switch)
-    browser.set_content(
-        BrowserContent::from_items(vec![make_item("one", "Movie"), make_item("two", "Movie")]),
-        true,
-    );
-    // Component cursor follows App cursor
+    // Only the identity-gated re-seed moves the control.
+    browser.apply_position(0, 0);
     assert_eq!(browser.cursor(), 0);
 }
 
