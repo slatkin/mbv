@@ -101,7 +101,7 @@ impl BrowserComponent {
             });
 
         // Right rail: pill row + one-column list.
-        let right_pane = hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
+        let right_pane = hero_on_left_right_pane(right_panel, right_area);
         let pills_area = right_pane.pills_area;
         let list_panel = right_pane.list_panel;
 

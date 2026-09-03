@@ -14,8 +14,7 @@ pub(in crate::app) fn wide_library_panes(
     pad_x: u16,
     pad_y: u16,
 ) -> Option<WideLibraryPanes> {
-    let (mut left_panel, right_panel) = hero_left::shared_hero_presentation(area)?;
-    left_panel.height = area.height.saturating_sub(1);
+    let (left_panel, right_panel) = hero_left::shared_hero_presentation(area)?;
     let left_area = padded_rect(left_panel, pad_x, pad_y);
     let right_area = Rect {
         x: right_panel.x,

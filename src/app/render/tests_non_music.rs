@@ -1,7 +1,10 @@
 use super::test_helpers::*;
 use super::*;
+use crate::app::render::arrangements::hero_left::PANE_PAD_Y;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, TabSelection};
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
 use tuirealm::component::Component;
 
 #[test]
@@ -357,5 +360,61 @@ fn narrow_series_inline_hero_shows_only_hero_content_no_season_or_episode_list()
     assert!(
         !output.contains("Pilot"),
         "narrow inline hero must not show the episode table:\n{output}"
+    );
+}
+
+/// migrate-home-feeds 5.1: the shared hero-on-left primitive owns the one-row
+/// status-row reserve, so the wide Music workspace's framed list panel must
+/// bottom out exactly one row above the terminal's bottom status row — the
+/// browser's inset content sits `PANE_PAD_Y` above its framed panel, and the
+/// pane's bottom edge is exactly one row above the terminal bottom.
+#[test]
+fn wide_music_list_panel_leaves_exactly_one_row_above_the_status_bar() {
+    let mut model = mounted_model_at(make_music_group_app(), 200, 40);
+    draw_mounted_frame(&mut model, 200, 40);
+    let layout = mounted_music_layout(&model);
+    let browser_area = layout.wide_music_browser_area;
+    assert!(browser_area.height > 0, "wide music browser must paint");
+    assert_eq!(
+        browser_area.bottom() + 1,
+        layout.wide_music_right_area.bottom(),
+        "browser content must sit one padded row above the right pane bottom"
+    );
+    assert_eq!(
+        layout.wide_music_right_area.bottom(),
+        39,
+        "right pane must bottom out one row above the 40-row terminal"
+    );
+}
+
+/// migrate-home-feeds 5.1: same invariant for the ABS Book tab, painted by
+/// its mounted `AudiobookshelfBookComponent` directly with the full rect.
+#[test]
+fn wide_book_panes_leave_exactly_one_row_above_the_status_bar() {
+    use crate::app::components::AudiobookshelfBookComponent;
+    let area = Rect::new(0, 0, 120, 30);
+    let app = make_audiobookshelf_book_app();
+    let mut component = AudiobookshelfBookComponent::new();
+    if let Some(state) = app.audiobookshelf_book_browse.first() {
+        component.set_content(state, true, app.images_enabled());
+    }
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal.draw(|frame| component.view(frame, area)).unwrap();
+    let geometry = component.geometry();
+    let panes = crate::app::render::arrangements::library::wide_library_panes(area, 0, PANE_PAD_Y)
+        .expect("wide book panes");
+    assert_eq!(
+        geometry
+            .selector_tabs
+            .first()
+            .map(|(rect, _)| rect.y)
+            .expect("book pills painted"),
+        panes.right_area.y,
+        "book pills must sit at the shared right pane's pill row"
+    );
+    assert_eq!(
+        panes.right_area.bottom(),
+        area.bottom() - 1,
+        "book right pane must bottom out one row above the status row"
     );
 }

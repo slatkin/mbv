@@ -34,10 +34,22 @@ pub(in crate::app) const PANE_PAD_Y: u16 = 1;
 /// Resolves the only shared responsive decision for hero-bearing browsers and
 /// returns the pane geometry when the wide presentation fits. Callers provide
 /// content; they do not own a breakpoint or a height threshold.
+///
+/// This primitive owns the one-row status-bar reserve: both returned panes
+/// already exclude the terminal's bottom status row, so every hero-on-left
+/// screen bottoms out exactly one row above it. Callers must not re-derive
+/// that reserve (no extra `saturating_sub(1)` on the panes, no `bottom_pad`
+/// on `hero_on_left_right_pane`) — doing so double-subtracts and shifts the
+/// screen a second row.
 pub(in crate::app) fn shared_hero_presentation(content_area: Rect) -> Option<(Rect, Rect)> {
     (content_area.width >= crate::app::TWO_COLUMN_THRESHOLD
         && content_area.height.saturating_sub(1) >= HERO_ON_LEFT_MIN_AREA_HEIGHT)
-        .then(|| hero_on_left_panes(content_area))
+        .then(|| {
+            let (mut left_pane, mut right_pane) = hero_on_left_panes(content_area);
+            left_pane.height = left_pane.height.saturating_sub(1);
+            right_pane.height = right_pane.height.saturating_sub(1);
+            (left_pane, right_pane)
+        })
 }
 
 #[cfg(test)]
@@ -76,6 +88,24 @@ mod tests {
         .is_none());
     }
 
+    /// The primitive owns the one-row status-row reserve (task 5.1, D7):
+    /// both returned panes already exclude the terminal's bottom status row,
+    /// so callers must not shrink them again.
+    #[test]
+    fn shared_presentation_reserves_one_status_row_on_both_panes() {
+        let area = Rect {
+            x: 2,
+            y: 4,
+            width: crate::app::TWO_COLUMN_THRESHOLD,
+            height: 20,
+        };
+        let (left, right) = shared_hero_presentation(area).expect("wide area");
+        assert_eq!(left.height, area.height - 1);
+        assert_eq!(right.height, area.height - 1);
+        assert_eq!(left.bottom(), area.bottom() - 1);
+        assert_eq!(right.bottom(), area.bottom() - 1);
+    }
+
     #[test]
     fn pill_and_right_pane_geometry_saturate_short_areas() {
         let areas = pill_bar_areas(Rect {
@@ -101,7 +131,6 @@ mod tests {
                 width: 10,
                 height: 1,
             },
-            4,
         );
         assert_eq!(right.list_panel.height, 0);
     }
@@ -144,9 +173,8 @@ pub(in crate::app::render) fn hero_on_left_panes(content_area: Rect) -> (Rect, R
 /// 6's "pill row at top of list pane"). `right_panel` is the pane's full
 /// rect (its `y`/`height` anchor the pill row and the panel's bottom);
 /// `right_area` is the vertically-inset pane used for the pill row's
-/// x/width. `bottom_pad` is the caller's own trailing padding reserve
-/// (grouped Music's `PANE_PAD_Y`), kept as a parameter rather than a second
-/// constant here so the two files do not each own a copy of the same value.
+/// x/width. The pane's own status-row reserve is owned by
+/// [`shared_hero_presentation`]; callers must not re-derive it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) struct HeroOnLeftRightPane {
     pub pills_area: Rect,
@@ -186,13 +214,12 @@ pub(in crate::app::render) fn pill_bar_areas(area: Rect) -> PillBarAreas {
 pub(in crate::app) fn hero_on_left_right_pane(
     right_panel: Rect,
     right_area: Rect,
-    bottom_pad: u16,
 ) -> HeroOnLeftRightPane {
     let areas = pill_bar_areas(Rect {
         x: right_area.x,
         y: right_panel.y,
         width: right_area.width,
-        height: right_panel.height.saturating_sub(bottom_pad),
+        height: right_panel.height,
     });
     HeroOnLeftRightPane {
         pills_area: areas.pills_area,

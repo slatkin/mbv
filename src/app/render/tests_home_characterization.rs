@@ -3,6 +3,7 @@ use super::test_helpers::{
 };
 use super::*;
 use crate::app::components::{ComponentId, HomeComponent};
+use crate::app::render::arrangements::hero_left;
 use crate::app::tests::make_app_stub;
 use crate::app::{palette, PanelFocus, TabSelection};
 
@@ -286,4 +287,41 @@ fn narrow_home_inline_hero_contrasts_with_pane_backdrop() {
     let backdrop_bg = buffer[(area.x, hero.y.saturating_sub(1))].style().bg;
     assert_eq!(backdrop_bg, Some(palette::SURFACE_BACKDROP));
     assert_ne!(hero_bg, backdrop_bg, "hero must read as a recessed card");
+}
+
+/// migrate-home-feeds 5.1: the shared hero-on-left primitive owns the one-row
+/// status-row reserve, so wide Home's hero panel and list panel must both
+/// bottom out exactly one row above the destination area's bottom (the status
+/// bar row) — no per-tab reserve on top of the shared one.
+#[test]
+fn wide_home_panes_leave_exactly_one_row_above_the_status_bar() {
+    let (width, height) = (200u16, 40u16);
+    let app = home_app();
+    let (model, _terminal) = render_home_shell_with(app, width, height, |m| {
+        m.home_content.continue_items = vec![emby_cw_item()];
+    });
+    let home = model
+        .application
+        .get_component(&ComponentId::Home)
+        .expect("Home component mounted")
+        .as_any()
+        .downcast_ref::<HomeComponent>()
+        .expect("Home component type");
+    // The status row sits one row below the Home destination area, not one
+    // row below the terminal (chrome owns the rows under `home_area`).
+    let home_area = model.app.layout.main.home_area;
+    let hero = home.hero_area().expect("wide Home paints a hero panel");
+    let (list_area, _) = home.menu_placement_geometry();
+    assert_eq!(
+        hero.bottom(),
+        home_area.bottom() - 1,
+        "hero panel must bottom out one row above the status row"
+    );
+    // The inset list content sits PANE_PAD_Y above its framed panel; the
+    // framed panel itself reaches the same one-row-above-bottom edge.
+    assert_eq!(
+        list_area.bottom() + hero_left::PANE_PAD_Y,
+        home_area.bottom() - 1,
+        "framed list panel must bottom out one row above the status row"
+    );
 }

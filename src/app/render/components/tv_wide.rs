@@ -94,8 +94,7 @@ impl TvWideRenderCtx {
         layout.tv_wide_left_area = panes.left_area;
         layout.tv_wide_right_area = panes.right_area;
         layout.left_area = Rect::default();
-        let right_pane =
-            hero_left::hero_on_left_right_pane(panes.right_panel, panes.right_area, PANE_PAD_Y);
+        let right_pane = hero_left::hero_on_left_right_pane(panes.right_panel, panes.right_area);
         layout.tv_wide_list_area = padded_rect(right_pane.list_panel, PANE_PAD_X, PANE_PAD_Y);
     }
 }
@@ -220,7 +219,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         render_placeholder(f, left_area, " Loading\u{2026}");
     }
 
-    let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
+    let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_area);
     if ctx.list.is_search_active() {
         crate::app::render::components::hero::render_search_box(
             f,

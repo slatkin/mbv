@@ -134,8 +134,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             )),
             panes.right_panel,
         );
-        let right_pane =
-            hero_left::hero_on_left_right_pane(panes.right_panel, panes.right_area, PANE_PAD_Y);
+        let right_pane = hero_left::hero_on_left_right_pane(panes.right_panel, panes.right_area);
         let pills = right_pane.pills_area;
         geometry.selector_tabs =
             render_book_pills(frame, pills, state, interaction.selected_bucket);

@@ -180,7 +180,6 @@ pub(in crate::app) fn render_home_content(
         let Some((mut hero_panel, right_panel)) = wide_panes else {
             unreachable!("wide_panes is present when two_column is true");
         };
-        hero_panel.height = area.height.saturating_sub(1);
         hero_area_out = Some(hero_panel);
         let mut hero_content = padded_rect(hero_panel, PANE_PAD_X, PANE_PAD_Y);
         let hero_col_height = hero_content.height;
@@ -364,7 +363,7 @@ pub(in crate::app) fn render_home_content(
     let (pills_area, spacer_area, green_panel_full): (Rect, Rect, Option<Rect>) =
         if wide_pill_section {
             let right_area = padded_rect(list_area, 0, PANE_PAD_Y);
-            let right_pane = hero_left::hero_on_left_right_pane(list_area, right_area, PANE_PAD_Y);
+            let right_pane = hero_left::hero_on_left_right_pane(list_area, right_area);
             (
                 right_pane.pills_area,
                 right_pane.spacer_area,

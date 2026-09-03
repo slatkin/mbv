@@ -393,7 +393,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
         ratatui::widgets::Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
         right_panel,
     );
-    let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
+    let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_area);
     if ctx.list.is_search_active() {
         crate::app::render::components::hero::render_search_box(
             f,

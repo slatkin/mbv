@@ -270,10 +270,10 @@ fn wide_feeds_reserve_borders_at_the_scrolled_bottom_boundary() {
     assert_eq!(buffer[(panel.x, panel.bottom() - 1)].symbol(), "▁");
 }
 
-/// migrate-home-feeds 4.6 regression: the Wide Feeds list panel and left hero
-/// panel must bottom out at least one row above `area.bottom()`, matching every
-/// sibling tab's 1-row gap above the status bar (`library.rs` reserves the same
-/// row via `area.height.saturating_sub(1)`).
+/// migrate-home-feeds 5.1: the shared hero-on-left primitive owns the status-row
+/// reserve, so the Wide Feeds list panel and left hero panel must bottom out
+/// exactly one row above `area.bottom()` — the same one-row gap every sibling
+/// tab gets from the shared primitive (no per-tab reserve on top of it).
 #[test]
 fn wide_feeds_reserve_a_bottom_row_above_the_status_bar() {
     let height: u16 = 30;
@@ -282,14 +282,15 @@ fn wide_feeds_reserve_a_bottom_row_above_the_status_bar() {
     let layout = component.layout();
 
     let list_panel_bottom = layout.left_area.bottom() + hero_left::PANE_PAD_Y;
-    assert!(
-        list_panel_bottom < height,
-        "list panel bottom {list_panel_bottom} must leave a row above {height}"
+    assert_eq!(
+        list_panel_bottom,
+        height - 1,
+        "framed list panel must bottom out one row above {height}"
     );
-    assert!(
-        layout.hero_area.bottom() < height,
-        "hero panel bottom {} must leave a row above {height}",
-        layout.hero_area.bottom()
+    assert_eq!(
+        layout.hero_area.bottom(),
+        height - 1,
+        "hero panel must bottom out one row above {height}"
     );
 
     let buffer = terminal.backend().buffer();

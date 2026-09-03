@@ -144,18 +144,9 @@ pub(in crate::app) fn render_feeds_content(
         (selector_tabs, list_area)
     };
 
-    // The pill strip lives in the right pane for Wide (below the hero-on-left
-    // card) and in the full area for Narrow.
-    // Reserve one bottom row so the Wide list panel and left hero panel bottom
-    // out one row above `area.bottom()`, matching every sibling tab's 1-row gap
-    // above the status bar (e.g. `library.rs` `area.height.saturating_sub(1)`).
-    let wide_panes = hero_left::shared_hero_presentation(area).map(|(left, right)| {
-        let shrink = |r: Rect| Rect {
-            height: r.height.saturating_sub(1),
-            ..r
-        };
-        (shrink(left), shrink(right))
-    });
+    // The shared arrangement owns the pill row and spacer (and the status-row
+    // reserve on both returned panes).
+    let wide_panes = hero_left::shared_hero_presentation(area);
     let selector_pane = wide_panes.map(|(_, right)| right).unwrap_or(area);
     let (selector_tabs, list_panel) = render_selector_content(f, selector_pane);
     layout.selector_tabs = selector_tabs;
