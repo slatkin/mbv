@@ -1,8 +1,8 @@
 ## 1. Preconditions and characterization
 
-- [ ] 1.1 Record the then-current merge-containing baseline SHA at implementation start. It will contain the unaccepted Home/Feeds wiring (`173bdba1`/`400c0b59`) — that is acknowledged, not forbidden: this slice reworks that wiring to the canonical contract. Note the stashed `home-wip-paused-during-canonical-merge` work as unaccepted evidence alongside it. Confirm dependencies on the merged and archived canonical foundation (merge `a72f60f9`, archive `9122cc1b`) plus the accepted `restore-feeds-service-wide-list` Feeds Wide prerequisite (umbrella task 1.3a). The Emby homevideos feed view (#634/#637) is an out-of-scope boundary, not a prerequisite.
-- [ ] 1.2 Record current Home active-section identity/cursor/scroll/restore behavior and Feeds watched/group behavior from source, existing evidence, and the running app.
-- [ ] 1.3 Record current Wide/Narrow rendering, images/workspaces, selection, scrolling, and one-painter paths as the pre-replacement baseline.
+- [x] 1.1 Record the then-current merge-containing baseline SHA at implementation start. It will contain the unaccepted Home/Feeds wiring (`173bdba1`/`400c0b59`) — that is acknowledged, not forbidden: this slice reworks that wiring to the canonical contract. Note the stashed `home-wip-paused-during-canonical-merge` work as unaccepted evidence alongside it. Confirm dependencies on the merged and archived canonical foundation (merge `a72f60f9`, archive `9122cc1b`) plus the accepted `restore-feeds-service-wide-list` Feeds Wide prerequisite (umbrella task 1.3a). The Emby homevideos feed view (#634/#637) is an out-of-scope boundary, not a prerequisite.
+- [x] 1.2 Record current Home active-section identity/cursor/scroll/restore behavior and Feeds watched/group behavior from source, existing evidence, and the running app.
+- [x] 1.3 Record current Wide/Narrow rendering, images/workspaces, selection, scrolling, and one-painter paths as the pre-replacement baseline.
 
 ## 2. Home composition
 
