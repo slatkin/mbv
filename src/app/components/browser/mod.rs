@@ -296,6 +296,14 @@ impl BrowserComponent {
         self.image_paint.take()
     }
 
+    /// The panel and selected-row anchor from the active control's last paint.
+    /// The shell uses this for keyboard-opened context menus instead of the
+    /// legacy App layout mirror.
+    pub(in crate::app) fn menu_placement_geometry(&self) -> Option<(Rect, Option<Rect>)> {
+        (self.layout.left_area.width > 0 && self.layout.left_area.height > 0)
+            .then_some((self.layout.left_area, self.layout.selected_item_rect))
+    }
+
     /// Handle a mouse event against the component's painted browse geometry.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         let col = mouse.column;

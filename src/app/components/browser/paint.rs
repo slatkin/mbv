@@ -153,6 +153,12 @@ impl BrowserComponent {
                 &mut self.layout,
             );
             self.wide_list.set_scroll(offset);
+            // Export the selected-row anchor from the control's exact painted
+            // flow; the shell consumes it for context-menu placement.
+            self.layout.selected_item_rect = self
+                .wide_list
+                .row_geometry(list_area.height as usize)
+                .selected_row_rect(list_area);
             // Republish the sorted display order the rail was built from so the
             // parent's letter-aware keyboard navigation keeps resolving targets
             // against `self.layout` (mirrors `render_wide_tv_with_ctx`; task
