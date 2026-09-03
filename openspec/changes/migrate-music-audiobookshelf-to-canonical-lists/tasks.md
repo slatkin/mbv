@@ -1,8 +1,8 @@
 ## 1. Preconditions and characterization
 
-- [ ] 1.1 Confirm the two predecessors (canonical media-list foundation — an accepted prerequisite slice that must merge first; the landed #640 Home podcast hero-on-left correction), PR #606 feature-branch stacking, and that `migrate-home-feeds-to-canonical-lists` is a sibling slice not a dependency; when implementation is issued, record the feature-branch baseline SHA in the implementation handoff/task evidence (no SHA pinned in this plan); do not edit umbrella artifacts.
-- [ ] 1.2 Read current Music, Podcast, and Book render/component callers — including the bespoke `render_book_browser` Wide path that reuses Narrow selected-row-replacement logic — and record source-of-truth precedent from working TV/Movies; document that the Emby podcast channel list, the Emby homevideos feed view, and #623/#634/#637 are out of scope.
-- [ ] 1.3 Record grouped Music re-anchor behavior before replacement with metadata-bearing Wide/Normal and breakpoint-transition evidence for selected target, cursor, scroll, and selected-row offset.
+- [x] 1.1 Confirm the two predecessors (canonical media-list foundation — an accepted prerequisite slice that must merge first; the landed #640 Home podcast hero-on-left correction), PR #606 feature-branch stacking, and that `migrate-home-feeds-to-canonical-lists` is a sibling slice not a dependency; when implementation is issued, record the feature-branch baseline SHA in the implementation handoff/task evidence (no SHA pinned in this plan); do not edit umbrella artifacts.
+- [x] 1.2 Read current Music, Podcast, and Book render/component callers — including the bespoke `render_book_browser` Wide path that reuses Narrow selected-row-replacement logic — and record source-of-truth precedent from working TV/Movies; document that the Emby podcast channel list, the Emby homevideos feed view, and #623/#634/#637 are out of scope.
+- [x] 1.3 Record grouped Music re-anchor behavior before replacement with metadata-bearing Wide/Normal and breakpoint-transition evidence for selected target, cursor, scroll, and selected-row offset.
 
 ## 2. Canonical composition
 
