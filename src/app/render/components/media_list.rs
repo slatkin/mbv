@@ -1,4 +1,4 @@
-use super::hero::{inline_display_row, InlineDisplayRow};
+use super::hero::InlineDisplayRow;
 use super::list_rows::{
     focused_or_subtle, item_cell_spans, selected_cell_rect, selection_marker, DisplayRow,
     InlineReplacementPlan, ListRenderCtx, MarkerEdge,
@@ -220,7 +220,7 @@ pub(in crate::app) fn render_plain_rows(
 /// `EmbyItem`-typed `render_plain_rows` above (which stays the path for the
 /// inline browsers until it is parameterised). Returns the resolved scroll
 /// offset for the caller to store via `WideMediaList::set_scroll`.
-pub(in crate::app) fn render_wide_media_list<Target>(
+pub(in crate::app) fn render_wide_media_list<Target: Clone>(
     f: &mut Frame,
     area: Rect,
     list: &WideMediaList<Target>,
@@ -228,59 +228,66 @@ pub(in crate::app) fn render_wide_media_list<Target>(
     selected_bg: Color,
     layout: &mut LayoutMain,
 ) -> usize {
-    let viewport = list.resolve_viewport(area.height as usize);
+    let geometry = list.row_geometry(area.height as usize);
     let rows = list.rows();
-    let selected_row = list.selected_display_row();
-    layout.left_item_rows = rows
-        .iter()
-        .enumerate()
-        .filter_map(|(row, item)| match item {
-            MediaListRow::Item { .. } => Some(vec![row]),
-            _ => None,
+    let selected_row = geometry.selected_row();
+    let offset = geometry.offset();
+    let total_rows = geometry.len();
+    layout.left_item_rows = (0..total_rows)
+        .filter_map(|row| {
+            geometry.source_row(row).and_then(|source_row| {
+                matches!(rows[source_row], MediaListRow::Item { .. }).then_some(vec![source_row])
+            })
         })
         .collect();
-    layout.left_row_map = (viewport.offset..viewport.total_rows)
-        .take(viewport.height)
-        .map(|row| matches!(rows[row], MediaListRow::Item { .. }).then_some(row))
+    layout.left_row_map = (offset..total_rows)
+        .take(area.height as usize)
+        .map(|row| {
+            geometry
+                .source_row(row)
+                .filter(|&source_row| matches!(rows[source_row], MediaListRow::Item { .. }))
+        })
         .collect();
 
-    let inner_width = area
-        .width
-        .saturating_sub(u16::from(focused && viewport.overflows())) as usize;
-    let list_items: Vec<ListItem> = (viewport.offset..viewport.total_rows)
-        .take(viewport.height)
+    let overflows = total_rows > area.height as usize;
+    let inner_width = area.width.saturating_sub(u16::from(focused && overflows)) as usize;
+    let list_items: Vec<ListItem> = (offset..total_rows)
+        .take(area.height as usize)
         .map(|row| {
+            let source_row = geometry
+                .source_row(row)
+                .expect("wide geometry contains a source row");
             wide_media_row(
-                &rows[row],
+                &rows[source_row],
                 Some(row) == selected_row,
                 focused,
                 selected_bg,
                 inner_width,
-                focused && viewport.overflows(),
+                focused && overflows,
             )
         })
         .collect();
     f.render_widget(List::new(list_items), area);
 
-    if focused && viewport.overflows() {
+    if focused && overflows {
         crate::app::render::render_right_scrollbar(
             f,
             area,
-            viewport.max_offset(),
-            viewport.offset,
+            total_rows.saturating_sub(area.height as usize),
+            offset,
             palette::SCROLLBAR,
         );
     }
 
-    viewport.offset
+    offset
 }
 
-/// Resolved paint output for [`render_inline_media_browser`]: the offset the
-/// caller stores via `InlineMediaBrowser::set_scroll`, and the screen rect of
-/// the admitted detail block (the caller paints the hero into it), or `None`
+/// Resolved paint output for [`render_inline_media_browser`]: the exact flow
+/// geometry used for painting and compatibility hit maps, plus the screen rect
+/// of the admitted detail block (the caller paints the hero into it), or `None`
 /// when the block did not fit and the ordinary selected row was painted.
-pub(in crate::app) struct InlinePaintResult {
-    pub offset: usize,
+pub(in crate::app) struct InlinePaintResult<Target> {
+    pub row_geometry: crate::app::components::media_list::RowGeometry<Target>,
     pub hero_area: Option<Rect>,
 }
 
@@ -291,74 +298,63 @@ pub(in crate::app) struct InlinePaintResult {
 /// ordinary rows around the reserved detail block, reusing the shared
 /// `wide_media_row` primitive and `hero::inline_display_row` mapping.
 ///
-pub(in crate::app) fn render_inline_media_browser<Target>(
+pub(in crate::app) fn render_inline_media_browser<Target: Clone>(
     f: &mut Frame,
     area: Rect,
     list: &InlineMediaBrowser<Target>,
     desired_detail_rows: usize,
     focused: bool,
     selected_bg: Color,
-) -> InlinePaintResult {
-    let layout: InlineLayout =
+) -> InlinePaintResult<Target> {
+    let layout: InlineLayout<Target> =
         list.resolve_inline_layout(area.height as usize, desired_detail_rows);
+    let geometry = layout.row_geometry;
     let rows = list.rows();
-    let source_rows = rows.len();
-    let selected_row = list.selected_display_row();
+    let offset = geometry.offset();
+    let total_rows = geometry.len();
+    let selected_row = geometry.selected_row();
 
-    let inner_width = area.width.saturating_sub(u16::from(
-        focused && layout.total_display_rows > layout.height,
-    )) as usize;
-    let window = (layout.offset..layout.total_display_rows).take(layout.height);
-    let list_items: Vec<ListItem> = if layout.detail_rows == 0 {
-        window
-            .map(|row| {
-                wide_media_row(
-                    &rows[row],
-                    Some(row) == selected_row,
-                    focused,
-                    selected_bg,
-                    inner_width,
-                    focused && layout.total_display_rows > layout.height,
-                )
-            })
-            .collect()
-    } else {
-        let sel = selected_row.expect("an admitted detail block requires a selection");
-        window
-            .map(|display_row| {
-                match inline_display_row(source_rows, sel, layout.detail_rows as u16, display_row) {
-                    Some(InlineDisplayRow::Source(source_row)) => wide_media_row(
+    let overflows = total_rows > area.height as usize;
+    let inner_width = area.width.saturating_sub(u16::from(focused && overflows)) as usize;
+    let window = (offset..total_rows).take(area.height as usize);
+    let list_items: Vec<ListItem> = window
+        .map(|display_row| {
+            geometry
+                .source_row(display_row)
+                .map(|source_row| {
+                    wide_media_row(
                         &rows[source_row],
-                        false,
+                        Some(display_row) == selected_row && layout.detail_rows == 0,
                         focused,
                         selected_bg,
                         inner_width,
-                        focused && layout.total_display_rows > layout.height,
-                    ),
-                    Some(InlineDisplayRow::Replacement) | None => ListItem::new(Line::default()),
-                }
-            })
-            .collect()
-    };
+                        focused && overflows,
+                    )
+                })
+                .unwrap_or_else(|| ListItem::new(Line::default()))
+        })
+        .collect();
     f.render_widget(List::new(list_items), area);
 
-    if focused && layout.total_display_rows > layout.height {
+    if focused && overflows {
         crate::app::render::render_right_scrollbar(
             f,
             area,
-            layout.total_display_rows.saturating_sub(layout.height),
-            layout.offset,
+            total_rows.saturating_sub(area.height as usize),
+            offset,
             palette::SCROLLBAR,
         );
     }
 
-    let hero_area = layout.detail_screen_row.map(|screen_row| Rect {
-        y: area.y + screen_row as u16,
-        height: layout.detail_rows as u16,
-        ..area
-    });
+    let hero_area = (layout.detail_rows > 0)
+        .then(|| geometry.selected_row_rect(area))
+        .flatten()
+        .map(|selected| Rect {
+            height: layout.detail_rows as u16,
+            ..selected
+        });
     InlinePaintResult {
-        offset: layout.offset,
+        row_geometry: geometry,
         hero_area,
     }
 }

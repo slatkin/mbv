@@ -222,54 +222,23 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         );
         layout.hero_area = result.hero_area.unwrap_or_default();
         layout.inline_hero_area = layout.hero_area;
-        let rows = browser.rows();
         layout.left_sorted_indices = sorted_indices;
-        // These maps are in replacement-flow space, including headings, spacers,
-        // and the admitted hero block; consumers must share the painter's plan.
-        let display_rows: Vec<crate::app::render::components::list_rows::DisplayRow> = rows
-            .iter()
-            .map(|row| match row {
-                MediaListRow::Item { target, .. } => {
-                    crate::app::render::components::list_rows::DisplayRow::Item(vec![*target])
-                }
-                MediaListRow::Heading { text } => {
-                    crate::app::render::components::list_rows::DisplayRow::LetterHeader(
-                        text.clone(),
-                    )
-                }
-                MediaListRow::Spacer => {
-                    crate::app::render::components::list_rows::DisplayRow::Spacer
-                }
-            })
+        // These maps come directly from the painter's replacement flow,
+        // including headings, spacers, and targetless hero continuation rows.
+        layout.left_item_rows = result
+            .row_geometry
+            .targets()
+            .map(|target| target.map(|target| vec![*target]).unwrap_or_default())
             .collect();
-        let selected_display = display_rows.iter().position(|row| matches!(row, crate::app::render::components::list_rows::DisplayRow::Item(ids) if ids.contains(&ctx.cursor))).unwrap_or(0);
-        let plan = crate::app::render::components::list_rows::InlineReplacementPlan::new(
-            &display_rows,
-            selected_display,
-            ctx.cursor,
-            desired_rows as u16,
-            list_area.height,
-            browser.scroll(),
-        );
-        layout.left_item_rows = plan.item_rows();
-        layout.left_row_map = plan
-            .row_targets()
-            .into_iter()
-            .skip(result.offset)
+        layout.left_row_map = result
+            .row_geometry
+            .targets()
+            .skip(result.row_geometry.offset())
             .take(list_area.height as usize)
+            .map(|target| target.copied())
             .collect();
-        layout.selected_item_rect = layout
-            .left_item_rows
-            .iter()
-            .position(|r| r.contains(&ctx.cursor))
-            .and_then(|row| row.checked_sub(result.offset))
-            .map(|y| Rect {
-                x: list_area.x,
-                y: list_area.y + y as u16,
-                width: list_area.width,
-                height: 1,
-            });
-        result.offset
+        layout.selected_item_rect = result.row_geometry.selected_row_rect(list_area);
+        result.row_geometry.offset()
     } else {
         let row_ctx = ctx.rows(list_area, cols, focused, inline_hero_rows);
         if use_letter_groups {

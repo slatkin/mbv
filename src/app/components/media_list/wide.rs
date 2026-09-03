@@ -1,4 +1,6 @@
-use super::{letter_grouped_rows, ListCore, MediaListRow, ViewportAnchor, WideViewport};
+use super::{
+    letter_grouped_rows, ListCore, MediaListRow, RowGeometry, ViewportAnchor, WideViewport,
+};
 
 /// Embedded plain fixed-height, one-column media list: owns the display-row
 /// list, the selectable index over it, the cursor, and the resting scroll
@@ -90,6 +92,18 @@ impl<Target> WideMediaList<Target> {
     /// row, for the responsive [`ViewportAnchor`] hand-off (design.md D3).
     pub fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
         self.core.selected_row_offset(viewport_height)
+    }
+}
+
+impl<Target: Clone> WideMediaList<Target> {
+    /// Export the fixed one-column flow used by the painter.
+    pub fn row_geometry(&self, viewport_height: usize) -> RowGeometry<Target> {
+        let viewport = self.core.resolve_viewport(viewport_height);
+        RowGeometry::source(
+            self.core.rows(),
+            viewport.offset,
+            self.core.selected_display_row(),
+        )
     }
 }
 

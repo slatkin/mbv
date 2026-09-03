@@ -1,21 +1,14 @@
-use super::{ListCore, MediaListRow, ViewportAnchor, WideViewport};
+use super::{ListCore, MediaListRow, RowGeometry, ViewportAnchor, WideViewport};
 
 /// Resolved geometry for one painted frame of an [`InlineMediaBrowser`]
 /// (design.md D1). `detail_rows == 0` means the detail block did not fit the
 /// painted viewport and the browser fell back to painting the ordinary
-/// selected row; otherwise the block replaces the selected row in the flow
-/// and `detail_screen_row` is its row offset from the viewport top.
-pub struct InlineLayout {
-    /// Display-row index at the viewport top.
-    pub offset: usize,
-    /// Painted viewport height (at least 1).
-    pub height: usize,
+/// selected row; otherwise the block replaces the selected row in the flow.
+pub struct InlineLayout<Target> {
+    /// The authoritative flow geometry used by the painter and consumers.
+    pub row_geometry: RowGeometry<Target>,
     /// Admitted detail-block height, or `0` on fallback.
     pub detail_rows: usize,
-    /// The detail block's row offset from the viewport top, when admitted.
-    pub detail_screen_row: Option<usize>,
-    /// Total display rows after the selected row is swallowed by the block.
-    pub total_display_rows: usize,
 }
 
 /// Embedded plain media browser that replaces the selected row with a
@@ -124,10 +117,11 @@ impl<Target> InlineMediaBrowser<Target> {
         &self,
         viewport_height: usize,
         desired_detail_rows: usize,
-    ) -> InlineLayout {
+    ) -> InlineLayout<Target>
+    where
+        Target: Clone,
+    {
         let height = viewport_height.max(1);
-        let source_rows = self.core.rows().len();
-
         let admit = match self.core.selected_display_row() {
             Some(row) if desired_detail_rows > 0 && desired_detail_rows < height => Some(row),
             _ => None,
@@ -136,28 +130,53 @@ impl<Target> InlineMediaBrowser<Target> {
         match admit {
             Some(row) => {
                 let lower_bound = (row + desired_detail_rows).saturating_sub(height).min(row);
-                let offset = self.core.scroll().clamp(lower_bound, row);
+                let mut offset = self.core.scroll().clamp(lower_bound, row);
+                if matches!(
+                    self.core.rows().get(offset.saturating_sub(1)),
+                    Some(MediaListRow::Heading { .. })
+                ) && offset > 0
+                {
+                    let header_offset = offset - 1;
+                    let detail_end = row.saturating_sub(header_offset) + desired_detail_rows;
+                    if detail_end <= height {
+                        offset = header_offset;
+                    }
+                }
                 InlineLayout {
-                    offset,
-                    height,
+                    row_geometry: RowGeometry::replacement(
+                        self.core.rows(),
+                        row,
+                        desired_detail_rows,
+                        offset,
+                    ),
                     detail_rows: desired_detail_rows,
-                    detail_screen_row: Some(row - offset),
-                    // One source row is swallowed by the block
-                    // (`hero::inline_display_row_count`).
-                    total_display_rows: source_rows - 1 + desired_detail_rows,
                 }
             }
             None => {
                 let viewport = self.core.resolve_viewport(height);
                 InlineLayout {
-                    offset: viewport.offset,
-                    height,
+                    row_geometry: RowGeometry::source(
+                        self.core.rows(),
+                        viewport.offset,
+                        self.core.selected_display_row(),
+                    ),
                     detail_rows: 0,
-                    detail_screen_row: None,
-                    total_display_rows: viewport.total_rows,
                 }
             }
         }
+    }
+
+    /// Export the replacement flow geometry used for a painted frame.
+    pub fn row_geometry(
+        &self,
+        viewport_height: usize,
+        desired_detail_rows: usize,
+    ) -> RowGeometry<Target>
+    where
+        Target: Clone,
+    {
+        self.resolve_inline_layout(viewport_height, desired_detail_rows)
+            .row_geometry
     }
 }
 
