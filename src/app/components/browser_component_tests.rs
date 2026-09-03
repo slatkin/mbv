@@ -1,4 +1,5 @@
 use super::browser::BrowserComponent;
+use super::browser_narrow::NarrowBrowseExtras;
 use super::component_id::BrowserKind;
 use crate::app::components::browser::BrowserContent;
 use crate::app::components::msg::{Msg, ShellRequest};
@@ -178,6 +179,55 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
             "{key:?} from cursor {from} in the letter-grouped list"
         );
     }
+}
+
+#[test]
+fn browser_control_transition_preserves_the_selected_viewport_offset() {
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    browser.set_content(BrowserContent::from_items(make_items(40)), true);
+    browser.set_narrow_extras(NarrowBrowseExtras {
+        hero_placeholder: true,
+        ..NarrowBrowseExtras::default()
+    });
+    browser.set_cursor_for_test(20);
+
+    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    let narrow_anchor = browser
+        .viewport_anchor(browser.painted_viewport_height())
+        .expect("narrow inline control has a selected item");
+
+    let mut wide_terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    wide_terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    let wide_anchor = browser
+        .viewport_anchor(browser.painted_viewport_height())
+        .expect("wide control has a selected item");
+
+    assert_eq!(wide_anchor.selected_target, narrow_anchor.selected_target);
+    assert_eq!(
+        wide_anchor.selected_row_offset, narrow_anchor.selected_row_offset,
+        "Movies breakpoint handoff must preserve the outgoing inline offset"
+    );
+
+    let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    narrow_terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    let narrow_again = browser
+        .viewport_anchor(browser.painted_viewport_height())
+        .expect("narrow control has a selected item after returning");
+    assert_eq!(
+        narrow_again.selected_target, wide_anchor.selected_target,
+        "Movies breakpoint handoff must preserve the selected item in both directions"
+    );
+    assert_eq!(
+        narrow_again.selected_row_offset, wide_anchor.selected_row_offset,
+        "Movies breakpoint handoff must preserve the outgoing wide offset"
+    );
 }
 
 /// Wide-Movies exact parity: a Movies-keyed component on a >=82-wide

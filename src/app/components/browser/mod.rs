@@ -449,7 +449,21 @@ impl Default for BrowserComponent {
 
 impl Component for BrowserComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        self.layout = LayoutMain::default();
+        // Compute the next presentation before consuming a pending anchor so a
+        // control transition can carry the outgoing control's live offset into
+        // the incoming control. The anchor is deliberately one-shot; the
+        // receiving control consumes it on this or the next frame.
+        let wide = (matches!(self.kind, BrowserKind::Movies | BrowserKind::HomeVideos)
+            || self.narrow_extras.feed_items.is_some())
+            && shared_hero_presentation(area).is_some();
+        let switching_controls = wide != self.wide_movies;
+        if switching_controls {
+            if let Some(anchor) = self.active_viewport_anchor(self.painted_viewport_height()) {
+                self.preserved_anchor = Some(anchor.clone());
+                self.pending_anchor = Some(anchor);
+            }
+            self.wide_movies = wide;
+        }
         if let Some(anchor) = self.pending_anchor.take() {
             if !self.apply_active_viewport_anchor(&anchor, area.height as usize) {
                 if let Some(cursor) = self
@@ -466,8 +480,14 @@ impl Component for BrowserComponent {
                             .saturating_sub(area.height as usize),
                     );
                 }
+                // A newly-mounted receiving control may not have rows until
+                // this render populates it. Retry the handoff once next frame.
+                if switching_controls {
+                    self.pending_anchor = Some(anchor);
+                }
             }
         }
+        self.layout = LayoutMain::default();
         let mut context = self
             .context
             .clone()
@@ -488,10 +508,6 @@ impl Component for BrowserComponent {
         // for the shared split), paint the full hero + pills + list layout
         // itself instead of just the inner list rows; otherwise keep the
         // narrow list-row behavior.
-        let wide = (matches!(self.kind, BrowserKind::Movies | BrowserKind::HomeVideos)
-            || self.narrow_extras.feed_items.is_some())
-            && shared_hero_presentation(area).is_some();
-        self.wide_movies = wide;
         self.scroll = if wide {
             self.render_wide_movies(frame, area, &context)
         } else {
