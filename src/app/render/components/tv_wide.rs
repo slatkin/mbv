@@ -180,7 +180,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     area: Rect,
     ctx: &TvWideRenderCtx,
     layout: &mut LayoutMain,
-    media_list: &WideMediaList<String>,
+    media_list: &mut WideMediaList<String>,
 ) -> (usize, Option<HomeImagePaint>) {
     layout.tv_wide_episode_rows.clear();
     layout.tv_wide_season_tabs.clear();
@@ -269,14 +269,17 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     // Legacy rail parity (`item_cell_spans`): the selected row takes the
     // resting surface so it reads against the focused green panel body.
-    let final_scroll = super::media_list::render_wide_media_list(
+    let paint = super::media_list::render_wide_media_list(
         f,
         paint_area,
+        list_area,
         media_list,
         right_focused,
         palette::SURFACE_RESTING,
-        layout,
     );
+    layout.left_item_rows = paint.left_item_rows;
+    layout.left_row_map = paint.left_row_map;
+    let final_scroll = paint.row_geometry.offset();
     // Same key the component sorts the rail rows by, so `left_sorted_indices`
     // matches the painted order; `sort_by_cached_key` computes each key once.
     let mut order: Vec<usize> = (0..ctx.list.items.len()).collect();

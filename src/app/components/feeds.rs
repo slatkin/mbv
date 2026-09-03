@@ -418,7 +418,7 @@ impl Component for FeedsComponent {
                 loading: self.loading,
                 selected_entry: selected_entry.as_ref(),
             },
-            &self.canonical_list,
+            &mut self.canonical_list,
             &self.inline_list,
         );
         self.painted_offset = offset;

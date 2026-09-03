@@ -603,7 +603,7 @@ impl Component for HomeComponent {
             self.section,
             cursor,
             &mut self.canonical_list,
-            &mut self.inline_list,
+            &self.inline_list,
             self.use_nerd_fonts,
         );
         self.section = result.resolved_section;

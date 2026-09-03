@@ -13,7 +13,6 @@ use super::msg::{
     Msg, QueueColumnResize, QueueHitRegion, QueueIntent, QueueMove, QueueRequest, ShellRequest,
 };
 use super::user_event::UserEvent;
-use crate::app::layout::LayoutMain;
 use crate::app::palette;
 use crate::app::render::{
     render_queue_title_content, render_wide_media_list, QueueRenderGeometry, QueueTitleModel,
@@ -419,21 +418,19 @@ impl Component for QueueComponent {
             return;
         }
         // The canonical child is the sole Queue body painter
-        // (migrate-queue-to-canonical-list D4). It publishes its row/scroll
-        // geometry into a `LayoutMain`; Queue keeps its own `QueueHitRegion`
+        // (migrate-queue-to-canonical-list D4). It persists the resolved scroll
+        // offset back into the list; Queue keeps its own `QueueHitRegion`
         // geometry (rebuilt below) so the untouched mouse path still resolves.
-        let mut published = LayoutMain::default();
         // Legacy `render_queue_content` parity: the selected row takes the
         // focused queue-column surface (its parent panel).
-        let offset = render_wide_media_list(
+        render_wide_media_list(
             frame,
             area,
-            &self.list,
+            area,
+            &mut self.list,
             self.focused,
             palette::SURFACE_FOCUSED,
-            &mut published,
         );
-        self.list.set_scroll(offset);
         let viewport = self.list.resolve_viewport(area.height as usize);
         self.geometry.rows = (viewport.offset..viewport.total_rows)
             .take(viewport.height)

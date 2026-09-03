@@ -4,7 +4,7 @@ use super::list_rows::{
     InlineReplacementPlan, ListRenderCtx, MarkerEdge,
 };
 use crate::app::components::media_list::{
-    InlineLayout, InlineMediaBrowser, MediaListRow, MediaSemanticState, WideMediaList,
+    InlineLayout, InlineMediaBrowser, MediaListRow, MediaSemanticState, RowGeometry, WideMediaList,
 };
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
@@ -214,32 +214,51 @@ pub(in crate::app) fn render_plain_rows(
     final_offset
 }
 
+/// Resolved paint output for [`render_wide_media_list`]: the flow geometry the
+/// painter laid out (callers rebuild their pre-#638 hit maps from it), the
+/// selected row's absolute rect within the hit/scroll geometry rect, and the
+/// pre-#638 mouse-compat maps the painter used to publish through a `&mut
+/// LayoutMain` out-param. The painter persists the resolved scroll offset into
+/// `list` itself, so no caller can forget to.
+pub(in crate::app) struct MediaListPaint<Target> {
+    pub row_geometry: RowGeometry<Target>,
+    pub selected_row_rect: Option<Rect>,
+    pub left_item_rows: Vec<Vec<usize>>,
+    pub left_row_map: Vec<Option<usize>>,
+}
+
 /// Paint entry point for the embedded plain `WideMediaList` (design.md D1):
 /// a fixed-height, one-column list with no inline-detail replacement flow.
 /// Reuses the shared list-row span and scrollbar primitives rather than the
 /// `EmbyItem`-typed `render_plain_rows` above (which stays the path for the
-/// inline browsers until it is parameterised). Returns the resolved scroll
-/// offset for the caller to store via `WideMediaList::set_scroll`.
+/// inline browsers until it is parameterised).
+///
+/// `paint_area` is the row-flow paint rect: its `x`/`width` span the full panel
+/// (so the selected-row background and the flush edge marker reach the panel
+/// border), while callers that own a framed rail pass a `paint_area` already
+/// inset vertically for their reserved border rows. `content_area` is the
+/// hit/scroll geometry rect (inset on both axes); the returned
+/// `selected_row_rect` and the caller's hit maps are resolved against it. The
+/// title's text indent is applied per row in `wide_media_row`, not by
+/// insetting either rect.
+///
+/// The painter resolves the scroll offset and stores it back into `list` via
+/// [`WideMediaList::set_scroll`] before returning, so the offset persists across
+/// frames without the caller threading a `usize` back.
 pub(in crate::app) fn render_wide_media_list<Target: Clone>(
     f: &mut Frame,
-    area: Rect,
-    list: &WideMediaList<Target>,
+    paint_area: Rect,
+    content_area: Rect,
+    list: &mut WideMediaList<Target>,
     focused: bool,
     selected_bg: Color,
-    layout: &mut LayoutMain,
-) -> usize {
-    // `area` is the row-flow paint rect: its `x`/`width` span the full panel
-    // (so the selected-row background and the flush edge marker reach the
-    // panel border), while callers that own a framed rail pass an `area`
-    // already inset vertically for their reserved border rows. The 4-column
-    // text indent is applied per row in `wide_media_row`, not by insetting
-    // `area`.
-    let geometry = list.row_geometry(area.height as usize);
+) -> MediaListPaint<Target> {
+    let geometry = list.row_geometry(content_area.height as usize);
     let rows = list.rows();
     let selected_row = geometry.selected_row();
     let offset = geometry.offset();
     let total_rows = geometry.len();
-    layout.left_item_rows = (0..total_rows)
+    let left_item_rows: Vec<Vec<usize>> = (0..total_rows)
         .filter_map(|row| {
             geometry.source_row(row).and_then(|source_row| {
                 matches!(rows[source_row], MediaListRow::Item { .. }).then_some(vec![source_row])
@@ -266,17 +285,17 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
             })
             .collect()
     };
-    layout.left_row_map = selectable_by_flow_row
+    let left_row_map: Vec<Option<usize>> = selectable_by_flow_row
         .into_iter()
         .skip(offset)
-        .take(area.height as usize)
+        .take(paint_area.height as usize)
         .collect();
 
-    let overflows = total_rows > area.height as usize;
+    let overflows = total_rows > paint_area.height as usize;
     let scrollbar = focused && overflows;
-    let inner_width = area.width.saturating_sub(u16::from(scrollbar)) as usize;
+    let inner_width = paint_area.width.saturating_sub(u16::from(scrollbar)) as usize;
     let list_items: Vec<ListItem> = (offset..total_rows)
-        .take(area.height as usize)
+        .take(paint_area.height as usize)
         .map(|row| {
             let source_row = geometry
                 .source_row(row)
@@ -292,19 +311,26 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
         .collect();
     // Row backgrounds own the full paint-rect width (legacy `selection_bg_full`
     // parity); `List` fills each row's style across the whole row area.
-    f.render_widget(List::new(list_items), area);
+    f.render_widget(List::new(list_items), paint_area);
 
     if scrollbar {
         crate::app::render::render_right_scrollbar(
             f,
-            area,
-            total_rows.saturating_sub(area.height as usize),
+            paint_area,
+            total_rows.saturating_sub(paint_area.height as usize),
             offset,
             palette::SCROLLBAR,
         );
     }
 
-    offset
+    let selected_row_rect = geometry.selected_row_rect(content_area);
+    list.set_scroll(offset);
+    MediaListPaint {
+        row_geometry: geometry,
+        selected_row_rect,
+        left_item_rows,
+        left_row_map,
+    }
 }
 
 /// Resolved paint output for [`render_inline_media_browser`]: the exact flow
@@ -393,10 +419,10 @@ pub(in crate::app) fn render_inline_media_browser<Target: Clone>(
 /// rails: `SURFACE_RESTING`, matching the legacy painters they replace).
 ///
 /// Row geometry: the flush edge marker sits at the paint rect's `x` (the
-/// panel border) and the title text is indented `LEFT_INSET` (4) columns in
-/// — `[marker][3 spaces][title…]` — matching the "standard 4" rail indent of
-/// the canonical Queue/TV rows; the selected row's background fills the whole
-/// row via `List`'s row-style fill.
+/// panel border) and the title text is indented `LEFT_INSET` (3) columns in
+/// — `[marker][2 spaces][title…]` — so the title lands at column 3 of the
+/// panel; the selected row's background fills the whole row via `List`'s
+/// row-style fill.
 fn wide_media_row<Target>(
     row: &MediaListRow<Target>,
     selected: bool,
@@ -408,7 +434,7 @@ fn wide_media_row<Target>(
         MediaListRow::Spacer => ListItem::new(Line::default()),
         MediaListRow::Heading { text } => ListItem::new(Line::from(vec![
             selection_marker(false, MarkerEdge::Left),
-            Span::raw("   "),
+            Span::raw("  "),
             Span::styled(
                 text.clone(),
                 Style::default()
@@ -424,11 +450,10 @@ fn wide_media_row<Target>(
             ..
         } => {
             // Canonical row geometry:
-            // `[marker][3 spaces][title…]  [FOAM trailing]  [green duration]`
-            // with the flush marker at the panel edge, the title at the
-            // "standard 4" rail indent, and a quiet gap before the
-            // right-aligned duration.
-            const LEFT_INSET: usize = 4;
+            // `[marker][2 spaces][title…]  [FOAM trailing]  [green duration]`
+            // with the flush marker at the panel edge, the title at column 3,
+            // and a quiet gap before the right-aligned duration.
+            const LEFT_INSET: usize = 3;
             const QUIET_GAP: usize = 2;
             const RIGHT_INSET: usize = 2;
 
@@ -467,7 +492,7 @@ fn wide_media_row<Target>(
             let selected = selected && focused;
             let mut spans = vec![
                 selection_marker(selected, MarkerEdge::Left),
-                Span::raw("   "),
+                Span::raw("  "),
             ];
             spans.push(Span::styled(
                 title,
@@ -519,13 +544,45 @@ mod wide_row_regression_tests {
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
 
+    fn item(target: &str, primary: &str, duration: Option<String>) -> MediaListRow<String> {
+        MediaListRow::Item {
+            target: target.into(),
+            primary: primary.into(),
+            trailing: None,
+            duration,
+            semantic_state: MediaSemanticState::Ordinary,
+        }
+    }
+
+    fn paint(
+        list: &mut WideMediaList<String>,
+        rect: Rect,
+        selected_bg: Color,
+    ) -> super::MediaListPaint<String> {
+        let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+        let mut captured = None;
+        terminal
+            .draw(|f| {
+                captured = Some(render_wide_media_list(
+                    f,
+                    rect,
+                    rect,
+                    list,
+                    true,
+                    selected_bg,
+                ));
+            })
+            .unwrap();
+        captured.unwrap()
+    }
+
     /// migrate-home-feeds 4.6: the selected row's highlight bar must span the
     /// whole panel width (never just the row text, with or without a duration
     /// string), the edge marker must sit flush at the panel's `x`, and the
-    /// title must land at the "standard 4" rail indent. These three broke
-    /// together when the painter was handed an already-inset content rect.
+    /// title must land at column 3. These broke together when the painter was
+    /// handed an already-inset content rect.
     #[test]
-    fn selected_row_spans_full_width_with_flush_marker_and_four_col_indent() {
+    fn selected_row_spans_full_width_with_flush_marker_and_three_col_indent() {
         const PX: u16 = 10;
         const PW: u16 = 40;
         let selected_bg = palette::SURFACE_RESTING;
@@ -533,33 +590,20 @@ mod wide_row_regression_tests {
         for duration in [None, Some("1:05".to_string())] {
             let mut list: WideMediaList<String> = WideMediaList::new();
             list.set_content(vec![
-                MediaListRow::Item {
-                    target: "sel".into(),
-                    primary: "Selected Entry".into(),
-                    trailing: None,
-                    duration: duration.clone(),
-                    semantic_state: MediaSemanticState::Ordinary,
-                },
-                MediaListRow::Item {
-                    target: "other".into(),
-                    primary: "Other Entry".into(),
-                    trailing: None,
-                    duration: None,
-                    semantic_state: MediaSemanticState::Ordinary,
-                },
+                item("sel", "Selected Entry", duration.clone()),
+                item("other", "Other Entry", None),
             ]);
 
             let mut terminal = Terminal::new(TestBackend::new(60, 6)).unwrap();
-            let mut layout = LayoutMain::default();
             terminal
                 .draw(|f| {
                     render_wide_media_list(
                         f,
                         Rect::new(PX, 0, PW, 4),
-                        &list,
+                        Rect::new(PX, 0, PW, 4),
+                        &mut list,
                         true,
                         selected_bg,
-                        &mut layout,
                     );
                 })
                 .unwrap();
@@ -577,8 +621,8 @@ mod wide_row_regression_tests {
                 .map(|x| x - PX);
             assert_eq!(
                 first_text,
-                Some(4),
-                "title text indent must be 4 columns (duration={duration:?})"
+                Some(3),
+                "title text indent must be 3 columns (duration={duration:?})"
             );
             for x in PX..PX + PW {
                 assert_eq!(
@@ -593,5 +637,35 @@ mod wide_row_regression_tests {
                 "only the selected row is filled (duration={duration:?})"
             );
         }
+    }
+
+    /// Step 4 latent bug: the painter must persist the resolved scroll offset
+    /// back into `list` so it survives across frames. Home discarded the old
+    /// `usize` return, so its rail always re-scrolled to the top.
+    #[test]
+    fn painter_persists_resolved_scroll_offset_across_frames() {
+        let rect = Rect::new(0, 0, 40, 4);
+        let selected_bg = palette::SURFACE_RESTING;
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(
+            (0..12)
+                .map(|i| item(&format!("t{i}"), &format!("Entry {i}"), None))
+                .collect(),
+        );
+        list.select_last();
+
+        let first = paint(&mut list, rect, selected_bg);
+        let resolved = first.row_geometry.offset();
+        assert!(resolved > 0, "a bottom selection must scroll the viewport");
+        assert_eq!(
+            list.scroll(),
+            resolved,
+            "painter stores the offset it resolved"
+        );
+
+        // Re-render with no further input: the stored offset is reused, not reset.
+        let second = paint(&mut list, rect, selected_bg);
+        assert_eq!(second.row_geometry.offset(), resolved);
+        assert_eq!(list.scroll(), resolved);
     }
 }

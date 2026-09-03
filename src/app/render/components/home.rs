@@ -73,7 +73,7 @@ pub(in crate::app) fn render_home_content(
     latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
     section: usize,
     cursor: usize,
-    canonical_list: &WideMediaList<String>,
+    canonical_list: &mut WideMediaList<String>,
     inline_list: &InlineMediaBrowser<String>,
     use_nerd_fonts: bool,
 ) -> HomeContentOutput {
@@ -458,26 +458,25 @@ pub(in crate::app) fn render_home_content(
         crate::app::render::render_placeholder(f, list_area, " (empty)");
         (Vec::new(), None)
     } else if two_column {
-        let mut scratch = crate::app::layout::LayoutMain::default();
         // Full panel width so the selected-row bar and flush marker reach the
-        // rail border; `list_area` is already inset vertically.
-        let paint = Rect {
+        // rail border; `list_area` is already inset vertically and stays the
+        // hit/scroll geometry rect.
+        let paint_rect = Rect {
             x: green_panel_full.map_or(list_area.x, |panel| panel.x),
             width: green_panel_full.map_or(list_area.width, |panel| panel.width),
             ..list_area
         };
-        super::media_list::render_wide_media_list(
+        let paint = super::media_list::render_wide_media_list(
             f,
-            paint,
+            paint_rect,
+            list_area,
             canonical_list,
             focused,
             selection_bg,
-            &mut scratch,
         );
-        let geometry = canonical_list.row_geometry(list_area.height as usize);
         (
-            home_hitmap(&geometry, list_area, &active_flat),
-            geometry.selected_row_rect(list_area),
+            home_hitmap(&paint.row_geometry, list_area, &active_flat),
+            paint.selected_row_rect,
         )
     } else {
         let result = super::media_list::render_inline_media_browser(

@@ -40,14 +40,17 @@ impl BrowserComponent {
             // fails on the same rect (`body_area == area`). If a degenerate
             // rect ever reaches here, keep a canonical render rather than
             // routing to the legacy painter.
-            return crate::app::render::render_wide_media_list(
+            let paint = crate::app::render::render_wide_media_list(
                 f,
                 body_area,
-                &self.wide_list,
+                body_area,
+                &mut self.wide_list,
                 self.focused,
                 palette::SURFACE_RESTING,
-                &mut self.layout,
             );
+            self.layout.left_item_rows = paint.left_item_rows;
+            self.layout.left_row_map = paint.left_row_map;
+            return paint.row_geometry.offset();
         };
         let mut left_panel = panes.left_panel;
         let right_panel = panes.right_panel;
@@ -152,21 +155,20 @@ impl BrowserComponent {
             );
             0
         } else {
-            let offset = crate::app::render::render_wide_media_list(
+            let painted = crate::app::render::render_wide_media_list(
                 f,
                 paint,
-                &self.wide_list,
+                content,
+                &mut self.wide_list,
                 self.focused,
                 palette::SURFACE_RESTING,
-                &mut self.layout,
             );
-            self.wide_list.set_scroll(offset);
+            self.layout.left_item_rows = painted.left_item_rows;
+            self.layout.left_row_map = painted.left_row_map;
+            let offset = painted.row_geometry.offset();
             // Export the selected-row anchor from the control's exact painted
             // flow; the shell consumes it for context-menu placement.
-            self.layout.selected_item_rect = self
-                .wide_list
-                .row_geometry(content.height as usize)
-                .selected_row_rect(content);
+            self.layout.selected_item_rect = painted.selected_row_rect;
             // Republish the sorted display order the rail was built from so the
             // parent's letter-aware keyboard navigation keeps resolving targets
             // against `self.layout` (mirrors `render_wide_tv_with_ctx`; task

@@ -429,7 +429,7 @@ impl Component for TvWorkspaceComponent {
             self.episode_cursor,
         );
         let (scroll, image_paint) =
-            render_wide_tv_with_ctx(frame, area, &context, &mut self.layout, &self.list);
+            render_wide_tv_with_ctx(frame, area, &context, &mut self.layout, &mut self.list);
         self.list.set_scroll(scroll);
         self.cursor = self.list.cursor();
         self.image_paint = image_paint;

@@ -47,7 +47,7 @@ pub(in crate::app) fn render_feeds_content(
     focused: bool,
     layout: &mut LayoutMain,
     model: FeedsRenderModel<'_>,
-    canonical_list: &WideMediaList<String>,
+    canonical_list: &mut WideMediaList<String>,
     inline_list: &InlineMediaBrowser<String>,
 ) -> usize {
     if area.height == 0 || area.width == 0 {
@@ -222,27 +222,26 @@ pub(in crate::app) fn render_feeds_content(
         // Full panel width so the selected-row bar and flush marker reach the
         // rail border; vertically inset so the framed border never overpaints
         // a heading or the last visible entry.
-        let paint = Rect {
+        let paint_rect = Rect {
             x: outer_panel.map_or(list_area.x, |panel| panel.x),
             width: outer_panel.map_or(list_area.width, |panel| panel.width),
             ..list_area
         };
-        let offset = render_wide_media_list(
+        let paint = render_wide_media_list(
             f,
-            paint,
+            paint_rect,
+            list_area,
             canonical_list,
             focused,
             palette::SURFACE_FOCUSED,
-            layout,
         );
         if let Some(panel) = outer_panel {
             hero_left::hero_on_left_list_panel_border(f, panel, focused);
         }
-        let geometry = canonical_list.row_geometry(list_area.height as usize);
-        layout.selected_item_rect = geometry.selected_row_rect(list_area);
-        rebuild_selectable_maps(layout, &geometry, list_area);
+        layout.selected_item_rect = paint.selected_row_rect;
+        rebuild_selectable_maps(layout, &paint.row_geometry, list_area);
         layout.inline_hero_area = Rect::default();
-        offset
+        paint.row_geometry.offset()
     } else {
         let desired_detail_rows =
             feed_hero_content_rows(true).saturating_add(HERO_BLOCK_EXTRA_ROWS) as usize;
