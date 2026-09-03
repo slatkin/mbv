@@ -12,7 +12,7 @@
 - [x] 2.3 Implement embedded plain `WideMediaList<Target>` with selectable indexing, movement, clamping, viewport/scrollbar, fixed-height one-column geometry, and internal row geometry for painting and scrolling.
 - [x] 2.4 Implement embedded plain `InlineMediaBrowser<Target>` with selected-row replacement, fit admission, fallback, anchor, and matching paint geometry; share only private mechanics with Wide.
 - [x] 2.5 Implement `ViewportAnchor { selected_target, selected_row_offset }`; preserve target/offset across breakpoint transitions and clamp receiving geometry without shell mirrors.
-- [ ] 2.6 Extend `WideMediaList` to absorb letter grouping through the existing `MediaListRow::Heading`/`Spacer` vocabulary: bucket derivation, heading/spacer emission, sorted display order, and letter-filter interaction, so an applicable Wide path needs no second grouped painter. Match the accepted `render_letter_grouped_rows` output for generic Emby/Movies; a difference requires a named contract correction.
+- [x] 2.6 Extend `WideMediaList` to absorb letter grouping through the existing `MediaListRow::Heading`/`Spacer` vocabulary: bucket derivation, heading/spacer emission, sorted display order, and letter-filter interaction, so an applicable Wide path needs no second grouped painter. Match the accepted `render_letter_grouped_rows` output for generic Emby/Movies; a difference requires a named contract correction.
 
 ## 3. Foundation destinations
 
