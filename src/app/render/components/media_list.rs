@@ -240,13 +240,30 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
             })
         })
         .collect();
-    layout.left_row_map = (offset..total_rows)
+    // Pre-#638 mouse compatibility map (kept wired, not rebuilt): read the
+    // painter's own `RowGeometry` and map each painted display row to the
+    // control's selectable index for that item, with letter headings and
+    // spacers left `None`. Walking `RowGeometry::targets` keeps this in step
+    // with the painted flow; the previous projection of source-row indices
+    // mis-targeted by the count of preceding non-item rows every row that
+    // followed a letter heading or spacer.
+    let selectable_by_flow_row: Vec<Option<usize>> = {
+        let mut next_selectable = 0usize;
+        geometry
+            .targets()
+            .map(|target| {
+                target.map(|_| {
+                    let index = next_selectable;
+                    next_selectable += 1;
+                    index
+                })
+            })
+            .collect()
+    };
+    layout.left_row_map = selectable_by_flow_row
+        .into_iter()
+        .skip(offset)
         .take(area.height as usize)
-        .map(|row| {
-            geometry
-                .source_row(row)
-                .filter(|&source_row| matches!(rows[source_row], MediaListRow::Item { .. }))
-        })
         .collect();
 
     let overflows = total_rows > area.height as usize;

@@ -198,3 +198,56 @@ fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_s
     );
     assert!(boundary_layout.left_row_map.contains(&Some(54)));
 }
+
+#[test]
+fn wide_letter_grouped_row_map_indexes_items_without_counting_headings() {
+    // Regression: the Wide `left_row_map` used to project source-row indices,
+    // so every painted row after a letter heading or spacer was off by the
+    // count of those non-item rows. It must instead map each painted row to
+    // the control's selectable index, leaving headings/spacers `None`.
+    use crate::app::components::browser::{BrowserComponent, BrowserContent};
+    use crate::app::components::component_id::BrowserKind;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tuirealm::component::Component;
+
+    let items = (0..55)
+        .map(|i| {
+            let mut item = make_item(
+                &format!("{} Movie {i:02}", (b'A' + (i % 26) as u8) as char),
+                "Movie",
+            );
+            item.id = format!("movie-{i}");
+            item
+        })
+        .collect();
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    browser.set_content(BrowserContent::from_items(items), true);
+    browser.apply_position(54, 40);
+
+    let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    let row_map = &browser.test_layout().left_row_map;
+
+    assert!(
+        row_map.iter().any(Option::is_none),
+        "grouped Wide flow must carry targetless heading/spacer rows: {row_map:?}"
+    );
+    let selectable: Vec<usize> = row_map.iter().flatten().copied().collect();
+    assert!(
+        selectable.len() >= 3,
+        "expected several painted item rows: {row_map:?}"
+    );
+    assert!(
+        selectable.iter().all(|&index| index < 55),
+        "no painted row may target past the last selectable item; source-row \
+         projection inflated these by the heading/spacer count: {row_map:?}"
+    );
+    assert!(
+        selectable.windows(2).all(|pair| pair[1] == pair[0] + 1),
+        "consecutive painted item rows map to consecutive selectable indices, \
+         not source rows inflated by preceding headings/spacers: {row_map:?}"
+    );
+}
