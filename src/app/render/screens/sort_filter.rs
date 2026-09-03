@@ -77,41 +77,7 @@ pub(crate) fn effective_sort_str(item: &mbv_core::api::EmbyItem) -> &str {
 /// name. "#" for titles starting with a digit or non-letter; ranges for 50–999 items;
 /// individual letters for 250+ items.
 pub(crate) fn letter_bucket(item: &mbv_core::api::EmbyItem, total: usize) -> String {
-    let key = effective_sort_str(item);
-    let first = key
-        .chars()
-        .next()
-        .map(|c| c.to_ascii_uppercase())
-        .unwrap_or('\0');
-    // KNOWN LIMITATION: any non-ASCII-alphabetic first character (accented
-    // letters like "Æon"/"Élan" included, codepoint > 'Z') buckets here as
-    // "#". But the "#" *pill*'s Emby fetch bounds are `NameLessThan("A")`
-    // -- only titles that SORT BEFORE "A" -- so an accented title with a
-    // codepoint after 'Z' is actually fetched by the `V–Z` pill
-    // (`name_ge = "V"`, no upper bound) yet renders under this "#" header,
-    // making it unreachable from the "#" pill's scoped fetch. Fixing this
-    // would mean either teaching the "#" pill to also request `V–Z`-range
-    // items with a non-ASCII-alphabetic first char (an Emby-side filter
-    // that doesn't exist), or bucketing accented letters under their
-    // unaccented equivalent instead of "#" (a bigger behavior change than
-    // this pass intends). Left as-is; flagged for a follow-up.
-    if !first.is_ascii_alphabetic() {
-        return "#".to_string();
-    }
-    if total >= 250 {
-        return first.to_string();
-    }
-    match first {
-        'A'..='C' => "A\u{2013}C",
-        'D'..='F' => "D\u{2013}F",
-        'G'..='I' => "G\u{2013}I",
-        'J'..='L' => "J\u{2013}L",
-        'M'..='O' => "M\u{2013}O",
-        'P'..='R' => "P\u{2013}R",
-        'S'..='U' => "S\u{2013}U",
-        _ => "V\u{2013}Z",
-    }
-    .to_string()
+    crate::app::ui_util::letter_bucket_label(effective_sort_str(item), total)
 }
 
 /// Library size above which the library list shows the

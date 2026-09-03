@@ -9,12 +9,14 @@
 use crate::app::ui_util::move_cursor;
 
 mod anchor;
+mod grouping;
 mod inline;
 #[cfg(test)]
 mod tests;
 mod wide;
 
 pub use anchor::ViewportAnchor;
+pub use grouping::letter_grouped_rows;
 pub use inline::{InlineLayout, InlineMediaBrowser};
 pub use wide::WideMediaList;
 
