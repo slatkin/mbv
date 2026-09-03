@@ -129,13 +129,21 @@ impl BrowserComponent {
                 list_panel,
             );
         }
-        let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
+        // `content` is the inset row/hit geometry; `paint` keeps the full
+        // panel width so the selected-row bar and flush marker reach the rail
+        // border, inset vertically for the framed border rows.
+        let content = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
+        let paint = Rect {
+            x: list_panel.x,
+            width: list_panel.width,
+            ..content
+        };
 
-        self.layout.left_area = list_area;
+        self.layout.left_area = content;
         let final_scroll = if self.wide_list.is_empty() {
             crate::app::render::components::widgets::render_placeholder(
                 f,
-                list_area,
+                content,
                 if ctx.loading {
                     " Loading…"
                 } else {
@@ -146,7 +154,7 @@ impl BrowserComponent {
         } else {
             let offset = crate::app::render::render_wide_media_list(
                 f,
-                list_area,
+                paint,
                 &self.wide_list,
                 self.focused,
                 palette::SURFACE_RESTING,
@@ -157,8 +165,8 @@ impl BrowserComponent {
             // flow; the shell consumes it for context-menu placement.
             self.layout.selected_item_rect = self
                 .wide_list
-                .row_geometry(list_area.height as usize)
-                .selected_row_rect(list_area);
+                .row_geometry(content.height as usize)
+                .selected_row_rect(content);
             // Republish the sorted display order the rail was built from so the
             // parent's letter-aware keyboard navigation keeps resolving targets
             // against `self.layout` (mirrors `render_wide_tv_with_ctx`; task

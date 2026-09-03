@@ -392,6 +392,8 @@ pub(in crate::app) fn render_home_content(
             Block::default().style(Style::default().bg(panel_bg)),
             list_panel,
         );
+        // `list_area` is the inset content rect (row/hit geometry); the
+        // painter is handed a full-width, vertically-inset paint rect.
         padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y)
     } else {
         // Narrow Home (and the empty-wide fallback) still owns a focus-aware
@@ -457,9 +459,16 @@ pub(in crate::app) fn render_home_content(
         (Vec::new(), None)
     } else if two_column {
         let mut scratch = crate::app::layout::LayoutMain::default();
+        // Full panel width so the selected-row bar and flush marker reach the
+        // rail border; `list_area` is already inset vertically.
+        let paint = Rect {
+            x: green_panel_full.map_or(list_area.x, |panel| panel.x),
+            width: green_panel_full.map_or(list_area.width, |panel| panel.width),
+            ..list_area
+        };
         super::media_list::render_wide_media_list(
             f,
-            list_area,
+            paint,
             canonical_list,
             focused,
             selection_bg,

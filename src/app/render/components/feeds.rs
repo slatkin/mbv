@@ -204,6 +204,8 @@ pub(in crate::app) fn render_feeds_content(
             Block::default().style(Style::default().bg(palette::resolve_surface_focus(focused))),
             list_panel,
         );
+        // `list_area` is the inset content rect (row/hit geometry); the
+        // painter is handed a full-width, vertically-inset paint rect below.
         (
             padded_rect(list_panel, hero_left::PANE_PAD_X, hero_left::PANE_PAD_Y),
             Some(list_panel),
@@ -216,11 +218,18 @@ pub(in crate::app) fn render_feeds_content(
         return 0;
     }
 
-    let viewport_height = list_area.height as usize;
     if wide {
+        // Full panel width so the selected-row bar and flush marker reach the
+        // rail border; vertically inset so the framed border never overpaints
+        // a heading or the last visible entry.
+        let paint = Rect {
+            x: outer_panel.map_or(list_area.x, |panel| panel.x),
+            width: outer_panel.map_or(list_area.width, |panel| panel.width),
+            ..list_area
+        };
         let offset = render_wide_media_list(
             f,
-            list_area,
+            paint,
             canonical_list,
             focused,
             palette::SURFACE_FOCUSED,
@@ -229,7 +238,7 @@ pub(in crate::app) fn render_feeds_content(
         if let Some(panel) = outer_panel {
             hero_left::hero_on_left_list_panel_border(f, panel, focused);
         }
-        let geometry = canonical_list.row_geometry(viewport_height);
+        let geometry = canonical_list.row_geometry(list_area.height as usize);
         layout.selected_item_rect = geometry.selected_row_rect(list_area);
         rebuild_selectable_maps(layout, &geometry, list_area);
         layout.inline_hero_area = Rect::default();

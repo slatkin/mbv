@@ -228,6 +228,12 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
     selected_bg: Color,
     layout: &mut LayoutMain,
 ) -> usize {
+    // `area` is the row-flow paint rect: its `x`/`width` span the full panel
+    // (so the selected-row background and the flush edge marker reach the
+    // panel border), while callers that own a framed rail pass an `area`
+    // already inset vertically for their reserved border rows. The 4-column
+    // text indent is applied per row in `wide_media_row`, not by insetting
+    // `area`.
     let geometry = list.row_geometry(area.height as usize);
     let rows = list.rows();
     let selected_row = geometry.selected_row();
@@ -267,7 +273,8 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
         .collect();
 
     let overflows = total_rows > area.height as usize;
-    let inner_width = area.width.saturating_sub(u16::from(focused && overflows)) as usize;
+    let scrollbar = focused && overflows;
+    let inner_width = area.width.saturating_sub(u16::from(scrollbar)) as usize;
     let list_items: Vec<ListItem> = (offset..total_rows)
         .take(area.height as usize)
         .map(|row| {
@@ -280,13 +287,14 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
                 focused,
                 selected_bg,
                 inner_width,
-                focused && overflows,
             )
         })
         .collect();
+    // Row backgrounds own the full paint-rect width (legacy `selection_bg_full`
+    // parity); `List` fills each row's style across the whole row area.
     f.render_widget(List::new(list_items), area);
 
-    if focused && overflows {
+    if scrollbar {
         crate::app::render::render_right_scrollbar(
             f,
             area,
@@ -345,7 +353,6 @@ pub(in crate::app) fn render_inline_media_browser<Target: Clone>(
                         focused,
                         selected_bg,
                         inner_width,
-                        focused && overflows,
                     )
                 })
                 .unwrap_or_else(|| ListItem::new(Line::default()))
@@ -379,23 +386,29 @@ pub(in crate::app) fn render_inline_media_browser<Target: Clone>(
 /// One painted row of a `WideMediaList`. Semantic state drives the row
 /// colour and, for active rows, an appended progress percentage; `primary`
 /// is truncated with an ellipsis to fit; `duration` is a distinct
-/// right-aligned green element ending two columns before the content edge
+/// right-aligned green element ending at the panel text-flow content edge
 /// (`inner_width` already excludes the scrollbar column). `selected_bg` is
 /// the focused-panel's parent surface — the colour the selected row takes so
 /// it reads against the panel body (Queue: `SURFACE_FOCUSED`; hero-on-left
 /// rails: `SURFACE_RESTING`, matching the legacy painters they replace).
+///
+/// Row geometry: the flush edge marker sits at the paint rect's `x` (the
+/// panel border) and the title text is indented `LEFT_INSET` (4) columns in
+/// — `[marker][3 spaces][title…]` — matching the "standard 4" rail indent of
+/// the canonical Queue/TV rows; the selected row's background fills the whole
+/// row via `List`'s row-style fill.
 fn wide_media_row<Target>(
     row: &MediaListRow<Target>,
     selected: bool,
     focused: bool,
     selected_bg: Color,
     inner_width: usize,
-    has_scrollbar: bool,
 ) -> ListItem<'static> {
     match row {
         MediaListRow::Spacer => ListItem::new(Line::default()),
         MediaListRow::Heading { text } => ListItem::new(Line::from(vec![
-            Span::raw("  "),
+            selection_marker(false, MarkerEdge::Left),
+            Span::raw("   "),
             Span::styled(
                 text.clone(),
                 Style::default()
@@ -410,15 +423,14 @@ fn wide_media_row<Target>(
             semantic_state,
             ..
         } => {
-            // Canonical row geometry (legacy `render_queue_content`,
-            // de4a079c): `[marker][space][title…]  [FOAM trailing]  [green
-            // duration]` with a 2-col inset on the left (marker + space) and
-            // the right, and a quiet gap before the right-aligned duration.
-            // Canonical Feeds/Home rows share the two-column rail indent;
-            // keep it here so destinations cannot drift.
+            // Canonical row geometry:
+            // `[marker][3 spaces][title…]  [FOAM trailing]  [green duration]`
+            // with the flush marker at the panel edge, the title at the
+            // "standard 4" rail indent, and a quiet gap before the
+            // right-aligned duration.
             const LEFT_INSET: usize = 4;
             const QUIET_GAP: usize = 2;
-            let right_inset = if focused && has_scrollbar { 1 } else { 2 };
+            const RIGHT_INSET: usize = 2;
 
             let (fg, progress) = match semantic_state {
                 MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None),
@@ -440,7 +452,7 @@ fn wide_media_row<Target>(
             };
             let duration = duration.as_deref().filter(|dur| !dur.is_empty());
 
-            let content_w = inner_width.saturating_sub(right_inset);
+            let content_w = inner_width.saturating_sub(RIGHT_INSET);
             let trailing_w = if trailing.is_empty() {
                 0
             } else {
@@ -454,9 +466,8 @@ fn wide_media_row<Target>(
 
             let selected = selected && focused;
             let mut spans = vec![
-                Span::raw("  "),
                 selection_marker(selected, MarkerEdge::Left),
-                Span::raw(" "),
+                Span::raw("   "),
             ];
             spans.push(Span::styled(
                 title,
@@ -484,11 +495,103 @@ fn wide_media_row<Target>(
                     Style::default().fg(palette::STATUS_AVAILABLE),
                 ));
             }
+            // Pad the selected row's spans out to the full row width (up to
+            // the scrollbar column) so the highlighted background bar spans
+            // the whole panel regardless of whether a duration string is
+            // present — never just the width of the row text.
+            if selected {
+                let used: usize = spans.iter().map(|span| span.content.width()).sum();
+                spans.push(Span::raw(" ".repeat(inner_width.saturating_sub(used))));
+            }
             ListItem::new(Line::from(spans)).style(if selected {
                 Style::default().bg(selected_bg)
             } else {
                 Style::default()
             })
+        }
+    }
+}
+
+#[cfg(test)]
+mod wide_row_regression_tests {
+    use super::*;
+    use crate::app::components::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    /// migrate-home-feeds 4.6: the selected row's highlight bar must span the
+    /// whole panel width (never just the row text, with or without a duration
+    /// string), the edge marker must sit flush at the panel's `x`, and the
+    /// title must land at the "standard 4" rail indent. These three broke
+    /// together when the painter was handed an already-inset content rect.
+    #[test]
+    fn selected_row_spans_full_width_with_flush_marker_and_four_col_indent() {
+        const PX: u16 = 10;
+        const PW: u16 = 40;
+        let selected_bg = palette::SURFACE_RESTING;
+
+        for duration in [None, Some("1:05".to_string())] {
+            let mut list: WideMediaList<String> = WideMediaList::new();
+            list.set_content(vec![
+                MediaListRow::Item {
+                    target: "sel".into(),
+                    primary: "Selected Entry".into(),
+                    trailing: None,
+                    duration: duration.clone(),
+                    semantic_state: MediaSemanticState::Ordinary,
+                },
+                MediaListRow::Item {
+                    target: "other".into(),
+                    primary: "Other Entry".into(),
+                    trailing: None,
+                    duration: None,
+                    semantic_state: MediaSemanticState::Ordinary,
+                },
+            ]);
+
+            let mut terminal = Terminal::new(TestBackend::new(60, 6)).unwrap();
+            let mut layout = LayoutMain::default();
+            terminal
+                .draw(|f| {
+                    render_wide_media_list(
+                        f,
+                        Rect::new(PX, 0, PW, 4),
+                        &list,
+                        true,
+                        selected_bg,
+                        &mut layout,
+                    );
+                })
+                .unwrap();
+            let buf = terminal.backend().buffer();
+
+            assert_eq!(
+                buf[(PX, 0)].symbol(),
+                "▎",
+                "edge marker must be flush at the panel x (duration={duration:?})"
+            );
+            // Skip the flush marker glyph itself; the title is the next
+            // non-blank cell.
+            let first_text = (PX + 1..PX + PW)
+                .find(|&x| buf[(x, 0)].symbol().trim() != "")
+                .map(|x| x - PX);
+            assert_eq!(
+                first_text,
+                Some(4),
+                "title text indent must be 4 columns (duration={duration:?})"
+            );
+            for x in PX..PX + PW {
+                assert_eq!(
+                    buf[(x, 0)].bg,
+                    selected_bg,
+                    "selected-row bar must fill column {x} (duration={duration:?})"
+                );
+            }
+            assert_ne!(
+                buf[(PX, 1)].bg,
+                selected_bg,
+                "only the selected row is filled (duration={duration:?})"
+            );
         }
     }
 }
