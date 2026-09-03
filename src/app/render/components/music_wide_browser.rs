@@ -1,7 +1,8 @@
-use crate::app::components::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
+use crate::app::components::media_list::WideMediaList;
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
 use crate::app::palette;
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
+use crate::app::render::components::music_wide::grouped_album_rows;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
@@ -40,7 +41,7 @@ pub(in crate::app) fn render_wide_right_album_browser_with_ctx(
     }
 
     let mut media: WideMediaList<String> = WideMediaList::new();
-    media.set_content(wide_album_rows(&list.items, album_info, order));
+    media.set_content(grouped_album_rows(&list.items, album_info, order));
     if let Some(selected) = list.items.get(list.cursor) {
         media.select_target(&selected.id);
     }
@@ -83,39 +84,4 @@ pub(in crate::app) fn render_wide_right_album_browser_with_ctx(
     }
 
     geometry.offset()
-}
-
-/// Projects the grouped album order onto the canonical row vocabulary: one
-/// `Heading` per artist group, a `Spacer` between groups, and one `Item` per
-/// album keyed by its stable id.
-fn wide_album_rows(
-    albums: &[mbv_core::api::EmbyItem],
-    album_info: &[(String, String, String)],
-    order: &[usize],
-) -> Vec<MediaListRow<String>> {
-    let mut rows = Vec::new();
-    let mut start = 0;
-    while start < order.len() {
-        let artist = album_info[order[start]].0.clone();
-        let mut end = start + 1;
-        while end < order.len() && album_info[order[end]].0 == artist {
-            end += 1;
-        }
-        if start > 0 {
-            rows.push(MediaListRow::Spacer);
-        }
-        rows.push(MediaListRow::Heading { text: artist });
-        for &idx in &order[start..end] {
-            let (_, year, name) = &album_info[idx];
-            rows.push(MediaListRow::Item {
-                target: albums[idx].id.clone(),
-                primary: name.clone(),
-                trailing: (!year.is_empty()).then(|| year.clone()),
-                duration: None,
-                semantic_state: MediaSemanticState::Ordinary,
-            });
-        }
-        start = end;
-    }
-    rows
 }

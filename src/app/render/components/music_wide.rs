@@ -1,14 +1,21 @@
 //! Grouped Music's wide hero-on-left component.
 
+use crate::app::components::media_list::{InlineMediaBrowser, MediaListRow, MediaSemanticState};
 use crate::app::layout::LayoutMain;
+use crate::app::layout::LibraryRowTarget;
 use crate::app::render::arrangements::hero_left::{self, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
+use crate::app::render::arrangements::library::selected_detail_content_area;
 use crate::app::render::arrangements::music::{self as music_arrangement, WideMusicLeftLayout};
 use crate::app::render::arrangements::padded_rect;
-use crate::app::render::components::album::{
-    render_grouped_album_rows_with_ctx, AlbumRowsCursorCtx, GroupedAlbumRenderCtx,
+use crate::app::render::components::album_detail::album_hero_detail_rows;
+use crate::app::render::components::detail_series_view::{SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS};
+use crate::app::render::components::hero::{
+    paint_hero_content, selected_detail_shell, HeroContent, HeroImage, HERO_BLOCK_EXTRA_ROWS,
 };
-use crate::app::render::components::list_rows::LibraryListRenderCtx;
+use crate::app::render::components::list_rows::{
+    LibraryListRenderCtx, SELECTED_BLOCK_SIDE_PADDING,
+};
 use crate::app::render::components::music_wide_browser::render_wide_right_album_browser_with_ctx;
 use crate::app::render::components::music_wide_tracks::render_wide_left_tracks;
 use crate::app::render::MusicImagePaint;
@@ -17,7 +24,6 @@ use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::Frame;
-use std::collections::HashMap;
 
 #[derive(Clone)]
 pub(in crate::app) struct MusicWideRenderCtx {
@@ -106,10 +112,60 @@ impl MusicWideRenderCtx {
     }
 }
 
+impl MusicWideRenderCtx {
+    /// Canonical row projection shared by the wide `WideMediaList` and the
+    /// narrow `InlineMediaBrowser`: one `Heading` per artist group, a `Spacer`
+    /// between groups, and one selectable `Item` per album keyed by its stable
+    /// id. Grouped Music album rows carry no played/active state (parity with
+    /// the wide rail and the legacy painter).
+    pub(in crate::app) fn grouped_rows(&self) -> Vec<MediaListRow<String>> {
+        grouped_album_rows(&self.list.items, &self.album_info, &self.album_order)
+    }
+}
+
+/// Projects the grouped album order onto the canonical row vocabulary. Shared
+/// by `render_wide_right_album_browser_with_ctx` (Wide) and the narrow
+/// `InlineMediaBrowser` composition.
+pub(in crate::app) fn grouped_album_rows(
+    albums: &[EmbyItem],
+    album_info: &[(String, String, String)],
+    order: &[usize],
+) -> Vec<MediaListRow<String>> {
+    let mut rows = Vec::new();
+    let mut start = 0;
+    while start < order.len() {
+        let artist = album_info[order[start]].0.clone();
+        let mut end = start + 1;
+        while end < order.len() && album_info[order[end]].0 == artist {
+            end += 1;
+        }
+        if start > 0 {
+            rows.push(MediaListRow::Spacer);
+        }
+        rows.push(MediaListRow::Heading { text: artist });
+        for &idx in &order[start..end] {
+            let (_, year, name) = &album_info[idx];
+            rows.push(MediaListRow::Item {
+                target: albums[idx].id.clone(),
+                primary: name.clone(),
+                trailing: (!year.is_empty()).then(|| year.clone()),
+                duration: None,
+                semantic_state: MediaSemanticState::Ordinary,
+            });
+        }
+        start = end;
+    }
+    rows
+}
+
 #[derive(Default)]
 pub(in crate::app) struct MusicWideRenderOutput {
     pub(in crate::app) final_scroll: usize,
     pub(in crate::app) image_paint: Option<MusicImagePaint>,
+    /// The content-area height the narrow `InlineMediaBrowser` painted into
+    /// (area minus the group pill row). The component feeds this back as the
+    /// painted viewport height for the responsive `ViewportAnchor` hand-off.
+    pub(in crate::app) viewport_height: usize,
 }
 
 /// Strips the "Artist (Year) " folder-name prefix from an album's display
@@ -255,21 +311,20 @@ impl App {
     }
 }
 
-/// App-free grouped Music painter. The legacy `App` path still performs the
-/// track fetch before building this context; this function consumes only its
-/// resolved presentation data.
-/// Paint grouped Music in Normal geometry: the album rows and Model A inline hero.
+/// Paint grouped Music in Normal geometry through the canonical persistent
+/// `InlineMediaBrowser`: the group pill bar, one-column album rows with artist
+/// headings/spacers, and the selected album's inline detail block (title /
+/// artist / year / art) reserved in the row flow by the control. Mirrors the
+/// narrow TV series composition in `list_narrow.rs`. The control is owned and
+/// fed by `MusicWorkspaceComponent`; this function only paints and publishes
+/// the flow geometry.
 pub(in crate::app) fn render_narrow_music_group_with_ctx(
     f: &mut Frame,
     area: Rect,
     ctx: &MusicWideRenderCtx,
     layout: &mut LayoutMain,
+    browser: &mut InlineMediaBrowser<String>,
 ) -> MusicWideRenderOutput {
-    let mut album_tracks = HashMap::new();
-    if let (Some(album), Some(tracks)) = (&ctx.selected_album, &ctx.album_tracks) {
-        album_tracks.insert(album.id.clone(), tracks.clone());
-    }
-
     // Group pill bar above the album rows, mirroring the narrow browser
     // (`list_narrow.rs`) and the wide sibling's right-pane pill slot. Album
     // rows then render into the reduced content area.
@@ -296,30 +351,119 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
         areas.content_area
     };
 
-    let (offset, image_paint) = render_grouped_album_rows_with_ctx(
+    let visible = content_area.height as usize;
+    if ctx.list.items.is_empty() {
+        crate::app::render::render_placeholder(
+            f,
+            content_area,
+            if ctx.list.loading {
+                " Loading\u{2026}"
+            } else {
+                " (empty)"
+            },
+        );
+        return MusicWideRenderOutput {
+            final_scroll: 0,
+            image_paint: None,
+            viewport_height: visible,
+        };
+    }
+
+    let images_enabled = ctx.images_enabled;
+    let hero_rows = album_hero_detail_rows(images_enabled) + HERO_BLOCK_EXTRA_ROWS as usize;
+    let focused = ctx.focused;
+    let cursor = ctx.list.cursor;
+
+    let result = super::media_list::render_inline_media_browser(
         f,
         content_area,
-        &ctx.list.items,
-        AlbumRowsCursorCtx {
-            cursor: ctx.list.cursor,
-            stored_scroll: ctx.list.scroll,
-        },
-        ctx.focused,
-        true,
-        1,
-        layout,
-        GroupedAlbumRenderCtx {
-            album_info: ctx.album_info.clone(),
-            order: ctx.album_order.clone(),
-            in_music_group_view: true,
-            playing_track_id: None,
-            images_enabled: ctx.images_enabled,
-            album_tracks: &album_tracks,
-        },
+        &*browser,
+        hero_rows,
+        focused,
+        palette::list_selected_row_bg(),
     );
+    let geometry = &result.row_geometry;
+    let offset = geometry.offset();
+
+    let id_to_index = |id: &String| ctx.list.items.iter().position(|item| &item.id == id);
+    layout.left_sorted_indices = ctx.album_order.clone();
+    layout.left_screen_offset = 0;
+    layout.left_item_rows = geometry
+        .targets()
+        .map(|target| {
+            target
+                .and_then(id_to_index)
+                .map(|idx| vec![idx])
+                .unwrap_or_default()
+        })
+        .collect();
+    layout.left_row_map = geometry
+        .targets()
+        .skip(offset)
+        .take(visible)
+        .map(|target| target.and_then(id_to_index))
+        .collect();
+    layout.left_row_targets = geometry
+        .targets()
+        .skip(offset)
+        .take(visible)
+        .map(|target| target.and_then(id_to_index).map(LibraryRowTarget::Album))
+        .collect();
+
+    let mut image_paint = None;
+    match result.hero_area {
+        Some(hero_area) => {
+            layout.hero_area = hero_area;
+            layout.inline_hero_area = hero_area;
+            layout.selected_item_rect = Some(hero_area);
+            selected_detail_shell(f, hero_area, hero_rows as u16, focused);
+            let content_rect = selected_detail_content_area(
+                hero_area,
+                SELECTED_BLOCK_SIDE_PADDING,
+                HERO_BLOCK_EXTRA_ROWS,
+            );
+            if let Some((artist, year, title)) = ctx.album_info.get(cursor) {
+                let meta = if year.is_empty() {
+                    artist.clone()
+                } else {
+                    format!("{artist} \u{2022} {year}")
+                };
+                let image = images_enabled.then_some(HeroImage {
+                    actual_w: SERIES_IMAGE_COLS,
+                    height: SERIES_IMAGE_ROWS,
+                });
+                let content = HeroContent {
+                    title: Some(title.as_str()),
+                    meta_line: (!meta.is_empty()).then_some(meta.as_str()),
+                    meta_color: palette::TEXT_DETAIL_META,
+                    show_playing: false,
+                    unconditional_spacer_after_meta: true,
+                    lines: &[],
+                    image,
+                };
+                let painted = paint_hero_content(f, content_rect, &content, false);
+                image_paint = painted.img_rect.and_then(|img_rect| {
+                    ctx.list
+                        .items
+                        .get(cursor)
+                        .filter(|_| images_enabled && img_rect.width >= 4 && img_rect.height >= 2)
+                        .map(|album| MusicImagePaint::Album {
+                            area: img_rect,
+                            album: Box::new(album.clone()),
+                            centered: false,
+                        })
+                });
+            }
+        }
+        None => {
+            layout.selected_item_rect = geometry.selected_row_rect(content_area);
+        }
+    }
+
     MusicWideRenderOutput {
         final_scroll: offset,
         image_paint,
+        viewport_height: visible,
     }
 }
 
