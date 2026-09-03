@@ -191,6 +191,9 @@ mod music_characterization_tests;
 #[path = "tests_music_groups.rs"]
 mod music_group_tests;
 #[cfg(test)]
+#[path = "tests_music_wide_reanchor_characterization.rs"]
+mod music_wide_reanchor_characterization_tests;
+#[cfg(test)]
 #[path = "tests_non_music.rs"]
 mod non_music_tests;
 #[cfg(test)]
