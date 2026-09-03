@@ -27,23 +27,21 @@ use super::msg::{HomeHitRegion, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::HomeImagePaint;
 use crate::app::types_playback::HomeLatestSource;
+use crate::app::ui_util::fmt_duration_short;
+use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::QueueItem;
 
-/// Provider-neutral semantic state for a Home row: in-progress items carry
-/// their resume percentage, finished items read as played, everything else is
-/// ordinary. Mirrors `BrowserComponent::feed_inline_browser`'s mapping.
-fn home_semantic_state(item: &QueueItem) -> MediaSemanticState {
-    let position = item.playback_position_ticks();
-    let runtime = item.runtime_ticks();
-    if position > 0 && !item.played() {
-        let progress = (runtime > 0)
-            .then(|| ((position as i128 * 100 / runtime as i128).clamp(0, 100)) as u16);
-        MediaSemanticState::active(progress)
-    } else if item.played() {
-        MediaSemanticState::Played
-    } else {
-        MediaSemanticState::Ordinary
-    }
+/// The resume-percentage badge legacy Home rows drew next to the title
+/// (`TEXT_METADATA`, rendered as canonical `trailing`). Only for in-progress,
+/// unfinished items with a non-zero rounded percentage — legacy Home rows show
+/// no played marker and no active recolouring, so `semantic_state` stays
+/// `Ordinary` for every Home row.
+fn home_progress_badge(item: &QueueItem) -> Option<String> {
+    let (position, runtime) = (item.playback_position_ticks(), item.runtime_ticks());
+    (position > 0 && !item.played() && runtime > 0)
+        .then(|| (position as i128 * 100 / runtime as i128) as u16)
+        .filter(|pct| *pct > 0)
+        .map(|pct| format!("{pct}%"))
 }
 
 /// The Interactive Component for the Home destination.
@@ -163,11 +161,17 @@ impl HomeComponent {
         let rows: Vec<MediaListRow<String>> = items
             .iter()
             .map(|item| MediaListRow::Item {
-                primary: item.title().to_owned(),
-                target: item.title().to_owned(),
-                trailing: None,
-                duration: None,
-                semantic_state: home_semantic_state(item),
+                primary: item.display_name(),
+                // Stable per-item identity (Emby id / feed guid / ABS episode
+                // id) — the same id the queue/shell treat as canonical — so an
+                // ordinary refresh retains the selection by identity, not by a
+                // title that can collide across episodes.
+                target: item.id().to_owned(),
+                trailing: home_progress_badge(item),
+                duration: item
+                    .duration()
+                    .map(|ticks| fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64)),
+                semantic_state: MediaSemanticState::Ordinary,
             })
             .collect();
         self.canonical_list.set_content(rows.clone());

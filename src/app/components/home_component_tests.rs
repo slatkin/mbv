@@ -246,7 +246,9 @@ fn dot_emits_home_context_menu_with_component_target() {
 }
 
 fn emby_queue_item(id: &str) -> QueueItem {
-    QueueItem::Emby(Box::new(crate::app::tests::make_item(id, "Movie")))
+    let mut item = crate::app::tests::make_item(id, "Movie");
+    item.id = id.to_owned();
+    QueueItem::Emby(Box::new(item))
 }
 
 fn cw_home(count: usize) -> HomeComponent {
@@ -262,21 +264,24 @@ fn cw_home(count: usize) -> HomeComponent {
     home
 }
 
-/// Task 2.1: only the active section's items are projected, as `Item` rows
-/// (Home has no `Heading`/`Spacer`), so the structural-row index equals the
-/// selectable index. Progress-bearing fixtures map to the `Active` semantic
-/// state.
+/// Task 2.1: only the active section is projected, as `Item` rows (Home has
+/// no `Heading`/`Spacer`), so structural-row index == selectable index; each
+/// row keeps the legacy Home row's display name, runtime, and resume badge,
+/// and carries no played/active marker.
 #[test]
-fn active_section_projects_item_rows_with_parallel_indices() {
+fn active_section_projects_item_rows_with_content_and_parallel_indices() {
+    use crate::app::ui_util::fmt_duration_short;
+    use mbv_core::api::TICKS_PER_SECOND;
+
+    let mut episode = crate::app::tests::make_item("Chapter One", "Episode");
+    episode.id = "ep-1".into();
+    episode.series_name = "The Series".into();
+    episode.runtime_ticks = 90 * TICKS_PER_SECOND;
+    episode.playback_position_ticks = 45 * TICKS_PER_SECOND;
+
     let mut home = HomeComponent::new();
-    let mut in_progress = crate::app::tests::make_item("cw0", "Movie");
-    in_progress.playback_position_ticks = 50;
-    in_progress.runtime_ticks = 200;
     home.set_content(
-        vec![
-            QueueItem::Emby(Box::new(in_progress)),
-            emby_queue_item("cw1"),
-        ],
+        vec![QueueItem::Emby(Box::new(episode)), emby_queue_item("cw1")],
         vec![(
             "Movies".into(),
             crate::app::types_playback::HomeLatestSource::Emby("movies".into()),
@@ -287,24 +292,36 @@ fn active_section_projects_item_rows_with_parallel_indices() {
 
     let rows = home.test_active_rows();
     assert_eq!(rows.len(), 2, "only the active Continue Watching section");
-    assert!(rows
-        .iter()
-        .all(|row| matches!(row, MediaListRow::Item { .. })));
     assert_eq!(
         rows.iter()
             .filter_map(MediaListRow::selectable_target)
             .map(String::as_str)
             .collect::<Vec<_>>(),
-        vec!["cw0", "cw1"],
-        "row N is selectable row N — no structural offset",
+        vec!["ep-1", "cw1"],
+        "target is the stable item id; row N is selectable row N",
     );
-    assert!(matches!(
-        rows[0],
-        MediaListRow::Item {
-            semantic_state: MediaSemanticState::Active { progress: Some(_) },
-            ..
-        }
-    ));
+    let MediaListRow::Item {
+        primary,
+        duration,
+        trailing,
+        semantic_state,
+        ..
+    } = &rows[0]
+    else {
+        unreachable!("projected Home rows are Item rows")
+    };
+    assert_eq!(primary, "The Series Chapter One", "episode display name");
+    assert_eq!(
+        duration.as_deref(),
+        Some(fmt_duration_short(90).as_str()),
+        "runtime surfaces as the row duration",
+    );
+    assert_eq!(trailing.as_deref(), Some("50%"), "resume badge surfaces");
+    assert_eq!(
+        *semantic_state,
+        MediaSemanticState::Ordinary,
+        "Home rows carry no played/active marker",
+    );
 }
 
 /// Task 2.2: an ordinary content refresh keeps the selected target and

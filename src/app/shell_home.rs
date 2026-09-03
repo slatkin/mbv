@@ -335,10 +335,7 @@ mod tests {
     #[test]
     fn shell_sync_keeps_home_component_cursor_local() {
         let mut model = Model::new(make_app_stub());
-        model.home_content.continue_items = vec![
-            crate::app::tests::make_item("one", "Movie"),
-            crate::app::tests::make_item("two", "Movie"),
-        ];
+        model.home_content.continue_items = crate::app::tests::make_items(2);
         model.push_home_content();
 
         let message = {
