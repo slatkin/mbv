@@ -582,29 +582,32 @@ fn feed_home_video_group_browser_scroll_updates_video_scroll() {
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
     let id = model.emby_browser_id.clone().expect("feed browser mounted");
-    let mut term = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    // Use the wide fixed-row control so its one-row-per-item geometry gives a
+    // durable maximum without reading the removed narrow `left_item_rows`.
+    let mut term = Terminal::new(TestBackend::new(140, 40)).unwrap();
     draw(&mut model, &mut term);
-    let (area, max_offset) = {
+    let (area, total_rows) = {
         let component = model.application.get_component(&id).unwrap();
         let browser = component
             .as_any()
             .downcast_ref::<BrowserComponent>()
             .unwrap();
         let layout = browser.test_layout();
-        (
-            layout.left_area,
-            layout
-                .left_item_rows
-                .len()
-                .saturating_sub(layout.left_area.height as usize),
-        )
+        let total_rows = model.app.libs[0]
+            .feed_home_video
+            .as_ref()
+            .unwrap()
+            .selected_len();
+        (layout.left_area, total_rows)
     };
+    let max_offset = total_rows.saturating_sub(area.height as usize);
+    assert!(max_offset > 0, "feed fixture must overflow the mounted control");
     let focused = model.application.focus().cloned();
     let mut music_resize = false;
     let mut tv_resize = false;
-    // Drive the typed scroll path through the boundary: the final wheel event
-    // has a raw result of max_offset + 1, but the component must emit the
-    // clamped offset max_offset to the feed state.
+    // Drive the existing typed wheel path through the mounted control: the
+    // final event has a raw result of max_offset + 1, but the control emits
+    // its clamped offset to the persisted feed-home-video state.
     for _ in 0..=max_offset {
         model.app.last_scroll_at = std::time::Instant::now() - std::time::Duration::from_secs(1);
         let msg = model
@@ -621,6 +624,13 @@ fn feed_home_video_group_browser_scroll_updates_video_scroll() {
         model.handle_terminal_message(msg, focused.as_ref(), &mut music_resize, &mut tv_resize);
     }
     assert_ne!(max_offset + 1, max_offset);
+    let control_scroll = model
+        .application
+        .get_component(&id)
+        .and_then(|component| component.as_any().downcast_ref::<BrowserComponent>())
+        .expect("feed browser remains mounted")
+        .scroll();
+    assert_eq!(control_scroll, max_offset);
     assert_eq!(
         model.app.libs[0].feed_home_video.as_ref().unwrap().video_scroll,
         max_offset

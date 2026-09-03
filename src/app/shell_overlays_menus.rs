@@ -1,8 +1,8 @@
 use super::super::components::audiobookshelf_book::AudiobookshelfBookComponent;
 use super::super::components::msg::ContextMenuIntent;
 use super::super::components::{
-    ComponentId, ContextMenuComponent, HomeComponent, LibraryRoutesComponent, MultiselectComponent,
-    OverlayId, PopupId, SelectionModalComponent, ShellRequest,
+    BrowserComponent, ComponentId, ContextMenuComponent, HomeComponent, LibraryRoutesComponent,
+    MultiselectComponent, OverlayId, PopupId, SelectionModalComponent, ShellRequest,
 };
 use super::super::shell::Model;
 use crate::app::types_context_menu::{
@@ -37,6 +37,23 @@ impl Model {
             .map(HomeComponent::menu_placement_geometry)
     }
 
+    /// The active Emby Browser's painted panel and selected-row anchor. The
+    /// Browser delegates this to its persistent media-list control, so context
+    /// menus follow the same flow geometry as the painted rows.
+    fn browser_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
+        if !matches!(self.app.tab, TabSelection::EmbyLibrary(_)) {
+            return None;
+        }
+        let id = self.emby_browser_id.as_ref()?;
+        if !matches!(self.app.effective_panel_focus(), PanelFocus::Library) {
+            return None;
+        }
+        self.application
+            .get_component(id)
+            .and_then(|component| component.as_any().downcast_ref::<BrowserComponent>())
+            .and_then(BrowserComponent::menu_placement_geometry)
+    }
+
     /// Like `home_menu_geometry`, but for the mounted `AudiobookshelfBookComponent`
     /// (task 5.3d.13, render ownership). Returns the book surface's painted
     /// selected-item rect so the context menu anchors to what the component
@@ -68,18 +85,15 @@ impl Model {
     fn context_menu_rect(&self, anchor: ContextMenuAnchor, entries: &[ContextMenuEntry]) -> Rect {
         let layout = &self.app.layout;
         let size = ContextMenu::rendered_size(entries);
-        // When Home is the active destination with the Library panel focused,
-        // the panel/selection placement geometry comes from the mounted
-        // `HomeComponent`'s own painted geometry (its `list_area` claim rect
-        // and `selected_item_rect`), not the legacy `AppLayout` copies, so the
-        // menu tracks what the component actually painted (task 5.3d, Home
-        // menu-placement geometry). Other destinations and Queue focus keep
-        // using `AppLayout` as before.
+        // For component-owned destinations, use the geometry exported by the
+        // active control (or the existing Home/ABS book component seam). Other
+        // destinations and Queue focus keep using `AppLayout` as before.
         let home = self.home_menu_geometry();
+        let browser = self.browser_menu_geometry();
         let (panel_rect, anchor_rect): (Rect, Option<Rect>) = match &anchor {
             ContextMenuAnchor::SelectedItem(focus) => {
                 let (panel, selected) = match focus {
-                    PanelFocus::Library => match home {
+                    PanelFocus::Library => match home.or(browser) {
                         Some((panel, selected)) => (panel, selected),
                         None => match self.book_menu_geometry() {
                             Some((panel, selected)) => (panel, selected),

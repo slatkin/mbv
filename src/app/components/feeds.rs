@@ -456,7 +456,8 @@ impl Component for FeedsComponent {
                 self.focused,
                 crate::app::palette::SURFACE_FOCUSED,
             )
-            .offset;
+            .row_geometry
+            .offset();
             self.inline_list.set_scroll(offset);
         }
         self.layout = layout;

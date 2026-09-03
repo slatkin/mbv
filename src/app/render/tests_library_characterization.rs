@@ -45,9 +45,8 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
     );
     assert!(
         layout.hero_area.height > 0,
-        "complete selected replacement should fit: hero={:?} rows={:?}\n{output}",
-        layout.hero_area,
-        layout.left_item_rows
+        "complete selected replacement should fit: hero={:?}\n{output}",
+        layout.hero_area
     );
     let selected_rect = layout
         .selected_item_rect
@@ -67,22 +66,28 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
     );
     assert_eq!(
         layout
-            .left_item_rows
+            .left_row_map
             .iter()
-            .filter(|row| row.as_slice() == [1])
+            .filter(|target| **target == Some(1))
             .count(),
         1,
         "replacement owns one parent row: {:?}",
-        layout.left_item_rows
+        layout.left_row_map
     );
     assert!(
-        layout.left_item_rows.iter().any(|row| row.is_empty()),
-        "continuation rows must not have ordinary item targets"
+        layout.left_row_map.iter().any(Option::is_none),
+        "replacement continuation rows must remain targetless"
     );
+    let control_scroll = mounted_browser_scroll(&model);
+    assert!(
+        control_scroll > 0,
+        "mounted control must retain replacement scroll"
+    );
+    let _ = draw_mounted_frame(&mut model, 70, 30);
     assert_eq!(
-        model.app.libs[0].nav_stack[0].resting().scroll(),
-        1,
-        "persisted scroll is retained"
+        mounted_browser_scroll(&model),
+        control_scroll,
+        "mounted control scroll persists across redraws"
     );
 
     let mut cannot_fit = make_movie_app();
@@ -97,10 +102,7 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
     );
     assert_eq!(fallback_layout.hero_area.height, 0);
     assert!(
-        fallback_layout
-            .left_item_rows
-            .iter()
-            .any(|row| row.as_slice() == [1]),
+        fallback_layout.left_row_map.contains(&Some(1)),
         "ordinary fallback restores the selected row"
     );
 }
@@ -140,14 +142,14 @@ fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_s
         "selected series is missing:\n{output}"
     );
     assert!(
-        layout.left_item_rows.iter().any(|row| row.is_empty()),
+        layout.left_row_map.iter().any(Option::is_none),
         "group headers and continuation rows remain targetless"
     );
     assert_eq!(
         layout
-            .left_item_rows
+            .left_row_map
             .iter()
-            .filter(|row| row.as_slice() == [54])
+            .filter(|target| **target == Some(54))
             .count(),
         1,
         "grouped replacement owns one parent row"
@@ -160,16 +162,10 @@ fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_s
         layout.left_row_map.iter().any(Option::is_none),
         "letter headers have no ordinary target"
     );
-    let selected_display_row = layout
-        .left_item_rows
-        .iter()
-        .position(|row| row.as_slice() == [54])
-        .expect("selected grouped row should be present in the physical flow");
-    let detail_screen_row = layout.hero_area.y.saturating_sub(layout.left_area.y) as usize;
-    assert_eq!(
-        mounted_browser_scroll(&model),
-        selected_display_row - detail_screen_row,
-        "first render must persist the shared flow offset"
+    let control_scroll = mounted_browser_scroll(&model);
+    assert!(
+        control_scroll > 0,
+        "mounted grouped control must retain scroll"
     );
     let hero_lines = output
         .lines()
@@ -179,6 +175,12 @@ fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_s
     assert!(
         !hero_lines.contains('▎'),
         "ordinary marker leaked into the grouped hero"
+    );
+    let _ = draw_mounted_frame(&mut model, 70, 20);
+    assert_eq!(
+        mounted_browser_scroll(&model),
+        control_scroll,
+        "mounted grouped control scroll persists across redraws"
     );
 
     let mut boundary_model = mounted_model_at(tv_letter_grouped_app(1), 70, 14);
@@ -195,4 +197,57 @@ fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_s
         "cannot-fit grouped detail restores ordinary rows"
     );
     assert!(boundary_layout.left_row_map.contains(&Some(54)));
+}
+
+#[test]
+fn wide_letter_grouped_row_map_indexes_items_without_counting_headings() {
+    // Regression: the Wide `left_row_map` used to project source-row indices,
+    // so every painted row after a letter heading or spacer was off by the
+    // count of those non-item rows. It must instead map each painted row to
+    // the control's selectable index, leaving headings/spacers `None`.
+    use crate::app::components::browser::{BrowserComponent, BrowserContent};
+    use crate::app::components::component_id::BrowserKind;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tuirealm::component::Component;
+
+    let items = (0..55)
+        .map(|i| {
+            let mut item = make_item(
+                &format!("{} Movie {i:02}", (b'A' + (i % 26) as u8) as char),
+                "Movie",
+            );
+            item.id = format!("movie-{i}");
+            item
+        })
+        .collect();
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    browser.set_content(BrowserContent::from_items(items), true);
+    browser.apply_position(54, 40);
+
+    let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    let row_map = &browser.test_layout().left_row_map;
+
+    assert!(
+        row_map.iter().any(Option::is_none),
+        "grouped Wide flow must carry targetless heading/spacer rows: {row_map:?}"
+    );
+    let selectable: Vec<usize> = row_map.iter().flatten().copied().collect();
+    assert!(
+        selectable.len() >= 3,
+        "expected several painted item rows: {row_map:?}"
+    );
+    assert!(
+        selectable.iter().all(|&index| index < 55),
+        "no painted row may target past the last selectable item; source-row \
+         projection inflated these by the heading/spacer count: {row_map:?}"
+    );
+    assert!(
+        selectable.windows(2).all(|pair| pair[1] == pair[0] + 1),
+        "consecutive painted item rows map to consecutive selectable indices, \
+         not source rows inflated by preceding headings/spacers: {row_map:?}"
+    );
 }

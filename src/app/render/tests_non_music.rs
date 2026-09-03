@@ -235,26 +235,9 @@ fn letter_grouped_series_app() -> App {
 #[test]
 fn tv_series_list_computes_sorted_indices_when_above_threshold() {
     // Narrow letter-grouped TV is painted by the mounted `BrowserComponent`
-    // (task 3.8), which computes and publishes the sorted display order into
-    // its own `LayoutMain`.
-    let mut narrow_model = mounted_model_at(letter_grouped_series_app(), 60, 20);
-    let _ = draw_mounted_frame(&mut narrow_model, 60, 20);
-    let narrow_layout = mounted_browser_layout(&narrow_model);
-
-    assert!(
-        !narrow_layout.left_sorted_indices.is_empty(),
-        "sorted indices should be computed for letter-grouped TV list"
-    );
-    // The first sorted index should map to the alphabetically-first A-series item
-    let first_idx = narrow_layout.left_sorted_indices[0];
-    assert!(
-        narrow_model.app.libs[0].nav_stack[0].items[first_idx]
-            .name
-            .starts_with('A'),
-        "first sorted item should start with A, got: {}",
-        narrow_model.app.libs[0].nav_stack[0].items[first_idx].name,
-    );
-
+    // (task 3.8). Its control exports row geometry for the compatibility hit
+    // map, not a second sorted-index projection. Use the Wide TV control's
+    // published sorted order below as the durable ordering evidence.
     let mut app = letter_grouped_series_app();
     let mut layout = LayoutMain::default();
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 20)).unwrap();
@@ -272,6 +255,18 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
         })
         .unwrap();
     let component_layout = component.test_layout();
+    let first_idx = component_layout
+        .left_sorted_indices
+        .first()
+        .copied()
+        .expect("Wide TV control publishes sorted order for grouped series");
+    assert!(
+        app.libs[0].nav_stack[0].items[first_idx]
+            .name
+            .starts_with('A'),
+        "first Wide TV sorted item should start with A, got: {}",
+        app.libs[0].nav_stack[0].items[first_idx].name,
+    );
     assert_surface_pills(
         &terminal,
         component_layout,

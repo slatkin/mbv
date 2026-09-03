@@ -7,16 +7,136 @@
 //! lives in `crate::app::render::components::media_list`.
 
 use crate::app::ui_util::move_cursor;
+use ratatui::layout::Rect;
 
 mod anchor;
+mod grouping;
 mod inline;
 #[cfg(test)]
 mod tests;
 mod wide;
 
 pub use anchor::ViewportAnchor;
+pub use grouping::letter_grouped_rows;
 pub use inline::{InlineLayout, InlineMediaBrowser};
 pub use wide::WideMediaList;
+
+/// Flow-space geometry for a painted media-list control.
+///
+/// Rows contain the source-row lookup used by painters and an optional stable
+/// target for compatibility hit maps. Replacement continuation rows contain
+/// neither; the selected replacement row contains only the selected target.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RowGeometry<Target> {
+    offset: usize,
+    rows: Vec<FlowRow<Target>>,
+    selected_row: Option<usize>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FlowRow<Target> {
+    source_row: Option<usize>,
+    target: Option<Target>,
+}
+
+impl<Target> RowGeometry<Target> {
+    /// Display-row index at the viewport top.
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    /// Number of rows in the complete painted flow.
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    /// Display-row index of the selected row in flow space.
+    pub fn selected_row(&self) -> Option<usize> {
+        self.selected_row
+    }
+
+    /// Stable targets parallel to the flow rows.
+    pub fn targets(&self) -> impl Iterator<Item = Option<&Target>> {
+        self.rows.iter().map(|row| row.target.as_ref())
+    }
+
+    /// Absolute one-line rectangles for rows visible in `area`.
+    pub fn visible_rows(&self, area: Rect) -> Vec<Rect> {
+        (self.offset..self.rows.len())
+            .take(area.height as usize)
+            .map(|row| Rect {
+                y: area.y + (row - self.offset) as u16,
+                height: 1,
+                ..area
+            })
+            .collect()
+    }
+
+    /// The selected row's absolute one-line rectangle when it is visible.
+    pub fn selected_row_rect(&self, area: Rect) -> Option<Rect> {
+        let row = self.selected_row?;
+        (self.offset..self.offset.saturating_add(area.height as usize))
+            .contains(&row)
+            .then(|| Rect {
+                y: area.y + (row - self.offset) as u16,
+                height: 1,
+                ..area
+            })
+    }
+
+    /// Resolve a flow row to its source row for canonical painting.
+    pub(crate) fn source_row(&self, row: usize) -> Option<usize> {
+        self.rows.get(row).and_then(|row| row.source_row)
+    }
+}
+
+impl<Target: Clone> RowGeometry<Target> {
+    fn source(rows: &[MediaListRow<Target>], offset: usize, selected_row: Option<usize>) -> Self {
+        Self {
+            offset,
+            rows: rows
+                .iter()
+                .enumerate()
+                .map(|(source_row, row)| FlowRow {
+                    source_row: Some(source_row),
+                    target: row.selectable_target().cloned(),
+                })
+                .collect(),
+            selected_row,
+        }
+    }
+
+    fn replacement(
+        rows: &[MediaListRow<Target>],
+        selected_row: usize,
+        detail_rows: usize,
+        offset: usize,
+    ) -> Self {
+        let mut flow = Vec::with_capacity(rows.len() - 1 + detail_rows);
+        for (source_row, row) in rows.iter().enumerate() {
+            if source_row == selected_row {
+                flow.extend((0..detail_rows).map(|detail_row| FlowRow {
+                    source_row: None,
+                    target: if detail_row == 0 {
+                        row.selectable_target().cloned()
+                    } else {
+                        None
+                    },
+                }));
+            } else {
+                flow.push(FlowRow {
+                    source_row: Some(source_row),
+                    target: row.selectable_target().cloned(),
+                });
+            }
+        }
+        Self {
+            offset,
+            rows: flow,
+            selected_row: Some(selected_row),
+        }
+    }
+}
 
 /// A bounded percentage used by active canonical media-list rows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

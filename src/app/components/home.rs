@@ -570,7 +570,8 @@ impl Component for HomeComponent {
                 self.focused,
                 crate::app::palette::SURFACE_RESTING,
             )
-            .offset
+            .row_geometry
+            .offset()
         };
         if crate::app::render::shared_hero_presentation(area).is_some() {
             self.canonical_list.set_scroll(offset);

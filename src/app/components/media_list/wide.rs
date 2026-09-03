@@ -1,4 +1,6 @@
-use super::{ListCore, MediaListRow, ViewportAnchor, WideViewport};
+use super::{
+    letter_grouped_rows, ListCore, MediaListRow, RowGeometry, ViewportAnchor, WideViewport,
+};
 
 /// Embedded plain fixed-height, one-column media list: owns the display-row
 /// list, the selectable index over it, the cursor, and the resting scroll
@@ -93,11 +95,41 @@ impl<Target> WideMediaList<Target> {
     }
 }
 
+impl<Target: Clone> WideMediaList<Target> {
+    /// Export the fixed one-column flow used by the painter.
+    pub fn row_geometry(&self, viewport_height: usize) -> RowGeometry<Target> {
+        let viewport = self.core.resolve_viewport(viewport_height);
+        RowGeometry::source(
+            self.core.rows(),
+            viewport.offset,
+            self.core.selected_display_row(),
+        )
+    }
+}
+
 impl<Target: Clone + PartialEq> WideMediaList<Target> {
     /// Replace the display rows, preserving the selected target where possible
     /// and locally clamping otherwise (design.md D3).
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
         self.core.set_content(rows);
+    }
+
+    /// Replace the display rows from a letter-grouped projection: sort the
+    /// `(sort_str, Item)` pairs by natural key and inject `Heading`/`Spacer`
+    /// rows per bucket, matching `render_letter_grouped_rows`. `total_count`
+    /// selects range vs per-letter buckets; `letter_filter_active` forces
+    /// per-letter mode for an already-filtered slice.
+    pub fn set_letter_grouped_content(
+        &mut self,
+        items: Vec<(String, MediaListRow<Target>)>,
+        total_count: usize,
+        letter_filter_active: bool,
+    ) {
+        self.core.set_content(letter_grouped_rows(
+            items,
+            total_count,
+            letter_filter_active,
+        ));
     }
 
     /// Move the cursor to `target` when it is present; returns whether it was.

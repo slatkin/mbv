@@ -1,5 +1,7 @@
 use super::browser::BrowserComponent;
+use super::browser_narrow::NarrowBrowseExtras;
 use super::component_id::BrowserKind;
+use crate::app::components::browser::{BrowserContent, BrowserIdentity};
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::render::LibraryListRenderCtx;
@@ -45,7 +47,7 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
     ];
     for (key, from, expected) in cases {
         let mut browser = BrowserComponent::new();
-        browser.set_content(LibraryListRenderCtx::from_items(make_items(40), 0, 0), true);
+        browser.set_content(BrowserContent::from_items(make_items(40)), true);
         browser.set_cursor_for_test(from);
         let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
         terminal
@@ -70,10 +72,7 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
     // Unfocused (Queue/playback own panel focus): movement keys do not
     // mutate the component cursor and remain unclaimed by this component.
     let mut browser = BrowserComponent::new();
-    browser.set_content(
-        LibraryListRenderCtx::from_items(make_items(40), 0, 0),
-        false,
-    );
+    browser.set_content(BrowserContent::from_items(make_items(40)), false);
     browser.set_cursor_for_test(7);
     let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
     terminal
@@ -165,7 +164,7 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
     ];
     for (key, from, expected) in cases {
         let mut browser = BrowserComponent::new();
-        browser.set_content(LibraryListRenderCtx::from_items(items.clone(), 0, 0), true);
+        browser.set_content(BrowserContent::from_items(items.clone()), true);
         browser.set_cursor_for_test(from);
         let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
         terminal
@@ -183,6 +182,56 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
     }
 }
 
+#[test]
+fn browser_control_transition_preserves_the_selected_viewport_offset() {
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    browser.set_content(BrowserContent::from_items(make_items(40)), true);
+    browser.set_narrow_extras(NarrowBrowseExtras {
+        hero_placeholder: true,
+        ..NarrowBrowseExtras::default()
+    });
+    // Seed a nontrivial resting viewport before the first breakpoint paint.
+    browser.apply_position(20, 8);
+
+    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    let narrow_anchor = browser
+        .viewport_anchor(browser.painted_viewport_height())
+        .expect("narrow inline control has a selected item");
+
+    let mut wide_terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    wide_terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    let wide_anchor = browser
+        .viewport_anchor(browser.painted_viewport_height())
+        .expect("wide control has a selected item");
+
+    assert_eq!(wide_anchor.selected_target, narrow_anchor.selected_target);
+    assert_eq!(
+        wide_anchor.selected_row_offset, narrow_anchor.selected_row_offset,
+        "Movies breakpoint handoff must preserve the outgoing inline offset"
+    );
+
+    let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    narrow_terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    let narrow_again = browser
+        .viewport_anchor(browser.painted_viewport_height())
+        .expect("narrow control has a selected item after returning");
+    assert_eq!(
+        narrow_again.selected_target, wide_anchor.selected_target,
+        "Movies breakpoint handoff must preserve the selected item in both directions"
+    );
+    assert_eq!(
+        narrow_again.selected_row_offset, wide_anchor.selected_row_offset,
+        "Movies breakpoint handoff must preserve the outgoing wide offset"
+    );
+}
+
 /// Wide-Movies exact parity: a Movies-keyed component on a >=82-wide
 /// rendered list uses its own kind and painted geometry, and the right
 /// rail strides ONE item per row, matching its painted one-column geometry.
@@ -191,7 +240,7 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
 #[test]
 fn browser_local_navigation_strides_one_column_for_wide_movies() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(LibraryListRenderCtx::from_items(make_items(12), 0, 0), true);
+    browser.set_content(BrowserContent::from_items(make_items(12)), true);
     browser.set_wide_movies(false, false);
     let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
     terminal
@@ -241,7 +290,7 @@ fn browser_local_navigation_strides_one_column_for_wide_movies() {
 #[test]
 fn browser_alt_navigation_stays_unclaimed() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(LibraryListRenderCtx::from_items(make_items(2), 0, 0), true);
+    browser.set_content(BrowserContent::from_items(make_items(2)), true);
 
     for code in [Key::Left, Key::Right, Key::Up, Key::Down] {
         let message = browser.on(&Event::Keyboard(TuiKeyEvent {
@@ -259,7 +308,7 @@ fn browser_alt_navigation_stays_unclaimed() {
 #[test]
 fn browser_alt_refresh_stays_component_owned() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(LibraryListRenderCtx::from_items(make_items(1), 0, 0), true);
+    browser.set_content(BrowserContent::from_items(make_items(1)), true);
 
     let message = browser.on(&Event::Keyboard(TuiKeyEvent {
         code: Key::Char('r'),
@@ -276,7 +325,7 @@ fn browser_alt_refresh_stays_component_owned() {
 #[test]
 fn browser_context_menu_requires_bare_dot() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(LibraryListRenderCtx::from_items(make_items(1), 0, 0), true);
+    browser.set_content(BrowserContent::from_items(make_items(1)), true);
 
     let modified = browser.on(&Event::Keyboard(TuiKeyEvent {
         code: Key::Char('.'),
@@ -298,54 +347,121 @@ fn browser_context_menu_requires_bare_dot() {
 }
 
 #[test]
-fn browser_syncs_cursor_from_context_on_set_content() {
+fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(
-        LibraryListRenderCtx::from_items(
-            vec![make_item("one", "Movie"), make_item("two", "Movie")],
-            0,
-            0,
-        ),
-        true,
-    );
+    let items = || make_items(4);
+    browser.set_content(BrowserContent::from_items(items()), true);
 
-    browser.handle_tui_key(TuiKeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    });
-    // Component cursor moved to 1
+    browser.apply_position(1, 2);
     assert_eq!(browser.cursor(), 1);
+    assert_eq!(browser.scroll(), 2);
 
-    // set_content with App cursor at 1 (as it would be after the shell handles the request)
+    // Position in the render context is deliberately stripped before content
+    // reaches the control, so a nonzero incoming cursor/scroll cannot replace
+    // its current position.
     browser.set_content(
-        LibraryListRenderCtx::from_items(
-            vec![make_item("one", "Movie"), make_item("two", "Movie")],
-            1, // App cursor updated to match component
-            0,
-        ),
+        BrowserContent::from_render_ctx(LibraryListRenderCtx::from_items(items(), 3, 7)),
         true,
     );
-    // Component cursor syncs from context
     assert_eq!(browser.cursor(), 1);
+    assert_eq!(browser.scroll(), 2);
 
-    // set_content with App cursor at 0 (external change like tab switch)
-    browser.set_content(
-        LibraryListRenderCtx::from_items(
-            vec![make_item("one", "Movie"), make_item("two", "Movie")],
-            0, // App cursor changed externally
-            0,
+    let identity = BrowserIdentity::default();
+    assert!(browser.note_browse_identity(identity.clone()));
+    let content = |ctx| BrowserContent::from_render_ctx(ctx);
+    for (label, content) in [
+        (
+            "pagination",
+            content(LibraryListRenderCtx::from_items(make_items(3), 2, 6)),
         ),
-        true,
-    );
-    // Component cursor follows App cursor
-    assert_eq!(browser.cursor(), 0);
+        (
+            "loading",
+            content(LibraryListRenderCtx::from_items(items(), 3, 7).with_loading(true)),
+        ),
+        (
+            "refresh",
+            content(LibraryListRenderCtx::from_items(items(), 0, 0)),
+        ),
+    ] {
+        // Unchanged browse identity means pagination, loading completion, and
+        // refresh content pushes cannot re-seed the component's position.
+        assert!(!browser.note_browse_identity(identity.clone()), "{label}");
+        browser.set_content(content, true);
+        assert_eq!(browser.cursor(), 1, "{label} cursor");
+        assert_eq!(browser.scroll(), 2, "{label} scroll");
+    }
+
+    let changed_identities = [
+        (
+            "depth",
+            BrowserIdentity {
+                depth: 1,
+                ..identity.clone()
+            },
+        ),
+        (
+            "parent",
+            BrowserIdentity {
+                parent_id: "parent".into(),
+                ..identity.clone()
+            },
+        ),
+        ("back restore", identity.clone()),
+        (
+            "letter reset",
+            BrowserIdentity {
+                letter_filter: Some(1),
+                ..identity.clone()
+            },
+        ),
+        (
+            "sort",
+            BrowserIdentity {
+                sort_by: "DateCreated".into(),
+                ..identity.clone()
+            },
+        ),
+        (
+            "saved restore",
+            BrowserIdentity {
+                unplayed_only: true,
+                ..identity.clone()
+            },
+        ),
+        (
+            "feed group",
+            BrowserIdentity {
+                feed_group: Some(1),
+                ..identity.clone()
+            },
+        ),
+    ];
+    for (label, changed_identity) in changed_identities {
+        // Start every changed-identity case from a known position. The
+        // identity change itself does not move the control; the explicit
+        // apply_position push is the only position re-seed.
+        browser.apply_position(1, 2);
+        assert!(
+            browser.note_browse_identity(changed_identity),
+            "{label} must be a new browse identity"
+        );
+        browser.set_content(
+            content(LibraryListRenderCtx::from_items(items(), 0, 0)),
+            true,
+        );
+        assert_eq!(browser.cursor(), 1, "{label} before explicit position");
+        assert_eq!(browser.scroll(), 2, "{label} before explicit position");
+        browser.apply_position(2, 3);
+        assert_eq!(browser.cursor(), 2, "{label} cursor");
+        assert_eq!(browser.scroll(), 3, "{label} scroll");
+    }
 }
 
 #[test]
 fn browser_renders_the_shared_generic_rows() {
     let mut browser = BrowserComponent::new();
     browser.set_content(
-        LibraryListRenderCtx::from_items(vec![make_item("Movie one", "Movie")], 0, 0),
+        BrowserContent::from_items(vec![make_item("Movie one", "Movie")]),
         true,
     );
     let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
@@ -363,11 +479,10 @@ fn browser_renders_the_shared_generic_rows() {
 fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
     let mut browser = BrowserComponent::new();
     browser.set_content(
-        LibraryListRenderCtx::from_items(
-            vec![make_item("first", "Movie"), make_item("second", "Movie")],
-            0,
-            0,
-        ),
+        BrowserContent::from_items(vec![
+            make_item("first", "Movie"),
+            make_item("second", "Movie"),
+        ]),
         true,
     );
     let mut terminal = Terminal::new(TestBackend::new(100, 6)).unwrap();

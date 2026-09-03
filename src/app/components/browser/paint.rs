@@ -8,8 +8,7 @@ use crate::app::components::component_id::BrowserKind;
 use crate::app::palette;
 use crate::app::render::{
     hero_on_left_list_panel_border, hero_on_left_right_pane, padded_rect,
-    prepare_wide_emby_hero_card, render_count_label,
-    render_generic_movies_home_video_rows_with_ctx, render_home_hero_content, render_pill_bar,
+    prepare_wide_emby_hero_card, render_count_label, render_home_hero_content, render_pill_bar,
     render_search_box, wide_library_panes, HeroData, LetterFilter, LibraryListRenderCtx, PillBar,
     PANE_PAD_X, PANE_PAD_Y,
 };
@@ -34,13 +33,19 @@ impl BrowserComponent {
             ..body_area
         };
         let Some(panes) = wide_library_panes(body_area, PANE_PAD_X, PANE_PAD_Y) else {
-            // Breakpoint no longer fits: fall back to the plain list rows.
-            return render_generic_movies_home_video_rows_with_ctx(
+            // Defensive structure only: unreachable on canonical Wide paths.
+            // `browser/mod.rs` calls `render_wide_movies` solely when
+            // `shared_hero_presentation(area).is_some()`, and
+            // `wide_library_panes` returns `None` only when that same check
+            // fails on the same rect (`body_area == area`). If a degenerate
+            // rect ever reaches here, keep a canonical render rather than
+            // routing to the legacy painter.
+            return crate::app::render::render_wide_media_list(
                 f,
                 body_area,
-                ctx,
+                &self.wide_list,
                 self.focused,
-                crate::app::library_column_width::library_column_count(area.width),
+                palette::SURFACE_RESTING,
                 &mut self.layout,
             );
         };
@@ -126,14 +131,53 @@ impl BrowserComponent {
         }
         let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
 
-        let final_scroll = render_generic_movies_home_video_rows_with_ctx(
-            f,
-            list_area,
-            ctx,
-            self.focused,
-            1,
-            &mut self.layout,
-        );
+        self.layout.left_area = list_area;
+        let final_scroll = if self.wide_list.is_empty() {
+            crate::app::render::components::widgets::render_placeholder(
+                f,
+                list_area,
+                if ctx.loading {
+                    " Loading…"
+                } else {
+                    " (empty)"
+                },
+            );
+            0
+        } else {
+            let offset = crate::app::render::render_wide_media_list(
+                f,
+                list_area,
+                &self.wide_list,
+                self.focused,
+                palette::SURFACE_RESTING,
+                &mut self.layout,
+            );
+            self.wide_list.set_scroll(offset);
+            // Export the selected-row anchor from the control's exact painted
+            // flow; the shell consumes it for context-menu placement.
+            self.layout.selected_item_rect = self
+                .wide_list
+                .row_geometry(list_area.height as usize)
+                .selected_row_rect(list_area);
+            // Republish the sorted display order the rail was built from so the
+            // parent's letter-aware keyboard navigation keeps resolving targets
+            // against `self.layout` (mirrors `render_wide_tv_with_ctx`; task
+            // 3.5c re-points navigation onto the control itself).
+            let grouped =
+                !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some());
+            self.layout.left_sorted_indices = if grouped {
+                let mut order: Vec<usize> = (0..ctx.items.len()).collect();
+                order.sort_by_cached_key(|&index| {
+                    crate::app::ui_util::natural_sort_key(crate::app::render::effective_sort_str(
+                        &ctx.items[index],
+                    ))
+                });
+                order
+            } else {
+                (0..ctx.items.len()).collect()
+            };
+            offset
+        };
 
         // Paint the shared hero text last (after the list); defer the cover
         // image paint to the shell, which owns the image-cache authority.
