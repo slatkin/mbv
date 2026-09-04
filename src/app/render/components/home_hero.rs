@@ -464,15 +464,23 @@ fn render_hero_layout_meta_content(
     meta_block: HeroMetaBlock,
     overview_pad: u16,
     focused: bool,
+    use_nerd_fonts: bool,
     hero: &dyn Hero,
 ) {
+    // Preserve the precomputed Nerd Font glyphs; Emby's Hero suffix is the
+    // ordinary-Unicode fallback and must not shadow them.
+    let title_suffix = if use_nerd_fonts {
+        meta_block.title_suffix
+    } else {
+        hero.title_suffix().or(meta_block.title_suffix)
+    };
     super::hero::render_home_hero_meta_block(
         f,
         area,
         wide_area,
         &layout.title_lines,
         hero.subtitle().unwrap_or(&layout.show_name),
-        hero.title_suffix().or(meta_block.title_suffix),
+        title_suffix,
         hero.meta_rows(area.width),
         &layout.overview_lines,
         overview_pad,
@@ -508,6 +516,7 @@ pub(in crate::app) fn render_home_hero_content(
                 meta_block,
                 overview_pad,
                 focused,
+                use_nerd_fonts,
                 item.as_ref(),
             );
             Some(HomeImagePaint::Emby {
