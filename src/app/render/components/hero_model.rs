@@ -13,11 +13,30 @@ pub(crate) trait Hero {
     fn meta_rows(&self, width: u16) -> Vec<Vec<Span<'static>>>;
     fn title_suffix(&self) -> Option<Span<'static>>;
     fn description(&self) -> Option<String>;
-    fn artwork(&self) -> HeroArtwork<'_>;
+    /// The default-aspect artwork request, i.e. `artwork_for(HeroArtworkAspect::Default)`.
+    fn artwork(&self) -> HeroArtwork<'_> {
+        self.artwork_for(HeroArtworkAspect::Default)
+    }
+    fn artwork_for(&self, aspect: HeroArtworkAspect) -> HeroArtwork<'_>;
+}
+
+/// Requested semantic shape for `Hero::artwork_for`'s resolved image
+/// (design.md D-D). `Landscape` asks the adapter to prefer a wide-aspect
+/// image via its locally verified per-item-type candidate chain; the layout
+/// requesting it owns the aspect ratio, not the provider's field names.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum HeroArtworkAspect {
+    Default,
+    Landscape,
 }
 
 pub(crate) enum HeroArtwork<'a> {
-    Image(&'a str),
+    Image {
+        item_id: &'a str,
+        /// Ordered Emby image-type candidate chain, same shape and
+        /// precedent as `card.rs::card_image_types`.
+        image_types: &'static [&'static str],
+    },
     Placeholder,
 }
 
@@ -74,11 +93,66 @@ impl Hero for EmbyItem {
         (!d.is_empty()).then_some(d)
     }
 
-    fn artwork(&self) -> HeroArtwork<'_> {
+    fn artwork_for(&self, aspect: HeroArtworkAspect) -> HeroArtwork<'_> {
         if self.id.is_empty() {
-            HeroArtwork::Placeholder
-        } else {
-            HeroArtwork::Image(&self.id)
+            return HeroArtwork::Placeholder;
+        }
+        let image_types = match (aspect, self.item_type.as_str()) {
+            (HeroArtworkAspect::Landscape, "Series") => {
+                &["Thumb", "Primary", "Backdrop", "Logo"][..]
+            }
+            _ => &["Primary", "Backdrop", "Logo"][..],
+        };
+        HeroArtwork::Image {
+            item_id: &self.id,
+            image_types,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::make_item;
+
+    fn item(item_type: &str) -> EmbyItem {
+        make_item("Test", item_type)
+    }
+
+    fn image_types(artwork: HeroArtwork<'_>) -> &'static [&'static str] {
+        match artwork {
+            HeroArtwork::Image { image_types, .. } => image_types,
+            HeroArtwork::Placeholder => panic!("expected HeroArtwork::Image"),
+        }
+    }
+
+    #[test]
+    fn series_landscape_prefers_thumb() {
+        let series = item("Series");
+        assert_eq!(
+            image_types(series.artwork_for(HeroArtworkAspect::Landscape)),
+            &["Thumb", "Primary", "Backdrop", "Logo"]
+        );
+    }
+
+    #[test]
+    fn non_series_landscape_skips_thumb() {
+        let movie = item("Movie");
+        assert_eq!(
+            image_types(movie.artwork_for(HeroArtworkAspect::Landscape)),
+            &["Primary", "Backdrop", "Logo"]
+        );
+    }
+
+    #[test]
+    fn default_aspect_is_unchanged_for_every_item_type() {
+        for item_type in ["Series", "Movie", "Episode", "Audio"] {
+            let it = item(item_type);
+            assert_eq!(image_types(it.artwork()), &["Primary", "Backdrop", "Logo"]);
+            assert_eq!(
+                image_types(it.artwork_for(HeroArtworkAspect::Default)),
+                &["Primary", "Backdrop", "Logo"]
+            );
         }
     }
 }
