@@ -93,7 +93,7 @@
 - [x] 4.1 Add a `SURFACE_ARTWORK_PLACEHOLDER` semantic role to `src/app/render/theme/` and a
   `render_artwork_placeholder(f, area)` component that paints it — verify the role is not a
   re-exported primitive and a unit test asserts the painted extent matches the requested rect.
-- [ ] 4.2 Define the `Hero` trait in `src/app/render/components/` (title, subtitle, meta rows,
+- [x] 4.2 Define the `Hero` trait in `src/app/render/components/` (title, subtitle, meta rows,
   body as listing-or-description, `artwork()` as `HeroArtwork::Image | Placeholder`) and implement
   it for `EmbyItem` — verify `rtk cargo check -p mbv` passes with the Emby hero path routed
   through the trait and all characterization tests unchanged from their phase-3 state.
