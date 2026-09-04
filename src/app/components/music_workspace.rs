@@ -11,7 +11,9 @@ use tuirealm::event::{Event, Key, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{InlineMediaBrowser, ViewportAnchor, WideMediaList};
+use super::media_list::{
+    InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
@@ -21,7 +23,31 @@ use crate::app::render::{
     render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, shared_hero_presentation,
     MusicImagePaint, MusicWideRenderCtx,
 };
-use crate::app::ui_util::move_cursor;
+use crate::app::ui_util::{fmt_duration_approx, move_cursor};
+use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
+
+fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
+    tracks
+        .iter()
+        .enumerate()
+        .map(|(index, track)| {
+            let number = if track.index_number > 0 {
+                track.index_number
+            } else {
+                index as i64 + 1
+            };
+            let duration = (track.runtime_ticks > 0)
+                .then(|| fmt_duration_approx(track.runtime_ticks / TICKS_PER_SECOND));
+            MediaListRow::Item {
+                target: track.id.clone(),
+                primary: format!("{number}. {}", track.name),
+                trailing: None,
+                duration,
+                semantic_state: MediaSemanticState::Ordinary,
+            }
+        })
+        .collect()
+}
 
 pub struct MusicWorkspaceComponent {
     context: MusicWideRenderCtx,
@@ -62,6 +88,7 @@ pub struct MusicWorkspaceComponent {
     /// path (design.md D6). The narrow list / track table are net-new mouse
     /// work in task 6.1.
     wide_list: WideMediaList<String>,
+    track_list: WideMediaList<String>,
     /// Narrow presentation only: the screen rect the album rows were painted
     /// into this frame, captured from `render_narrow_music_group_with_ctx`.
     /// The narrow mouse path resolves row hits against it through
@@ -107,6 +134,7 @@ impl MusicWorkspaceComponent {
             wide_selected_row_offset: None,
             mouse_gestures: MouseGestureState::new(),
             wide_list: WideMediaList::new(),
+            track_list: WideMediaList::new(),
             narrow_list_area: Rect::default(),
             pill_regions: HitRegions::new(),
         }
@@ -212,6 +240,12 @@ impl MusicWorkspaceComponent {
             .as_ref()
             .map(|album| album.id.clone());
         self.context = context;
+        self.track_list.set_content(build_track_rows(
+            self.context.album_tracks.as_deref().unwrap_or_default(),
+        ));
+        if let Some(cursor) = self.track_cursor {
+            self.track_list.select_index(cursor);
+        }
         // The component owns `album_cursor`/`album_scroll` outright; an
         // ordinary content push never adopts the shell's cursor. A shrunk
         // projection can still orphan the local cursor, so clamp it against
@@ -332,6 +366,7 @@ impl MusicWorkspaceComponent {
     pub(in crate::app) fn enter_track_focus(&mut self) {
         if self.can_enter_track_focus() {
             self.track_cursor = Some(0);
+            self.track_list.select_first();
         }
     }
 
@@ -339,12 +374,14 @@ impl MusicWorkspaceComponent {
     /// deleted track-focus-clear rehome.
     pub(in crate::app) fn clear_track_focus(&mut self) {
         self.track_cursor = None;
+        self.track_list.select_first();
     }
 
     fn move_track(&mut self, delta: i64) {
         let count = self.context.album_tracks.as_ref().map_or(0, Vec::len);
         if count > 0 {
             self.track_cursor = Some(move_cursor(self.track_cursor.unwrap_or(0), delta, count));
+            self.track_list.select_index(self.track_cursor.unwrap_or(0));
         }
     }
 
@@ -373,6 +410,7 @@ impl MusicWorkspaceComponent {
             Key::Enter if self.track_cursor.is_none() => {
                 if self.can_enter_track_focus() {
                     self.track_cursor = Some(0);
+                    self.track_list.select_first();
                     return None;
                 }
                 Some(Msg::Shell(ShellRequest::MusicAlbumActivate))
@@ -381,6 +419,7 @@ impl MusicWorkspaceComponent {
             // unprefixed panel's Esc/Stop semantics.
             Key::Esc | Key::Backspace if self.track_cursor.is_some() => {
                 self.track_cursor = None;
+                self.track_list.select_first();
                 None
             }
             // Track moves are local to the component while a track is
@@ -726,6 +765,7 @@ impl Component for MusicWorkspaceComponent {
                 &context,
                 &mut self.layout,
                 &mut self.wide_list,
+                &mut self.track_list,
             );
             self.album_scroll = output.final_scroll;
             self.image_paint = output.image_paint;

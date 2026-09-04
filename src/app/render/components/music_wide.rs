@@ -1,6 +1,8 @@
 //! Grouped Music's wide hero-on-left component.
 
-use crate::app::components::media_list::{InlineMediaBrowser, MediaListRow, MediaSemanticState};
+use crate::app::components::media_list::{
+    InlineMediaBrowser, MediaListRow, MediaSemanticState, WideMediaList,
+};
 use crate::app::layout::LayoutMain;
 use crate::app::layout::LibraryRowTarget;
 use crate::app::render::arrangements::hero_left::{self, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y};
@@ -17,7 +19,6 @@ use crate::app::render::components::list_rows::{
     LibraryListRenderCtx, SELECTED_BLOCK_SIDE_PADDING,
 };
 use crate::app::render::components::music_wide_browser::render_wide_right_album_browser_with_ctx;
-use crate::app::render::components::music_wide_tracks::render_wide_left_tracks;
 use crate::app::render::MusicImagePaint;
 use crate::app::{palette, App, PanelFocus};
 use mbv_core::api::EmbyItem;
@@ -491,7 +492,8 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     area: Rect,
     ctx: &MusicWideRenderCtx,
     layout: &mut LayoutMain,
-    album_list: &mut crate::app::components::media_list::WideMediaList<String>,
+    album_list: &mut WideMediaList<String>,
+    track_list: &mut WideMediaList<String>,
 ) -> MusicWideRenderOutput {
     let mut output = MusicWideRenderOutput::default();
     // The pure arrangement is computed exactly once here in
@@ -531,17 +533,31 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
             ctx.focused,
             ctx.images_enabled,
         );
-        render_wide_left_tracks(
-            f,
-            &left_layout.track_area,
-            album,
-            ctx.album_tracks.as_deref(),
-            ctx.album_tracks_loading,
-            ctx.track_cursor,
-            left_focused,
-            ctx.focused,
-            layout,
-        );
+        let track_area = left_layout.track_area;
+        if track_area.height > 0 && track_area.width > 0 && !track_list.is_empty() {
+            let paint = super::media_list::render_wide_media_list(
+                f,
+                track_area,
+                track_area,
+                track_list,
+                left_focused,
+                palette::list_selected_row_bg(),
+            );
+            layout.selected_item_rect = paint.selected_row_rect;
+            layout.wide_music_track_hitmap.clear();
+            for (row, index) in paint.left_row_map.into_iter().enumerate() {
+                if let Some(index) = index {
+                    layout.wide_music_track_hitmap.push((
+                        Rect {
+                            y: track_area.y + row as u16,
+                            height: 1,
+                            ..track_area
+                        },
+                        index,
+                    ));
+                }
+            }
+        }
     } else {
         crate::app::render::render_placeholder(f, left_area, " Loading\u{2026}");
     }

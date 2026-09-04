@@ -45,7 +45,6 @@ pub(super) mod multiselect;
 pub(super) mod music;
 pub(super) mod music_wide;
 pub(super) mod music_wide_browser;
-pub(super) mod music_wide_tracks;
 pub(super) mod playlists;
 pub(in crate::app) mod queue;
 pub(super) mod remote_reanchor;

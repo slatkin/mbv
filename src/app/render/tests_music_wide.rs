@@ -74,7 +74,7 @@ fn wide_music_composes_the_canonical_control_exactly_once() {
     assert_eq!(
         WIDE_MEDIA_LIST_PAINTS.with(std::cell::Cell::get),
         1,
-        "exactly one wide list painter runs for wide grouped Music"
+        "the populated album rail uses the canonical painter"
     );
     assert_eq!(
         PLAIN_ROWS_PAINTS.with(std::cell::Cell::get),
