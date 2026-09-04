@@ -345,7 +345,7 @@ impl App {
                 show_placeholder,
                 image_types,
             }) => {
-                let cache_key = format!("{}:ser_primary", item.id);
+                let cache_key = format!("{}:ser:{}", item.id, image_types.join(","));
                 if self.images_enabled() {
                     self.fetch_card_image(
                         cache_key.clone(),
