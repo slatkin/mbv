@@ -30,24 +30,6 @@ pub(in crate::app::render) fn focused_or_subtle(focused: bool) -> Color {
     }
 }
 
-/// Returns `palette::TEXT_FOCUS_ACCENT` when `focused`, `palette::TEXT_MUTED` otherwise.
-pub(in crate::app::render) fn focused_or_muted(focused: bool) -> Color {
-    if focused {
-        palette::TEXT_FOCUS_ACCENT
-    } else {
-        palette::TEXT_MUTED
-    }
-}
-
-/// Returns `palette::TEXT_EMPHASIS` when `focused`, `palette::TEXT_MUTED` otherwise.
-pub(in crate::app::render) fn focused_or_muted_soft_white(focused: bool) -> Color {
-    if focused {
-        palette::TEXT_EMPHASIS
-    } else {
-        palette::TEXT_MUTED
-    }
-}
-
 pub(in crate::app::render) enum DisplayRow {
     Spacer,
     LetterHeader(String),
