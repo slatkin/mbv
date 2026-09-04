@@ -4,7 +4,7 @@ use ratatui::{style::Style, text::Span};
 
 use crate::app::palette;
 use crate::app::render::components::home_video::format_release_date;
-use crate::app::ui_util::{clean_overview, fmt_duration_approx, trunc_str};
+use crate::app::ui_util::{clean_overview, fmt_duration_approx, fmt_duration_short, trunc_str};
 use mbv_core::api::TICKS_PER_SECOND;
 
 /// Provider-neutral content exposed to the shared hero presentation.
@@ -88,7 +88,7 @@ impl Hero for QueueItem {
             .map(|ticks| {
                 vec![vec![Span::styled(
                     trunc_str(
-                        &fmt_duration_approx((ticks / TICKS_PER_SECOND as u64) as i64),
+                        &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
                         width as usize,
                     ),
                     Style::default().fg(palette::TEXT_SECONDARY),
