@@ -52,7 +52,7 @@
 
 ## 3. Per-surface conformance: the three already-filling destinations
 
-- [ ] 3.1 Movies/home-videos/Emby-podcasts/feed-group browser
+- [x] 3.1 Movies/home-videos/Emby-podcasts/feed-group browser
   (`src/app/components/browser/paint.rs`): route the fill through `hero_on_left_pane(f, body_area,
   LeftPaneFocus::ReadOnly)`, take the hero content rect from its return value, and **delete** the
   second inset at `:82` (`padded_rect(left_area, PANE_PAD_X, 0)`) — the effective inset today is
