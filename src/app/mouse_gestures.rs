@@ -23,12 +23,10 @@ impl App {
         self.is_browse_layout_current()
     }
 
-    pub(super) fn seek_to_col(&mut self, col: u16) {
-        let bar = self.layout.playback.seekbar_area;
-        if bar.width == 0 {
-            return;
-        }
-        let fraction = (col.saturating_sub(bar.x)) as f64 / bar.width as f64;
+    /// Seek to a 0.0..=1.0 `fraction` of the runtime. `PlaybackComponent`
+    /// resolves the click column against its own painted `seekbar_area`, so no
+    /// shell code reads `self.layout.playback.seekbar_area` (ADR 0022 Residual A).
+    pub(super) fn seek_to_fraction(&mut self, fraction: f64) {
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             let runtime_s = self
                 .connected_session_state

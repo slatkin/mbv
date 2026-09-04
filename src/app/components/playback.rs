@@ -143,8 +143,12 @@ impl PlaybackComponent {
             {
                 Some(Msg::Playback(PlaybackRequest::Next))
             }
-            MouseEventKind::Down(MouseButton::Left) if self.seekbar_area.contains(point) => {
-                Some(Msg::Playback(PlaybackRequest::SeekTo(event.column)))
+            MouseEventKind::Down(MouseButton::Left)
+                if self.seekbar_area.contains(point) && self.seekbar_area.width > 0 =>
+            {
+                let fraction = event.column.saturating_sub(self.seekbar_area.x) as f64
+                    / self.seekbar_area.width as f64;
+                Some(Msg::Playback(PlaybackRequest::SeekTo(fraction)))
             }
             _ => None,
         }
@@ -230,6 +234,66 @@ mod tests {
             code,
             modifiers: KeyModifiers::NONE,
         })
+    }
+
+    fn click(column: u16, row: u16) -> Event<UserEvent> {
+        Event::Mouse(tuirealm::event::MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        })
+    }
+
+    fn painted_component() -> PlaybackComponent {
+        let mut component = PlaybackComponent::new();
+        component.set_projection(PlaybackProjection {
+            state: PlaybackState::default(),
+            title: Some("Example".into()),
+            player_area: Rect::new(10, 5, 40, 4),
+            status_area: Rect::new(10, 9, 40, 1),
+            show_controls: true,
+            focused: false,
+            player_h: 4,
+            panel_bg: palette::SURFACE_PLAYBACK,
+            narrow_player: false,
+            now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
+            title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],
+            status_indicators: None,
+            throbber: Span::raw(" "),
+            idle_feed_title: None,
+            use_nerd_fonts: false,
+            stop_available: true,
+            next_available: true,
+            volume: "50%".into(),
+            muted: false,
+        });
+        let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        component
+    }
+
+    #[test]
+    fn seekbar_click_resolves_a_fraction_against_the_painted_seekbar_area() {
+        let mut component = painted_component();
+        // seekbar_area == player_area row: x 10, width 40. Column 30 -> 0.5.
+        let message = component.on(&click(30, 5));
+        assert!(matches!(
+            message,
+            Some(Msg::Playback(PlaybackRequest::SeekTo(f))) if (f - 0.5).abs() < 1e-6
+        ));
+    }
+
+    #[test]
+    fn transport_button_click_emits_its_typed_intent() {
+        let mut component = painted_component();
+        // Play/pause glyph starts at player_area.x + 1 on the title row.
+        assert!(matches!(
+            component.on(&click(11, 6)),
+            Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
+        ));
     }
 
     #[test]

@@ -21,6 +21,17 @@ pub(in crate::app) struct ChromeGeometryInput {
     pub terminal_width: u16,
 }
 
+/// Inner tab-strip text width for a tab-bar box of `tab_bar_width` columns.
+///
+/// Shared by the chrome painter (`chrome_geometry` below) and the keyboard-path
+/// `App::ensure_tab_visible`, so the tab-scroll math matches what is painted
+/// rather than being re-derived (ADR 0022 Residual A). `PB_H` is the 2-column
+/// padding inside the coloured box, applied on both sides.
+pub(in crate::app) fn tab_strip_text_width(tab_bar_width: u16) -> u16 {
+    const PB_H: u16 = 2;
+    tab_bar_width.saturating_sub(2 * PB_H + TABBAR_LEFT_RESERVE)
+}
+
 /// Computes the root/chrome geometry for one frame without reading app state.
 pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChromeGeometry {
     let area = input.area;
@@ -116,11 +127,8 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
             height: 1,
             ..tab_bar_area
         };
-        let pb_h: u16 = 2; // 2-col padding inside the coloured box
         let tabs_x = tab_bar_area.x + 1;
-        let tabs_w = tab_bar_area
-            .width
-            .saturating_sub(2 * pb_h + TABBAR_LEFT_RESERVE);
+        let tabs_w = tab_strip_text_width(tab_bar_area.width);
         Rect {
             x: tabs_x,
             width: tabs_w,

@@ -285,6 +285,56 @@ mod tests {
         );
     }
 
+    /// Task 2.9(a): the eligible set follows what is painted across a
+    /// wide/narrow breakpoint change and an overlay mount/unmount — it is
+    /// derived off `library_child_id()`, never a second "did I paint" ledger.
+    #[test]
+    fn mouse_eligibility_follows_breakpoint_and_overlay_lifecycle() {
+        use ratatui::layout::Rect;
+
+        let tv_child = |wide: bool| {
+            let mut app = make_movie_app();
+            app.libs[0].library.collection_type = "tvshows".into();
+            app.tab = TabSelection::EmbyLibrary(0);
+            app.panel_focus = PanelFocus::Library;
+            app.panel_mode = PanelMode::Both;
+            app.layout.main.tv_wide_right_area = if wide {
+                Rect::new(40, 0, 60, 20)
+            } else {
+                Rect::default()
+            };
+            let mut model = Model::new(app);
+            model.sync_tv_workspace();
+            model.sync_emby_browser();
+            model.sync_active_destination();
+            let eligible: std::collections::HashSet<_> =
+                model.mouse_eligible_ids().into_iter().collect();
+            (model, eligible)
+        };
+
+        let (wide, wide_eligible) = tv_child(true);
+        assert!(wide_eligible.contains(&wide.tv_workspace_id.clone().unwrap()));
+        assert!(wide.emby_browser_id.is_none());
+
+        let (narrow, narrow_eligible) = tv_child(false);
+        assert!(narrow_eligible.contains(&narrow.emby_browser_id.clone().unwrap()));
+        assert!(narrow.tv_workspace_id.is_none());
+
+        let mut model = eligibility_model();
+        let child = model.emby_browser_id.clone().expect("browser mounted");
+        assert!(model.mouse_eligible_ids().contains(&child));
+        model.mount_help();
+        assert_eq!(
+            model.mouse_eligible_ids(),
+            vec![ComponentId::Overlay(OverlayId::Help)]
+        );
+        model
+            .application
+            .umount(&ComponentId::Overlay(OverlayId::Help))
+            .unwrap();
+        assert!(model.mouse_eligible_ids().contains(&child));
+    }
+
     #[test]
     fn sync_mouse_subscriptions_tracks_and_wipes_the_eligible_set() {
         use crate::app::components::{ConfirmComponent, ModalId};

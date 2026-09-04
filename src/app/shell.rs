@@ -174,6 +174,15 @@ pub(super) fn apply_router_outcome(
 /// Keyboard ticks carry a `TerminalObserverEvent::Key` marker (the permanent
 /// `UiRoot` observer emits it for every `Event::Keyboard`); those pass through
 /// untouched for the keyboard router to resolve.
+///
+/// Load-bearing invariant: `UiRootComponent` is the *only* component that mounts
+/// with a non-mouse (`EventClause::Any`) subscription — every other `.mount(`
+/// site passes `vec![]`, and mouse eligibility is added later by
+/// `sync_mouse_subscriptions`. The structural mouse-tick detection here (a tick
+/// with no `TerminalEvent` marker is a mouse tick) depends on that: if a future
+/// component mounts its own non-mouse subscription, a non-mouse tick could reach
+/// this fold with no marker and be mistaken for a mouse claim — release builds
+/// drop it silently, debug builds trip the `debug_assert!` below (ADR 0024).
 pub(super) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
     let observed_key = messages
         .iter()
@@ -351,6 +360,10 @@ impl Model {
             home_section_pending: home_section,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
+        // This is the ONLY mount with a non-mouse subscription; every other
+        // `.mount(` passes `vec![]` and gains mouse eligibility only via
+        // `sync_mouse_subscriptions`. `fold_mouse_messages` depends on that
+        // (ADR 0024) — see its doc comment before adding a subscription here.
         model
             .application
             .mount(
@@ -373,6 +386,9 @@ impl Model {
             .mount(
                 ComponentId::Playback,
                 Box::new(PlaybackComponent::new()),
+                // `vec![]`: no non-mouse subscription (ADR 0024, see
+                // `fold_mouse_messages`); mouse eligibility comes from
+                // `sync_mouse_subscriptions`.
                 vec![],
             )
             .expect("mount Playback");

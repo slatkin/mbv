@@ -1,9 +1,14 @@
 use std::time::{Duration, Instant};
 
+use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
+use ratatui::Terminal;
 use tuirealm::component::AppComponent;
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
-use crate::app::components::msg::{ConfirmIntent, ServiceRequest};
+use crate::app::components::msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
 use crate::app::components::{
     ComponentId, ModalId, Msg, OverlayId, QueueRequest, SearchSidebarComponent, ShellRequest,
     TerminalObserverEvent, UserEvent,
@@ -45,6 +50,46 @@ fn arm_search_query(harness: &mut TickHarness, query: &str) {
         let message = search_component_mut(harness).on(&key(Key::Char(c)));
         assert!(message.is_none(), "typing search chars stays local");
     }
+}
+
+/// Phase 1 delivery proof (task 2.7): with Queue focused, a click on the
+/// seek-bar row still reaches the unfocused `PlaybackComponent` through its
+/// `mouse_sub()` subscription, and the component resolves the column against
+/// its own painted `seekbar_area` into a 0.0..=1.0 fraction. No other eligible
+/// surface claims the event (D2 exclusivity).
+#[test]
+fn tick_delivers_seekbar_click_to_unfocused_playback_as_a_fraction() {
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Queue;
+    app.connected_session_id = Some("session-1".into());
+    app.layout.playback.player_area = Rect::new(10, 5, 40, 4);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().render_playback_component(frame))
+        .unwrap();
+
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: 30,
+        row: 5,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+
+    assert_eq!(outcome.pre_fold_focus, Some(ComponentId::Queue));
+    let seeks: Vec<f64> = outcome
+        .raw_messages
+        .iter()
+        .filter_map(|msg| match msg {
+            Msg::Playback(PlaybackRequest::SeekTo(f)) => Some(*f),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(seeks.len(), 1, "exactly one surface claims the click");
+    assert!((seeks[0] - 0.5).abs() < 1e-6, "column 30 of x10..w40 is 0.5");
 }
 
 #[test]

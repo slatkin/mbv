@@ -94,8 +94,14 @@ impl App {
             self.tab_scroll = pos;
             return;
         }
-        let tab_w = if self.layout.tabs_area.width > 0 {
-            self.layout.tabs_area.width
+        // Residual A: derive the tab-strip width from the shared arrangement
+        // primitive instead of reading the painted `layout.tabs_area`.
+        let area = ratatui::layout::Rect::new(0, 0, self.terminal_width, self.terminal_height);
+        let chrome = self.compute_chrome_geometry(area);
+        let tab_w = if chrome.right_visible {
+            crate::app::render::arrangements::chrome::tab_strip_text_width(
+                chrome.tab_bar_area.width,
+            )
         } else {
             self.terminal_width
                 .saturating_sub(super::TABBAR_LEFT_RESERVE)

@@ -11,7 +11,10 @@ pub enum PlaybackRequest {
     Previous,
     Next,
     SeekRelative(i64),
-    SeekTo(u16),
+    /// Seek to a resolved 0.0..=1.0 fraction of the runtime. `PlaybackComponent`
+    /// resolves the click column against its own `seekbar_area` so no shell code
+    /// reads painted seek-bar geometry (ADR 0022 Residual A).
+    SeekTo(f64),
     ToggleMute,
     VolumeDelta(i64),
     CycleAudio,

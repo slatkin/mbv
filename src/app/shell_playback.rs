@@ -104,7 +104,7 @@ impl Model {
             PlaybackRequest::SeekRelative(seconds) => {
                 self.dispatch_playback(Command::SeekRelative(seconds as f64));
             }
-            PlaybackRequest::SeekTo(column) => self.app.seek_to_col(column),
+            PlaybackRequest::SeekTo(fraction) => self.app.seek_to_fraction(fraction),
             PlaybackRequest::ToggleMute => self.dispatch_playback(Command::ToggleMute),
             PlaybackRequest::VolumeDelta(delta) => {
                 self.dispatch_playback(Command::AdjustVolume(delta));
