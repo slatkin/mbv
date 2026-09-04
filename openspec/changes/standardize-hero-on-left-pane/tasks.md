@@ -76,7 +76,7 @@
   `browser/paint.rs:60-68`, `music_wide.rs:497-506`, and `audiobookshelf_book.rs:174-181` —
   verify all three characterization tests show no painted row between the left pane's bottom and
   the status bar, and that the pane still bottoms out exactly one row above the status bar.
-- [ ] 3.5 Extend the main content box to the three destinations that lack it — ABS Books (chapter
+- [x] 3.5 Extend the main content box to the three destinations that lack it — ABS Books (chapter
   listing), ABS Podcasts (episode listing), Feeds (entry description + metadata) — carrying each
   surface's existing payload into the shared primitive, and paint the box even when its payload is
   empty. **Feeds gains a box it has never had (D11); flag it for live review, do not treat it as
