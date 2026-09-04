@@ -644,6 +644,15 @@ impl App {
         }
     }
 
+    /// [`open_context_menu_for`](Self::open_context_menu_for) anchored at a
+    /// pointer position (narrow grouped-Music album right-click).
+    pub(super) fn open_context_menu_for_at(&mut self, item: EmbyItem, x: u16, y: u16) {
+        if let Some(mut menu) = self.build_context_menu_for(Some(item), false, None) {
+            menu.anchor = ContextMenuAnchor::Pointer { x, y };
+            self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+        }
+    }
+
     /// Pointer right-click entry. `home_cw_selected` is the authoritative
     /// Continue-Watching-selected fact resolved by the shell from the mounted
     /// `HomeComponent` (task 5.3d, Home context-menu section decoupling). On

@@ -166,6 +166,12 @@ pub(in crate::app) struct MusicWideRenderOutput {
     /// (area minus the group pill row). The component feeds this back as the
     /// painted viewport height for the responsive `ViewportAnchor` hand-off.
     pub(in crate::app) viewport_height: usize,
+    /// Narrow presentation only: the screen rect the album rows were painted
+    /// into (area minus the group pill row). The component resolves narrow
+    /// mouse row hits against this same rect via
+    /// `InlineMediaBrowser::resolve_point` (task 6.1). `Rect::default()` in the
+    /// wide presentation.
+    pub(in crate::app) narrow_list_area: Rect,
 }
 
 /// Strips the "Artist (Year) " folder-name prefix from an album's display
@@ -367,6 +373,7 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
             final_scroll: 0,
             image_paint: None,
             viewport_height: visible,
+            narrow_list_area: content_area,
         };
     }
 
@@ -473,6 +480,7 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
         final_scroll: offset,
         image_paint,
         viewport_height: visible,
+        narrow_list_area: content_area,
     }
 }
 

@@ -51,6 +51,14 @@ pub enum ShellRequest {
     MusicGroupSwitch {
         delta: i64,
     },
+    /// Right-click on a narrow grouped-Music album row: the component has
+    /// already moved its selection cursor to the row under the pointer; the
+    /// shell resolves the album from `MusicWorkspaceComponent::selected_item()`
+    /// and opens its context menu anchored at the click (mirrors the `.`
+    /// keyboard action, which has no anchor).
+    MusicAlbumContextMenu {
+        anchor: (u16, u16),
+    },
     /// Quit the application.
     Quit,
     /// Dismiss the Help overlay (Esc/F1 while help is open).

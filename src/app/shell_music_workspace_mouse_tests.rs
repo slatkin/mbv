@@ -1,6 +1,6 @@
 use super::tests::{make_item, make_music_group_app};
 use super::*;
-use crate::app::components::msg::ShellRequest;
+use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
 use crate::app::components::Msg;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -48,6 +48,247 @@ fn narrow_short_wide_grouped_music_moves_one_album_per_down_and_page() {
     assert!(matches!(
         message,
         Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target: 6, .. }))
+    ));
+}
+
+#[test]
+fn narrow_music_album_click_selects_and_requests_cursor_move() {
+    let mut model = Model::new(make_music_group_app());
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 60, 9);
+    model.app.layout.main.wide_music_area = ratatui::layout::Rect::default();
+    for index in 0..4 {
+        let mut album = make_item(&format!("Album {}", index + 2), "MusicAlbum");
+        album.id = format!("album-{}", index + 2);
+        album.artist = "Alpha".into();
+        model.app.libs[0].nav_stack[1].items.push(album);
+    }
+    model.sync_music_workspace();
+    let id = model.music_workspace_id.clone().unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(60, 9)).unwrap();
+    terminal
+        .draw(|frame| model.render_music_workspace_component(frame))
+        .unwrap();
+    let (col, heading_row, item_row) = {
+        let c = model
+            .application
+            .get_component(&id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<MusicWorkspaceComponent>()
+            .unwrap();
+        let area = c.test_narrow_list_area();
+        (area.x + 1, area.y, area.y + 2)
+    };
+
+    // A click on the artist heading resolves to nothing.
+    let heading = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: col,
+            row: heading_row,
+            modifiers: KeyModifiers::NONE,
+        }));
+    assert_eq!(heading, None);
+
+    let message = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: col,
+            row: item_row,
+            modifiers: KeyModifiers::NONE,
+        }));
+    let Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target, kind })) = message else {
+        panic!("expected MusicAlbumCursor, got {message:?}");
+    };
+    assert_eq!(kind, AlbumCursorKind::Move);
+    let component = model
+        .application
+        .get_component(&id)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<MusicWorkspaceComponent>()
+        .unwrap();
+    assert_eq!(component.album_cursor(), target);
+}
+
+#[test]
+fn narrow_music_album_double_click_requests_activation() {
+    let mut model = Model::new(make_music_group_app());
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 60, 9);
+    model.app.layout.main.wide_music_area = ratatui::layout::Rect::default();
+    for index in 0..4 {
+        let mut album = make_item(&format!("Album {}", index + 2), "MusicAlbum");
+        album.id = format!("album-{}", index + 2);
+        album.artist = "Alpha".into();
+        model.app.libs[0].nav_stack[1].items.push(album);
+    }
+    model.sync_music_workspace();
+    let id = model.music_workspace_id.clone().unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(60, 9)).unwrap();
+    terminal
+        .draw(|frame| model.render_music_workspace_component(frame))
+        .unwrap();
+    let (col, row) = {
+        let c = model
+            .application
+            .get_component(&id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<MusicWorkspaceComponent>()
+            .unwrap();
+        let area = c.test_narrow_list_area();
+        (area.x + 1, area.y + 2)
+    };
+    let down = Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: col,
+        row,
+        modifiers: KeyModifiers::NONE,
+    });
+    let first = model.application.get_component_mut(&id).unwrap().on(&down);
+    assert!(matches!(
+        first,
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
+    ));
+    let second = model.application.get_component_mut(&id).unwrap().on(&down);
+    assert_eq!(second, Some(Msg::Shell(ShellRequest::MusicAlbumActivate)));
+}
+
+#[test]
+fn narrow_music_group_pill_click_requests_relative_group_switch() {
+    let mut model = Model::new(make_music_group_app());
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 6);
+    model.app.layout.main.wide_music_area = ratatui::layout::Rect::default();
+    model.sync_music_workspace();
+    let id = model.music_workspace_id.clone().unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(100, 6)).unwrap();
+    terminal
+        .draw(|frame| model.render_music_workspace_component(frame))
+        .unwrap();
+    let (col, row, target_group) = {
+        let c = model
+            .application
+            .get_component(&id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<MusicWorkspaceComponent>()
+            .unwrap();
+        let (rect, group) = c
+            .test_pill_regions()
+            .iter()
+            .find(|(_, group)| *group == 2)
+            .copied()
+            .expect("third group pill painted");
+        (rect.x + 1, rect.y, group)
+    };
+    assert_eq!(target_group, 2);
+    let message = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: col,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }));
+    assert_eq!(
+        message,
+        Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 2 }))
+    );
+}
+
+#[test]
+fn narrow_music_album_right_click_carries_pointer_anchor() {
+    let mut model = Model::new(make_music_group_app());
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 60, 9);
+    model.app.layout.main.wide_music_area = ratatui::layout::Rect::default();
+    for index in 0..4 {
+        let mut album = make_item(&format!("Album {}", index + 2), "MusicAlbum");
+        album.id = format!("album-{}", index + 2);
+        album.artist = "Alpha".into();
+        model.app.libs[0].nav_stack[1].items.push(album);
+    }
+    model.sync_music_workspace();
+    let id = model.music_workspace_id.clone().unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(60, 9)).unwrap();
+    terminal
+        .draw(|frame| model.render_music_workspace_component(frame))
+        .unwrap();
+    let (col, row) = {
+        let c = model
+            .application
+            .get_component(&id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<MusicWorkspaceComponent>()
+            .unwrap();
+        let area = c.test_narrow_list_area();
+        (area.x + 1, area.y + 2)
+    };
+    let message = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Right),
+            column: col,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }));
+    assert_eq!(
+        message,
+        Some(Msg::Shell(ShellRequest::MusicAlbumContextMenu {
+            anchor: (col, row)
+        }))
+    );
+}
+
+#[test]
+fn wide_music_album_rail_click_still_requests_cursor_move() {
+    let mut model = Model::new(make_music_group_app());
+    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.sync_music_workspace();
+    let id = model.music_workspace_id.clone().unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| model.render_music_workspace_component(frame))
+        .unwrap();
+    let (col, row) = {
+        let c = model
+            .application
+            .get_component(&id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<MusicWorkspaceComponent>()
+            .unwrap();
+        let area = c.layout().wide_music_browser_area;
+        // Row 0 is the artist heading; row 1 is the sole album row.
+        (area.x + 1, area.y + 1)
+    };
+    let message = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: col,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }));
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+            target: 0,
+            kind: AlbumCursorKind::Move,
+        }))
     ));
 }
 

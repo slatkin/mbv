@@ -13,6 +13,7 @@ use tuirealm::state::State;
 
 use super::media_list::{InlineMediaBrowser, ViewportAnchor, WideMediaList};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
@@ -61,6 +62,15 @@ pub struct MusicWorkspaceComponent {
     /// path (design.md D6). The narrow list / track table are net-new mouse
     /// work in task 6.1.
     wide_list: WideMediaList<String>,
+    /// Narrow presentation only: the screen rect the album rows were painted
+    /// into this frame, captured from `render_narrow_music_group_with_ctx`.
+    /// The narrow mouse path resolves row hits against it through
+    /// `narrow_list.resolve_point` (design.md D6, task 6.1).
+    narrow_list_area: Rect,
+    /// Group-pill rects (design.md D6), repopulated in `view()` from
+    /// `layout.selector_tabs` — the pill painter's own output — for both
+    /// breakpoints. The tag is the 0-based group index.
+    pill_regions: HitRegions<usize>,
 }
 
 impl MusicWorkspaceComponent {
@@ -97,6 +107,8 @@ impl MusicWorkspaceComponent {
             wide_selected_row_offset: None,
             mouse_gestures: MouseGestureState::new(),
             wide_list: WideMediaList::new(),
+            narrow_list_area: Rect::default(),
+            pill_regions: HitRegions::new(),
         }
     }
 
@@ -536,20 +548,76 @@ impl MusicWorkspaceComponent {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
-        let at = match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click(at) | MouseGesture::DoubleClick(at) => at,
-            _ => return None,
-        };
-        if let Some(track) = self.layout.wide_music_track_at(at) {
-            self.track_cursor = Some(track);
-            return None;
+        let wide = self.last_wide.unwrap_or(false);
+        match self.mouse_gestures.recognize(mouse)? {
+            // Wide right-rail / track table: unchanged from task 3.6.
+            MouseGesture::Click(at) | MouseGesture::DoubleClick(at) if wide => {
+                if let Some(track) = self.layout.wide_music_track_at(at) {
+                    self.track_cursor = Some(track);
+                    return None;
+                }
+                let album = self.resolve_wide_album(at)?;
+                self.album_cursor = album;
+                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                    target: album,
+                    kind: AlbumCursorKind::Move,
+                }))
+            }
+            // Narrow: group pills, then album rows (task 6.1).
+            MouseGesture::Click(at) => {
+                if let Some(msg) = self.claim_group_pill(at) {
+                    return Some(msg);
+                }
+                let album = self.claim_narrow_album(at)?;
+                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                    target: album,
+                    kind: AlbumCursorKind::Move,
+                }))
+            }
+            MouseGesture::DoubleClick(at) => {
+                if let Some(msg) = self.claim_group_pill(at) {
+                    return Some(msg);
+                }
+                self.claim_narrow_album(at)?;
+                Some(Msg::Shell(ShellRequest::MusicAlbumActivate))
+            }
+            MouseGesture::RightClick(at) if !wide => {
+                self.claim_narrow_album(at)?;
+                Some(Msg::Shell(ShellRequest::MusicAlbumContextMenu {
+                    anchor: (mouse.column, mouse.row),
+                }))
+            }
+            _ => None,
         }
-        let album = self.resolve_wide_album(at)?;
+    }
+
+    /// Move the album selection to the narrow row under `at`, resolved by the
+    /// embedded `InlineMediaBrowser` against the rect it painted (design.md
+    /// D6). Returns the pushed-context item index, or `None` for a
+    /// heading/spacer row or a point outside the list.
+    fn claim_narrow_album(&mut self, at: Position) -> Option<usize> {
+        let detail_rows = self.layout.inline_hero_area.height as usize;
+        let id = self
+            .narrow_list
+            .resolve_point(self.narrow_list_area, detail_rows, at)?;
+        let album = self
+            .context
+            .list
+            .items
+            .iter()
+            .position(|item| &item.id == id)?;
         self.album_cursor = album;
-        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-            target: album,
-            kind: AlbumCursorKind::Move,
-        }))
+        self.sync_narrow_selection();
+        Some(album)
+    }
+
+    /// If `at` lands on a group pill, emit the relative `MusicGroupSwitch` that
+    /// reaches the clicked group (the only group-selection keyboard action is
+    /// the relative `[`/`]`). A click on the current pill is a no-op.
+    fn claim_group_pill(&self, at: Position) -> Option<Msg> {
+        let &target = self.pill_regions.resolve(at)?;
+        let delta = target as i64 - self.context.group_cursor as i64;
+        (delta != 0).then_some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta }))
     }
 
     /// The album index under `at` on the wide right rail, resolved by the
@@ -576,6 +644,16 @@ impl MusicWorkspaceComponent {
     /// consume frame geometry.
     pub(in crate::app) fn layout(&self) -> &LayoutMain {
         &self.layout
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_narrow_list_area(&self) -> Rect {
+        self.narrow_list_area
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_pill_regions(&self) -> &[(Rect, usize)] {
+        self.pill_regions.regions()
     }
 }
 
@@ -638,8 +716,10 @@ impl Component for MusicWorkspaceComponent {
             self.album_scroll = output.final_scroll;
             self.narrow_list.set_scroll(output.final_scroll);
             self.narrow_viewport_height = output.viewport_height;
+            self.narrow_list_area = output.narrow_list_area;
             self.image_paint = output.image_paint;
         } else {
+            self.narrow_list_area = Rect::default();
             let output = render_wide_music_group_with_ctx(
                 frame,
                 area,
@@ -655,6 +735,12 @@ impl Component for MusicWorkspaceComponent {
                 .selected_item_rect
                 .and_then(|rect| rect.y.checked_sub(self.layout.wide_music_browser_area.y))
                 .map(usize::from);
+        }
+        // Adopt the group-pill rects the pill painter just published into the
+        // irregular-chrome registry (design.md D6), for both breakpoints.
+        self.pill_regions.clear();
+        for (rect, target) in &self.layout.selector_tabs {
+            self.pill_regions.push(*rect, *target);
         }
         self.last_wide = Some(wide);
     }

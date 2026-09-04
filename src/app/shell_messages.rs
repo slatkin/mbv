@@ -37,6 +37,11 @@ impl Model {
                     self.push_music_workspace_content();
                 }
                 ShellRequest::MusicAlbumCursor { target, kind } => {
+                    // Click-to-focus: a pointer-driven album-cursor move pulls
+                    // panel focus to the Library. Keyboard moves only reach
+                    // this arm while the Library is already focused, so this is
+                    // idempotent there.
+                    self.app.set_panel_focus(crate::app::PanelFocus::Library);
                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
                         match kind {
                             AlbumCursorKind::Move => {
@@ -92,6 +97,19 @@ impl Model {
                         .and_then(|lib_idx| self.focused_music_track(lib_idx))
                     {
                         self.app.open_context_menu_for(track);
+                    }
+                    self.push_music_workspace_content();
+                }
+                ShellRequest::MusicAlbumContextMenu { anchor } => {
+                    self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                    let album = self
+                        .music_workspace_id
+                        .as_ref()
+                        .and_then(|id| self.application.get_component(id))
+                        .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
+                        .and_then(|comp| comp.selected_item());
+                    if let Some(album) = album {
+                        self.app.open_context_menu_for_at(album, anchor.0, anchor.1);
                     }
                     self.push_music_workspace_content();
                 }
