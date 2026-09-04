@@ -7,7 +7,7 @@
 ## 2. Canonical composition
 
 - [ ] 2.1 Prepare only grouped Music album rows for `WideMediaList`/`InlineMediaBrowser`; preserve group headings/buckets, parent-owned track workspace, images, selectors, and typed intents.
-- [ ] 2.2 Compose only Audiobookshelf Podcast show rows with canonical controls; retain the parent-owned selected-show episode workspace, episode/played filter, images, and provider playback authority.
+- [x] 2.2 Compose only Audiobookshelf Podcast show rows with canonical controls; retain the parent-owned selected-show episode workspace, episode/played filter, images, and provider playback authority.
 - [ ] 2.3 Compose only Audiobookshelf Book rows with canonical controls; remove the Wide right-rail selected-row replacement (the `render_book_browser` reuse of Narrow logic) so Wide is provider detail workspace on the LEFT plus ordinary fixed-height one-column rows on the RIGHT, with no Inline hero in the right rail; retain parent-owned book detail, chapter/audio-file authority, images, surname buckets, and absolute chapter seek intents.
 - [ ] 2.4 Repair the owned Audiobookshelf Podcast and Book non-list arrangement/framing defects: route Podcast Wide through the shared hero-on-left right pane so the Wide pill row matches Narrow, and correct Book Wide left-workspace framing/spacing to the shared policy — no bespoke painter or destination-specific breakpoint. Preserve Wide, Normal/Narrow, and short-height fallback. Covered by the `right-panel-arrangements` delta.
 - [ ] 2.5 Preserve stable `ViewportAnchor` target/offset handoff across breakpoint changes and navigation events without shell mirrors or per-frame writeback.
