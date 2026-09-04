@@ -4,7 +4,6 @@ use crate::app::components::Msg;
 use crate::app::layout::LibraryRowTarget;
 pub(crate) use crate::app::render::make_music_group_app;
 pub(crate) use crate::app::tests::make_item;
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::event::{

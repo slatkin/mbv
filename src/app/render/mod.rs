@@ -102,7 +102,6 @@ pub(in crate::app) use components::chrome::{
 // src/app/actions.rs); the rest are referenced via `super::X` from render's
 // sibling submodules (album, card, detail, home, list, music, pills, queue)
 // and/or `use super::*` in render/tests.rs.
-use components::chrome::LIST_PLAY_ICON;
 pub use components::indicators;
 use components::list_rows::{selection_marker, MarkerEdge};
 use components::widgets::{
