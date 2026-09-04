@@ -100,7 +100,7 @@
   delete its listing body and give the shared arrangement named artwork, overview, and optional
   media-list viewport slots. Keep `Rect`, targets, cursor, scroll, and hit state out of `Hero` —
   verify the existing Home/Emby path remains unchanged and the compiler finds no `HeroBody::Listing`.
-- [ ] 4.2b Establish the shared stacked-artwork/title gap policy: when Music Wide stacks album
+- [x] 4.2b Establish the shared stacked-artwork/title gap policy: when Music Wide stacks album
   art above title with images on, reserve exactly one blank row; do not apply it images-off or to
   side-by-side layout. Update the existing Music publish-versus-paint geometry test or add the
   smallest durable geometry assertion that catches a lost row.
