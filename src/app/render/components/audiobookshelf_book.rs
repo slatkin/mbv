@@ -160,10 +160,14 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
     let plan = book_hero_plan(state, area.width, images_enabled);
     if hero_left::shared_hero_presentation(area).is_some() {
         let panes = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y)?;
-        let left_area = panes.left_area;
         geometry.left_area = panes.left_area;
         geometry.wide = true;
-        let hero_content_area = padded_rect(left_area, PANE_PAD_X, PANE_PAD_Y);
+        let hero_content_area = hero_left::hero_on_left_pane(
+            frame,
+            area,
+            hero_left::LeftPaneFocus::Workspace(focused && interaction.chapter_selection.is_some()),
+        )
+        .expect("wide branch already confirmed shared_hero_presentation fits");
         let hero_height = (plan.content_rows + 1).min(hero_content_area.height);
         let hero_area = Rect {
             height: hero_height,
@@ -178,12 +182,6 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
                 width: panes.left_panel.width,
                 height: 1,
             },
-        );
-        frame.render_widget(
-            Block::default().style(palette::resolve_surface_focus(
-                focused && interaction.chapter_selection.is_some(),
-            )),
-            panes.left_panel,
         );
         let image = render_book_hero(
             frame,
@@ -205,12 +203,6 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             interaction.chapter_selection,
             focused && interaction.chapter_selection.is_some(),
             geometry,
-        );
-        frame.render_widget(
-            Block::default().style(palette::resolve_surface_focus(
-                focused && interaction.chapter_selection.is_none(),
-            )),
-            panes.right_panel,
         );
         let rail_focused = focused && interaction.chapter_selection.is_none();
         let right_pane = hero_on_left_right_pane(panes.right_panel, panes.right_area);

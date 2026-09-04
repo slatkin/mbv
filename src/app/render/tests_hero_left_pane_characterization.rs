@@ -250,11 +250,12 @@ fn feeds_wide_left_pane_unfilled_with_no_selected_entry() {
     );
 }
 
-/// ABS Books: `audiobookshelf_book.rs:182-187` passes a bare `Color` to
-/// `Block::default().style(...)`, which sets foreground only (`impl
-/// From<Color> for Style`) -- the panel background is never painted.
+/// ABS Books (task 2.2): the `.style(Color)` foreground-only bug is fixed --
+/// the wide left pane is filled via `hero_on_left_pane`, focus-green
+/// (`LeftPaneFocus::Workspace`) only when a chapter is selected while
+/// focused.
 #[test]
-fn abs_books_wide_left_pane_style_color_bug_leaves_background_unpainted() {
+fn abs_books_wide_left_pane_fills_via_shared_primitive() {
     let app = make_audiobookshelf_book_app();
     let mut component = AudiobookshelfBookComponent::new();
     if let Some(state) = app.audiobookshelf_book_browse.first() {
@@ -267,10 +268,15 @@ fn abs_books_wide_left_pane_style_color_bug_leaves_background_unpainted() {
     let panes = wide_library_panes(area, 0, PANE_PAD_Y).expect("wide fits");
     let left_panel = panes.left_panel;
     let buffer = terminal.backend().buffer();
-    assert_ne!(
+    // No chapter is selected in this fixture, so the workspace is not held:
+    // the pane stays resting, not focus-green.
+    assert_eq!(
         buffer[(left_panel.x, left_panel.y)].bg,
-        palette::resolve_surface_focus(true),
-        "characterizes the pre-fix .style(Color) bug: bg is never set"
+        palette::SURFACE_RESTING
+    );
+    assert_eq!(
+        buffer[(left_panel.x, left_panel.bottom() - 1)].bg,
+        palette::SURFACE_RESTING
     );
 }
 
