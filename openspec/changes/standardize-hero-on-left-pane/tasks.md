@@ -90,7 +90,7 @@
 
 ## 4. One UI-level `Hero` abstraction, with artwork
 
-- [ ] 4.1 Add a `SURFACE_ARTWORK_PLACEHOLDER` semantic role to `src/app/render/theme/` and a
+- [x] 4.1 Add a `SURFACE_ARTWORK_PLACEHOLDER` semantic role to `src/app/render/theme/` and a
   `render_artwork_placeholder(f, area)` component that paints it — verify the role is not a
   re-exported primitive and a unit test asserts the painted extent matches the requested rect.
 - [ ] 4.2 Define the `Hero` trait in `src/app/render/components/` (title, subtitle, meta rows,
