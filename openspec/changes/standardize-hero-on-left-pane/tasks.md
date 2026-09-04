@@ -82,7 +82,7 @@
   empty. **Feeds gains a box it has never had (D11); flag it for live review, do not treat it as
   incidental** — verify each surface's characterization test shows the backdrop inset in both the
   populated and empty-payload states, and that all three use the primitive's single padding value.
-- [ ] 3.6 Grep for surviving left-pane paint outside the primitive
+- [x] 3.6 Grep for surviving left-pane paint outside the primitive
   (`bg(palette::SURFACE_RESTING)`, `bg(palette::resolve_surface_focus` on a left-pane rect,
   `padded_rect(left_area`, and any `left_panel` mutation) across
   `src/app/render/components/` and `src/app/components/browser/` — verify the only remaining hits
