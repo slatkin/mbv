@@ -235,6 +235,8 @@ mod queue_title_characterization_tests;
 #[path = "tests.rs"]
 mod tests;
 #[cfg(test)]
+mod tests_audiobookshelf_books;
+#[cfg(test)]
 mod tests_audiobookshelf_podcasts;
 #[cfg(test)]
 mod tests_conformance_matrix;

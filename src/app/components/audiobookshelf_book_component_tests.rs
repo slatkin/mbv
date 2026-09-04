@@ -374,6 +374,43 @@ fn abs_book_component_drops_stale_chapter_focus_when_selection_vanishes() {
     );
 }
 
+/// §2.5: the selected book and its screen-row offset survive a
+/// Wide -> Narrow -> Wide breakpoint round trip through the component's
+/// internal `ViewportAnchor` hand-off, applied at the content-viewport height.
+#[test]
+fn abs_book_viewport_anchor_round_trips_across_wide_narrow_wide() {
+    let mut state = book_state(30, false);
+    state.select(state.books.len() - 1);
+    let selected_id = state.selected_id.clone().unwrap();
+    let mut component = AudiobookshelfBookComponent::new();
+    component.set_content(&state, true, false);
+
+    let wide = ratatui::layout::Rect::new(0, 0, 120, 12);
+    let narrow = ratatui::layout::Rect::new(0, 0, 60, 12);
+    let mut term = Terminal::new(TestBackend::new(120, 12)).unwrap();
+
+    term.draw(|f| component.view(f, wide)).unwrap();
+    let wide_offset = component.geometry().selected_row_offset;
+    assert!(
+        wide_offset.is_some(),
+        "the bottom book scrolls the wide rail"
+    );
+
+    term.draw(|f| component.view(f, narrow)).unwrap();
+    assert_eq!(
+        component.selected_book_id(),
+        Some(selected_id.as_str()),
+        "selection survives the wide -> narrow flip"
+    );
+
+    term.draw(|f| component.view(f, wide)).unwrap();
+    assert_eq!(
+        component.geometry().selected_row_offset,
+        wide_offset,
+        "the selected-row screen offset returns to the wide arrangement"
+    );
+}
+
 #[test]
 fn abs_book_component_unmatched_shift_bracket_stays_unclaimed() {
     let mut component = AudiobookshelfBookComponent::new();
