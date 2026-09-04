@@ -82,8 +82,7 @@ pub(in crate::app::render) fn podcast_hero_content_rows(
 use crate::app::palette;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::widgets::Block;
 use ratatui::Frame;
 
 /// The component-owned interaction values the podcast renderer needs, passed
@@ -215,6 +214,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     interaction: PodcastInteraction,
     scroll: &mut usize,
     narrow_list: &mut InlineMediaBrowser<String>,
+    wide_episode_list: &mut WideMediaList<String>,
     flip_anchor: Option<&ViewportAnchor<String>>,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
@@ -229,6 +229,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
             interaction,
             scroll,
             narrow_list,
+            wide_episode_list,
             flip_anchor,
             geometry,
         );
@@ -267,6 +268,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         false,
         images_enabled,
         true,
+        wide_episode_list,
         geometry,
     );
     if state.shows.is_empty() {
@@ -330,6 +332,7 @@ fn render_narrow_podcast(
     interaction: PodcastInteraction,
     scroll: &mut usize,
     narrow_list: &mut InlineMediaBrowser<String>,
+    _wide_episode_list: &mut WideMediaList<String>,
     flip_anchor: Option<&ViewportAnchor<String>>,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
@@ -404,6 +407,7 @@ fn render_narrow_podcast(
         true,
         images_enabled,
         false,
+        _wide_episode_list,
         geometry,
     )
 }
@@ -418,6 +422,7 @@ fn render_podcast_hero(
     show_title: bool,
     images_enabled: bool,
     wide: bool,
+    wide_episode_list: &mut WideMediaList<String>,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
     let show = state.selected_show()?;
@@ -498,30 +503,50 @@ fn render_podcast_hero(
         );
         geometry.selector_tabs.extend(tabs);
         let row_y = listing_content_area.y + 1;
-        for (index, episode) in state.visible_episodes(filter).iter().enumerate() {
-            if row_y + index as u16 >= area.bottom() {
-                break;
-            }
-            let row = Rect {
-                x: area.x,
-                y: row_y + index as u16,
-                width: area.width,
-                height: 1,
-            };
-            let marker = if interaction.episode_selection == Some(index) {
-                "> "
-            } else {
-                "  "
-            };
-            frame.render_widget(
-                Paragraph::new(Line::from(vec![
-                    Span::styled(marker, Style::default().fg(palette::TEXT_FOCUS_ACCENT)),
-                    Span::raw(episode.title.clone()),
-                ])),
-                row,
-            );
-            geometry.episode_rows.push((row, index));
-        }
+        let rows = state
+            .visible_episodes(filter)
+            .into_iter()
+            .map(|episode| MediaListRow::Item {
+                target: episode.episode_id.clone(),
+                primary: episode.title.clone(),
+                trailing: None,
+                duration: None,
+                semantic_state: MediaSemanticState::Ordinary,
+            })
+            .collect();
+        wide_episode_list.set_content(rows);
+        wide_episode_list.select_index(interaction.episode_selection.unwrap_or(0));
+        let episode_area = Rect {
+            x: listing_content_area.x,
+            y: row_y,
+            width: listing_content_area.width,
+            height: area.bottom().saturating_sub(row_y),
+        };
+        let paint = render_wide_media_list(
+            frame,
+            episode_area,
+            episode_area,
+            wide_episode_list,
+            focused,
+            palette::list_selected_row_bg(),
+        );
+        geometry.episode_rows = paint
+            .row_geometry
+            .targets()
+            .enumerate()
+            .filter_map(|(row, target)| target.map(|_| (row, row)))
+            .map(|(row, index)| {
+                (
+                    Rect {
+                        x: episode_area.x,
+                        y: episode_area.y + row as u16,
+                        width: episode_area.width,
+                        height: 1,
+                    },
+                    index,
+                )
+            })
+            .collect();
     }
     (images_enabled && result.img_rect.is_some()).then(|| HomeImagePaint::AudiobookshelfCover {
         area: result.img_rect.unwrap(),
