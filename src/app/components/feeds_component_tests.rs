@@ -641,3 +641,92 @@ fn breakpoint_flip_carries_one_viewport_anchor() {
         component.layout().left_row_map
     );
 }
+
+/// Task 4.1/4.5: a click on a list row resolves through the active canonical
+/// control's `resolve_point`, selects the row on both controls, and emits the
+/// `FeedsRowClick` focus request. A right-click is ignored (task 4.6: no
+/// keyboard context-menu equivalent on this surface).
+#[test]
+fn feeds_mouse_click_resolves_row_and_right_click_is_ignored() {
+    let mut component = component();
+    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
+        .unwrap();
+    let list = component.layout().left_area;
+    // Scan for a painted selectable row below the hero-covered top rows; the
+    // gesture recognizer is reset between probes.
+    let click = |component: &mut FeedsComponent, column: u16, row: u16, kind: MouseEventKind| {
+        component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }))
+    };
+    let mut resolved = None;
+    for row in (list.y..list.y + list.height).rev() {
+        component.reset_mouse_gestures_for_test();
+        if click(
+            &mut component,
+            list.x,
+            row,
+            MouseEventKind::Down(MouseButton::Left),
+        )
+        .is_some()
+        {
+            resolved = Some(row);
+            break;
+        }
+    }
+    let row = resolved.expect("a painted selectable row must resolve FeedsRowClick");
+    assert!(
+        component.cursor() > 0 || row < list.y + 4,
+        "click must select the resolved row on both controls"
+    );
+    component.reset_mouse_gestures_for_test();
+    assert_eq!(
+        click(
+            &mut component,
+            list.x,
+            row,
+            MouseEventKind::Down(MouseButton::Right)
+        ),
+        None,
+        "task 4.6: right-click must be ignored on this surface"
+    );
+}
+
+/// Task 4.1: a double-click on a list row plays the resolved entry through
+/// the existing `FeedsPlay` request.
+#[test]
+fn feeds_mouse_double_click_plays_the_resolved_entry() {
+    let mut component = component();
+    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
+        .unwrap();
+    let list = component.layout().left_area;
+    // Two quick Downs at the same painted row = DoubleClick on the second;
+    // scan for a row whose double-click resolves a played entry.
+    for row in (list.y..list.y + list.height).rev() {
+        component.reset_mouse_gestures_for_test();
+        let mut played = None;
+        for _ in 0..2 {
+            let msg = component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: list.x,
+                row,
+                modifiers: KeyModifiers::NONE,
+            }));
+            if let Some(Msg::Shell(ShellRequest::FeedsPlay(Some(entry)))) = msg {
+                played = Some(entry);
+            }
+        }
+        if let Some(entry) = played {
+            assert_eq!(entry.guid, "Second");
+            return;
+        }
+    }
+    panic!("double-click on a painted row must emit FeedsPlay(Some(entry))");
+}

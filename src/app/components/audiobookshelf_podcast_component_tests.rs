@@ -284,6 +284,9 @@ fn abs_podcast_wheel_moves_three_rows_and_ignores_outside_list() {
             index: 5
         }))
     ));
+    // The wheel throttle lives in the private gesture state (ADR 0024, D3);
+    // reset it so the synchronous test loop's second wheel step is recognized.
+    component.reset_mouse_gestures_for_test();
     assert!(matches!(
         component.on(&Event::Mouse(MouseEvent {
             kind: MouseEventKind::ScrollUp,
@@ -545,4 +548,52 @@ fn abs_podcast_component_geometry_is_wide_coherent_and_narrow_resets_wide() {
     assert_eq!(empty_narrow_geometry.hero_area, Rect::default());
     assert_eq!(empty_narrow_geometry.inline_hero_area, Rect::default());
     assert!(empty_narrow_geometry.selected_item_rect.is_none());
+}
+
+/// Task 4.1/4.5: a double-click on a painted show row selects it and emits
+/// the existing OpenOrPlay episode intent; a right-click is ignored
+/// (task 4.6: no keyboard context-menu equivalent).
+#[test]
+fn abs_podcast_mouse_double_click_emits_open_or_play_and_right_click_ignored() {
+    let state = narrow_grid_component_state();
+    let mut component = AudiobookshelfPodcastComponent::new();
+    component.set_content(&state, true, false);
+    view_narrow(&mut component, 100, 6);
+    let (rect, clicked) = component
+        .geometry()
+        .show_rows
+        .iter()
+        .copied()
+        .find(|(_, i)| *i != component.cursor())
+        .expect("a non-selected show row is painted");
+    // Two quick Downs at the same point = DoubleClick on the second.
+    component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: rect.x,
+        row: rect.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let msg = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: rect.x,
+        row: rect.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(
+        msg,
+        Some(Msg::Shell(
+            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay)
+        ))
+    );
+    assert_eq!(component.cursor(), clicked);
+    assert_eq!(
+        component.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Right),
+            column: rect.x,
+            row: rect.y,
+            modifiers: KeyModifiers::NONE,
+        })),
+        None,
+        "task 4.6: right-click must be ignored on this surface"
+    );
 }

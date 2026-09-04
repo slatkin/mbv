@@ -12,6 +12,10 @@ impl Model {
     /// preserves the legacy persistence, detail-fetch, and playback effects;
     /// the push reconciles the mounted component after that write.
     pub(super) fn handle_audiobookshelf_book_request(&mut self, request: ShellRequest) {
+        // Click-to-focus (task 4.5): a mouse-driven book request (and any
+        // keyboard request from the already-focused component) pulls panel
+        // focus to the Library.
+        self.app.set_panel_focus(crate::app::PanelFocus::Library);
         match request {
             ShellRequest::AudiobookshelfBookMove(movement) => match movement {
                 // Resolved-value routing
@@ -717,5 +721,30 @@ mod tests {
             model.app.layout.main.selected_item_rect.is_some()
                 || model.app.layout.main.hero_area.width > 0
         );
+    }
+
+    // Task 4.5: a book request (mouse or already-focused keyboard) pulls
+    // panel focus to the Library.
+    #[test]
+    fn abs_book_request_pulls_panel_focus_to_library() {
+        let mut app = make_app_stub();
+        let library = AudiobookshelfLibrary {
+            id: "books".into(),
+            name: "Books".into(),
+            media_type: "book".into(),
+        };
+        app.audiobookshelf_libraries.push(library);
+        app.audiobookshelf_book_browse
+            .push(AudiobookshelfBookBrowseState::new(AudiobookshelfLibrary {
+                id: "books".into(),
+                name: "Books".into(),
+                media_type: "book".into(),
+            }));
+        app.panel_focus = PanelFocus::Queue;
+        let mut model = Model::new(app);
+        model.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::Book(0),
+        ));
+        assert_eq!(model.app.panel_focus, PanelFocus::Library);
     }
 }

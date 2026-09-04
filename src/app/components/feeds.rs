@@ -13,15 +13,14 @@ use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{
-    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
     InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
 };
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
@@ -57,6 +56,9 @@ pub struct FeedsComponent {
     focused: bool,
     layout: LayoutMain,
     last_subscription_urls: Vec<String>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
+    /// the double-click window and wheel throttle. Not a shared clock.
+    mouse_gestures: MouseGestureState,
 }
 
 impl FeedsComponent {
@@ -76,6 +78,7 @@ impl FeedsComponent {
             focused: false,
             layout: LayoutMain::default(),
             last_subscription_urls: Vec::new(),
+            mouse_gestures: MouseGestureState::new(),
         }
     }
 
@@ -224,13 +227,19 @@ impl FeedsComponent {
         self.inline_list.move_selection(delta);
     }
 
-    /// Place the selection at selectable index `index` (which, for Feeds, is
-    /// the `visible_entries` index) on both controls. Pre-#638 mouse
-    /// compatibility: the bespoke `*HitRegion` path reads control-exported
-    /// geometry.
-    fn select_entry(&mut self, index: usize) {
-        self.canonical_list.select_index(index);
-        self.inline_list.select_index(index);
+    /// Select the row carrying `target` (a stable guid) on both controls, so
+    /// they stay cursor-aligned across a breakpoint flip.
+    fn select_target(&mut self, target: &str) {
+        let target = target.to_string();
+        self.canonical_list.select_target(&target);
+        self.inline_list.select_target(&target);
+    }
+
+    /// Adopt `target` as the selected group and rebuild.
+    fn select_group(&mut self, target: usize) {
+        self.selected_group = target;
+        self.rebuild_visible_entries();
+        self.reset_selection();
     }
 
     fn page_size(&self) -> i64 {
@@ -318,53 +327,77 @@ impl FeedsComponent {
         }
     }
 
+    /// Handle a TuiRealm mouse event via the private `MouseGestureState`
+    /// (ADR 0024, design.md D3). Row identity comes from the active canonical
+    /// control's `resolve_point` (design.md D6); the selector pills stay
+    /// parent chrome resolved from `selector_tabs`. The component emits a
+    /// semantic `Msg` — never raw coordinates. Feeds has no keyboard
+    /// context-menu action (task 4.6), so right-click is ignored.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let position: Position = (mouse.column, mouse.row).into();
-        match mouse.kind {
-            MouseEventKind::ScrollDown if self.layout.left_area.contains(position) => {
-                self.move_selection(1);
+        // Feeds does not consume hover-move (design.md D7).
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
+        }
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Scroll { at, delta } => {
+                if !self.layout.left_area.contains(at) {
+                    return None;
+                }
+                self.move_selection(delta);
+                None
             }
-            MouseEventKind::ScrollUp if self.layout.left_area.contains(position) => {
-                self.move_selection(-1);
-            }
-            MouseEventKind::Down(MouseButton::Left | MouseButton::Right) => {
-                if let Some(target) = self
+            MouseGesture::Click(at) => {
+                if let Some((_, target)) = self
                     .layout
                     .selector_tabs
                     .iter()
-                    .find(|(rect, _)| rect.contains(position))
-                    .map(|(_, target)| *target)
+                    .find(|(rect, _)| rect.contains(at))
                 {
-                    if target < self.group_count() {
-                        self.selected_group = target;
-                        self.rebuild_visible_entries();
-                        self.reset_selection();
+                    if *target < self.group_count() {
+                        self.select_group(*target);
                     }
                     return None;
                 }
-                if self.layout.left_area.contains(position) {
-                    let list_area = self.layout.left_area;
-                    let click_y = (mouse.row.saturating_sub(list_area.y)) as usize;
-                    let n = self.visible_entries.len();
-                    if let Some(Some(item_idx)) = self.layout.left_row_map.get(click_y) {
-                        if *item_idx < n {
-                            self.select_entry(*item_idx);
-                        }
-                    } else if let Some(item_idx) = self
-                        .layout
-                        .left_item_rows
-                        .get(self.painted_offset + click_y)
-                        .and_then(|row| row.first().copied())
-                    {
-                        if item_idx < n {
-                            self.select_entry(item_idx);
-                        }
-                    }
-                }
+                let target = self.resolve_row_id(at)?;
+                self.select_target(&target);
+                Some(Msg::Shell(ShellRequest::FeedsRowClick))
             }
-            _ => {}
+            MouseGesture::DoubleClick(at) => {
+                let target = self.resolve_row_id(at)?;
+                self.select_target(&target);
+                let index = self
+                    .visible_entries
+                    .iter()
+                    .position(|entry| entry.guid == target)?;
+                Some(Msg::Shell(ShellRequest::FeedsPlay(Some(
+                    self.visible_entries[index].clone(),
+                ))))
+            }
+            _ => None,
         }
-        None
+    }
+
+    /// The stable row id under `point`, resolved by the embedded canonical
+    /// control that painted the active list (design.md D6).
+    fn resolve_row_id(&self, at: Position) -> Option<String> {
+        if self.wide {
+            return self
+                .canonical_list
+                .resolve_point(self.layout.left_area, at)
+                .cloned();
+        }
+        let detail_rows = self.layout.inline_hero_area.height as usize;
+        self.inline_list
+            .resolve_point(self.layout.left_area, detail_rows, at)
+            .cloned()
+    }
+
+    /// Test seam: reset the private gesture recognizer so a synchronous test
+    /// loop can drive successive wheel/click events without the
+    /// throttle/double-click window collapsing them.
+    #[cfg(test)]
+    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
+        self.mouse_gestures.reset_for_test();
     }
 }
 

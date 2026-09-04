@@ -2,13 +2,12 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{
-    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{InlineMediaBrowser, ViewportAnchor};
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{
@@ -48,6 +47,9 @@ pub struct AudiobookshelfBookComponent {
     /// Selected-row screen offset captured each `view`, so `viewport_anchor`
     /// can report the outgoing control's anchor at a flip.
     painted_row_offset: Option<usize>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
+    /// the double-click window and wheel throttle. Not a shared clock.
+    mouse_gestures: MouseGestureState,
 }
 
 impl AudiobookshelfBookComponent {
@@ -73,6 +75,7 @@ impl AudiobookshelfBookComponent {
             pending_anchor: None,
             last_wide: None,
             painted_row_offset: None,
+            mouse_gestures: MouseGestureState::new(),
         }
     }
 
@@ -314,40 +317,93 @@ impl AudiobookshelfBookComponent {
         }
     }
 
+    /// Handle a TuiRealm mouse event via the private `MouseGestureState`
+    /// (ADR 0024, design.md D3). Row identity comes from the painted row
+    /// rects (`book_rows`/`chapter_rows`) — the wide rail is composed
+    /// per-frame in the renderer and is not a persistent control, so
+    /// `resolve_point` does not apply there (task 4.1). Effects reuse the
+    /// existing move/intent Msgs (task 4.5). Book has no keyboard
+    /// context-menu action (task 4.6), so right-click is ignored.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
-        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-            if let Some((_, index)) = self
-                .geometry
-                .book_rows
-                .iter()
-                .find(|(rect, _)| rect.contains(position))
-            {
-                self.state.select(*index);
-            }
-            if self.chapters_visible {
+        // The book surface does not consume hover-move (design.md D7).
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
+        }
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Click(at) => {
+                if let Some((_, bucket)) = self
+                    .geometry
+                    .selector_tabs
+                    .iter()
+                    .find(|(rect, _)| rect.contains(at))
+                {
+                    if let Some(range) = self.state.buckets.get(*bucket).copied() {
+                        self.selected_bucket = *bucket;
+                        self.state.select(range.start);
+                    }
+                    return Some(self.bucket_request());
+                }
                 if let Some((_, index)) = self
                     .geometry
-                    .chapter_rows
+                    .book_rows
                     .iter()
-                    .find(|(rect, _)| rect.contains(position))
+                    .find(|(rect, _)| rect.contains(at))
                 {
-                    self.chapter_selection = Some(*index);
+                    self.state.select(*index);
+                    return Some(self.book_request());
                 }
-            }
-            if let Some((_, bucket)) = self
-                .geometry
-                .selector_tabs
-                .iter()
-                .find(|(rect, _)| rect.contains(position))
-            {
-                if let Some(range) = self.state.buckets.get(*bucket).copied() {
-                    self.selected_bucket = *bucket;
-                    self.state.select(range.start);
+                if self.chapters_visible {
+                    if let Some((_, index)) = self
+                        .geometry
+                        .chapter_rows
+                        .iter()
+                        .find(|(rect, _)| rect.contains(at))
+                    {
+                        self.chapter_selection = Some(*index);
+                        return Some(self.chapter_focus_request());
+                    }
                 }
+                None
             }
+            MouseGesture::DoubleClick(at) => {
+                if let Some((_, index)) = self
+                    .geometry
+                    .book_rows
+                    .iter()
+                    .find(|(rect, _)| rect.contains(at))
+                {
+                    self.state.select(*index);
+                    return Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+                        AudiobookshelfBookIntent::Activate,
+                    )));
+                }
+                None
+            }
+            MouseGesture::Scroll { at, delta } => {
+                // Page-size move + re-request (Home/Queue precedent, task
+                // 4.1); this surface had no wheel arm before. Mirrors the
+                // keyboard PageUp/PageDown focus split.
+                if !self.geometry.left_area.contains(at) {
+                    return None;
+                }
+                let rows = delta * self.page_size() as i64;
+                if self.chapters_visible && self.chapter_selection.is_some() {
+                    self.move_chapter(rows);
+                    return Some(self.chapter_focus_request());
+                }
+                self.move_book(rows);
+                Some(self.book_request())
+            }
+            _ => None,
         }
-        None
+    }
+
+    /// Test seam: reset the private gesture recognizer so a synchronous test
+    /// loop can drive successive wheel/click events without the
+    /// throttle/double-click window collapsing them.
+    #[cfg(test)]
+    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
+        self.mouse_gestures.reset_for_test();
     }
 }
 

@@ -5,7 +5,9 @@ use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfLibrary};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 #[test]
 fn abs_book_component_keeps_local_cursor_and_renders_without_app_state() {
@@ -420,4 +422,117 @@ fn abs_book_component_unmatched_shift_bracket_stays_unclaimed() {
         modifiers: KeyModifiers::SHIFT,
     }));
     assert_eq!(message, None);
+}
+
+/// Task 4.1/4.5: a click on a painted book row resolves through the row rect
+/// and emits the existing resolved book-move request; a right-click is
+/// ignored (task 4.6: no keyboard context-menu equivalent).
+#[test]
+fn abs_book_mouse_click_resolves_row_and_right_click_is_ignored() {
+    let state = book_state(6, false);
+    let mut component = AudiobookshelfBookComponent::new();
+    component.set_content(&state, true, false);
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let (rect, clicked) = component
+        .geometry()
+        .book_rows
+        .iter()
+        .copied()
+        .find(|(_, i)| i != &0)
+        .expect("a non-selected book row is painted");
+    let mut click = |column: u16, row: u16, kind: MouseEventKind| {
+        component.on(&Event::Mouse(MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }))
+    };
+    let msg = click(rect.x, rect.y, MouseEventKind::Down(MouseButton::Left));
+    assert!(
+        matches!(
+            &msg,
+            Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+                AudiobookshelfBookMove::Book(index)
+            ))) if *index == clicked
+        ),
+        "click must resolve the painted row, got {msg:?}"
+    );
+    // Task 4.6: right-click is ignored on this surface.
+    assert_eq!(
+        click(rect.x, rect.y, MouseEventKind::Down(MouseButton::Right)),
+        None
+    );
+}
+
+/// Task 4.1: a double-click on a book row emits the Activate intent.
+#[test]
+fn abs_book_mouse_double_click_emits_activate_intent() {
+    let state = book_state(6, false);
+    let mut component = AudiobookshelfBookComponent::new();
+    component.set_content(&state, true, false);
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let (rect, _) = component
+        .geometry()
+        .book_rows
+        .first()
+        .copied()
+        .expect("a book row is painted");
+    for _ in 0..2 {
+        component.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: rect.x,
+            row: rect.y,
+            modifiers: KeyModifiers::NONE,
+        }));
+    }
+    // The double-click (second Down) is the last recognized gesture; re-drive
+    // it so its Msg is the one returned.
+    let msg = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: rect.x,
+        row: rect.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        msg,
+        Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+            AudiobookshelfBookIntent::Activate
+        )))
+    ));
+}
+
+/// Task 4.1: the wheel pages the book list by the painted page size and
+/// re-requests; the throttle lives in the gesture state.
+#[test]
+fn abs_book_mouse_wheel_pages_the_book_list() {
+    let state = book_state(20, false);
+    let mut component = AudiobookshelfBookComponent::new();
+    component.set_content(&state, true, false);
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let list = component.geometry().left_area;
+    let msg = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: list.x,
+        row: list.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(AudiobookshelfBookMove::Book(index)))) =
+        msg
+    else {
+        panic!("wheel must emit a page-size book move, got {msg:?}");
+    };
+    assert!(
+        index > 1,
+        "wheel must advance more than one row, got {index}"
+    );
 }

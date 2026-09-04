@@ -592,3 +592,19 @@ fn abs_podcast_stays_mounted_and_preserves_selection_across_switch() {
         "the podcast selection must survive the switch-and-return round trip"
     );
 }
+
+// Task 4.5: the podcast show-move shell arm pulls panel focus to the Library
+// (click-to-focus on the component-owned cursor path).
+#[test]
+fn abs_podcast_show_move_pulls_panel_focus_to_library() {
+    let mut model = Model::new(audiobookshelf_app());
+    model.sync_audiobookshelf_podcast();
+    model.app.panel_focus = PanelFocus::Queue;
+    model.handle_terminal_message(
+        Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { index: 0 }),
+        None,
+        &mut false,
+        &mut false,
+    );
+    assert_eq!(model.app.panel_focus, PanelFocus::Library);
+}

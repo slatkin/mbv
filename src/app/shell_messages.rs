@@ -217,6 +217,13 @@ impl Model {
                             .flash("No feed entry selected".into(), ToastSeverity::Neutral);
                     }
                 }
+                ShellRequest::FeedsRowClick => {
+                    // A Feeds list row the user clicked: the component already
+                    // resolved and selected the row; the shell pulls panel
+                    // focus to the Library (task 4.5, mirrors `HomeRowClick`).
+                    self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                    self.sync_feeds();
+                }
                 ShellRequest::FeedsEnqueue(entry) => {
                     if let Some(entry) = entry {
                         self.app.enqueue_feed_entry(entry);
@@ -265,6 +272,10 @@ impl Model {
                     // + detail-fetch), never recomputing from a delta. The
                     // episode-selection guard lives only on the component
                     // now (D2).
+                    // Click-to-focus (task 4.5): a mouse-driven (or already
+                    // focused keyboard) show move pulls panel focus to the
+                    // Library.
+                    self.app.set_panel_focus(crate::app::PanelFocus::Library);
                     self.app.select_audiobookshelf_show(index);
                     // The component owns the painted cursor; persist the
                     // active tab's slot once after the movement lands so

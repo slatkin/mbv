@@ -9,6 +9,9 @@ impl Model {
         &mut self,
         intent: super::components::msg::PodcastEpisodeIntent,
     ) {
+        // Click-to-focus (task 4.5): a mouse-driven (or already focused
+        // keyboard) episode intent pulls panel focus to the Library.
+        self.app.set_panel_focus(crate::app::PanelFocus::Library);
         // Resolve every condition from current App state/layout at the Model
         // boundary, never from component state (D17). The shell arm re-projects
         // podcast content after this call, preserving the existing effect plus

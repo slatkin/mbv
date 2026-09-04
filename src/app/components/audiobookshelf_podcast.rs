@@ -8,13 +8,12 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{
-    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{InlineMediaBrowser, ViewportAnchor};
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{
@@ -49,6 +48,9 @@ pub struct AudiobookshelfPodcastComponent {
     /// Selected-row screen offset captured each `view`, so `viewport_anchor`
     /// can report the outgoing control's anchor at a flip.
     painted_row_offset: Option<usize>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
+    /// the double-click window and wheel throttle. Not a shared clock.
+    mouse_gestures: MouseGestureState,
 }
 
 impl AudiobookshelfPodcastComponent {
@@ -73,6 +75,7 @@ impl AudiobookshelfPodcastComponent {
             pending_anchor: None,
             last_wide: None,
             painted_row_offset: None,
+            mouse_gestures: MouseGestureState::new(),
         }
     }
 
@@ -318,60 +321,83 @@ impl AudiobookshelfPodcastComponent {
         self.set_episode_filter(AudiobookshelfEpisodeFilter::ALL[next]);
     }
 
+    /// Handle a TuiRealm mouse event via the private `MouseGestureState`
+    /// (ADR 0024, design.md D3): the state also owns the wheel throttle that
+    /// the legacy raw wheel arm lacked. Show-row identity comes from the
+    /// painted `show_rows` rects — the wide rail is composed per-frame in the
+    /// renderer and is not a persistent control, so `resolve_point` does not
+    /// apply there (task 4.1). Effects reuse the existing move/intent Msgs
+    /// (task 4.5). Podcast has no keyboard context-menu action (task 4.6),
+    /// so right-click is ignored.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let pos: ratatui::layout::Position = (mouse.column, mouse.row).into();
-        // TODO(remove-legacy-keyboard-endpoint): podcast episode wheel parity
-        if self.episode_selection.is_none()
-            && self.geometry.list_area.width > 0
-            && self.geometry.list_area.height > 0
-            && self.geometry.list_area.contains(pos)
-        {
-            let columns = self.geometry.columns.max(1) as i64;
-            match mouse.kind {
-                MouseEventKind::ScrollDown => {
-                    self.move_cursor(3 * columns);
-                    return Some(self.show_move_request());
-                }
-                MouseEventKind::ScrollUp => {
-                    self.move_cursor(-(3 * columns));
-                    return Some(self.show_move_request());
-                }
-                _ => {}
-            }
+        // The podcast surface does not consume hover-move (design.md D7).
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
         }
-        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-            let pos: ratatui::layout::Position = (mouse.column, mouse.row).into();
-            let mut selected = false;
-            if let Some((_, index)) = self
-                .geometry
-                .show_rows
-                .iter()
-                .find(|(rect, _)| rect.contains(pos))
-            {
-                self.select_show(*index);
-                selected = true;
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Scroll { at, delta } => {
+                if self.episode_selection.is_some() || !self.geometry.list_area.contains(at) {
+                    return None;
+                }
+                let columns = self.geometry.columns.max(1) as i64;
+                self.move_cursor(delta * 3 * columns);
+                Some(self.show_move_request())
             }
-            if let Some((_, bucket)) = self
-                .geometry
-                .selector_tabs
-                .iter()
-                .find(|(rect, _)| rect.contains(pos))
-            {
-                if let Some(range) =
-                    crate::app::types_audiobookshelf_browse::build_show_title_buckets(
-                        &self.state.shows,
-                    )
-                    .get(*bucket)
+            MouseGesture::Click(at) => {
+                if let Some((_, index)) = self
+                    .geometry
+                    .show_rows
+                    .iter()
+                    .find(|(rect, _)| rect.contains(at))
                 {
-                    self.select_show(range.start);
-                    selected = true;
+                    self.select_show(*index);
+                    return Some(self.show_move_request());
                 }
+                if let Some((_, bucket)) = self
+                    .geometry
+                    .selector_tabs
+                    .iter()
+                    .find(|(rect, _)| rect.contains(at))
+                {
+                    if let Some(range) =
+                        crate::app::types_audiobookshelf_browse::build_show_title_buckets(
+                            &self.state.shows,
+                        )
+                        .get(*bucket)
+                    {
+                        self.select_show(range.start);
+                        return Some(self.show_move_request());
+                    }
+                    return None;
+                }
+                None
             }
-            if selected {
-                return Some(self.show_move_request());
+            MouseGesture::DoubleClick(at) => {
+                if let Some((_, index)) = self
+                    .geometry
+                    .show_rows
+                    .iter()
+                    .find(|(rect, _)| rect.contains(at))
+                {
+                    self.select_show(*index);
+                    return Some(Msg::Shell(
+                        ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+                            PodcastEpisodeIntent::OpenOrPlay,
+                        ),
+                    ));
+                }
+                None
             }
+            _ => None,
         }
-        None
+    }
+
+    /// Test seam: reset the private gesture recognizer so a synchronous test
+    /// loop can drive successive wheel/click events without the
+    /// throttle/double-click window collapsing them.
+    #[cfg(test)]
+    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
+        self.mouse_gestures.reset_for_test();
     }
 }
 

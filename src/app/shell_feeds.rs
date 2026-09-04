@@ -95,4 +95,21 @@ mod tests {
             .expect("Feeds component type");
         assert_eq!(component.subscription_names(), ["Shell Feed"]);
     }
+
+    // Task 4.5: the FeedsRowClick arm pulls panel focus to the Library
+    // (mirrors the HomeRowClick arm).
+    #[test]
+    fn feeds_row_click_pulls_panel_focus_to_library() {
+        let mut model = Model::new(make_app_stub());
+        model.app.panel_focus = PanelFocus::Queue;
+        let mut music_resize = false;
+        let mut tv_resize = false;
+        model.handle_terminal_message(
+            crate::app::components::Msg::Shell(crate::app::components::ShellRequest::FeedsRowClick),
+            None,
+            &mut music_resize,
+            &mut tv_resize,
+        );
+        assert_eq!(model.app.panel_focus, PanelFocus::Library);
+    }
 }

@@ -109,6 +109,11 @@ pub enum ShellRequest {
     /// Enqueue the exact entry selected by the Feeds component; `None` reports
     /// that there is no visible selection so the shell can provide feedback.
     FeedsEnqueue(Option<FeedEntry>),
+    /// A row the user single-clicked in the Feeds list. The component has
+    /// already moved its own selection to the resolved row; the shell only
+    /// pulls panel focus to the Library (design.md D4/D5). Mirrors
+    /// `HomeRowClick`.
+    FeedsRowClick,
     /// Dismiss the blocking Selection modal.
     DismissSelectionModal,
     /// Select a source-specific filter in the Selection modal.
