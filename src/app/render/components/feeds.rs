@@ -197,6 +197,7 @@ pub(in crate::app) fn render_feeds_content(
         let hero_content_area =
             hero_left::hero_on_left_pane(f, area, hero_left::LeftPaneFocus::ReadOnly)
                 .expect("wide branch already confirmed shared_hero_presentation fits");
+        let (_, hero_content_area) = hero_left::hero_on_left_main_content_box(f, hero_content_area);
         if let Some(entry) = model.selected_entry {
             paint_feed_hero(f, hero_content_area, entry, focused);
         }

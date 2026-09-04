@@ -465,6 +465,13 @@ fn render_podcast_hero(
     // gate); narrow routes Enter to the selection modal instead, so
     // `episode_selection` is never set in narrow in practice.
     if wide && interaction.episode_selection.is_some() && result.next_row < area.bottom() {
+        let listing_area = Rect {
+            y: result.next_row,
+            height: area.bottom().saturating_sub(result.next_row),
+            ..area
+        };
+        let (_, listing_content_area) =
+            hero_left::hero_on_left_main_content_box(frame, listing_area);
         let filter = interaction.episode_filter;
         let labels: Vec<String> = AudiobookshelfEpisodeFilter::ALL
             .iter()
@@ -474,10 +481,10 @@ fn render_podcast_hero(
         let tabs = render_pill_bar(
             frame,
             Rect {
-                x: area.x,
-                y: result.next_row,
-                width: area.width,
-                height: 1,
+                x: listing_content_area.x,
+                y: listing_content_area.y,
+                width: listing_content_area.width,
+                height: listing_content_area.height.min(1),
             },
             PillBar {
                 labels: &labels,
@@ -490,7 +497,7 @@ fn render_podcast_hero(
             },
         );
         geometry.selector_tabs.extend(tabs);
-        let row_y = result.next_row + 1;
+        let row_y = listing_content_area.y + 1;
         for (index, episode) in state.visible_episodes(filter).iter().enumerate() {
             if row_y + index as u16 >= area.bottom() {
                 break;

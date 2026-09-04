@@ -187,9 +187,11 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             height: hero_content_area.height.saturating_sub(hero_height),
             ..hero_content_area
         };
+        let (_, chapters_content_area) =
+            hero_left::hero_on_left_main_content_box(frame, chapters_area);
         render_book_rows(
             frame,
-            chapters_area,
+            chapters_content_area,
             state,
             interaction.chapter_selection,
             focused && interaction.chapter_selection.is_some(),
