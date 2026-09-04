@@ -407,6 +407,36 @@ fn abs_podcasts_wide_left_pane_fills_via_shared_primitive() {
     );
 }
 
+#[test]
+fn abs_book_wide_hero_keeps_text_with_images_on_or_off() {
+    let app = make_audiobookshelf_book_app();
+    for images_enabled in [true, false] {
+        let mut component = AudiobookshelfBookComponent::new();
+        component.set_content(
+            app.audiobookshelf_book_browse.first().expect("book state"),
+            true,
+            images_enabled,
+        );
+        let terminal = direct_terminal(|f| component.view(f, wide_area()));
+        assert!(buffer_to_string(&terminal).contains("Alpha Tales"));
+    }
+}
+
+#[test]
+fn abs_podcast_wide_hero_keeps_text_with_images_on_or_off() {
+    let app = crate::app::tests_podcast::audiobookshelf_app();
+    for images_enabled in [true, false] {
+        let mut component = AudiobookshelfPodcastComponent::new();
+        component.set_content(
+            app.audiobookshelf_browse.first().expect("podcast state"),
+            true,
+            images_enabled,
+        );
+        let terminal = direct_terminal(|f| component.view(f, wide_area()));
+        assert!(buffer_to_string(&terminal).contains("Show A"));
+    }
+}
+
 /// Sanity: the fixture width used throughout this module clears the shared
 /// two-column breakpoint, so every characterization above exercises the Wide
 /// hero-on-left presentation rather than falling back to narrow.

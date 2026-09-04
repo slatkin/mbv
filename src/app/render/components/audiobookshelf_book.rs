@@ -407,15 +407,14 @@ fn render_book_hero(
     let overview_start = HERO_TITLE_ROWS
         + usize::from(!author.is_empty()) as u16
         + usize::from(!meta.is_empty()) as u16 * 2;
-    let artwork = wide
-        .then(|| {
-            hero_left::hero_left_slots(area, plan.image_height, plan.image_key.is_some(), None)
-                .artwork
-        })
-        .flatten();
-    let (image_width, image_height) = artwork
-        .map(|rect| (rect.width, rect.height))
-        .unwrap_or((plan.image_width, plan.image_height));
+    // HeroImage is right-aligned by the painter; keep its fixed cover width
+    // separate from the full-width text area. The old slot calculation passed
+    // the whole pane as the artwork width, leaving no room for text.
+    let (image_width, image_height) = if wide && plan.image_key.is_some() {
+        (plan.image_width, plan.image_height)
+    } else {
+        (0, 0)
+    };
     let lines = wrap_overview_lines(&overview, |line| {
         crate::app::render::components::hero::inline_hero_text_width(
             area.width,
