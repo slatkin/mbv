@@ -79,7 +79,13 @@ fn unfocused_component_ignores_keyboard_input() {
         kind: FeedKind::Audio,
     }];
     let entries = vec![entry("First", false), entry("Second", true)];
-    component.set_content(&subscriptions, &[entries.clone()], &entries, false, false);
+    component.set_content(
+        &subscriptions,
+        std::slice::from_ref(&entries),
+        &entries,
+        false,
+        false,
+    );
     let keys = [
         Key::Char('r'),
         Key::Char('w'),
@@ -272,7 +278,13 @@ fn unfocused_component_handles_mouse_input() {
         kind: FeedKind::Audio,
     }];
     let entries = vec![entry("First", false), entry("Second", true)];
-    component.set_content(&subscriptions, &[entries.clone()], &entries, false, false);
+    component.set_content(
+        &subscriptions,
+        std::slice::from_ref(&entries),
+        &entries,
+        false,
+        false,
+    );
     let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
     terminal
         .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
@@ -632,11 +644,7 @@ fn breakpoint_flip_carries_one_viewport_anchor() {
         .unwrap();
     assert_eq!(component.cursor(), 15);
     assert!(
-        component
-            .layout()
-            .left_row_map
-            .iter()
-            .any(|slot| *slot == Some(15)),
+        component.layout().left_row_map.contains(&Some(15)),
         "selected entry stays visible after the flip: {:?}",
         component.layout().left_row_map
     );
