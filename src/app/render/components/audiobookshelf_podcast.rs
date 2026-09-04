@@ -449,6 +449,12 @@ fn render_podcast_hero(
             height: area.height.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
         }
     };
+    let artwork = wide
+        .then(|| {
+            hero_left::hero_left_slots(content_area, SERIES_IMAGE_ROWS, images_enabled, None)
+                .artwork
+        })
+        .flatten();
     let result = crate::app::render::components::hero::paint_hero_content(
         frame,
         content_area,
@@ -459,10 +465,17 @@ fn render_podcast_hero(
             show_playing: false,
             unconditional_spacer_after_meta: false,
             lines: &lines,
-            image: images_enabled.then_some(HeroImage {
-                actual_w: SERIES_IMAGE_COLS,
-                height: SERIES_IMAGE_ROWS,
-            }),
+            image: if wide {
+                artwork.map(|rect| HeroImage {
+                    actual_w: rect.width,
+                    height: rect.height,
+                })
+            } else {
+                images_enabled.then_some(HeroImage {
+                    actual_w: SERIES_IMAGE_COLS,
+                    height: SERIES_IMAGE_ROWS,
+                })
+            },
         },
         focused,
     );

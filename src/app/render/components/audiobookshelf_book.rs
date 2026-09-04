@@ -182,6 +182,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             focused && interaction.chapter_selection.is_some(),
             true,
             &plan,
+            true,
         );
         let chapters_area = Rect {
             y: hero_content_area.y + hero_height,
@@ -329,7 +330,7 @@ fn render_narrow_book(
     selected_detail_shell(frame, hero_area, hero_area.height, focused);
     geometry.hero_area = Some(hero_area);
     geometry.selected_item_rect = Some(hero_area);
-    render_book_hero(frame, hero_area, state, focused, true, &plan)
+    render_book_hero(frame, hero_area, state, focused, true, &plan, false)
 }
 
 fn render_book_pills(
@@ -366,6 +367,7 @@ fn render_book_hero(
     focused: bool,
     show_title: bool,
     plan: &BookHeroPlan,
+    wide: bool,
 ) -> Option<super::home_hero::HomeImagePaint> {
     let book = state.selected_book()?;
     let mut meta = Vec::new();
@@ -405,11 +407,20 @@ fn render_book_hero(
     let overview_start = HERO_TITLE_ROWS
         + usize::from(!author.is_empty()) as u16
         + usize::from(!meta.is_empty()) as u16 * 2;
+    let artwork = wide
+        .then(|| {
+            hero_left::hero_left_slots(area, plan.image_height, plan.image_key.is_some(), None)
+                .artwork
+        })
+        .flatten();
+    let (image_width, image_height) = artwork
+        .map(|rect| (rect.width, rect.height))
+        .unwrap_or((plan.image_width, plan.image_height));
     let lines = wrap_overview_lines(&overview, |line| {
         crate::app::render::components::hero::inline_hero_text_width(
             area.width,
-            plan.image_width,
-            plan.image_height,
+            image_width,
+            image_height,
             overview_start + line as u16,
         ) as usize
     });
@@ -433,9 +444,9 @@ fn render_book_hero(
             show_playing: false,
             unconditional_spacer_after_meta: false,
             lines: &hero_lines,
-            image: (plan.image_height > 0).then_some(HeroImage {
-                actual_w: plan.image_width,
-                height: plan.image_height,
+            image: (image_height > 0).then_some(HeroImage {
+                actual_w: image_width,
+                height: image_height,
             }),
         },
         focused,
