@@ -18,7 +18,7 @@ impl Model {
     /// component cursor into a `BrowseLevel.cursor` and re-reading it. The
     /// active library index is derived from the shell's own tab state (the
     /// browser is mounted only for the active generic/Movies/home-video
-    /// `EmbyLibrary` tab, same derivation as the `BrowserClick` mouse arms).
+    /// `EmbyLibrary` tab, same derivation as the `BrowserRow*`/`BrowserPillClick` mouse arms).
     /// A missing library index is a defensive no-op.
     pub(super) fn handle_browser_request(&mut self, request: ShellRequest) {
         let Some(lib_idx) = self.app.tab.emby_library_index() else {

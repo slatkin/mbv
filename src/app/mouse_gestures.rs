@@ -85,6 +85,8 @@ impl App {
         }
     }
 
+    // TODO(task 6.3): remove once no mouse surface uses the shell double-click clock
+    #[allow(dead_code)]
     pub(super) fn note_browse_double_click(&mut self, col: u16, row: u16) -> bool {
         let now = Instant::now();
         let is_double = now.duration_since(self.last_click_time) < Duration::from_millis(400)

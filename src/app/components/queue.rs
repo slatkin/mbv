@@ -426,8 +426,9 @@ impl Component for QueueComponent {
         }
         // The canonical child is the sole Queue body painter
         // (migrate-queue-to-canonical-list D4). It persists the resolved scroll
-        // offset back into the list; Queue keeps its own `QueueHitRegion`
-        // geometry (rebuilt below) so the untouched mouse path still resolves.
+        // offset back into the list; Queue resolves click slots via
+        // `list.resolve_point` now, and keeps `geometry.rows` (rebuilt below)
+        // only for `selected_row_rect` and tests.
         // Legacy `render_queue_content` parity: the selected row takes the
         // focused queue-column surface (its parent panel).
         render_wide_media_list(

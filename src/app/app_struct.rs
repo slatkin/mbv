@@ -145,7 +145,11 @@ pub struct App {
     pub(super) layout: layout::AppLayout,
     pub(super) terminal_width: u16,
     pub(super) terminal_height: u16,
+    // TODO(task 6.3): remove once no mouse surface uses the shell double-click clock
+    #[allow(dead_code)]
     pub(super) last_click_time: Instant,
+    // TODO(task 6.3): remove once no mouse surface uses the shell double-click clock
+    #[allow(dead_code)]
     pub(super) last_click_pos: (u16, u16),
     pub(super) last_space_press: Option<Instant>,
     pub(super) last_esc_press: Option<Instant>,

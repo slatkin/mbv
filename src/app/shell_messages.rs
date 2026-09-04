@@ -101,7 +101,7 @@ impl Model {
                     }
                     // A group switch replaces the album level; re-anchor the
                     // workspace cursor at this nav event (mirrors the pill
-                    // click path in `ShellRequest::BrowserClick`).
+                    // click path in `ShellRequest::BrowserPillClick`).
                     self.music_workspace_reanchor = true;
                     self.push_music_workspace_content();
                 }

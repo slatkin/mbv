@@ -471,7 +471,7 @@ mod tests {
     }
 
     /// Task 5.3d, Home mouse-click handoff: the shell routes each typed
-    /// `HomeClick` region at the Model boundary. A pill persists the section
+    /// `HomeRow*`/`HomePillClick` request at the Model boundary. A pill persists the section
     /// through the existing section-selection mechanism; a single row click
     /// focuses the Library panel but does **not** mutate App's independent
     /// Continue Watching `continue_cursor` or the per-latest pill cursors
