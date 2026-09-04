@@ -90,24 +90,6 @@ pub(in crate::app) struct PlaylistsRenderGeometry {
     pub open_rows: Vec<(Rect, usize)>,
 }
 
-impl PlaylistsRenderGeometry {
-    pub(in crate::app) fn hit_test(
-        &self,
-        position: ratatui::layout::Position,
-    ) -> Option<(bool, usize)> {
-        self.open_rows
-            .iter()
-            .find(|(rect, _)| rect.contains(position))
-            .map(|(_, index)| (true, *index))
-            .or_else(|| {
-                self.playlist_rows
-                    .iter()
-                    .find(|(rect, _)| rect.contains(position))
-                    .map(|(_, index)| (false, *index))
-            })
-    }
-}
-
 /// Everything the playlists painter reads and mutates, gathered from the
 /// component once per frame. The painter keeps no ownership: cursors and
 /// scroll offsets are written back through these borrows.

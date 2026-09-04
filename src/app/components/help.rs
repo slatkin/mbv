@@ -13,10 +13,11 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{help_destination, render_help_panel, HelpDestination};
@@ -34,6 +35,8 @@ pub struct HelpComponent {
     /// hit-testing in `on()`. `None` when no panel area was provided (the
     /// help sidebar uses the full terminal with a width constraint).
     panel_area: Option<Rect>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3).
+    mouse_gestures: MouseGestureState,
 }
 
 impl HelpComponent {
@@ -42,6 +45,7 @@ impl HelpComponent {
             scroll: 0,
             destination: HelpDestination::EmbyLibrary,
             panel_area: None,
+            mouse_gestures: MouseGestureState::new(),
         }
     }
 
@@ -94,29 +98,27 @@ impl HelpComponent {
         }
     }
 
-    /// Handle a mouse event. Click-outside dismisses; scroll adjusts by 3
-    /// (matching legacy `handle_mouse_panels` help branch).
+    /// Handle a mouse event (task 5.2): recognition via the component's own
+    /// `MouseGestureState` (ADR 0024, design.md D3). Behaviour unchanged
+    /// from the ad-hoc handler: a click inside the panel is swallowed, a
+    /// click outside dismisses (the second click of a double included), and
+    /// the wheel adjusts the scroll by 3 per throttled step.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let (col, row) = (mouse.column, mouse.row);
-        match mouse.kind {
-            MouseEventKind::Down(MouseButton::Left) => {
-                let inside = self
-                    .panel_area
-                    .is_some_and(|r| r.contains((col, row).into()));
-                if !inside {
-                    // Click outside the panel: dismiss.
-                    Some(Msg::Shell(ShellRequest::DismissHelp))
-                } else {
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
+        }
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Click(at) | MouseGesture::DoubleClick(at) => {
+                if self.panel_area.is_some_and(|r| r.contains(at)) {
                     // Click inside: swallow.
                     None
+                } else {
+                    // Click outside the panel: dismiss.
+                    Some(Msg::Shell(ShellRequest::DismissHelp))
                 }
             }
-            MouseEventKind::ScrollDown => {
-                self.scroll = self.scroll.saturating_add(3);
-                None
-            }
-            MouseEventKind::ScrollUp => {
-                self.scroll = self.scroll.saturating_sub(3);
+            MouseGesture::Scroll { delta, .. } => {
+                self.scroll = self.scroll.saturating_add_signed((delta * 3) as i16);
                 None
             }
             _ => None,
@@ -165,7 +167,7 @@ impl AppComponent<Msg, UserEvent> for HelpComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tuirealm::event::{Key, KeyModifiers};
+    use tuirealm::event::{Key, KeyModifiers, MouseButton};
 
     fn make_key(code: Key, modifiers: KeyModifiers) -> KeyEvent {
         KeyEvent { code, modifiers }
@@ -300,6 +302,27 @@ mod tests {
             modifiers: KeyModifiers::NONE,
         });
         assert_eq!(comp.scroll, 2);
+    }
+
+    #[test]
+    fn mouse_double_click_outside_panel_also_dismisses() {
+        let mut comp = HelpComponent::new();
+        comp.set_panel_area(Some(Rect::new(0, 0, 40, 20)));
+        let down = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 50,
+            row: 10,
+            modifiers: KeyModifiers::NONE,
+        };
+        assert_eq!(
+            comp.handle_mouse(&down),
+            Some(Msg::Shell(ShellRequest::DismissHelp))
+        );
+        // The second down is recognized as a double click and dismisses too.
+        assert_eq!(
+            comp.handle_mouse(&down),
+            Some(Msg::Shell(ShellRequest::DismissHelp))
+        );
     }
 
     #[test]

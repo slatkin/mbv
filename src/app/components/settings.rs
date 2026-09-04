@@ -2,10 +2,12 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
 use super::msg::{Msg, ServiceRequest, SettingsIntent, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
@@ -61,6 +63,12 @@ pub struct SettingsComponent {
     scroll: usize,
     area: Rect,
     geometry: SettingsRenderGeometry,
+    /// Irregular painted chrome (task 5.2, design.md D6): the
+    /// cursor-activatable rows, repopulated in `view()` from the geometry
+    /// the painter just produced. Tag = the row's cursor index.
+    hit_rows: HitRegions<usize>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3).
+    mouse_gestures: MouseGestureState,
     initialized: bool,
 }
 
@@ -76,6 +84,8 @@ impl SettingsComponent {
             scroll: 0,
             area: Rect::default(),
             geometry: SettingsRenderGeometry::default(),
+            hit_rows: HitRegions::new(),
+            mouse_gestures: MouseGestureState::new(),
             initialized: false,
         }
     }
@@ -307,40 +317,42 @@ impl SettingsComponent {
         }
     }
 
-    fn handle_mouse(&mut self, mouse: &tuirealm::event::MouseEvent) -> Option<Msg> {
-        use tuirealm::event::{MouseButton, MouseEventKind};
-        let position = (mouse.column, mouse.row).into();
-        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
-            && !self.geometry.panel_area.contains(position)
-        {
-            return Some(Msg::Shell(ShellRequest::DismissSettings));
+    /// Mouse handling (task 5.2): recognition via the component's own
+    /// `MouseGestureState` (ADR 0024, design.md D3); row geometry via
+    /// `HitRegions` (D6). Behaviour unchanged from the ad-hoc handler: a
+    /// click outside the panel dismisses, a click on a cursor-activatable
+    /// row selects and activates it (the Enter/Space equivalent), and the
+    /// wheel scrolls by 3 per throttled step.
+    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
         }
-        match mouse.kind {
-            MouseEventKind::ScrollDown => self.scroll += 3,
-            MouseEventKind::ScrollUp => self.scroll = self.scroll.saturating_sub(3),
-            MouseEventKind::Down(MouseButton::Left)
-                if self.geometry.content_area.contains(position) =>
-            {
-                let line = (mouse.row - self.geometry.content_area.y) as usize + self.scroll;
-                if let Some(cursor) = self
-                    .geometry
-                    .cursor_lines
-                    .iter()
-                    .position(|&row| row == line)
-                {
-                    if self.destination == SettingsDestination::Services {
-                        self.services_cursor = cursor;
-                        return Some(Msg::Service(ServiceRequest::ActivateService(cursor)));
-                    }
-                    self.cursor = cursor;
-                    return Some(Msg::Shell(ShellRequest::SettingsIntent(
-                        SettingsIntent::Activate(cursor),
-                    )));
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Click(at) | MouseGesture::DoubleClick(at) => {
+                if !self.geometry.panel_area.contains(at) {
+                    return Some(Msg::Shell(ShellRequest::DismissSettings));
                 }
+                let &cursor = self.hit_rows.resolve(at)?;
+                if self.destination == SettingsDestination::Services {
+                    self.services_cursor = cursor;
+                    return Some(Msg::Service(ServiceRequest::ActivateService(cursor)));
+                }
+                self.cursor = cursor;
+                Some(Msg::Shell(ShellRequest::SettingsIntent(
+                    SettingsIntent::Activate(cursor),
+                )))
             }
-            _ => {}
+            MouseGesture::Scroll { delta, .. } => {
+                self.scroll = self.scroll.saturating_add_signed((delta * 3) as isize);
+                None
+            }
+            _ => None,
         }
-        None
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_rows(&self) -> &HitRegions<usize> {
+        &self.hit_rows
     }
 }
 
@@ -367,6 +379,30 @@ impl Component for SettingsComponent {
             },
             &mut self.geometry,
         );
+        // Adopt the cursor-activatable rows the painter just produced into
+        // the irregular-chrome registry (task 5.2, design.md D6). The
+        // painter's `cursor_lines` are document line numbers indexed by
+        // cursor; document line `line` paints at `content_area.y + line -
+        // scroll`.
+        self.hit_rows.clear();
+        for (cursor, &line) in self.geometry.cursor_lines.iter().enumerate() {
+            if line < self.scroll {
+                continue;
+            }
+            let offset = (line - self.scroll) as u16;
+            if offset >= self.geometry.content_area.height {
+                continue;
+            }
+            self.hit_rows.push(
+                Rect {
+                    x: self.geometry.content_area.x,
+                    y: self.geometry.content_area.y + offset,
+                    width: self.geometry.content_area.width,
+                    height: 1,
+                },
+                cursor,
+            );
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
@@ -396,13 +432,121 @@ mod tests {
     use super::*;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
-    use tuirealm::event::KeyModifiers;
+    use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
     fn key(code: Key) -> Event<UserEvent> {
         Event::Keyboard(KeyEvent {
             code,
             modifiers: KeyModifiers::NONE,
         })
+    }
+
+    fn mouse_down(column: u16, row: u16) -> Event<UserEvent> {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        })
+    }
+
+    fn painted_settings(destination: SettingsDestination) -> SettingsComponent {
+        let mut component = SettingsComponent::new();
+        let (rows, services): (Vec<SettingsRow>, Vec<ServiceRow>) = match destination {
+            SettingsDestination::Services => (
+                Vec::new(),
+                vec![
+                    ServiceRow {
+                        name: "Emby".into(),
+                        detail: "Connected".into(),
+                        muted: false,
+                    },
+                    ServiceRow {
+                        name: "Audiobookshelf".into(),
+                        detail: "Not configured".into(),
+                        muted: false,
+                    },
+                ],
+            ),
+            _ => (
+                vec![
+                    SettingsRow {
+                        label: "Section".into(),
+                        value: String::new(),
+                        section: true,
+                        cursor: None,
+                    },
+                    SettingsRow {
+                        label: "Stay alive".into(),
+                        value: "off".into(),
+                        section: false,
+                        cursor: Some(0),
+                    },
+                ],
+                Vec::new(),
+            ),
+        };
+        component.set_content(SettingsSnapshot {
+            destination,
+            rows,
+            services,
+            setup: None,
+            area: Rect::new(0, 0, 40, 12),
+        });
+        let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        component
+    }
+
+    #[test]
+    fn settings_mouse_click_selects_and_activates_a_row() {
+        let mut component = painted_settings(SettingsDestination::Main);
+        let (rect, cursor) = component.test_rows().regions()[0];
+        assert!(matches!(
+            component.on(&mouse_down(rect.x, rect.y)),
+            Some(Msg::Shell(ShellRequest::SettingsIntent(
+                SettingsIntent::Activate(c)
+            ))) if c == cursor
+        ));
+        assert_eq!(component.cursor, cursor);
+    }
+
+    #[test]
+    fn settings_mouse_click_on_a_service_selects_and_activates_it() {
+        let mut component = painted_settings(SettingsDestination::Services);
+        let (rect, cursor) = component.test_rows().regions()[0];
+        assert_eq!(
+            component.on(&mouse_down(rect.x, rect.y)),
+            Some(Msg::Service(ServiceRequest::ActivateService(cursor)))
+        );
+        assert_eq!(component.services_cursor, cursor);
+    }
+
+    #[test]
+    fn settings_mouse_click_outside_the_painted_panel_dismisses() {
+        let mut component = painted_settings(SettingsDestination::Main);
+        let (x, width) = (
+            component.geometry.panel_area.x,
+            component.geometry.panel_area.width,
+        );
+        assert_eq!(
+            component.on(&mouse_down(x + width + 5, 1)),
+            Some(Msg::Shell(ShellRequest::DismissSettings))
+        );
+    }
+
+    #[test]
+    fn settings_mouse_wheel_scrolls_by_three() {
+        let mut component = painted_settings(SettingsDestination::Main);
+        component.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 1,
+            row: 1,
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert_eq!(component.scroll, 3);
     }
 
     #[test]

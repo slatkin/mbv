@@ -1,16 +1,17 @@
-use ratatui::layout::{Position, Rect};
+use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_playlists_content, PlaylistsRenderGeometry, PlaylistsViewState};
 use mbv_core::api::EmbyItem;
-use std::time::{Duration, Instant};
 
 pub struct PlaylistsComponent {
     playlists: Vec<EmbyItem>,
@@ -25,7 +26,16 @@ pub struct PlaylistsComponent {
     loaded_id: Option<String>,
     panel_area: Option<Rect>,
     geometry: PlaylistsRenderGeometry,
-    last_click: Option<(Instant, u16, u16)>,
+    /// Irregular painted chrome (task 5.2, design.md D6): playlist rows and
+    /// open-playlist item rows, repopulated in `view()` from the geometry
+    /// the painter just produced. Tag = `(open, row index)`; open rows are
+    /// pushed last so they win overlaps, matching the retired
+    /// `PlaylistsRenderGeometry::hit_test` ordering.
+    hit_rows: HitRegions<(bool, usize)>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3).
+    /// Owns the double-click window the hand-rolled `last_click` field used
+    /// to keep.
+    mouse_gestures: MouseGestureState,
 }
 
 /// Owned snapshot of playlist state, handed to the component whenever the
@@ -59,7 +69,8 @@ impl PlaylistsComponent {
             loaded_id: None,
             panel_area: None,
             geometry: PlaylistsRenderGeometry::default(),
-            last_click: None,
+            hit_rows: HitRegions::new(),
+            mouse_gestures: MouseGestureState::new(),
         }
     }
 
@@ -200,57 +211,54 @@ impl PlaylistsComponent {
         }
     }
 
+    /// Mouse handling (task 5.2): recognition via the component's own
+    /// `MouseGestureState` (ADR 0024, design.md D3) — including the
+    /// double-click window the hand-rolled `last_click` field used to own;
+    /// row geometry via `HitRegions` (D6). Behaviour unchanged from the
+    /// ad-hoc handler: the wheel steps the visible list's cursor, a
+    /// right-click on an open playlist goes back, an outside click
+    /// dismisses, a row click selects, and a double click activates (the
+    /// Enter equivalent).
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let position: Position = (mouse.column, mouse.row).into();
-        match mouse.kind {
-            MouseEventKind::ScrollDown => {
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
+        }
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Scroll { delta, .. } => {
                 if self.open.is_some() {
-                    self.open_cursor =
-                        (self.open_cursor + 1).min(self.open_items.len().saturating_sub(1));
+                    self.open_cursor = if delta < 0 {
+                        self.open_cursor.saturating_sub(1)
+                    } else {
+                        (self.open_cursor + 1).min(self.open_items.len().saturating_sub(1))
+                    };
                 } else {
-                    self.cursor = (self.cursor + 1).min(self.playlists.len().saturating_sub(1));
+                    self.cursor = if delta < 0 {
+                        self.cursor.saturating_sub(1)
+                    } else {
+                        (self.cursor + 1).min(self.playlists.len().saturating_sub(1))
+                    };
                 }
-                Self::local_change()
+                None
             }
-            MouseEventKind::ScrollUp => {
-                if self.open.is_some() {
-                    self.open_cursor = self.open_cursor.saturating_sub(1);
-                } else {
-                    self.cursor = self.cursor.saturating_sub(1);
-                }
-                Self::local_change()
-            }
-            MouseEventKind::Down(MouseButton::Right) if self.open.is_some() => {
+            MouseGesture::RightClick(_) if self.open.is_some() => {
                 self.open = None;
                 self.open_items.clear();
                 Some(Msg::Shell(ShellRequest::PlaylistsBack))
             }
-            MouseEventKind::Down(MouseButton::Left) => {
-                if self.panel_area.is_some_and(|area| !area.contains(position)) {
+            gesture @ (MouseGesture::Click(at) | MouseGesture::DoubleClick(at)) => {
+                if self.panel_area.is_some_and(|area| !area.contains(at)) {
                     return Some(Msg::Shell(ShellRequest::DismissPlaylists));
                 }
-                let Some((open, index)) = self.geometry.hit_test(position) else {
-                    return Self::local_change();
-                };
-                let now = Instant::now();
-                let double = self.last_click.is_some_and(|(at, col, row)| {
-                    now.duration_since(at) < Duration::from_millis(400)
-                        && col == mouse.column
-                        && row == mouse.row
-                });
-                self.last_click = Some((now, mouse.column, mouse.row));
+                let &(open, index) = self.hit_rows.resolve(at)?;
                 if open {
                     self.open_cursor = index;
                 } else {
                     self.cursor = index;
                 }
-                if double {
-                    Some(Msg::Shell(ShellRequest::PlaylistsActivate { open, index }))
-                } else {
-                    Self::local_change()
-                }
+                matches!(gesture, MouseGesture::DoubleClick(_))
+                    .then_some(Msg::Shell(ShellRequest::PlaylistsActivate { open, index }))
             }
-            _ => Self::local_change(),
+            _ => None,
         }
     }
 }
@@ -281,6 +289,16 @@ impl Component for PlaylistsComponent {
                 geometry: &mut self.geometry,
             },
         );
+        // Adopt the rows the painter just produced into the irregular-chrome
+        // registry (task 5.2, design.md D6). Open rows are pushed last so
+        // they win overlaps, matching the old `hit_test` ordering.
+        self.hit_rows.clear();
+        for (rect, index) in &self.geometry.playlist_rows {
+            self.hit_rows.push(*rect, (false, *index));
+        }
+        for (rect, index) in &self.geometry.open_rows {
+            self.hit_rows.push(*rect, (true, *index));
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

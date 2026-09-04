@@ -11,10 +11,11 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, Key, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{
@@ -65,6 +66,8 @@ pub struct InlineSearchComponent {
     focused: bool,
     layout: crate::app::layout::LayoutMain,
     wide: bool,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3).
+    mouse_gestures: MouseGestureState,
 }
 
 impl InlineSearchComponent {
@@ -78,6 +81,7 @@ impl InlineSearchComponent {
             focused: false,
             layout: Default::default(),
             wide: false,
+            mouse_gestures: MouseGestureState::new(),
         }
     }
 
@@ -179,15 +183,25 @@ impl InlineSearchComponent {
         None
     }
 
+    /// Mouse handling (task 5.2): recognition via the component's own
+    /// `MouseGestureState` (ADR 0024, design.md D3). Behaviour unchanged
+    /// from the ad-hoc handler: a left click on a list row moves the cursor
+    /// to that row (the second click of a double is the same no-op-equivalent
+    /// cursor move); every other gesture is ignored — this surface has none.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-            let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
-            if self.layout.left_area.contains(position) {
-                let row = position.y.saturating_sub(self.layout.left_area.y) as usize;
-                self.cursor = move_cursor(row, 0, self.pool.filtered_items(&self.query).len());
-            }
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
         }
-        None
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Click(at) | MouseGesture::DoubleClick(at) => {
+                if self.layout.left_area.contains(at) {
+                    let row = at.y.saturating_sub(self.layout.left_area.y) as usize;
+                    self.cursor = move_cursor(row, 0, self.pool.filtered_items(&self.query).len());
+                }
+                None
+            }
+            _ => None,
+        }
     }
 }
 

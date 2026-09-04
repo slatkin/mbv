@@ -335,6 +335,90 @@ mod tests {
         assert!(model.mouse_eligible_ids().contains(&child));
     }
 
+    // Task 5.2 (ADR 0024 D2): the five already-handling surfaces ride the
+    // same eligibility ladder — each sidebar / inline search is eligible
+    // alone while it is the painted overlay or destination child, and every
+    // one is ineligible while a blocking overlay covers it.
+    #[test]
+    fn phase4_surfaces_are_eligible_alone_and_ineligible_under_a_blocking_overlay() {
+        use crate::app::components::{ConfirmComponent, InlineSearchComponent, ModalId};
+        use crate::app::SidebarId;
+
+        let confirm_id = ComponentId::Modal(ModalId::Confirm);
+        let mount_confirm = |model: &mut Model| {
+            model
+                .application
+                .mount(
+                    confirm_id.clone(),
+                    Box::new(ConfirmComponent::new()),
+                    vec![],
+                )
+                .unwrap();
+        };
+
+        // The three overlay sidebars: the topmost mounted overlay is
+        // eligible alone; the blocking modal takes exclusivity from all.
+        for (sidebar, id) in [
+            (
+                SidebarId::Settings,
+                ComponentId::Overlay(OverlayId::Settings),
+            ),
+            (
+                SidebarId::Sessions,
+                ComponentId::Overlay(OverlayId::Sessions),
+            ),
+            (
+                SidebarId::Playlists,
+                ComponentId::Overlay(OverlayId::Playlists),
+            ),
+        ] {
+            let mut model = eligibility_model();
+            model.mount_sidebar(sidebar);
+            model.sync_mouse_subscriptions();
+            assert!(model.mouse_subscribed.contains(&id), "{id:?}");
+            mount_confirm(&mut model);
+            model.sync_mouse_subscriptions();
+            assert!(!model.mouse_subscribed.contains(&id), "{id:?}");
+            assert_eq!(
+                model.mouse_subscribed,
+                std::iter::once(confirm_id.clone()).collect()
+            );
+        }
+
+        // Help mounts through its own path but the same rung applies.
+        let mut model = eligibility_model();
+        let help_id = ComponentId::Overlay(OverlayId::Help);
+        model.mount_help();
+        model.sync_mouse_subscriptions();
+        assert!(model.mouse_subscribed.contains(&help_id));
+        mount_confirm(&mut model);
+        model.sync_mouse_subscriptions();
+        assert!(!model.mouse_subscribed.contains(&help_id));
+
+        // Inline search is a mounted destination child (rung 3), not an
+        // overlay — same eligibility, same blocking-overlay exclusion.
+        let mut model = eligibility_model();
+        let library = &model.app.libs[0].library;
+        let inline_id = ComponentId::InlineSearch(BrowserKey {
+            service: ServiceKind::Emby,
+            library_id: library.id.clone(),
+            kind: BrowserKind::from_collection_type(&library.collection_type),
+        });
+        model
+            .application
+            .mount(
+                inline_id.clone(),
+                Box::new(InlineSearchComponent::new()),
+                vec![],
+            )
+            .unwrap();
+        model.sync_mouse_subscriptions();
+        assert!(model.mouse_subscribed.contains(&inline_id));
+        mount_confirm(&mut model);
+        model.sync_mouse_subscriptions();
+        assert!(!model.mouse_subscribed.contains(&inline_id));
+    }
+
     #[test]
     fn sync_mouse_subscriptions_tracks_and_wipes_the_eligible_set() {
         use crate::app::components::{ConfirmComponent, ModalId};

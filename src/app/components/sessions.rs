@@ -8,10 +8,12 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::panel_targets::PanelTarget;
@@ -28,7 +30,11 @@ pub struct SessionsComponent {
     can_disconnect: bool,
     requested_panel_area: Option<Rect>,
     painted_panel_area: Option<Rect>,
-    row_targets: Vec<(Rect, usize)>,
+    /// Irregular painted chrome (task 5.2, design.md D6): session rows,
+    /// repopulated in `view()` from the geometry the painter just produced.
+    hit_rows: HitRegions<usize>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3).
+    mouse_gestures: MouseGestureState,
 }
 
 impl SessionsComponent {
@@ -44,7 +50,8 @@ impl SessionsComponent {
             can_disconnect: false,
             requested_panel_area: None,
             painted_panel_area: None,
-            row_targets: Vec::new(),
+            hit_rows: HitRegions::new(),
+            mouse_gestures: MouseGestureState::new(),
         }
     }
 
@@ -102,38 +109,54 @@ impl SessionsComponent {
         }
     }
 
+    /// Mouse handling (task 5.2): recognition via the component's own
+    /// `MouseGestureState` (ADR 0024, design.md D3); row geometry via
+    /// `HitRegions` (D6). Behaviour unchanged from the ad-hoc handler: the
+    /// wheel steps the cursor, a click outside the painted panel dismisses,
+    /// and a click on a session row selects it — or connects when it is
+    /// already selected (the Enter equivalent).
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        match mouse.kind {
-            MouseEventKind::ScrollDown => {
-                if !self.targets.is_empty() {
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
+        }
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Scroll { delta, .. } => {
+                if delta < 0 {
+                    self.cursor = self.cursor.saturating_sub(1);
+                } else if !self.targets.is_empty() {
                     self.cursor = (self.cursor + 1).min(self.targets.len() - 1);
                 }
                 None
             }
-            MouseEventKind::ScrollUp => {
-                self.cursor = self.cursor.saturating_sub(1);
-                None
-            }
-            MouseEventKind::Down(MouseButton::Left) => {
-                let pos = (mouse.column, mouse.row).into();
+            MouseGesture::Click(at) | MouseGesture::DoubleClick(at) => {
                 if !self
                     .painted_panel_area
-                    .is_some_and(|area| area.contains(pos))
+                    .is_some_and(|area| area.contains(at))
                 {
                     return Some(Msg::Shell(ShellRequest::DismissSessions));
                 }
-                if let Some((_, index)) =
-                    self.row_targets.iter().find(|(rect, _)| rect.contains(pos))
-                {
-                    if self.cursor == *index {
-                        return Some(Msg::Shell(ShellRequest::SelectSession(*index)));
+                if let Some(&index) = self.hit_rows.resolve(at) {
+                    if self.cursor == index {
+                        return Some(Msg::Shell(ShellRequest::SelectSession(index)));
                     }
-                    self.cursor = *index;
+                    self.cursor = index;
                 }
                 None
             }
             _ => None,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_rows(&self) -> &HitRegions<usize> {
+        &self.hit_rows
+    }
+
+    /// Test seam: forget the last click so the next event is neither
+    /// throttled nor promoted to a double-click.
+    #[cfg(test)]
+    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
+        self.mouse_gestures.reset_for_test();
     }
 }
 
@@ -171,7 +194,10 @@ impl Component for SessionsComponent {
             self.can_disconnect,
         );
         self.painted_panel_area = Some(panel_area);
-        self.row_targets = rows;
+        self.hit_rows.clear();
+        for (rect, index) in rows {
+            self.hit_rows.push(rect, index);
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
@@ -202,7 +228,9 @@ impl AppComponent<Msg, UserEvent> for SessionsComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tuirealm::event::KeyModifiers;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
     fn key(code: Key) -> KeyEvent {
         KeyEvent {
@@ -246,5 +274,100 @@ mod tests {
             component.handle_key(&key(Key::Enter)),
             Some(Msg::Shell(ShellRequest::SelectSession(0)))
         );
+    }
+
+    // --- Mouse (task 5.2): primitives delivery with unchanged behaviour ---
+
+    fn painted_component() -> SessionsComponent {
+        use crate::app::tests::make_session;
+        let targets = vec![
+            PanelTarget::Emby(Box::new(make_session("a", "mbv"))),
+            PanelTarget::Emby(Box::new(make_session("b", "mbv"))),
+        ];
+        let mut component = SessionsComponent::new();
+        component.set_content(
+            &targets,
+            false,
+            None,
+            false,
+            None,
+            false,
+            Some(Rect::new(0, 0, 40, 12)),
+        );
+        let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        component
+    }
+
+    fn left_down(column: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    #[test]
+    fn sessions_mouse_click_on_selected_row_connects() {
+        let mut component = painted_component();
+        let (rect, _) = component.test_rows().regions()[0];
+        assert_eq!(
+            component.handle_mouse(&left_down(rect.x, rect.y)),
+            Some(Msg::Shell(ShellRequest::SelectSession(0)))
+        );
+    }
+
+    #[test]
+    fn sessions_mouse_click_on_unselected_row_selects_then_second_click_connects() {
+        let mut component = painted_component();
+        let (rect, index) = component.test_rows().regions()[1];
+        // First click selects the row (no message).
+        assert_eq!(component.handle_mouse(&left_down(rect.x, rect.y)), None);
+        assert_eq!(component.cursor, index);
+        // The second click on the same row — a double click — connects.
+        assert_eq!(
+            component.handle_mouse(&left_down(rect.x, rect.y)),
+            Some(Msg::Shell(ShellRequest::SelectSession(index)))
+        );
+    }
+
+    #[test]
+    fn sessions_mouse_click_outside_the_painted_panel_dismisses() {
+        let mut component = painted_component();
+        assert_eq!(
+            component.handle_mouse(&left_down(100, 100)),
+            Some(Msg::Shell(ShellRequest::DismissSessions))
+        );
+    }
+
+    #[test]
+    fn sessions_mouse_wheel_steps_the_cursor() {
+        let mut component = painted_component();
+        component.handle_mouse(&MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 1,
+            row: 1,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(component.cursor, 1);
+        // A back-to-back scroll inside the throttle window is coalesced.
+        component.handle_mouse(&MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: 1,
+            row: 1,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(component.cursor, 1);
+        component.reset_mouse_gestures_for_test();
+        component.handle_mouse(&MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: 1,
+            row: 1,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(component.cursor, 0);
     }
 }
