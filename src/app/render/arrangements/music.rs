@@ -31,7 +31,7 @@ pub(in crate::app::render) fn wide_music_left_layout(
     let track_rows = track_count.max(1) as u16;
     let requested_track_h = track_rows.saturating_add(PANE_PAD_Y * 2);
     let hero_ideal = if art_available {
-        INLINE_ALBUM_ART_ROWS.saturating_add(if stack_metadata { 3 } else { 0 })
+        INLINE_ALBUM_ART_ROWS.saturating_add(if stack_metadata { 4 } else { 0 })
     } else {
         2
     }
@@ -81,9 +81,14 @@ pub(in crate::app::render) fn wide_music_left_layout(
     let text_area = if stack_metadata {
         Rect {
             x: hero_area.x,
-            y: hero_area.y.saturating_add(art_area.height),
+            y: hero_area
+                .y
+                .saturating_add(art_area.height)
+                .saturating_add(1),
             width: hero_area.width,
-            height: hero_area.height.saturating_sub(art_area.height),
+            height: hero_area
+                .height
+                .saturating_sub(art_area.height.saturating_add(1)),
         }
     } else {
         Rect {

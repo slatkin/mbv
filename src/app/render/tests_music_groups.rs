@@ -395,3 +395,38 @@ fn wide_music_frame_publishes_identical_geometry_from_publish_and_paint() {
     );
     assert_eq!(publish_layout.hero_area, paint_layout.hero_area);
 }
+
+#[test]
+fn wide_music_stacked_layout_reserves_one_blank_row_between_art_and_text() {
+    use crate::app::render::arrangements::music::wide_music_left_layout;
+
+    // Narrow left pane forces `stack_metadata` when images are on.
+    let left_area = Rect::new(0, 0, 40, 24);
+
+    let stacked = wide_music_left_layout(left_area, true, 5);
+    assert!(stacked.stack_metadata, "expected stacked metadata layout");
+    assert_eq!(
+        stacked.text_area.y,
+        stacked.art_area.y + stacked.art_area.height + 1,
+        "expected exactly one blank row between art and text when stacked"
+    );
+
+    // Same geometry with images off must not stack: no art is reserved at
+    // all, so text occupies the full hero area with no gap applied.
+    let no_images = wide_music_left_layout(left_area, false, 5);
+    assert!(!no_images.stack_metadata);
+    assert_eq!(
+        no_images.text_area.y, no_images.hero_area.y,
+        "expected text to flush against the hero area when images are off"
+    );
+
+    // Wide left pane forces side-by-side (not stacked) even with images on:
+    // art and text sit next to each other, no vertical gap applies.
+    let side_by_side_area = Rect::new(0, 0, 80, 24);
+    let side_by_side = wide_music_left_layout(side_by_side_area, true, 5);
+    assert!(!side_by_side.stack_metadata, "expected side-by-side layout");
+    assert_eq!(
+        side_by_side.text_area.y, side_by_side.hero_area.y,
+        "expected text to flush against the hero area in side-by-side layout"
+    );
+}
