@@ -26,9 +26,12 @@ leftovers from the Music slice), all in `src/app/render/components/`:
 | `GroupedAlbumRenderCtx` | `album.rs:40` |
 
 No dead selection/scroll/cursor geometry exists — the canonical migration
-reused it rather than orphaning it. No `AppLayout::main` field is dead: every
+reused it rather than orphaning it. No layout field is dead: every
 `left_*` / `hero_*` / `selector_*` / `wide_*` field is written by a live
-canonical painter and/or read by keyboard-nav or render-geometry code.
+canonical painter and/or read by keyboard-nav or render-geometry code. These
+fields live on component-local `LayoutMain` values (owned by `browser`,
+`feeds`, and `music_workspace` via `LayoutMain::default()`), not on a global
+`AppLayout::main`; there is no global reader.
 `left_row_map` and `left_row_targets` are the only fields with any
 mouse-specific readers (`browser/mod.rs::click_item_at`,
 `tv_workspace::hit_at`, `feeds::handle_mouse_click`); those readers and the
@@ -39,7 +42,7 @@ which owns hit-region migration and lands after this slice.
 
 - [x] 2.1 Delete the five test-only-reachable album symbols from §1.3 (`render_grouped_album_rows`, `render_grouped_album_rows_with_ctx`, `render_grouped_album_rows_inline_plan`, `AlbumRowsCursorCtx`, `GroupedAlbumRenderCtx`) plus the tests that exist only to exercise them and any `GroupedAlbumDisplayRow` match arms left unreachable. Re-run the ast-grep/grep inventory after deletion to confirm zero references remain.
 - [x] 2.2 Prove zero production consumers for obsolete selection, scroll, and cursor geometry. Result: none exists — nothing to delete. Component-owned viewport geometry and all row-hit / `*HitRegion` geometry retained for `restore-mouse-support` (#638).
-- [x] 2.3 Prove zero production readers/writers/geometry-dependent callers for `AppLayout::main` left/hero/selector/wide-family fields. Result: every field is still consumed by canonical painters, keyboard nav, or render geometry. `left_row_map` / `left_row_targets` mouse-reader cleanup reassigned to #638. Nothing deleted here.
+- [x] 2.3 Prove zero production readers/writers/geometry-dependent callers for the left/hero/selector/wide-family layout fields. Result: every field is still consumed by canonical painters, keyboard nav, or render geometry. Note: these are fields of component-local `LayoutMain` values, not a global `app.layout` — `browser` (`src/app/components/browser/mod.rs:53`), `feeds` (`src/app/components/feeds.rs:58`), and `music_workspace` (`src/app/components/music_workspace.rs:36`) each own one via `LayoutMain::default()`. There is no global `AppLayout::main` reader to remove. The `left_row_map` / `left_row_targets` mouse-reader cleanup on those component-local values is reassigned to #638. Nothing deleted here.
 - [ ] 2.4 Preserve Queue fixed-row-only behavior and make no destination-family, Service, Player, provider, protocol, persistence, dependency, or visual corrections. Route defects to the owning slice.
 
 ## 4. Evidence, gates, review, and acceptance
