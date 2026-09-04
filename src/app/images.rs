@@ -642,7 +642,7 @@ impl App {
                             return fetch_url(&url);
                         }
                         let src = match t.as_str() {
-                            "Logo" | "Backdrop" if !series_id.is_empty() => &series_id,
+                            "Logo" | "Backdrop" | "Thumb" if !series_id.is_empty() => &series_id,
                             _ => &item_id,
                         };
                         let url = match t.as_str() {
@@ -652,6 +652,10 @@ impl App {
                             ),
                             "Logo" => format!(
                                 "{}/Items/{}/Images/Logo?maxHeight=400&quality=80&api_key={}",
+                                server_url, src, token
+                            ),
+                            "Thumb" => format!(
+                                "{}/Items/{}/Images/Thumb?maxHeight=400&quality=80&api_key={}",
                                 server_url, src, token
                             ),
                             _ => format!(
