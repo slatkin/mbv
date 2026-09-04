@@ -10,13 +10,14 @@
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::FeedEntry;
 
-use super::hit_regions::{HomeHitRegion, QueueHitRegion, TvHitRegion};
+use super::hit_regions::TvHitRegion;
 use super::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
     ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,
     PodcastEpisodeTransition, RemoteReanchorIntent, SavePlaylistIntent, SettingsIntent,
 };
 use super::queue::QueueIntent;
+use crate::app::types_playback::QueueScope;
 
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
@@ -151,26 +152,35 @@ pub enum ShellRequest {
     /// preference, resolved via the mounted component's `source_for_section`
     /// at the Model boundary (task 5.3d, numeric Home section deletion).
     HomeSectionSelected(usize),
-    /// A Home-surface wheel scroll over the component's own list area
-    /// (`list_area`, rebuilt every `view`; task 5.3d, home hit_test). The
-    /// shell runs `App`'s 30ms wheel throttle and browse-readiness gate and
-    /// then, at the Model boundary, moves the mounted component's
-    /// section-local cursor plus the Continue Watching column's independent
-    /// cursor (`Model::handle_home_scroll`, task 5.3d, Home wheel-scroll
-    /// ownership); the component holds no timing state.
+    /// A Home-surface wheel step recognized by `HomeComponent`'s private
+    /// `MouseGestureState` (ADR 0024, design.md D3): the component owns the
+    /// wheel throttle. The shell still runs `handle_home_scroll` (its App
+    /// wheel gate plus the Continue Watching `cw_move_cursor` quirk) until
+    /// task 4.3 moves that effect over too.
     HomeScroll {
         delta: i64,
     },
-    /// A Home-surface click the component resolved to a region of its own
-    /// geometry (task 5.3d, home hit_test). The component reports *where* it
-    /// landed; the shell decides *when* it counts — it runs `App`'s 400ms
-    /// double-click comparison against `App::last_click_time`/`last_click_pos`
-    /// and then routes the region through `Model::handle_home_click` (task
-    /// 5.3d, Home mouse-click handoff).
-    HomeClick {
-        region: HomeHitRegion,
-        col: u16,
-        row: u16,
+    /// A row the user single-clicked in the Home list or inline hero. The
+    /// component has already moved its own selection to the resolved row; the
+    /// shell only pulls panel focus to the Library (design.md D4/D5).
+    HomeRowClick,
+    /// A row the user double-clicked; `target` is the component-resolved flat
+    /// index and the shell activates it (design.md D3/D4).
+    HomeRowActivate {
+        target: usize,
+    },
+    /// A right-click in the Home list; `anchor` is the click position the
+    /// component forwards as the context-menu anchor — the one legitimate
+    /// forwarded coordinate (design.md D4). The component has already moved
+    /// its selection to the row under the click.
+    HomeRowContextMenu {
+        anchor: (u16, u16),
+    },
+    /// A Home section pill the user clicked; `target` is the section index the
+    /// component resolved from its `HitRegions` and already applied locally
+    /// (design.md D4/D6). The shell persists the selected source.
+    HomePillClick {
+        target: usize,
     },
     /// Resolved podcast show-list cursor
     /// (split-audiobookshelf-cursor-ownership D1). Emitted by the component
@@ -230,21 +240,31 @@ pub enum ShellRequest {
     /// Semantic settings navigation/action intent; local cursor state stays
     /// in the Settings component.
     SettingsIntent(SettingsIntent),
-    /// (`area`, rebuilt every `view`; task 5.3d, queue hit_test). The shell
-    /// runs `App`'s 30ms wheel throttle against `App::last_scroll_at` and
-    /// then calls the extracted queue scroll gesture; the component holds no
-    /// timing state.
+    /// A Queue-surface wheel step recognized by `QueueComponent`'s private
+    /// `MouseGestureState` (ADR 0024, design.md D3): the component owns the
+    /// wheel throttle. The shell only applies the scroll effect.
     QueueScroll {
         delta: i64,
     },
-    /// A Queue-surface click the component resolved to a region of its own
-    /// geometry (task 5.3d, queue hit_test). The component reports *where*
-    /// it landed; the shell decides *when* it counts via App's single
-    /// double-click clock, then calls the extracted queue gesture method.
-    QueueClick {
-        region: QueueHitRegion,
-        col: u16,
-        row: u16,
+    /// A Queue row the user single-clicked; the component has already pinned
+    /// its selection to `slot_id` (design.md D4/D5).
+    QueueRowClick {
+        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
+    },
+    /// A Queue row the user double-clicked; the shell activates `slot_id`.
+    QueueRowActivate {
+        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
+    },
+    /// A right-click in the Queue list; `slot_id` is the component-resolved
+    /// row and `anchor` the forwarded context-menu position (design.md D4).
+    QueueRowContextMenu {
+        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
+        anchor: (u16, u16),
+    },
+    /// A Queue scope pill the user clicked; the component has already switched
+    /// its own scope and reset its scroll (design.md D3).
+    QueueScopeClick {
+        scope: QueueScope,
     },
     /// A TV-workspace wheel scroll over the component's own series list
     /// (`layout.left_area`, the right-pane list area, rebuilt every `view`;

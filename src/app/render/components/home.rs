@@ -1,4 +1,4 @@
-use crate::app::components::media_list::{InlineMediaBrowser, RowGeometry, WideMediaList};
+use crate::app::components::media_list::{InlineMediaBrowser, WideMediaList};
 use crate::app::palette;
 use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
@@ -20,7 +20,6 @@ use ratatui::Frame;
 /// `hero_area`/`selected_item_rect` are `None` when this render touched no
 /// hero / painted no visible selection.
 pub(in crate::app) struct HomeContentOutput {
-    pub(in crate::app) hitmap: Vec<(Rect, usize)>,
     pub(in crate::app) pill_targets: Vec<(Rect, usize)>,
     pub(in crate::app) image_paint: Option<HomeImagePaint>,
     pub(in crate::app) hero_area: Option<Rect>,
@@ -79,7 +78,6 @@ pub(in crate::app) fn render_home_content(
 ) -> HomeContentOutput {
     if area.height == 0 || area.width == 0 {
         return HomeContentOutput {
-            hitmap: Vec::new(),
             pill_targets: Vec::new(),
             image_paint: None,
             hero_area: None,
@@ -445,11 +443,12 @@ pub(in crate::app) fn render_home_content(
         hero_left::hero_on_left_list_panel_border(f, panel, focused);
     }
 
-    // Paint the active canonical control into the list area and rebuild the
-    // pre-#638 Home hit map from its exported row geometry.
-    let (hitmap, selected_item_rect) = if control_empty {
+    // Paint the active canonical control into the list area. Row identity for
+    // the mouse path comes from the control's own `resolve_point` (#638), not
+    // a parent hit map.
+    let selected_item_rect = if control_empty {
         crate::app::render::render_placeholder(f, list_area, " (empty)");
-        (Vec::new(), None)
+        None
     } else if two_column {
         // Full panel width so the selected-row bar and flush marker reach the
         // rail border; `list_area` is already inset vertically and stays the
@@ -467,10 +466,7 @@ pub(in crate::app) fn render_home_content(
             focused,
             selection_bg,
         );
-        (
-            home_hitmap(&paint.row_geometry, list_area, &active_flat),
-            paint.selected_row_rect,
-        )
+        paint.selected_row_rect
     } else {
         let result = super::media_list::render_inline_media_browser(
             f,
@@ -480,10 +476,8 @@ pub(in crate::app) fn render_home_content(
             focused,
             selection_bg,
         );
-        let mut hitmap = home_hitmap(&result.row_geometry, list_area, &active_flat);
-        let selected_item_rect = match result.hero_area {
+        match result.hero_area {
             Some(hero_area) => {
-                hitmap.push((hero_area, cursor));
                 hero_area_out = Some(hero_area);
                 hero::selected_detail_shell(f, hero_area, hero_area.height, focused);
                 let hero_content = library_arrangement::selected_detail_content_area(
@@ -506,12 +500,10 @@ pub(in crate::app) fn render_home_content(
                 Some(hero_area)
             }
             None => result.row_geometry.selected_row_rect(list_area),
-        };
-        (hitmap, selected_item_rect)
+        }
     };
 
     HomeContentOutput {
-        hitmap,
         pill_targets,
         image_paint,
         hero_area: hero_area_out,
@@ -560,26 +552,4 @@ fn narrow_hero_data(dims: HeroContentDims, hero_content: Rect) -> Option<HeroDat
         HeroContentDims::Generic(item, _) => Some(HeroData::Generic(item, hero_content)),
         HeroContentDims::None => None,
     }
-}
-
-/// Rebuild the pre-#638 Home hit map from a canonical control's exported
-/// `RowGeometry`: each visible display row that resolves to a source row maps
-/// to that active-section item's flat index. Replacement/continuation rows
-/// (source row `None`) are skipped; the caller adds the selected replacement
-/// block separately.
-fn home_hitmap(
-    geometry: &RowGeometry<String>,
-    area: Rect,
-    active_flat: &[usize],
-) -> Vec<(Rect, usize)> {
-    let offset = geometry.offset();
-    geometry
-        .visible_rows(area)
-        .into_iter()
-        .enumerate()
-        .filter_map(|(row, rect)| {
-            let source = geometry.source_row(offset + row)?;
-            Some((rect, *active_flat.get(source)?))
-        })
-        .collect()
 }

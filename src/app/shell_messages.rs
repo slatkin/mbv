@@ -373,20 +373,39 @@ impl Model {
                     }
                     self.push_emby_browser_content();
                 }
-                // Home (cross-Service) mouse geometry lives in
-                // `HomeComponent`, which forwards the hit region; the
-                // shell decides *when* it counts via `App`'s 400ms
-                // double-click / 30ms wheel fields (task 5.3d, home
-                // hit_test). Accepted wheel scroll is routed at the
-                // Model boundary, which moves the mounted component's
-                // section-local cursor and, as a preserved legacy
-                // quirk, the Continue Watching column's independent
-                // cursor (task 5.3d, Home wheel-scroll ownership).
+                // Home (cross-Service) mouse gestures are recognized by
+                // `HomeComponent`'s private `MouseGestureState` (ADR 0024,
+                // design.md D3/D4): it owns the double-click window and wheel
+                // throttle and resolves the row target itself. The wheel
+                // effect still runs through `handle_home_scroll` (its App gate
+                // plus the Continue Watching `cw_move_cursor` quirk) until
+                // task 4.3.
                 ShellRequest::HomeScroll { delta } => {
                     self.handle_home_scroll(delta);
                 }
-                ShellRequest::HomeClick { region, col, row } => {
-                    self.handle_home_click(region, col, row);
+                ShellRequest::HomeRowClick => {
+                    self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                    self.push_home_content();
+                }
+                ShellRequest::HomeRowActivate { target } => {
+                    self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                    if let Some((item, from_cw)) = self.home_flat_target(target) {
+                        self.app.home_play_target(item, from_cw);
+                    }
+                    self.push_home_content();
+                }
+                ShellRequest::HomeRowContextMenu { anchor } => {
+                    self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                    self.app.open_context_menu_at(
+                        anchor.0,
+                        anchor.1,
+                        self.home_continue_watching_selected(),
+                        self.home_cw_item(),
+                    );
+                    self.push_home_content();
+                }
+                ShellRequest::HomePillClick { target } => {
+                    self.select_home_section_from_component(target);
                 }
                 // Home typed effects (task 5.3d, Home typed-effect
                 // prep): `HomeComponent` owns the cursor and reports the
@@ -399,54 +418,38 @@ impl Model {
                 | ShellRequest::HomeDelete(_)
                 | ShellRequest::HomeToggleWatched
                 | ShellRequest::HomeSectionSelected(_)) => self.handle_home_request(request),
-                // Queue mouse geometry lives in `QueueComponent`;
-                // the shell decides *when* a row click is a double-click
-                // and shares App's 30ms wheel throttle with browse/home.
+                // Queue mouse gestures are recognized by `QueueComponent`'s
+                // private `MouseGestureState` (ADR 0024, design.md D3/D4): it
+                // owns the double-click window and wheel throttle, switches
+                // its own scope, and resolves the slot itself. The shell only
+                // applies the cross-boundary effect.
                 ShellRequest::QueueScroll { delta } => {
-                    if self.app.note_browse_scroll() {
-                        self.app.handle_mouse_scroll_queue(delta);
-                    }
+                    self.app.handle_mouse_scroll_queue(delta);
                 }
-                ShellRequest::QueueClick { region, col, row } => {
-                    match region {
-                        QueueHitRegion::ScopeLocal => {
-                            self.app.last_click_time = Instant::now();
-                            self.app.last_click_pos = (col, row);
-                            self.app
-                                .handle_mouse_selector_click_queue(QueueScope::Local);
-                        }
-                        QueueHitRegion::ScopeRemote => {
-                            self.app.last_click_time = Instant::now();
-                            self.app.last_click_pos = (col, row);
-                            self.app
-                                .handle_mouse_selector_click_queue(QueueScope::Remote);
-                        }
-                        QueueHitRegion::ContextMenu(slot_id) => {
-                            // The authoritative Continue-Watching-selected
-                            // fact is resolved here (Model boundary) and
-                            // passed into the App builder, so the odd
-                            // queue→Home coupling reflects the mounted
-                            // Home component's section (task 5.3d).
-                            self.app.handle_mouse_right_click_queue(
-                                slot_id,
-                                col,
-                                row,
-                                self.home_continue_watching_selected(),
-                            );
-                        }
-                        QueueHitRegion::Row(slot_id) => {
-                            if self.app.note_browse_double_click(col, row) {
-                                self.app.handle_mouse_double_click_queue(slot_id);
-                            } else {
-                                self.app.handle_mouse_single_click_queue(slot_id);
-                            }
-                        }
-                    }
-                    // Queue clicks move panel focus to the Queue panel;
-                    // re-project the Home focus flag (task 5.3d, sync_home deletion).
-                    self.push_home_content();
-                    // Emby browser content may have changed (5.3d.15/M2).
-                    self.push_emby_browser_content();
+                ShellRequest::QueueScopeClick { scope } => {
+                    self.app.handle_mouse_selector_click_queue(scope);
+                    self.queue_click_reproject();
+                }
+                ShellRequest::QueueRowClick { slot_id } => {
+                    self.app.handle_mouse_single_click_queue(slot_id);
+                    self.queue_click_reproject();
+                }
+                ShellRequest::QueueRowActivate { slot_id } => {
+                    self.app.handle_mouse_double_click_queue(slot_id);
+                    self.queue_click_reproject();
+                }
+                ShellRequest::QueueRowContextMenu { slot_id, anchor } => {
+                    // The authoritative Continue-Watching-selected fact is
+                    // resolved here (Model boundary) and passed into the App
+                    // builder, so the odd queue->Home coupling reflects the
+                    // mounted Home component's section (task 5.3d).
+                    self.app.handle_mouse_right_click_queue(
+                        slot_id,
+                        anchor.0,
+                        anchor.1,
+                        self.home_continue_watching_selected(),
+                    );
+                    self.queue_click_reproject();
                 }
                 // TV keyboard requests are resolved by the mounted
                 // workspace component. Cursor and pane movement remain
@@ -539,5 +542,13 @@ impl Model {
             Msg::Navigate(_) => {}
         }
         quit
+    }
+
+    /// Re-project after a Queue click: the click moves panel focus to the
+    /// Queue panel (re-project the Home focus flag) and may mutate Emby
+    /// browser content (5.3d.15/M2).
+    fn queue_click_reproject(&mut self) {
+        self.push_home_content();
+        self.push_emby_browser_content();
     }
 }

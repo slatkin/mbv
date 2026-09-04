@@ -4,14 +4,14 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
-use super::msg::{
-    Msg, QueueColumnResize, QueueHitRegion, QueueIntent, QueueMove, QueueRequest, ShellRequest,
-};
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
+use super::msg::{Msg, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::palette;
 use crate::app::render::{
@@ -44,6 +44,12 @@ pub struct QueueComponent {
     title_area: Option<Rect>,
     area: Rect,
     geometry: QueueRenderGeometry,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
+    /// the double-click window and wheel throttle.
+    mouse_gestures: MouseGestureState,
+    /// Scope-pill rects (design.md D6), repopulated in `view()` from the
+    /// geometry the title painter just produced.
+    scope_regions: HitRegions<QueueScope>,
 }
 
 impl QueueComponent {
@@ -66,6 +72,8 @@ impl QueueComponent {
             title_area: None,
             area: Rect::default(),
             geometry: QueueRenderGeometry::default(),
+            mouse_gestures: MouseGestureState::new(),
+            scope_regions: HitRegions::new(),
         }
     }
 
@@ -275,90 +283,80 @@ impl QueueComponent {
         None
     }
 
-    /// The component owns *where* a Queue event lands: it hit-tests its
-    /// painted geometry (`area`, `rows`, and scope-pill targets, rebuilt
-    /// every `view`) and emits typed shell intent. It holds no double-click
-    /// or scroll timing; the shell decides *when* using App's shared fields.
+    /// Gesture recognition (click / double-click / right-click / wheel) comes
+    /// from the private `MouseGestureState` (ADR 0024, design.md D3). Row
+    /// identity comes from the embedded control's `resolve_point`
+    /// (design.md D6); scope pills from `scope_regions`. The component emits a
+    /// semantic `Msg` with a resolved `QueueSlotId`/scope — never raw
+    /// coordinates — except the context-menu anchor (design.md D4).
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let position: Position = (mouse.column, mouse.row).into();
-        match mouse.kind {
-            MouseEventKind::Down(MouseButton::Left) => {
-                if self.title.is_some() {
-                    if self.geometry.scope_local_area.contains(position) {
-                        self.scope = QueueScope::Local;
-                        // Same preassignment caveat as the '['/']' keys: reset
-                        // the component's own scroll on scope switch (D3).
-                        self.list.set_scroll(0);
-                        return Some(Msg::Shell(ShellRequest::QueueClick {
-                            region: QueueHitRegion::ScopeLocal,
-                            col: mouse.column,
-                            row: mouse.row,
-                        }));
-                    }
-                    if self.geometry.scope_remote_area.contains(position) {
-                        self.scope = QueueScope::Remote;
-                        // Same preassignment caveat as the '['/']' keys: reset
-                        // the component's own scroll on scope switch (D3).
-                        self.list.set_scroll(0);
-                        return Some(Msg::Shell(ShellRequest::QueueClick {
-                            region: QueueHitRegion::ScopeRemote,
-                            col: mouse.column,
-                            row: mouse.row,
-                        }));
-                    }
-                }
-                if self.area.contains(position) {
-                    if let Some((_, slot_id)) = self
-                        .geometry
-                        .rows
-                        .iter()
-                        .find(|(rect, _)| rect.contains(position))
-                        .copied()
-                    {
-                        self.list.select_target(&slot_id);
-                    }
-                    return Some(Msg::Shell(ShellRequest::QueueClick {
-                        region: QueueHitRegion::Row(self.list.selected_target().copied()),
-                        col: mouse.column,
-                        row: mouse.row,
-                    }));
-                }
-            }
-            MouseEventKind::Down(MouseButton::Right) => {
-                if self.area.contains(position) {
-                    // Resolve the slot under the click; a blank click keeps
-                    // the previous slot, preserving the legacy no-op.
-                    let slot_id = self
-                        .geometry
-                        .rows
-                        .iter()
-                        .find(|(rect, _)| rect.contains(position))
-                        .map(|(_, slot_id)| *slot_id);
-                    if let Some(id) = slot_id {
-                        self.list.select_target(&id);
-                    }
-                    return Some(Msg::Shell(ShellRequest::QueueClick {
-                        region: QueueHitRegion::ContextMenu(
-                            slot_id.or_else(|| self.list.selected_target().copied()),
-                        ),
-                        col: mouse.column,
-                        row: mouse.row,
-                    }));
-                }
-            }
-            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
-                if self.area.contains(position) =>
-            {
-                let delta: i64 = if matches!(mouse.kind, MouseEventKind::ScrollUp) {
-                    -1
-                } else {
-                    1
-                };
-                return Some(Msg::Shell(ShellRequest::QueueScroll { delta }));
-            }
-            _ => {}
+        // Queue does not consume hover-move (design.md D7).
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
         }
-        None
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Scroll { at, delta } => {
+                if !self.area.contains(at) {
+                    return None;
+                }
+                Some(Msg::Shell(ShellRequest::QueueScroll { delta }))
+            }
+            MouseGesture::Click(at) => {
+                if let Some(scope) = self.claim_scope_pill(at) {
+                    return Some(Msg::Shell(ShellRequest::QueueScopeClick { scope }));
+                }
+                if !self.area.contains(at) {
+                    return None;
+                }
+                self.claim_slot(at);
+                Some(Msg::Shell(ShellRequest::QueueRowClick {
+                    slot_id: self.list.selected_target().copied(),
+                }))
+            }
+            MouseGesture::DoubleClick(at) => {
+                if let Some(scope) = self.claim_scope_pill(at) {
+                    return Some(Msg::Shell(ShellRequest::QueueScopeClick { scope }));
+                }
+                if !self.area.contains(at) {
+                    return None;
+                }
+                self.claim_slot(at);
+                Some(Msg::Shell(ShellRequest::QueueRowActivate {
+                    slot_id: self.list.selected_target().copied(),
+                }))
+            }
+            MouseGesture::RightClick(at) => {
+                if !self.area.contains(at) {
+                    return None;
+                }
+                let slot_id = self.claim_slot(at);
+                Some(Msg::Shell(ShellRequest::QueueRowContextMenu {
+                    slot_id: slot_id.or_else(|| self.list.selected_target().copied()),
+                    anchor: (mouse.column, mouse.row),
+                }))
+            }
+            _ => None,
+        }
+    }
+
+    /// If `at` lands on a scope pill, switch the component's own scope and
+    /// reset its scroll (design.md D3), and return the new scope.
+    fn claim_scope_pill(&mut self, at: Position) -> Option<QueueScope> {
+        let &scope = self.scope_regions.resolve(at)?;
+        self.scope = scope;
+        self.list.set_scroll(0);
+        Some(scope)
+    }
+
+    /// Resolve the slot under `at` from the embedded control and pin the
+    /// selection to it (a blank click keeps the previous slot, preserving the
+    /// legacy no-op). Returns the resolved slot, if any.
+    fn claim_slot(&mut self, at: Position) -> Option<QueueSlotId> {
+        let slot_id = self.list.resolve_point(self.area, at).copied();
+        if let Some(id) = slot_id {
+            self.list.select_target(&id);
+        }
+        slot_id
     }
 
     #[cfg(test)]
@@ -405,6 +403,15 @@ impl Component for QueueComponent {
         self.geometry = QueueRenderGeometry::default();
         if let (Some(title_area), Some(title)) = (self.title_area, self.title.as_ref()) {
             render_queue_title_content(frame, title_area, title, &mut self.geometry);
+        }
+        // Adopt the scope-pill rects the title painter just produced into the
+        // irregular-chrome registry (design.md D6).
+        self.scope_regions.clear();
+        if self.title.is_some() {
+            self.scope_regions
+                .push(self.geometry.scope_local_area, QueueScope::Local);
+            self.scope_regions
+                .push(self.geometry.scope_remote_area, QueueScope::Remote);
         }
         if area.height < 1 {
             return;

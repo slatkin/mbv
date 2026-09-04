@@ -10,20 +10,20 @@
 //! typed shell requests for effects that cross the Model boundary;
 //! destination-independent chords are handled by the central router.
 
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{
-    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
     InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
 };
-use super::msg::{HomeHitRegion, Msg, ShellRequest};
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::HomeImagePaint;
 use crate::app::types_playback::HomeLatestSource;
@@ -65,8 +65,13 @@ pub struct HomeComponent {
     /// content); set once by the shell after construction.
     use_nerd_fonts: bool,
     panel_area: Option<Rect>,
-    hitmap: Vec<(Rect, usize)>,
     pill_targets: Vec<(Rect, usize)>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
+    /// the double-click window and wheel throttle.
+    mouse_gestures: MouseGestureState,
+    /// Section-pill rects as last-push-wins rectangles (design.md D6),
+    /// repopulated in `view()` from `pill_targets`.
+    pill_regions: HitRegions<usize>,
     /// The current Continue Watching column target supplied by the shell's
     /// Model-owned `home_content` snapshot. It remains separate from the
     /// component's flat cursor, matching the legacy Home context-menu target.
@@ -77,11 +82,11 @@ pub struct HomeComponent {
     /// paints it using `App::paint_home_image`.
     image_paint: Option<HomeImagePaint>,
     /// The list area (`render_home_content`'s `left_area`) `view()` painted
-    /// the rows into. Rebuilt every `view` like `hitmap`/`pill_targets`; this
+    /// the rows into. Rebuilt every `view` like `pill_targets`; this
     /// is Home's whole claim rect, so a click or wheel anywhere inside it is
-    /// reported to the shell as a typed `HomeClick`/`HomeScroll` (the shell
-    /// decides `App`'s cursor/focus/activation meaning). The component holds
-    /// no double-click or scroll timing state — `App` owns that.
+    /// recognized by the private `MouseGestureState` and emitted as a semantic
+    /// `Msg::Shell` (the shell applies the cross-boundary effect). The
+    /// double-click window and wheel throttle live in `mouse_gestures`.
     list_area: Rect,
     /// The selected row's painted rect (`render_home_content`'s
     /// `selected_item_rect`), retained for the shell to anchor the Home
@@ -111,8 +116,9 @@ impl HomeComponent {
             focused: false,
             use_nerd_fonts: false,
             panel_area: None,
-            hitmap: Vec::new(),
             pill_targets: Vec::new(),
+            mouse_gestures: MouseGestureState::new(),
+            pill_regions: HitRegions::new(),
             cw_item: None,
             image_paint: None,
             list_area: Rect::default(),
@@ -328,17 +334,6 @@ impl HomeComponent {
         self.inline_list.select_last();
     }
 
-    /// Move both controls' selection to the active-section row carrying flat
-    /// index `flat` (a rebuilt hit-map target), when it is in the active
-    /// section. Pre-#638 mouse compatibility: the bespoke `*HitRegion` path
-    /// stays wired and reads control-exported geometry.
-    fn select_flat(&mut self, flat: usize) {
-        if let Some(index) = self.visible_indices().iter().position(|&idx| idx == flat) {
-            self.canonical_list.select_index(index);
-            self.inline_list.select_index(index);
-        }
-    }
-
     /// Select `section_idx` (clamped to the nearest valid section). Returns
     /// `true` when the selection actually changed, so the caller emits the
     /// persist `Msg` only on a real change.
@@ -456,89 +451,144 @@ impl HomeComponent {
     /// playback controls, the hero in two-column layout, ...); the caller
     /// falls through to the legacy mouse dispatch unchanged.
     ///
-    /// The component owns *where* a Home click lands: it hit-tests against
-    /// its own painted geometry (`list_area`, `hitmap`, `pill_targets`,
-    /// rebuilt every `view`) and emits a typed `Msg::Shell` naming the region.
-    /// It holds no double-click or scroll timing — the shell decides *when* a
-    /// click counts against `App`'s own timing fields. Wheel scroll over the
-    /// list area is claimed as `HomeScroll`: the shell moves the component's
-    /// local cursor and, as a preserved pre-existing quirk, the independent
-    /// Continue Watching column's cursor (`Model::handle_home_scroll` →
-    /// `App::cw_move_cursor`), which this migration preserves rather than
-    /// fixes (task 5.3d, Home wheel-scroll ownership).
+    /// Gesture recognition (click / double-click / right-click / wheel) comes
+    /// from the private `MouseGestureState` (ADR 0024, design.md D3). Row
+    /// identity comes from the embedded control's `resolve_point`
+    /// (design.md D6); section pills from `pill_regions`. The component emits
+    /// a semantic `Msg` with a resolved target — never raw coordinates —
+    /// except the context-menu anchor (design.md D4). The wheel step is still
+    /// finished by `Model::handle_home_scroll` (its App gate plus the Continue
+    /// Watching `cw_move_cursor` quirk) until task 4.3.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let pos: ratatui::layout::Position = (mouse.column, mouse.row).into();
-        match mouse.kind {
-            MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
-                let delta: i64 = if matches!(mouse.kind, MouseEventKind::ScrollUp) {
-                    -1
-                } else {
-                    1
-                };
-                if self.list_area.contains(pos) {
-                    return Some(Msg::Shell(ShellRequest::HomeScroll { delta }));
-                }
-            }
-            MouseEventKind::Down(MouseButton::Left) => {
-                // Section pills sit above the list area; claim them before
-                // the row hit-test. `select_section` keeps the component's
-                // own render state (section/cursor) authoritative; the shell
-                // arm persists the selected source at the Model boundary.
-                if let Some(section_idx) = self
-                    .pill_targets
-                    .iter()
-                    .find(|(rect, _)| rect.contains(pos))
-                    .map(|(_, section_idx)| *section_idx)
-                {
-                    self.select_section(section_idx);
-                    return Some(Msg::Shell(ShellRequest::HomeClick {
-                        region: HomeHitRegion::Pill(section_idx),
-                        col: mouse.column,
-                        row: mouse.row,
-                    }));
-                }
-                if self.list_area.contains(pos) {
-                    // Local highlight only: the authoritative cursor set
-                    // (row-map resolution, panel focus) stays in the shell.
-                    // The `HomeClick` shell arm consumes the resolved cursor.
-                    if let Some((_, flat_idx)) =
-                        self.hitmap.iter().find(|(rect, _)| rect.contains(pos))
-                    {
-                        self.select_flat(*flat_idx);
-                    }
-                    return Some(Msg::Shell(ShellRequest::HomeClick {
-                        region: HomeHitRegion::Row(self.cursor()),
-                        col: mouse.column,
-                        row: mouse.row,
-                    }));
-                }
-            }
-            MouseEventKind::Down(MouseButton::Right) if self.list_area.contains(pos) => {
-                // Resolve the row under the click before opening the menu;
-                // a blank/gap click leaves the cursor unchanged (no hitmap
-                // rect matches), so the context menu opens at the current
-                // cursor. Matching the left-click/`BrowserComponent` row
-                // treatment, resolving a row also moves the component-local
-                // cursor so the emitted `ContextMenu` and the cursor agree
-                // on the row under the click.
-                if let Some((_, flat_idx)) = self.hitmap.iter().find(|(rect, _)| rect.contains(pos))
-                {
-                    self.select_flat(*flat_idx);
-                }
-                return Some(Msg::Shell(ShellRequest::HomeClick {
-                    region: HomeHitRegion::ContextMenu(self.cursor()),
-                    col: mouse.column,
-                    row: mouse.row,
-                }));
-            }
-            _ => {}
+        // Home does not consume hover-move (design.md D7).
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
         }
-        None
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Scroll { at, delta } => {
+                if !self.list_area.contains(at) {
+                    return None;
+                }
+                Some(Msg::Shell(ShellRequest::HomeScroll { delta }))
+            }
+            MouseGesture::Click(at) => {
+                if let Some(&section_idx) = self.pill_regions.resolve(at) {
+                    self.select_section(section_idx);
+                    return Some(Msg::Shell(ShellRequest::HomePillClick {
+                        target: section_idx,
+                    }));
+                }
+                if !self.claim_row(at) {
+                    return None;
+                }
+                Some(Msg::Shell(ShellRequest::HomeRowClick))
+            }
+            MouseGesture::DoubleClick(at) => {
+                if let Some(&section_idx) = self.pill_regions.resolve(at) {
+                    self.select_section(section_idx);
+                    return Some(Msg::Shell(ShellRequest::HomePillClick {
+                        target: section_idx,
+                    }));
+                }
+                if !self.claim_row(at) {
+                    return None;
+                }
+                Some(Msg::Shell(ShellRequest::HomeRowActivate {
+                    target: self.cursor(),
+                }))
+            }
+            MouseGesture::RightClick(at) => {
+                if !self.claim_row(at) {
+                    return None;
+                }
+                Some(Msg::Shell(ShellRequest::HomeRowContextMenu {
+                    anchor: (mouse.column, mouse.row),
+                }))
+            }
+            _ => None,
+        }
     }
 
+    /// If `at` lands in the Home list area, move the selection to the row
+    /// under it (a blank/gap click leaves it unchanged, matching the legacy
+    /// hit map) and return `true`.
+    fn claim_row(&mut self, at: Position) -> bool {
+        if !self.list_area.contains(at) {
+            return false;
+        }
+        if let Some(id) = self.resolve_row_id(at) {
+            self.canonical_list.select_target(&id);
+            self.inline_list.select_target(&id);
+        }
+        true
+    }
+
+    /// The stable item id under `point`, resolved by the embedded canonical
+    /// control that painted the active list (design.md D6). The inline hero
+    /// covers the selected item, so a hero click carries the current
+    /// selection.
+    fn resolve_row_id(&self, point: Position) -> Option<String> {
+        if self.wide {
+            return self
+                .canonical_list
+                .resolve_point(self.list_area, point)
+                .cloned();
+        }
+        if self.hero_area.is_some_and(|hero| hero.contains(point)) {
+            return self.inline_list.selected_target().cloned();
+        }
+        let detail_rows = self.hero_area.map_or(0, |hero| hero.height as usize);
+        self.inline_list
+            .resolve_point(self.list_area, detail_rows, point)
+            .cloned()
+    }
+
+    /// Test seam: reset the private gesture recognizer so a synchronous test
+    /// loop can drive successive wheel/click events without the
+    /// throttle/double-click window collapsing them.
     #[cfg(test)]
-    pub(crate) fn test_hitmap(&self) -> &[(Rect, usize)] {
-        &self.hitmap
+    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
+        self.mouse_gestures.reset_for_test();
+    }
+
+    /// The visible row rectangles paired with their flat index, reproduced
+    /// from the active control's exported row geometry (the same mapping the
+    /// deleted parent hit map used). The selected inline detail block is
+    /// appended, mirroring the legacy hit map.
+    #[cfg(test)]
+    pub(crate) fn test_hitmap(&self) -> Vec<(Rect, usize)> {
+        use super::media_list::RowGeometry;
+        fn rows(g: &RowGeometry<String>, area: Rect, flat: &[usize]) -> Vec<(Rect, usize)> {
+            let offset = g.offset();
+            g.visible_rows(area)
+                .into_iter()
+                .enumerate()
+                .filter_map(|(i, rect)| Some((rect, *flat.get(g.source_row(offset + i)?)?)))
+                .collect()
+        }
+        let flat = self.visible_indices();
+        if self.wide {
+            rows(
+                &self
+                    .canonical_list
+                    .row_geometry(self.list_area.height as usize),
+                self.list_area,
+                &flat,
+            )
+        } else {
+            let detail_rows = self.hero_area.map_or(0, |hero| hero.height as usize);
+            let mut map = rows(
+                &self
+                    .inline_list
+                    .row_geometry(self.list_area.height as usize, detail_rows),
+                self.list_area,
+                &flat,
+            );
+            if let Some(hero) = self.hero_area {
+                map.push((hero, self.cursor()));
+            }
+            map
+        }
     }
 
     /// The active section's projected canonical rows (both controls hold the
@@ -608,12 +658,18 @@ impl Component for HomeComponent {
             self.use_nerd_fonts,
         );
         self.section = result.resolved_section;
-        self.hitmap = result.hitmap;
         self.pill_targets = result.pill_targets;
         self.list_area = result.left_area;
         self.selected_item_rect = result.selected_item_rect;
         self.image_paint = result.image_paint;
         self.hero_area = result.hero_area;
+
+        // Adopt the section-pill rects the composer just painted into the
+        // irregular-chrome registry (design.md D6).
+        self.pill_regions.clear();
+        for (rect, target) in &self.pill_targets {
+            self.pill_regions.push(*rect, *target);
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

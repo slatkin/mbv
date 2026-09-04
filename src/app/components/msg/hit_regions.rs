@@ -6,41 +6,6 @@
 //! (single vs double-click decided there via App's 400ms window). The
 //! component holds no double-click or scroll timing state of its own.
 
-/// Region of the Home surface a click resolved to, reported by
-/// `HomeComponent` (task 5.3d, home hit_test). The shell turns this plus
-/// `col`/`row` into the right gesture call; the component holds no double-click
-/// or scroll timing state of its own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HomeHitRegion {
-    /// The Home list area (`list_area`): the component resolves the row
-    /// under the click; the shell decides whether the same coordinates form
-    /// a single click (focus Library) or a double-click activation of the
-    /// resolved flat target.
-    Row(usize),
-    /// Section pill; `target` is the section index the component resolved.
-    Pill(usize),
-    /// Right-click → Home context menu after the row is focused.
-    ContextMenu(usize),
-}
-
-/// Region of the Queue surface a click resolved to, reported by
-/// `QueueComponent` (task 5.3d, queue hit_test). The shell turns this plus
-/// `col`/`row` into the matching App gesture; the component holds no
-/// double-click or scroll timing state of its own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum QueueHitRegion {
-    /// Queue list area: a single click selects/focuses via
-    /// The resolved slot target is applied by the shell, while the shell decides whether the same
-    /// coordinates form a double-click activation.
-    Row(Option<mbv_core::playback_queue::QueueSlotId>),
-    /// Local queue scope pill.
-    ScopeLocal,
-    /// Remote queue scope pill.
-    ScopeRemote,
-    /// Right-click in the queue list area.
-    ContextMenu(Option<mbv_core::playback_queue::QueueSlotId>),
-}
-
 /// Pane + hit within the TV workspace a click resolved to, reported by
 /// `TvWorkspaceComponent` (task 5.3d, tv_workspace hit_test). The TV
 /// workspace has two focusable panes, so a click's meaning depends on which

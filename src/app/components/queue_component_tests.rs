@@ -1,5 +1,5 @@
 use super::media_list::{MediaListRow, MediaSemanticState};
-use super::msg::{Msg, QueueColumnResize, QueueHitRegion, QueueIntent, QueueRequest, ShellRequest};
+use super::msg::{Msg, QueueColumnResize, QueueIntent, QueueRequest, ShellRequest};
 use super::queue::{queue_media_rows, QueueComponent, QueueCursorUpdate};
 use crate::app::render::QueueTitleModel;
 use crate::app::types_playback::{PlaybackState, QueueScope};
@@ -208,8 +208,8 @@ fn queue_right_click_uses_the_rendered_slot_target() {
         modifiers: KeyModifiers::NONE,
     }));
     assert!(
-        matches!(message, Some(Msg::Shell(super::msg::ShellRequest::QueueClick {
-        region: super::msg::QueueHitRegion::ContextMenu(Some(slot_id)), ..
+        matches!(message, Some(Msg::Shell(super::msg::ShellRequest::QueueRowContextMenu {
+        slot_id: Some(slot_id), ..
     })) if slot_id == second)
     );
 }
@@ -571,12 +571,11 @@ fn queue_scope_mouse_pills_reset_component_scroll_from_nonzero() {
     assert!(
         matches!(
             message,
-            Some(Msg::Shell(ShellRequest::QueueClick {
-                region: QueueHitRegion::ScopeRemote,
-                ..
+            Some(Msg::Shell(ShellRequest::QueueScopeClick {
+                scope: QueueScope::Remote,
             }))
         ),
-        "remote pill click must emit a ScopeRemote QueueClick"
+        "remote pill click must emit a Remote QueueScopeClick"
     );
     assert_eq!(
         component.test_scroll(),
@@ -604,12 +603,11 @@ fn queue_scope_mouse_pills_reset_component_scroll_from_nonzero() {
     assert!(
         matches!(
             message,
-            Some(Msg::Shell(ShellRequest::QueueClick {
-                region: QueueHitRegion::ScopeLocal,
-                ..
+            Some(Msg::Shell(ShellRequest::QueueScopeClick {
+                scope: QueueScope::Local,
             }))
         ),
-        "local pill click must emit a ScopeLocal QueueClick"
+        "local pill click must emit a Local QueueScopeClick"
     );
     assert_eq!(
         component.test_scroll(),

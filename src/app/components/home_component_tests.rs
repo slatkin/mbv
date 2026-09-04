@@ -421,11 +421,10 @@ fn home_right_click_uses_the_rendered_row_target() {
         target,
         "right-click moves the local cursor to the painted row"
     );
-    assert!(
-        matches!(row_message, Some(Msg::Shell(ShellRequest::HomeClick {
-        region: super::msg::HomeHitRegion::ContextMenu(index), ..
-    })) if index == target)
-    );
+    assert!(matches!(
+        row_message,
+        Some(Msg::Shell(ShellRequest::HomeRowContextMenu { .. }))
+    ));
 
     // A right-click on rendered blank space inside the list (the rows below
     // the last painted hitmap row) opens the menu at the current cursor and
@@ -448,9 +447,8 @@ fn home_right_click_uses_the_rendered_row_target() {
         cursor_before,
         "blank-space right-click leaves the cursor unchanged"
     );
-    assert!(
-        matches!(blank_message, Some(Msg::Shell(ShellRequest::HomeClick {
-        region: super::msg::HomeHitRegion::ContextMenu(index), ..
-    })) if index == cursor_before)
-    );
+    assert!(matches!(
+        blank_message,
+        Some(Msg::Shell(ShellRequest::HomeRowContextMenu { .. }))
+    ));
 }

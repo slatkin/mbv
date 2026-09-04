@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use super::action::{playback_command_for_key, Command};
-use super::components::msg::{AlbumCursorKind, QueueHitRegion, TvHitRegion};
+use super::components::msg::{AlbumCursorKind, TvHitRegion};
 use super::components::{
     media_list::ViewportAnchor, ComponentId, Msg, OverlayId, PlaybackComponent, ShellRequest,
     TerminalObserverEvent, UiRootComponent, UserEvent,
@@ -13,7 +13,7 @@ use super::types_playback::{HomeContent, HomeLatestSource};
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
-use super::{App, IdleFeed, QueueScope, ToastSeverity};
+use super::{App, IdleFeed, ToastSeverity};
 use crossterm::event::KeyCode;
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;

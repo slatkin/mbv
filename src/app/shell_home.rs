@@ -4,9 +4,6 @@
 //! tab); content/focus/nerd-fonts are pushed event-driven at their writers
 //! (`push_home_content`, task 5.3d); cursor/section/scroll stay local.
 
-use std::time::Instant;
-
-use super::components::msg::HomeHitRegion;
 use super::components::{ComponentId, HomeComponent, ShellRequest};
 use super::shell::Model;
 use super::{PanelFocus, TabSelection};
@@ -52,60 +49,6 @@ impl Model {
             // unreachable: shell_messages.rs routes only the Home* group (Play/
             // Enqueue/ContextMenu/Delete/ToggleWatched/SectionSelected) here.
             _ => {}
-        }
-    }
-
-    /// Route the Home click family (task 5.3d, Home mouse-click handoff) at
-    /// the Model boundary. `HomeComponent` owns the hit geometry and has
-    /// already moved its local cursor/section before emitting the region;
-    /// the shell finishes only the cross-boundary side of each gesture:
-    ///
-    /// - `Pill` — persist the section preference through the existing
-    ///   section-selection boundary (`select_home_section_from_component`,
-    ///   which maps the clicked pill to its `HomeLatestSource` in the
-    ///   component and calls `save_prefs`) and mark the click timestamp so a
-    ///   follow-up row click isn't misread.
-    /// - `Row` single click — focus the Library panel, as a Home click does
-    ///   today. The clicked row is **not** copied into an App flat cursor;
-    ///   the component owns the cursor, and App's independent Continue
-    ///   Watching / per-latest cursors are left untouched.
-    /// - `Row` double click — focus the Library panel and activate the
-    ///   component-provided flat target directly via `home_play(target)`.
-    /// - `ContextMenu` — focus the Library panel and open the menu at the
-    ///   pointer, preserving the existing eligibility, menu actions, and
-    ///   `continue_cursor` target semantics (the Home menu target is not the
-    ///   clicked flat row, so no cursor copy is required).
-    ///
-    /// Double-click/scroll timing stays `App`-owned
-    /// (`note_browse_double_click` against `last_click_time`/`last_click_pos`
-    /// and the wheel throttle), so the 400ms window is preserved.
-    pub(super) fn handle_home_click(&mut self, region: HomeHitRegion, col: u16, row: u16) {
-        match region {
-            HomeHitRegion::Pill(target) => {
-                self.app.last_click_time = Instant::now();
-                self.app.last_click_pos = (col, row);
-                self.select_home_section_from_component(target);
-            }
-            HomeHitRegion::ContextMenu(_target) => {
-                self.app.set_panel_focus(PanelFocus::Library);
-                self.app.open_context_menu_at(
-                    col,
-                    row,
-                    self.home_continue_watching_selected(),
-                    self.home_cw_item(),
-                );
-                // Right/row clicks focus Library: re-project (5.3d).
-                self.push_home_content();
-            }
-            HomeHitRegion::Row(target) => {
-                self.app.set_panel_focus(PanelFocus::Library);
-                if self.app.note_browse_double_click(col, row) {
-                    if let Some((item, from_cw)) = self.home_flat_target(target) {
-                        self.app.home_play_target(item, from_cw);
-                    }
-                }
-                self.push_home_content();
-            }
         }
     }
 
@@ -243,6 +186,14 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::components::Msg;
+    use std::time::Instant;
+
+    /// Route a `ShellRequest` through the Model's terminal-message dispatch,
+    /// the same path `handle_terminal_message` takes for a folded mouse `Msg`.
+    fn route(model: &mut Model, request: ShellRequest) {
+        model.handle_terminal_message(Msg::Shell(request), None, &mut false, &mut false);
+    }
     use crate::app::tests::{make_app_stub, make_item, make_items};
     use std::time::Duration;
     use tuirealm::component::AppComponent;
@@ -553,7 +504,7 @@ mod tests {
         model.home_content.continue_cursor = 1;
         model.home_content.latest[0].3 = 7;
         model.app.status.clear();
-        model.handle_home_click(HomeHitRegion::Row(0), 5, 5);
+        route(&mut model, ShellRequest::HomeRowClick);
         assert_eq!(
             model.app.effective_panel_focus(),
             PanelFocus::Library,
@@ -572,11 +523,12 @@ mod tests {
             "single click must not activate"
         );
 
-        // Double click on CW row 0 (same coords within the App-owned 400ms
-        // window): activates the flat target via home_play, which flashes on
-        // the missing Emby service — proving it acted on the clicked CW
-        // target, not the non-CW folder.
-        model.handle_home_click(HomeHitRegion::Row(0), 5, 5);
+        // Double click on CW row 0: the component recognized the double-click
+        // and emits `HomeRowActivate` with the resolved flat target; the
+        // shell activates it via home_play, which flashes on the missing Emby
+        // service — proving it acted on the clicked CW target, not the non-CW
+        // folder.
+        route(&mut model, ShellRequest::HomeRowActivate { target: 0 });
         assert_eq!(
             model.app.status, "Emby is unavailable",
             "double click must activate the clicked flat target"
@@ -584,7 +536,7 @@ mod tests {
 
         // Pill click: the clicked pill's semantic source is persisted via the
         // Model-boundary selection (`select_home_section_from_component`).
-        model.handle_home_click(HomeHitRegion::Pill(1), 6, 6);
+        route(&mut model, ShellRequest::HomePillClick { target: 1 });
         assert_eq!(
             model.home_section_pref(),
             "emby:lib",
@@ -597,7 +549,10 @@ mod tests {
         // target is continue_cursor, never the clicked row, so preserving it
         // needs no cursor copy.)
         model.home_content.continue_cursor = 0;
-        model.handle_home_click(HomeHitRegion::ContextMenu(0), 70, 20);
+        route(
+            &mut model,
+            ShellRequest::HomeRowContextMenu { anchor: (70, 20) },
+        );
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu)) =
             model.app.pending_overlay
         else {
