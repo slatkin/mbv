@@ -10,7 +10,7 @@
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::FeedEntry;
 
-use super::hit_regions::TvHitRegion;
+use super::hit_regions::TvHit;
 use super::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
     ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,
@@ -266,26 +266,35 @@ pub enum ShellRequest {
     QueueScopeClick {
         scope: QueueScope,
     },
-    /// A TV-workspace wheel scroll over the component's own series list
-    /// (`layout.left_area`, the right-pane list area, rebuilt every `view`;
-    /// task 5.3d, tv_workspace hit_test). The shell runs `App`'s 30ms wheel
-    /// throttle against `App::last_scroll_at` and then calls
-    /// `App::handle_mouse_scroll_browse`; the component holds no timing
-    /// state.
+    /// A TV-workspace wheel step recognized by `TvWorkspaceComponent`'s
+    /// private `MouseGestureState` (ADR 0024, design.md D3): the component
+    /// owns the wheel throttle. The shell only applies the scroll effect.
     TvScroll {
         delta: i64,
     },
-    /// A TV-workspace click the component resolved to a region of its own
-    /// geometry (task 5.3d, tv_workspace hit_test). The component painted
-    /// the two panes, so it resolves which pane a click lands in and the hit
-    /// within it; the shell never re-derives the pane from `col`/`row`. The
-    /// shell decides *when* it counts — via `App`'s 400ms double-click
-    /// window (`note_browse_double_click`) — then calls the matching
-    /// extracted gesture method.
-    TvClick {
-        region: TvHitRegion,
-        col: u16,
-        row: u16,
+    /// A TV-workspace row the user single-clicked. `TvWorkspaceComponent`
+    /// painted the two panes and resolved which pane + hit the click landed
+    /// in (season pill, episode row, blank Episodes-pane space, or a series
+    /// row resolved through the embedded `WideMediaList`); the shell applies
+    /// the matching `App` effect without re-deriving the pane (design.md
+    /// D3/D4).
+    TvHitClick {
+        hit: TvHit,
+    },
+    /// A TV-workspace row the user double-clicked; `hit` is the
+    /// component-resolved pane + hit and the shell activates it (design.md
+    /// D3/D4).
+    TvHitDoubleClick {
+        hit: TvHit,
+    },
+    /// A right-click in the TV workspace; `hit` is the component-resolved
+    /// pane + hit and `anchor` is the click position the component forwards
+    /// as the context-menu anchor — the one legitimate forwarded coordinate
+    /// (design.md D4). The component never moves its pane/cursor on a
+    /// right-click.
+    TvHitContextMenu {
+        hit: TvHit,
+        anchor: (u16, u16),
     },
     /// Series-list row movement from the TV workspace. The component applies
     /// the same local cursor delta before handing the App-side mirror update

@@ -1,4 +1,4 @@
-use super::msg::{Msg, ShellRequest, TvHit, TvHitRegion};
+use super::msg::{Msg, ShellRequest, TvHit};
 use super::tv_workspace::TvWorkspaceComponent;
 use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_item;
@@ -44,9 +44,8 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
     }));
     assert!(matches!(
         left,
-        Some(Msg::Shell(ShellRequest::TvClick {
-            region: TvHitRegion::Hit(TvHit::SeriesRow(1)),
-            ..
+        Some(Msg::Shell(ShellRequest::TvHitClick {
+            hit: TvHit::SeriesRow(1),
         }))
     ));
 
@@ -58,8 +57,8 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
     }));
     assert!(matches!(
         right,
-        Some(Msg::Shell(ShellRequest::TvClick {
-            region: TvHitRegion::ContextMenu(TvHit::SeriesRow(1)),
+        Some(Msg::Shell(ShellRequest::TvHitContextMenu {
+            hit: TvHit::SeriesRow(1),
             ..
         }))
     ));

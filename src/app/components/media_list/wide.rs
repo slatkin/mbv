@@ -121,6 +121,33 @@ impl<Target: Clone> WideMediaList<Target> {
         let display_row = row_in_view + self.row_geometry(list_area.height as usize).offset();
         self.core.rows().get(display_row)?.selectable_target()
     }
+
+    /// Resolve a screen row `y` inside the painter-supplied `list_area` to the
+    /// selectable-item ordinal painted on that row (design.md D6). Unlike
+    /// [`Self::resolve_point`] this returns a **positional** ordinal (safe when
+    /// targets are not unique) and keys on the row only, matching the legacy
+    /// `left_row_map` row-hit flow the TV workspace feeds to
+    /// `NavLevel::set_resting_cursor`. Returns `None` for a `y` outside the
+    /// vertical span of `list_area`, a heading/spacer row, or a row past the
+    /// last item.
+    #[allow(dead_code)] // consumers land in tasks 3.4-3.6
+    pub fn resolve_ordinal_at_y(&self, list_area: Rect, y: u16) -> Option<usize> {
+        if y < list_area.y || y >= list_area.y.saturating_add(list_area.height) {
+            return None;
+        }
+        let geometry = self.row_geometry(list_area.height as usize);
+        let display_row = (y - list_area.y) as usize + geometry.offset();
+        let mut ordinal = 0usize;
+        for (row, target) in geometry.targets().enumerate() {
+            if row == display_row {
+                return target.map(|_| ordinal);
+            }
+            if target.is_some() {
+                ordinal += 1;
+            }
+        }
+        None
+    }
 }
 
 impl<Target: Clone + PartialEq> WideMediaList<Target> {

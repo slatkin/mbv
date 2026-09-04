@@ -19,7 +19,7 @@ mod queue;
 mod service;
 mod shell;
 
-pub use self::hit_regions::{TvHit, TvHitRegion};
+pub use self::hit_regions::TvHit;
 pub use self::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
     ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,

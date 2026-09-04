@@ -464,32 +464,32 @@ impl Model {
                 | ShellRequest::TvCycleLetterPill { .. }
                 | ShellRequest::TvEpisodeMove { .. }
                 | ShellRequest::TvSeasonMove { .. }) => self.handle_tv_request(request),
-                // TV workspace mouse geometry lives in
-                // `TvWorkspaceComponent`, which resolves the pane +
-                // hit (two focusable panes); the shell decides *when*
-                // a click is a double-click via App's 400ms window
-                // and shares the 30ms wheel throttle (task 5.3d,
-                // tv_workspace hit_test).
+                // TV workspace mouse gestures are recognized by
+                // `TvWorkspaceComponent`'s private `MouseGestureState` (ADR
+                // 0024, design.md D3/D4): it owns the double-click window and
+                // wheel throttle, resolves the pane + hit itself, and moves
+                // its own pane/cursor before emitting. The shell only applies
+                // the cross-boundary effect.
                 ShellRequest::TvScroll { delta } => {
-                    if self.app.note_browse_scroll() {
-                        self.app.handle_mouse_scroll_browse(delta);
+                    self.app.handle_mouse_scroll_browse(delta);
+                    self.push_tv_workspace_content();
+                }
+                ShellRequest::TvHitClick { hit } => {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        self.app.handle_mouse_single_click_tv(lib_idx, hit);
                     }
                     self.push_tv_workspace_content();
                 }
-                ShellRequest::TvClick { region, col, row } => {
+                ShellRequest::TvHitDoubleClick { hit } => {
                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                        match region {
-                            TvHitRegion::ContextMenu(hit) => {
-                                self.app.handle_mouse_right_click_tv(lib_idx, hit, col, row);
-                            }
-                            TvHitRegion::Hit(hit) => {
-                                if self.app.note_browse_double_click(col, row) {
-                                    self.app.handle_mouse_double_click_tv(lib_idx, hit);
-                                } else {
-                                    self.app.handle_mouse_single_click_tv(lib_idx, hit);
-                                }
-                            }
-                        }
+                        self.app.handle_mouse_double_click_tv(lib_idx, hit);
+                    }
+                    self.push_tv_workspace_content();
+                }
+                ShellRequest::TvHitContextMenu { hit, anchor } => {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        self.app
+                            .handle_mouse_right_click_tv(lib_idx, hit, anchor.0, anchor.1);
                     }
                     self.push_tv_workspace_content();
                 }

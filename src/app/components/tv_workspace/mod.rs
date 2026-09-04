@@ -4,18 +4,20 @@
 //! keeps the active pane and the season/episode cursor used to paint the two
 //! child targets; cross-authority effects use typed shell requests.
 
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use mbv_core::api::EmbyItem;
 
 use super::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
-use super::msg::{Msg, ShellRequest, TvHit, TvHitRegion};
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
+use super::msg::{Msg, ShellRequest, TvHit};
 use super::user_event::UserEvent;
 #[cfg(test)]
 use crate::app::layout::LayoutMain;
@@ -48,6 +50,15 @@ pub struct TvWorkspaceComponent {
     image_paint: Option<HomeImagePaint>,
     pending_anchor: Option<super::media_list::ViewportAnchor<String>>,
     viewport_height: usize,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
+    /// the double-click window and wheel throttle. Not a shared clock.
+    mouse_gestures: MouseGestureState,
+    /// Irregular Episodes-pane chrome — season pills, episode rows, and the
+    /// blank pane area — as last-push-wins rectangles (design.md D6),
+    /// repopulated in `view()` from the geometry the wide-TV painter just
+    /// produced. The Series pane has an embedded canonical control, so its
+    /// row identity comes from `WideMediaList::resolve_ordinal_at_y` instead.
+    tv_chrome: HitRegions<TvHit>,
 }
 
 impl TvWorkspaceComponent {
@@ -74,6 +85,8 @@ impl TvWorkspaceComponent {
             image_paint: None,
             pending_anchor: None,
             viewport_height: 1,
+            mouse_gestures: MouseGestureState::new(),
+            tv_chrome: HitRegions::new(),
         }
     }
 
@@ -285,116 +298,96 @@ impl TvWorkspaceComponent {
         Some((series_id, season_id))
     }
 
-    /// The component owns *where* a TV event lands: it hit-tests its painted
-    /// panes (`tv_wide_season_tabs`, `tv_wide_episode_rows`, and the two
-    /// pane rects — all rebuilt every `view`) and resolves pane + hit into a
-    /// typed region. A click in a pane moves the component's local focus
-    /// there (its `pane` plus the pane cursors below); the shell decides
-    /// *when* a click counts (App's 400ms double-click window, 30ms wheel
-    /// throttle) via App's shared fields — the component holds no timing
-    /// state.
+    /// Handle a mouse event against the component's painted workspace geometry.
+    ///
+    /// Gesture recognition (click / double-click / right-click / wheel) comes
+    /// from the private `MouseGestureState` (ADR 0024, design.md D3). The
+    /// Episodes-pane chrome (season pills, episode rows, blank pane) resolves
+    /// through `tv_chrome` (design.md D6); the Series pane row identity comes
+    /// from the embedded `WideMediaList`. The component emits a semantic `Msg`
+    /// with a resolved `TvHit` — never raw coordinates — except the
+    /// context-menu anchor (design.md D4). A left click moves the component's
+    /// local pane + pane cursor; a right click never does.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
-        match mouse.kind {
-            MouseEventKind::Down(MouseButton::Left) => {
-                if let Some(hit) = self.resolve_hit(position) {
-                    // A click in the unfocused pane moves local focus there;
-                    // a click in the already-focused pane keeps it (the hit
-                    // only re-targets the pane's cursor). Clicking a season
-                    // pill also selects that season; blank Episodes-pane
-                    // space is consumed without changing the pane.
-                    match hit {
-                        TvHit::SeasonTab(index) => {
-                            self.pane = Pane::Episodes;
-                            self.season_cursor = index;
-                            self.episode_cursor = Some(0);
-                        }
-                        TvHit::EpisodeRow(index) => {
-                            self.pane = Pane::Episodes;
-                            self.episode_cursor = Some(index);
-                        }
-                        TvHit::SeriesRow(index) => {
-                            self.pane = Pane::Series;
-                            self.cursor = index;
-                        }
-                        TvHit::EpisodesPane => {}
-                    }
-                    return Some(Msg::Shell(ShellRequest::TvClick {
-                        region: TvHitRegion::Hit(hit),
-                        col: mouse.column,
-                        row: mouse.row,
-                    }));
-                }
-            }
-            MouseEventKind::Down(MouseButton::Right) => {
-                if let Some(hit) = self.resolve_hit(position) {
-                    // Right-click carries the same resolved pane + hit so
-                    // the shell applies the pane-appropriate single-click
-                    // effect before opening the menu; it never moves the
-                    // component's pane or cursors.
-                    return Some(Msg::Shell(ShellRequest::TvClick {
-                        region: TvHitRegion::ContextMenu(hit),
-                        col: mouse.column,
-                        row: mouse.row,
-                    }));
-                }
-            }
-            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
-                if self.layout.left_area.contains(position) =>
-            {
+        // TV does not consume hover-move (design.md D7).
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
+        }
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Scroll { at, delta } => {
                 // Wheel scroll over the series list (`left_area` is the
                 // right-pane list area this renderer publishes — the exact
                 // region the legacy scroll arm hit-tested). The Episodes
-                // pane has no wheel behaviour, so those scrolls remain
-                // unhandled.
-                let delta: i64 = if matches!(mouse.kind, MouseEventKind::ScrollUp) {
-                    -1
-                } else {
-                    1
-                };
+                // pane has no wheel behaviour.
+                if !self.layout.left_area.contains(at) {
+                    return None;
+                }
                 self.move_rows(delta);
-                return Some(Msg::Shell(ShellRequest::TvScroll { delta }));
+                Some(Msg::Shell(ShellRequest::TvScroll { delta }))
             }
-            _ => {}
+            MouseGesture::Click(at) => {
+                let hit = self.resolve_hit(at)?;
+                self.apply_pane_click(hit);
+                Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
+            }
+            MouseGesture::DoubleClick(at) => {
+                let hit = self.resolve_hit(at)?;
+                self.apply_pane_click(hit);
+                Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
+            }
+            MouseGesture::RightClick(at) => {
+                let hit = self.resolve_hit(at)?;
+                Some(Msg::Shell(ShellRequest::TvHitContextMenu {
+                    hit,
+                    anchor: (mouse.column, mouse.row),
+                }))
+            }
+            _ => None,
         }
-        None
+    }
+
+    /// Move the component's local pane + pane cursor to the clicked `hit`.
+    /// A click in the unfocused pane moves local focus there; a click in the
+    /// already-focused pane keeps it. Clicking a season pill also selects
+    /// that season; blank Episodes-pane space is consumed without changing
+    /// the pane. Right-clicks never call this.
+    fn apply_pane_click(&mut self, hit: TvHit) {
+        match hit {
+            TvHit::SeasonTab(index) => {
+                self.pane = Pane::Episodes;
+                self.season_cursor = index;
+                self.episode_cursor = Some(0);
+            }
+            TvHit::EpisodeRow(index) => {
+                self.pane = Pane::Episodes;
+                self.episode_cursor = Some(index);
+            }
+            TvHit::SeriesRow(index) => {
+                self.pane = Pane::Series;
+                self.cursor = index;
+            }
+            TvHit::EpisodesPane => {}
+        }
     }
 
     /// Resolve a workspace position to the pane + hit it lands in, from the
     /// component's own painted geometry. `None` = outside every TV rect
     /// (the clicks that remain unhandled).
-    fn resolve_hit(&self, position: ratatui::layout::Position) -> Option<TvHit> {
-        if let Some((_, index)) = self
-            .layout
-            .tv_wide_season_tabs
-            .iter()
-            .find(|(rect, _)| rect.contains(position))
-        {
-            return Some(TvHit::SeasonTab(*index));
-        }
-        if let Some((_, index)) = self
-            .layout
-            .tv_wide_episode_rows
-            .iter()
-            .find(|(rect, _)| rect.contains(position))
-        {
-            return Some(TvHit::EpisodeRow(*index));
-        }
-        if self.layout.tv_wide_left_area.contains(position) {
-            return Some(TvHit::EpisodesPane);
+    fn resolve_hit(&self, position: Position) -> Option<TvHit> {
+        if let Some(&hit) = self.tv_chrome.resolve(position) {
+            return Some(hit);
         }
         if self.layout.tv_wide_right_area.contains(position) {
-            // Resolve the series row under the click from the painted
-            // `left_row_map` relative to the painted series list (None for a
-            // header/gap cell → keep the current series cursor, matching the
-            // legacy blank-space click no-op).
-            let click_y = (position.y.saturating_sub(self.layout.tv_wide_list_area.y)) as usize;
+            // Resolve the series row under the click from the embedded
+            // canonical control (design.md D6). A header/gap cell (or a click
+            // in the pane outside the list rows) returns the current series
+            // cursor, matching the legacy blank-space click no-op. A click in
+            // the right pane above the list clamps to the first row, matching
+            // the legacy `saturating_sub` row keying.
+            let list_area = self.layout.tv_wide_list_area;
             let target = self
-                .layout
-                .left_row_map
-                .get(click_y)
-                .copied()
-                .flatten()
+                .list
+                .resolve_ordinal_at_y(list_area, position.y.max(list_area.y))
                 .unwrap_or(self.cursor);
             return Some(TvHit::SeriesRow(target));
         }
@@ -433,6 +426,23 @@ impl Component for TvWorkspaceComponent {
         self.list.set_scroll(scroll);
         self.cursor = self.list.cursor();
         self.image_paint = image_paint;
+
+        // Adopt the Episodes-pane chrome the wide-TV painter just produced
+        // into the irregular-chrome registry (design.md D6). Push order is
+        // low-to-high z: the blank pane first, then episode rows, then season
+        // pills, so `resolve` (last-push-wins) prefers a pill over a row over
+        // blank space — the legacy `resolve_hit` precedence.
+        self.tv_chrome.clear();
+        if self.layout.tv_wide_left_area.width > 0 && self.layout.tv_wide_left_area.height > 0 {
+            self.tv_chrome
+                .push(self.layout.tv_wide_left_area, TvHit::EpisodesPane);
+        }
+        for (rect, index) in &self.layout.tv_wide_episode_rows {
+            self.tv_chrome.push(*rect, TvHit::EpisodeRow(*index));
+        }
+        for (rect, index) in &self.layout.tv_wide_season_tabs {
+            self.tv_chrome.push(*rect, TvHit::SeasonTab(*index));
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

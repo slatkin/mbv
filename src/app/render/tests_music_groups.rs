@@ -370,6 +370,7 @@ fn wide_music_frame_publishes_identical_geometry_from_publish_and_paint() {
                 Rect::new(0, 0, 120, 24),
                 &app2.wide_music_render_ctx(0, None),
                 &mut paint_layout,
+                &mut crate::app::components::media_list::WideMediaList::new(),
             );
         })
         .unwrap();

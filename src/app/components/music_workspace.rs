@@ -3,18 +3,19 @@
 //! The shell mirrors album data and cached tracks. Album/track cursor state is
 //! local here; cross-authority effects use typed shell requests.
 
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, Key, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{InlineMediaBrowser, ViewportAnchor};
+use super::media_list::{InlineMediaBrowser, ViewportAnchor, WideMediaList};
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::user_event::UserEvent;
-use crate::app::layout::{LayoutMain, LibraryRowTarget};
+use crate::app::layout::LayoutMain;
 use crate::app::render::{
     render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, shared_hero_presentation,
     MusicImagePaint, MusicWideRenderCtx,
@@ -51,6 +52,15 @@ pub struct MusicWorkspaceComponent {
     narrow_viewport_height: usize,
     wide_viewport_height: usize,
     wide_selected_row_offset: Option<usize>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
+    /// the double-click window and wheel throttle. Not a shared clock.
+    mouse_gestures: MouseGestureState,
+    /// The wide right-rail's canonical album control, seeded each `view()` by
+    /// `render_wide_right_album_browser_with_ctx` from the pushed context.
+    /// Its `resolve_point` gives the wide-rail row identity for the mouse
+    /// path (design.md D6). The narrow list / track table are net-new mouse
+    /// work in task 6.1.
+    wide_list: WideMediaList<String>,
 }
 
 impl MusicWorkspaceComponent {
@@ -85,6 +95,8 @@ impl MusicWorkspaceComponent {
             narrow_viewport_height: 1,
             wide_viewport_height: 1,
             wide_selected_row_offset: None,
+            mouse_gestures: MouseGestureState::new(),
+            wide_list: WideMediaList::new(),
         }
     }
 
@@ -512,28 +524,47 @@ impl MusicWorkspaceComponent {
         }
     }
 
+    /// Handle a mouse event against the wide workspace's painted geometry.
+    ///
+    /// Recognition comes from the private `MouseGestureState` (ADR 0024,
+    /// design.md D3). The wide right-rail album row identity comes from the
+    /// embedded `WideMediaList::resolve_point` (design.md D6). The wide-left
+    /// track table keeps its component-local cursor claim unchanged — its
+    /// full mouse surface is net-new work in task 6.1.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-            let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
-            if let Some(track) = self.layout.wide_music_track_at(position) {
-                self.track_cursor = Some(track);
-            } else if self.layout.wide_music_browser_area.contains(position) {
-                let row = position
-                    .y
-                    .saturating_sub(self.layout.wide_music_browser_area.y)
-                    as usize;
-                if let Some(Some(LibraryRowTarget::Album(album))) =
-                    self.layout.left_row_targets.get(row)
-                {
-                    self.album_cursor = *album;
-                    return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                        target: *album,
-                        kind: AlbumCursorKind::Move,
-                    }));
-                }
-            }
+        // Music does not consume hover-move (design.md D7).
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
         }
-        None
+        let at = match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Click(at) | MouseGesture::DoubleClick(at) => at,
+            _ => return None,
+        };
+        if let Some(track) = self.layout.wide_music_track_at(at) {
+            self.track_cursor = Some(track);
+            return None;
+        }
+        let album = self.resolve_wide_album(at)?;
+        self.album_cursor = album;
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+            target: album,
+            kind: AlbumCursorKind::Move,
+        }))
+    }
+
+    /// The album index under `at` on the wide right rail, resolved by the
+    /// embedded canonical control against the rail area it painted, then
+    /// mapped to the pushed context's item index (design.md D6). `None` for a
+    /// heading/spacer row or a point outside the rail.
+    fn resolve_wide_album(&self, at: Position) -> Option<usize> {
+        let id = self
+            .wide_list
+            .resolve_point(self.layout.wide_music_browser_area, at)?;
+        self.context
+            .list
+            .items
+            .iter()
+            .position(|item| &item.id == id)
     }
 
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<MusicImagePaint> {
@@ -609,7 +640,13 @@ impl Component for MusicWorkspaceComponent {
             self.narrow_viewport_height = output.viewport_height;
             self.image_paint = output.image_paint;
         } else {
-            let output = render_wide_music_group_with_ctx(frame, area, &context, &mut self.layout);
+            let output = render_wide_music_group_with_ctx(
+                frame,
+                area,
+                &context,
+                &mut self.layout,
+                &mut self.wide_list,
+            );
             self.album_scroll = output.final_scroll;
             self.image_paint = output.image_paint;
             self.wide_viewport_height = self.layout.wide_music_browser_area.height as usize;

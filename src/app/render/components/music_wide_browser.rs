@@ -25,9 +25,11 @@ pub(in crate::app) fn render_wide_right_album_browser_with_ctx(
     list: &LibraryListRenderCtx,
     right_focused: bool,
     layout: &mut LayoutMain,
+    media: &mut WideMediaList<String>,
 ) -> usize {
     layout.wide_music_browser_area = browser_area;
     if list.items.is_empty() {
+        media.set_content(Vec::new());
         crate::app::render::render_placeholder(
             f,
             browser_area,
@@ -40,7 +42,6 @@ pub(in crate::app) fn render_wide_right_album_browser_with_ctx(
         return 0;
     }
 
-    let mut media: WideMediaList<String> = WideMediaList::new();
     media.set_content(grouped_album_rows(&list.items, album_info, order));
     if let Some(selected) = list.items.get(list.cursor) {
         media.select_target(&selected.id);
@@ -59,7 +60,7 @@ pub(in crate::app) fn render_wide_right_album_browser_with_ctx(
         f,
         paint_area,
         browser_area,
-        &mut media,
+        media,
         right_focused,
         palette::list_selected_row_bg(),
     );

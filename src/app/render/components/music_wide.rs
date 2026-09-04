@@ -483,6 +483,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     area: Rect,
     ctx: &MusicWideRenderCtx,
     layout: &mut LayoutMain,
+    album_list: &mut crate::app::components::media_list::WideMediaList<String>,
 ) -> MusicWideRenderOutput {
     let mut output = MusicWideRenderOutput::default();
     // The pure arrangement is computed exactly once here in
@@ -580,6 +581,9 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     if browser_area.height > 0 && browser_area.width > 0 {
         if ctx.list.is_search_active() {
+            // The search-results grid is not the canonical album rail; keep
+            // the rail control empty so a stray mouse hit resolves to nothing.
+            album_list.set_content(Vec::new());
             let cols = crate::app::library_column_width::library_column_count(browser_area.width);
             output.final_scroll = super::media_list::render_plain_rows(
                 f,
@@ -596,6 +600,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
                 &ctx.list,
                 right_focused,
                 layout,
+                album_list,
             );
         }
     }

@@ -28,20 +28,3 @@ pub enum TvHit {
     /// to `target` before any pane effect (activation, context menu).
     SeriesRow(usize),
 }
-
-/// Region of the TV workspace a click resolved to (task 5.3d, tv_workspace
-/// hit_test). The component resolves the pane and the hit within it; the
-/// shell turns the region into the matching App gesture — single vs
-/// double-click decided there via App's 400ms window — without re-deriving
-/// the pane from the click coordinates.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TvHitRegion {
-    /// A left click on the carried `TvHit`.
-    Hit(TvHit),
-    /// A right click; the carried `TvHit` is the pane + hit the click
-    /// resolved to, so the shell applies the same pane-appropriate
-    /// single-click effect (panel focus for Episodes-pane hits, series
-    /// cursor for Series-pane hits) before opening the context menu at the
-    /// click position.
-    ContextMenu(TvHit),
-}
