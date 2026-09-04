@@ -13,11 +13,20 @@ pub(in crate::app) struct MultiSelectRenderModel<'a> {
     pub cursor: usize,
 }
 
+/// Geometry painted by the multiselect popup, reused by its mouse
+/// hit-testing (task 5.1, design.md D6).
+pub(in crate::app) struct MultiSelectRenderGeometry {
+    /// The painted modal rect — the outside-click boundary.
+    pub frame: Rect,
+    /// Painted item-row rect -> absolute item index.
+    pub rows: Vec<(Rect, usize)>,
+}
+
 pub(in crate::app) fn render_multiselect_content(
     f: &mut Frame,
     dim_backdrop_active: &mut bool,
     model: MultiSelectRenderModel<'_>,
-) {
+) -> MultiSelectRenderGeometry {
     let title = match model.kind {
         MultiSelectKind::HiddenLibraries => " Hidden Libraries ",
         MultiSelectKind::HiddenLatest => " Hidden Latest ",
@@ -68,6 +77,24 @@ pub(in crate::app) fn render_multiselect_content(
     } else {
         0
     };
+    let rows = model
+        .items
+        .iter()
+        .enumerate()
+        .skip(scroll)
+        .take(list_h)
+        .map(|(i, _)| {
+            (
+                Rect {
+                    x: list_area.x,
+                    y: list_area.y + (i - scroll) as u16,
+                    width: list_area.width,
+                    height: 1,
+                },
+                i,
+            )
+        })
+        .collect();
 
     let lines: Vec<Line> = model
         .items
@@ -98,4 +125,5 @@ pub(in crate::app) fn render_multiselect_content(
         })
         .collect();
     f.render_widget(Paragraph::new(lines), list_area);
+    MultiSelectRenderGeometry { frame: inner, rows }
 }

@@ -1,13 +1,15 @@
 //! Interactive Component for the nested Settings Feed-management popup.
 
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
 use super::msg::{FeedsManageIntent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_feeds_manage_content, FeedsManageRenderModel};
@@ -20,6 +22,15 @@ pub struct FeedsManageComponent {
     cursor: usize,
     pending_add: Option<u64>,
     dim_backdrop_active: bool,
+    /// The painted modal rect (last frame) — the outside-click boundary.
+    frame: Rect,
+    /// Irregular painted chrome (task 5.1, design.md D6): list-stage feed
+    /// rows and form-stage field rows, repopulated in `view()` from the
+    /// geometry the painter just produced.
+    hit_rows: HitRegions<usize>,
+    hit_fields: HitRegions<FeedFormField>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3).
+    mouse_gestures: MouseGestureState,
 }
 
 impl FeedsManageComponent {
@@ -30,6 +41,10 @@ impl FeedsManageComponent {
             cursor: 0,
             pending_add: None,
             dim_backdrop_active: false,
+            frame: Rect::default(),
+            hit_rows: HitRegions::new(),
+            hit_fields: HitRegions::new(),
+            mouse_gestures: MouseGestureState::new(),
         }
     }
 
@@ -129,6 +144,81 @@ impl FeedsManageComponent {
         Some(Msg::Shell(ShellRequest::FeedsManageIntent(intent)))
     }
 
+    /// Mouse handling (task 5.1): only actions with a keyboard equivalent.
+    /// List stage: a feed-row click selects (Up/Down equivalent), a
+    /// double-click edits (Enter equivalent), an outside click dismisses
+    /// (Esc equivalent). Form stage: a field-row click focuses that field
+    /// (Tab equivalent; the read-only edit-mode URL is unreachable by
+    /// keyboard too), an outside click cancels (Esc equivalent). The popup
+    /// paints no buttons, so add/remove have no click targets, and
+    /// right-click/wheel have no keyboard equivalent here — both ignored.
+    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
+        }
+        let Some(stage) = self.stage.clone() else {
+            return None;
+        };
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Click(at) => match &stage {
+                FeedsManageStage::List => {
+                    if let Some(&index) = self.hit_rows.resolve(at) {
+                        self.cursor = index;
+                        return None;
+                    }
+                    self.dismiss_outside(at, &stage)
+                }
+                FeedsManageStage::Form(_) => {
+                    if let Some(&field) = self.hit_fields.resolve(at) {
+                        self.focus_field(field);
+                        return None;
+                    }
+                    self.dismiss_outside(at, &stage)
+                }
+            },
+            MouseGesture::DoubleClick(at) => {
+                if let FeedsManageStage::List = &stage {
+                    if let Some(&index) = self.hit_rows.resolve(at) {
+                        self.cursor = index;
+                        return Self::shell_intent(FeedsManageIntent::Edit);
+                    }
+                }
+                // Outside double-click: the first click already dismissed.
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// A click outside the painted modal mirrors the stage's Esc path:
+    /// Dismiss on the list, Cancel on the form (which returns to the list).
+    fn dismiss_outside(&mut self, at: Position, stage: &FeedsManageStage) -> Option<Msg> {
+        if self.frame.contains(at) {
+            return None;
+        }
+        Self::shell_intent(match stage {
+            FeedsManageStage::List => FeedsManageIntent::Dismiss,
+            FeedsManageStage::Form(_) => FeedsManageIntent::Cancel,
+        })
+    }
+
+    /// Focus a clicked form field — the Tab/BackTab equivalent. While a
+    /// submission is in flight the keyboard ignores everything but Esc, so
+    /// the mouse does too; the edit-mode URL is read-only and keyboard-
+    /// unreachable (`next_field` skips it), so clicking it is a no-op.
+    fn focus_field(&mut self, field: FeedFormField) {
+        if self.submitting() {
+            return;
+        }
+        let Some(FeedsManageStage::Form(form)) = self.stage.as_mut() else {
+            return;
+        };
+        if form.editing_index.is_some() && field == FeedFormField::Url {
+            return;
+        }
+        form.focus = field;
+    }
+
     fn next_field(&mut self) {
         let Some(FeedsManageStage::Form(form)) = self.stage.as_mut() else {
             return;
@@ -188,6 +278,28 @@ impl FeedsManageComponent {
             _ => {}
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn test_rows(&self) -> &HitRegions<usize> {
+        &self.hit_rows
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_fields(&self) -> &HitRegions<FeedFormField> {
+        &self.hit_fields
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_frame(&self) -> Rect {
+        self.frame
+    }
+
+    /// Test seam: forget the last click so the next event is neither
+    /// throttled nor promoted to a double-click.
+    #[cfg(test)]
+    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
+        self.mouse_gestures.reset_for_test();
+    }
 }
 
 impl Default for FeedsManageComponent {
@@ -201,7 +313,7 @@ impl Component for FeedsManageComponent {
         let Some(stage) = self.stage.as_ref() else {
             return;
         };
-        render_feeds_manage_content(
+        let geometry = render_feeds_manage_content(
             f,
             &mut self.dim_backdrop_active,
             FeedsManageRenderModel {
@@ -211,6 +323,17 @@ impl Component for FeedsManageComponent {
                 pending_add: self.pending_add,
             },
         );
+        // Adopt the rects the painter just produced into the irregular-
+        // chrome registries (task 5.1, design.md D6).
+        self.frame = geometry.frame;
+        self.hit_rows.clear();
+        for (rect, index) in geometry.rows {
+            self.hit_rows.push(rect, index);
+        }
+        self.hit_fields.clear();
+        for (rect, field) in geometry.fields {
+            self.hit_fields.push(rect, field);
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
@@ -232,6 +355,7 @@ impl AppComponent<Msg, UserEvent> for FeedsManageComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
+            Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }
     }

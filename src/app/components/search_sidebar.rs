@@ -23,10 +23,12 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyModifiers};
+use tuirealm::event::{Event, Key, KeyModifiers, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
 use super::msg::{Msg, ServiceRequest, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::search_sidebar::SearchSidebar;
@@ -49,6 +51,16 @@ pub struct SearchSidebarComponent {
     /// for the same reason as `debounce_deadline`.
     pub(in crate::app) debounce_pending: Option<String>,
     panel_area: Option<Rect>,
+    /// The painted panel-shell rect (last frame) — the outside-click
+    /// boundary. Empty while no frame has painted.
+    frame: Rect,
+    /// Irregular painted chrome (task 5.1, design.md D6): result rows and
+    /// type-filter chips, repopulated in `view()` from the geometry the
+    /// painter just produced.
+    hit_results: HitRegions<usize>,
+    hit_chips: HitRegions<usize>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3).
+    mouse_gestures: MouseGestureState,
 }
 
 impl SearchSidebarComponent {
@@ -58,6 +70,10 @@ impl SearchSidebarComponent {
             debounce_deadline: None,
             debounce_pending: None,
             panel_area: None,
+            frame: Rect::default(),
+            hit_results: HitRegions::new(),
+            hit_chips: HitRegions::new(),
+            mouse_gestures: MouseGestureState::new(),
         }
     }
 
@@ -208,6 +224,56 @@ impl SearchSidebarComponent {
         Some(Msg::Service(ServiceRequest::SearchQuery(query)))
     }
 
+    /// Mouse handling (task 5.1): only actions with a keyboard equivalent.
+    /// A result-row click selects (Up/Down equivalent), a double-click
+    /// activates (Enter equivalent), a type-filter chip click sets that
+    /// filter (Tab/BackTab cycle equivalent — every chip is reachable by
+    /// cycling), and an outside click dismisses (Esc equivalent). The query
+    /// row has no cursor-positioning keyboard path, so clicking it is a
+    /// no-op. Right-click and wheel have no keyboard equivalent here and
+    /// are ignored.
+    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
+        }
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Click(at) => {
+                if let Some(&chip) = self.hit_chips.resolve(at) {
+                    if chip < self.sidebar.available_types().len() + 1
+                        && chip != self.sidebar.type_filter
+                    {
+                        self.sidebar.type_filter = chip;
+                        self.sidebar.cursor = 0;
+                        self.sidebar.scroll = 0;
+                    }
+                    return None;
+                }
+                if let Some(&index) = self.hit_results.resolve(at) {
+                    if index < self.sidebar.filtered_count() {
+                        self.sidebar.cursor = index;
+                    }
+                    return None;
+                }
+                if !self.frame.contains(at) {
+                    return Some(Msg::Shell(ShellRequest::DismissSearch));
+                }
+                None
+            }
+            MouseGesture::DoubleClick(at) => {
+                if let Some(&index) = self.hit_results.resolve(at) {
+                    if index < self.sidebar.filtered_count() {
+                        self.sidebar.cursor = index;
+                        return self.handle_activate();
+                    }
+                    return None;
+                }
+                // Outside double-click: the first click already dismissed.
+                None
+            }
+            _ => None,
+        }
+    }
+
     /// Sweep the debounce deadline using the shell's wall clock. Called by
     /// the shell once per main-loop iteration next to `drain_search_results`
     /// (#609): production never wired a `UserEvent::Clock` publisher, so the
@@ -217,6 +283,28 @@ impl SearchSidebarComponent {
     /// by every other shell-side adapter.
     pub(in crate::app) fn tick_clock(&mut self, now: Instant) -> Option<Msg> {
         self.handle_clock(now)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_results(&self) -> &HitRegions<usize> {
+        &self.hit_results
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_chips(&self) -> &HitRegions<usize> {
+        &self.hit_chips
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_frame(&self) -> Rect {
+        self.frame
+    }
+
+    /// Test seam: forget the last click so the next event is neither
+    /// throttled nor promoted to a double-click.
+    #[cfg(test)]
+    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
+        self.mouse_gestures.reset_for_test();
     }
 }
 
@@ -228,7 +316,19 @@ impl Default for SearchSidebarComponent {
 
 impl Component for SearchSidebarComponent {
     fn view(&mut self, f: &mut Frame, _area: Rect) {
-        crate::app::render::render_search_sidebar(f, self.panel_area, &mut self.sidebar);
+        let geometry =
+            crate::app::render::render_search_sidebar(f, self.panel_area, &mut self.sidebar);
+        // Adopt the rects the painter just produced into the irregular-
+        // chrome registries (task 5.1, design.md D6).
+        self.frame = geometry.frame;
+        self.hit_results.clear();
+        for (rect, index) in geometry.result_rows {
+            self.hit_results.push(rect, index);
+        }
+        self.hit_chips.clear();
+        for (rect, chip) in geometry.chips {
+            self.hit_chips.push(rect, chip);
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
@@ -250,6 +350,7 @@ impl AppComponent<Msg, UserEvent> for SearchSidebarComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
+            Event::Mouse(mouse) => self.handle_mouse(mouse),
             Event::User(UserEvent::Clock(now)) => self.handle_clock(*now),
             _ => None,
         }

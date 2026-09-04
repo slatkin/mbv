@@ -52,6 +52,13 @@ impl<Tag> HitRegions<Tag> {
             .find(|(rect, _)| rect.contains(point))
             .map(|(_, tag)| tag)
     }
+
+    /// Test seam: the recorded rect/tag pairs, so component tests can derive
+    /// click coordinates from the same geometry the component resolves.
+    #[cfg(test)]
+    pub(crate) fn regions(&self) -> &[(Rect, Tag)] {
+        &self.regions
+    }
 }
 
 #[cfg(test)]

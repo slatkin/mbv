@@ -100,6 +100,15 @@ pub(in crate::app::render) fn service_state_color(
 // `pub(in crate::app)` so the `render` module can re-export them for the
 // Interactive Components in `crate::app::components` (design D5/D9).
 
+pub(in crate::app) fn panel_shell_rect(full: Rect, width: u16) -> Rect {
+    Rect {
+        x: full.x,
+        y: full.y + 2,
+        width: width.min(full.width),
+        height: full.height.saturating_sub(2),
+    }
+}
+
 pub(in crate::app) fn render_panel_shell(
     f: &mut Frame,
     full: Rect,
@@ -107,12 +116,7 @@ pub(in crate::app) fn render_panel_shell(
     title: &str,
     hints: &str,
 ) -> Rect {
-    let sidebar = Rect {
-        x: full.x,
-        y: full.y + 2,
-        width: width.min(full.width),
-        height: full.height.saturating_sub(2),
-    };
+    let sidebar = panel_shell_rect(full, width);
     render_panel_shell_at(f, sidebar, title, hints, false)
 }
 

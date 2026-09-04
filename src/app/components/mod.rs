@@ -90,8 +90,17 @@ mod browser_component_tests;
 #[path = "feeds_component_tests.rs"]
 mod feeds_component_tests;
 #[cfg(test)]
+#[path = "feeds_manage_component_tests.rs"]
+mod feeds_manage_component_tests;
+#[cfg(test)]
 #[path = "home_component_tests.rs"]
 mod home_component_tests;
+#[cfg(test)]
+#[path = "library_routes_component_tests.rs"]
+mod library_routes_component_tests;
+#[cfg(test)]
+#[path = "multiselect_component_tests.rs"]
+mod multiselect_component_tests;
 #[cfg(test)]
 #[path = "music_workspace_component_tests.rs"]
 mod music_workspace_component_tests;
@@ -104,6 +113,9 @@ mod queue_component_tests;
 #[cfg(test)]
 #[path = "save_playlist_component_tests.rs"]
 mod save_playlist_component_tests;
+#[cfg(test)]
+#[path = "search_sidebar_component_tests.rs"]
+mod search_sidebar_component_tests;
 #[cfg(test)]
 #[path = "selection_modal_component_tests.rs"]
 mod selection_modal_component_tests;

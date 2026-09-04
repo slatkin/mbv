@@ -16,11 +16,22 @@ pub(in crate::app) struct FeedsManageRenderModel<'a> {
     pub pending_add: Option<u64>,
 }
 
+/// Geometry painted by the feeds-manage popup, reused by its mouse
+/// hit-testing (task 5.1, design.md D6).
+pub(in crate::app) struct FeedsManageRenderGeometry {
+    /// The painted modal rect — the outside-click boundary.
+    pub frame: Rect,
+    /// List stage: painted feed-row rect -> feed index.
+    pub rows: Vec<(Rect, usize)>,
+    /// Form stage: painted field-row rect -> field.
+    pub fields: Vec<(Rect, FeedFormField)>,
+}
+
 pub(in crate::app) fn render_feeds_manage_content(
     f: &mut Frame,
     dim_backdrop_active: &mut bool,
     model: FeedsManageRenderModel<'_>,
-) {
+) -> FeedsManageRenderGeometry {
     match model.stage {
         FeedsManageStage::List => render_feeds_manage_list(f, dim_backdrop_active, &model),
         FeedsManageStage::Form(form) => {
@@ -33,7 +44,7 @@ fn render_feeds_manage_list(
     f: &mut Frame,
     dim_backdrop_active: &mut bool,
     model: &FeedsManageRenderModel<'_>,
-) {
+) -> FeedsManageRenderGeometry {
     let title = " Manage Feeds ";
     let hint = "[a]add  [↵/e]edit  [d]remove  [Esc]close";
     let width: u16 = 58;
@@ -74,8 +85,29 @@ fn render_feeds_manage_list(
             )),
             list_area,
         );
-        return;
+        return FeedsManageRenderGeometry {
+            frame: inner,
+            rows: Vec::new(),
+            fields: Vec::new(),
+        };
     }
+    let rows = model
+        .feeds
+        .iter()
+        .enumerate()
+        .take(list_area.height as usize)
+        .map(|(i, _)| {
+            (
+                Rect {
+                    x: list_area.x,
+                    y: list_area.y + i as u16,
+                    width: list_area.width,
+                    height: 1,
+                },
+                i,
+            )
+        })
+        .collect();
 
     let lines: Vec<Line> = model
         .feeds
@@ -111,6 +143,11 @@ fn render_feeds_manage_list(
         })
         .collect();
     f.render_widget(Paragraph::new(lines), list_area);
+    FeedsManageRenderGeometry {
+        frame: inner,
+        rows,
+        fields: Vec::new(),
+    }
 }
 
 fn render_feeds_manage_form(
@@ -118,7 +155,7 @@ fn render_feeds_manage_form(
     dim_backdrop_active: &mut bool,
     form: &super::super::super::types_feeds_manage::FeedForm,
     pending_add: Option<u64>,
-) {
+) -> FeedsManageRenderGeometry {
     let editing = form.editing_index.is_some();
     let title = if editing { " Edit Feed " } else { " Add Feed " };
     let submitting = pending_add.is_some();
@@ -171,6 +208,22 @@ fn render_feeds_manage_form(
         (url_line, field_style(url_focused)),
         (kind_line, field_style(kind_focused)),
     ];
+    let fields: Vec<(Rect, FeedFormField)> =
+        [FeedFormField::Name, FeedFormField::Url, FeedFormField::Kind]
+            .into_iter()
+            .enumerate()
+            .map(|(i, field)| {
+                (
+                    Rect {
+                        x: inner.x + 1,
+                        y: inner.y + 1 + i as u16,
+                        width: inner.width.saturating_sub(2),
+                        height: 1,
+                    },
+                    field,
+                )
+            })
+            .collect();
     for (i, (text, style)) in rows.iter().enumerate() {
         f.render_widget(
             Paragraph::new(Span::styled(text.clone(), *style)),
@@ -200,4 +253,9 @@ fn render_feeds_manage_form(
             height: 1,
         },
     );
+    FeedsManageRenderGeometry {
+        frame: inner,
+        rows: Vec::new(),
+        fields,
+    }
 }

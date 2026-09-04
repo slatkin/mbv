@@ -2,10 +2,11 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent};
+use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{Msg, SavePlaylistIntent, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_save_playlist_content;
@@ -16,6 +17,10 @@ pub struct SavePlaylistComponent {
     rename: bool,
     rename_id: Option<String>,
     dim_backdrop_active: bool,
+    /// The painted modal rect (last frame) — the outside-click boundary.
+    frame: Rect,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3).
+    mouse_gestures: MouseGestureState,
 }
 
 impl SavePlaylistComponent {
@@ -25,6 +30,8 @@ impl SavePlaylistComponent {
             rename: false,
             rename_id: None,
             dim_backdrop_active: false,
+            frame: Rect::default(),
+            mouse_gestures: MouseGestureState::new(),
         }
     }
 
@@ -77,6 +84,35 @@ impl SavePlaylistComponent {
             _ => None,
         }
     }
+
+    /// Mouse handling (task 5.1): the modal is a single always-focused
+    /// name input with no painted buttons and no focus/select keyboard
+    /// path, so the only click with a keyboard equivalent is an outside
+    /// click mirroring Esc (`SavePlaylistIntent::Dismiss`). Typing,
+    /// submit, and right-click/wheel stay keyboard-only.
+    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
+        }
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Click(at) if !self.frame.contains(at) => Some(Msg::Shell(
+                ShellRequest::SavePlaylistIntent(SavePlaylistIntent::Dismiss),
+            )),
+            _ => None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_frame(&self) -> Rect {
+        self.frame
+    }
+
+    /// Test seam: forget the last click so the next event is neither
+    /// throttled nor promoted to a double-click.
+    #[cfg(test)]
+    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
+        self.mouse_gestures.reset_for_test();
+    }
 }
 
 impl Default for SavePlaylistComponent {
@@ -87,12 +123,14 @@ impl Default for SavePlaylistComponent {
 
 impl Component for SavePlaylistComponent {
     fn view(&mut self, frame: &mut Frame, _area: Rect) {
-        render_save_playlist_content(
+        let geometry = render_save_playlist_content(
             frame,
             &mut self.dim_backdrop_active,
             &self.input,
             self.rename,
         );
+        // Adopt the painted frame for outside-click dismissal (task 5.1).
+        self.frame = geometry.frame;
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
@@ -111,6 +149,7 @@ impl AppComponent<Msg, UserEvent> for SavePlaylistComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
             Event::Keyboard(key) => self.handle_key(key),
+            Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }
     }

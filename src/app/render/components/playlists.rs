@@ -13,12 +13,20 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+/// Geometry painted by the save-playlist modal, reused by its mouse
+/// hit-testing (task 5.1, design.md D6). The modal has no click targets —
+/// the single name input is always keyboard-focused — so only the frame
+/// (the outside-click boundary) is published.
+pub(in crate::app) struct SavePlaylistRenderGeometry {
+    pub frame: Rect,
+}
+
 pub(in crate::app) fn render_save_playlist_content(
     f: &mut Frame,
     dim_backdrop_active: &mut bool,
     input: &str,
     rename: bool,
-) {
+) -> SavePlaylistRenderGeometry {
     let title_text = if rename {
         " Rename Playlist "
     } else {
@@ -71,6 +79,7 @@ pub(in crate::app) fn render_save_playlist_content(
             height: 1,
         },
     );
+    SavePlaylistRenderGeometry { frame: inner }
 }
 
 #[derive(Default)]

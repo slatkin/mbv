@@ -4,10 +4,12 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent};
+use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
 use super::msg::Msg;
 use super::user_event::UserEvent;
 use crate::app::render::{render_multiselect_content, MultiSelectRenderModel};
@@ -18,6 +20,13 @@ pub struct MultiselectComponent {
     items: Vec<(String, String, bool)>,
     cursor: usize,
     dim_backdrop_active: bool,
+    /// The painted modal rect (last frame) — the outside-click boundary.
+    frame: Rect,
+    /// Irregular painted chrome (task 5.1, design.md D6): item rows,
+    /// repopulated in `view()` from the geometry the painter just produced.
+    hit_rows: HitRegions<usize>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3).
+    mouse_gestures: MouseGestureState,
 }
 
 impl MultiselectComponent {
@@ -27,6 +36,9 @@ impl MultiselectComponent {
             items: Vec::new(),
             cursor: 0,
             dim_backdrop_active: false,
+            frame: Rect::default(),
+            hit_rows: HitRegions::new(),
+            mouse_gestures: MouseGestureState::new(),
         }
     }
 
@@ -78,6 +90,77 @@ impl MultiselectComponent {
             _ => None,
         }
     }
+
+    /// Mouse handling (task 5.1): only actions with a keyboard equivalent.
+    /// A row click toggles that item's selection and moves the cursor to it
+    /// (Space equivalent), a double-click commits (Enter equivalent), and an
+    /// outside click commits exactly like Esc — this popup's only dismiss
+    /// path *is* a commit (`Esc | Enter` both emit `MultiselectCommit`).
+    /// The painted rows are `[ ]/[x]` checkboxes with no separate confirm
+    /// button, so there is no click target for a bare confirm. Right-click
+    /// and wheel have no keyboard equivalent here and are ignored.
+    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
+        }
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Click(at) => {
+                if let Some(&index) = self.hit_rows.resolve(at) {
+                    if let Some(item) = self.items.get_mut(index) {
+                        item.2 = !item.2;
+                        self.cursor = index;
+                    }
+                    return None;
+                }
+                if !self.frame.contains(at) {
+                    return self.commit_request();
+                }
+                None
+            }
+            MouseGesture::DoubleClick(at) => {
+                if self.hit_rows.resolve(at).is_some() {
+                    return self.commit_request();
+                }
+                // Outside double-click: the first click already committed.
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// The keyboard Esc/Enter path: commit the current choices.
+    fn commit_request(&self) -> Option<Msg> {
+        self.commit_snapshot().map(|(kind, items)| {
+            Msg::Shell(super::msg::ShellRequest::MultiselectCommit { kind, items })
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_rows(&self) -> &HitRegions<usize> {
+        &self.hit_rows
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_cursor(&self) -> usize {
+        self.cursor
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_items(&self) -> &[(String, String, bool)] {
+        &self.items
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_frame(&self) -> Rect {
+        self.frame
+    }
+
+    /// Test seam: forget the last click so the next event is neither
+    /// throttled nor promoted to a double-click.
+    #[cfg(test)]
+    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
+        self.mouse_gestures.reset_for_test();
+    }
 }
 
 impl Default for MultiselectComponent {
@@ -91,7 +174,7 @@ impl Component for MultiselectComponent {
         let Some(kind) = self.kind else {
             return;
         };
-        render_multiselect_content(
+        let geometry = render_multiselect_content(
             f,
             &mut self.dim_backdrop_active,
             MultiSelectRenderModel {
@@ -100,6 +183,13 @@ impl Component for MultiselectComponent {
                 cursor: self.cursor,
             },
         );
+        // Adopt the rects the painter just produced into the irregular-
+        // chrome registry (task 5.1, design.md D6).
+        self.frame = geometry.frame;
+        self.hit_rows.clear();
+        for (rect, index) in geometry.rows {
+            self.hit_rows.push(rect, index);
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
@@ -121,6 +211,7 @@ impl AppComponent<Msg, UserEvent> for MultiselectComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => self.handle_key(key),
+            Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }
     }
