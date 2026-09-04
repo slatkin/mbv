@@ -72,7 +72,7 @@
   `wide_library_panes(area, 0, PANE_PAD_Y)` call for `right_area`; do not change its arguments —
   verify the Music characterization test diff shows only the left-pane horizontal inset change and
   the right rail is byte-identical.
-- [ ] 3.4 Delete the redundant one-row `SURFACE_BACKDROP` strips below the left pane at
+- [x] 3.4 Delete the redundant one-row `SURFACE_BACKDROP` strips below the left pane at
   `browser/paint.rs:60-68`, `music_wide.rs:497-506`, and `audiobookshelf_book.rs:174-181` —
   verify all three characterization tests show no painted row between the left pane's bottom and
   the status bar, and that the pane still bottoms out exactly one row above the status bar.
