@@ -50,18 +50,6 @@ impl BrowserComponent {
         };
         let right_panel = panes.right_panel;
 
-        // Library-side separator row below the left pane, matching Music and
-        // Home's wide layout.
-        f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
-            Rect {
-                x: panes.left_panel.x,
-                y: panes.left_panel.bottom(),
-                width: panes.left_panel.width,
-                height: 1,
-            },
-        );
-
         let right_area = panes.right_area;
         self.layout.movies_wide_right_area = right_area;
 

@@ -174,15 +174,6 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             ..hero_content_area
         };
         geometry.hero_area = Some(hero_area);
-        frame.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
-            Rect {
-                x: panes.left_panel.x,
-                y: panes.left_panel.bottom(),
-                width: panes.left_panel.width,
-                height: 1,
-            },
-        );
         let image = render_book_hero(
             frame,
             hero_area,

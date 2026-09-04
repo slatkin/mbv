@@ -503,15 +503,6 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     layout.wide_music_track_hitmap.clear();
     let left_panel = panes.left_panel;
     let right_panel = panes.right_panel;
-    f.render_widget(
-        ratatui::widgets::Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
-        Rect {
-            x: left_panel.x,
-            y: left_panel.bottom(),
-            width: left_panel.width,
-            height: 1,
-        },
-    );
     let right_area = panes.right_area;
     let track_active = ctx.track_cursor.is_some();
     let left_focused = ctx.focused && track_active;
