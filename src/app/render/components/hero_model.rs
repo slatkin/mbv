@@ -1,4 +1,5 @@
 use mbv_core::api::EmbyItem;
+use mbv_core::playback_queue::QueueItem;
 use ratatui::{style::Style, text::Span};
 
 use crate::app::palette;
@@ -38,6 +39,96 @@ pub(crate) enum HeroArtwork<'a> {
         image_types: &'static [&'static str],
     },
     Placeholder,
+}
+
+impl Hero for mbv_core::playback_queue::FeedEntry {
+    fn title(&self) -> &str {
+        &self.title
+    }
+    fn subtitle(&self) -> Option<&str> {
+        None
+    }
+    fn meta_rows(&self, width: u16) -> Vec<Vec<Span<'static>>> {
+        let line = crate::app::render::screens::feeds_model::feed_entry_meta_line(self);
+        if line.is_empty() {
+            Vec::new()
+        } else {
+            vec![vec![Span::styled(
+                trunc_str(&line, width as usize),
+                Style::default().fg(palette::TEXT_SECONDARY),
+            )]]
+        }
+    }
+    fn title_suffix(&self) -> Option<Span<'static>> {
+        None
+    }
+    fn description(&self) -> Option<String> {
+        None
+    }
+    fn artwork_for(&self, _aspect: HeroArtworkAspect) -> HeroArtwork<'_> {
+        HeroArtwork::Placeholder
+    }
+}
+
+impl Hero for QueueItem {
+    fn title(&self) -> &str {
+        self.title()
+    }
+
+    fn subtitle(&self) -> Option<&str> {
+        match self {
+            QueueItem::Audiobookshelf(item) => item.show_title.as_deref(),
+            QueueItem::AudiobookshelfBook(item) => item.author.as_deref(),
+            _ => None,
+        }
+    }
+
+    fn meta_rows(&self, width: u16) -> Vec<Vec<Span<'static>>> {
+        self.duration()
+            .map(|ticks| {
+                vec![vec![Span::styled(
+                    trunc_str(
+                        &fmt_duration_approx((ticks / TICKS_PER_SECOND as u64) as i64),
+                        width as usize,
+                    ),
+                    Style::default().fg(palette::TEXT_SECONDARY),
+                )]]
+            })
+            .unwrap_or_default()
+    }
+
+    fn title_suffix(&self) -> Option<Span<'static>> {
+        None
+    }
+
+    fn description(&self) -> Option<String> {
+        match self {
+            QueueItem::Audiobookshelf(item) => item.description.clone(),
+            _ => None,
+        }
+    }
+
+    fn artwork_for(&self, _aspect: HeroArtworkAspect) -> HeroArtwork<'_> {
+        match self {
+            QueueItem::Audiobookshelf(item) => item
+                .cover_path
+                .as_deref()
+                .map(|id| HeroArtwork::Image {
+                    item_id: id,
+                    image_types: &["Primary"],
+                })
+                .unwrap_or(HeroArtwork::Placeholder),
+            QueueItem::AudiobookshelfBook(item) => item
+                .cover_path
+                .as_deref()
+                .map(|id| HeroArtwork::Image {
+                    item_id: id,
+                    image_types: &["Primary"],
+                })
+                .unwrap_or(HeroArtwork::Placeholder),
+            _ => HeroArtwork::Placeholder,
+        }
+    }
 }
 
 impl Hero for EmbyItem {

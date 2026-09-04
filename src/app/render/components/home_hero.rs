@@ -99,6 +99,50 @@ pub(in crate::app) enum HeroData {
     Generic(QueueItem, Rect),
 }
 
+impl HeroData {
+    fn render_content(
+        &self,
+        f: &mut Frame,
+        two_column: bool,
+        focused: bool,
+        use_nerd_fonts: bool,
+    ) -> Option<HomeImagePaint> {
+        match self {
+            Self::Emby(item, meta_area, wide_area, img_area, meta_layout) => {
+                let meta_block =
+                    App::keep_watching_hero_meta_block(item, meta_area.width, use_nerd_fonts);
+                render_hero_layout_meta_content(
+                    f,
+                    *meta_area,
+                    *wide_area,
+                    meta_layout,
+                    meta_block,
+                    if two_column {
+                        WIDE_OVERVIEW_PAD as u16
+                    } else {
+                        0
+                    },
+                    focused,
+                    use_nerd_fonts,
+                    item.as_ref(),
+                );
+                Some(HomeImagePaint::Emby {
+                    area: *img_area,
+                    item: item.clone(),
+                    centered: two_column,
+                })
+            }
+            Self::Generic(item, area) => super::home_latest_row::render_home_latest_detail_content(
+                f,
+                *area,
+                item,
+                focused,
+                if two_column { WIDE_OVERVIEW_PAD } else { 0 },
+            ),
+        }
+    }
+}
+
 impl App {
     /// Image types to request for the Keep Watching hero panel, mirroring
     /// the per-type conventions used for the queue card (`render_card`).
@@ -504,40 +548,7 @@ pub(in crate::app) fn render_home_hero_content(
     focused: bool,
     use_nerd_fonts: bool,
 ) -> Option<HomeImagePaint> {
-    let overview_pad = if two_column {
-        WIDE_OVERVIEW_PAD as u16
-    } else {
-        0
-    };
-    match hero_data {
-        HeroData::Emby(item, meta_area, wide_area, img_area, meta_layout) => {
-            let meta_block =
-                App::keep_watching_hero_meta_block(item, meta_area.width, use_nerd_fonts);
-            render_hero_layout_meta_content(
-                f,
-                *meta_area,
-                *wide_area,
-                meta_layout,
-                meta_block,
-                overview_pad,
-                focused,
-                use_nerd_fonts,
-                item.as_ref(),
-            );
-            Some(HomeImagePaint::Emby {
-                area: *img_area,
-                item: item.clone(),
-                centered: two_column,
-            })
-        }
-        HeroData::Generic(item, area) => super::home_latest_row::render_home_latest_detail_content(
-            f,
-            *area,
-            item,
-            focused,
-            overview_pad as usize,
-        ),
-    }
+    hero_data.render_content(f, two_column, focused, use_nerd_fonts)
 }
 
 /// Beside-image inline dims: image width, the wrap-around text layout,

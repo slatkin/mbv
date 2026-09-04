@@ -136,11 +136,12 @@ pub(in crate::app::render) fn render_home_latest_detail_content(
     // rather than the legacy Home metadata painter. Audiobookshelf keeps
     // the beside-image path below because its cover is a wide thumbnail.
     if !matches!(item, QueueItem::Audiobookshelf(_)) {
+        let hero: &dyn super::hero_model::Hero = item;
         let meta = item
             .duration()
             .map(|ticks| fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64));
         let content = HeroContent {
-            title: Some(item.title()),
+            title: Some(hero.title()),
             meta_line: meta.as_deref(),
             meta_color: palette::TEXT_SECONDARY,
             show_playing: false,
