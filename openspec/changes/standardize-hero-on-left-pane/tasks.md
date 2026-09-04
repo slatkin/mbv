@@ -66,7 +66,7 @@
   call for `right_area` — its `pad_y` also shapes the right pane (`arrangements/library.rs:19-23`)
   — verify the TV characterization test is unchanged (TV already uses the shared inset and focus
   resolution).
-- [x] 3.3 Music (`music_wide.rs:99`, `:515-519`): route the fill through `hero_on_left_pane(f,
+- [ ] 3.3 Music (`music_wide.rs:99`, `:515-519`): route the fill through `hero_on_left_pane(f,
   area, LeftPaneFocus::Workspace(ctx.focused && ctx.track_cursor.is_some()))` and take the left
   content rect from its return value instead of `panes.left_area`. Keep the
   `wide_library_panes(area, 0, PANE_PAD_Y)` call for `right_area`; do not change its arguments —
