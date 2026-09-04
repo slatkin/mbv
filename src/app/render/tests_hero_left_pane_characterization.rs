@@ -274,11 +274,11 @@ fn abs_books_wide_left_pane_style_color_bug_leaves_background_unpainted() {
     );
 }
 
-/// ABS Podcasts: no fill call exists at all on the wide left pane
-/// (`audiobookshelf_podcast.rs:250-260` goes straight to
-/// `render_podcast_hero`); the reported `hero_area` is unpainted.
+/// ABS Podcasts (task 2.1): the wide left pane fills via `hero_on_left_pane`.
+/// D8's gain: this surface goes focus-green when the episode workspace holds
+/// focus (mirroring TV), not a bare `focused`.
 #[test]
-fn abs_podcasts_wide_left_pane_never_filled() {
+fn abs_podcasts_wide_left_pane_fills_via_shared_primitive() {
     let app = crate::app::tests_podcast::audiobookshelf_app();
     let mut component = AudiobookshelfPodcastComponent::new();
     if let Some(state) = app.audiobookshelf_browse.first() {
@@ -290,11 +290,10 @@ fn abs_podcasts_wide_left_pane_never_filled() {
     let hero = geometry.hero_area;
     assert!(hero.width > 0 && hero.height > 0, "hero={hero:?}");
     let buffer = terminal.backend().buffer();
-    assert_ne!(
-        buffer[(hero.x, hero.y)].bg,
-        palette::SURFACE_RESTING,
-        "characterizes the pre-fix state: ABS Podcasts never fills the pane"
-    );
+    // No episode is selected in this fixture: the show list holds focus, so
+    // the pane stays resting even though the surface is focused overall
+    // (D8/D3: never a bare `focused`).
+    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
     assert_ne!(
         buffer[(hero.x, hero.y)].bg,
         palette::resolve_surface_focus(true)

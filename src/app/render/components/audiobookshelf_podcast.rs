@@ -246,12 +246,21 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         paint_bucket_pills(frame, right_pane.pills_area, state, geometry);
     }
 
-    // Wide hero: title lives in the right show-list panel, so the hero body
-    // carries only author/description/image. Persistent-mode episode pills +
-    // table are wide-only.
+    // Wide hero: fills and insets the left pane via the shared primitive
+    // (D8: this surface gains focus-green when the episode workspace holds
+    // focus, mirroring TV -- never a bare `focused`). Title lives in the
+    // right show-list panel, so the hero body carries only
+    // author/description/image. Persistent-mode episode pills + table are
+    // wide-only.
+    let hero_content_area = hero_left::hero_on_left_pane(
+        frame,
+        area,
+        hero_left::LeftPaneFocus::Workspace(focused && interaction.episode_selection.is_some()),
+    )
+    .expect("wide branch already confirmed shared_hero_presentation fits");
     let image_paint = render_podcast_hero(
         frame,
-        hero_panel,
+        hero_content_area,
         state,
         interaction,
         focused,
@@ -423,14 +432,21 @@ fn render_podcast_hero(
         }
     }
     lines.push(HeroLine::Plain(String::new()));
-    let result = crate::app::render::components::hero::paint_hero_content(
-        frame,
+    // Wide: `area` is already the shared-inset content rect `hero_on_left_pane`
+    // returned to the caller. Narrow keeps its own selected-item-shell inset.
+    let content_area = if wide {
+        area
+    } else {
         Rect {
             x: area.x + SELECTED_BLOCK_SIDE_PADDING,
             y: area.y + SELECTED_BLOCK_SIDE_PADDING,
             width: area.width.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
             height: area.height.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
-        },
+        }
+    };
+    let result = crate::app::render::components::hero::paint_hero_content(
+        frame,
+        content_area,
         &HeroContent {
             title: show_title.then_some(show.title.as_str()),
             meta_line: None,
