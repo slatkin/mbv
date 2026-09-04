@@ -85,39 +85,42 @@ focused.
 - **WHEN** a destination whose left pane is a read-only hero renders in any focus state
 - **THEN** its left pane renders the resting surface treatment
 
-### Requirement: The main content box is a shared primitive with a kind-dependent payload
+### Requirement: Hero overview and media-list boxes have distinct ownership
 
-Every hero-on-left destination's left pane SHALL contain one main content box: a recessed
-backdrop area, painted by a single shared primitive, inset within the pane's content rect. Its
-presence SHALL NOT vary by destination. Its payload SHALL vary by the selected item's kind: the
-episode listing for a series, the track listing for an album, the chapter listing for a book, and
-the item's description plus metadata for items that have no such listing.
+Every hero-on-left destination SHALL paint a recessed overview main-content box through the
+shared primitive, even when its description is empty. The overview box carries only the Hero
+text description and has one primitive-owned internal padding value.
 
-A destination SHALL select the payload it supplies; it SHALL NOT decide whether the box is
-present, and SHALL NOT define its own recessed area, geometry, or surface. The box's internal
-padding SHALL be a single value owned by the shared primitive and SHALL NOT vary by destination
-or by payload kind.
+A destination with structured episode, track, or chapter content SHALL additionally paint a
+separate recessed media-list box. The shared arrangement owns both box and viewport rects; the
+destination component owns its embedded `WideMediaList<Target>`, including rows, target identity,
+cursor, scroll, selection, intent translation, and hit geometry. A Hero SHALL NOT carry a
+structured listing or mutable list state. The destination SHALL NOT define its own box geometry
+or surface.
 
-#### Scenario: An item with a structured listing
+#### Scenario: TV presents overview before episodes
 
-- **WHEN** a hero-on-left destination's selected item has an episode, track, or chapter listing
-- **THEN** that listing renders inside the main content box
+- **WHEN** a selected Series renders at Wide geometry
+- **THEN** title and ordered metadata render first
+- **AND** one blank row separates the metadata from the overview main-content box
+- **AND** a separate media-list box follows the overview box
+- **AND** season pills are parent chrome above the episode `WideMediaList` viewport
 
-#### Scenario: An item with no structured listing
+#### Scenario: A structured workspace renders its media list
 
-- **WHEN** a hero-on-left destination's selected item has no episode, track, or chapter listing
-- **THEN** the item's description and metadata render inside the main content box
+- **WHEN** TV, Music, or Audiobookshelf renders selected structured content
+- **THEN** its parent-owned `WideMediaList` renders inside the separate media-list box
+- **AND** canonical row, scroll, selection, and hit geometry are preserved
 
-#### Scenario: The payload is empty
+#### Scenario: The overview is empty
 
-- **WHEN** a selected item supplies neither a listing nor description text
-- **THEN** the main content box is still painted
+- **WHEN** a selected item supplies no description text
+- **THEN** the overview main-content box is still painted
 - **AND** its absence is never used to signal an empty payload
 
-#### Scenario: Two payload kinds are compared
+#### Scenario: Two overview payloads are compared
 
-- **WHEN** a structured listing and a description payload are rendered in the main content box at
-  the same pane width
+- **WHEN** two description payloads render in the overview main-content box at the same pane width
 - **THEN** both begin at the same offset from the box's edges
 
 ## MODIFIED Requirements

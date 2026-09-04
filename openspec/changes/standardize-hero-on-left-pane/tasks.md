@@ -93,10 +93,30 @@
 - [x] 4.1 Add a `SURFACE_ARTWORK_PLACEHOLDER` semantic role to `src/app/render/theme/` and a
   `render_artwork_placeholder(f, area)` component that paints it — verify the role is not a
   re-exported primitive and a unit test asserts the painted extent matches the requested rect.
-- [x] 4.2 Define the `Hero` trait in `src/app/render/components/` (title, subtitle, meta rows,
-  body as listing-or-description, `artwork()` as `HeroArtwork::Image | Placeholder`) and implement
-  it for `EmbyItem` — verify `rtk cargo check -p mbv` passes with the Emby hero path routed
-  through the trait and all characterization tests unchanged from their phase-3 state.
+- [x] 4.2 Define the initial `Hero` trait in `src/app/render/components/` and implement it for
+  `EmbyItem` — verify `rtk cargo check -p mbv` passes with the Emby hero path routed through the
+  trait and all characterization tests unchanged from their phase-3 state.
+- [ ] 4.2a Narrow `Hero` to title, ordered metadata, optional description, and semantic artwork;
+  delete its listing body and give the shared arrangement named artwork, overview, and optional
+  media-list viewport slots. Keep `Rect`, targets, cursor, scroll, and hit state out of `Hero` —
+  verify the existing Home/Emby path remains unchanged and the compiler finds no `HeroBody::Listing`.
+- [ ] 4.2b Establish the shared stacked-artwork/title gap policy: when Music Wide stacks album
+  art above title with images on, reserve exactly one blank row; do not apply it images-off or to
+  side-by-side layout. Update the existing Music publish-versus-paint geometry test or add the
+  smallest durable geometry assertion that catches a lost row.
+- [ ] 4.2c Route TV Wide through the Hero slots: use shared landscape geometry and a locally
+  verified Emby artwork candidate chain (with `Thumb` first only when supported by the client
+  mapping), then render title, ordered metadata, blank row, and an overview main-content box.
+  Re-baseline the existing TV buffer characterization as the intended visual delta.
+- [ ] 4.2d Replace TV's hand-painted episode table with a parent-owned embedded
+  `WideMediaList<String>` in a separate recessed media-list box below the overview; season pills
+  remain parent chrome. Preserve component-owned selection, scroll, viewport anchoring, and hit
+  resolution through the canonical control; add only the smallest buffer/integration coverage for
+  the two boxes and canonical episode rows.
+- [ ] 4.2e Migrate Music tracks and Audiobookshelf episode/chapter left workspaces individually to
+  parent-owned embedded `WideMediaList` controls in their Hero media-list slots. Preserve each
+  parent's typed targets, local selection, scroll/anchor, and hit semantics; do not introduce a
+  media-list trait. Verify each migration with the existing narrowest interaction/buffer coverage.
 - [ ] 4.3 Make the images-off collapse a layout decision, not a `HeroArtwork` variant (D10): the
   hero layout takes the global images setting and returns `Option<Rect>` for the artwork region,
   `None` when images are off, with text and metadata taking the full content width — verify a test
@@ -138,10 +158,10 @@
   fixtures — verify `rtk ast-grep test` passes and the unscoped `rtk ast-grep scan` reports zero
   findings tree-wide (fix or separately file any pre-existing hits recorded in task 1.2; a
   standing baseline is not a conforming resolution).
-- [ ] 5.4 Add a conformance assertion that the main content box is present on all seven surfaces
-  in both populated and empty-payload states, and that a structured-listing payload and a
-  description payload begin at the same offset from the box's edges (D9) — verify the test fails
-  if any destination skips the box or reintroduces per-caller padding.
+- [ ] 5.4 Add a conformance assertion that the overview main-content box is present on all seven
+  surfaces in populated and empty-description states, and that structured workspaces paint a
+  separate canonical media-list box with primitive-owned padding — verify the test fails if a
+  destination skips either required box or reintroduces per-caller padding.
 
 ## 6. Canon
 

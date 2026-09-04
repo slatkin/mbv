@@ -139,34 +139,36 @@ sites drop their arguments:
 The three destinations missing the box (ABS Books, ABS Podcasts, Feeds) gain it in the
 per-surface phase, carrying their existing payload into it.
 
-### D-D. The `Hero` trait is a UI-layer trait over content, not over providers
+### D-D. The `Hero` trait is a UI-layer content contract, not a provider or interaction contract
 
 ```
 trait Hero {
     fn title(&self) -> &str;
-    fn subtitle(&self) -> Option<&str>;      // series/author/show
+    fn subtitle(&self) -> Option<&str>;
     fn meta_rows(&self, width: u16) -> Vec<...>;
-    fn body(&self) -> HeroBody;              // Listing(..) | Description(&str)
-    fn artwork(&self) -> HeroArtwork;        // Image(..) | Placeholder
+    fn description(&self) -> Option<&str>;
+    fn artwork(&self) -> HeroArtwork;
 }
 ```
 
-`artwork()` answers *what this item has*, with exactly two states: real artwork, or none
-(`Placeholder`). It is deliberately **not** where the images-off mode lives — see D-E.
+`Hero` carries text and semantic artwork only: `description()` replaces `HeroBody`, and there is
+no listing variant. A `Vec<String>` cannot preserve `WideMediaList` targets, headings, semantic
+row state, cursor, scroll, or hit geometry. `Hero` also carries no `Rect` and no mutable list.
 
-Implemented for `EmbyItem`, for the Audiobookshelf/generic `QueueItem` hero, and — per locked
-decision **D11** — for feed entries, with no Feeds exception: a feed entry renders the same
-image region (real thumbnail when it has one, placeholder when it does not) and the same main
-content box carrying its entry text. The renderer
-takes `&dyn Hero` (or a generic) plus a `Rect` and never inspects the concrete type.
-`HeroData::Generic` disappears; `HeroData` collapses to the layout-carrying struct the Emby arm
-already is.
+The shared arrangement returns named artwork, overview-box, and optional media-list viewport
+slots. The destination component owns its embedded `WideMediaList<Target>`, projects its own
+`MediaListRow<Target>` values, and paints it into the viewport. It retains cursor, scroll,
+selection, intent translation, and hit geometry. TV season pills remain parent chrome above its
+media-list viewport.
 
-*Why a trait rather than a single struct built by both providers:* the metadata layout needs
-width-dependent text measurement (`keep_watching_hero_layout`, `home_latest_detail_text`) that
-today runs at different points for each provider. A trait lets each provider keep its own
-measurement while the renderer keeps one path. If the two measurement paths converge during
-implementation, collapse to a struct — that is strictly simpler and preferred if it works.
+`artwork()` answers what the item has (`Image` or `Placeholder`) and its semantic aspect. TV
+requests `Landscape`; the Emby adapter resolves a locally verified ordered candidate chain
+(`Thumb` first when supported by the client mapping, then the established fallback). The layout,
+not Emby field names, owns the landscape ratio. Images-off remains a layout decision (D-E).
+
+Implemented for `EmbyItem`, Audiobookshelf/generic entries, and feed entries; the renderer does
+not branch on provider. `HeroData::Generic` disappears. If provider measurement converges during
+implementation, replace the trait with a simpler shared struct.
 
 *What this fixes structurally:* `home.rs:237-242` reads `if let Some(HeroData::Generic(_, area))`.
 With no `Generic` variant, the clamp has nowhere to be written. Deleting the clamp without

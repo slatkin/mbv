@@ -44,15 +44,16 @@ hack lived in.
   Movies, Feeds) never do. Podcasts gains the treatment; Feeds' current always-resting behaviour
   is made explicit rather than incidental.
 - **The `SURFACE_BACKDROP` inset is reframed as the "main content box"** — a shared primitive
-  present on *every* hero-on-left surface, whose payload varies by item kind (episode listing on
-  TV, track listing on Music, description + metadata on Movies/Home and any item with no
-  episodes or tracks). It is renamed from `hero_on_left_recessed_box` and extended to ABS Books,
-  ABS Podcasts and Feeds, which lack it today. It is not a per-surface presence toggle; the
-  `b64c7e4e` → `1a43a1d4` TV revert was correct and is not undone. Its internal padding becomes a
-  single primitive-owned value, so Movies' and Home's overview text shifts to match.
+  for a Hero description. Structured workspaces additionally receive a separate recessed
+  media-list box, whose parent-owned `WideMediaList` supplies the interactive rows. TV therefore
+  presents title, metadata, a blank row, overview box, then season-pills/media-list box; Music
+  and Audiobookshelf follow the same ownership model as they migrate. The primitive retains one
+  internal padding value.
 - **One UI-level `Hero` trait** implemented for Emby items, Audiobookshelf/generic entries, and
-  feed entries. `HeroData::Generic` special-casing is removed at the UI layer; the hero renderer
-  no longer branches on provider.
+  feed entries. It carries title, ordered metadata, optional description, and semantic artwork;
+  arrangements own slots while destination components own `WideMediaList` state and interaction.
+  `HeroData::Generic` special-casing is removed at the UI layer; the hero renderer no longer
+  branches on provider.
 - **Placeholder artwork.** While images are on, every hero renders an image region; an item with
   no artwork gets a single shared placeholder owned centrally (theme role + component), not per
   provider. **Feeds gains an image region it has never had** — the most visible change here.
@@ -79,8 +80,8 @@ _None._ The behaviour belongs to two existing capabilities.
 
 - `right-panel-arrangements`: adds a requirement that the hero-on-left left pane is a shared,
   unconditionally filled container with one owner, one extent, one inset and one focus rule;
-  adds a requirement that the main content box is a shared primitive present on every
-  hero-on-left surface with a kind-dependent payload and one padding value; extends the
+  adds requirements for the Hero overview box and separately recessed parent-owned media-list
+  box on structured workspaces, with one padding value; extends the
   two-focusable-panes requirement so the focus rule is stated once for every focusable left
   workspace rather than named per surface; corrects the wide-arrangement requirement, which
   currently lists Emby podcast libraries as having an interactive left detail workspace when they

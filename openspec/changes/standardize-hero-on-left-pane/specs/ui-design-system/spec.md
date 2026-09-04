@@ -6,7 +6,15 @@ The UI SHALL render hero content through one provider-neutral abstraction. Every
 can supply a hero — Emby items and Audiobookshelf entries alike — SHALL satisfy that one
 abstraction, and the hero renderer SHALL NOT branch on which provider supplied the item, nor
 select geometry, extent, or layout from the provider's identity. Provider differences SHALL be
-expressed as content the abstraction carries.
+expressed as content the abstraction carries. The abstraction SHALL carry title, ordered metadata,
+optional description, and semantic artwork only; it SHALL NOT carry a structured listing, a layout
+rect, or interactive list state. A shared arrangement SHALL provide named artwork, overview, and
+optional media-list viewport slots. A destination component SHALL own and render its existing
+embedded `WideMediaList` into a media-list slot.
+
+A hero that requests landscape artwork SHALL express that semantic aspect rather than a
+provider-specific field name. The provider adapter SHALL resolve its verified image candidates
+and fallback order; the layout SHALL own the landscape ratio.
 
 While image rendering is enabled, a hero SHALL always present an image region. When the selected
 item has no artwork, the region SHALL be filled by a single shared placeholder owned by the theme
@@ -24,6 +32,21 @@ surface SHALL retain a reserved or placeheld image region when images are off.
   presentation
 - **THEN** both are rendered by the same code path through the shared hero abstraction
 - **AND** the renderer contains no branch on the provider that supplied the item
+
+#### Scenario: A structured Hero preserves list ownership
+
+- **WHEN** a Hero-bearing destination presents episodes, tracks, or chapters
+- **THEN** Hero text renders in its overview slot
+- **AND** the destination's existing `WideMediaList` renders the structured rows in the separate
+  media-list slot
+- **AND** the Hero abstraction contains no list target, cursor, scroll, or hit state
+
+#### Scenario: A Hero requests landscape artwork
+
+- **WHEN** a Hero presentation requires landscape artwork
+- **THEN** its layout uses the shared landscape geometry
+- **AND** its provider adapter resolves artwork through its verified candidate chain rather than
+  exposing a provider-specific image field to the layout
 
 #### Scenario: A provider's hero cannot resize its container
 
