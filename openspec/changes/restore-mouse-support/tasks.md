@@ -62,7 +62,7 @@ exists for irregular painted chrome. This scope note also governs Phase 3._
 - [x] 5.3 **[D]** Confirm the `confirm`, `daemon_lost`, and `remote_reanchor` blocking modals suppress all mouse activity beneath them **by eligibility** (D2): a `tick()`-level test asserts that a click outside the modal produces no underlying message **and** leaves underlying component state (cursor, scroll, selection) unchanged, since a message-discarding fold could not have guaranteed the second.
 - [x] 5.4 **[D]** Verify `context_menu` and `selection_modal` mouse behaviour matches their specs (menu-click executes/closes, outside-click dismisses, wheel does not mutate the obscured view — the last now follows from exclusivity in D2 rung 2); run `rtk cargo nextest run -p mbv context_menu selection_modal`.
 - [x] 5.5 **[M]** Update the ledger Mouse columns for every overlay/popup/modal row and the five surfaces from 5.2, recording breakpoints verified.
-- [ ] 5.6 **[M]** Phase-4 gate: `rtk cargo nextest run -p mbv`, clippy, fmt; then live-review observable overlay/popup pointer behaviour **at both breakpoints**. Treat defects as bugs and rerun affected tests and the gate before phase acceptance.
+- [x] 5.6 **[M]** Phase-4 gate: `rtk cargo nextest run -p mbv`, clippy, fmt; then live-review observable overlay/popup pointer behaviour **at both breakpoints**. Treat defects as bugs and rerun affected tests and the gate before phase acceptance.
 
 ## 6. Phase 5 — Net-new mouse surfaces: Music narrow + narrow browse
 
