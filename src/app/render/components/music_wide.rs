@@ -497,7 +497,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     // The pure arrangement is computed exactly once here in
     // `publish_geometry`; the paint path below consumes the returned panes
     // and left layout rather than recomputing them.
-    let Some((panes, left_layout)) = ctx.publish_geometry(area, layout) else {
+    let Some((panes, _published_left_layout)) = ctx.publish_geometry(area, layout) else {
         return output;
     };
     layout.wide_music_track_hitmap.clear();
@@ -512,19 +512,23 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
             height: 1,
         },
     );
-
-    let left_area = panes.left_area;
     let right_area = panes.right_area;
     let track_active = ctx.track_cursor.is_some();
     let left_focused = ctx.focused && track_active;
     let right_focused = ctx.focused && !track_active;
-    // `left_layout` is the arrangement returned from `publish_geometry`; no
-    // recomputation here.
-    f.render_widget(
-        ratatui::widgets::Block::default()
-            .style(Style::default().bg(palette::resolve_surface_focus(left_focused))),
-        left_panel,
+    let Some(left_area) = hero_left::hero_on_left_pane(
+        f,
+        area,
+        hero_left::LeftPaneFocus::Workspace(ctx.focused && ctx.track_cursor.is_some()),
+    ) else {
+        return output;
+    };
+    let left_layout = music_arrangement::wide_music_left_layout(
+        left_area,
+        ctx.selected_album.is_some() && ctx.images_enabled,
+        ctx.album_tracks.as_ref().map_or(0, Vec::len),
     );
+    layout.left_area = left_area;
 
     if let Some(album) = ctx.selected_album.as_ref() {
         output.image_paint = render_wide_left_hero(
