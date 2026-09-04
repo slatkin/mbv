@@ -331,7 +331,7 @@ fn render_tv_series_selection(
     let media_list_height = EPISODE_LIST_VISIBLE_ROWS
         .saturating_add(1) // season pill row
         .saturating_add(PANE_PAD_Y * 2);
-    let slots = hero_left::hero_left_slots(area, artwork_height, None);
+    let slots = hero_left::hero_left_slots(area, artwork_height, images_enabled, None);
 
     let image_paint = slots.artwork.map(|artwork_area| {
         let image_types = match item.artwork_for(HeroArtworkAspect::Landscape) {

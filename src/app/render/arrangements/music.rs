@@ -1,4 +1,4 @@
-use super::hero_left::{PANE_PAD_X, PANE_PAD_Y};
+use super::hero_left::{hero_artwork_slot, PANE_PAD_X, PANE_PAD_Y};
 use super::padded_rect;
 use crate::app::render::components::album_art::{INLINE_ALBUM_ART_RESERVED, INLINE_ALBUM_ART_ROWS};
 use ratatui::layout::Rect;
@@ -50,34 +50,38 @@ pub(in crate::app::render) fn wide_music_left_layout(
         width: left_area.width,
         height: track_h,
     };
-    let art_area = if art_available && hero_area.width >= INLINE_ALBUM_ART_RESERVED {
-        let art_width = if stack_metadata {
-            hero_area.width
+    let art_area = hero_artwork_slot(
+        if art_available && hero_area.width >= INLINE_ALBUM_ART_RESERVED {
+            let art_width = if stack_metadata {
+                hero_area.width
+            } else {
+                INLINE_ALBUM_ART_RESERVED
+            };
+            Rect {
+                x: if stack_metadata {
+                    hero_area.x
+                } else {
+                    hero_area.x.saturating_add(
+                        hero_area
+                            .width
+                            .saturating_sub(INLINE_ALBUM_ART_RESERVED)
+                            .saturating_add(PANE_PAD_X),
+                    )
+                },
+                y: hero_area.y,
+                width: art_width,
+                height: if stack_metadata {
+                    INLINE_ALBUM_ART_ROWS.min(hero_area.height)
+                } else {
+                    hero_area.height
+                },
+            }
         } else {
-            INLINE_ALBUM_ART_RESERVED
-        };
-        Rect {
-            x: if stack_metadata {
-                hero_area.x
-            } else {
-                hero_area.x.saturating_add(
-                    hero_area
-                        .width
-                        .saturating_sub(INLINE_ALBUM_ART_RESERVED)
-                        .saturating_add(PANE_PAD_X),
-                )
-            },
-            y: hero_area.y,
-            width: art_width,
-            height: if stack_metadata {
-                INLINE_ALBUM_ART_ROWS.min(hero_area.height)
-            } else {
-                hero_area.height
-            },
-        }
-    } else {
-        Rect::default()
-    };
+            Rect::default()
+        },
+        images_enabled,
+    )
+    .unwrap_or_default();
     let text_area = if stack_metadata {
         Rect {
             x: hero_area.x,

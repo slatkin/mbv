@@ -443,19 +443,30 @@ pub(in crate::app) struct HeroLeftSlots {
 pub(in crate::app::render) fn hero_left_slots(
     content: Rect,
     artwork_height: u16,
+    images_enabled: bool,
     _media_list_height: Option<u16>,
 ) -> HeroLeftSlots {
     let artwork_height = artwork_height.min(content.height);
-    let artwork = (artwork_height > 0).then_some(Rect {
-        height: artwork_height,
-        ..content
-    });
+    let artwork = hero_artwork_slot(
+        Rect {
+            height: artwork_height,
+            ..content
+        },
+        images_enabled,
+    );
+    let reserved_artwork_height = artwork.map_or(0, |area| area.height);
     let overview = Rect {
-        y: content.y.saturating_add(artwork_height),
-        height: content.height.saturating_sub(artwork_height),
+        y: content.y.saturating_add(reserved_artwork_height),
+        height: content.height.saturating_sub(reserved_artwork_height),
         ..content
     };
     HeroLeftSlots { artwork, overview }
+}
+
+/// Applies the global image policy to an artwork region. Images-off removes
+/// the region entirely so its sibling can use the full content width.
+pub(in crate::app::render) fn hero_artwork_slot(area: Rect, images_enabled: bool) -> Option<Rect> {
+    (images_enabled && area.width > 0 && area.height > 0).then_some(area)
 }
 
 /// Places an embedded media-list box `gap` rows below `overview_bottom` (the
@@ -503,7 +514,7 @@ mod hero_left_slots_tests {
 
     #[test]
     fn splits_artwork_and_overview_slots() {
-        let slots = hero_left_slots(content(), 5, None);
+        let slots = hero_left_slots(content(), 5, true, None);
         let artwork = slots.artwork.expect("artwork slot present");
         assert_eq!(artwork.y, content().y);
         assert_eq!(artwork.height, 5);
@@ -513,9 +524,18 @@ mod hero_left_slots_tests {
 
     #[test]
     fn omits_absent_artwork_slot() {
-        let slots = hero_left_slots(content(), 0, None);
+        let slots = hero_left_slots(content(), 0, true, None);
         assert!(slots.artwork.is_none());
         assert_eq!(slots.overview, content());
+    }
+
+    #[test]
+    fn images_off_collapses_artwork_and_preserves_full_content_width() {
+        let area = content();
+        let slots = hero_left_slots(area, 5, false, None);
+        assert!(slots.artwork.is_none());
+        assert_eq!(slots.overview, area);
+        assert_eq!(hero_artwork_slot(area, false), None);
     }
 
     #[test]
