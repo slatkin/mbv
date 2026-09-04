@@ -503,7 +503,7 @@ fn render_book_rows(
         frame,
         area,
         area,
-        chapter_list,
+        &mut *chapter_list,
         focused,
         palette::list_selected_row_bg(),
     );
