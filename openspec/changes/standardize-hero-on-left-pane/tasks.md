@@ -104,7 +104,7 @@
   art above title with images on, reserve exactly one blank row; do not apply it images-off or to
   side-by-side layout. Update the existing Music publish-versus-paint geometry test or add the
   smallest durable geometry assertion that catches a lost row.
-- [ ] 4.2c Route TV Wide through the Hero slots: use shared landscape geometry and a locally
+- [x] 4.2c Route TV Wide through the Hero slots: use shared landscape geometry and a locally
   verified Emby artwork candidate chain (with `Thumb` first only when supported by the client
   mapping), then render title, ordered metadata, blank row, and an overview main-content box.
   Re-baseline the existing TV buffer characterization as the intended visual delta.

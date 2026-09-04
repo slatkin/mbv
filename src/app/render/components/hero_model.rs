@@ -52,6 +52,29 @@ impl Hero for EmbyItem {
 
     fn meta_rows(&self, width: u16) -> Vec<Vec<Span<'static>>> {
         let mut rows = Vec::new();
+        if self.item_type == "Series" {
+            // Ported from `series_meta_line()` (`detail_series_view.rs`):
+            // year range (`production_year`..`end_year`) and uppercased
+            // genre, joined with two spaces, skipping empty parts.
+            let year_range = match (self.production_year, self.end_year) {
+                (s, e) if s > 0 && e > 0 && e != s => format!("{}-{}", s, e),
+                (s, _) if s > 0 => format!("{}", s),
+                _ => String::new(),
+            };
+            let genre_upper = self.genre.to_uppercase();
+            let line = [year_range.as_str(), genre_upper.as_str()]
+                .iter()
+                .filter(|s| !s.is_empty())
+                .copied()
+                .collect::<Vec<_>>()
+                .join("  ");
+            if !line.is_empty() {
+                rows.push(vec![Span::styled(
+                    trunc_str(&line, width as usize),
+                    Style::default().fg(palette::TEXT_DETAIL_META),
+                )]);
+            }
+        }
         if !self.premiere_date.is_empty() {
             rows.push(vec![Span::styled(
                 format_release_date(&self.premiere_date),

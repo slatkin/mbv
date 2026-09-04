@@ -140,5 +140,6 @@ pub(in crate::app::render) fn render_series_inline_detail(
         area: image_area,
         item: Box::new(item.clone()),
         show_placeholder: img_is_placeholder || img_loading,
+        image_types: &["Primary"],
     })
 }

@@ -343,6 +343,7 @@ impl App {
                 area,
                 item,
                 show_placeholder,
+                image_types,
             }) => {
                 let cache_key = format!("{}:ser_primary", item.id);
                 if self.images_enabled() {
@@ -350,7 +351,7 @@ impl App {
                         cache_key.clone(),
                         item.id.clone(),
                         String::new(),
-                        &["Primary"],
+                        image_types,
                     );
                 }
                 if show_placeholder {
@@ -426,6 +427,10 @@ pub(in crate::app) enum HomeImagePaint {
         area: Rect,
         item: Box<mbv_core::api::EmbyItem>,
         show_placeholder: bool,
+        /// Ordered Emby image-type candidate chain to fetch, so wide TV's
+        /// landscape hero can request the `Thumb`-first chain while other
+        /// callers keep the narrow inline detail's `&["Primary"]`.
+        image_types: &'static [&'static str],
     },
     /// The compact movie/Series detail banner's poster. Painted byte-identically
     /// to the legacy inline `render_compact_detail` block: a dim placeholder

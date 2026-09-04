@@ -99,17 +99,19 @@ fn wide_tv_requests_selected_series_primary_image_with_budget_and_placeholder() 
             area,
             item,
             show_placeholder,
+            image_types,
         }) => {
             assert_eq!(item.id, "series");
-            assert_eq!((area.width, area.height), (18, 12));
+            assert_eq!((area.width, area.height), (36, 11));
             assert!(show_placeholder);
+            assert_eq!(image_types, &["Thumb", "Primary", "Backdrop", "Logo"]);
         }
         _ => panic!("expected selected Series image request"),
     }
 }
 
 #[test]
-fn wide_tv_series_overview_wraps_around_portrait_in_real_painter() {
+fn wide_tv_series_overview_wraps_below_the_landscape_artwork_slot() {
     let mut app = tv_app();
     app.libs[0].nav_stack[0].items[0].overview =
         "one two three four five six seven eight nine ten eleven twelve thirteen".into();
@@ -121,7 +123,7 @@ fn wide_tv_series_overview_wraps_around_portrait_in_real_painter() {
     );
     assert!(
         output.contains("four five six"),
-        "overview should wrap beside the portrait: {output:?}"
+        "overview should wrap below the artwork slot: {output:?}"
     );
     assert!(!output.contains("one two three four five six seven eight nine"));
 }
@@ -139,6 +141,7 @@ fn wide_tv_series_placeholder_paints_the_full_portrait_budget() {
                     area: Rect::new(2, 2, 18, 12),
                     item: Box::new(item),
                     show_placeholder: true,
+                    image_types: &["Primary"],
                 }),
             );
         })

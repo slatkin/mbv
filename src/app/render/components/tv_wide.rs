@@ -3,10 +3,8 @@ use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
-use crate::app::render::components::detail_series_view::{SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS};
-use crate::app::render::components::hero::{
-    inline_hero_text_width, wrap_overview_lines, HeroContent, HeroImage, HeroLine,
-};
+use crate::app::render::components::hero::{wrap_overview_lines, HeroContent};
+use crate::app::render::components::hero_model::{Hero, HeroArtwork, HeroArtworkAspect};
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::HomeImagePaint;
 use crate::app::render::{render_pill_bar, render_placeholder, MarkerEdge, PillBar};
@@ -16,7 +14,8 @@ use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::Constraint;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::widgets::{Block, Cell, Row, Table};
+use ratatui::text::Span;
+use ratatui::widgets::{Block, Cell, Paragraph, Row, Table, Wrap};
 use ratatui::Frame;
 
 /// All App-derived data needed to paint the wide TV workspace.
@@ -307,54 +306,97 @@ fn render_tv_series_selection(
     let Some(item) = selected_series else {
         return (false, None);
     };
-    let title = item.display_name();
-    let meta = super::detail_series_view::series_meta_line(item);
-    let overview_lines = if item.overview.is_empty() {
-        Vec::new()
+
+    // Artwork-slot-first layout (design.md D-D): a full-width 16:9 landscape
+    // slot above the title/metadata/overview, sized with the same formula
+    // `prepare_wide_emby_hero_card` uses for Home's wide hero-on-left card.
+    let artwork_height = if images_enabled {
+        (area.width.saturating_mul(9).saturating_add(31) / 32).max(1)
     } else {
-        let overview_start_row = area.y + 1 + (!meta.is_empty()) as u16 + 1;
-        wrap_overview_lines(&item.overview, |line_idx| {
-            inline_hero_text_width(
-                area.width,
-                SERIES_IMAGE_COLS,
-                SERIES_IMAGE_ROWS,
-                overview_start_row
-                    .saturating_add(line_idx as u16)
-                    .saturating_sub(area.y),
-            ) as usize
-        })
+        0
     };
-    let lines: Vec<HeroLine> = overview_lines.into_iter().map(HeroLine::Plain).collect();
+    let slots = hero_left::hero_left_slots(area, artwork_height, None);
+
+    let image_paint = slots.artwork.map(|artwork_area| {
+        let image_types = match item.artwork_for(HeroArtworkAspect::Landscape) {
+            HeroArtwork::Image { image_types, .. } => image_types,
+            HeroArtwork::Placeholder => &["Primary"][..],
+        };
+        HomeImagePaint::Series {
+            area: artwork_area,
+            item: Box::new(item.clone()),
+            show_placeholder: image_loading,
+            image_types,
+        }
+    });
+
+    let content_area = slots.overview;
+    if content_area.height == 0 {
+        return (true, image_paint);
+    }
+
+    let title = item.title().to_string();
+    let meta = item
+        .meta_rows(content_area.width)
+        .into_iter()
+        .next()
+        .map(|spans| {
+            spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        });
+    // Title + ordered metadata only here -- the overview gets its own
+    // main-content box below (design.md D-C), matching the season/episode
+    // detail box already painted the same way further down.
     let result = crate::app::render::components::hero::paint_hero_content(
         f,
-        area,
+        content_area,
         &HeroContent {
             title: Some(title.as_str()),
-            meta_line: (!meta.is_empty()).then_some(meta.as_str()),
+            meta_line: meta.as_deref(),
             meta_color: palette::TEXT_DETAIL_META,
             show_playing: false,
             unconditional_spacer_after_meta: true,
-            lines: &lines,
-            image: (images_enabled).then_some(HeroImage {
-                actual_w: SERIES_IMAGE_COLS,
-                height: SERIES_IMAGE_ROWS,
-            }),
+            lines: &[],
+            image: None,
         },
         focused,
     );
-    let image_paint = result.img_rect.map(|image_area| HomeImagePaint::Series {
-        area: image_area,
-        item: Box::new(item.clone()),
-        show_placeholder: image_loading,
-    });
-    let detail_top = if images_enabled {
-        result
-            .next_row
-            .max(area.y.saturating_add(SERIES_IMAGE_ROWS))
-    } else {
-        result.next_row
+    let mut row = result.next_row;
+    let description = item.description();
+    if let Some(text) = description.filter(|t| !t.is_empty()) {
+        let box_content_width = content_area.width.saturating_sub(PANE_PAD_X * 2) as usize;
+        let ov_lines = wrap_overview_lines(&text, |_| box_content_width);
+        let ov_height = (ov_lines.len() as u16)
+            .max(1)
+            .saturating_add(PANE_PAD_Y * 2)
+            .min(content_area.bottom().saturating_sub(row));
+        if ov_height > PANE_PAD_Y * 2 {
+            let box_area = Rect::new(
+                content_area.x.saturating_sub(PANE_PAD_X),
+                row,
+                content_area.width.saturating_add(PANE_PAD_X * 2),
+                ov_height,
+            );
+            let (_, ov_content) = hero_left::hero_on_left_main_content_box(f, box_area);
+            let ov_color = if focused {
+                palette::TEXT_STRONG
+            } else {
+                palette::TEXT_MUTED
+            };
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    ov_lines.join(" "),
+                    Style::default().fg(ov_color),
+                ))
+                .wrap(Wrap { trim: true }),
+                ov_content,
+            );
+            row = box_area.y.saturating_add(ov_height);
+        }
     }
-    .saturating_add(1);
+    let detail_top = row.saturating_add(1);
     if detail_top >= area.bottom() {
         return (true, image_paint);
     }
