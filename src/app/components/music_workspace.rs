@@ -343,6 +343,11 @@ impl MusicWorkspaceComponent {
     }
 
     #[cfg(test)]
+    pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
+        self.track_list.selected_display_row()
+    }
+
+    #[cfg(test)]
     pub(in crate::app) fn album_tracks_loading(&self) -> bool {
         self.context.album_tracks_loading
     }
@@ -593,6 +598,7 @@ impl MusicWorkspaceComponent {
             MouseGesture::Click(at) | MouseGesture::DoubleClick(at) if wide => {
                 if let Some(track) = self.layout.wide_music_track_at(at) {
                     self.track_cursor = Some(track);
+                    self.track_list.select_index(track);
                     return None;
                 }
                 let album = self.resolve_wide_album(at)?;

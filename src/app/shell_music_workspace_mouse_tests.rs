@@ -297,10 +297,12 @@ fn music_mouse_track_click_stays_component_local() {
     let mut model = Model::new(make_music_group_app());
     let mut track = make_item("Track One", "Audio");
     track.id = "track-1".into();
+    let mut second_track = make_item("Track Two", "Audio");
+    second_track.id = "track-2".into();
     model
         .app
         .album_tracks_cache
-        .insert("album-1".into(), vec![track]);
+        .insert("album-1".into(), vec![track, second_track]);
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
     model.sync_music_workspace();
@@ -324,9 +326,9 @@ fn music_mouse_track_click_stays_component_local() {
         let (rect, _) = component
             .layout()
             .wide_music_track_hitmap
-            .first()
+            .get(1)
             .copied()
-            .expect("painted track hitmap");
+            .expect("painted second track hitmap");
         (rect.x + 1, rect.y)
     };
     let message = model
@@ -347,5 +349,6 @@ fn music_mouse_track_click_stays_component_local() {
         .as_any()
         .downcast_ref::<MusicWorkspaceComponent>()
         .unwrap();
-    assert_eq!(component.track_cursor(), Some(0));
+    assert_eq!(component.track_cursor(), Some(1));
+    assert_eq!(component.track_selected_row(), Some(1));
 }
