@@ -2,14 +2,15 @@ use super::test_helpers::*;
 use crate::app::components::{ComponentId, HomeComponent};
 use crate::app::tests::make_app_stub;
 use crate::app::types_playback::HomeLatestSource;
-use crate::app::{PanelFocus, TabSelection};
+use crate::app::{palette, PanelFocus, TabSelection};
 use mbv_core::api::TICKS_PER_SECOND;
-use mbv_core::config::FeedKind;
+use mbv_core::config::{AudiobookshelfSetup, FeedKind};
 use mbv_core::playback_queue::{FeedEntry, QueueItem};
 
 #[test]
 fn wide_home_audiobookshelf_hero_paints_cover_slot_and_subtitle() {
-    let mut app = home_emby_app();
+    let app = home_emby_app();
+    app.config.lock().unwrap().audiobookshelf_setup = Some(AudiobookshelfSetup::default());
     let item =
         QueueItem::AudiobookshelfBook(mbv_core::playback_queue::AudiobookshelfBookQueueItem {
             library_item_id: "book-1".into(),
@@ -21,7 +22,7 @@ fn wide_home_audiobookshelf_hero_paints_cover_slot_and_subtitle() {
             is_finished: false,
             cover_path: Some("cover-1".into()),
         });
-    let (_model, terminal) = render_home_shell_with(app, 120, 40, |m| {
+    let (model, terminal) = render_home_shell_with(app, 120, 40, |m| {
         m.home_section_pending = Some(HomeLatestSource::Audiobookshelf("books".into()));
         m.home_content.latest = vec![(
             "Books".into(),
@@ -33,6 +34,19 @@ fn wide_home_audiobookshelf_hero_paints_cover_slot_and_subtitle() {
     let output = buffer_to_string(&terminal);
     assert!(output.contains("Home Book"));
     assert!(output.contains("Author"));
+
+    let home = model
+        .application
+        .get_component(&ComponentId::Home)
+        .expect("Home component mounted")
+        .as_any()
+        .downcast_ref::<HomeComponent>()
+        .expect("Home component type");
+    let hero = home.hero_area().expect("wide hero should be painted");
+    let buffer = terminal.backend().buffer();
+    assert!((hero.x + hero.width / 2..hero.x + hero.width).any(|x| {
+        (hero.y..hero.y + hero.height).any(|y| buffer[(x, y)].bg == palette::BORDER_UNFOCUSED)
+    }));
 }
 
 fn home_emby_app() -> crate::app::App {
