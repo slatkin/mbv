@@ -7,6 +7,34 @@ use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::config::FeedKind;
 use mbv_core::playback_queue::{FeedEntry, QueueItem};
 
+#[test]
+fn wide_home_audiobookshelf_hero_paints_cover_slot_and_subtitle() {
+    let mut app = home_emby_app();
+    let item =
+        QueueItem::AudiobookshelfBook(mbv_core::playback_queue::AudiobookshelfBookQueueItem {
+            library_item_id: "book-1".into(),
+            title: "Home Book".into(),
+            author: Some("Author".into()),
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            is_finished: false,
+            cover_path: Some("cover-1".into()),
+        });
+    let (_model, terminal) = render_home_shell_with(app, 120, 40, |m| {
+        m.home_section_pending = Some(HomeLatestSource::Audiobookshelf("books".into()));
+        m.home_content.latest = vec![(
+            "Books".into(),
+            HomeLatestSource::Audiobookshelf("books".into()),
+            vec![item],
+            0,
+        )];
+    });
+    let output = buffer_to_string(&terminal);
+    assert!(output.contains("Home Book"));
+    assert!(output.contains("Author"));
+}
+
 fn home_emby_app() -> crate::app::App {
     let mut app = make_app_stub();
     app.tab = TabSelection::Home;

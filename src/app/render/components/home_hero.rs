@@ -11,7 +11,7 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use textwrap::wrap;
 
-use super::hero_model::Hero;
+use super::hero_model::{Hero, HeroArtwork};
 
 /// The two-column (wide) hero's original 2-col horizontal padding around
 /// the overview text block. The single-column hero has none (flush with
@@ -134,27 +134,55 @@ impl HeroData {
             }
             Self::Generic(item, area) => {
                 let hero: &dyn Hero = item;
-                let meta = hero.meta_rows(area.width);
-                let meta_line = meta
-                    .first()
-                    .and_then(|row| row.first().map(|span| span.content.to_string()));
-                let description = hero.description();
-                let lines = description
-                    .iter()
-                    .flat_map(|text| text.lines())
-                    .map(|line| super::hero::HeroLine::Plain(line.to_owned()))
-                    .collect::<Vec<_>>();
-                let content = super::hero::HeroContent {
-                    title: Some(hero.title()),
-                    meta_line: meta_line.as_deref(),
-                    meta_color: palette::TEXT_SECONDARY,
-                    show_playing: false,
-                    unconditional_spacer_after_meta: false,
-                    lines: &lines,
-                    image: None,
-                };
-                super::hero::paint_hero_content(f, *area, &content, focused);
-                None
+                let overview = hero.description().unwrap_or_default();
+                let (img_w, layout, image_rows) = beside_image_hero_dims(
+                    hero.title(),
+                    hero.subtitle().unwrap_or_default(),
+                    &overview,
+                    area.width,
+                    area.height,
+                    hero.meta_rows(area.width).len() as u16,
+                );
+                let (meta_area, image_area) =
+                    beside_image_hero_rects(*area, img_w, layout.height, image_rows);
+                render_hero_layout_meta_content(
+                    f,
+                    meta_area,
+                    *area,
+                    &layout,
+                    HeroMetaBlock {
+                        title_suffix: hero.title_suffix(),
+                        meta_rows: hero.meta_rows(meta_area.width),
+                    },
+                    0,
+                    focused,
+                    use_nerd_fonts,
+                    hero,
+                );
+                match hero.artwork() {
+                    HeroArtwork::Image { item_id, .. } => {
+                        let image = match item {
+                            QueueItem::Audiobookshelf(_) => HomeImagePaint::AudiobookshelfCover {
+                                area: image_area,
+                                library_item_id: item_id.to_owned(),
+                                show_placeholder: true,
+                            },
+                            QueueItem::AudiobookshelfBook(_) => {
+                                HomeImagePaint::AudiobookshelfBookCover {
+                                    area: image_area,
+                                    library_item_id: item_id.to_owned(),
+                                    show_placeholder: true,
+                                }
+                            }
+                            _ => return None,
+                        };
+                        Some(image)
+                    }
+                    HeroArtwork::Placeholder => {
+                        super::artwork_placeholder::render_artwork_placeholder(f, image_area);
+                        None
+                    }
+                }
             }
         }
     }

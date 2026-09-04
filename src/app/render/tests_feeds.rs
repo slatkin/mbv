@@ -95,6 +95,13 @@ fn wide_feeds_use_a_left_detail_and_right_entry_workspace() {
             layout.left_item_rows
         );
         let buffer = terminal.backend().buffer();
+        assert!(
+            (layout.hero_area.x..layout.hero_area.right()).any(|x| {
+                (layout.hero_area.y..layout.hero_area.bottom())
+                    .any(|y| buffer[(x, y)].bg == crate::app::palette::SURFACE_ARTWORK_PLACEHOLDER)
+            }),
+            "feed hero must paint its reserved artwork slot placeholder"
+        );
         let panel = Rect::new(
             layout.left_area.x.saturating_sub(hero_left::PANE_PAD_X),
             layout.left_area.y.saturating_sub(hero_left::PANE_PAD_Y),
