@@ -422,6 +422,90 @@ pub(in crate::app::render) fn hero_on_left_main_content_box(
     (panel, content)
 }
 
+/// Named Rect-only extension points within a hero-on-left content rect
+/// (design.md D-D): an optional artwork region, the overview text area, and
+/// an optional embedded media-list viewport below it. Placement only -- no
+/// painting, no Service/image effects, no list ownership; callers pass the
+/// heights they need and the primitive only slices the rect vertically.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) struct HeroLeftSlots {
+    pub artwork: Option<Rect>,
+    pub overview: Rect,
+    pub media_list: Option<Rect>,
+}
+
+/// Slices `content` top-to-bottom into `HeroLeftSlots`: an `artwork_height`
+/// row artwork slot (omitted when `0`), the overview slot filling the
+/// remainder above an optional `media_list_height` row media-list slot at
+/// the bottom (omitted when `None` or `0`).
+pub(in crate::app::render) fn hero_left_slots(
+    content: Rect,
+    artwork_height: u16,
+    media_list_height: Option<u16>,
+) -> HeroLeftSlots {
+    let artwork_height = artwork_height.min(content.height);
+    let artwork = (artwork_height > 0).then_some(Rect {
+        height: artwork_height,
+        ..content
+    });
+    let below_artwork = Rect {
+        y: content.y.saturating_add(artwork_height),
+        height: content.height.saturating_sub(artwork_height),
+        ..content
+    };
+    let media_list_height = media_list_height.unwrap_or(0).min(below_artwork.height);
+    let media_list = (media_list_height > 0).then_some(Rect {
+        y: below_artwork.bottom().saturating_sub(media_list_height),
+        height: media_list_height,
+        ..below_artwork
+    });
+    let overview = Rect {
+        height: below_artwork.height.saturating_sub(media_list_height),
+        ..below_artwork
+    };
+    HeroLeftSlots {
+        artwork,
+        overview,
+        media_list,
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod hero_left_slots_tests {
+    use super::*;
+
+    fn content() -> Rect {
+        Rect {
+            x: 1,
+            y: 2,
+            width: 30,
+            height: 20,
+        }
+    }
+
+    #[test]
+    fn splits_artwork_overview_and_media_list_slots() {
+        let slots = hero_left_slots(content(), 5, Some(6));
+        let artwork = slots.artwork.expect("artwork slot present");
+        assert_eq!(artwork.y, content().y);
+        assert_eq!(artwork.height, 5);
+        let media_list = slots.media_list.expect("media-list slot present");
+        assert_eq!(media_list.height, 6);
+        assert_eq!(media_list.bottom(), content().bottom());
+        assert_eq!(slots.overview.y, artwork.bottom());
+        assert_eq!(slots.overview.bottom(), media_list.y);
+    }
+
+    #[test]
+    fn omits_absent_artwork_and_media_list_slots() {
+        let slots = hero_left_slots(content(), 0, None);
+        assert!(slots.artwork.is_none());
+        assert!(slots.media_list.is_none());
+        assert_eq!(slots.overview, content());
+    }
+}
+
 /// One line of the `Hero` component's hero-on-left text block. Unlike
 /// inline presentation's single-row, truncated [`super::hero::HeroLine`], hero-on-left
 /// text wraps across as many rows as it needs (design.md decision 2's

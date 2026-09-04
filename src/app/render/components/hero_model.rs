@@ -12,13 +12,8 @@ pub(crate) trait Hero {
     fn subtitle(&self) -> Option<&str>;
     fn meta_rows(&self, width: u16) -> Vec<Vec<Span<'static>>>;
     fn title_suffix(&self) -> Option<Span<'static>>;
-    fn body(&self) -> HeroBody;
+    fn description(&self) -> Option<String>;
     fn artwork(&self) -> HeroArtwork<'_>;
-}
-
-pub(crate) enum HeroBody {
-    Listing(Vec<String>),
-    Description(String),
 }
 
 pub(crate) enum HeroArtwork<'a> {
@@ -74,8 +69,9 @@ impl Hero for EmbyItem {
         Some(Span::styled(glyph, Style::default().fg(color)))
     }
 
-    fn body(&self) -> HeroBody {
-        HeroBody::Description(clean_overview(&self.overview))
+    fn description(&self) -> Option<String> {
+        let d = clean_overview(&self.overview);
+        (!d.is_empty()).then_some(d)
     }
 
     fn artwork(&self) -> HeroArtwork<'_> {
