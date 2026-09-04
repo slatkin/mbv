@@ -1,5 +1,5 @@
 use crate::app::layout::LayoutMain;
-use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
+use crate::app::render::arrangements::hero_left;
 use crate::app::{palette, ui_util};
 use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;
@@ -24,8 +24,7 @@ pub(in crate::app) fn render_wide_left_tracks(
     if track_area.height == 0 {
         return;
     }
-    let (track_panel, track_content) =
-        hero_left::hero_on_left_recessed_box(f, *track_area, PANE_PAD_X, PANE_PAD_Y);
+    let (track_panel, track_content) = hero_left::hero_on_left_main_content_box(f, *track_area);
     if track_content.height == 0 || track_content.width == 0 {
         return;
     }

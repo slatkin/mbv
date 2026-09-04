@@ -2,11 +2,12 @@
 //! and wrapped-text rendering for the two-pane layout shared by Music,
 //! Home, and future screens (design.md decisions 4–6).
 
+use super::padded_rect;
 use crate::app::palette;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 use textwrap::wrap;
 
@@ -228,6 +229,135 @@ pub(in crate::app) fn hero_on_left_right_pane(
     }
 }
 
+/// The hero-on-left left pane's focus resolution (design.md D-B). A closed
+/// enum rather than a `bool`: the defect class this primitive exists to
+/// prevent is exactly the read-only-versus-workspace confusion (e.g. passing
+/// a bare `focused` when the correct value is `focused &&
+/// interaction.episode_selection.is_some()`). `ReadOnly` and `Workspace(..)`
+/// are two visibly different call shapes, so a reviewer can check the
+/// variant rather than the expression.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum LeftPaneFocus {
+    /// The pane is never focusable (Movies/home-videos/Emby-podcasts/
+    /// feed-group browser, Home, Feeds): always [`palette::SURFACE_RESTING`].
+    ReadOnly,
+    /// The pane belongs to a focusable workspace (TV, Music, ABS Books, ABS
+    /// Podcasts); `true` when that workspace currently holds focus.
+    Workspace(bool),
+}
+
+/// Paints the hero-on-left left pane: fills the [`shared_hero_presentation`]
+/// left panel with the surface [`LeftPaneFocus`] resolves to, and returns the
+/// shared content inset (`PANE_PAD_X`, `PANE_PAD_Y`). One owner for fill,
+/// extent, inset, and focus resolution (design.md D-A) -- callers must not
+/// resize, re-derive, or conditionally skip the fill, and must not apply a
+/// destination-specific inset.
+///
+/// Takes `content_area` rather than a pane rect so a caller has nothing to
+/// hand in but the rect the arrangement already consumes -- it cannot supply
+/// a mutated `left_panel`. `shared_hero_presentation` is pure and cheap, so
+/// recomputing it here costs nothing.
+pub(in crate::app) fn hero_on_left_pane(
+    f: &mut Frame,
+    content_area: Rect,
+    focus: LeftPaneFocus,
+) -> Option<Rect> {
+    let (left_panel, _right_panel) = shared_hero_presentation(content_area)?;
+    let background = match focus {
+        LeftPaneFocus::ReadOnly => palette::SURFACE_RESTING,
+        LeftPaneFocus::Workspace(held) => palette::resolve_surface_focus(held),
+    };
+    f.render_widget(
+        Block::default().style(Style::default().bg(background)),
+        left_panel,
+    );
+    Some(padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y))
+}
+
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod hero_on_left_pane_tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn wide_area() -> Rect {
+        Rect {
+            x: 3,
+            y: 2,
+            width: crate::app::TWO_COLUMN_THRESHOLD,
+            height: HERO_ON_LEFT_MIN_AREA_HEIGHT + 5,
+        }
+    }
+
+    #[test]
+    fn read_only_never_resolves_to_the_focused_surface() {
+        let area = wide_area();
+        let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
+        let (left_panel, _) = shared_hero_presentation(area).expect("wide fits");
+        terminal
+            .draw(|f| {
+                let returned =
+                    hero_on_left_pane(f, area, LeftPaneFocus::ReadOnly).expect("wide fits");
+                assert_eq!(returned, padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y));
+            })
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
+        assert_eq!(cell.bg, palette::SURFACE_RESTING);
+        assert_ne!(cell.bg, palette::resolve_surface_focus(true));
+    }
+
+    #[test]
+    fn workspace_resolves_focus_and_returns_the_shared_inset() {
+        let area = wide_area();
+        let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
+        let (left_panel, _) = shared_hero_presentation(area).expect("wide fits");
+        let expected = padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y);
+        terminal
+            .draw(|f| {
+                let returned =
+                    hero_on_left_pane(f, area, LeftPaneFocus::Workspace(true)).expect("wide fits");
+                assert_eq!(returned.x, left_panel.x + PANE_PAD_X);
+                assert_eq!(returned.y, left_panel.y + PANE_PAD_Y);
+                assert_eq!(returned, expected);
+            })
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
+        assert_eq!(cell.bg, palette::resolve_surface_focus(true));
+
+        let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
+        terminal
+            .draw(|f| {
+                hero_on_left_pane(f, area, LeftPaneFocus::Workspace(false)).expect("wide fits");
+            })
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
+        assert_eq!(cell.bg, palette::resolve_surface_focus(false));
+    }
+
+    #[test]
+    fn sub_breakpoint_content_area_returns_none_without_painting() {
+        let area = Rect {
+            x: 0,
+            y: 0,
+            width: crate::app::TWO_COLUMN_THRESHOLD - 1,
+            height: 20,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
+        terminal
+            .draw(|f| {
+                assert_eq!(hero_on_left_pane(f, area, LeftPaneFocus::ReadOnly), None);
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        for y in 0..area.height {
+            for x in 0..area.width {
+                assert_eq!(buffer[(x, y)].bg, ratatui::style::Color::Reset);
+            }
+        }
+    }
+}
+
 /// Paints the focused browser rail's border using the shared framing primitive:
 /// a `▔` top row and a `▁` bottom row, with a focus-resolved background, one
 /// row inside `list_panel`'s own top/bottom edge. The rail uses the shared
@@ -261,24 +391,22 @@ pub(in crate::app) fn hero_on_left_list_panel_border(
     );
 }
 
-/// Paints the hero-on-left component's standard recessed content block:
-/// a [`palette::SURFACE_BACKDROP`] rect inset by `pad_x` from `area`'s
-/// horizontal edges, with an inner content rect further inset by
-/// `pad_x` / `pad_y`.  Returns both rects so callers can use `panel` for
+/// Paints the hero-on-left arrangement's main content box: a
+/// [`palette::SURFACE_BACKDROP`] inset within the hero-on-left left pane,
+/// present on every hero-on-left surface with a kind-dependent payload (the
+/// episode listing on TV, the track listing on Music, item description and
+/// metadata elsewhere) and one shared padding value (design.md D9, matching
+/// the pane inset from D6). Returns both rects so callers can use `panel` for
 /// full-bleed row backgrounds and `content` for text layout.
 ///
 /// Shared by Music's track panel and Home's overview block.
-pub(in crate::app::render) fn hero_on_left_recessed_box(
+pub(in crate::app::render) fn hero_on_left_main_content_box(
     f: &mut Frame,
     area: Rect,
-    pad_x: u16,
-    pad_y: u16,
 ) -> (Rect, Rect) {
-    use ratatui::widgets::Block;
-
     let panel = Rect {
-        x: area.x.saturating_add(pad_x),
-        width: area.width.saturating_sub(pad_x * 2),
+        x: area.x.saturating_add(PANE_PAD_X),
+        width: area.width.saturating_sub(PANE_PAD_X * 2),
         ..area
     };
     f.render_widget(
@@ -286,10 +414,10 @@ pub(in crate::app::render) fn hero_on_left_recessed_box(
         panel,
     );
     let content = Rect {
-        x: panel.x.saturating_add(pad_x),
-        y: panel.y.saturating_add(pad_y),
-        width: panel.width.saturating_sub(pad_x * 2),
-        height: panel.height.saturating_sub(pad_y * 2),
+        x: panel.x.saturating_add(PANE_PAD_X),
+        y: panel.y.saturating_add(PANE_PAD_Y),
+        width: panel.width.saturating_sub(PANE_PAD_X * 2),
+        height: panel.height.saturating_sub(PANE_PAD_Y * 2),
     };
     (panel, content)
 }

@@ -306,6 +306,6 @@ fn abs_podcasts_wide_left_pane_never_filled() {
 /// hero-on-left presentation rather than falling back to narrow.
 #[test]
 fn fixture_width_is_wide() {
-    assert!(WIDTH >= TWO_COLUMN_THRESHOLD);
+    const { assert!(WIDTH >= TWO_COLUMN_THRESHOLD) };
     let _ = buffer_to_string; // keep the shared helper import exercised
 }

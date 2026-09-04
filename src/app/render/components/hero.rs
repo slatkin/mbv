@@ -601,11 +601,8 @@ pub(in crate::app::render) fn render_home_hero_meta_block(
                 height: ov_height,
             };
             Some(
-                crate::app::render::arrangements::hero_left::hero_on_left_recessed_box(
-                    f,
-                    ov_area,
-                    overview_pad,
-                    1,
+                crate::app::render::arrangements::hero_left::hero_on_left_main_content_box(
+                    f, ov_area,
                 ),
             )
         } else {

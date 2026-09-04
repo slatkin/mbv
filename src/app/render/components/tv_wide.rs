@@ -365,8 +365,7 @@ fn render_tv_series_selection(
             area.width.saturating_add(PANE_PAD_X * 2),
             3.min(area.bottom().saturating_sub(detail_top)),
         );
-        let (_, content) =
-            hero_left::hero_on_left_recessed_box(f, box_area, PANE_PAD_X, PANE_PAD_Y);
+        let (_, content) = hero_left::hero_on_left_main_content_box(f, box_area);
         render_placeholder(f, content, " Loading\u{2026}");
         return (true, image_paint);
     };
@@ -388,8 +387,7 @@ fn render_tv_series_selection(
         area.width.saturating_add(PANE_PAD_X * 2),
         detail_height,
     );
-    let (detail_panel, detail_area) =
-        hero_left::hero_on_left_recessed_box(f, box_area, PANE_PAD_X, PANE_PAD_Y);
+    let (detail_panel, detail_area) = hero_left::hero_on_left_main_content_box(f, box_area);
     if focused {
         f.render_widget(
             Block::default().style(Style::default().bg(palette::SURFACE_ACCENT_SOFT)),
