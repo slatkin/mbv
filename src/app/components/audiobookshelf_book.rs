@@ -8,10 +8,12 @@ use tuirealm::event::{
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::media_list::{InlineMediaBrowser, ViewportAnchor};
 use super::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{
-    render_audiobookshelf_book_content, AudiobookshelfBookGeometry, BookInteraction, HomeImagePaint,
+    render_audiobookshelf_book_content, shared_hero_presentation, AudiobookshelfBookGeometry,
+    BookInteraction, HomeImagePaint,
 };
 use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
 
@@ -34,6 +36,18 @@ pub struct AudiobookshelfBookComponent {
     /// must follow the rendered wide/chapter geometry rather than that state.
     chapters_visible: bool,
     image_paint: Option<HomeImagePaint>,
+    /// Persistent narrow-presentation control, fed the canonical book-row
+    /// projection by the renderer each frame. Never constructed during a
+    /// render pass. The wide rail composes its own per-frame `WideMediaList`.
+    narrow_list: InlineMediaBrowser<String>,
+    /// One-shot `ViewportAnchor` carried across a Wide<->Narrow breakpoint
+    /// flip (§2.5); consumed by the next `view`.
+    pending_anchor: Option<ViewportAnchor<String>>,
+    /// The presentation the last `view` painted; `None` before the first paint.
+    last_wide: Option<bool>,
+    /// Selected-row screen offset captured each `view`, so `viewport_anchor`
+    /// can report the outgoing control's anchor at a flip.
+    painted_row_offset: Option<usize>,
 }
 
 impl AudiobookshelfBookComponent {
@@ -55,7 +69,20 @@ impl AudiobookshelfBookComponent {
             geometry: AudiobookshelfBookGeometry::default(),
             chapters_visible: false,
             image_paint: None,
+            narrow_list: InlineMediaBrowser::new(),
+            pending_anchor: None,
+            last_wide: None,
+            painted_row_offset: None,
         }
+    }
+
+    /// The outgoing control's `ViewportAnchor` for the last painted
+    /// presentation (mirrors `AudiobookshelfPodcastComponent::viewport_anchor`).
+    fn viewport_anchor(&self) -> Option<ViewportAnchor<String>> {
+        Some(ViewportAnchor {
+            selected_target: self.state.selected_id.clone()?,
+            selected_row_offset: self.painted_row_offset?,
+        })
     }
 
     pub(in crate::app) fn set_content(
@@ -336,9 +363,28 @@ impl Component for AudiobookshelfBookComponent {
         // presentation. Clear it before painting a narrow frame so a
         // wide→narrow resize cannot leave keyboard input targeting a hidden
         // chapter pane.
-        self.chapters_visible = crate::app::render::shared_hero_presentation(area).is_some();
+        let wide = shared_hero_presentation(area).is_some();
+        self.chapters_visible = wide;
         if !self.chapters_visible {
             self.chapter_selection = None;
+        }
+        // §2.5: at a breakpoint flip carry the outgoing control's anchor into
+        // the incoming one so the selected book keeps its screen-row offset.
+        if let Some(was_wide) = self.last_wide {
+            if was_wide != wide && self.pending_anchor.is_none() {
+                self.pending_anchor = self.viewport_anchor();
+            }
+        }
+        let flip_anchor = self.pending_anchor.take();
+        if let Some(anchor) = &flip_anchor {
+            if let Some(idx) = self
+                .state
+                .books
+                .iter()
+                .position(|book| book.library_item_id == anchor.selected_target)
+            {
+                self.state.select(idx);
+            }
         }
         self.image_paint = render_audiobookshelf_book_content(
             frame,
@@ -352,7 +398,11 @@ impl Component for AudiobookshelfBookComponent {
             self.images_enabled,
             &mut self.geometry,
             &mut self.browser_offset,
+            &mut self.narrow_list,
+            flip_anchor.as_ref(),
         );
+        self.painted_row_offset = self.geometry.selected_row_offset;
+        self.last_wide = Some(wide);
         // A wide frame can still have no painted chapter rows (for example
         // while detail is loading or when the selected book has no chapters).
         // Do not advertise focus for geometry that was not rendered.
