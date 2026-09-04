@@ -43,7 +43,6 @@ pub(in crate::app) fn thin_vertical_thumb(mut glyphs: GlyphSet) -> GlyphSet {
 }
 
 pub(in crate::app::render) const PLAY_ICON: &str = "\u{f04b}";
-pub(in crate::app::render) const LIST_PLAY_ICON: &str = "▶";
 const PLAY_ICON_FALLBACK: &str = ">";
 
 pub(in crate::app::render) fn play_icon(use_nerd_fonts: bool) -> &'static str {
