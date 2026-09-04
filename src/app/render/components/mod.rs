@@ -25,6 +25,7 @@ pub(super) mod feeds;
 pub(super) mod feeds_manage;
 pub(super) mod help;
 pub(super) mod hero;
+pub(in crate::app) mod hero_model;
 pub(super) mod home;
 pub(super) mod home_feed;
 pub(super) mod home_hero;

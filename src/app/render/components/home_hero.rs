@@ -11,6 +11,8 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use textwrap::wrap;
 
+use super::hero_model::Hero;
+
 /// The two-column (wide) hero's original 2-col horizontal padding around
 /// the overview text block. The single-column hero has none (flush with
 /// the title above it).
@@ -462,6 +464,7 @@ fn render_hero_layout_meta_content(
     meta_block: HeroMetaBlock,
     overview_pad: u16,
     focused: bool,
+    _hero: &dyn Hero,
 ) {
     super::hero::render_home_hero_meta_block(
         f,
@@ -505,6 +508,7 @@ pub(in crate::app) fn render_home_hero_content(
                 meta_block,
                 overview_pad,
                 focused,
+                item.as_ref(),
             );
             Some(HomeImagePaint::Emby {
                 area: *img_area,

@@ -56,6 +56,7 @@ pub(in crate::app) use arrangements::hero_left::{
 pub(in crate::app) use arrangements::library::wide_library_panes;
 pub(in crate::app) use arrangements::padded_rect;
 pub(in crate::app) use components::hero::render_search_box;
+pub(in crate::app) use components::hero_model::{Hero, HeroArtwork, HeroBody};
 pub(in crate::app) use components::home_hero::{
     prepare_wide_emby_hero_card, render_home_hero_content, HeroData,
 };
