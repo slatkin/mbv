@@ -278,4 +278,51 @@ mod tests {
             Some(Msg::Shell(ShellRequest::ContextMenuSelect(0)))
         ));
     }
+
+    fn dismissable_menu() -> ContextMenuComponent {
+        let mut comp = ContextMenuComponent::new();
+        comp.set_content(
+            ContextMenuAnchor::SelectedItem(PanelFocus::Library),
+            vec![ContextMenuEntry {
+                label: "a",
+                action: Some(ContextAction::Play),
+            }],
+            0,
+        );
+        comp.set_rect(Rect {
+            x: 10,
+            y: 5,
+            width: 10,
+            height: 4,
+        });
+        comp
+    }
+
+    #[test]
+    fn mouse_click_outside_the_menu_dismisses_like_esc() {
+        let mut comp = dismissable_menu();
+        let msg = comp.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0, // far above/left of the painted rect
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert!(matches!(
+            msg,
+            Some(Msg::Shell(ShellRequest::ContextMenuDismiss))
+        ));
+    }
+
+    #[test]
+    fn mouse_wheel_does_not_mutate_the_menu() {
+        let mut comp = dismissable_menu();
+        let msg = comp.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 12,
+            row: 6,
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert_eq!(msg, None, "wheel is not part of the menu's vocabulary");
+        assert_eq!(comp.cursor(), 0, "the highlight must not move");
+    }
 }

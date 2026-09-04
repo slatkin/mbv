@@ -132,3 +132,21 @@ fn library_routes_keyboard_paths_still_work_alongside_mouse() {
         Some(Msg::Shell(ShellRequest::LibraryRoutesEsc))
     );
 }
+
+#[test]
+fn library_routes_outside_double_click_emits_nothing_after_the_first_esc() {
+    let mut component = LibraryRoutesComponent::new();
+    component.set_content(&library_popup());
+    draw(&mut component);
+    let frame = component.test_frame();
+    assert!(frame.x > 0, "popup must be inset for an outside point");
+
+    component.reset_mouse_gestures_for_test();
+    assert_eq!(
+        component.on(&click(frame.x - 1, frame.y - 1)),
+        Some(Msg::Shell(ShellRequest::LibraryRoutesEsc))
+    );
+    // The double-click arm must not re-fire the Esc path (or anything else):
+    // in the real flow the first click already closed the popup.
+    assert_eq!(component.on(&click(frame.x - 1, frame.y - 1)), None);
+}

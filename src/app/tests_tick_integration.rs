@@ -15,10 +15,15 @@ use crate::app::components::{
 };
 use crate::app::router::RouterOutcome;
 use crate::app::shell::apply_router_outcome;
-use crate::app::tests::make_app_stub;
+use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::types_confirm::{ConfirmAction, ConfirmModal};
+use crate::app::types_context_menu::{
+    ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
+};
+use crate::app::types_daemon_lost::DaemonLostModal;
 use crate::app::types_overlay::OverlayRequest;
+use crate::app::types_playback::RemoteReanchorPopup;
 use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
 
 fn key(code: Key) -> Event<UserEvent> {
@@ -294,4 +299,210 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     assert_eq!(pre_fold_focus, Some(ComponentId::Queue));
     assert!(matches!(router, RouterOutcome::Swallow));
     assert!(messages.is_empty());
+}
+
+// --- Task 5.3: blocking modals suppress mouse activity by eligibility (D2
+// rung 1), not by message discarding. A mounted Search sidebar painted with
+// results is the underlying surface: if the modal did not hold exclusivity,
+// a click on a result row would move its cursor and a click outside its
+// frame would emit `DismissSearch`.
+
+/// A harness with a mounted Search sidebar painted with two results.
+fn search_sidebar_with_painted_results() -> (TickHarness, Vec<(Rect, usize)>) {
+    let mut app = make_app_stub();
+    app.layout.main.panel_area = Rect::new(0, 0, 30, 16);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().mount_sidebar(SidebarId::Search);
+    {
+        let component = search_component_mut(&mut harness);
+        component.sidebar.query = "clip".into();
+        component.sidebar.results = vec![
+            make_item("Birthday Clip", "Movie"),
+            make_item("Other Clip", "Series"),
+        ];
+        component.sidebar.list_height = 10;
+    }
+    let mut terminal = Terminal::new(TestBackend::new(40, 16)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().render_search_overlay(frame))
+        .unwrap();
+    let rows = search_component_mut(&mut harness)
+        .test_results()
+        .regions()
+        .to_vec();
+    assert_eq!(rows.len(), 2, "both search results must be painted");
+    (harness, rows)
+}
+
+/// Clicking on the second painted result row (outside the modal) must
+/// produce no message and leave the sidebar's cursor/scroll/filter
+/// untouched; clicking outside the sidebar frame must not emit the
+/// `DismissSearch` it would if the sidebar were still eligible.
+fn assert_blocking_modal_suppresses_sidebar_clicks(
+    harness: &mut TickHarness,
+    rows: &[(Rect, usize)],
+) {
+    let (column, row) = {
+        let (rect, _) = rows[1];
+        (rect.x, rect.y)
+    };
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .all(|msg| matches!(msg, Msg::TerminalEvent(_))),
+        "a click outside the blocking modal must produce no underlying \
+         message (only the UiRoot observer's NoOp redraw echo may appear)"
+    );
+    {
+        let component = search_component_mut(harness);
+        assert_eq!(component.sidebar.cursor, 0, "underlying cursor untouched");
+        assert_eq!(component.sidebar.scroll, 0, "underlying scroll untouched");
+        assert_eq!(component.sidebar.type_filter, 0);
+    }
+
+    // Outside the sidebar's painted frame: an eligible sidebar would emit
+    // `DismissSearch` here (its Esc path).
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: 39,
+        row: 15,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .all(|msg| matches!(msg, Msg::TerminalEvent(_))),
+        "the sidebar's dismiss click must not surface beneath a blocking modal"
+    );
+    assert_eq!(search_component_mut(harness).sidebar.cursor, 0);
+}
+
+#[test]
+fn tick_blocking_confirm_modal_suppresses_underlying_mouse_activity() {
+    let (mut harness, rows) = search_sidebar_with_painted_results();
+    let modal_id = ComponentId::Modal(ModalId::Confirm);
+    harness.model_mut().app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
+        title: "Clear queue?".into(),
+        message: "Remove queued items".into(),
+        hint: "[y] Confirm    [Esc] Cancel".into(),
+        on_confirm: ConfirmAction::ClearQueue,
+    }));
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness.model().application.mounted(&modal_id));
+    assert_eq!(
+        harness.model().mouse_subscribed,
+        std::iter::once(modal_id).collect(),
+        "rung 1: only the blocking modal is mouse-eligible"
+    );
+
+    assert_blocking_modal_suppresses_sidebar_clicks(&mut harness, &rows);
+}
+
+#[test]
+fn tick_blocking_daemon_lost_modal_suppresses_underlying_mouse_activity() {
+    let (mut harness, rows) = search_sidebar_with_painted_results();
+    let modal_id = ComponentId::Modal(ModalId::DaemonLost);
+    harness.model_mut().app.pending_overlay =
+        Some(OverlayRequest::DaemonLost(DaemonLostModal {
+            last_playing_title: Some("Birthday Clip".into()),
+            daemon_log_path: "/tmp/mbvd.log".into(),
+            restart_error: None,
+        }));
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness.model().application.mounted(&modal_id));
+    assert_eq!(
+        harness.model().mouse_subscribed,
+        std::iter::once(modal_id).collect(),
+        "rung 1: only the blocking modal is mouse-eligible"
+    );
+
+    assert_blocking_modal_suppresses_sidebar_clicks(&mut harness, &rows);
+}
+
+#[test]
+fn tick_blocking_remote_reanchor_modal_suppresses_underlying_mouse_activity() {
+    let (mut harness, rows) = search_sidebar_with_painted_results();
+    let modal_id = ComponentId::Modal(ModalId::RemoteReanchor);
+    harness.model_mut().app.pending_overlay = Some(OverlayRequest::RemoteReanchor(
+        RemoteReanchorPopup {
+            targets: vec![(0, "Local".into())],
+            cursor: 0,
+        },
+    ));
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness.model().application.mounted(&modal_id));
+    assert_eq!(
+        harness.model().mouse_subscribed,
+        std::iter::once(modal_id).collect(),
+        "rung 1: only the blocking modal is mouse-eligible"
+    );
+
+    assert_blocking_modal_suppresses_sidebar_clicks(&mut harness, &rows);
+}
+
+/// Task 5.4 (D2 rung 2 exclusivity): with the context menu mounted, a wheel
+/// over the obscured queue must not reach it. The same wheel reaches the
+/// queue and scrolls it while the queue is eligible.
+#[test]
+fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Queue;
+    app.layout.main.queue_area = Rect::new(0, 0, 40, 10);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let wheel = |column, row| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+    harness.inject(wheel(5, 5));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::QueueScroll { .. }))),
+        "the queue responds to the wheel while it is mouse-eligible"
+    );
+
+    let menu_id = ComponentId::Overlay(OverlayId::ContextMenu);
+    harness.model_mut().app.pending_overlay = Some(OverlayRequest::ContextMenu(ContextMenu {
+        anchor: ContextMenuAnchor::SelectedItem(PanelFocus::Queue),
+        entries: vec![ContextMenuEntry {
+            label: "Play",
+            action: Some(ContextAction::Play),
+        }],
+        cursor: 0,
+    }));
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness.model().application.mounted(&menu_id));
+    assert_eq!(
+        harness.model().mouse_subscribed,
+        std::iter::once(menu_id).collect(),
+        "only the context menu is mouse-eligible while it is mounted"
+    );
+
+    harness.inject(wheel(5, 5));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .all(|msg| matches!(msg, Msg::TerminalEvent(_))),
+        "the obscured queue must not receive the wheel once the menu is up"
+    );
 }

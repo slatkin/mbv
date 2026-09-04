@@ -139,3 +139,21 @@ fn multiselect_keyboard_paths_still_work_alongside_mouse() {
         Some(Msg::Shell(ShellRequest::MultiselectCommit { .. }))
     ));
 }
+
+#[test]
+fn multiselect_outside_double_click_does_not_commit_twice() {
+    let mut component = MultiselectComponent::new();
+    component.set_content(&popup());
+    draw(&mut component);
+    let frame = component.test_frame();
+    assert!(frame.x > 0);
+
+    component.reset_mouse_gestures_for_test();
+    assert!(matches!(
+        component.on(&click(frame.x - 1, frame.y - 1)),
+        Some(Msg::Shell(ShellRequest::MultiselectCommit { .. }))
+    ));
+    // The double-click arm must not produce a second MultiselectCommit: in
+    // the real flow the first click already closed the popup.
+    assert_eq!(component.on(&click(frame.x - 1, frame.y - 1)), None);
+}

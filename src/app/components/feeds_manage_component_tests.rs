@@ -210,3 +210,23 @@ fn feeds_manage_keyboard_paths_still_work_alongside_mouse() {
         )))
     );
 }
+
+#[test]
+fn feeds_manage_outside_double_click_emits_nothing_after_the_first_dismiss() {
+    let mut component = list_component();
+    draw(&mut component);
+    let frame = component.test_frame();
+    let outside =
+        ratatui::layout::Position::new(frame.x.saturating_sub(1), frame.y.saturating_sub(1));
+
+    component.reset_mouse_gestures_for_test();
+    assert!(matches!(
+        component.on(&click(outside.x, outside.y)),
+        Some(Msg::Shell(ShellRequest::FeedsManageIntent(
+            FeedsManageIntent::Dismiss
+        )))
+    ));
+    // The double-click arm must not re-fire the dismiss (or anything else):
+    // in the real flow the first click already closed the popup.
+    assert_eq!(component.on(&click(outside.x, outside.y)), None);
+}

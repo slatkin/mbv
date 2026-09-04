@@ -340,4 +340,61 @@ mod tests {
         // assertion site of an unrelated caller.
         let _ = ServiceRequest::SearchQuery;
     }
+
+    /// Task 5.4: the context menu's mouse click path must execute the entry
+    /// *and* close the menu (the shell owns the dismissal, task 5.3c).
+    #[test]
+    fn context_menu_click_select_executes_and_closes_the_menu() {
+        use crate::app::components::ContextMenuComponent;
+        use crate::app::types_context_menu::{
+            ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
+        };
+        use ratatui::layout::Rect;
+        use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
+
+        let mut model = Model::new(make_app_stub());
+        model.app.pending_overlay = Some(
+            crate::app::types_overlay::OverlayRequest::ContextMenu(ContextMenu {
+                anchor: ContextMenuAnchor::SelectedItem(crate::app::PanelFocus::Library),
+                entries: vec![ContextMenuEntry {
+                    label: "Play",
+                    action: Some(ContextAction::Play),
+                }],
+                cursor: 0,
+            }),
+        );
+        model.sync_modal_requests();
+        let id = ComponentId::Overlay(OverlayId::ContextMenu);
+        assert!(model.application.mounted(&id));
+
+        let message = {
+            let component = model
+                .application
+                .get_component_mut(&id)
+                .expect("context menu mounted")
+                .as_any_mut()
+                .downcast_mut::<ContextMenuComponent>()
+                .expect("context menu type");
+            component.set_rect(Rect::new(10, 5, 10, 4));
+            component.on(&Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 12,
+                row: 6, // inner row 1 -> entry index 0
+                modifiers: KeyModifiers::NONE,
+            }))
+        };
+        let Some(Msg::Shell(request)) = message else {
+            panic!("menu click must select the entry");
+        };
+        assert!(matches!(
+            request,
+            ShellRequest::ContextMenuSelect(0)
+        ));
+
+        model.handle_terminal_message(Msg::Shell(request), None, &mut false, &mut false);
+        assert!(
+            !model.application.mounted(&id),
+            "executing a menu entry must close the menu"
+        );
+    }
 }

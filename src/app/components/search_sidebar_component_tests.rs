@@ -165,3 +165,22 @@ fn search_sidebar_clock_paths_still_work_alongside_mouse() {
         Some(Msg::Service(ServiceRequest::SearchQuery(q))) if q == "ab"
     ));
 }
+
+#[test]
+fn search_sidebar_outside_double_click_emits_nothing_after_the_first_dismiss() {
+    let mut comp = sidebar_component();
+    comp.sidebar.list_height = 10;
+    draw(&mut comp);
+    let frame = comp.test_frame();
+    let outside_x = frame.x + frame.width + 1;
+    let outside_y = frame.y + 1;
+
+    comp.reset_mouse_gestures_for_test();
+    assert_eq!(
+        comp.on(&click_event(outside_x, outside_y)),
+        Some(Msg::Shell(ShellRequest::DismissSearch))
+    );
+    // The double-click arm must not re-fire the dismiss (or anything else):
+    // in the real flow the first click already closed the sidebar.
+    assert_eq!(comp.on(&click_event(outside_x, outside_y)), None);
+}

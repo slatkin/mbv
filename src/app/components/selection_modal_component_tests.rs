@@ -162,3 +162,58 @@ fn selection_modal_mouse_filter_updates_local_state() {
         Some(Msg::Shell(ShellRequest::SelectionModalFilterSelected))
     );
 }
+
+#[test]
+fn selection_modal_outside_click_dismisses_like_esc() {
+    let mut component = SelectionModalComponent::new();
+    component.set_content(&modal(None));
+    let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 16)))
+        .unwrap();
+
+    // The modal paints centred and inset, so the frame corner is outside
+    // the painted panel: the click must follow the modal's Esc path.
+    assert_eq!(
+        component.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::NONE,
+        })),
+        Some(Msg::Shell(ShellRequest::DismissSelectionModal))
+    );
+}
+
+#[test]
+fn selection_modal_wheel_does_not_mutate_the_obscured_view() {
+    let mut component = SelectionModalComponent::new();
+    component.set_content(&modal(None));
+    let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 16)))
+        .unwrap();
+    let (rect, _) = component.row_targets()[0];
+
+    let msg = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: rect.x,
+        row: rect.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(msg, None, "wheel is not part of the modal's vocabulary");
+
+    // The modal is unharmed: a real click on the same row still activates.
+    let msg = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: rect.x,
+        row: rect.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(
+        msg,
+        Some(Msg::Shell(ShellRequest::SelectionModalActivate(Some(
+            "track-a".into()
+        ))))
+    );
+}
