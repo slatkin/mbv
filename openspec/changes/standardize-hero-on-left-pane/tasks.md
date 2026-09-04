@@ -113,7 +113,7 @@
   remain parent chrome. Preserve component-owned selection, scroll, viewport anchoring, and hit
   resolution through the canonical control; add only the smallest buffer/integration coverage for
   the two boxes and canonical episode rows.
-- [ ] 4.2e Migrate Music tracks and Audiobookshelf episode/chapter left workspaces individually to
+- [x] 4.2e Migrate Music tracks and Audiobookshelf episode/chapter left workspaces individually to
   parent-owned embedded `WideMediaList` controls in their Hero media-list slots. Preserve each
   parent's typed targets, local selection, scroll/anchor, and hit semantics; do not introduce a
   media-list trait. Verify each migration with the existing narrowest interaction/buffer coverage.
