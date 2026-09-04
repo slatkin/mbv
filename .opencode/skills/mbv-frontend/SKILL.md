@@ -59,7 +59,7 @@ persistence, and external effects.
 
 A component therefore never receives `App`, a Service client, `PlayerProxy`,
 `Config`, credentials, or an mpsc channel. `rules/interactive-component-boundary/`
-enforces that mechanically (`rtk ast-grep scan`), but the reason matters more than
+enforces that mechanically (`ast-grep scan`), but the reason matters more than
 the rule: this migration existed to delete an `App`-wide input snapshot, and every
 one of those handles is a way to grow it back.
 
@@ -211,7 +211,7 @@ one you're relying on:
 
 1. **The compiler** — private theme primitives. A raw `Color` outside
    `theme/` is a compile error. Cannot be bypassed.
-2. **ast-grep**, run as `rtk ast-grep scan` from the repo root over two rule
+2. **ast-grep**, run as `ast-grep scan` from the repo root over two rule
    directories (`sgconfig.yml` registers both):
    - `rules/frontend-boundary/` scopes to `src/app/render/screens/` and flags
      `use ratatui::`, `render_widget`/`render_stateful_widget`, `Layout::...`,
@@ -219,8 +219,8 @@ one you're relying on:
    - `rules/interactive-component-boundary/` scopes to `src/app/components/` and
      rejects `impl App`, `App` as a type, Service clients / `PlayerProxy` /
      `RemotePlayer`, and `std::sync::mpsc`. Fixtures live in
-     `rules/interactive-component-boundary-tests/`; `rtk ast-grep test` runs them,
-     and `rtk ast-grep test -U` regenerates snapshots after an intentional rule
+     `rules/interactive-component-boundary-tests/`; `ast-grep test` runs them,
+     and `ast-grep test -U` regenerates snapshots after an intentional rule
      change.
 
    The scan catches the common bypasses and nothing subtler. The bare
