@@ -299,7 +299,7 @@ pub(in crate::app) fn render_feeds_content(
 /// HeroShell.
 fn paint_feed_hero(f: &mut Frame, content: Rect, entry: &FeedEntry, focused: bool) {
     let meta = feed_entry_meta_line(entry);
-    let image_width = content.width / 2;
+    let image_width = (content.width / 8).max(1);
     let image_height = (image_width.saturating_mul(9).saturating_add(31) / 32)
         .min(content.height)
         .max(1);
