@@ -5,8 +5,8 @@ differs most, and two surfaces in Phase 5 exist only there.
 
 ## 1. Foundations (ADR + ledger seam)
 
-- [ ] 1.1 **[D]** Write `docs/adr/0024-mouse-events-through-component-subscriptions.md` recording D1 (any-position subscription + the pinned tuirealm 4.1 `is_in_range` assumption + component-side kind filtering), D2 (eligibility decided before delivery, not by discarding messages), D3 (mounted-parent gesture recognition), D11 (mouse eligibility follows paint, and why that is not ADR 0022 debt), and D13 (Residual A closed here) as Accepted; verify it cross-links ADR 0022/0023 and `openspec validate restore-mouse-support --strict` still passes.
-- [ ] 1.2 **[M]** Replace the "Mouse ownership is out of scope" section of `docs/architecture/interactive-surface-ledger.md` with "Mouse owner / gestures / breakpoints verified / verification" columns on every row (value `pending` for all); verify the table still renders and `rtk make check-code-file-lines` passes for the doc.
+- [x] 1.1 **[D]** Write `docs/adr/0024-mouse-events-through-component-subscriptions.md` recording D1 (any-position subscription + the pinned tuirealm 4.1 `is_in_range` assumption + component-side kind filtering), D2 (eligibility decided before delivery, not by discarding messages), D3 (mounted-parent gesture recognition), D11 (mouse eligibility follows paint, and why that is not ADR 0022 debt), and D13 (Residual A closed here) as Accepted; verify it cross-links ADR 0022/0023 and `openspec validate restore-mouse-support --strict` still passes.
+- [x] 1.2 **[M]** Replace the "Mouse ownership is out of scope" section of `docs/architecture/interactive-surface-ledger.md` with "Mouse owner / gestures / breakpoints verified / verification" columns on every row (value `pending` for all); verify the table still renders and `rtk make check-code-file-lines` passes for the doc.
 
 ## 2. Phase 1 — Delivery spine, eligibility, and Residual A geometry
 
