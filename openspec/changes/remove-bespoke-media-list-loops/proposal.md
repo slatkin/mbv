@@ -34,6 +34,17 @@ Reconcile ADR 0022, the interactive-surface ledger, `CONTEXT.md`, and frontend
 guidance with final `WideMediaList`/`InlineMediaBrowser` ownership and
 terminology.
 
+## Inventory outcome (2026-09-04)
+
+Staged inventory at accepted HEAD `9feeec54` found the deletable surface far
+smaller than anticipated. Only five test-only-reachable album symbols carry
+zero production references (see `tasks.md` §1.3). No obsolete selection/scroll/
+cursor geometry exists, and no `AppLayout::main` field is dead — the canonical
+migration reused that geometry. The `left_row_map` / `left_row_targets`
+mouse-reader cleanup is reassigned to `restore-mouse-support` (#638). This
+change therefore deletes the five album symbols and performs the docs
+reconciliation; the layout-field deletion moves to #638.
+
 ## Invariants
 
 Preserve the non-hero two-column carve-out, Queue fixed-row-only presentation,
