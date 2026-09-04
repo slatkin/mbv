@@ -154,9 +154,8 @@ pub enum ShellRequest {
     HomeSectionSelected(usize),
     /// A Home-surface wheel step recognized by `HomeComponent`'s private
     /// `MouseGestureState` (ADR 0024, design.md D3): the component owns the
-    /// wheel throttle. The shell still runs `handle_home_scroll` (its App
-    /// wheel gate plus the Continue Watching `cw_move_cursor` quirk) until
-    /// task 4.3 moves that effect over too.
+    /// wheel throttle. The shell runs `handle_home_scroll` only for the
+    /// Continue Watching `cw_move_cursor` quirk and context-menu refresh.
     HomeScroll {
         delta: i64,
     },

@@ -566,8 +566,6 @@ fn aggregate_surfaces_do_not_bleed_across_destinations() {
     term.draw(|f| app.compose_base_frame(f, None)).unwrap();
 
     let main = &app.layout.main;
-    // The destination tag is only set on the completed frame.
-    assert!(main.browse_destination.is_some());
     // Cross-surface bleed check: a nonzero queue area must not also be a
     // nonzero music wide area (they are mutually exclusive destinations).
     let queue_active = main.queue_area.width > 0 && main.queue_area.height > 0;

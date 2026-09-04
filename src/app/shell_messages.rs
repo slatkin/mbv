@@ -284,15 +284,13 @@ impl Model {
                 // `BrowserComponent`'s private `MouseGestureState` (ADR 0024,
                 // design.md D3/D4): it owns the wheel throttle and resolves the
                 // row target itself, so the shell only applies the effect.
-                ShellRequest::BrowserScroll { delta, offset } => {
+                ShellRequest::BrowserScroll { delta: _, offset } => {
                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
                         if self.app.is_feed_home_video_group_view(lib_idx) {
                             if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
                                 state.video_scroll = offset;
                                 self.app.save_default_library_position(lib_idx);
                             }
-                        } else {
-                            self.app.handle_mouse_scroll_browse(delta);
                         }
                     }
                 }
@@ -470,8 +468,7 @@ impl Model {
                 // wheel throttle, resolves the pane + hit itself, and moves
                 // its own pane/cursor before emitting. The shell only applies
                 // the cross-boundary effect.
-                ShellRequest::TvScroll { delta } => {
-                    self.app.handle_mouse_scroll_browse(delta);
+                ShellRequest::TvScroll { .. } => {
                     self.push_tv_workspace_content();
                 }
                 ShellRequest::TvHitClick { hit } => {

@@ -2,30 +2,16 @@
 
 use crate::app::action::Command;
 use crate::app::components::msg::TvHit;
-use crate::app::{App, QueueScope, TabSelection};
+use crate::app::{App, QueueScope};
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerCommand;
 use mbv_core::remote_reconciliation::RemoteIntent;
 use std::time::{Duration, Instant};
 
 impl App {
-    pub(super) fn is_browse_layout_current(&self) -> bool {
-        match self.layout.main.browse_destination {
-            Some(tag) => tag == self.tab,
-            None => true,
-        }
-    }
-
-    pub(super) fn browse_mouse_ready(&mut self) -> bool {
-        if self.normalize_stale_browse_destination() {
-            return false;
-        }
-        self.is_browse_layout_current()
-    }
-
     /// Seek to a 0.0..=1.0 `fraction` of the runtime. `PlaybackComponent`
-    /// resolves the click column against its own painted `seekbar_area`, so no
-    /// shell code reads `self.layout.playback.seekbar_area` (ADR 0022 Residual A).
+    /// resolves the click column against its own painted `seekbar_area`, so the
+    /// shell never reads that component-owned geometry.
     pub(super) fn seek_to_fraction(&mut self, fraction: f64) {
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             let runtime_s = self
@@ -66,25 +52,6 @@ impl App {
         }
     }
 
-    /// Destination-agnostic wheel handling for browse surfaces. Emby,
-    /// Home, Audiobookshelf, and Feeds are no-ops. Home no longer routes here:
-    /// its wheel is claimed by
-    /// `HomeComponent` and handled at the Model boundary
-    /// (`Model::handle_home_scroll`), which keeps the same throttle/readiness
-    /// gates and the Continue Watching `cw_move_cursor` quirk (task 5.3d,
-    /// Home wheel-scroll ownership).
-    pub(super) fn handle_mouse_scroll_browse(&mut self, _delta: i64) {
-        if !self.browse_mouse_ready() {
-            return;
-        }
-        match self.tab {
-            TabSelection::EmbyLibrary(_)
-            | TabSelection::Home
-            | TabSelection::AudiobookshelfLibrary(_)
-            | TabSelection::Feeds => {}
-        }
-    }
-
     // TODO(task 6.3): remove once no mouse surface uses the shell double-click clock
     #[allow(dead_code)]
     pub(super) fn note_browse_double_click(&mut self, col: u16, row: u16) -> bool {
@@ -96,6 +63,8 @@ impl App {
         is_double
     }
 
+    // TODO(task 6.3): remove with the remaining shell-side mouse clock.
+    #[allow(dead_code)]
     pub(super) fn note_browse_scroll(&mut self) -> bool {
         let now = Instant::now();
         let allow = now.duration_since(self.last_scroll_at) >= Duration::from_millis(30);

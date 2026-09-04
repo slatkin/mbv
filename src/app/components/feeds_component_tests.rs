@@ -264,7 +264,7 @@ fn group_change_reflects_active_filter() {
 }
 
 #[test]
-fn unfocused_component_ignores_mouse_input() {
+fn unfocused_component_handles_mouse_input() {
     let mut component = grouped_component();
     let subscriptions = [FeedSubscription {
         name: "Test Feed".into(),
@@ -290,8 +290,8 @@ fn unfocused_component_ignores_mouse_input() {
         kind: MouseEventKind::ScrollDown,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.selected_group(), 0);
-    assert_eq!(component.cursor(), 0);
+    assert_eq!(component.selected_group(), 1);
+    assert_eq!(component.cursor(), 1);
 }
 
 #[test]

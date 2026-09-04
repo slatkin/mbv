@@ -166,17 +166,6 @@ impl App {
         // the shell mounts it from `pending_overlay` and paints it via the
         // overlay stack, so nothing is written to `layout` here.
 
-        // Blocking modal mount exclusivity is asserted by the shell, where the
-        // TuiRealm mount state is available.
-        // Record the destination this completed frame was rendered for, on
-        // the layout about to be installed. The tag is set only here (never
-        // on the intermediate/draft `layout`), so browse mouse handling can
-        // tell whether the installed layout describes the currently selected
-        // destination and refuse to interpret stale geometry otherwise
-        // (design §4). `self.tab` was already normalized to a live
-        // destination inside `render_main`.
-        layout.main.browse_destination = Some(self.tab);
-
         // One atomic replace, reached only once the full pass above has
         // completed -- `self.layout` never observes a half-updated frame.
         self.layout = layout;

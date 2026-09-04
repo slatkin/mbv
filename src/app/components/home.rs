@@ -456,9 +456,9 @@ impl HomeComponent {
     /// identity comes from the embedded control's `resolve_point`
     /// (design.md D6); section pills from `pill_regions`. The component emits
     /// a semantic `Msg` with a resolved target — never raw coordinates —
-    /// except the context-menu anchor (design.md D4). The wheel step is still
-    /// finished by `Model::handle_home_scroll` (its App gate plus the Continue
-    /// Watching `cw_move_cursor` quirk) until task 4.3.
+    /// except the context-menu anchor (design.md D4). The wheel step is
+    /// finished by `Model::handle_home_scroll`, which preserves the Continue
+    /// Watching `cw_move_cursor` quirk and refreshes the target snapshot.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         // Home does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
