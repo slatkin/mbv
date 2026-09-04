@@ -122,7 +122,7 @@
   `None` when images are off, with text and metadata taking the full content width — verify a test
   renders two different surfaces with images off and asserts both collapse identically with no
   reserved or placeheld region.
-- [ ] 4.4 Implement `Hero` for the Audiobookshelf/generic entry and for feed entries (D11: no
+- [x] 4.4 Implement `Hero` for the Audiobookshelf/generic entry and for feed entries (D11: no
   Feeds exception), and route `render_home_hero_content` (`home_hero.rs:483-521`) through the
   trait — verify the renderer contains no `match` on `HeroData` variants, the non-Emby Home
   characterization test is unchanged from its task-2.4 state, and Feeds renders an image region.
