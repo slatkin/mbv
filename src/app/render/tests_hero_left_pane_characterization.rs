@@ -139,13 +139,10 @@ fn music_wide_left_pane_unconditional_fill_no_horizontal_pad() {
     );
 }
 
-/// Home's `HeroData::Generic` clamp (`home.rs:237-242`): `hero_area()`
-/// reports the full unclamped pane (captured before the clamp mutates
-/// `hero_panel.height` in place), but the fill only paints the clamped
-/// subset -- rows below the clamp are left unpainted. Non-Emby Latest
-/// selection (an Audiobookshelf book) exercises the `Generic` arm.
+/// Home's non-Emby Latest selection fills the complete hero pane. The
+/// Audiobookshelf cover and metadata are top-anchored within that pane.
 #[test]
-fn home_wide_non_emby_latest_clamps_the_fill_below_reported_hero_area() {
+fn home_wide_non_emby_latest_fills_the_full_hero_area() {
     let source = crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into());
     let latest = vec![(
         "Books".into(),
@@ -174,11 +171,10 @@ fn home_wide_non_emby_latest_clamps_the_fill_below_reported_hero_area() {
     let buffer = terminal.backend().buffer();
 
     assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
-    assert_ne!(
+    assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].bg,
         palette::SURFACE_RESTING,
-        "characterizes the pre-fix clamp: the reported hero_area's bottom \
-         row is not painted"
+        "the full reported hero area must be filled"
     );
 }
 

@@ -175,11 +175,13 @@ pub(in crate::app) fn render_home_content(
         // Two-column layout: hero on left, list on right (hero-on-left,
         // design.md decision 4/5: the pane split and its minimum pane
         // width are the shared arrangement's, not a Home-local ratio).
-        let Some((mut hero_panel, right_panel)) = wide_panes else {
+        let Some((hero_panel, right_panel)) = wide_panes else {
             unreachable!("wide_panes is present when two_column is true");
         };
         hero_area_out = Some(hero_panel);
-        let mut hero_content = padded_rect(hero_panel, PANE_PAD_X, PANE_PAD_Y);
+        let mut hero_content =
+            hero_left::hero_on_left_pane(f, area, hero_left::LeftPaneFocus::ReadOnly)
+                .expect("wide branch already confirmed shared hero presentation fits");
         let hero_col_height = hero_content.height;
 
         hero_data = match emby_item {
@@ -210,9 +212,8 @@ pub(in crate::app) fn render_home_content(
                     // (title/overview text, plus a cover for
                     // Audiobookshelf) instead of the full column height —
                     // otherwise short items (feeds have no cover at all)
-                    // leave a mostly-empty panel, and the cover -- placed
-                    // at the bottom of `area` by `render_home_latest_detail`
-                    // -- ends up stranded far below the text.
+                    // leave a mostly-empty panel. Artwork is top-anchored
+                    // with the text by `render_home_latest_detail_content`.
                     let text_w = hero_content.width as usize;
                     // The recessed overview box applies the shared pane
                     // padding twice (panel and content), so measure against
@@ -233,20 +234,6 @@ pub(in crate::app) fn render_home_content(
                     HeroData::Generic(item, hero_content)
                 }),
         };
-
-        if let Some(HeroData::Generic(_, area)) = &hero_data {
-            hero_panel.height = area
-                .height
-                .saturating_add(PANE_PAD_Y * 2)
-                .min(hero_panel.height);
-        }
-
-        if hero_data.is_some() {
-            f.render_widget(
-                Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
-                hero_panel,
-            );
-        }
 
         list_area = if hero_data.is_some() {
             right_panel
