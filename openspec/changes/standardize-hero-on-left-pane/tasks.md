@@ -1,13 +1,13 @@
 ## 1. Baseline and the shared primitives
 
-- [ ] 1.1 Add characterization buffer tests capturing the current Wide left-pane output of all
+- [x] 1.1 Add characterization buffer tests capturing the current Wide left-pane output of all
   seven hero-on-left destinations (Movies/home-videos/Emby-podcasts/feed-group browser, TV,
   Music, Home with a non-Emby Latest selection, Feeds with and without a selected entry, ABS
   Books, ABS Podcasts) — verify `rtk cargo nextest run -p mbv` passes and the new tests are in
   their own commit before any paint change, per the ledger migration flow.
-- [ ] 1.2 Record the pre-existing `Block::default().style(<Color>)` hits across the tree — verify
+- [x] 1.2 Record the pre-existing `Block::default().style(<Color>)` hits across the tree — verify
   the list is captured in the change folder or the PR body, so task 5.3 can land a clean rule.
-- [ ] 1.3 Add `LeftPaneFocus { ReadOnly, Workspace(bool) }` and
+- [x] 1.3 Add `LeftPaneFocus { ReadOnly, Workspace(bool) }` and
   `hero_on_left_pane(f: &mut Frame, content_area: Rect, focus: LeftPaneFocus) -> Option<Rect>` to
   `src/app/render/arrangements/hero_left.rs`, next to `hero_on_left_list_panel_border`. It calls
   `shared_hero_presentation(content_area)?` itself (callers cannot supply a pane extent), fills
@@ -16,13 +16,13 @@
   `padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y)` — verify a unit test in that module asserts
   the returned rect's offsets, that `ReadOnly` never resolves to the focused surface, and that a
   sub-breakpoint `content_area` returns `None` without painting.
-- [ ] 1.4 Rename `hero_on_left_recessed_box` to the committed "main content box" name, **remove
+- [x] 1.4 Rename `hero_on_left_recessed_box` to the committed "main content box" name, **remove
   its `pad_x`/`pad_y` parameters** (D9), and hard-code `(PANE_PAD_X, PANE_PAD_Y)` inside it;
   update its doc comment to state it is present on every hero-on-left surface with a
   kind-dependent payload and one padding value — verify `rtk cargo check -p mbv` passes with all
   four call sites updated (`tv_wide.rs:369`, `:392`, `music_wide_tracks.rs:28` are argument-only
-  changes; `hero.rs:604` previously passed `overview_pad, 1` and its output shifts, which is the
-  accepted D9 delta).
+  changes; `hero.rs:604` previously passed `overview_pad, 1`, which review confirmed was already
+  `(2, 1)` in every reachable state — so this call site is behavior-preserving too, not a D9 shift).
 
 ## 2. Per-surface conformance: the four broken destinations
 
