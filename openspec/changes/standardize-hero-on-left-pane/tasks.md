@@ -96,7 +96,7 @@
 - [x] 4.2 Define the initial `Hero` trait in `src/app/render/components/` and implement it for
   `EmbyItem` — verify `rtk cargo check -p mbv` passes with the Emby hero path routed through the
   trait and all characterization tests unchanged from their phase-3 state.
-- [ ] 4.2a Narrow `Hero` to title, ordered metadata, optional description, and semantic artwork;
+- [x] 4.2a Narrow `Hero` to title, ordered metadata, optional description, and semantic artwork;
   delete its listing body and give the shared arrangement named artwork, overview, and optional
   media-list viewport slots. Keep `Rect`, targets, cursor, scroll, and hit state out of `Hero` —
   verify the existing Home/Emby path remains unchanged and the compiler finds no `HeroBody::Listing`.
