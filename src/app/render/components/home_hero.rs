@@ -132,13 +132,30 @@ impl HeroData {
                     centered: two_column,
                 })
             }
-            Self::Generic(item, area) => super::home_latest_row::render_home_latest_detail_content(
-                f,
-                *area,
-                item,
-                focused,
-                if two_column { WIDE_OVERVIEW_PAD } else { 0 },
-            ),
+            Self::Generic(item, area) => {
+                let hero: &dyn Hero = item;
+                let meta = hero.meta_rows(area.width);
+                let meta_line = meta
+                    .first()
+                    .and_then(|row| row.first().map(|span| span.content.to_string()));
+                let description = hero.description();
+                let lines = description
+                    .iter()
+                    .flat_map(|text| text.lines())
+                    .map(|line| super::hero::HeroLine::Plain(line.to_owned()))
+                    .collect::<Vec<_>>();
+                let content = super::hero::HeroContent {
+                    title: Some(hero.title()),
+                    meta_line: meta_line.as_deref(),
+                    meta_color: palette::TEXT_SECONDARY,
+                    show_playing: false,
+                    unconditional_spacer_after_meta: false,
+                    lines: &lines,
+                    image: None,
+                };
+                super::hero::paint_hero_content(f, *area, &content, focused);
+                None
+            }
         }
     }
 }

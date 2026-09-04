@@ -7,6 +7,7 @@ use crate::app::render::components::hero::{
 };
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::render::components::widgets::{render_pill_bar, render_placeholder, PillBar};
+use crate::app::render::render_artwork_placeholder;
 use crate::app::render::screens::feeds_model::{feed_entry_meta_line, feed_hero_content_rows};
 use crate::app::types_feed_tab::WatchedFilter;
 use mbv_core::config::FeedSubscription;
@@ -298,7 +299,11 @@ pub(in crate::app) fn render_feeds_content(
 /// HeroShell.
 fn paint_feed_hero(f: &mut Frame, content: Rect, entry: &FeedEntry, focused: bool) {
     let meta = feed_entry_meta_line(entry);
-    paint_hero_content(
+    let image_width = content.width / 2;
+    let image_height = (image_width.saturating_mul(9).saturating_add(31) / 32)
+        .min(content.height)
+        .max(1);
+    let result = paint_hero_content(
         f,
         content,
         &HeroContent {
@@ -308,10 +313,24 @@ fn paint_feed_hero(f: &mut Frame, content: Rect, entry: &FeedEntry, focused: boo
             show_playing: false,
             unconditional_spacer_after_meta: false,
             lines: &[],
-            image: None,
+            image: Some(crate::app::render::components::hero::HeroImage {
+                actual_w: image_width,
+                height: image_height,
+            }),
         },
         focused,
     );
+    if let Some(image_area) = result.img_rect {
+        if matches!(
+            <FeedEntry as crate::app::render::components::hero_model::Hero>::artwork_for(
+                entry,
+                crate::app::render::components::hero_model::HeroArtworkAspect::Default
+            ),
+            crate::app::render::components::hero_model::HeroArtwork::Placeholder
+        ) {
+            render_artwork_placeholder(f, image_area);
+        }
+    }
 }
 
 /// Rebuild the pre-#638 mouse-compat maps from the canonical control's
