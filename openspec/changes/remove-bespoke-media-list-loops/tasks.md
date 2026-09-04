@@ -37,7 +37,7 @@ which owns hit-region migration and lands after this slice.
 
 ## 2. Zero-reference cleanup
 
-- [ ] 2.1 Delete the five test-only-reachable album symbols from §1.3 (`render_grouped_album_rows`, `render_grouped_album_rows_with_ctx`, `render_grouped_album_rows_inline_plan`, `AlbumRowsCursorCtx`, `GroupedAlbumRenderCtx`) plus the tests that exist only to exercise them and any `GroupedAlbumDisplayRow` match arms left unreachable. Re-run the ast-grep/grep inventory after deletion to confirm zero references remain.
+- [x] 2.1 Delete the five test-only-reachable album symbols from §1.3 (`render_grouped_album_rows`, `render_grouped_album_rows_with_ctx`, `render_grouped_album_rows_inline_plan`, `AlbumRowsCursorCtx`, `GroupedAlbumRenderCtx`) plus the tests that exist only to exercise them and any `GroupedAlbumDisplayRow` match arms left unreachable. Re-run the ast-grep/grep inventory after deletion to confirm zero references remain.
 - [x] 2.2 Prove zero production consumers for obsolete selection, scroll, and cursor geometry. Result: none exists — nothing to delete. Component-owned viewport geometry and all row-hit / `*HitRegion` geometry retained for `restore-mouse-support` (#638).
 - [x] 2.3 Prove zero production readers/writers/geometry-dependent callers for `AppLayout::main` left/hero/selector/wide-family fields. Result: every field is still consumed by canonical painters, keyboard nav, or render geometry. `left_row_map` / `left_row_targets` mouse-reader cleanup reassigned to #638. Nothing deleted here.
 - [ ] 2.4 Preserve Queue fixed-row-only behavior and make no destination-family, Service, Player, provider, protocol, persistence, dependency, or visual corrections. Route defects to the owning slice.
