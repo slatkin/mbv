@@ -96,9 +96,9 @@ impl MusicWideRenderCtx {
         layout.wide_music_area = area;
         layout.wide_music_art_area = Rect::default();
 
-        let panes = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y)?;
+        let panes = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y)?;
         let left_layout = music_arrangement::wide_music_left_layout(
-            panes.left_area,
+            panes.left_panel,
             self.selected_album.is_some() && self.images_enabled,
             self.album_tracks.as_ref().map_or(0, Vec::len),
         );
@@ -524,7 +524,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
         return output;
     };
     let left_layout = music_arrangement::wide_music_left_layout(
-        left_area,
+        left_panel,
         ctx.selected_album.is_some() && ctx.images_enabled,
         ctx.album_tracks.as_ref().map_or(0, Vec::len),
     );
