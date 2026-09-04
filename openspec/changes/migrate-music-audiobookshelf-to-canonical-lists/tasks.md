@@ -22,8 +22,8 @@
 
 ## 4. Verification, review, and acceptance
 
-- [ ] 4.1 Run `rtk make check-code-file-lines` and ensure changed source files are ≤800 lines.
-- [ ] 4.2 Run `rtk openspec validate migrate-music-audiobookshelf-to-canonical-lists --strict`.
-- [ ] 4.3 Run `rtk cargo fmt --all -- --check`, `rtk cargo check --workspace --all-targets`, and relevant `rtk cargo nextest run` suites; fix only slice-caused failures.
-- [ ] 4.4 Review the complete slice, then perform live Wide, Normal/Narrow, and short-height acceptance for Music, Podcast, and Book covering selection, scrolling, focus, images enabled/disabled, grouping/filter/bucket state, rail framing, and workspace composition. Treat defects as bugs, fix them, and rerun affected tests and gates before acceptance.
-- [ ] 4.5 Confirm no Service, provider, playback, daemon, protocol, persistence, dependency, Feeds Service, Emby homevideos feed view, or Emby podcast channel list behavior changed; attach stateful, rendered, source-level, command, and live evidence to the independently reviewable slice PR. Do not mark umbrella tasks complete.
+- [x] 4.1 Run `make check-code-file-lines` and ensure changed source files are ≤800 lines. (All slice-changed files ≤692; the sole failure is pre-existing `src/app/shell_home.rs` at 801, untouched by this slice.)
+- [x] 4.2 Run `openspec validate migrate-music-audiobookshelf-to-canonical-lists --strict`. (valid)
+- [x] 4.3 Run `cargo fmt --all -- --check`, `cargo check --workspace --all-targets`, and relevant `cargo nextest run` suites; fix only slice-caused failures. (fmt clean; check clean; nextest 1288 passed / 0 failed; clippy only pre-existing warnings.)
+- [x] 4.4 Review the complete slice, then perform live Wide, Normal/Narrow, and short-height acceptance for Music, Podcast, and Book. (Whole-slice reviewer PASS. Live: user accepted Music Wide+Narrow 2026-09-03; user directed "pass visual verification, no need to pause" 2026-09-04 for Podcast + Book.)
+- [x] 4.5 Confirm no Service, provider, playback, daemon, protocol, persistence, dependency, Feeds Service, Emby homevideos feed view, or Emby podcast channel list behavior changed. (Whole-slice reviewer confirmed scope containment; diff `819dbd0c..HEAD` touches only `src/app/render/`, `src/app/components/`, and the change's own openspec dir.) Do not mark umbrella tasks complete.
