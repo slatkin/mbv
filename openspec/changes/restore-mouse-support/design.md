@@ -20,7 +20,11 @@ See `proposal.md` — Why. The relevant current state:
   enum per surface. `feeds`, `audiobookshelf_book`, `audiobookshelf_podcast`,
   and `home` additionally self-gate their handler with
   `if !self.focused { return None }` (`feeds.rs:322`, `abs_book.rs:214`,
-  `abs_podcast.rs:204`, `home.rs:385`) — so, e.g., Feeds already scrolls its own
+  `abs_podcast.rs:204`, `home.rs:385`) — verified against the tree: only
+  `feeds.rs:322` is in a `handle_mouse`; the other three sit in `handle_key` /
+  `handle_crossterm_key` (keyboard), and the three components' mouse paths
+  already carry no focus check after the Phase 2 migrations — so, e.g., Feeds
+  already scrolls its own
   list on the wheel *while focused*; what is missing there is not row wiring but
   the focus gate.
 - **Stubs / dead code.** `handle_mouse_scroll_browse(_delta)` is an empty match.
@@ -409,14 +413,23 @@ The eligibility set is derived from the shell's existing active-destination
 derivation, not from a second paint ledger, so there is no new "did I paint"
 fact stored anywhere.
 
-### D12 — The four `if !self.focused` mouse guards come out in Phase 3, not Phase 1
+### D12 — The `if !self.focused` mouse guards come out in Phase 3, not Phase 1
 
-`feeds.rs:322`, `audiobookshelf_book.rs:214`, `audiobookshelf_podcast.rs:204`,
-and `home.rs:385` return `None` from their mouse handler unless focused.
-Removing them is the visible payoff of this change *and* an observable
-behaviour change, which Phase 1's "delivery only, no observable change" gate
-forbids. They come out per surface in Phase 3 (Home and Feeds) and Phase 4/5
-(ABS book/podcast), each behind that phase's live-review gate.
+`feeds.rs:322` (`FeedsComponent::handle_mouse`) returns `None` from its mouse
+handler unless focused. Removing it is the visible payoff of this change *and*
+an observable behaviour change, which Phase 1's "delivery only, no observable
+change" gate forbids. It comes out in Phase 3 (task 4.2), behind that phase's
+live-review gate.
+
+The original four-guard list also named `audiobookshelf_book.rs:214`,
+`audiobookshelf_podcast.rs:204`, and `home.rs:385` — verified against the tree
+before implementation, those three sit in `handle_key` /
+`handle_crossterm_key`, i.e. they are **keyboard** guards, not mouse. The mouse
+paths of those same components (`AudiobookshelfBookComponent::handle_mouse`,
+`AudiobookshelfPodcastComponent::handle_mouse`, `HomeComponent::handle_mouse`)
+already carry no focus check after the Phase 2 migrations, so 4.2 is a
+one-guard deletion plus per-surface verification that the already-unfocused
+mouse paths act from any focus state.
 
 This makes Phase 1's own verification awkward — a delivery test aimed at a
 guarded component would assert `None` and prove nothing. Phase 1 therefore

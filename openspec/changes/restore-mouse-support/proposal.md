@@ -13,7 +13,10 @@ requests, but TuiRealm delivers `Event::Mouse` only to the **focused** component
 transport buttons — is never made active, so its handler is unreachable. Four
 components additionally self-gate their handler with
 `if !self.focused { return None }` (`feeds.rs:322`, `audiobookshelf_book.rs:214`,
-`audiobookshelf_podcast.rs:204`, `home.rs:385`) — Feeds, for instance, already
+`audiobookshelf_podcast.rs:204`, `home.rs:385`) — verified against the tree: only
+`feeds.rs:322` is in a `handle_mouse`; the other three are in `handle_key` /
+`handle_crossterm_key` (keyboard), and the three components' mouse paths already
+carry no focus check — Feeds, for instance, already
 scrolls its own list on the wheel *while focused* (`feeds.rs:327`), so restoring
 it is deleting a focus gate, not wiring rows. The shell's cross-surface browse
 wheel (`handle_mouse_scroll_browse(_delta)`) is a stubbed no-op. Clicking any
