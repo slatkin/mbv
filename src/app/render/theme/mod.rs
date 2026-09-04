@@ -20,6 +20,7 @@ pub const SURFACE_ACCENT_SOFT: Color = primitives::BG_GREEN_SOFT;
 pub const SURFACE_ITEM_FOCUSED: Color = primitives::FOCUSED;
 pub const SURFACE_STATUS_PILL: Color = SURFACE_CHROME; // pills sit on the chrome status row; same bg
 pub const SURFACE_SIDEBAR: Color = primitives::PANEL_BG; // plain (non-hero) sidebar/panel background
+pub const SURFACE_ARTWORK_PLACEHOLDER: Color = primitives::ARTWORK_PLACEHOLDER;
 
 // Accents
 pub const ACCENT: Color = primitives::AQUA; // selection marker, watched, folders, Emby brand glyph
