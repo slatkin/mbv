@@ -191,21 +191,14 @@ pub(in crate::app) fn render_feeds_content(
     // never replace a heading or the last visible entry at a scroll boundary.
     let (list_area, outer_panel) = if let Some((hero_panel, _)) = wide_panes {
         layout.hero_area = hero_panel;
-        // Wide left hero pane mirrors the sibling media tabs (Movies/Home/TV):
-        // a plain resting-surface background fill, no `▔`/`▁` HeroShell and no
-        // tint from the list panel's focus. The inline/narrow path keeps the
-        // shell (below).
+        // Wide left hero pane: unconditional fill via the shared primitive
+        // (D1, persistent pane -- painted even with no selected entry). Feeds
+        // is read-only and never focus-green (D3/D8).
+        let hero_content_area =
+            hero_left::hero_on_left_pane(f, area, hero_left::LeftPaneFocus::ReadOnly)
+                .expect("wide branch already confirmed shared_hero_presentation fits");
         if let Some(entry) = model.selected_entry {
-            f.render_widget(
-                Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
-                hero_panel,
-            );
-            paint_feed_hero(
-                f,
-                padded_rect(hero_panel, hero_left::PANE_PAD_X, hero_left::PANE_PAD_Y),
-                entry,
-                focused,
-            );
+            paint_feed_hero(f, hero_content_area, entry, focused);
         }
         f.render_widget(
             Block::default().style(Style::default().bg(palette::resolve_surface_focus(focused))),
