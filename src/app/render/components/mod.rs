@@ -1,7 +1,6 @@
 pub(super) mod album;
 pub(super) mod album_art;
 pub(super) mod album_detail;
-pub(super) mod album_inline;
 pub(super) mod album_rows;
 pub(super) mod audiobookshelf_book;
 pub(super) mod audiobookshelf_books;
