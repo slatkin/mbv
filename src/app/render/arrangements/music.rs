@@ -20,7 +20,8 @@ pub(in crate::app::render) fn wide_music_left_layout(
     track_count: usize,
 ) -> WideMusicLeftLayout {
     let total_h = left_area.height;
-    let hero_content_area = padded_rect(left_area, PANE_PAD_X, 0);
+    let top_pad = PANE_PAD_Y;
+    let hero_content_area = padded_rect(left_area, PANE_PAD_X, top_pad);
     let art_available = images_enabled && hero_content_area.width >= INLINE_ALBUM_ART_RESERVED;
     let side_metadata_width = hero_content_area
         .width
@@ -34,18 +35,18 @@ pub(in crate::app::render) fn wide_music_left_layout(
     } else {
         2
     }
-    .min(total_h.saturating_sub(sep + PANE_PAD_Y * 2));
-    let track_h = requested_track_h.min(total_h.saturating_sub(hero_ideal + sep));
-    let hero_h = hero_ideal.min(total_h.saturating_sub(track_h + sep));
+    .min(total_h.saturating_sub(top_pad + sep + PANE_PAD_Y * 2));
+    let track_h = requested_track_h.min(total_h.saturating_sub(top_pad + hero_ideal + sep));
+    let hero_h = hero_ideal.min(total_h.saturating_sub(top_pad + track_h + sep));
     let hero_area = Rect {
         x: hero_content_area.x,
-        y: left_area.y,
+        y: hero_content_area.y,
         width: hero_content_area.width,
         height: hero_h,
     };
     let track_area = Rect {
         x: left_area.x,
-        y: left_area.y + hero_h + sep,
+        y: left_area.y + top_pad + hero_h + sep,
         width: left_area.width,
         height: track_h,
     };
