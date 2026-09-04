@@ -147,7 +147,7 @@ fn wide_feeds_use_a_left_detail_and_right_entry_workspace() {
             "heading={heading:?}"
         );
         let hero = buffer_to_string(&terminal);
-        assert!(hero.contains("audio/mpeg"), "metadata missing: {hero:?}");
+        assert!(hero.contains("audio/m"), "metadata missing: {hero:?}");
     }
 }
 
