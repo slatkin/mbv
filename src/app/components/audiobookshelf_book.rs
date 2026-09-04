@@ -6,7 +6,7 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEvent
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{InlineMediaBrowser, ViewportAnchor};
+use super::media_list::{InlineMediaBrowser, ViewportAnchor, WideMediaList};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, Msg, ShellRequest};
 use super::user_event::UserEvent;
@@ -39,6 +39,8 @@ pub struct AudiobookshelfBookComponent {
     /// projection by the renderer each frame. Never constructed during a
     /// render pass. The wide rail composes its own per-frame `WideMediaList`.
     narrow_list: InlineMediaBrowser<String>,
+    /// Parent-owned chapter control for the wide hero workspace.
+    chapter_list: WideMediaList<String>,
     /// One-shot `ViewportAnchor` carried across a Wide<->Narrow breakpoint
     /// flip (§2.5); consumed by the next `view`.
     pending_anchor: Option<ViewportAnchor<String>>,
@@ -72,6 +74,7 @@ impl AudiobookshelfBookComponent {
             chapters_visible: false,
             image_paint: None,
             narrow_list: InlineMediaBrowser::new(),
+            chapter_list: WideMediaList::new(),
             pending_anchor: None,
             last_wide: None,
             painted_row_offset: None,
@@ -455,6 +458,7 @@ impl Component for AudiobookshelfBookComponent {
             &mut self.geometry,
             &mut self.browser_offset,
             &mut self.narrow_list,
+            &mut self.chapter_list,
             flip_anchor.as_ref(),
         );
         self.painted_row_offset = self.geometry.selected_row_offset;

@@ -19,11 +19,11 @@ use crate::app::render::components::media_list::{
 };
 use crate::app::render::{render_pill_bar, render_placeholder, PillBar};
 use crate::app::types_audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
-use crate::app::ui_util::{fmt_duration_approx, trunc_str};
-use ratatui::layout::{Constraint, Rect};
+use crate::app::ui_util::fmt_duration_approx;
+use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Cell, Row, Table, TableState};
+
+use ratatui::widgets::Block;
 use ratatui::Frame;
 
 /// The component-owned interaction values the book renderer needs, passed in
@@ -138,6 +138,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
     geometry: &mut AudiobookshelfBookGeometry,
     browser_offset: &mut usize,
     narrow_list: &mut InlineMediaBrowser<String>,
+    chapter_list: &mut WideMediaList<String>,
     flip_anchor: Option<&ViewportAnchor<String>>,
 ) -> Option<super::home_hero::HomeImagePaint> {
     *geometry = AudiobookshelfBookGeometry::default();
@@ -195,6 +196,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             state,
             interaction.chapter_selection,
             focused && interaction.chapter_selection.is_some(),
+            chapter_list,
             geometry,
         );
         let rail_focused = focused && interaction.chapter_selection.is_none();
@@ -453,6 +455,7 @@ fn render_book_rows(
     state: &AudiobookshelfBookBrowseState,
     chapter_selection: Option<usize>,
     focused: bool,
+    chapter_list: &mut WideMediaList<String>,
     geometry: &mut AudiobookshelfBookGeometry,
 ) {
     if area.height == 0 {
@@ -471,77 +474,45 @@ fn render_book_rows(
         return;
     }
     let show_length = area.width > 40;
-    let duration_width = if show_length { 7 } else { 0 };
-    let title_width =
-        (area.width as usize).saturating_sub(1 + usize::from(show_length) * (duration_width + 1));
-    let table_rows = rows
+    let media_rows = rows
         .iter()
         .enumerate()
         .map(|(index, row)| {
-            let selected = chapter_selection == Some(index);
-            let style = if selected && focused {
-                Style::default().fg(palette::TEXT_FOCUS_ACCENT)
-            } else if focused {
-                Style::default().fg(palette::TEXT_STRONG)
-            } else {
-                Style::default().fg(palette::TEXT_SECONDARY)
-            };
-            let marker = crate::app::render::selection_marker(
-                selected,
-                crate::app::render::MarkerEdge::Left,
-            );
-            let (title, duration) = match row {
+            let (primary, duration) = match row {
                 BookRow::Chapter { title, start, end } => (
                     title.clone(),
-                    fmt_duration_approx((end - start).max(0.0) as i64),
+                    Some(fmt_duration_approx((end - start).max(0.0) as i64)),
                 ),
                 BookRow::AudioFile { index, duration } => (
                     format!("Part {index}"),
-                    fmt_duration_approx(*duration as i64),
+                    Some(fmt_duration_approx(*duration as i64)),
                 ),
             };
-            let title = Cell::from(Line::from(vec![
-                marker,
-                Span::raw(trunc_str(&title, title_width)),
-            ]));
-            if show_length {
-                Row::new([title, Cell::from(duration), Cell::from("")]).style(style)
-            } else {
-                Row::new([title, Cell::from(""), Cell::from("")]).style(style)
+            MediaListRow::Item {
+                target: index.to_string(),
+                primary,
+                trailing: None,
+                duration: show_length.then_some(duration.unwrap()),
+                semantic_state: MediaSemanticState::Ordinary,
             }
         })
-        .collect::<Vec<_>>();
-    let mut table_state = TableState::default();
-    table_state.select(chapter_selection);
-    frame.render_stateful_widget(
-        Table::new(
-            table_rows,
-            [
-                Constraint::Min(10),
-                Constraint::Length(duration_width as u16),
-                Constraint::Length(1),
-            ],
-        )
-        .column_spacing(1),
+        .collect();
+    chapter_list.set_content(media_rows);
+    chapter_list.select_index(chapter_selection.unwrap_or(0));
+    let paint = render_wide_media_list(
+        frame,
         area,
-        &mut table_state,
+        area,
+        chapter_list,
+        focused,
+        palette::list_selected_row_bg(),
     );
-    geometry.chapter_rows = rows
-        .iter()
+    geometry.chapter_rows = paint
+        .row_geometry
+        .visible_rows(area)
+        .into_iter()
         .enumerate()
-        .skip(table_state.offset())
-        .take(area.height as usize)
-        .enumerate()
-        .map(|(screen, (index, _))| {
-            (
-                Rect {
-                    y: area.y + screen as u16,
-                    height: 1,
-                    ..area
-                },
-                table_state.offset() + index,
-            )
-        })
+        .map(|(screen, rect)| (rect, paint.row_geometry.offset() + screen))
         .collect();
 }
 
