@@ -108,7 +108,7 @@
   verified Emby artwork candidate chain (with `Thumb` first only when supported by the client
   mapping), then render title, ordered metadata, blank row, and an overview main-content box.
   Re-baseline the existing TV buffer characterization as the intended visual delta.
-- [ ] 4.2d Replace TV's hand-painted episode table with a parent-owned embedded
+- [x] 4.2d Replace TV's hand-painted episode table with a parent-owned embedded
   `WideMediaList<String>` in a separate recessed media-list box below the overview; season pills
   remain parent chrome. Preserve component-owned selection, scroll, viewport anchoring, and hit
   resolution through the canonical control; add only the smallest buffer/integration coverage for
