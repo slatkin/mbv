@@ -60,7 +60,7 @@
   the now-orphaned `left_panel`/`left_content_area` bindings; keep the `wide_library_panes` call
   at `:35`, which still produces `right_area` — verify the Movies characterization test diff shows
   a **two-column horizontal shift and no row shift**, and nothing else.
-- [ ] 3.2 TV (`tv_wide.rs:188`, `:201-205`): route the fill through `hero_on_left_pane(f, area,
+- [x] 3.2 TV (`tv_wide.rs:188`, `:201-205`): route the fill through `hero_on_left_pane(f, area,
   LeftPaneFocus::Workspace(ctx.focused && ctx.episode_cursor.is_some()))` and take the hero
   content rect from its return value. Keep the `wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y)`
   call for `right_area` — its `pad_y` also shapes the right pane (`arrangements/library.rs:19-23`)
