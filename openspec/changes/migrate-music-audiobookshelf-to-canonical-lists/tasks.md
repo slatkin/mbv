@@ -6,18 +6,18 @@
 
 ## 2. Canonical composition
 
-- [ ] 2.1 Prepare only grouped Music album rows for `WideMediaList`/`InlineMediaBrowser`; preserve group headings/buckets, parent-owned track workspace, images, selectors, and typed intents.
+- [x] 2.1 Prepare only grouped Music album rows for `WideMediaList`/`InlineMediaBrowser`; preserve group headings/buckets, parent-owned track workspace, images, selectors, and typed intents.
 - [x] 2.2 Compose only Audiobookshelf Podcast show rows with canonical controls; retain the parent-owned selected-show episode workspace, episode/played filter, images, and provider playback authority.
-- [ ] 2.3 Compose only Audiobookshelf Book rows with canonical controls; remove the Wide right-rail selected-row replacement (the `render_book_browser` reuse of Narrow logic) so Wide is provider detail workspace on the LEFT plus ordinary fixed-height one-column rows on the RIGHT, with no Inline hero in the right rail; retain parent-owned book detail, chapter/audio-file authority, images, surname buckets, and absolute chapter seek intents.
-- [ ] 2.4 Repair the owned Audiobookshelf Podcast and Book non-list arrangement/framing defects: route Podcast Wide through the shared hero-on-left right pane so the Wide pill row matches Narrow, and correct Book Wide left-workspace framing/spacing to the shared policy — no bespoke painter or destination-specific breakpoint. Preserve Wide, Normal/Narrow, and short-height fallback. Covered by the `right-panel-arrangements` delta.
-- [ ] 2.5 Preserve stable `ViewportAnchor` target/offset handoff across breakpoint changes and navigation events without shell mirrors or per-frame writeback.
+- [x] 2.3 Compose only Audiobookshelf Book rows with canonical controls; remove the Wide right-rail selected-row replacement (the `render_book_browser` reuse of Narrow logic) so Wide is provider detail workspace on the LEFT plus ordinary fixed-height one-column rows on the RIGHT, with no Inline hero in the right rail; retain parent-owned book detail, chapter/audio-file authority, images, surname buckets, and absolute chapter seek intents.
+- [x] 2.4 Repair the owned Audiobookshelf Podcast and Book non-list arrangement/framing defects: route Podcast Wide through the shared hero-on-left right pane so the Wide pill row matches Narrow, and correct Book Wide left-workspace framing/spacing to the shared policy — no bespoke painter or destination-specific breakpoint. Preserve Wide, Normal/Narrow, and short-height fallback. Covered by the `right-panel-arrangements` delta.
+- [x] 2.5 Preserve stable `ViewportAnchor` target/offset handoff across breakpoint changes and navigation events without shell mirrors or per-frame writeback.
 - (2.6 removed: mouse deferred to #638. `restore-mouse-support` lands after every canonical slice and owns the parent/child point-resolution seam; this slice adds no mouse wiring and leaves existing bespoke `*HitRegion` paths untouched.)
-- [ ] 2.7 Split `src/app/components/audiobookshelf_podcast.rs` and any other near-limit changed files into cohesive modules before/with wiring; enforce every changed source file ≤800 lines.
+- [x] 2.7 Split `src/app/components/audiobookshelf_podcast.rs` and any other near-limit changed files into cohesive modules before/with wiring; enforce every changed source file ≤800 lines. (No split needed — every changed source file landed ≤692 lines; enforcement clause satisfied.)
 
 ## 3. Implementation evidence
 
-- [ ] 3.1 Add/update the smallest focused stateful, rendered-buffer, and geometry tests with metadata-bearing fixtures covering one-column geometry, selected/active/played states, images, selectors/buckets, chapter/episode targets, breakpoint fallback, ordinary-refresh target retention, and target/offset anchoring.
-- [ ] 3.2 Prove one painter per destination/breakpoint by source trace and execution counter/assertion; prove no destination-sized duplicate list or Wide Book selected-row replacement remains.
+- [x] 3.1 Add/update the smallest focused stateful, rendered-buffer, and geometry tests with metadata-bearing fixtures covering one-column geometry, selected/active/played states, images, selectors/buckets, chapter/episode targets, breakpoint fallback, ordinary-refresh target retention, and target/offset anchoring.
+- [x] 3.2 Prove one painter per destination/breakpoint by source trace and execution counter/assertion; prove no destination-sized duplicate list or Wide Book selected-row replacement remains.
 - (3.3 removed: mouse deferred to #638. This slice adds no mouse parent/child seam; `restore-mouse-support` owns it and lands last.)
 
 ## 4. Verification, review, and acceptance
