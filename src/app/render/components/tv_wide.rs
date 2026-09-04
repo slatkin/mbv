@@ -188,21 +188,21 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     let Some(panes) = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y) else {
         return (0, None);
     };
-    let left_panel = panes.left_panel;
     let right_panel = panes.right_panel;
-    let left_area = panes.left_area;
     let right_area = panes.right_area;
+    let episode_focused = ctx.focused && ctx.episode_cursor.is_some();
+    let right_focused = ctx.focused && !episode_focused;
+    let Some(left_area) = hero_left::hero_on_left_pane(
+        f,
+        area,
+        hero_left::LeftPaneFocus::Workspace(ctx.focused && ctx.episode_cursor.is_some()),
+    ) else {
+        return (0, None);
+    };
     layout.tv_wide_left_area = left_area;
     layout.tv_wide_right_area = right_area;
     layout.left_area = Rect::default();
 
-    let episode_focused = ctx.focused && ctx.episode_cursor.is_some();
-    let right_focused = ctx.focused && !episode_focused;
-    f.render_widget(
-        Block::default()
-            .style(Style::default().bg(palette::resolve_surface_focus(episode_focused))),
-        left_panel,
-    );
     let (selection_rendered, image_paint) = render_tv_series_selection(
         f,
         left_area,
