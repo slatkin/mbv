@@ -26,20 +26,20 @@
 
 ## 2. Per-surface conformance: the four broken destinations
 
-- [ ] 2.1 ABS Podcasts (`audiobookshelf_podcast.rs:~222-260`): call `hero_on_left_pane(frame,
+- [x] 2.1 ABS Podcasts (`audiobookshelf_podcast.rs:~222-260`): call `hero_on_left_pane(frame,
   area, LeftPaneFocus::Workspace(focused && interaction.episode_selection.is_some()))` before
   `render_podcast_hero` and pass its returned rect as the hero's content rect, replacing the
   `SELECTED_BLOCK_SIDE_PADDING` inset at `:429-432`. This is the surface **gaining** focus-green
   under D8 — passing the in-scope bare `focused` is the specific mistake to avoid — verify the
   surface's characterization test shows a filled resting-surface left pane with the show list
   focused, and a focused-surface left pane with an episode selected.
-- [ ] 2.2 ABS Books (`audiobookshelf_book.rs:182-187`): replace the `.style(<Color>)` call with
+- [x] 2.2 ABS Books (`audiobookshelf_book.rs:182-187`): replace the `.style(<Color>)` call with
   `hero_on_left_pane(frame, area, LeftPaneFocus::Workspace(focused &&
   interaction.chapter_selection.is_some()))`, take the hero content rect from its return value
   instead of `panes.left_area`, and delete the dead outer `right_panel` paint at `:208-213` —
   verify the characterization test shows a filled pane in both focus states and `rtk cargo clippy
   --workspace --all-targets` is clean.
-- [ ] 2.3 Feeds (`feeds.rs:198-209`): hoist the pane fill out of the `if let Some(entry)` guard so
+- [x] 2.3 Feeds (`feeds.rs:198-209`): hoist the pane fill out of the `if let Some(entry)` guard so
   it is unconditional, passing `LeftPaneFocus::ReadOnly` — verify the no-selection
   characterization test shows a filled resting pane with no hero content, and that the pane stays
   resting in every focus state Feeds can reach.
