@@ -1,4 +1,5 @@
 use super::{ListCore, MediaListRow, RowGeometry, ViewportAnchor, WideViewport};
+use ratatui::layout::{Position, Rect};
 
 /// Resolved geometry for one painted frame of an [`InlineMediaBrowser`]
 /// (design.md D1). `detail_rows == 0` means the detail block did not fit the
@@ -177,6 +178,41 @@ impl<Target> InlineMediaBrowser<Target> {
     {
         self.resolve_inline_layout(viewport_height, desired_detail_rows)
             .row_geometry
+    }
+
+    /// Resolve a screen `point` inside the painter-supplied `list_area` to the
+    /// target under it (design.md D6). `detail_rows` is the block height the
+    /// parent painted; the control resolves against the same replacement flow.
+    /// Returns `None` for a point outside `list_area` (horizontally too), a
+    /// heading/spacer row, an inline detail-block continuation row, or a point
+    /// past the last row.
+    #[allow(dead_code)] // consumers land in tasks 3.4-3.6
+    pub fn resolve_point(
+        &self,
+        list_area: Rect,
+        detail_rows: usize,
+        point: Position,
+    ) -> Option<&Target>
+    where
+        Target: Clone,
+    {
+        if !list_area.contains(point) {
+            return None;
+        }
+        let layout = self.resolve_inline_layout(list_area.height as usize, detail_rows);
+        let geom = &layout.row_geometry;
+        let flow_row = (point.y - list_area.y) as usize + geom.offset();
+        match geom.source_row(flow_row) {
+            Some(source_row) => self.core.rows().get(source_row)?.selectable_target(),
+            None => match geom.selected_row() {
+                // The detail block replaces the selected row; only its first
+                // flow row carries the target, continuation rows resolve None.
+                Some(block_start) if layout.detail_rows > 0 && flow_row == block_start => {
+                    self.core.selected_target()
+                }
+                _ => None,
+            },
+        }
     }
 }
 
