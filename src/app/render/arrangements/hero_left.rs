@@ -423,51 +423,68 @@ pub(in crate::app::render) fn hero_on_left_main_content_box(
 }
 
 /// Named Rect-only extension points within a hero-on-left content rect
-/// (design.md D-D): an optional artwork region, the overview text area, and
-/// an optional embedded media-list viewport below it. Placement only -- no
-/// painting, no Service/image effects, no list ownership; callers pass the
-/// heights they need and the primitive only slices the rect vertically.
+/// (design.md D-D): an optional artwork region and the overview text area
+/// filling the remainder. Placement only -- no painting, no Service/image
+/// effects, no list ownership.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) struct HeroLeftSlots {
     pub artwork: Option<Rect>,
     pub overview: Rect,
-    pub media_list: Option<Rect>,
 }
 
 /// Slices `content` top-to-bottom into `HeroLeftSlots`: an `artwork_height`
-/// row artwork slot (omitted when `0`), the overview slot filling the
-/// remainder above an optional `media_list_height` row media-list slot at
-/// the bottom (omitted when `None` or `0`).
+/// row artwork slot (omitted when `0`), and the overview slot filling the
+/// remainder.
+///
+/// `media_list_height` is currently unused: an embedded media list is no
+/// longer pre-reserved here, since its overview sibling's real painted
+/// height is text-length-dependent and only known after the overview is
+/// painted. Callers place it afterward via [`place_media_list_below`].
 pub(in crate::app::render) fn hero_left_slots(
     content: Rect,
     artwork_height: u16,
-    media_list_height: Option<u16>,
+    _media_list_height: Option<u16>,
 ) -> HeroLeftSlots {
     let artwork_height = artwork_height.min(content.height);
     let artwork = (artwork_height > 0).then_some(Rect {
         height: artwork_height,
         ..content
     });
-    let below_artwork = Rect {
+    let overview = Rect {
         y: content.y.saturating_add(artwork_height),
         height: content.height.saturating_sub(artwork_height),
         ..content
     };
-    let media_list_height = media_list_height.unwrap_or(0).min(below_artwork.height);
-    let media_list = (media_list_height > 0).then_some(Rect {
-        y: below_artwork.bottom().saturating_sub(media_list_height),
-        height: media_list_height,
-        ..below_artwork
-    });
-    let overview = Rect {
-        height: below_artwork.height.saturating_sub(media_list_height),
-        ..below_artwork
-    };
-    HeroLeftSlots {
-        artwork,
-        overview,
-        media_list,
+    HeroLeftSlots { artwork, overview }
+}
+
+/// Places an embedded media-list box `gap` rows below `overview_bottom` (the
+/// caller's already-painted overview content's real bottom row -- not a
+/// pre-reserved slot height), sized to `height` rows and clamped to fit
+/// within `content`'s bottom edge. Returns `None` when there is no room
+/// (same "omitted when no room" convention as [`hero_left_slots`]).
+///
+/// Rect-only: no painting, no text measurement -- callers supply the
+/// already-measured overview bottom and desired height. Reusable by any
+/// hero-on-left surface embedding a media list below its overview (TV's
+/// episode list; a future Music tracks / Audiobookshelf list).
+pub(in crate::app::render) fn place_media_list_below(
+    content: Rect,
+    overview_bottom: u16,
+    gap: u16,
+    height: u16,
+) -> Option<Rect> {
+    let y = overview_bottom.saturating_add(gap);
+    if y >= content.bottom() {
+        return None;
     }
+    let height = height.min(content.bottom().saturating_sub(y));
+    (height > 0).then_some(Rect {
+        x: content.x,
+        y,
+        width: content.width,
+        height,
+    })
 }
 
 #[cfg(test)]
@@ -485,24 +502,49 @@ mod hero_left_slots_tests {
     }
 
     #[test]
-    fn splits_artwork_overview_and_media_list_slots() {
-        let slots = hero_left_slots(content(), 5, Some(6));
+    fn splits_artwork_and_overview_slots() {
+        let slots = hero_left_slots(content(), 5, None);
         let artwork = slots.artwork.expect("artwork slot present");
         assert_eq!(artwork.y, content().y);
         assert_eq!(artwork.height, 5);
-        let media_list = slots.media_list.expect("media-list slot present");
-        assert_eq!(media_list.height, 6);
-        assert_eq!(media_list.bottom(), content().bottom());
         assert_eq!(slots.overview.y, artwork.bottom());
-        assert_eq!(slots.overview.bottom(), media_list.y);
+        assert_eq!(slots.overview.bottom(), content().bottom());
     }
 
     #[test]
-    fn omits_absent_artwork_and_media_list_slots() {
+    fn omits_absent_artwork_slot() {
         let slots = hero_left_slots(content(), 0, None);
         assert!(slots.artwork.is_none());
-        assert!(slots.media_list.is_none());
         assert_eq!(slots.overview, content());
+    }
+
+    #[test]
+    fn place_media_list_below_starts_one_gap_row_after_overview_bottom() {
+        let area = content();
+        let overview_bottom = area.y + 5;
+        let placed =
+            place_media_list_below(area, overview_bottom, 1, 6).expect("room for media list");
+        assert_eq!(placed.y, overview_bottom + 1);
+        assert_eq!(placed.height, 6);
+        assert_eq!(placed.x, area.x);
+        assert_eq!(placed.width, area.width);
+    }
+
+    #[test]
+    fn place_media_list_below_clamps_to_content_bottom() {
+        let area = content();
+        let overview_bottom = area.bottom() - 3;
+        let placed =
+            place_media_list_below(area, overview_bottom, 1, 6).expect("some room remains");
+        assert_eq!(placed.height, 2);
+        assert_eq!(placed.bottom(), area.bottom());
+    }
+
+    #[test]
+    fn place_media_list_below_returns_none_without_room() {
+        let area = content();
+        let overview_bottom = area.bottom();
+        assert!(place_media_list_below(area, overview_bottom, 1, 6).is_none());
     }
 }
 

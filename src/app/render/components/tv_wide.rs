@@ -1,6 +1,8 @@
 use crate::app::components::media_list::WideMediaList;
 use crate::app::layout::LayoutMain;
-use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
+use crate::app::render::arrangements::hero_left::{
+    self, place_media_list_below, PANE_PAD_X, PANE_PAD_Y,
+};
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::hero::{wrap_overview_lines, HeroContent};
@@ -21,6 +23,11 @@ use ratatui::Frame;
 /// same recessed-box padding the overview box uses. Overflow scrolls through
 /// the canonical control rather than growing the box to fit every episode.
 const EPISODE_LIST_VISIBLE_ROWS: u16 = 6;
+
+/// Blank rows between the overview box and the episode media-list box below
+/// it (the same one-row gap convention as task 4.2b's stacked-artwork/title
+/// gap).
+const MEDIA_LIST_GAP_ROWS: u16 = 1;
 
 /// All App-derived data needed to paint the wide TV workspace.
 #[derive(Clone)]
@@ -324,7 +331,7 @@ fn render_tv_series_selection(
     let media_list_height = EPISODE_LIST_VISIBLE_ROWS
         .saturating_add(1) // season pill row
         .saturating_add(PANE_PAD_Y * 2);
-    let slots = hero_left::hero_left_slots(area, artwork_height, Some(media_list_height));
+    let slots = hero_left::hero_left_slots(area, artwork_height, None);
 
     let image_paint = slots.artwork.map(|artwork_area| {
         let image_types = match item.artwork_for(HeroArtworkAspect::Landscape) {
@@ -374,6 +381,7 @@ fn render_tv_series_selection(
     );
     let row = result.next_row;
     let description = item.description();
+    let mut overview_bottom = row;
     if let Some(text) = description.filter(|t| !t.is_empty()) {
         let box_content_width = content_area.width.saturating_sub(PANE_PAD_X * 2) as usize;
         let ov_lines = wrap_overview_lines(&text, |_| box_content_width);
@@ -402,13 +410,20 @@ fn render_tv_series_selection(
                 .wrap(Wrap { trim: true }),
                 ov_content,
             );
+            overview_bottom = row + ov_height;
         }
     }
     // The episode media-list box is a separate, fixed-height recessed box
-    // below the overview box (task 4.2d), placed by the shared
-    // `hero_left_slots` primitive rather than computed from the overview's
-    // painted height.
-    let Some(media_list_area) = slots.media_list else {
+    // placed one blank row below the overview box's real painted bottom
+    // edge (task 4.2d's regression fix), not pre-reserved by
+    // `hero_left_slots` -- overview height is text-length-dependent and
+    // only known after the overview is painted.
+    let Some(media_list_area) = place_media_list_below(
+        content_area,
+        overview_bottom,
+        MEDIA_LIST_GAP_ROWS,
+        media_list_height,
+    ) else {
         return (true, image_paint);
     };
     let Some(detail) = detail else {
