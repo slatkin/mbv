@@ -65,7 +65,8 @@ Known deviations from the authority bar, each with an owner:
 - **Residual A — chrome hit geometry.** Absorbed by issue #638.
   `src/app/mouse_gestures.rs:13`, `src/app/mouse_gestures.rs:27`,
   `src/app/input.rs:97`.
-- **Residual B — paint-inference keyboard branching.** Keyboard paths branch on
+- **Residual B — paint-inference keyboard branching.** Tracked by issue #643.
+  Keyboard paths branch on
   `is_wide_*_active()` (`src/app/layout.rs:209`, `:213`, `:220`, `:227`), which
   infers layout from the last painted frame and so is wrong for one frame after
   a resize. Consumed at `src/app/input_browse_dispatch.rs:35`,
