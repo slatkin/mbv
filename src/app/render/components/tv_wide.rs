@@ -7,16 +7,20 @@ use crate::app::render::components::hero::{wrap_overview_lines, HeroContent};
 use crate::app::render::components::hero_model::{Hero, HeroArtwork, HeroArtworkAspect};
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::HomeImagePaint;
-use crate::app::render::{render_pill_bar, render_placeholder, MarkerEdge, PillBar};
+use crate::app::render::{render_pill_bar, render_placeholder, PillBar};
 use crate::app::{palette, App, PanelFocus, PanelMode, SeriesDetail};
 use mbv_core::api::EmbyItem;
-use mbv_core::api::TICKS_PER_SECOND;
-use ratatui::layout::Constraint;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Span;
-use ratatui::widgets::{Block, Cell, Paragraph, Row, Table, Wrap};
+use ratatui::widgets::{Block, Paragraph, Wrap};
 use ratatui::Frame;
+
+/// Fixed visible-row budget for the embedded episode `WideMediaList` box
+/// (task 4.2d): a season pill row plus this many episode rows, inset by the
+/// same recessed-box padding the overview box uses. Overflow scrolls through
+/// the canonical control rather than growing the box to fit every episode.
+const EPISODE_LIST_VISIBLE_ROWS: u16 = 6;
 
 /// All App-derived data needed to paint the wide TV workspace.
 #[derive(Clone)]
@@ -179,8 +183,9 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     ctx: &TvWideRenderCtx,
     layout: &mut LayoutMain,
     media_list: &mut WideMediaList<String>,
+    episodes: &mut WideMediaList<String>,
 ) -> (usize, Option<HomeImagePaint>) {
-    layout.tv_wide_episode_rows.clear();
+    layout.tv_wide_episode_list_area = Rect::default();
     layout.tv_wide_season_tabs.clear();
     layout.tv_wide_area = area;
 
@@ -209,10 +214,10 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         ctx.selected_series.as_ref(),
         ctx.series_detail.as_ref(),
         ctx.season_cursor,
-        ctx.episode_cursor,
         layout,
         ctx.images_enabled,
         ctx.image_loading,
+        episodes,
     );
     if !selection_rendered {
         render_placeholder(f, left_area, " Loading\u{2026}");
@@ -291,6 +296,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     (final_scroll, image_paint)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_tv_series_selection(
     f: &mut Frame,
     area: Rect,
@@ -298,10 +304,10 @@ fn render_tv_series_selection(
     selected_series: Option<&EmbyItem>,
     detail: Option<&SeriesDetail>,
     season_cursor: usize,
-    episode_cursor: Option<usize>,
     layout: &mut LayoutMain,
     images_enabled: bool,
     image_loading: bool,
+    episodes: &mut WideMediaList<String>,
 ) -> (bool, Option<HomeImagePaint>) {
     let Some(item) = selected_series else {
         return (false, None);
@@ -315,7 +321,10 @@ fn render_tv_series_selection(
     } else {
         0
     };
-    let slots = hero_left::hero_left_slots(area, artwork_height, None);
+    let media_list_height = EPISODE_LIST_VISIBLE_ROWS
+        .saturating_add(1) // season pill row
+        .saturating_add(PANE_PAD_Y * 2);
+    let slots = hero_left::hero_left_slots(area, artwork_height, Some(media_list_height));
 
     let image_paint = slots.artwork.map(|artwork_area| {
         let image_types = match item.artwork_for(HeroArtworkAspect::Landscape) {
@@ -363,7 +372,7 @@ fn render_tv_series_selection(
         },
         focused,
     );
-    let mut row = result.next_row;
+    let row = result.next_row;
     let description = item.description();
     if let Some(text) = description.filter(|t| !t.is_empty()) {
         let box_content_width = content_area.width.saturating_sub(PANE_PAD_X * 2) as usize;
@@ -393,43 +402,24 @@ fn render_tv_series_selection(
                 .wrap(Wrap { trim: true }),
                 ov_content,
             );
-            row = box_area.y.saturating_add(ov_height);
         }
     }
-    let detail_top = row.saturating_add(1);
-    if detail_top >= area.bottom() {
+    // The episode media-list box is a separate, fixed-height recessed box
+    // below the overview box (task 4.2d), placed by the shared
+    // `hero_left_slots` primitive rather than computed from the overview's
+    // painted height.
+    let Some(media_list_area) = slots.media_list else {
         return (true, image_paint);
-    }
+    };
     let Some(detail) = detail else {
-        let box_area = Rect::new(
-            area.x.saturating_sub(PANE_PAD_X),
-            detail_top,
-            area.width.saturating_add(PANE_PAD_X * 2),
-            3.min(area.bottom().saturating_sub(detail_top)),
-        );
-        let (_, content) = hero_left::hero_on_left_main_content_box(f, box_area);
+        let (_, content) = hero_left::hero_on_left_main_content_box(f, media_list_area);
         render_placeholder(f, content, " Loading\u{2026}");
         return (true, image_paint);
     };
     let Some(season) = detail.seasons.get(season_cursor) else {
         return (true, image_paint);
     };
-    let episodes = detail
-        .episodes
-        .get(&season.id)
-        .map(Vec::as_slice)
-        .unwrap_or(&[]);
-    let detail_rows = 1usize.saturating_add(episodes.len().max(1));
-    let detail_height = (detail_rows as u16)
-        .saturating_add(PANE_PAD_Y * 2)
-        .min(area.bottom().saturating_sub(detail_top));
-    let box_area = Rect::new(
-        area.x.saturating_sub(PANE_PAD_X),
-        detail_top,
-        area.width.saturating_add(PANE_PAD_X * 2),
-        detail_height,
-    );
-    let (detail_panel, detail_area) = hero_left::hero_on_left_main_content_box(f, box_area);
+    let (detail_panel, detail_area) = hero_left::hero_on_left_main_content_box(f, media_list_area);
     if focused {
         f.render_widget(
             Block::default().style(Style::default().bg(palette::SURFACE_ACCENT_SOFT)),
@@ -445,6 +435,8 @@ fn render_tv_series_selection(
         .map(|season| season.display_name())
         .collect();
     let ids: Vec<usize> = (0..labels.len()).collect();
+    // Season pills stay parent-owned chrome (design.md D-D): painted here,
+    // never absorbed into `hero_left_slots`/`WideMediaList`.
     layout.tv_wide_season_tabs = render_pill_bar(
         f,
         Rect::new(detail_area.x, detail_area.y, detail_area.width, 1),
@@ -455,12 +447,23 @@ fn render_tv_series_selection(
             prefix: Some(" Series: "),
         },
     );
-    let first_row = detail_area.y.saturating_add(1);
-    let visible = detail_area.height.saturating_sub(1) as usize;
+    let episode_list_area = Rect {
+        y: detail_area.y.saturating_add(1),
+        height: detail_area.height.saturating_sub(1),
+        ..detail_area
+    };
+    if episode_list_area.height == 0 {
+        return (true, image_paint);
+    }
     if episodes.is_empty() {
         render_placeholder(
             f,
-            Rect::new(detail_area.x, first_row, detail_area.width, 1),
+            Rect::new(
+                episode_list_area.x,
+                episode_list_area.y,
+                episode_list_area.width,
+                1,
+            ),
             if detail.episodes.contains_key(&season.id) {
                 " (no episodes)"
             } else {
@@ -469,60 +472,19 @@ fn render_tv_series_selection(
         );
         return (true, image_paint);
     }
-    let start = episode_cursor
-        .map(|cursor| cursor.saturating_sub(visible.saturating_sub(1)))
-        .unwrap_or(0)
-        .min(episodes.len().saturating_sub(visible));
-    let rows = episodes
-        .iter()
-        .enumerate()
-        .skip(start)
-        .take(visible)
-        .map(|(index, episode)| {
-            let selected = episode_cursor == Some(index);
-            let marker = super::list_rows::selection_marker(selected, MarkerEdge::Left);
-            let number = if episode.index_number > 0 {
-                episode.index_number
-            } else {
-                index as i64 + 1
-            };
-            let length = episode.runtime_ticks / TICKS_PER_SECOND;
-            let duration = if length > 0 {
-                crate::app::ui_util::fmt_duration_approx(length)
-            } else {
-                "\u{2014}".into()
-            };
-            Row::new(vec![
-                Cell::from(format!("{marker}{number}. {}", episode.name)),
-                Cell::from(duration),
-            ])
-            .style(if selected && focused {
-                Style::default().fg(palette::TEXT_FOCUS_ACCENT)
-            } else {
-                Style::default().fg(palette::TEXT_STRONG)
-            })
-        })
-        .collect::<Vec<_>>();
-    for (visible_index, (index, _)) in episodes
-        .iter()
-        .enumerate()
-        .skip(start)
-        .take(visible)
-        .enumerate()
-    {
-        layout.tv_wide_episode_rows.push((
-            Rect::new(
-                detail_area.x,
-                first_row + visible_index as u16,
-                detail_area.width,
-                1,
-            ),
-            index,
-        ));
-    }
-    f.render_widget(
-        Table::new(rows, [Constraint::Min(10), Constraint::Length(7)]).column_spacing(1),
-        Rect::new(detail_area.x, first_row, detail_area.width, visible as u16),
+    layout.tv_wide_episode_list_area = episode_list_area;
+    let paint_area = Rect {
+        x: detail_panel.x,
+        width: detail_panel.width,
+        ..episode_list_area
+    };
+    super::media_list::render_wide_media_list(
+        f,
+        paint_area,
+        episode_list_area,
+        episodes,
+        focused,
+        palette::list_selected_row_bg(),
     );
     (true, image_paint)
 }

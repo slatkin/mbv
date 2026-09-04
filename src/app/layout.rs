@@ -157,7 +157,10 @@ pub(crate) struct LayoutMain {
     // component-internal only).
     pub tv_wide_right_area: Rect,
     pub tv_wide_list_area: Rect,
-    pub tv_wide_episode_rows: Vec<(Rect, usize)>,
+    /// Paint area of the embedded episode `WideMediaList` (task 4.2d): the
+    /// canonical control resolves its own row hits against this rect, so no
+    /// per-row hit map is published here.
+    pub tv_wide_episode_list_area: Rect,
     pub tv_wide_season_tabs: Vec<(Rect, usize)>,
     pub tv_wide_left_area: Rect,
     pub tv_wide_area: Rect,

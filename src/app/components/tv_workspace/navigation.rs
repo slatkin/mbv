@@ -2,48 +2,8 @@ use super::TvWorkspaceComponent;
 use crate::app::ui_util::move_cursor;
 
 impl TvWorkspaceComponent {
-    /// Entering the Episodes pane by keyboard starts at the first available
-    /// episode, while retaining an existing local selection.
-    pub(super) fn ensure_episode_cursor(&mut self) {
-        if self.episode_cursor.is_some() {
-            return;
-        }
-        let has_episode = self
-            .context
-            .series_detail
-            .as_ref()
-            .and_then(|detail| detail.seasons.get(self.season_cursor))
-            .and_then(|season| {
-                self.context
-                    .series_detail
-                    .as_ref()?
-                    .episodes
-                    .get(&season.id)
-            })
-            .is_some_and(|episodes| !episodes.is_empty());
-        if has_episode {
-            self.episode_cursor = Some(0);
-        }
-    }
-
     pub(super) fn move_episode(&mut self, delta: i64) {
-        let count = self
-            .context
-            .series_detail
-            .as_ref()
-            .and_then(|detail| detail.seasons.get(self.season_cursor))
-            .and_then(|season| {
-                self.context
-                    .series_detail
-                    .as_ref()?
-                    .episodes
-                    .get(&season.id)
-            })
-            .map_or(0, Vec::len);
-        if count > 0 {
-            let cursor = self.episode_cursor.unwrap_or(0);
-            self.episode_cursor = Some(move_cursor(cursor, delta, count));
-        }
+        self.episodes.move_selection(delta);
     }
 
     pub(super) fn move_season(&mut self, delta: i64) {
@@ -54,7 +14,8 @@ impl TvWorkspaceComponent {
             .map_or(0, |detail| detail.seasons.len());
         if count > 0 {
             self.season_cursor = move_cursor(self.season_cursor, delta, count);
-            self.episode_cursor = Some(0);
+            self.refresh_episode_rows();
+            self.episodes.select_first();
         }
     }
 

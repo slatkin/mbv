@@ -13,12 +13,11 @@ impl TvWorkspaceComponent {
                 Some(ShellRequest::TvMoveColumn { delta: -1 })
             }
             Key::Right | Key::Char('l') => {
-                self.ensure_episode_cursor();
                 self.pane = Pane::Episodes;
                 Some(ShellRequest::TvMoveColumn { delta: 1 })
             }
             Key::Enter if self.pane == Pane::Series => {
-                self.episode_cursor = Some(0);
+                self.episodes.select_first();
                 self.pane = Pane::Episodes;
                 // Resolve the selected Series from the component's own cursor
                 // and carry it in the typed request; if nothing is resolvable
@@ -28,10 +27,7 @@ impl TvWorkspaceComponent {
             }
             Key::Enter => Some(ShellRequest::TvEpisodeActivate),
             Key::Esc | Key::Backspace => {
-                if self.episode_cursor.is_some() {
-                    self.episode_cursor = None;
-                    self.pane = Pane::Series;
-                }
+                self.pane = Pane::Series;
                 Some(ShellRequest::TvBack)
             }
             Key::Up | Key::Char('k') if self.pane == Pane::Episodes => {

@@ -20,7 +20,7 @@ use tuirealm::component::{AppComponent, Component};
 /// `TvWorkspaceComponent` over the same area so it owns the picture.
 /// Returns the buffer and the component so tests can read both the App
 /// pre-pass layout (`AppLayout`) and the component-owned geometry
-/// (`tv_wide_episode_rows`/`tv_wide_season_tabs`).
+/// (`tv_wide_episode_list_area`/`tv_wide_season_tabs`).
 fn render_tv_workspace(app: &mut App, layout: &mut LayoutMain) -> (String, TvWorkspaceComponent) {
     let backend = TestBackend::new(100, 40);
     let mut term = Terminal::new(backend).unwrap();
@@ -165,7 +165,7 @@ fn wide_tv_persists_series_workspace_and_separate_targets() {
     let (output, component) = render_tv_workspace(&mut app, &mut layout);
 
     assert!(layout.is_wide_tv_active());
-    assert!(!component.test_layout().tv_wide_episode_rows.is_empty());
+    assert!(component.test_layout().tv_wide_episode_list_area.height > 0);
     assert!(
         output.contains("Series:"),
         "season tabs are missing: {output}"
@@ -239,7 +239,7 @@ fn wide_series_with_no_seasons_keeps_the_child_region_blank() {
     assert!(!output.contains("No items available"), "{output}");
     assert!(!output.contains("Empty"), "{output}");
     assert!(component.test_layout().tv_wide_season_tabs.is_empty());
-    assert!(component.test_layout().tv_wide_episode_rows.is_empty());
+    assert_eq!(component.test_layout().tv_wide_episode_list_area.height, 0);
 }
 
 #[test]
@@ -265,7 +265,21 @@ fn wide_tv_selected_series_follows_inline_search_cursor() {
 
 #[test]
 fn wide_tv_episode_list_uses_soft_accent_when_focused() {
-    let app = tv_app();
+    // A second episode (task 4.2d) so there is an unselected row: the
+    // canonical episode `WideMediaList` paints its own selected-row
+    // background (`palette::list_selected_row_bg`) over the cursor row, so
+    // the box-level soft accent this test characterizes is now only visible
+    // through an unselected row.
+    let mut app = tv_app();
+    let mut second_episode = make_item("Episode Two", "Episode");
+    second_episode.id = "episode-2".into();
+    app.series_detail_cache
+        .get_mut("series")
+        .unwrap()
+        .episodes
+        .get_mut("season-1")
+        .unwrap()
+        .push(second_episode);
     let mut component = TvWorkspaceComponent::new();
     component.set_content(
         app.wide_tv_render_ctx(0, true, None)
@@ -280,9 +294,14 @@ fn wide_tv_episode_list_uses_soft_accent_when_focused() {
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal.draw(|f| component.view(f, f.area())).unwrap();
 
-    let episode_row = component.test_layout().tv_wide_episode_rows[0].0;
+    let episode_list_area = component.test_layout().tv_wide_episode_list_area;
+    let unselected_row_y = episode_list_area.y.saturating_add(1);
     assert_eq!(
-        terminal.backend().buffer()[(episode_row.x.saturating_sub(PANE_PAD_X), episode_row.y)].bg,
+        terminal.backend().buffer()[(
+            episode_list_area.x.saturating_sub(PANE_PAD_X),
+            unselected_row_y
+        )]
+            .bg,
         palette::SURFACE_ACCENT_SOFT
     );
 }

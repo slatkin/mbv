@@ -12,7 +12,7 @@ use tuirealm::event::{Event, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use mbv_core::api::EmbyItem;
+use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 
 use super::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
@@ -24,7 +24,7 @@ use crate::app::layout::LayoutMain;
 use crate::app::render::{
     effective_sort_str, letter_bucket, render_wide_tv_with_ctx, HomeImagePaint, TvWideRenderCtx,
 };
-use crate::app::ui_util::natural_sort_key;
+use crate::app::ui_util::{fmt_duration_approx, natural_sort_key};
 #[cfg(test)]
 use tuirealm::event::Key;
 
@@ -42,7 +42,13 @@ pub struct TvWorkspaceComponent {
     list: WideMediaList<String>,
     cursor: usize,
     season_cursor: usize,
-    episode_cursor: Option<usize>,
+    /// Embedded canonical control for the recessed episode media-list box
+    /// (task 4.2d): owns cursor/scroll/hit-resolution for the current
+    /// season's episode rows. Content always mirrors the current season
+    /// (like `list` mirrors the series rail) so the box previews episodes
+    /// even while the Series pane holds focus; `pane` controls whether its
+    /// selected row paints as focused.
+    episodes: WideMediaList<String>,
     pane: Pane,
     initialized: bool,
     last_series_id: Option<String>,
@@ -53,12 +59,43 @@ pub struct TvWorkspaceComponent {
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
-    /// Irregular Episodes-pane chrome — season pills, episode rows, and the
-    /// blank pane area — as last-push-wins rectangles (design.md D6),
+    /// Irregular Episodes-pane chrome — season pills only (design.md D6),
     /// repopulated in `view()` from the geometry the wide-TV painter just
-    /// produced. The Series pane has an embedded canonical control, so its
-    /// row identity comes from `WideMediaList::resolve_ordinal_at_y` instead.
+    /// produced. Both panes now have an embedded canonical control, so row
+    /// identity comes from `WideMediaList::resolve_ordinal_at_y` instead; the
+    /// blank Episodes-pane fallback is resolved directly against
+    /// `tv_wide_left_area` in `resolve_hit`.
     tv_chrome: HitRegions<TvHit>,
+}
+
+/// Build the embedded episode `WideMediaList`'s rows from a season's
+/// episodes (task 4.2d): the same title/duration formatting the hand-painted
+/// table previously rendered, now the canonical control's row content.
+fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
+    episodes
+        .iter()
+        .enumerate()
+        .map(|(index, episode)| {
+            let number = if episode.index_number > 0 {
+                episode.index_number
+            } else {
+                index as i64 + 1
+            };
+            let length = episode.runtime_ticks / TICKS_PER_SECOND;
+            let duration = if length > 0 {
+                fmt_duration_approx(length)
+            } else {
+                "\u{2014}".into()
+            };
+            MediaListRow::Item {
+                target: episode.id.clone(),
+                primary: format!("{number}. {}", episode.name),
+                trailing: None,
+                duration: Some(duration),
+                semantic_state: MediaSemanticState::Ordinary,
+            }
+        })
+        .collect()
 }
 
 impl TvWorkspaceComponent {
@@ -77,7 +114,7 @@ impl TvWorkspaceComponent {
             list: WideMediaList::new(),
             cursor: 0,
             season_cursor: 0,
-            episode_cursor: None,
+            episodes: WideMediaList::new(),
             pane: Pane::Series,
             initialized: false,
             last_series_id: None,
@@ -148,14 +185,15 @@ impl TvWorkspaceComponent {
             context.selected_series.as_ref().map(|item| &item.id) != self.last_series_id.as_ref();
         if series_changed {
             self.season_cursor = 0;
-            self.episode_cursor = None;
+            self.episodes.set_content(Vec::new());
             self.pane = Pane::Series;
             self.last_series_id = context.selected_series.as_ref().map(|item| item.id.clone());
         }
+        let mut restore_episode_index = None;
         if !self.initialized {
             if !series_changed {
                 self.season_cursor = context.season_cursor;
-                self.episode_cursor = context.episode_cursor;
+                restore_episode_index = context.episode_cursor;
                 self.pane = if context.episode_cursor.is_some() {
                     Pane::Episodes
                 } else {
@@ -172,27 +210,57 @@ impl TvWorkspaceComponent {
             .as_ref()
             .map_or(0, |detail| detail.seasons.len());
         self.season_cursor = self.season_cursor.min(season_count.saturating_sub(1));
-        if let Some(episode_cursor) = self.episode_cursor {
-            // Missing detail or episode data means the refresh is still loading;
-            // do not discard the component-local selection in that interval.
-            let Some(episodes) = self
-                .context
-                .series_detail
-                .as_ref()
-                .and_then(|detail| detail.seasons.get(self.season_cursor))
-                .and_then(|season| {
-                    self.context
-                        .series_detail
-                        .as_ref()?
-                        .episodes
-                        .get(&season.id)
-                })
-            else {
-                return;
-            };
-            self.episode_cursor =
-                (!episodes.is_empty()).then(|| episode_cursor.min(episodes.len() - 1));
+        // Missing detail or episode data means the season's refresh is still
+        // loading; do not discard the component-local episode selection by
+        // clearing the canonical control's content in that interval. Once
+        // the season's episode key is present (even an empty `Vec`), refresh
+        // unconditionally -- the box previews episodes regardless of pane.
+        if self.current_season_episodes_key_present() {
+            self.refresh_episode_rows();
+            if let Some(index) = restore_episode_index {
+                self.episodes.select_index(index);
+            }
         }
+    }
+
+    /// The current season's episode `Vec`, `&[]` when the season has no
+    /// episodes loaded yet or `series_detail`/`season_cursor` cannot resolve
+    /// one.
+    fn current_season_episodes(&self) -> &[EmbyItem] {
+        self.context
+            .series_detail
+            .as_ref()
+            .and_then(|detail| {
+                let season = detail.seasons.get(self.season_cursor)?;
+                detail.episodes.get(&season.id)
+            })
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    /// Whether the current season's episode key is present in
+    /// `series_detail.episodes` at all (even mapped to an empty `Vec`) --
+    /// the loaded/loading distinction the refresh guard in `set_content`
+    /// needs, unlike [`Self::current_season_episodes`] which treats both as
+    /// empty.
+    fn current_season_episodes_key_present(&self) -> bool {
+        self.context
+            .series_detail
+            .as_ref()
+            .and_then(|detail| {
+                let season = detail.seasons.get(self.season_cursor)?;
+                detail.episodes.get(&season.id)
+            })
+            .is_some()
+    }
+
+    /// Rebuild the embedded episode `WideMediaList`'s content from the
+    /// current season's episodes (design.md D3): preserves the selected
+    /// target where still present, otherwise clamps locally -- the same
+    /// canonical machinery the series rail uses.
+    fn refresh_episode_rows(&mut self) {
+        let rows = build_episode_rows(self.current_season_episodes());
+        self.episodes.set_content(rows);
     }
 
     pub(in crate::app) fn cursor(&self) -> usize {
@@ -278,10 +346,13 @@ impl TvWorkspaceComponent {
     /// The shell uses these cursors to resolve the episode from App's cache;
     /// it never re-reads the library cursor for this action.
     pub(in crate::app) fn episode_activation_selection(&self) -> Option<(String, usize, usize)> {
+        if self.episodes.is_empty() {
+            return None;
+        }
         Some((
             self.context.selected_series.as_ref()?.id.clone(),
             self.season_cursor,
-            self.episode_cursor?,
+            self.episodes.cursor(),
         ))
     }
 
@@ -301,13 +372,12 @@ impl TvWorkspaceComponent {
     /// Handle a mouse event against the component's painted workspace geometry.
     ///
     /// Gesture recognition (click / double-click / right-click / wheel) comes
-    /// from the private `MouseGestureState` (ADR 0024, design.md D3). The
-    /// Episodes-pane chrome (season pills, episode rows, blank pane) resolves
-    /// through `tv_chrome` (design.md D6); the Series pane row identity comes
-    /// from the embedded `WideMediaList`. The component emits a semantic `Msg`
-    /// with a resolved `TvHit` — never raw coordinates — except the
-    /// context-menu anchor (design.md D4). A left click moves the component's
-    /// local pane + pane cursor; a right click never does.
+    /// from the private `MouseGestureState` (ADR 0024, design.md D3). Season
+    /// pills resolve through `tv_chrome` (design.md D6); both panes' row
+    /// identity comes from their embedded `WideMediaList`. The component
+    /// emits a semantic `Msg` with a resolved `TvHit` — never raw coordinates
+    /// — except the context-menu anchor (design.md D4). A left click moves
+    /// the component's local pane + pane cursor; a right click never does.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         // TV does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
@@ -356,11 +426,12 @@ impl TvWorkspaceComponent {
             TvHit::SeasonTab(index) => {
                 self.pane = Pane::Episodes;
                 self.season_cursor = index;
-                self.episode_cursor = Some(0);
+                self.refresh_episode_rows();
+                self.episodes.select_first();
             }
             TvHit::EpisodeRow(index) => {
                 self.pane = Pane::Episodes;
-                self.episode_cursor = Some(index);
+                self.episodes.select_index(index);
             }
             TvHit::SeriesRow(index) => {
                 self.pane = Pane::Series;
@@ -391,6 +462,21 @@ impl TvWorkspaceComponent {
                 .unwrap_or(self.cursor);
             return Some(TvHit::SeriesRow(target));
         }
+        // Episode rows resolve the same way against the embedded episode
+        // control (design.md D6) before falling back to the blank
+        // Episodes-pane no-op.
+        let episode_list_area = self.layout.tv_wide_episode_list_area;
+        if episode_list_area.contains(position) {
+            if let Some(target) = self
+                .episodes
+                .resolve_ordinal_at_y(episode_list_area, position.y)
+            {
+                return Some(TvHit::EpisodeRow(target));
+            }
+        }
+        if self.layout.tv_wide_left_area.contains(position) {
+            return Some(TvHit::EpisodesPane);
+        }
         None
     }
 
@@ -415,31 +501,32 @@ impl Component for TvWorkspaceComponent {
             self.list
                 .apply_viewport_anchor(&anchor, area.height as usize);
         }
+        // `episode_cursor` in the render context only signals the Episodes
+        // pane's focus/highlight state now (the embedded control tracks the
+        // real cursor); it is `Some` exactly while `pane == Pane::Episodes`.
+        let episode_focus_cursor = (self.pane == Pane::Episodes).then(|| self.episodes.cursor());
         let context = self.context.clone().with_local_state(
             self.list.cursor(),
             self.list.scroll(),
             self.season_cursor,
-            self.episode_cursor,
+            episode_focus_cursor,
         );
-        let (scroll, image_paint) =
-            render_wide_tv_with_ctx(frame, area, &context, &mut self.layout, &mut self.list);
+        let (scroll, image_paint) = render_wide_tv_with_ctx(
+            frame,
+            area,
+            &context,
+            &mut self.layout,
+            &mut self.list,
+            &mut self.episodes,
+        );
         self.list.set_scroll(scroll);
         self.cursor = self.list.cursor();
         self.image_paint = image_paint;
 
-        // Adopt the Episodes-pane chrome the wide-TV painter just produced
-        // into the irregular-chrome registry (design.md D6). Push order is
-        // low-to-high z: the blank pane first, then episode rows, then season
-        // pills, so `resolve` (last-push-wins) prefers a pill over a row over
-        // blank space — the legacy `resolve_hit` precedence.
+        // Adopt the season-pill chrome the wide-TV painter just produced into
+        // the irregular-chrome registry (design.md D6); both list rows and
+        // the blank Episodes-pane fallback resolve directly in `resolve_hit`.
         self.tv_chrome.clear();
-        if self.layout.tv_wide_left_area.width > 0 && self.layout.tv_wide_left_area.height > 0 {
-            self.tv_chrome
-                .push(self.layout.tv_wide_left_area, TvHit::EpisodesPane);
-        }
-        for (rect, index) in &self.layout.tv_wide_episode_rows {
-            self.tv_chrome.push(*rect, TvHit::EpisodeRow(*index));
-        }
         for (rect, index) in &self.layout.tv_wide_season_tabs {
             self.tv_chrome.push(*rect, TvHit::SeasonTab(*index));
         }
@@ -480,20 +567,48 @@ mod tests {
     use tuirealm::component::Component;
     use tuirealm::event::{Event, KeyEvent, KeyModifiers};
 
+    /// Task 4.2d: the embedded episode `WideMediaList` field replaces the
+    /// old `Option<usize>` episode cursor. This exercises the same
+    /// component-local persistence through the canonical control -- moving
+    /// the cursor via keyboard, then re-syncing the same series/season data,
+    /// must preserve it (target-preserving `WideMediaList::set_content`).
     #[test]
     fn tv_workspace_keeps_episode_pane_cursor_local_between_syncs() {
         let mut component = TvWorkspaceComponent::new();
-        let mut list = LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0);
-        list = list.with_cursor_scroll(0, 0);
+        let mut series = make_item("Series", "Series");
+        series.id = "series-id".into();
+        let mut season = make_item("Season 1", "Season");
+        season.id = "season-1".into();
+        let episode = |name: &str, id: &str| {
+            let mut item = make_item(name, "Episode");
+            item.id = id.into();
+            item
+        };
+        let detail = crate::app::SeriesDetail {
+            seasons: vec![season],
+            episodes: [(
+                "season-1".into(),
+                vec![
+                    episode("Episode 1", "episode-1"),
+                    episode("Episode 2", "episode-2"),
+                ],
+            )]
+            .into_iter()
+            .collect(),
+        };
         component.set_content(TvWideRenderCtx::new(
-            list,
-            None,
-            None,
+            LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+            Some(series.clone()),
+            Some(detail.clone()),
             0,
-            Some(0),
+            None,
             true,
             false,
         ));
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Right,
+            modifiers: KeyModifiers::NONE,
+        }));
         let message = component.on(&Event::Keyboard(KeyEvent {
             code: Key::Down,
             modifiers: KeyModifiers::NONE,
@@ -502,16 +617,18 @@ mod tests {
             message,
             Some(Msg::Shell(ShellRequest::TvEpisodeMove { delta: 1 }))
         ));
+        assert_eq!(component.episodes.cursor(), 1);
+
         component.set_content(TvWideRenderCtx::new(
-            LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
-            None,
-            None,
+            LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+            Some(series),
+            Some(detail),
             0,
-            Some(0),
+            None,
             true,
             false,
         ));
-        assert_eq!(component.episode_cursor, Some(0));
+        assert_eq!(component.episodes.cursor(), 1);
     }
 
     #[test]
@@ -552,7 +669,7 @@ mod tests {
         ));
 
         assert_eq!(component.season_cursor, 0);
-        assert!(component.episode_cursor.is_none());
+        assert!(component.episodes.is_empty());
         assert!(matches!(component.pane, Pane::Series));
     }
 
