@@ -127,6 +127,15 @@ impl MouseGestureState {
 }
 
 #[cfg(test)]
+impl MouseGestureState {
+    /// Test seam: forget the last click/scroll so the next event is neither
+    /// throttled nor promoted to a double-click.
+    pub(crate) fn reset_for_test(&mut self) {
+        *self = Self::default();
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

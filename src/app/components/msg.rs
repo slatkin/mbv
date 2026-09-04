@@ -19,7 +19,7 @@ mod queue;
 mod service;
 mod shell;
 
-pub use self::hit_regions::{BrowserHitRegion, HomeHitRegion, QueueHitRegion, TvHit, TvHitRegion};
+pub use self::hit_regions::{HomeHitRegion, QueueHitRegion, TvHit, TvHitRegion};
 pub use self::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
     ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,

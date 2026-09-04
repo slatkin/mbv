@@ -6,22 +6,6 @@
 //! (single vs double-click decided there via App's 400ms window). The
 //! component holds no double-click or scroll timing state of its own.
 
-/// Region of the generic Emby browser a click resolved to, reported by
-/// `BrowserComponent` (task 5.3d correction). The shell turns this plus
-/// `col`/`row` into the right gesture call; the component holds no double-click
-/// or scroll timing state of its own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BrowserHitRegion {
-    /// Left list area; the component resolves the row via `left_row_map`.
-    LeftRow(usize),
-    /// Inline hero (browse surface for the two Services that publish one).
-    InlineHero(usize),
-    /// Selector-tab pill; `target` is the pill index the component resolved.
-    SelectorTab(usize),
-    /// Right-click → Emby context menu after the row is focused.
-    ContextMenu(usize),
-}
-
 /// Region of the Home surface a click resolved to, reported by
 /// `HomeComponent` (task 5.3d, home hit_test). The shell turns this plus
 /// `col`/`row` into the right gesture call; the component holds no double-click

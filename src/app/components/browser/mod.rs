@@ -9,7 +9,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
@@ -20,7 +20,9 @@ use super::component_id::BrowserKind;
 use super::media_list::{
     InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
 };
-use super::msg::{BrowserHitRegion, Msg, ShellRequest};
+use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::hit::HitRegions;
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
@@ -85,6 +87,13 @@ pub struct BrowserComponent {
     /// browse paths. Driven by `render_narrow_browse_with_ctx` instead of a
     /// per-frame `InlineMediaBrowser::new()`.
     inline_browser: InlineMediaBrowser<usize>,
+    /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
+    /// the double-click window and wheel throttle. Not a shared clock.
+    mouse_gestures: MouseGestureState,
+    /// Irregular painted chrome — the selector-pill row — as last-push-wins
+    /// rectangles (design.md D6). Repopulated in `view()` from the pill rects
+    /// the narrow/wide composer just painted into `self.layout.selector_tabs`.
+    pill_regions: HitRegions<usize>,
 }
 
 impl BrowserComponent {
@@ -111,6 +120,8 @@ impl BrowserComponent {
             preserved_anchor: None,
             wide_list: WideMediaList::new(),
             inline_browser: InlineMediaBrowser::new(),
+            mouse_gestures: MouseGestureState::new(),
+            pill_regions: HitRegions::new(),
         }
     }
 
@@ -392,105 +403,113 @@ impl BrowserComponent {
     }
 
     /// Handle a mouse event against the component's painted browse geometry.
+    ///
+    /// Gesture recognition (click / double-click / right-click / wheel) comes
+    /// from the private `MouseGestureState` (ADR 0024, design.md D3). Row
+    /// identity comes only from the embedded control's `resolve_point`
+    /// (design.md D6); the non-canonical generic grid keeps the parent's
+    /// painted row map. The component emits a semantic `Msg` with a resolved
+    /// target — never raw coordinates — except the context-menu anchor, which
+    /// is display geometry it legitimately forwards (design.md D4).
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        let col = mouse.column;
-        let row = mouse.row;
-        let position: Position = (col, row).into();
-        // The component owns *where* a browse click lands: it hit-tests
-        // against its own painted geometry (`self.layout`, rebuilt every
-        // `view`) and emits a typed `Msg::Shell` naming the region. It holds
-        // no double-click or scroll timing — the shell decides *when* a click
-        // counts against `App`'s own timing fields. Clicks outside every
-        // browse rect are forwarded as a raw legacy event so `App::handle_mouse`
-        // keeps handling the surrounding chrome (tabs, playback pills, queue,
-        // the un-migrated tv/music surfaces).
-        match mouse.kind {
-            MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
-                let delta: i64 = if matches!(mouse.kind, MouseEventKind::ScrollUp) {
-                    -1
-                } else {
-                    1
-                };
-                if self.layout.left_area.contains(position) {
-                    let rows = self.layout.left_item_rows.len();
-                    let viewport = self.layout.left_area.height as usize;
-                    let max_offset = rows.saturating_sub(viewport);
-                    self.scroll = self
-                        .scroll
-                        .saturating_add_signed(
-                            delta.clamp(isize::MIN as i64, isize::MAX as i64) as isize
-                        )
-                        .min(max_offset);
-                    return Some(Msg::Shell(ShellRequest::BrowserScroll {
-                        delta,
-                        offset: self.scroll,
-                    }));
-                }
-            }
-            MouseEventKind::Down(MouseButton::Left) => {
-                // Selector-tab pills sit inside the left area; claim them
-                // before the row-select hit-test.
-                for (rect, target) in self.layout.selector_tabs.iter() {
-                    if rect.contains(position) {
-                        return Some(Msg::Shell(ShellRequest::BrowserClick {
-                            region: BrowserHitRegion::SelectorTab(*target),
-                            col,
-                            row,
-                        }));
-                    }
-                }
-                if self.layout.left_area.contains(position)
-                    || self.layout.inline_hero_area.contains(position)
-                {
-                    // Resolve the clicked row from the component's own painted
-                    // geometry *before* building the region, so the emitted
-                    // cursor matches the row under the click (not the
-                    // pre-click cursor). The inline hero is already on the
-                    // selected item, so it carries the current cursor.
-                    let in_hero = self.layout.inline_hero_area.contains(position);
-                    if !in_hero {
-                        if let Some(resolved) = self.resolve_left_cursor(col, row) {
-                            self.cursor = resolved;
-                        }
-                    }
-                    let region = if in_hero {
-                        BrowserHitRegion::InlineHero(self.cursor)
-                    } else {
-                        BrowserHitRegion::LeftRow(self.cursor)
-                    };
-                    return Some(Msg::Shell(ShellRequest::BrowserClick { region, col, row }));
-                }
-            }
-            MouseEventKind::Down(MouseButton::Right)
-                if (self.layout.left_area.contains(position)
-                    || self.layout.inline_hero_area.contains(position)) =>
-            {
-                // Resolve the row under the click before opening the menu;
-                // a blank/gap click leaves the cursor unchanged
-                // (`resolve_left_cursor` returns None for headers/gaps).
-                let in_hero = self.layout.inline_hero_area.contains(position);
-                if !in_hero {
-                    if let Some(resolved) = self.resolve_left_cursor(col, row) {
-                        self.cursor = resolved;
-                    }
-                }
-                return Some(Msg::Shell(ShellRequest::BrowserClick {
-                    region: BrowserHitRegion::ContextMenu(self.cursor),
-                    col,
-                    row,
-                }));
-            }
-            _ => {}
+        // Browse does not consume hover-move (design.md D7).
+        if matches!(mouse.kind, MouseEventKind::Moved) {
+            return None;
         }
-        None
+        match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Scroll { at, delta } => {
+                if !self.layout.left_area.contains(at) {
+                    return None;
+                }
+                let rows = self.layout.left_item_rows.len();
+                let viewport = self.layout.left_area.height as usize;
+                let max_offset = rows.saturating_sub(viewport);
+                self.scroll = self
+                    .scroll
+                    .saturating_add_signed(delta as isize)
+                    .min(max_offset);
+                Some(Msg::Shell(ShellRequest::BrowserScroll {
+                    delta,
+                    offset: self.scroll,
+                }))
+            }
+            MouseGesture::Click(at) => {
+                if let Some(&pill) = self.pill_regions.resolve(at) {
+                    return Some(Msg::Shell(ShellRequest::BrowserPillClick { target: pill }));
+                }
+                if !self.claim_list_point(at) {
+                    return None;
+                }
+                Some(Msg::Shell(ShellRequest::BrowserRowClick {
+                    target: self.cursor,
+                }))
+            }
+            MouseGesture::DoubleClick(at) => {
+                if let Some(&pill) = self.pill_regions.resolve(at) {
+                    return Some(Msg::Shell(ShellRequest::BrowserPillClick { target: pill }));
+                }
+                if !self.claim_list_point(at) {
+                    return None;
+                }
+                Some(Msg::Shell(ShellRequest::BrowserRowActivate {
+                    target: self.cursor,
+                }))
+            }
+            MouseGesture::RightClick(at) => {
+                if !self.claim_list_point(at) {
+                    return None;
+                }
+                Some(Msg::Shell(ShellRequest::BrowserRowContextMenu {
+                    target: self.cursor,
+                    anchor: (mouse.column, mouse.row),
+                }))
+            }
+            _ => None,
+        }
+    }
+
+    /// If `at` lands inside the painted list or inline-hero region, move the
+    /// cursor to the row under it (a blank/gap click leaves the cursor
+    /// unchanged, matching the legacy behaviour) and return `true`.
+    fn claim_list_point(&mut self, at: Position) -> bool {
+        if !(self.layout.left_area.contains(at) || self.layout.inline_hero_area.contains(at)) {
+            return false;
+        }
+        if let Some(target) = self.resolve_row_target(at) {
+            self.cursor = target;
+        }
+        true
+    }
+
+    /// The item index under `point`, resolved by the embedded canonical
+    /// control that painted the active list (design.md D6). The inline hero
+    /// covers the selected item, so a hero click carries the current cursor.
+    /// The non-hero generic grid has no canonical control, so it falls back to
+    /// the parent's painted row map.
+    fn resolve_row_target(&self, point: Position) -> Option<usize> {
+        if self.wide_movies {
+            return self
+                .wide_list
+                .resolve_point(self.layout.left_area, point)
+                .copied();
+        }
+        if self.layout.inline_hero_area.contains(point) {
+            return Some(self.cursor);
+        }
+        if self.layout.left_item_rows.is_empty() {
+            let detail_rows = self.layout.inline_hero_area.height as usize;
+            return self
+                .inline_browser
+                .resolve_point(self.layout.left_area, detail_rows, point)
+                .copied();
+        }
+        self.resolve_left_cursor(point.x, point.y)
     }
 
     /// Resolve the list item under `(col, row)` from the component's own
-    /// painted `LayoutMain`, mirroring the legacy `App::click_set_cursor`
-    /// Emby branch: the exact cell is picked when the list is two-column, and
-    /// header/gap screen rows are `None` (no-op). Returns `None` for clicks
-    /// outside the list area or on a header/gap cell, leaving the cursor
-    /// unchanged. The `BrowserClick` shell arm consumes the resolved target.
+    /// painted `LayoutMain` for the non-canonical generic multi-column grid:
+    /// the exact cell is picked when the list is two-column, and header/gap
+    /// screen rows are `None` (no-op).
     fn resolve_left_cursor(&self, col: u16, row: u16) -> Option<usize> {
         let la = self.layout.left_area;
         if !la.contains((col, row).into()) {
@@ -533,6 +552,14 @@ impl BrowserComponent {
     #[cfg(test)]
     pub(crate) fn set_cursor_for_test(&mut self, cursor: usize) {
         self.cursor = cursor;
+    }
+
+    /// Test-only reset of the private gesture recognizer, so a synchronous
+    /// test loop can drive successive wheel/click events without the
+    /// throttle/double-click window collapsing them.
+    #[cfg(test)]
+    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
+        self.mouse_gestures.reset_for_test();
     }
 }
 
@@ -629,6 +656,14 @@ impl Component for BrowserComponent {
             }
             scroll
         };
+
+        // Adopt the selector-pill rects the composer just painted into the
+        // irregular-chrome registry (design.md D6). `selector_tabs` is the
+        // composer's own painted output for this frame.
+        self.pill_regions.clear();
+        for (rect, target) in &self.layout.selector_tabs {
+            self.pill_regions.push(*rect, *target);
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

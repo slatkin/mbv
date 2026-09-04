@@ -609,7 +609,14 @@ fn feed_home_video_group_browser_scroll_updates_video_scroll() {
     // final event has a raw result of max_offset + 1, but the control emits
     // its clamped offset to the persisted feed-home-video state.
     for _ in 0..=max_offset {
-        model.app.last_scroll_at = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<BrowserComponent>()
+            .unwrap()
+            .reset_mouse_gestures_for_test();
         let msg = model
             .application
             .get_component_mut(&id)

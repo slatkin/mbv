@@ -10,7 +10,7 @@
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::FeedEntry;
 
-use super::hit_regions::{BrowserHitRegion, HomeHitRegion, QueueHitRegion, TvHitRegion};
+use super::hit_regions::{HomeHitRegion, QueueHitRegion, TvHitRegion};
 use super::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
     ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,
@@ -308,26 +308,39 @@ pub enum ShellRequest {
     TvSeasonMove {
         delta: i64,
     },
-    /// Browse-surface scroll over the browser list, hit-tested locally by
-    /// `BrowserComponent` against its own `LayoutMain` (task 5.3d, browser
-    /// hit_test). The shell runs `App`'s 30ms wheel throttle against
-    /// `App::last_scroll_at` and then calls `App::handle_mouse_scroll_browse`;
-    /// the component holds no timing state.
+    /// Browse-surface wheel step over the browser list, recognized by
+    /// `BrowserComponent`'s private `MouseGestureState` (ADR 0024, design.md
+    /// D3). The component owns the wheel throttle and updates its own scroll;
+    /// `offset` is the clamped scroll it landed on.
     BrowserScroll {
         delta: i64,
         offset: usize,
     },
-    /// A browse-surface click the component resolved to a region of its own
-    /// geometry (task 5.3d correction). The component reports *where* it
-    /// landed; the shell decides *when* it counts — it runs `App`'s 400ms
-    /// double-click comparison against `App::last_click_time`/`last_click_pos`
-    /// and then calls the matching extracted gesture method
-    /// (`handle_mouse_single_click_emby`, `handle_mouse_double_click_emby`,
-    /// `handle_mouse_right_click_emby`, `handle_mouse_selector_click_emby`).
-    BrowserClick {
-        region: BrowserHitRegion,
-        col: u16,
-        row: u16,
+    /// A row the user single-clicked in the browser list or inline hero,
+    /// resolved to an item index by the embedded control's `resolve_point`
+    /// (design.md D4/D6). The shell applies focus-follows-click and sets the
+    /// resting cursor.
+    BrowserRowClick {
+        target: usize,
+    },
+    /// A row the user double-clicked; `target` is the resolved item index and
+    /// the shell activates it (design.md D3/D4).
+    BrowserRowActivate {
+        target: usize,
+    },
+    /// A row the user right-clicked; `target` is the resolved item index and
+    /// `anchor` is the click position the component forwards as the
+    /// context-menu anchor — the one legitimate forwarded coordinate
+    /// (design.md D4).
+    BrowserRowContextMenu {
+        target: usize,
+        anchor: (u16, u16),
+    },
+    /// A selector pill (letter filter / feed-folder / music group) the user
+    /// clicked; `target` is the pill index the component resolved from its
+    /// `HitRegions` (design.md D4/D6).
+    BrowserPillClick {
+        target: usize,
     },
     /// Ctrl+P/A/W/S/R and bare `r` requests from an Emby Music or TV
     /// workspace. These mirror the corresponding `Browser*` requests while

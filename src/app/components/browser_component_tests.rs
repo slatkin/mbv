@@ -503,10 +503,7 @@ fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
     assert!(matches!(
         left,
         Some(crate::app::components::msg::Msg::Shell(
-            crate::app::components::msg::ShellRequest::BrowserClick {
-                region: crate::app::components::msg::BrowserHitRegion::LeftRow(1),
-                ..
-            }
+            crate::app::components::msg::ShellRequest::BrowserRowClick { target: 1 }
         ))
     ));
 
@@ -519,10 +516,7 @@ fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
     assert!(matches!(
         right,
         Some(crate::app::components::msg::Msg::Shell(
-            crate::app::components::msg::ShellRequest::BrowserClick {
-                region: crate::app::components::msg::BrowserHitRegion::ContextMenu(1),
-                ..
-            }
+            crate::app::components::msg::ShellRequest::BrowserRowContextMenu { target: 1, .. }
         ))
     ));
 }

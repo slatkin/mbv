@@ -280,23 +280,19 @@ impl Model {
                 | ShellRequest::AudiobookshelfBookIntent(_)) => {
                     self.handle_audiobookshelf_book_request(request);
                 }
-                // Browser (generic Emby) mouse geometry lives in
-                // `BrowserComponent`, which forwards the hit region; the
-                // shell decides *when* it counts via `App`'s 400ms
-                // double-click / 30ms wheel fields (task 5.3d, correction to b5799185).
+                // Browser (generic Emby) mouse gestures are recognized by
+                // `BrowserComponent`'s private `MouseGestureState` (ADR 0024,
+                // design.md D3/D4): it owns the wheel throttle and resolves the
+                // row target itself, so the shell only applies the effect.
                 ShellRequest::BrowserScroll { delta, offset } => {
-                    if self.app.note_browse_scroll() {
-                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                            let feed_group_view = self.app.is_feed_home_video_group_view(lib_idx);
-                            if feed_group_view {
-                                if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut()
-                                {
-                                    state.video_scroll = offset;
-                                    self.app.save_default_library_position(lib_idx);
-                                }
-                            } else {
-                                self.app.handle_mouse_scroll_browse(delta);
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        if self.app.is_feed_home_video_group_view(lib_idx) {
+                            if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
+                                state.video_scroll = offset;
+                                self.app.save_default_library_position(lib_idx);
                             }
+                        } else {
+                            self.app.handle_mouse_scroll_browse(delta);
                         }
                     }
                 }
@@ -349,38 +345,32 @@ impl Model {
                 request @ ShellRequest::BrowserCursorIndex { .. } => {
                     self.handle_browser_request(request);
                 }
-                ShellRequest::BrowserClick { region, col, row } => {
-                    match region {
-                        BrowserHitRegion::SelectorTab(target) => {
-                            self.app.last_click_time = Instant::now();
-                            self.app.last_click_pos = (col, row);
-                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                self.app.handle_mouse_selector_click_emby(lib_idx, target);
-                            }
-                            // A music-group pill switch replaces the album level;
-                            // re-anchor the workspace cursor at this nav event.
-                            self.music_workspace_reanchor = true;
-                        }
-                        BrowserHitRegion::ContextMenu(target) => {
-                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                self.app
-                                    .handle_mouse_right_click_emby(lib_idx, target, col, row);
-                            }
-                        }
-                        BrowserHitRegion::LeftRow(target)
-                        | BrowserHitRegion::InlineHero(target) => {
-                            if self.app.note_browse_double_click(col, row) {
-                                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                    self.app.handle_mouse_double_click_emby(lib_idx, target);
-                                }
-                            } else {
-                                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                    self.app.handle_mouse_single_click_emby(lib_idx, target);
-                                }
-                            }
-                        }
+                ShellRequest::BrowserPillClick { target } => {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        self.app.handle_mouse_selector_click_emby(lib_idx, target);
                     }
-                    // Selector-tab / item clicks mutate library state; re-project (5.3d.15/M2).
+                    // A music-group pill switch replaces the album level;
+                    // re-anchor the workspace cursor at this nav event.
+                    self.music_workspace_reanchor = true;
+                    self.push_emby_browser_content();
+                }
+                ShellRequest::BrowserRowClick { target } => {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        self.app.handle_mouse_single_click_emby(lib_idx, target);
+                    }
+                    self.push_emby_browser_content();
+                }
+                ShellRequest::BrowserRowActivate { target } => {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        self.app.handle_mouse_double_click_emby(lib_idx, target);
+                    }
+                    self.push_emby_browser_content();
+                }
+                ShellRequest::BrowserRowContextMenu { target, anchor } => {
+                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        self.app
+                            .handle_mouse_right_click_emby(lib_idx, target, anchor.0, anchor.1);
+                    }
                     self.push_emby_browser_content();
                 }
                 // Home (cross-Service) mouse geometry lives in
