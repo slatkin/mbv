@@ -7,7 +7,7 @@ use super::BrowserComponent;
 use crate::app::components::component_id::BrowserKind;
 use crate::app::palette;
 use crate::app::render::{
-    hero_on_left_list_panel_border, hero_on_left_right_pane, padded_rect,
+    hero_on_left_list_panel_border, hero_on_left_pane, hero_on_left_right_pane, padded_rect,
     prepare_wide_emby_hero_card, render_count_label, render_home_hero_content, render_pill_bar,
     render_search_box, wide_library_panes, HeroData, LetterFilter, LibraryListRenderCtx, PillBar,
     PANE_PAD_X, PANE_PAD_Y,
@@ -28,10 +28,6 @@ impl BrowserComponent {
     ) -> usize {
         let body_area = area;
 
-        let left_content_area = Rect {
-            height: body_area.height.saturating_sub(1),
-            ..body_area
-        };
         let Some(panes) = wide_library_panes(body_area, PANE_PAD_X, PANE_PAD_Y) else {
             // Defensive structure only: unreachable on canonical Wide paths.
             // `browser/mod.rs` calls `render_wide_movies` solely when
@@ -52,34 +48,29 @@ impl BrowserComponent {
             self.layout.left_row_map = paint.left_row_map;
             return paint.row_geometry.offset();
         };
-        let mut left_panel = panes.left_panel;
         let right_panel = panes.right_panel;
-        left_panel.height = left_content_area.height;
 
         // Library-side separator row below the left pane, matching Music and
         // Home's wide layout.
         f.render_widget(
             Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
             Rect {
-                x: left_panel.x,
-                y: left_panel.bottom(),
-                width: left_panel.width,
+                x: panes.left_panel.x,
+                y: panes.left_panel.bottom(),
+                width: panes.left_panel.width,
                 height: 1,
             },
         );
 
-        let left_area = panes.left_area;
         let right_area = panes.right_area;
         self.layout.movies_wide_right_area = right_area;
 
         // Left pane: read-only shared hero card (not an interactive hero —
         // `layout.hero_area` stays unset so the left pane is outside mouse
         // geometry, mirroring the legacy wide renderer).
-        f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
-            left_panel,
-        );
-        let hero_content = padded_rect(left_area, PANE_PAD_X, 0);
+        let hero_content =
+            hero_on_left_pane(f, body_area, crate::app::render::LeftPaneFocus::ReadOnly)
+                .expect("wide movies layout has a hero pane");
         let hero_data = ctx
             .selected_item()
             .filter(|item| {

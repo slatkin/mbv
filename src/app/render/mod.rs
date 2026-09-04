@@ -49,8 +49,8 @@ pub(in crate::app) use screens::feeds_model::{
 // so the legacy wide renderer can be deleted in 5.3d.17b. Re-export the
 // shared helpers it needs at crate::app visibility.
 pub(in crate::app) use arrangements::hero_left::{
-    hero_on_left_list_panel_border, hero_on_left_right_pane, shared_hero_presentation, PANE_PAD_X,
-    PANE_PAD_Y,
+    hero_on_left_list_panel_border, hero_on_left_pane, hero_on_left_right_pane,
+    shared_hero_presentation, LeftPaneFocus, PANE_PAD_X, PANE_PAD_Y,
 };
 pub(in crate::app) use arrangements::library::wide_library_panes;
 pub(in crate::app) use arrangements::padded_rect;

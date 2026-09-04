@@ -67,18 +67,21 @@ fn movies_family_wide_left_pane_unconditional_fill_double_horizontal_inset() {
         buffer[(left_panel.x, left_panel.bottom() - 1)].bg,
         palette::SURFACE_RESTING
     );
-    // The known double-inset defect (D-F): `browser/paint.rs` insets the
-    // hero content twice, an effective `(4, 1)` rather than the shared
-    // `(PANE_PAD_X, PANE_PAD_Y)` -- capture that today's overview text does
-    // not start at `left_panel.x + PANE_PAD_X`.
+    // The shared hero pane owns the single `(PANE_PAD_X, PANE_PAD_Y)` inset.
     let single_inset_x = left_panel.x + PANE_PAD_X;
-    let row_text = (single_inset_x..left_panel.right())
-        .map(|x| buffer[(x, left_panel.y + PANE_PAD_Y)].symbol())
-        .collect::<String>();
-    assert!(
-        !row_text.trim_start().starts_with("Focused Movie"),
-        "characterizes the pre-fix double inset; row={row_text:?}"
+    let title = (left_panel.y..left_panel.bottom()).find_map(|y| {
+        let row = (left_panel.x..left_panel.right())
+            .map(|x| buffer[(x, y)].symbol())
+            .collect::<String>();
+        row.find("Focused Movie")
+            .map(|x| (left_panel.x + x as u16, y))
+    });
+    assert_eq!(
+        title.map(|(x, _)| x),
+        Some(single_inset_x),
+        "characterizes the shared single horizontal inset"
     );
+    assert_eq!(title.map(|(_, y)| y), Some(13), "row position is unchanged");
 }
 
 /// TV already routes through `wide_library_panes(area, PANE_PAD_X,
