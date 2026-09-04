@@ -25,7 +25,8 @@ use mbv_core::playback_queue::{FeedEntry, QueueItem};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
-use tuirealm::component::Component;
+use tuirealm::component::{AppComponent, Component};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 const WIDTH: u16 = 100;
 const HEIGHT: u16 = 30;
@@ -276,6 +277,37 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
         buffer[(hero.x, hero.bottom() - 1)].bg,
         palette::SURFACE_RESTING
     );
+
+    let mut focused_layout = LayoutMain::default();
+    let mut focused_list: WideMediaList<String> = WideMediaList::new();
+    let focused_terminal = direct_terminal(|f| {
+        render_feeds_content(
+            f,
+            area,
+            true,
+            &mut focused_layout,
+            FeedsRenderModel {
+                subscriptions: &subscriptions,
+                visible_entries: &entries,
+                watched_filter: WatchedFilter::All,
+                selected_group: 0,
+                loading: false,
+                selected_entry: None,
+            },
+            &mut focused_list,
+            &inline_list,
+        );
+    });
+    let focused_hero = focused_layout.hero_area;
+    let focused_buffer = focused_terminal.backend().buffer();
+    assert_eq!(
+        focused_buffer[(focused_hero.x, focused_hero.y)].bg,
+        palette::SURFACE_RESTING
+    );
+    assert_eq!(
+        focused_buffer[(focused_hero.x, focused_hero.bottom() - 1)].bg,
+        palette::SURFACE_RESTING
+    );
 }
 
 /// Feeds with no entries to select: `feeds.rs:170-184` returns before the
@@ -329,6 +361,17 @@ fn abs_books_wide_left_pane_fills_via_shared_primitive() {
         buffer[(left_panel.x, left_panel.bottom() - 1)].bg,
         palette::SURFACE_RESTING
     );
+
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Left,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let focused_terminal = direct_terminal(|f| component.view(f, area));
+    let focused_buffer = focused_terminal.backend().buffer();
+    assert_eq!(
+        focused_buffer[(left_panel.x, left_panel.y)].bg,
+        palette::SURFACE_FOCUSED
+    );
 }
 
 /// ABS Podcasts (task 2.1): the wide left pane fills via `hero_on_left_pane`.
@@ -354,6 +397,14 @@ fn abs_podcasts_wide_left_pane_fills_via_shared_primitive() {
     assert_ne!(
         buffer[(hero.x, hero.y)].bg,
         palette::resolve_surface_focus(true)
+    );
+
+    component.set_episode_selection(Some(0));
+    let focused_terminal = direct_terminal(|f| component.view(f, area));
+    let focused_buffer = focused_terminal.backend().buffer();
+    assert_eq!(
+        focused_buffer[(hero.x, hero.y)].bg,
+        palette::SURFACE_FOCUSED
     );
 }
 
