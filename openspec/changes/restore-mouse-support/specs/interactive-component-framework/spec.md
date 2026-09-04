@@ -113,8 +113,9 @@ in the loop body.
   event listener and `tick()` is called
 - **THEN** every mounted component subscribed to mouse events is given the event,
   regardless of which component holds focus
-- **AND** the shell applies at most one component's resulting message, chosen by
-  the `mouse-input` arbitration priority
+- **AND** a mounted component that the shell has not made mouse-eligible for the
+  current frame is not given the event at all, so its handler cannot mutate it
+- **AND** the shell applies at most one component's resulting message
 - **AND** no component's message for that event is produced twice
 
 #### Scenario: Focus after the synchronisation pass is asserted in its real order
@@ -288,19 +289,20 @@ coverage — the top-level exhaustive match is.
 ### Requirement: Mounted parents recognize mouse gestures and embedded controls resolve targets
 
 A mounted destination `AppComponent` SHALL own its TuiRealm mouse subscription
-and its `MouseGestureState`. An embedded media-list control SHALL own the
-`HitRegions<Target>` populated from the geometry of its own most recent view.
-After the parent recognizes a mouse gesture, it SHALL delegate point resolution
-to the embedded control and translate the returned stable target into the
-destination request.
+and its `MouseGestureState`. An embedded media-list control SHALL resolve a point
+within the list rectangle its parent painted to a stable target, using the same
+row flow it exports to that parent's painter. After the parent recognizes a
+mouse gesture, it SHALL delegate point resolution to the embedded control and
+translate the returned stable target into the destination request.
 
 An embedded control SHALL NOT subscribe independently, own a second gesture
-recognizer, or publish row rectangles into a parent-owned duplicate hit map.
-Parent-owned controls outside the list rectangle, such as pills or Queue scope
-buttons, MAY retain separate parent hit regions. When a recognized point falls
-within the embedded list rectangle, the embedded control's explicit list targets
-SHALL be resolved before any parent workspace target. This change owns adding
-`HitRegions<Target>` to the already-landed `WideMediaList` and
+recognizer, store a per-row rectangle list duplicating its exported row flow, or
+publish row rectangles into a parent-owned hit map. Parent-owned controls outside
+the list rectangle, such as pills or Queue scope buttons, MAY retain separate
+parent hit regions, populated where those rectangles are painted. When a
+recognized point falls within the embedded list rectangle, the embedded control's
+explicit list targets SHALL be resolved before any parent workspace target. This
+change owns adding point resolution to the already-landed `WideMediaList` and
 `InlineMediaBrowser`, migrating every per-surface canonical row-hit `*HitRegion`
 enum onto it, and deleting those enums; no `compose-canonical-media-lists` slice
 performs any part of that migration.
@@ -309,8 +311,9 @@ performs any part of that migration.
 
 - **WHEN** the mounted parent recognizes a click, double click, context click, or
   scroll gesture over its embedded list rectangle
-- **THEN** the embedded control resolves the point against hit regions populated
-  by its own view
+- **THEN** the parent passes the list rectangle it painted and the point to the
+  embedded control, which resolves it from the row flow it exported to that same
+  paint
 - **AND** it returns the stable target or list-local scroll result to the parent
 - **AND** neither the parent nor shell recomputes the row from coordinates
 
@@ -327,6 +330,7 @@ performs any part of that migration.
 - **WHEN** Queue composes the canonical fixed-row control
 - **THEN** Queue's parent keeps the subscription, gesture state, and scope-button
   geometry
-- **AND** the embedded control owns row hit regions and resolves `QueueSlotId`
+- **AND** the embedded control resolves a point in the painted row area to a
+  `QueueSlotId`
 - **AND** Queue's `QueueHitRegion` enum is deleted once its row hits resolve
   through the embedded control

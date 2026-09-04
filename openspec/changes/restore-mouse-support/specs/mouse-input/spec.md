@@ -10,22 +10,30 @@ gestures extend additively rather than a per-surface bolt-on.
 
 ### Requirement: Every visible interactive surface receives mouse events
 
-A mounted interactive component that paints a region the user can point at SHALL
-receive every terminal mouse event while it is mounted, not only while it holds
-keyboard focus. Mouse-event delivery SHALL use the component framework's
-subscription mechanism; the shell SHALL NOT introduce a separate mouse event
-loop, a global completed-frame hit map, or a global coordinate router.
+An interactive component that is mounted **and painted in the most recent frame**
+SHALL receive every terminal mouse event, not only while it holds keyboard focus.
+A component that is mounted but was not painted in the most recent frame SHALL
+NOT receive mouse events at all — not merely have its resulting message
+discarded — because the component framework mutates a component before it
+returns a message, so a discarded message does not undo a mutation.
 
-The mounted destination parent receives every mouse event while it is mounted and
-owns gesture recognition for that surface. The parent SHALL decide whether an
-event is its own by testing the event coordinates against the non-list chrome
-geometry it painted on its most recent render — pills, scope buttons, the seek
-bar and transport, overlay and popup regions. For a canonical media-list row the
-parent SHALL delegate point resolution to the embedded list control's
-view-populated `HitRegions<Target>` rather than re-deriving row coordinates
-itself. The parent SHALL emit a `Msg` for a mouse event only when it resolves to
-a region it painted or to a row the embedded control claims; otherwise it SHALL
-ignore the event.
+Mouse-event delivery SHALL use the component framework's subscription mechanism;
+the shell SHALL NOT introduce a separate mouse event loop, a global
+completed-frame hit map, or a global coordinate router.
+
+The mounted destination parent owns gesture recognition for its surface. The
+parent SHALL decide whether an event is its own by testing the event coordinates
+against the non-list chrome geometry it painted on its most recent render —
+pills, scope buttons, the seek bar and transport, overlay and popup regions. For
+a canonical media-list row the parent SHALL delegate point resolution to the
+embedded list control, passing the list rectangle the parent itself painted, and
+SHALL NOT re-derive row coordinates itself. The parent SHALL emit a `Msg` for a
+mouse event only when it resolves to a region it painted or to a row the embedded
+control claims; otherwise it SHALL ignore the event.
+
+A component that resolves a mouse event SHALL resolve it against geometry it
+painted itself. Filtering by mouse event kind SHALL happen inside the component;
+no behaviour SHALL depend on the subscription clause filtering by event kind.
 
 #### Scenario: A click lands on a panel that does not hold focus
 
@@ -41,42 +49,75 @@ ignore the event.
 
 - **WHEN** a mouse event is injected into a mounted `Application` through its
   event listener and `tick()` is called
-- **THEN** every subscribed mounted parent is given the event, and each resolves
-  it against the geometry it painted or its embedded control's regions
+- **THEN** every eligible mounted parent is given the event, and each resolves
+  it against the geometry it painted or its embedded control's rows
 - **AND** no parent's message for that event is produced twice
+
+#### Scenario: A destination is mounted but not painted
+
+- **WHEN** several destinations are mounted at once and only one is painted,
+  and a mouse event arrives over the painted one
+- **THEN** the unpainted destinations' mouse handlers are not invoked at all
+- **AND** their cursor, scroll offset, and selection are unchanged
 
 #### Scenario: Chrome that never holds focus is still clickable
 
 - **WHEN** the user clicks a transport control or the seek bar in the playback
   chrome, which never receives keyboard focus
 - **THEN** the playback component resolves the click against its painted control
-  geometry and emits the corresponding transport or seek intent
+  geometry and emits the corresponding transport intent, or a seek intent
+  carrying a resolved position fraction
+- **AND** the shell handler for that intent does not read the seek bar's
+  rectangle
 
-### Requirement: Overlapping hit claims are arbitrated by a fixed surface priority
+### Requirement: Overlapping hit claims are arbitrated before delivery
 
-When more than one mounted component's painted geometry contains a mouse event's
-coordinates, the shell SHALL resolve the conflict by a fixed priority order:
-topmost overlay or modal, then the active panel, then any other visible panel,
-then chrome. At most one component's mouse message SHALL be applied for a single
-event.
+The shell SHALL determine which components are mouse-eligible for the current
+frame and SHALL deliver mouse events only to those, in this order of precedence:
 
-While a blocking overlay or modal is mounted, mouse messages from components
-beneath it SHALL be discarded, so a click on obscured content cannot mutate or
-navigate it. A non-blocking popup SHALL NOT suppress mouse events outside its own
-geometry.
+1. a mounted blocking overlay or modal — exclusively;
+2. otherwise, the topmost mounted overlay or popup that paints over panel
+   content — exclusively;
+3. otherwise, the components painted in the current frame.
+
+Arbitration SHALL take effect **before** a component's event handler runs, so a
+losing component is never mutated. The shell SHALL NOT rely on discarding a
+component's returned mouse message to prevent that component from acting.
+
+At most one component's mouse message SHALL be applied for a single event. The
+eligible components' painted regions do not overlap, so two claims for one event
+indicate a geometry defect; the shell SHALL surface that as a failure in debug
+builds rather than silently ranking them.
+
+A component that holds keyboard focus receives events outside this eligibility
+set as a framework property. A mounted blocking overlay SHALL therefore hold
+keyboard focus, so that no surface beneath it can be both focused and obscured.
+
+A popup that is not blocking SHALL still receive mouse events outside its own
+geometry, so its dismissal policy applies; surfaces beneath it SHALL NOT act on
+those events.
 
 #### Scenario: A click falls where an overlay covers a panel
 
 - **WHEN** an overlay is mounted over a panel and the user clicks a point inside
   both the overlay's and the panel's painted geometry
-- **THEN** only the overlay's mouse message is applied and the panel's is
-  discarded
+- **THEN** only the overlay's mouse handler runs and only its message is applied
+- **AND** the panel's handler is not invoked, so the panel's state is unchanged
 
 #### Scenario: A click outside a blocking modal
 
 - **WHEN** a blocking modal is mounted and the user clicks outside it
-- **THEN** the underlying surfaces receive no mouse mutation
+- **THEN** the underlying surfaces' mouse handlers are not invoked and their
+  state is unchanged
 - **AND** the modal's own dismissal policy, if any, still applies
+
+#### Scenario: A blocking overlay is mounted without keyboard focus
+
+- **WHEN** a blocking overlay is mounted and the shell's synchronisation pass
+  completes
+- **THEN** the overlay holds keyboard focus
+- **AND** a test asserts this, so a future change that mounts a blocking overlay
+  without focusing it fails rather than leaking clicks to obscured surfaces
 
 #### Scenario: Simultaneous Queue and Library are both pointable
 
@@ -91,14 +132,21 @@ Each mounted destination parent SHALL recognize click, double-click, right-click
 and wheel gestures from the raw mouse events it receives, using a private
 `MouseGestureState`. The double-click interval and wheel throttle SHALL NOT be
 held as shell-global state keyed by screen position. An embedded canonical
-media-list control SHALL NOT recognize gestures — it only populates and resolves
-`HitRegions<Target>` for its painted list rows, and the parent delegates
-list-point resolution to it.
+media-list control SHALL NOT recognize gestures — it only resolves a point
+within the list rectangle its parent painted to a stable target, and the parent
+delegates list-point resolution to it.
+
+Hit geometry for a uniform row flow SHALL be resolved from the flow the control
+already exports to its painter, not from a separately stored per-row rectangle
+list. A stored rectangle registry is for irregular painted controls — pills,
+scope buttons, transport controls, group selectors, overlay rows — whose owner
+populates it in the same code that paints those rectangles.
 
 A mounted parent SHALL translate a recognized gesture into a semantic typed `Msg`
 carrying the resolved target (a child-returned row identity, a control, a pill
-index), never raw coordinates for the shell to re-resolve. The shell handler for
-that `Msg` SHALL accept the resolved target as an argument.
+index, a seek fraction), never raw coordinates for the shell to re-resolve. The
+shell handler for that `Msg` SHALL accept the resolved target as an argument, and
+SHALL NOT read the painted geometry of the component that emitted it.
 
 The gesture vocabulary SHALL be open to drag (`start`, `move`, `end`) and hover
 (`enter`, `leave`) gestures without changing the delivery or arbitration
@@ -141,6 +189,18 @@ double-click-to-activate, wheel-scroll, and right-click-to-menu where the surfac
 has a corresponding keyboard action; overlays and popups SHALL support
 click-to-select and click-to-dismiss where they have a corresponding keyboard
 action. A surface with no meaningful pointer gesture SHALL say so explicitly.
+
+A surface that renders at more than one breakpoint SHALL have its mouse
+behaviour verified at each breakpoint it renders at, since its hit geometry
+differs between them. A surface that exists at only one breakpoint SHALL record
+which.
+
+#### Scenario: A surface renders at both breakpoints
+
+- **WHEN** a surface paints pointable regions in both the wide and narrow
+  arrangements
+- **THEN** its ledger row records mouse verification for both
+- **AND** a verification at one breakpoint alone does not satisfy the row
 
 #### Scenario: The ledger is checked for mouse completeness
 
