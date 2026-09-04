@@ -43,7 +43,7 @@
   it is unconditional, passing `LeftPaneFocus::ReadOnly` — verify the no-selection
   characterization test shows a filled resting pane with no hero content, and that the pane stays
   resting in every focus state Feeds can reach.
-- [ ] 2.4 Home (`home.rs`): delete the `HeroData::Generic` height clamp at `:237-242`, make the
+- [x] 2.4 Home (`home.rs`): delete the `HeroData::Generic` height clamp at `:237-242`, make the
   fill unconditional via `hero_on_left_pane(..., LeftPaneFocus::ReadOnly)` at `:244-249`, and keep
   the content-height calculation `hero_content.height = rows.min(hero_col_height)` at `:231`.
   Change `render_home_latest_detail`'s cover anchoring from bottom-of-rect to top-anchored with
