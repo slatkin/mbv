@@ -1,6 +1,5 @@
 use super::components::album_detail::album_hero_detail_rows;
 use super::components::hero::HERO_BLOCK_EXTRA_ROWS;
-use super::screens::album_plan::{group_album_info, sorted_group_album_order};
 use super::test_helpers::*;
 use super::*;
 use crate::app::shell::Model;
@@ -8,7 +7,6 @@ use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
-use std::collections::HashMap;
 
 /// Narrow grouped Music is painted by the mounted `MusicWorkspaceComponent`
 /// now (task 3.8): drive the real `Model::draw_frame` shell path and read the

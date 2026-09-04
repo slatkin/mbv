@@ -6,9 +6,7 @@ pub(crate) use crate::app::tests::make_item;
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
-use tuirealm::event::{
-    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 #[test]
 fn music_resize_push_uses_current_frame_geometry() {
     let mut model = Model::new(make_music_group_app());
