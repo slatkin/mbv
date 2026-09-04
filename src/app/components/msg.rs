@@ -49,13 +49,14 @@ pub enum Msg {
 }
 
 /// Self-contained payload emitted by the permanent UiRoot terminal observer.
-/// Mouse and otherwise unhandled events are represented without carrying a
+/// Otherwise unhandled events are represented without carrying a
 /// framework-specific event payload because they only participate in redraw
-/// accounting at the shell boundary.
+/// accounting at the shell boundary. Mouse events are no longer observed here:
+/// they reach components through `mouse_sub()` subscriptions and are arbitrated
+/// by `sync_mouse_subscriptions` before delivery (ADR 0024).
 #[derive(Debug, Clone, PartialEq)]
 pub enum TerminalObserverEvent {
     Key(TuiKeyEvent),
-    Mouse,
     Resize,
     FocusGained,
     FocusLost,

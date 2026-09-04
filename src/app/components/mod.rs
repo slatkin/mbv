@@ -23,6 +23,7 @@ pub mod home;
 pub mod inline_search;
 pub mod library_routes;
 pub mod media_list;
+pub mod mouse;
 pub mod msg;
 pub mod multiselect;
 pub mod music_workspace;
@@ -52,6 +53,7 @@ pub use self::help::HelpComponent;
 pub use self::home::HomeComponent;
 pub(in crate::app) use self::inline_search::{InlineSearchComponent, SearchPool};
 pub use self::library_routes::LibraryRoutesComponent;
+pub use self::mouse::{mouse_event_clause, mouse_sub};
 pub use self::msg::{
     Msg, PlaybackRequest, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ServiceRequest,
     SettingsIntent, ShellRequest, TerminalObserverEvent,

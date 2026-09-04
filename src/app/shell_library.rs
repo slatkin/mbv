@@ -99,6 +99,97 @@ impl Model {
         }))
     }
 
+    /// ADR 0024 D2: the mouse-eligible component set for the current frame, a
+    /// three-rung ladder derived off the same `library_child_id()` the
+    /// active-destination pass uses (no second "did I paint" ledger).
+    pub(super) fn mouse_eligible_ids(&self) -> Vec<ComponentId> {
+        use super::components::{ModalId, OverlayId, PopupId};
+
+        // Rung 1: a mounted blocking overlay/modal is eligible alone.
+        const BLOCKING: &[ComponentId] = &[
+            ComponentId::Overlay(OverlayId::ContextMenu),
+            ComponentId::Overlay(OverlayId::SelectionModal),
+            ComponentId::Modal(ModalId::Confirm),
+            ComponentId::Modal(ModalId::DaemonLost),
+            ComponentId::Modal(ModalId::RemoteReanchor),
+            ComponentId::Modal(ModalId::SavePlaylist),
+            ComponentId::Popup(PopupId::Multiselect),
+            ComponentId::Popup(PopupId::LibraryRoutes),
+            ComponentId::Popup(PopupId::FeedManage),
+        ];
+        if let Some(id) = BLOCKING.iter().find(|id| self.application.mounted(id)) {
+            return vec![id.clone()];
+        }
+
+        // Rung 2: else the topmost mounted panel-covering overlay/popup alone.
+        // `OVERLAY_IDS` is canonical bottom-to-top, so the last mounted one is
+        // topmost. No blocking overlay is mounted at this point, so every
+        // remaining match is a non-blocking panel-covering overlay.
+        if let Some(id) = super::components::UiRootComponent::overlay_ids()
+            .iter()
+            .rev()
+            .find(|id| self.application.mounted(id))
+        {
+            return vec![id.clone()];
+        }
+
+        // Rung 3: the components painted this frame — active destination,
+        // Queue, and Playback (the transport chrome).
+        let mut ids = Vec::new();
+        if let Some(child) = self
+            .library_child_id()
+            .filter(|child| self.application.mounted(child))
+        {
+            ids.push(child);
+        }
+        for id in [ComponentId::Queue, ComponentId::Playback] {
+            if self.application.mounted(&id) {
+                ids.push(id);
+            }
+        }
+        ids
+    }
+
+    /// ADR 0024 D2: reconcile the `mouse_sub()` subscription table to
+    /// `mouse_eligible_ids()`. Runs in `sync_mounted_surfaces` immediately
+    /// after `sync_active_destination`.
+    ///
+    /// `tuirealm` 4.1's `Application::unsubscribe(id, clause)` retains
+    /// `s.target() != id && s.event() != &clause`, so it drops *every*
+    /// subscription whose clause equals the mouse clause, not just `id`'s.
+    /// Any change therefore wipes the whole mouse table and rebuilds it from
+    /// the eligible set; `self.mouse_subscribed` mirrors the result so the
+    /// reconciler knows the current state without querying `Application`.
+    pub(super) fn sync_mouse_subscriptions(&mut self) {
+        let eligible: std::collections::HashSet<ComponentId> =
+            self.mouse_eligible_ids().into_iter().collect();
+        if eligible == self.mouse_subscribed {
+            return;
+        }
+        // Wipe: one successful unsubscribe clears every mouse subscription.
+        if let Some(anchor) = self
+            .mouse_subscribed
+            .iter()
+            .find(|id| self.application.mounted(id))
+            .cloned()
+        {
+            let _ = self
+                .application
+                .unsubscribe(&anchor, super::components::mouse_event_clause());
+        }
+        self.mouse_subscribed.clear();
+        for id in eligible {
+            if self.application.mounted(&id)
+                && self
+                    .application
+                    .subscribe(&id, super::components::mouse_sub())
+                    .is_ok()
+            {
+                self.mouse_subscribed.insert(id);
+            }
+        }
+    }
+
     /// Whether any sidebar, modal, or popup overlay is mounted. Every
     /// focus-management sync pass (`sync_active_destination`, `sync_queue`)
     /// consults this before re-activating its own surface, so a mounted
@@ -136,6 +227,87 @@ mod tests {
     use crate::app::{
         BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, PanelFocus, PanelMode, TabSelection,
     };
+
+    // ADR 0024 D2 (task 2.3): the three-rung mouse-eligibility ladder.
+
+    fn eligibility_model() -> Model {
+        let mut model = Model::new(make_movie_app());
+        model.app.tab = TabSelection::EmbyLibrary(0);
+        model.app.panel_focus = PanelFocus::Library;
+        model.app.panel_mode = PanelMode::Both;
+        model.sync_emby_browser();
+        model.sync_active_destination();
+        model
+    }
+
+    #[test]
+    fn mouse_eligibility_rung3_is_painted_destination_plus_playback() {
+        let model = eligibility_model();
+        let child = model.emby_browser_id.clone().expect("browser mounted");
+        let eligible: std::collections::HashSet<_> =
+            model.mouse_eligible_ids().into_iter().collect();
+        assert!(eligible.contains(&child));
+        assert!(eligible.contains(&ComponentId::Playback));
+        assert!(
+            !eligible
+                .iter()
+                .any(|id| matches!(id, ComponentId::Overlay(_) | ComponentId::Modal(_))),
+            "rung 3 carries no overlay"
+        );
+    }
+
+    #[test]
+    fn mouse_eligibility_rung1_blocking_overlay_is_exclusive() {
+        use crate::app::components::{ConfirmComponent, ModalId};
+        let mut model = eligibility_model();
+        model
+            .application
+            .mount(
+                ComponentId::Modal(ModalId::Confirm),
+                Box::new(ConfirmComponent::new()),
+                vec![],
+            )
+            .unwrap();
+        assert_eq!(
+            model.mouse_eligible_ids(),
+            vec![ComponentId::Modal(ModalId::Confirm)]
+        );
+    }
+
+    #[test]
+    fn mouse_eligibility_rung2_topmost_panel_overlay_is_exclusive() {
+        let mut model = Model::new(make_movie_app());
+        model.app.tab = TabSelection::Home;
+        model.mount_help();
+        assert_eq!(
+            model.mouse_eligible_ids(),
+            vec![ComponentId::Overlay(OverlayId::Help)]
+        );
+    }
+
+    #[test]
+    fn sync_mouse_subscriptions_tracks_and_wipes_the_eligible_set() {
+        use crate::app::components::{ConfirmComponent, ModalId};
+        let mut model = eligibility_model();
+        model.sync_mouse_subscriptions();
+        let child = model.emby_browser_id.clone().expect("browser mounted");
+        assert!(model.mouse_subscribed.contains(&child));
+        assert!(model.mouse_subscribed.contains(&ComponentId::Playback));
+
+        model
+            .application
+            .mount(
+                ComponentId::Modal(ModalId::Confirm),
+                Box::new(ConfirmComponent::new()),
+                vec![],
+            )
+            .unwrap();
+        model.sync_mouse_subscriptions();
+        assert_eq!(
+            model.mouse_subscribed,
+            std::iter::once(ComponentId::Modal(ModalId::Confirm)).collect()
+        );
+    }
 
     #[test]
     fn shell_routes_focus_to_the_active_destination_child() {

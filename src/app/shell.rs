@@ -54,6 +54,14 @@ pub struct Model {
     /// `reconcile_destination_mounts` can find a retired library's component
     /// even when no `*_id` pointer still names it.
     pub(super) mounted_destinations: std::collections::HashSet<ComponentId>,
+    /// Components currently carrying the `mouse_sub()` subscription. Owned
+    /// solely by `sync_mouse_subscriptions` (ADR 0024 D2): it is the mouse
+    /// arbitration table. `tuirealm` 4.1's `Application::unsubscribe` removes
+    /// every subscription matching the clause value at once (it cannot target
+    /// one component's mouse sub in isolation), so the reconciler wipes and
+    /// rebuilds the whole set on any change and this mirror is how it knows
+    /// the current state without querying `Application`.
+    pub(super) mouse_subscribed: std::collections::HashSet<ComponentId>,
     /// One-shot shell→component request for the mounted Music workspace's
     /// inline track focus, applied at the next `sync_music_workspace` after
     /// the component is mounted/synced (so mount-timing never loses it).
@@ -149,6 +157,51 @@ pub(super) fn apply_router_outcome(
         }
     }
     out
+}
+
+/// ADR 0024: the mouse fold, applied to a `tick()` message list beside the
+/// ADR 0023 keyboard router fold.
+///
+/// `tuirealm` forwards `Event::Mouse` to the focused component *and* to every
+/// subscriber, so a mouse tick can yield several `Msg`s. `sync_mouse_subscriptions`
+/// keeps only components painted this frame mouse-eligible, and those paint
+/// disjoint rectangles and each emits only for points inside its own geometry,
+/// so at most one should claim any event. This fold applies the first claim in
+/// `tick()` order and `debug_assert!`s that no more than one was produced — two
+/// claims for one event is a geometry defect, not a ranking problem, so the fold
+/// deliberately has no `Msg`-variant → surface table.
+///
+/// Keyboard ticks carry a `TerminalObserverEvent::Key` marker (the permanent
+/// `UiRoot` observer emits it for every `Event::Keyboard`); those pass through
+/// untouched for the keyboard router to resolve.
+pub(super) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
+    let observed_key = messages
+        .iter()
+        .any(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::Key(_))));
+    if observed_key {
+        return messages;
+    }
+    let claims = messages
+        .iter()
+        .filter(|msg| !matches!(msg, Msg::TerminalEvent(_)))
+        .count();
+    debug_assert!(
+        claims <= 1,
+        "mouse fold: {claims} components claimed one mouse event; eligible \
+         surfaces paint disjoint regions (ADR 0024)"
+    );
+    let mut kept_claim = false;
+    messages
+        .into_iter()
+        .filter(|msg| {
+            if matches!(msg, Msg::TerminalEvent(_)) {
+                return true;
+            }
+            let first = !kept_claim;
+            kept_claim = true;
+            first
+        })
+        .collect()
 }
 
 impl Model {
@@ -288,6 +341,7 @@ impl Model {
             abs_podcast_id: None,
             abs_book_id: None,
             mounted_destinations: std::collections::HashSet::new(),
+            mouse_subscribed: std::collections::HashSet::new(),
             music_track_focus_request: None,
             music_workspace_reanchor: false,
             tv_viewport_anchor: None,
@@ -346,9 +400,51 @@ fn apply_terminal_observer(
         }
         TerminalObserverEvent::FocusGained => model.app.note_focus_gained(),
         TerminalObserverEvent::FocusLost => model.app.note_focus_lost(),
-        TerminalObserverEvent::Key(_)
-        | TerminalObserverEvent::Mouse
-        | TerminalObserverEvent::NoOp => {}
+        TerminalObserverEvent::Key(_) | TerminalObserverEvent::NoOp => {}
+    }
+}
+
+#[cfg(test)]
+mod mouse_fold_tests {
+    use super::*;
+    use crate::app::components::msg::PlaybackRequest;
+
+    #[test]
+    fn fold_keeps_one_mouse_claim_and_the_observer_signal() {
+        let msgs = vec![
+            Msg::Playback(PlaybackRequest::TogglePlayPause),
+            Msg::TerminalEvent(TerminalObserverEvent::NoOp),
+        ];
+        assert_eq!(
+            fold_mouse_messages(msgs),
+            vec![
+                Msg::Playback(PlaybackRequest::TogglePlayPause),
+                Msg::TerminalEvent(TerminalObserverEvent::NoOp),
+            ]
+        );
+    }
+
+    #[test]
+    fn fold_passes_a_keyboard_tick_through_untouched() {
+        use tuirealm::event::{Key, KeyEvent, KeyModifiers};
+        let key = Msg::TerminalEvent(TerminalObserverEvent::Key(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let leaf = Msg::Playback(PlaybackRequest::TogglePlayPause);
+        assert_eq!(
+            fold_mouse_messages(vec![leaf.clone(), key.clone()]),
+            vec![leaf, key]
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "claimed one mouse event")]
+    fn fold_debug_asserts_on_a_second_claim() {
+        let _ = fold_mouse_messages(vec![
+            Msg::Playback(PlaybackRequest::TogglePlayPause),
+            Msg::Playback(PlaybackRequest::Stop),
+        ]);
     }
 }
 

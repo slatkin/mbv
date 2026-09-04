@@ -69,11 +69,13 @@ impl AppComponent<Msg, UserEvent> for UiRootComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         let observed = match event {
             Event::Keyboard(key) => TerminalObserverEvent::Key(*key),
-            Event::Mouse(_) => TerminalObserverEvent::Mouse,
             Event::WindowResize(_, _) => TerminalObserverEvent::Resize,
             Event::FocusGained => TerminalObserverEvent::FocusGained,
             Event::FocusLost => TerminalObserverEvent::FocusLost,
-            Event::None | Event::Paste(_) | Event::Tick | Event::User(_) => {
+            // Mouse events are delivered to components through `mouse_sub()`
+            // subscriptions (ADR 0024); the observer only needs them as a
+            // redraw signal, same as the other non-chord events.
+            Event::Mouse(_) | Event::None | Event::Paste(_) | Event::Tick | Event::User(_) => {
                 TerminalObserverEvent::NoOp
             }
         };

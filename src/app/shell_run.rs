@@ -42,6 +42,9 @@ impl Model {
         // (keep-destination-components-mounted tasks 1.3).
         self.reconcile_destination_mounts();
         self.sync_active_destination();
+        // ADR 0024 D2: mouse eligibility is derived off the same
+        // active-destination derivation, in the same pass, right after it.
+        self.sync_mouse_subscriptions();
     }
 
     /// The sole base-frame orchestrator (D3): legacy base paint, resize
@@ -500,6 +503,11 @@ impl Model {
                 Ok(msgs) => msgs,
                 Err(_) => break,
             };
+            // ADR 0024: fold the mouse-derived messages (one per eligible
+            // subscribed component) down to at most one before the keyboard
+            // router fold and `handle_terminal_message` dispatch. A keyboard
+            // tick passes through untouched.
+            let messages = fold_mouse_messages(messages);
             if !messages.is_empty() {
                 had_events = true;
                 // `PollStrategy::Once` delivers at most one terminal event per
