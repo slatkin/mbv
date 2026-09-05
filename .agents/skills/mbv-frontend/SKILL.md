@@ -122,7 +122,10 @@ Before writing rendering code for a screen:
 1. **Look for an existing component or arrangement first.** Check
    `src/app/render/components/mod.rs` and `src/app/render/arrangements/mod.rs`
    for something that already paints this shape (a row, a card, a modal
-   frame, a hero pane). Reuse it before writing a new painter.
+   frame, a hero pane). Reuse it before writing a new painter — for a
+   hero-bearing surface this means `hero_on_left_pane`/`LeftPaneFocus`
+   (`arrangements/hero_left.rs`) for the pane itself and the `Hero` trait
+   (`components/hero_model.rs`) for its content, not a bespoke layout.
 2. **If it almost fits, check for a policy or variant** (see the decision
    table below) before reaching for a screen-local branch.
 3. **If nothing fits, add centrally** — a new component/arrangement function,
@@ -192,7 +195,7 @@ pub(in crate::app::render) fn render_some_row(f: &mut Frame, area: Rect, model: 
 let [left, right] = Layout::horizontal([Constraint::Percentage(60), Constraint::Percentage(40)]).areas(area);
 
 // Right: an arrangement owns the split, screen calls it.
-let (left, right) = hero_on_left_panes(area); // arrangements/hero_left.rs
+let hero = hero_on_left_pane(f, area, LeftPaneFocus::ReadOnly); // arrangements/hero_left.rs
 ```
 
 ```rust

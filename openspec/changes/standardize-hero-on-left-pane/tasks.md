@@ -157,12 +157,12 @@
 
 ## 6. Canon
 
-- [ ] 6.1 Add the "Hero pane" term to `CONTEXT.md`'s Presentation section (`#333c43`
+- [x] 6.1 Add the "Hero pane" term to `CONTEXT.md`'s Presentation section (`#333c43`
   `SURFACE_RESTING` fill of the hero-on-left left pane; `_Avoid_`: recessed box, hero panel,
   detail panel) and the "Main content box" term (the `#2d353b` `SURFACE_BACKDROP` inset within it,
   kind-dependent payload, one padding value; `_Avoid_`: overview box, recessed box) — verify the
   two terms are unambiguously distinguishable to a reader who has seen neither.
-- [ ] 6.2 Add `hero_on_left_pane`, `LeftPaneFocus` and the `Hero` trait to the `mbv-frontend`
+- [x] 6.2 Add `hero_on_left_pane`, `LeftPaneFocus` and the `Hero` trait to the `mbv-frontend`
   skill's reuse list (`.agents/skills/mbv-frontend/SKILL.md` ~`:125` and ~`:195`) and mirror the
   edit to `.opencode/skills/mbv-frontend/SKILL.md` — verify both copies are identical.
 - [ ] 6.3 Run the full gate set: `rtk cargo fmt`, `rtk cargo clippy --workspace --all-targets`,
