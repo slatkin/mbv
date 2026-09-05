@@ -669,7 +669,18 @@ impl Component for BrowserComponent {
             let list_area = if self.narrow_extras.show_letter_pills
                 || self.narrow_extras.feed_items.is_some()
             {
-                crate::app::render::arrangements::hero_left::pill_bar_areas(area).content_area
+                let areas = crate::app::render::arrangements::hero_left::pill_bar_areas(area);
+                if self.narrow_extras.feed_items.is_some() {
+                    crate::app::render::paint_feed_group_pills_row(
+                        frame,
+                        areas.pills_area,
+                        &self.narrow_extras,
+                        &mut self.layout,
+                    );
+                } else {
+                    self.render_letter_pills_row(frame, areas.pills_area, &context);
+                }
+                areas.content_area
             } else {
                 area
             };

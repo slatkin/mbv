@@ -561,10 +561,18 @@ impl Component for MusicWorkspaceComponent {
             let loading = self.inline_search.loading();
             let cursor = self.inline_search.cursor();
             let scroll_in = self.inline_search.scroll();
-            let list_area = ratatui::layout::Rect {
-                y: area.y.saturating_add(1),
-                height: area.height.saturating_sub(1),
-                ..area
+            let list_area = if self.context.groups.is_empty() {
+                area
+            } else {
+                let areas = crate::app::render::arrangements::hero_left::pill_bar_areas(area);
+                crate::app::render::components::music::render_music_group_pills_row_with_ctx(
+                    frame,
+                    areas.pills_area,
+                    &self.context.groups,
+                    self.context.group_cursor,
+                    &mut self.layout,
+                );
+                areas.content_area
             };
             let columns = crate::app::library_column_width::library_column_count(list_area.width);
             let new_scroll = crate::app::render::render_inline_search(
