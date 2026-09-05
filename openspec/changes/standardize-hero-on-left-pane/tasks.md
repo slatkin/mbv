@@ -141,27 +141,19 @@
 
 ## 5. Drift-proofing
 
-- [ ] 5.1 Extend `src/app/render/tests_conformance_matrix.rs` to sample the left-pane top-left,
-  bottom-left and bottom-right background cells for all seven surfaces at the Wide fixture,
-  asserting `left_panel.bottom() == area.bottom() - 1` and the expected surface **per surface
-  kind, not per caller expression** (design.md D-I): the four workspace surfaces rendered twice,
-  once with the left workspace focused (`SURFACE_FOCUSED`) and once with the right rail focused
-  (`SURFACE_RESTING`); the three read-only surfaces asserting `SURFACE_RESTING` in every focus
-  state they can reach. Run it with a non-Emby Home selection and with empty Feeds and ABS Podcast
-  selections — verify the test fails if any destination's fill is removed, clamped, or given the
-  wrong `LeftPaneFocus` variant.
-- [ ] 5.2 Split `tests_conformance_matrix.rs` (747 lines before 5.1) into the existing file
-  keeping the shared harnesses plus a new `tests_conformance_hero_pane.rs` for the left-pane
-  assertions — verify `rtk make check-code-file-lines` is clean.
+- [ ] 5.1 CUT FROM SCOPE (2026-09-05, user decision): new conformance-matrix left-pane
+  background-cell assertions across all seven surfaces. Judged not worth the added
+  test-infrastructure weight for this change; revisit only if a real regression surfaces here.
+- [ ] 5.2 CUT FROM SCOPE (2026-09-05, user decision): file split that existed only to host 5.1's
+  new assertions. No longer needed since 5.1 is cut.
 - [ ] 5.3 Add an `ast-grep` rule under `rules/frontend-boundary/` rejecting
   `Block::default().style(<expr of type Color>)` and requiring explicit `.bg()`/`.fg()`, with
   fixtures — verify `rtk ast-grep test` passes and the unscoped `rtk ast-grep scan` reports zero
   findings tree-wide (fix or separately file any pre-existing hits recorded in task 1.2; a
   standing baseline is not a conforming resolution).
-- [ ] 5.4 Add a conformance assertion that the overview main-content box is present on all seven
-  surfaces in populated and empty-description states, and that structured workspaces paint a
-  separate canonical media-list box with primitive-owned padding — verify the test fails if a
-  destination skips either required box or reintroduces per-caller padding.
+- [ ] 5.4 CUT FROM SCOPE (2026-09-05, user decision): main-content-box conformance assertion
+  across all seven surfaces. Same rationale as 5.1 — not worth the added test-infrastructure
+  weight for this change.
 
 ## 6. Canon
 
@@ -176,9 +168,7 @@
 - [ ] 6.3 Run the full gate set: `rtk cargo fmt`, `rtk cargo clippy --workspace --all-targets`,
   `rtk cargo nextest run -p mbv`, `rtk ast-grep scan`, `rtk make check-code-file-lines` — verify
   all pass clean.
-- [ ] 6.4 Live-review all seven destinations at Wide geometry in every selection state (item
-  selected, nothing selected, empty library, artwork-less item, images off, focused and unfocused
-  left workspace) — verify each shows a filled pane, a main content box, and (images on) an
-  artwork region; that no pane shows the right column's backdrop; and that **Feeds' new image
-  region and main content box** are accepted as intended, since they are the proposal's most
-  visible change.
+- [ ] 6.4 SHRUNK FROM SCOPE (2026-09-05, user decision): one manual pass, not a full
+  selection-state matrix. Run the app, view all seven destinations once at Wide geometry with an
+  artwork-less item and images off — confirm each shows a filled pane and no right-column
+  backdrop bleed, and that Feeds' new image region and main content box look intended.
