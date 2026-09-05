@@ -159,7 +159,8 @@ fn music_workspace_selection_follows_shared_hero_gate_boundaries() {
             .draw(|frame| component.view(frame, Rect::new(0, 0, width, height)))
             .unwrap();
         assert_eq!(
-            component.layout().is_wide_music_active(),
+            component.layout().wide_music_right_area.width > 0
+                && component.layout().wide_music_right_area.height > 0,
             wide,
             "component layout branch at {width}x{height}"
         );

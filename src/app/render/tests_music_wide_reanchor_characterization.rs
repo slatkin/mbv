@@ -79,7 +79,10 @@ fn grouped_music_wide_reanchor_characterization() {
         .music_workspace_id
         .clone()
         .expect("grouped Music workspace mounted");
-    assert!(model.app.layout.main.is_wide_music_active());
+    assert!(
+        model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0
+    );
     assert_eq!(
         album_cursor(&model, &id),
         0,
@@ -133,14 +136,20 @@ fn grouped_music_wide_reanchor_characterization() {
     // album_cursor across the round trip and the wide scroll recomputes to the
     // identical bottom-anchored offset.
     let _ = draw_mounted_frame(&mut model, 60, 30);
-    assert!(!model.app.layout.main.is_wide_music_active());
+    assert!(
+        !(model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0)
+    );
     assert_eq!(
         album_cursor(&model, &id),
         last,
         "the breakpoint flip keeps the component's local cursor"
     );
     let _ = draw_mounted_frame(&mut model, 160, 40);
-    assert!(model.app.layout.main.is_wide_music_active());
+    assert!(
+        model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0
+    );
     assert_eq!(album_cursor(&model, &id), last);
     assert_eq!(
         mounted_music_scroll(&model),
@@ -158,7 +167,10 @@ fn grouped_music_wide_reanchor_characterization() {
         .music_workspace_id
         .clone()
         .expect("narrow Music workspace mounted");
-    assert!(!narrow_model.app.layout.main.is_wide_music_active());
+    assert!(
+        !(narrow_model.app.layout.main.wide_music_right_area.width > 0
+            && narrow_model.app.layout.main.wide_music_right_area.height > 0)
+    );
     assert_eq!(album_cursor(&narrow_model, &n_id), 6);
     assert!(
         narrow.contains("Album 06"),

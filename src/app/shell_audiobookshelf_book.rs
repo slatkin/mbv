@@ -681,21 +681,18 @@ mod tests {
         // Narrow book area (60x20): the component paints the narrow
         // presentation; the mirror must project the narrow content area.
         model.app.layout.main.audiobookshelf_book_area = Rect::new(0, 0, 60, 20);
+        model.app.terminal_width = 60;
+        model.app.terminal_height = 20;
         let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
         terminal
             .draw(|frame| model.render_audiobookshelf_book_component(frame))
             .unwrap();
 
-        // Narrow: wide flag false, wide right area zero, and the projected
-        // left area mirrors the component's own painted content area (the
-        // page stride now comes from that geometry alone,
-        // split-audiobookshelf-cursor-ownership D1 — the shell projects no
-        // page size in).
-        assert!(!model.app.layout.main.is_wide_book_active());
-        assert_eq!(
-            model.app.layout.main.audiobookshelf_book_wide_right_area,
-            Rect::default()
-        );
+        // Narrow: wide flag false, and the projected left area mirrors the
+        // component's own painted content area (the page stride now comes
+        // from that geometry alone, split-audiobookshelf-cursor-ownership
+        // D1 — the shell projects no page size in).
+        assert!(!model.app.is_right_panel_wide());
         assert!(model.app.layout.main.left_area.height > 0);
         let component_left_area = model
             .application
@@ -733,5 +730,90 @@ mod tests {
             AudiobookshelfBookMove::Book(0),
         ));
         assert_eq!(model.app.panel_focus, PanelFocus::Library);
+    }
+
+    /// replace-wide-paint-inference completion gate (6.3): the book
+    /// `AudiobookshelfBookIntent::Activate` shell arm and
+    /// `activate_audiobookshelf_book_parent`'s narrow-with-hero gate both
+    /// read `App::is_right_panel_wide`, a paint-free predicate driven solely
+    /// by terminal size. Resizing narrow -> wide through the real
+    /// `Msg::TerminalEvent(Resize)` path must flip the activation branch on
+    /// that same tick, before any repaint refreshes `audiobookshelf_book_area`.
+    #[test]
+    fn book_activation_branch_flips_on_resize_tick_before_repaint() {
+        let mut app = make_app_stub();
+        let library = AudiobookshelfLibrary {
+            id: "books".into(),
+            name: "Books".into(),
+            media_type: "book".into(),
+        };
+        let mut state = AudiobookshelfBookBrowseState::new(library.clone());
+        state.books.push(AudiobookshelfBook {
+            library_item_id: "book-a".into(),
+            title: "Book A".into(),
+            author_display: None,
+            author_sort_key: "A".into(),
+            cover_path: None,
+            duration_seconds: 0.0,
+            narrator: None,
+            published_year: None,
+            genres: Vec::new(),
+            description: None,
+            series_name: None,
+            chapters: Vec::new(),
+            audio_files: Vec::new(),
+        });
+        state.selected_id = Some("book-a".into());
+        app.audiobookshelf_libraries.push(library);
+        app.audiobookshelf_book_browse.push(state);
+        app.tab = TabSelection::AudiobookshelfLibrary(0);
+        app.panel_focus = PanelFocus::Library;
+        // The narrow branch only opens the chapter modal when an inline hero
+        // is admitted; poison it here so both breakpoints exercise the same
+        // hero geometry.
+        app.layout.main.hero_area = Rect::new(0, 0, 40, 6);
+        app.terminal_width = 60;
+        app.terminal_height = 20;
+        let mut model = Model::new(app);
+        assert!(!model.app.is_right_panel_wide());
+
+        // Narrow: activation opens the chapter selection modal.
+        model.app.activate_audiobookshelf_book_parent();
+        assert!(
+            matches!(
+                model.app.pending_overlay,
+                Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
+            ),
+            "narrow-with-hero activation must open the book chapter selection modal"
+        );
+        model.app.pending_overlay = None;
+
+        let mut music_resize = false;
+        let mut tv_resize = false;
+        model.handle_terminal_message(
+            Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::Resize {
+                width: 160,
+                height: 40,
+            }),
+            None,
+            &mut music_resize,
+            &mut tv_resize,
+        );
+        assert_eq!(model.app.terminal_width, 160);
+        assert!(model.app.is_right_panel_wide());
+
+        // Wide, on this same tick: activation must not open the narrow
+        // modal -- it plays the selected book instead (no admissible player
+        // in this stub, so it only flashes a toast, but the modal path is
+        // provably not taken).
+        model.app.activate_audiobookshelf_book_parent();
+        assert!(
+            model.app.pending_overlay.is_none(),
+            "wide activation right after the resize tick must not open the chapter modal"
+        );
+        assert_eq!(
+            model.app.status, "Audiobookshelf playback owner is unavailable",
+            "wide activation must have attempted playback instead of the narrow modal"
+        );
     }
 }

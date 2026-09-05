@@ -567,8 +567,8 @@ impl App {
                     // whole hero-on-left workspace itself (task 5.3d.18d);
                     // the legacy wide-TV branch is gone. We only publish the
                     // hand-off `tv_wide_*` rects here before `render_list` so
-                    // input routing (`is_wide_tv_active`) and the shell's
-                    // render seam can locate them.
+                    // input routing (`App::wide_tv_library_area`) and the
+                    // shell's render seam can locate them.
                     if self.is_wide_tv_library(lib_idx)
                         && crate::app::render::arrangements::hero_left::shared_hero_presentation(
                             area,

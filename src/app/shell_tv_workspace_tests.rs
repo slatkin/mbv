@@ -1,6 +1,7 @@
 use super::*;
 use crate::app::components::{
-    browser_narrow::NarrowInlineHero, Msg, ShellRequest, TvWorkspaceComponent,
+    browser_narrow::NarrowInlineHero, Msg, ShellRequest, TerminalObserverEvent,
+    TvWorkspaceComponent,
 };
 use crate::app::render::make_movie_app;
 use crate::app::types_browse::BrowseResting;
@@ -545,9 +546,9 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
 
 /// Entering a wide TV library must route straight to `TvWorkspaceComponent`
 /// on the *first* `sync_mounted_surfaces()` after the tab flips — no
-/// one-frame narrow `BrowserComponent` flash. `is_wide_tv_active()` alone is
-/// a previous-frame paint signal; `prime_wide_tv_geometry` publishes the
-/// wide geometry synchronously from terminal size so the mount gate is
+/// one-frame narrow `BrowserComponent` flash. `App::wide_tv_library_area`
+/// alone is a previous-frame paint signal; `prime_wide_tv_geometry` publishes
+/// the wide geometry synchronously from terminal size so the mount gate is
 /// correct immediately.
 #[test]
 fn entering_wide_tv_library_does_not_flash_the_narrow_browser() {
@@ -792,4 +793,53 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     model.app.libs[0].library.collection_type = "tvshows".into();
     model.app.libs[0].nav_stack[0].items[0].item_type = "Movie".into();
     assert!(!model.app.activate_selected_series(0));
+}
+
+/// replace-wide-paint-inference completion gate (6.3): `activate_selected_series`
+/// gates on `App::wide_tv_library_area`, a paint-free predicate driven solely
+/// by terminal size. Resizing narrow -> wide through the real
+/// `Msg::TerminalEvent(Resize)` path must flip the activation branch on that
+/// same tick, before any repaint refreshes `tv_wide_left_area`/
+/// `tv_wide_right_area`.
+#[test]
+fn tv_series_activation_branch_flips_on_resize_tick_before_repaint() {
+    let mut model = mounted_tv_model();
+    model.app.terminal_width = 60;
+    model.app.terminal_height = 24;
+    model.sync_tv_workspace();
+    assert!(model.app.wide_tv_library_area(0).is_none());
+
+    // Narrow: activation opens the Series selection modal, never the
+    // persistent workspace fetch.
+    assert!(model.app.activate_selected_series(0));
+    assert!(
+        matches!(
+            model.app.pending_overlay,
+            Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
+        ),
+        "narrow activation must open the series selection modal"
+    );
+    model.app.pending_overlay = None;
+
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    model.handle_terminal_message(
+        Msg::TerminalEvent(TerminalObserverEvent::Resize {
+            width: 160,
+            height: 40,
+        }),
+        None,
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    assert_eq!(model.app.terminal_width, 160);
+    assert!(model.app.wide_tv_library_area(0).is_some());
+
+    // Wide, on this same tick: activation must enter the persistent
+    // workspace, not the narrow modal -- with no intervening repaint.
+    assert!(model.app.activate_selected_series(0));
+    assert!(
+        model.app.pending_overlay.is_none(),
+        "wide activation right after the resize tick must not open the series modal"
+    );
 }

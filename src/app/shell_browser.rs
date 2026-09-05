@@ -191,7 +191,7 @@ impl Model {
             BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos => true,
             // Narrow TV is a flat series list this component already handles
             // (D4). Wide TV routes to TvWorkspaceComponent instead; the two
-            // gates share `is_wide_tv_active()` so they are mutually exclusive
+            // gates share `wide_tv_library_area(index)` so they are mutually exclusive
             // for a TV library at every width.
             BrowserKind::TvShows => !self.app.wide_tv_library_area(index).is_some(),
             _ => false,

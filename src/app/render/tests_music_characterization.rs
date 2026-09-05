@@ -103,7 +103,7 @@ fn wide_grouped_music_publishes_same_frame_layout_geometry() {
     let _ = render_library_to_string_sized(&mut app, &mut layout, 120, 30);
 
     assert_eq!(layout.wide_music_area, Rect::new(0, 0, 120, 30));
-    assert!(layout.is_wide_music_active());
+    assert!(layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0);
     assert!(layout.left_area.width > 0);
     assert!(layout.hero_area.width > 0);
     assert!(layout.wide_music_right_area.width > 0);
@@ -147,7 +147,7 @@ fn narrow_grouped_music_publishes_no_wide_track_targets() {
     let mut layout = LayoutMain::default();
     let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 30);
 
-    assert!(!layout.is_wide_music_active());
+    assert!(!(layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0));
     assert!(layout.wide_music_track_hitmap.is_empty());
 }
 

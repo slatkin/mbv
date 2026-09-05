@@ -93,8 +93,8 @@ impl TvWideRenderCtx {
     /// `TvWorkspaceComponent` hit-tests (task 5.3d.18d). The legacy
     /// `render_list` wide-TV underpaint is gone; the App frame now only
     /// publishes the hand-off rects before `render_list` runs so input
-    /// routing (`is_wide_tv_active`) and the shell's render seam stay
-    /// correct while the component owns the picture.
+    /// routing (`App::wide_tv_library_area`) and the shell's render seam
+    /// stay correct while the component owns the picture.
     pub(in crate::app) fn publish_geometry(&self, area: Rect, layout: &mut LayoutMain) {
         layout.tv_wide_area = area;
         let Some(panes) = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y)
@@ -161,8 +161,8 @@ impl App {
     /// or the breakpoint is narrow. Mirrors the exact gate `render_library`
     /// applies (`is_wide_tv_library` + `shared_hero_presentation` on the
     /// finalized area), so component mount/focus can be routed a frame
-    /// earlier than `LayoutMain::is_wide_tv_active` (a previous-frame paint
-    /// signal that flashes the narrow browser on entry).
+    /// earlier than the deleted previous-frame paint signal this predicate
+    /// replaced, which used to flash the narrow browser on entry.
     pub(in crate::app) fn wide_tv_library_area(&self, lib_idx: usize) -> Option<Rect> {
         if !self.is_wide_tv_library(lib_idx) {
             return None;

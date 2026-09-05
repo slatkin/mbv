@@ -194,7 +194,7 @@ fn narrow_podcasts_replace_selected_show_row_with_detail() {
         buffer[(hero.x, hero.bottom() - 1)].style().fg,
         Some(palette::PROGRESS_TRACK)
     );
-    assert!(!layout.is_wide_podcast_active());
+    assert!(!model.app.is_right_panel_wide());
 
     // Repoint from the legacy `LayoutMain.audiobookshelf_episode_rows` to the
     // mounted component's painted geometry (task 5.3d.10, Unit D). Narrow

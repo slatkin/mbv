@@ -179,55 +179,15 @@ pub(crate) struct LayoutMain {
     /// they share row-target indexing but differ in outer gating rect.
     /// This is published at its natural checkpoint before paint.
     pub wide_music_browser_area: Rect,
-    /// Bounding rect of the Audiobookshelf podcast tab's right pane (show
-    /// workspace). Populated only when the wide hero-on-left podcast layout
-    /// is active, mirroring `tv_wide_right_area`/`wide_music_right_area` --
-    /// unlike the book tab, the narrow podcast presentation has no
-    /// equivalent always-visible right pane.
-    pub audiobookshelf_podcast_right_area: Rect,
     /// Full area passed to the Audiobookshelf podcast component after the
     /// legacy frame computes the current library layout.
     pub audiobookshelf_podcast_area: Rect,
     /// Full area passed to the Audiobookshelf book component after the legacy
     /// frame computes the current library layout.
     pub audiobookshelf_book_area: Rect,
-    /// Bounding rect of the Audiobookshelf book tab's wide-only right pane.
-    /// Stays empty for the narrow inline presentation and is therefore safe
-    /// for input gating. Repopulated by the 2.1j shell mirror from the
-    /// component-reported wide flag (`AudiobookshelfBookGeometry::wide`) so
-    /// `is_wide_book_active()` regains its legacy signal after the legacy
-    /// underpaint renderer was removed.
-    pub audiobookshelf_book_wide_right_area: Rect,
 }
 
 impl LayoutMain {
-    /// Whether the wide Music layout rendered this frame. The right pane
-    /// area is only set by the wide Music renderer, so it is a reliable
-    /// signal even when the track hitmap is empty (tracks still loading
-    /// or album has no tracks).
-    pub(crate) fn is_wide_music_active(&self) -> bool {
-        self.wide_music_right_area.width > 0 && self.wide_music_right_area.height > 0
-    }
-
-    pub(crate) fn is_wide_tv_active(&self) -> bool {
-        self.tv_wide_right_area.width > 0 && self.tv_wide_right_area.height > 0
-    }
-
-    /// Whether the wide hero-on-left podcast layout rendered this frame. The
-    /// right pane is only set by the wide podcast renderer, so it is a
-    /// reliable signal even when the show list is empty.
-    pub(crate) fn is_wide_podcast_active(&self) -> bool {
-        self.audiobookshelf_podcast_right_area.width > 0
-            && self.audiobookshelf_podcast_right_area.height > 0
-    }
-
-    /// Whether the wide hero-on-left Audiobookshelf book layout rendered this
-    /// frame. The ordinary book right area is populated in both presentations.
-    pub(crate) fn is_wide_book_active(&self) -> bool {
-        self.audiobookshelf_book_wide_right_area.width > 0
-            && self.audiobookshelf_book_wide_right_area.height > 0
-    }
-
     /// Returns the track index whose hit target contains `pos`, if any.
     pub(crate) fn wide_music_track_at(&self, pos: ratatui::layout::Position) -> Option<usize> {
         self.wide_music_track_hitmap

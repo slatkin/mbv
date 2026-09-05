@@ -578,3 +578,69 @@ fn abs_podcast_show_move_pulls_panel_focus_to_library() {
     );
     assert_eq!(model.app.panel_focus, PanelFocus::Library);
 }
+
+/// replace-wide-paint-inference completion gate (6.3): the podcast
+/// `OpenOrPlay` episode intent gates on `App::is_right_panel_wide`, a
+/// paint-free predicate driven solely by terminal size. Resizing narrow ->
+/// wide through the real `Msg::TerminalEvent(Resize)` path must flip the
+/// activation branch on that same tick, before any repaint refreshes
+/// `audiobookshelf_podcast_area`.
+#[test]
+fn podcast_episode_activation_branch_flips_on_resize_tick_before_repaint() {
+    let mut model = Model::new(audiobookshelf_app());
+    model.app.terminal_width = 60;
+    model.app.terminal_height = 24;
+    model.sync_audiobookshelf_podcast();
+    let id = model
+        .abs_podcast_id
+        .clone()
+        .expect("podcast component mounted");
+    assert!(!model.app.is_right_panel_wide());
+
+    // Narrow: no episode selected yet, so `OpenOrPlay` opens the episode
+    // selection modal instead of entering episode focus.
+    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::OpenOrPlay);
+    assert!(
+        matches!(
+            model.app.pending_overlay,
+            Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
+        ),
+        "narrow activation must open the podcast episode selection modal"
+    );
+    model.app.pending_overlay = None;
+
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    model.handle_terminal_message(
+        Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::Resize {
+            width: 160,
+            height: 40,
+        }),
+        None,
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    assert_eq!(model.app.terminal_width, 160);
+    assert!(model.app.is_right_panel_wide());
+
+    // Wide, on this same tick: activation must enter episode focus on the
+    // mounted component, never the narrow modal.
+    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::OpenOrPlay);
+    assert!(
+        model.app.pending_overlay.is_none(),
+        "wide activation right after the resize tick must not open the episode modal"
+    );
+    let episode_selection = model
+        .application
+        .get_component_mut(&id)
+        .expect("podcast component")
+        .as_any_mut()
+        .downcast_mut::<crate::app::components::AudiobookshelfPodcastComponent>()
+        .expect("podcast component type")
+        .episode_selection();
+    assert_eq!(
+        episode_selection,
+        Some(0),
+        "wide activation must enter episode focus on the component"
+    );
+}

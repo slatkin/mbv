@@ -199,7 +199,7 @@ fn wide_tv_persists_series_workspace_and_separate_targets() {
     let mut layout = crate::app::layout::LayoutMain::default();
     let (output, component) = render_tv_workspace(&mut app, &mut layout);
 
-    assert!(layout.is_wide_tv_active());
+    assert!(layout.tv_wide_right_area.width > 0 && layout.tv_wide_right_area.height > 0);
     assert!(component.test_layout().tv_wide_episode_list_area.height > 0);
     assert!(
         output.contains("Series:"),
@@ -228,7 +228,6 @@ fn wide_tv_legacy_base_frame_publishes_geometry_but_paints_no_workspace() {
     })
     .unwrap();
 
-    assert!(layout.is_wide_tv_active());
     assert!(
         layout.tv_wide_right_area.width > 0 && layout.tv_wide_right_area.height > 0,
         "wide TV geometry hand-off must still be reserved: {:?}",

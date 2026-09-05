@@ -566,7 +566,7 @@ fn aggregate_surfaces_do_not_bleed_across_destinations() {
     // Cross-surface bleed check: a nonzero queue area must not also be a
     // nonzero music wide area (they are mutually exclusive destinations).
     let queue_active = main.queue_area.width > 0 && main.queue_area.height > 0;
-    let music_wide_active = main.is_wide_music_active();
+    let music_wide_active = app.is_right_panel_wide();
     // A stub may render a degenerate frame; the invariant is that neither
     // surface's geometry is written by the other's producer.
     assert!(!(queue_active && music_wide_active));

@@ -36,7 +36,10 @@ fn music_resize_push_uses_current_frame_geometry() {
             .downcast_mut::<MusicWorkspaceComponent>()
             .unwrap();
         wide.enter_track_focus();
-        assert!(model.app.layout.main.is_wide_music_active());
+        assert!(
+            (model.app.layout.main.wide_music_right_area.width > 0
+                && model.app.layout.main.wide_music_right_area.height > 0)
+        );
         assert_eq!(wide.track_cursor(), Some(0));
     }
     let hitmap_before = model.app.layout.main.wide_music_track_hitmap.len();
@@ -68,14 +71,20 @@ fn music_resize_push_uses_current_frame_geometry() {
         .as_any()
         .downcast_ref::<MusicWorkspaceComponent>()
         .unwrap();
-    assert!(!model.app.layout.main.is_wide_music_active());
+    assert!(
+        !(model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0)
+    );
     assert_eq!(narrow.track_cursor(), None);
 }
 
 #[test]
 fn narrow_music_workspace_requests_album_activation() {
     let mut model = Model::new(make_music_group_app());
-    assert!(!model.app.layout.main.is_wide_music_active());
+    assert!(
+        !(model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0)
+    );
     model.sync_music_workspace();
     let id = model
         .music_workspace_id
@@ -150,7 +159,10 @@ fn recursive_album_activation_enters_track_focus_only_in_wide() {
         .album_tracks_cache
         .insert("album-1".into(), vec![track]);
     model.sync_music_workspace();
-    assert!(!model.app.layout.main.is_wide_music_active());
+    assert!(
+        !(model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0)
+    );
     let id = model
         .music_workspace_id
         .clone()
@@ -419,7 +431,10 @@ fn narrow_grouped_music_workspace_is_rendered_and_focusable() {
     model.app.panel_focus = PanelFocus::Library;
     assert!(model.app.is_music_group_view(0));
     assert!(model.app.is_viewing_album_folders(0));
-    assert!(!model.app.layout.main.is_wide_music_active());
+    assert!(
+        !(model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0)
+    );
 
     model.sync_music_workspace();
     let id = model
@@ -450,7 +465,8 @@ fn narrow_grouped_music_workspace_is_rendered_and_focusable() {
          left_area fallback and publish geometry, not early-return at narrow"
     );
     assert!(
-        !model.app.layout.main.is_wide_music_active(),
+        !(model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0),
         "the narrow fallback must not mark the wide Music layout active"
     );
 
@@ -549,4 +565,51 @@ fn music_workspace_ordinary_push_does_not_touch_album_cursor() {
     // even though the nav level's cursor is 0.
     model.push_music_workspace_content();
     assert_eq!(music_album_cursor(&model, &id), 1);
+}
+
+/// replace-wide-paint-inference completion gate (6.3): `activate_album_folder_row`
+/// gates on `App::is_right_panel_wide`, a paint-free predicate driven solely
+/// by terminal size. Resizing narrow -> wide through the real
+/// `Msg::TerminalEvent(Resize)` path must flip the activation branch on that
+/// same tick, before any repaint refreshes `wide_music_right_area`.
+#[test]
+fn music_album_folder_activation_branch_flips_on_resize_tick_before_repaint() {
+    let mut model = Model::new(make_music_group_app());
+    model.app.terminal_width = 60;
+    model.app.terminal_height = 24;
+    let album = make_item("First Album", "MusicAlbum");
+    assert!(!model.app.is_right_panel_wide());
+
+    // Narrow: activation opens the album selection modal.
+    model.app.activate_album_folder_row(Some(album.clone()));
+    assert!(
+        matches!(
+            model.app.pending_overlay,
+            Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
+        ),
+        "narrow activation must open the album selection modal"
+    );
+    model.app.pending_overlay = None;
+
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    model.handle_terminal_message(
+        Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::Resize {
+            width: 160,
+            height: 40,
+        }),
+        None,
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    assert_eq!(model.app.terminal_width, 160);
+    assert!(model.app.is_right_panel_wide());
+
+    // Wide, on this same tick: activation must be a no-op, with no
+    // intervening repaint.
+    model.app.activate_album_folder_row(Some(album));
+    assert!(
+        model.app.pending_overlay.is_none(),
+        "wide activation right after the resize tick must not open the album modal"
+    );
 }

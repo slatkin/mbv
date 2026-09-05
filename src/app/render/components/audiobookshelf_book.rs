@@ -46,8 +46,8 @@ pub(in crate::app) struct AudiobookshelfBookGeometry {
     /// after render ownership moved to the component (2.1j).
     pub left_area: Rect,
     /// Whether the last painted presentation is the wide hero-on-left
-    /// layout (mirrors the legacy wide/narrow gate; drives
-    /// `is_wide_book_active()` and the Enter activate decision).
+    /// layout (mirrors the legacy wide/narrow gate; the Enter activate
+    /// decision now uses `App::is_right_panel_wide()` instead).
     pub wide: bool,
     /// Hero rect the component painted for the selected book (wide left pane,
     /// or narrow inline-detail flow). Mirrors the legacy `LayoutMain.hero_area`

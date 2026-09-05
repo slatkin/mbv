@@ -58,7 +58,7 @@ impl Model {
         // Wide TV focuses `TvWorkspaceComponent` under its distinct
         // `ComponentId::TvWorkspace`; narrow TV focuses the mounted
         // `BrowserComponent` under `ComponentId::Browser` (D4). The two
-        // mount gates share `is_wide_tv_active()`, so mirror that split here.
+        // mount gates share `wide_tv_library_area(index)`, so mirror that split here.
         if kind == BrowserKind::TvShows && self.app.wide_tv_library_area(index).is_some() {
             return Some(ComponentId::TvWorkspace(BrowserKey {
                 service: ServiceKind::Emby,

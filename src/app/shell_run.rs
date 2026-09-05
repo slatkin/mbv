@@ -29,10 +29,10 @@ impl Model {
         self.sync_audiobookshelf_book();
         self.sync_queue();
         self.update_playlists_content();
-        // Publish wide-TV geometry before the browser/workspace mount gates
-        // read `is_wide_tv_active()` (a previous-frame paint signal), so
-        // entering a wide TV library does not flash the narrow browser for
-        // one frame before the workspace takes over.
+        // Publish wide-TV geometry before other readers of `tv_wide_right_area`/
+        // `tv_wide_left_area` (e.g. context-menu anchors) see this frame's
+        // values, since those fields are otherwise a previous-frame paint
+        // signal.
         self.prime_wide_tv_geometry();
         self.hand_off_tv_breakpoint();
         self.sync_emby_browser();

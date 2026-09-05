@@ -283,7 +283,10 @@ fn shell_mounts_music_workspace_in_narrow_mode() {
     let mut model = Model::new(make_music_group_app());
     assert!(model.app.is_music_group_view(0));
     assert!(model.app.is_viewing_album_folders(0));
-    assert!(!model.app.layout.main.is_wide_music_active());
+    assert!(
+        !(model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0)
+    );
 
     let wide_area = model.app.layout.main.wide_music_area;
     assert_eq!(wide_area.width, 0);

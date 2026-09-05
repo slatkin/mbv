@@ -288,7 +288,10 @@ fn narrow_music_viewport_anchor_round_trips_across_wide_narrow_wide() {
         .music_workspace_id
         .clone()
         .expect("music workspace mounted");
-    assert!(model.app.layout.main.is_wide_music_active());
+    assert!(
+        model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0
+    );
     assert_eq!(album_cursor(&model, &id), last);
     let wide_scroll = mounted_music_scroll(&model);
     assert!(wide_scroll > 0, "the bottom album scrolls the wide rail");
@@ -296,7 +299,10 @@ fn narrow_music_viewport_anchor_round_trips_across_wide_narrow_wide() {
 
     // Wide -> Narrow: the selected album and its screen-row offset carry over.
     let narrow = resize_draw(&mut model, 60, 30);
-    assert!(!model.app.layout.main.is_wide_music_active());
+    assert!(
+        !(model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0)
+    );
     assert_eq!(
         album_cursor(&model, &id),
         last,
@@ -310,7 +316,10 @@ fn narrow_music_viewport_anchor_round_trips_across_wide_narrow_wide() {
     // Narrow -> Wide: the album, cursor, scroll offset, and screen-row offset
     // all return to the wide arrangement.
     let _ = resize_draw(&mut model, 160, 40);
-    assert!(model.app.layout.main.is_wide_music_active());
+    assert!(
+        model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0
+    );
     assert_eq!(album_cursor(&model, &id), last);
     assert_eq!(
         mounted_music_scroll(&model),
@@ -336,17 +345,26 @@ fn narrow_music_reused_model_paints_after_a_wide_to_narrow_resize() {
     // album rows on the resized frame.
     let mut model = mounted_model_at(multi_artist_app(), 160, 40);
     let _ = resize_draw(&mut model, 160, 40);
-    assert!(model.app.layout.main.is_wide_music_active());
+    assert!(
+        model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0
+    );
 
     let narrow = resize_draw(&mut model, 60, 30);
-    assert!(!model.app.layout.main.is_wide_music_active());
+    assert!(
+        !(model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0)
+    );
     assert!(
         narrow.contains("First Album") || narrow.contains("Alpha Album"),
         "narrow grouped Music must paint album rows after the resize:\n{narrow}"
     );
 
     let wide = resize_draw(&mut model, 160, 40);
-    assert!(model.app.layout.main.is_wide_music_active());
+    assert!(
+        model.app.layout.main.wide_music_right_area.width > 0
+            && model.app.layout.main.wide_music_right_area.height > 0
+    );
     assert!(wide.contains("First Album") || wide.contains("Alpha Album"));
 }
 
