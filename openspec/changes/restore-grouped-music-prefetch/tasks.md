@@ -5,8 +5,8 @@
 
 ## 2. Prefetch coverage tests
 
-- [ ] 2.1 Add a wide-breakpoint test mirroring `narrow_grouped_music_prewarms_neighbour_album_images` (wide area geometry, neighbours of the painted cursor in `card_image_loading`, selected album excluded) and verify it passes
-- [ ] 2.2 Add a stale-order regression test (painted order diverging from a freshly rebuilt context warms the painted neighbourhood) and verify it passes
+- [x] 2.1 Add a wide-breakpoint test mirroring `narrow_grouped_music_prewarms_neighbour_album_images` (wide area geometry, neighbours of the painted cursor in `card_image_loading`, selected album excluded) and verify it passes
+- [x] 2.2 Add a stale-order regression test (painted order diverging from a freshly rebuilt context warms the painted neighbourhood) and verify it passes
 
 ## 3. Gates
 
