@@ -123,6 +123,7 @@ impl HeroData {
         two_column: bool,
         focused: bool,
         use_nerd_fonts: bool,
+        images_enabled: bool,
     ) -> Option<HomeImagePaint> {
         match self {
             Self::Emby(item, meta_area, wide_area, img_area, meta_layout) => {
@@ -159,9 +160,15 @@ impl HeroData {
                     area.width,
                     area.height,
                     hero.meta_rows(area.width).len() as u16,
+                    images_enabled,
                 );
-                let (meta_area, image_area) =
-                    beside_image_hero_rects(*area, img_w, layout.height, image_rows);
+                let (meta_area, image_area) = beside_image_hero_rects(
+                    *area,
+                    img_w,
+                    layout.height,
+                    image_rows,
+                    images_enabled,
+                );
                 render_hero_layout_meta_content(
                     f,
                     meta_area,
@@ -177,7 +184,7 @@ impl HeroData {
                     hero,
                 );
                 match hero.artwork() {
-                    HeroArtwork::Image { item_id, .. } => {
+                    HeroArtwork::Image { item_id, .. } if images_enabled => {
                         let image = match item {
                             QueueItem::Audiobookshelf(_) => HomeImagePaint::AudiobookshelfCover {
                                 area: image_area,
@@ -195,10 +202,11 @@ impl HeroData {
                         };
                         Some(image)
                     }
-                    HeroArtwork::Placeholder => {
+                    HeroArtwork::Placeholder if images_enabled => {
                         super::artwork_placeholder::render_artwork_placeholder(f, image_area);
                         None
                     }
+                    _ => None,
                 }
             }
         }
@@ -609,8 +617,9 @@ pub(in crate::app) fn render_home_hero_content(
     two_column: bool,
     focused: bool,
     use_nerd_fonts: bool,
+    images_enabled: bool,
 ) -> Option<HomeImagePaint> {
-    hero_data.render_content(f, two_column, focused, use_nerd_fonts)
+    hero_data.render_content(f, two_column, focused, use_nerd_fonts, images_enabled)
 }
 
 /// Beside-image inline dims: image width, the wrap-around text layout,
@@ -624,8 +633,9 @@ pub(in crate::app::render) fn beside_image_hero_dims(
     inner_w: u16,
     max_allowed: u16,
     meta_row_count: u16,
+    images_enabled: bool,
 ) -> (u16, KeepWatchingHeroLayout, u16) {
-    let img_w = inner_w / 2;
+    let img_w = if images_enabled { inner_w / 2 } else { 0 };
     let meta_w = inner_w.saturating_sub(img_w + 1) as usize;
     let image_rows = (img_w.saturating_mul(9).saturating_add(31) / 32).min(max_allowed);
     let layout = hero_text_layout(
@@ -650,6 +660,7 @@ pub(in crate::app::render) fn beside_image_hero_rects(
     img_w: u16,
     layout_height: u16,
     image_rows: u16,
+    images_enabled: bool,
 ) -> (Rect, Rect) {
     // Clamp to `hero_content.height` -- the panel's actual granted height,
     // which `placement-neutral geometry` can clamp smaller than what `image_rows`/
@@ -659,6 +670,9 @@ pub(in crate::app::render) fn beside_image_hero_rects(
     // bottom edge, where the image's overflow gets drawn over by whatever
     // renders below it (pills/list) -- looking like the image is cut off.
     let hero_height = image_rows.max(layout_height).min(hero_content.height);
+    if !images_enabled {
+        return (hero_content, Rect::default());
+    }
     let meta_area = Rect {
         x: hero_content.x,
         y: hero_content.y,

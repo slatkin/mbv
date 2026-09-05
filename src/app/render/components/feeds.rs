@@ -33,6 +33,7 @@ pub(in crate::app) struct FeedsRenderModel<'a> {
     /// pane and Narrow inline replacement block). `None` when nothing is
     /// selectable.
     pub selected_entry: Option<&'a FeedEntry>,
+    pub images_enabled: bool,
 }
 
 /// Paints the Feeds destination's parent-owned pill strip + watched-filter
@@ -200,7 +201,7 @@ pub(in crate::app) fn render_feeds_content(
                 .expect("wide branch already confirmed shared_hero_presentation fits");
         let (_, hero_content_area) = hero_left::hero_on_left_main_content_box(f, hero_content_area);
         if let Some(entry) = model.selected_entry {
-            paint_feed_hero(f, hero_content_area, entry, focused);
+            paint_feed_hero(f, hero_content_area, entry, focused, model.images_enabled);
         }
         f.render_widget(
             Block::default().style(Style::default().bg(palette::resolve_surface_focus(focused))),
@@ -280,6 +281,7 @@ pub(in crate::app) fn render_feeds_content(
                         },
                         entry,
                         focused,
+                        model.images_enabled,
                     );
                 }
             }
@@ -297,9 +299,19 @@ pub(in crate::app) fn render_feeds_content(
 /// already-inset `content` rect. Wide passes the plain pane's padded rect (like
 /// the sibling hero painters); Narrow passes the rect inset inside its `▔`/`▁`
 /// HeroShell.
-fn paint_feed_hero(f: &mut Frame, content: Rect, entry: &FeedEntry, focused: bool) {
+fn paint_feed_hero(
+    f: &mut Frame,
+    content: Rect,
+    entry: &FeedEntry,
+    focused: bool,
+    images_enabled: bool,
+) {
     let meta = feed_entry_meta_line(entry);
-    let image_width = (content.width / 8).max(1);
+    let image_width = if images_enabled {
+        (content.width / 8).max(1)
+    } else {
+        0
+    };
     let image_height = (image_width.saturating_mul(9).saturating_add(31) / 32)
         .min(content.height)
         .max(1);
@@ -313,7 +325,7 @@ fn paint_feed_hero(f: &mut Frame, content: Rect, entry: &FeedEntry, focused: boo
             show_playing: false,
             unconditional_spacer_after_meta: false,
             lines: &[],
-            image: Some(crate::app::render::components::hero::HeroImage {
+            image: images_enabled.then_some(crate::app::render::components::hero::HeroImage {
                 actual_w: image_width,
                 height: image_height,
             }),

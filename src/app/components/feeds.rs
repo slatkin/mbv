@@ -53,6 +53,7 @@ pub struct FeedsComponent {
     /// (characterization tests), never fed back into the control.
     painted_offset: usize,
     loading: bool,
+    images_enabled: bool,
     focused: bool,
     layout: LayoutMain,
     last_subscription_urls: Vec<String>,
@@ -75,6 +76,7 @@ impl FeedsComponent {
             wide: false,
             painted_offset: 0,
             loading: false,
+            images_enabled: true,
             focused: false,
             layout: LayoutMain::default(),
             last_subscription_urls: Vec::new(),
@@ -84,6 +86,10 @@ impl FeedsComponent {
 
     /// Replace the shell-owned snapshot while preserving the component's
     /// render and input state shape.
+    pub(in crate::app) fn set_images_enabled(&mut self, images_enabled: bool) {
+        self.images_enabled = images_enabled;
+    }
+
     pub(in crate::app) fn set_content(
         &mut self,
         subscriptions: &[FeedSubscription],
@@ -447,6 +453,7 @@ impl Component for FeedsComponent {
                 selected_group: self.selected_group,
                 loading: self.loading,
                 selected_entry: selected_entry.as_ref(),
+                images_enabled: self.images_enabled,
             },
             &mut self.canonical_list,
             &self.inline_list,

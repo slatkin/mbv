@@ -286,6 +286,7 @@ pub(in crate::app) fn render_home_content(
                                 inner_w,
                                 max_allowed,
                                 2, // release-date row + duration row
+                                images_enabled,
                             );
                         if meta_layout.height < 4 {
                             HeroContentDims::None
@@ -311,7 +312,7 @@ pub(in crate::app) fn render_home_content(
                                 inner_w as usize,
                                 inner_w as usize,
                             );
-                            let image_rows = inner_w.saturating_mul(9).saturating_add(31) / 32;
+                            let image_rows = if images_enabled { inner_w.saturating_mul(9).saturating_add(31) / 32 } else { 0 };
                             HeroContentDims::Generic(
                                 item,
                                 (layout.meta_height + 1 + image_rows).min(max_allowed),
@@ -420,8 +421,14 @@ pub(in crate::app) fn render_home_content(
     // (its geometry was resolved above, before the pill/list split).
     if two_column {
         if let Some(hero_data) = &hero_data {
-            image_paint =
-                home_hero::render_home_hero_content(f, hero_data, true, focused, use_nerd_fonts);
+            image_paint = home_hero::render_home_hero_content(
+                f,
+                hero_data,
+                true,
+                focused,
+                use_nerd_fonts,
+                images_enabled,
+            );
         }
     }
 
@@ -476,7 +483,7 @@ pub(in crate::app) fn render_home_content(
                 );
                 if let Some(hero_data) = narrow_dims
                     .take()
-                    .and_then(|dims| narrow_hero_data(dims, hero_content))
+                    .and_then(|dims| narrow_hero_data(dims, hero_content, images_enabled))
                 {
                     image_paint = home_hero::render_home_hero_content(
                         f,
@@ -484,6 +491,7 @@ pub(in crate::app) fn render_home_content(
                         false,
                         focused,
                         use_nerd_fonts,
+                        images_enabled,
                     );
                 }
                 Some(hero_area)
@@ -520,7 +528,11 @@ enum HeroContentDims {
 
 /// Build the parent-owned narrow `HeroData` once the canonical control has
 /// resolved the on-screen detail-block rect.
-fn narrow_hero_data(dims: HeroContentDims, hero_content: Rect) -> Option<HeroData> {
+fn narrow_hero_data(
+    dims: HeroContentDims,
+    hero_content: Rect,
+    images_enabled: bool,
+) -> Option<HeroData> {
     match dims {
         HeroContentDims::Emby(item, img_w, meta_layout, image_rows) => {
             let (meta_area, img_area) =
@@ -529,6 +541,7 @@ fn narrow_hero_data(dims: HeroContentDims, hero_content: Rect) -> Option<HeroDat
                     img_w,
                     meta_layout.height,
                     image_rows,
+                    images_enabled,
                 );
             Some(HeroData::Emby(
                 item,

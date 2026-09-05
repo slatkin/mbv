@@ -17,6 +17,7 @@ impl Model {
         let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
         if let Some(comp) = self.application.get_component_mut(&ComponentId::Feeds) {
             if let Some(feeds) = comp.as_any_mut().downcast_mut::<FeedsComponent>() {
+                feeds.set_images_enabled(self.app.images_enabled());
                 feeds.set_content(
                     &state.subscriptions,
                     &state.entries,
