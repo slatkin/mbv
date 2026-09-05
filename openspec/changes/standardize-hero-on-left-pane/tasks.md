@@ -126,7 +126,7 @@
   Feeds exception), and route `render_home_hero_content` (`home_hero.rs:483-521`) through the
   trait — verify the renderer contains no `match` on `HeroData` variants, the non-Emby Home
   characterization test is unchanged from its task-2.4 state, and Feeds renders an image region.
-- [ ] 4.5 Route every hero artwork region through `render_artwork_placeholder` when `artwork()`
+- [x] 4.5 Route every hero artwork region through `render_artwork_placeholder` when `artwork()`
   returns `Placeholder`, on all seven destinations, so no hero renders an empty image region while
   images are on — verify a test renders an artwork-less item on Feeds and on Home's non-Emby
   Latest path and asserts the artwork region is filled.
