@@ -134,6 +134,12 @@ fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
 /// Task 2.1: the Wide push prefetches the identical canonical key the
 /// painter requests, so `paint_home_image` on the consumed `HomeImagePaint`
 /// starts no additional fetch and the reservation survives the paint.
+///
+/// The fixture has no Emby client, so `spawn_image_fetch` balances
+/// `image_fetches_active` synchronously and never fills
+/// `pending_image_fetches`: the counters cannot see an extra paint-time fetch.
+/// The reservation set can — a fetch always reserves its own key first, so a
+/// divergent paint-time key shows up as an extra entry in `card_image_loading`.
 #[test]
 fn push_tv_workspace_prefetch_warms_the_painted_series_key() {
     use crate::app::images::series_image_cache_key;
@@ -149,6 +155,7 @@ fn push_tv_workspace_prefetch_warms_the_painted_series_key() {
         model.app.card_image_loading.contains(&expected_key),
         "prefetch must reserve the painted key: {expected_key}"
     );
+    let loading = model.app.card_image_loading.clone();
     let active = model.app.image_fetches_active;
     let pending = model.app.pending_image_fetches.len();
 
@@ -180,6 +187,10 @@ fn push_tv_workspace_prefetch_warms_the_painted_series_key() {
         model.app.card_image_loading.contains(&expected_key)
             || model.app.card_image_states.contains_key(&expected_key),
         "paint must keep the prefetched key reserved: {expected_key}"
+    );
+    assert_eq!(
+        model.app.card_image_loading, loading,
+        "paint must leave the prefetch's reservation set untouched: {expected_key}"
     );
     assert_eq!(
         model.app.image_fetches_active, active,
