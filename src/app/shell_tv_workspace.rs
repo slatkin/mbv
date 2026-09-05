@@ -181,6 +181,15 @@ impl Model {
             return;
         }
         let wide = self.app.wide_tv_library_area(lib_idx).is_some();
+        // Capture the outgoing host before any viewport-anchor guard can return;
+        // this is a discrete owner handoff, never a per-frame mirror.
+        let outgoing = if wide {
+            self.emby_browser_id.as_ref()
+        } else {
+            self.tv_workspace_id.as_ref()
+        };
+        self.inline_search_transfer =
+            outgoing.and_then(|id| self.capture_inline_search_transfer(id));
         match (
             wide,
             self.tv_workspace_id.clone(),
@@ -201,6 +210,11 @@ impl Model {
                 // Deliver after destination sync so Browser adopts the target
                 // without mirroring component-local cursor state.
                 self.tv_viewport_anchor = Some(anchor);
+                if let Some(transfer) = self.inline_search_transfer.take() {
+                    if let Some(browser_id) = self.emby_browser_id.clone() {
+                        self.apply_inline_search_transfer(&browser_id, transfer);
+                    }
+                }
             }
             // narrow -> wide: capture the Browser's painted anchor and deliver
             // it to the kept-mounted wide workspace on its next paint.
@@ -214,8 +228,15 @@ impl Model {
                     return;
                 };
                 self.tv_viewport_anchor = Some(anchor);
+                if let Some(transfer) = self.inline_search_transfer.take() {
+                    if let Some(tv_id) = self.tv_workspace_id.clone() {
+                        self.apply_inline_search_transfer(&tv_id, transfer);
+                    }
+                }
             }
-            _ => {}
+            _ => {
+                self.inline_search_transfer = None;
+            }
         }
     }
 

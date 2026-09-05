@@ -186,6 +186,27 @@ impl InlineSearch {
         self.scroll = scroll;
     }
 
+    pub(in crate::app) fn selected_target(&self) -> Option<(String, String)> {
+        self.selected_item().map(|item| (item.id, item.item_type))
+    }
+
+    pub(in crate::app) fn restore_target(
+        &mut self,
+        target: Option<(String, String)>,
+        row_offset: usize,
+    ) {
+        if let Some((id, item_type)) = target {
+            if let Some(cursor) = self.order.iter().position(|&(idx, _)| {
+                self.pool
+                    .resolved_item_at(idx)
+                    .is_some_and(|item| item.id == id && item.item_type == item_type)
+            }) {
+                self.cursor = cursor;
+                self.scroll = row_offset.min(cursor);
+            }
+        }
+    }
+
     pub(in crate::app) fn results_len(&self) -> usize {
         self.order.len()
     }
@@ -353,6 +374,22 @@ impl Default for InlineSearch {
 pub(in crate::app) trait InlineSearchHost {
     fn inline_search(&self) -> &InlineSearch;
     fn inline_search_mut(&mut self) -> &mut InlineSearch;
+    fn inline_search_transfer(&self) -> Option<(String, String, usize)> {
+        let search = self.inline_search();
+        search
+            .selected_target()
+            .map(|(id, item_type)| (id, item_type, search.scroll()))
+    }
+    fn apply_inline_search_transfer(
+        &mut self,
+        query: String,
+        target: Option<(String, String)>,
+        row_offset: usize,
+    ) {
+        let search = self.inline_search_mut();
+        search.restore_query(query);
+        search.restore_target(target, row_offset);
+    }
     fn selected_inline_search_item(&self) -> Option<mbv_core::api::EmbyItem> {
         self.inline_search().selected_item()
     }
