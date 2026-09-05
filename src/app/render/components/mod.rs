@@ -29,6 +29,7 @@ pub(in crate::app) mod hero_model;
 pub(super) mod home;
 pub(super) mod home_feed;
 pub(super) mod home_hero;
+pub(super) mod home_hero_emby;
 pub(super) mod home_latest_row;
 pub(super) mod home_pills;
 pub(super) mod home_video;
