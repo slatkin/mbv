@@ -406,7 +406,9 @@ fn apply_terminal_observer(
     _quit: &mut bool,
 ) {
     match event {
-        TerminalObserverEvent::Resize => {
+        TerminalObserverEvent::Resize { width, height } => {
+            model.app.terminal_width = width;
+            model.app.terminal_height = height;
             model.app.force_clear = true;
             model.app.card_image_states.clear();
             model.app.card_image_loading.clear();

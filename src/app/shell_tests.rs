@@ -96,7 +96,10 @@ fn terminal_resize_observer_preserves_layout_side_effects() {
     let mut quit = false;
     apply_terminal_observer(
         &mut model,
-        TerminalObserverEvent::Resize,
+        TerminalObserverEvent::Resize {
+            width: 80,
+            height: 24,
+        },
         Some(&ComponentId::Playback),
         &mut music_resize,
         &mut tv_resize,
@@ -107,6 +110,31 @@ fn terminal_resize_observer_preserves_layout_side_effects() {
     assert!(model.app.card_image_loading.is_empty());
     assert!(music_resize && tv_resize);
     assert!(!quit);
+}
+
+#[test]
+fn terminal_resize_observer_applies_new_size_before_paint() {
+    let mut model = Model::new(make_app_stub());
+    model.app.terminal_width = 60;
+    model.app.terminal_height = 24;
+    assert!(!model.app.is_right_panel_wide());
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    let mut quit = false;
+    apply_terminal_observer(
+        &mut model,
+        TerminalObserverEvent::Resize {
+            width: 150,
+            height: 24,
+        },
+        Some(&ComponentId::Playback),
+        &mut music_resize,
+        &mut tv_resize,
+        &mut quit,
+    );
+    assert_eq!(model.app.terminal_width, 150);
+    assert_eq!(model.app.terminal_height, 24);
+    assert!(model.app.is_right_panel_wide());
 }
 
 #[test]

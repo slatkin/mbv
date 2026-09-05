@@ -57,7 +57,10 @@ pub enum Msg {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TerminalObserverEvent {
     Key(TuiKeyEvent),
-    Resize,
+    Resize {
+        width: u16,
+        height: u16,
+    },
     FocusGained,
     FocusLost,
     /// A left mouse button press, carried through so the shell can resolve
