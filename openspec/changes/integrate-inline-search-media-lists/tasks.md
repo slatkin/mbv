@@ -6,9 +6,9 @@
 
 ## 2. Destination ownership
 
-- [ ] 2.1 Embed Inline Search in `BrowserComponent`, give the active search first refusal for keyboard and mouse events, and paint it at the Browser-owned list composition point for Normal catalogs and Hero-on-left right rails; adapt Browser tests to verify `/`, a shortcut letter entered as query text, and one Wide right-rail placement with `cargo nextest run -p mbv emby_browser`.
-- [ ] 2.2 Embed the same control in `MusicWorkspaceComponent`, suppress grouped album rows only in the search list area, retain the Hero/track pane in Wide presentation, and verify flat scored results with no artist headers plus dismissal restoring the prior album position using `cargo nextest run -p mbv music_workspace inline_library_search`.
-- [ ] 2.3 Embed the same control in `TvWorkspaceComponent`, suppress the ordinary series rail only in the search list area, retain the episode/Hero pane in Wide presentation, and verify the input and result rows paint in the right rail rather than the left pane using `cargo nextest run -p mbv tv_workspace inline_library_search`.
+- [x] 2.1 Embed Inline Search in `BrowserComponent`, give the active search first refusal for keyboard and mouse events, and paint it at the Browser-owned list composition point for Normal catalogs and Hero-on-left right rails; adapt Browser tests to verify `/`, a shortcut letter entered as query text, and one Wide right-rail placement with `cargo nextest run -p mbv emby_browser`.
+- [x] 2.2 Embed the same control in `MusicWorkspaceComponent`, suppress grouped album rows only in the search list area, retain the Hero/track pane in Wide presentation, and verify flat scored results with no artist headers plus dismissal restoring the prior album position using `cargo nextest run -p mbv music_workspace inline_library_search`.
+- [x] 2.3 Embed the same control in `TvWorkspaceComponent`, suppress the ordinary series rail only in the search list area, retain the episode/Hero pane in Wide presentation, and verify the input and result rows paint in the right rail rather than the left pane using `cargo nextest run -p mbv tv_workspace inline_library_search`.
 
 ## 3. Shell lifecycle and responsive transfer
 
