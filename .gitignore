@@ -18,3 +18,5 @@ context-snapshot.json
 .claude/worktrees/
 state.md
 session-log.md
+.handoffs/
+.mcp.json
