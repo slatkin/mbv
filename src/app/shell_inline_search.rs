@@ -95,7 +95,10 @@ impl Model {
                     .downcast_ref::<TvWorkspaceComponent>()
                     .map(|h| h.inline_search())
             })?;
-        (!search.is_active()).then_some(())?;
+        // Only an open session transfers (design.md: a transfer moves an
+        // already-open session); a closed search must not open on the
+        // receiving host.
+        search.is_active().then_some(())?;
         let (selected_id, selected_type) = search
             .selected_target()
             .map_or((None, None), |(id, ty)| (Some(id), Some(ty)));
