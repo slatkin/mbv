@@ -63,15 +63,28 @@ pub(in crate::app) fn prepare_wide_emby_hero_card(
 ) -> Option<(KeepWatchingHeroLayout, Rect, Option<Rect>)> {
     let meta_w = content_area.width as usize;
     let meta_layout = App::keep_watching_hero_layout(item, meta_w, meta_w, 0, WIDE_OVERVIEW_PAD);
-    // Terminal cells are roughly twice as tall as they are wide, so a
-    // 16:9 image needs 9 rows for every 32 columns. Ceiling (matching
-    // `render_keep_watching_hero_image`'s own budget) so the reserved
-    // box never ends above where the image actually draws -- a smaller
-    // box would let the image's last row overlap the title's first row.
+    if meta_layout.height < 4 {
+        return None;
+    }
+    if !images_enabled {
+        let meta_height = meta_layout.height.min(content_area.height);
+        return Some((
+            meta_layout,
+            Rect {
+                x: content_area.x,
+                y: content_area.y,
+                width: content_area.width,
+                height: meta_height,
+            },
+            None,
+        ));
+    }
+    // Preserve the image-on geometry: the image reserves its original
+    // 16:9 budget and the metadata keeps its full measured height.
     let image_height = (content_area.width.saturating_mul(9).saturating_add(31) / 32)
         .max(1)
         .min(content_area.height.saturating_sub(meta_layout.height));
-    if meta_layout.height < 4 || (images_enabled && image_height == 0) {
+    if image_height == 0 {
         return None;
     }
     let img_area = Rect {
@@ -82,15 +95,12 @@ pub(in crate::app) fn prepare_wide_emby_hero_card(
     };
     let img_area =
         super::super::arrangements::hero_left::hero_artwork_slot(img_area, images_enabled);
+    let meta_y = img_area.map_or(content_area.y, |area| area.bottom() + 1);
     let meta_area = Rect {
         x: content_area.x,
-        y: img_area.map_or(content_area.y, |area| area.bottom() + 1),
+        y: meta_y,
         width: content_area.width,
-        height: meta_layout.height.min(
-            content_area
-                .bottom()
-                .saturating_sub(img_area.map_or(content_area.y, |area| area.bottom() + 1)),
-        ),
+        height: meta_layout.height,
     };
     Some((meta_layout, meta_area, img_area))
 }
@@ -761,5 +771,42 @@ pub(in crate::app::render) fn hero_text_layout(
         show_name: show_name.to_string(),
         overview_lines,
         height,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::prepare_wide_emby_hero_card;
+    use crate::app::render::make_movie_app;
+    use ratatui::layout::Rect;
+
+    #[test]
+    fn wide_emby_hero_without_images_starts_full_width_meta_at_content_start() {
+        let item = make_movie_app().libs[0].nav_stack[0].items[0].clone();
+        let content = Rect::new(4, 3, 80, 30);
+        let (layout, meta, artwork) = prepare_wide_emby_hero_card(&item, content, false).unwrap();
+
+        assert!(artwork.is_none());
+        assert_eq!(meta.x, content.x);
+        assert_eq!(meta.y, content.y);
+        assert_eq!(meta.width, content.width);
+        assert_eq!(meta.height, layout.height.min(content.height));
+    }
+
+    #[test]
+    fn wide_emby_hero_with_images_preserves_artwork_and_meta_dimensions() {
+        let item = make_movie_app().libs[0].nav_stack[0].items[0].clone();
+        let content = Rect::new(4, 3, 80, 40);
+        let (layout, meta, artwork) = prepare_wide_emby_hero_card(&item, content, true).unwrap();
+        let expected_image_height = (content.width * 9 + 31) / 32;
+
+        let artwork = artwork.unwrap();
+        assert_eq!(
+            artwork.height,
+            expected_image_height.min(content.height - layout.height)
+        );
+        assert_eq!(meta.y, artwork.bottom() + 1);
+        assert_eq!(meta.width, content.width);
+        assert_eq!(meta.height, layout.height);
     }
 }
