@@ -333,16 +333,19 @@ fn render_tv_series_selection(
         .saturating_add(PANE_PAD_Y * 2);
     let slots = hero_left::hero_left_slots(area, artwork_height, images_enabled, None);
 
-    let image_paint = slots.artwork.map(|artwork_area| {
-        let image_types = match item.artwork_for(HeroArtworkAspect::Landscape) {
-            HeroArtwork::Image { image_types, .. } => image_types,
-            HeroArtwork::Placeholder => &["Primary"][..],
-        };
-        HomeImagePaint::Series {
-            area: artwork_area,
-            item: Box::new(item.clone()),
-            show_placeholder: image_loading,
-            image_types,
+    let image_paint = slots.artwork.and_then(|artwork_area| {
+        match item.artwork_for(HeroArtworkAspect::Landscape) {
+            HeroArtwork::Placeholder if images_enabled => {
+                super::artwork_placeholder::render_artwork_placeholder(f, artwork_area);
+                None
+            }
+            HeroArtwork::Image { image_types, .. } => Some(HomeImagePaint::Series {
+                area: artwork_area,
+                item: Box::new(item.clone()),
+                show_placeholder: image_loading,
+                image_types,
+            }),
+            _ => None,
         }
     });
 
