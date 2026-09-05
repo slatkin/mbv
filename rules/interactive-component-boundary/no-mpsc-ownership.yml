@@ -10,6 +10,8 @@ message: >-
   authority".
 files:
   - "src/app/components/**"
+ignores:
+  - "src/app/components/**/*tests*.rs"
 rule:
   any:
     - kind: use_declaration
