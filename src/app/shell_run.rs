@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::components::{BrowserComponent, MusicWorkspaceComponent, TvWorkspaceComponent};
+use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
@@ -107,6 +108,41 @@ impl Model {
         self.render_inline_search_component(f);
         self.render_queue_component(f);
         self.render_overlay_stack(f);
+    }
+
+    /// Drain completed card-image fetches into the render cache. Returns whether
+    /// any completion arrived.
+    ///
+    /// A completion under a Series (`:ser:` family) key re-projects TV workspace
+    /// content: the Wide push reserved its painted key and painted the
+    /// placeholder, and the cached entry only reaches the screen through that
+    /// re-push. The infix is the only Series-family marker, so both live chains
+    /// (Wide's Thumb-first, narrow's `Primary`) gate without a suffix list that
+    /// can drift from the key the painter builds.
+    pub(in crate::app) fn drain_card_image_completions(&mut self) -> bool {
+        let mut series_image_changed = false;
+        let mut drained = false;
+        while let Ok((cache_key, img_opt)) = self.app.card_image_rx.try_recv() {
+            drained = true;
+            series_image_changed |= cache_key.contains(SERIES_IMAGE_CACHE_KEY_INFIX);
+            self.app.card_image_loading.remove(&cache_key);
+            self.app.image_fetches_active = self.app.image_fetches_active.saturating_sub(1);
+            let entry = self.app.build_cached_image(&cache_key, img_opt);
+            if entry.img.is_some() {
+                self.app.image_lru.retain(|k| k != &cache_key);
+                self.app.image_lru.push_back(cache_key.clone());
+                while self.app.image_lru.len() > self.app.image_cache_size_total {
+                    if let Some(evict) = self.app.image_lru.pop_front() {
+                        self.app.card_image_states.remove(&evict);
+                    }
+                }
+            }
+            self.app.card_image_states.insert(cache_key, entry);
+        }
+        if series_image_changed {
+            self.push_tv_workspace_content();
+        }
+        drained
     }
 
     /// The run loop — the moved body of the former `App::run`.
@@ -360,27 +396,7 @@ impl Model {
 
             had_events |= self.drain_feed_add_results();
 
-            let mut tv_image_changed = false;
-            while let Ok((item_id, img_opt)) = self.app.card_image_rx.try_recv() {
-                had_events = true;
-                tv_image_changed |= item_id.ends_with(":ser_primary");
-                self.app.card_image_loading.remove(&item_id);
-                self.app.image_fetches_active = self.app.image_fetches_active.saturating_sub(1);
-                let entry = self.app.build_cached_image(&item_id, img_opt);
-                if entry.img.is_some() {
-                    self.app.image_lru.retain(|k| k != &item_id);
-                    self.app.image_lru.push_back(item_id.clone());
-                    while self.app.image_lru.len() > self.app.image_cache_size_total {
-                        if let Some(evict) = self.app.image_lru.pop_front() {
-                            self.app.card_image_states.remove(&evict);
-                        }
-                    }
-                }
-                self.app.card_image_states.insert(item_id, entry);
-            }
-            if tv_image_changed {
-                self.push_tv_workspace_content();
-            }
+            had_events |= self.drain_card_image_completions();
             self.app.drain_image_fetches();
 
             // Apply completed off-thread resize+encode results (#164). A
@@ -611,3 +627,7 @@ impl Model {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "shell_run_tests.rs"]
+mod tests;

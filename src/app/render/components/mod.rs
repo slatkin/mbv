@@ -69,3 +69,7 @@ mod hero_tests;
 #[cfg(test)]
 #[path = "detail_series_tests.rs"]
 mod detail_series_tests;
+
+#[cfg(test)]
+#[path = "list_narrow_tests.rs"]
+mod list_narrow_tests;

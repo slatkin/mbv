@@ -5,6 +5,7 @@
 use super::detail::compact_banner_image_cache_key;
 use crate::app::components::browser_narrow::{NarrowBrowseExtras, NarrowInlineHero};
 use crate::app::components::media_list::InlineMediaBrowser;
+use crate::app::images::series_image_cache_key;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::library_column_count;
 use crate::app::render::arrangements::{hero_left, library};
@@ -386,7 +387,10 @@ impl App {
             })
         } else if let Some(item) = selected_series {
             let images_enabled = self.images_enabled();
-            let image_cache_key = format!("{}:ser_primary", item.id);
+            // Narrow keeps its own `Primary`-chain entry (the chain
+            // `detail_series_view` paints); it must never read Wide's
+            // Thumb-first entry, whose bytes differ.
+            let image_cache_key = series_image_cache_key(&item.id, &["Primary"]);
             let image_loading =
                 images_enabled && !self.card_image_states.contains_key(&image_cache_key);
             Some(NarrowInlineHero::Series {

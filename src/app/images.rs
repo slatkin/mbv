@@ -26,13 +26,21 @@ pub(super) fn audiobookshelf_book_cover_cache_key(server: &str, id: &str, suffix
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:bookcover:{id}:{suffix}")
 }
 
+/// The infix opening a Series artwork key: `{id}{SERIES_IMAGE_CACHE_KEY_INFIX}{types}`.
+/// No other cache-key namespace uses it, which is what lets the image-completion
+/// gate recognise the whole Series family from the key alone.
+pub(in crate::app) const SERIES_IMAGE_CACHE_KEY_INFIX: &str = ":ser:";
+
 /// Cache key for Series artwork under the `{id}:ser:{types}` scheme.
 /// Shared by the `paint_home_image` Series arm and the shell-side
 /// prefetch/loading lookups so the two can never format the key
 /// differently and silently miss each other's cache entries. Formats only;
 /// chain ownership stays with the callers.
 pub(in crate::app) fn series_image_cache_key(item_id: &str, image_types: &[&str]) -> String {
-    format!("{item_id}:ser:{}", image_types.join(","))
+    format!(
+        "{item_id}{SERIES_IMAGE_CACHE_KEY_INFIX}{}",
+        image_types.join(",")
+    )
 }
 
 const MAX_IMAGE_FETCHES: usize = 6;
