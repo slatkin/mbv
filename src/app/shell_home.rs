@@ -103,6 +103,7 @@ impl Model {
         let cw_item = self.home_cw_item();
         let focused = !matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
         let use_nerd_fonts = self.app.use_nerd_fonts;
+        let images_enabled = self.app.images_enabled();
         // Snapshot the pending persisted-pill restore before the component
         // borrow so the source identity is stable; arriving sources are
         // applied by `restore_section` only once a matching section exists.
@@ -113,6 +114,7 @@ impl Model {
                 home.set_continue_watching_item(cw_item);
                 home.set_focused(focused);
                 home.set_use_nerd_fonts(use_nerd_fonts);
+                home.set_images_enabled(images_enabled);
                 if let Some(pending_source) = &pending {
                     if home.restore_section(pending_source) {
                         // Successful restore retains the pending source and

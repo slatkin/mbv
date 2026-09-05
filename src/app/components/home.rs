@@ -64,6 +64,7 @@ pub struct HomeComponent {
     /// Runtime terminal-capability flag (config-derived, not per-render
     /// content); set once by the shell after construction.
     use_nerd_fonts: bool,
+    images_enabled: bool,
     panel_area: Option<Rect>,
     pill_targets: Vec<(Rect, usize)>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
@@ -115,6 +116,7 @@ impl HomeComponent {
             wide: false,
             focused: false,
             use_nerd_fonts: false,
+            images_enabled: true,
             panel_area: None,
             pill_targets: Vec::new(),
             mouse_gestures: MouseGestureState::new(),
@@ -194,6 +196,10 @@ impl HomeComponent {
 
     pub(in crate::app) fn set_use_nerd_fonts(&mut self, use_nerd_fonts: bool) {
         self.use_nerd_fonts = use_nerd_fonts;
+    }
+
+    pub(in crate::app) fn set_images_enabled(&mut self, images_enabled: bool) {
+        self.images_enabled = images_enabled;
     }
 
     /// Takes the cover image (if any) `view()` computed but could not
@@ -656,6 +662,7 @@ impl Component for HomeComponent {
             &mut self.canonical_list,
             &self.inline_list,
             self.use_nerd_fonts,
+            self.images_enabled,
         );
         self.section = result.resolved_section;
         self.pill_targets = result.pill_targets;

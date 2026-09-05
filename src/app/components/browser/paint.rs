@@ -66,7 +66,7 @@ impl BrowserComponent {
                     && (!matches!(self.kind, BrowserKind::Movies) || item.item_type == "Movie")
             })
             .and_then(|item| {
-                prepare_wide_emby_hero_card(item, hero_content).map(
+                prepare_wide_emby_hero_card(item, hero_content, self.images_enabled).map(
                     |(meta_layout, meta_area, img_area)| {
                         HeroData::Emby(
                             Box::new(item.clone()),

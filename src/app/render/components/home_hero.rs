@@ -59,7 +59,8 @@ pub(in crate::app::render) struct HeroMetaBlock {
 pub(in crate::app) fn prepare_wide_emby_hero_card(
     item: &mbv_core::api::EmbyItem,
     content_area: Rect,
-) -> Option<(KeepWatchingHeroLayout, Rect, Rect)> {
+    images_enabled: bool,
+) -> Option<(KeepWatchingHeroLayout, Rect, Option<Rect>)> {
     let meta_w = content_area.width as usize;
     let meta_layout = App::keep_watching_hero_layout(item, meta_w, meta_w, 0, WIDE_OVERVIEW_PAD);
     // Terminal cells are roughly twice as tall as they are wide, so a
@@ -70,7 +71,7 @@ pub(in crate::app) fn prepare_wide_emby_hero_card(
     let image_height = (content_area.width.saturating_mul(9).saturating_add(31) / 32)
         .max(1)
         .min(content_area.height.saturating_sub(meta_layout.height));
-    if meta_layout.height < 4 || image_height == 0 {
+    if meta_layout.height < 4 || (images_enabled && image_height == 0) {
         return None;
     }
     let img_area = Rect {
@@ -79,11 +80,17 @@ pub(in crate::app) fn prepare_wide_emby_hero_card(
         width: content_area.width,
         height: image_height,
     };
+    let img_area =
+        super::super::arrangements::hero_left::hero_artwork_slot(img_area, images_enabled);
     let meta_area = Rect {
         x: content_area.x,
-        y: content_area.y + img_area.height + 1,
+        y: img_area.map_or(content_area.y, |area| area.bottom() + 1),
         width: content_area.width,
-        height: meta_layout.height,
+        height: meta_layout.height.min(
+            content_area
+                .bottom()
+                .saturating_sub(img_area.map_or(content_area.y, |area| area.bottom() + 1)),
+        ),
     };
     Some((meta_layout, meta_area, img_area))
 }
@@ -93,7 +100,7 @@ pub(in crate::app) enum HeroData {
         Box<mbv_core::api::EmbyItem>,
         Rect,
         Rect,
-        Rect,
+        Option<Rect>,
         KeepWatchingHeroLayout,
     ),
     Generic(QueueItem, Rect),
@@ -126,8 +133,8 @@ impl HeroData {
                     use_nerd_fonts,
                     item.as_ref(),
                 );
-                Some(HomeImagePaint::Emby {
-                    area: *img_area,
+                img_area.map(|area| HomeImagePaint::Emby {
+                    area,
                     item: item.clone(),
                     centered: two_column,
                 })

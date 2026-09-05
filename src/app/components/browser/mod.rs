@@ -66,6 +66,7 @@ pub struct BrowserComponent {
     /// Runtime terminal-capability flag (config-derived), set by the shell so
     /// the component can paint the hero text like every other surface.
     use_nerd_fonts: bool,
+    images_enabled: bool,
     /// The hero cover image `view()` computed but could not paint itself (no
     /// `App`/image-cache authority); the shell takes it right after
     /// `application.view()` and paints it via `App::paint_home_image`
@@ -114,6 +115,7 @@ impl BrowserComponent {
             wide_movies_home_video: false,
             wide_movies_letter_pills: false,
             use_nerd_fonts: false,
+            images_enabled: true,
             image_paint: None,
             narrow_extras: NarrowBrowseExtras::default(),
             pending_anchor: None,
@@ -384,6 +386,10 @@ impl BrowserComponent {
     /// wide hero text.
     pub(in crate::app) fn set_use_nerd_fonts(&mut self, use_nerd_fonts: bool) {
         self.use_nerd_fonts = use_nerd_fonts;
+    }
+
+    pub(in crate::app) fn set_images_enabled(&mut self, images_enabled: bool) {
+        self.images_enabled = images_enabled;
     }
 
     /// Takes the hero cover image (if any) `view()` computed but could not

@@ -435,6 +435,7 @@ impl Model {
             if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {
                 browser.set_wide_movies(home_video, letter_pills);
                 browser.set_use_nerd_fonts(self.app.use_nerd_fonts);
+                browser.set_images_enabled(self.app.images_enabled());
                 if let Some(extras) = narrow_extras {
                     browser.set_narrow_extras(extras);
                 }

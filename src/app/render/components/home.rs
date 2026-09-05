@@ -75,6 +75,7 @@ pub(in crate::app) fn render_home_content(
     canonical_list: &mut WideMediaList<String>,
     inline_list: &InlineMediaBrowser<String>,
     use_nerd_fonts: bool,
+    images_enabled: bool,
 ) -> HomeContentOutput {
     if area.height == 0 || area.width == 0 {
         return HomeContentOutput {
@@ -194,6 +195,7 @@ pub(in crate::app) fn render_home_content(
                 crate::app::render::components::home_hero::prepare_wide_emby_hero_card(
                     &item,
                     hero_content,
+                    images_enabled,
                 )
                 .map(|(meta_layout, meta_area, img_area)| {
                     HeroData::Emby(
@@ -532,7 +534,7 @@ fn narrow_hero_data(dims: HeroContentDims, hero_content: Rect) -> Option<HeroDat
                 item,
                 meta_area,
                 hero_content,
-                img_area,
+                Some(img_area),
                 meta_layout,
             ))
         }
