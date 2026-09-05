@@ -11,4 +11,4 @@
 
 ## 3. Gates
 
-- [ ] 3.1 Run `cargo clippy --workspace --all-targets`, `ast-grep scan`, `cargo fmt --all -- --check`; verify all clean
+- [x] 3.1 Run `cargo clippy --workspace --all-targets`, `ast-grep scan`, `cargo fmt --all -- --check`; verify all clean
