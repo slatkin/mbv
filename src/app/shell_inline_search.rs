@@ -10,7 +10,7 @@ use mbv_core::config::ServiceKind;
 use ratatui::layout::Rect;
 
 impl Model {
-    pub(super) fn active_inline_search_is_open(&self) -> bool {
+    pub(crate) fn active_inline_search_is_open(&self) -> bool {
         let Some(id) = self.active_inline_search_host() else {
             return false;
         };
@@ -45,6 +45,37 @@ impl Model {
         }
         self.emby_browser_component_id()
             .filter(|id| self.application.mounted(id))
+    }
+
+    fn with_active_inline_search_host(
+        &mut self,
+        f: impl FnOnce(&mut dyn InlineSearchHost),
+    ) -> bool {
+        let Some(id) = self.active_inline_search_host() else {
+            return false;
+        };
+        let Some(component) = self.application.get_component_mut(&id) else {
+            return false;
+        };
+        if let Some(host) = component.as_any_mut().downcast_mut::<BrowserComponent>() {
+            f(host);
+            return true;
+        }
+        if let Some(host) = component
+            .as_any_mut()
+            .downcast_mut::<MusicWorkspaceComponent>()
+        {
+            f(host);
+            return true;
+        }
+        if let Some(host) = component
+            .as_any_mut()
+            .downcast_mut::<TvWorkspaceComponent>()
+        {
+            f(host);
+            return true;
+        }
+        false
     }
 
     fn inline_search_expected_id(&self, index: usize) -> Option<ComponentId> {
@@ -170,6 +201,10 @@ impl Model {
     }
 
     pub(super) fn open_inline_search(&mut self) {
+        if self.with_active_inline_search_host(|host| host.open_inline_search()) {
+            self.push_inline_search_content();
+            return;
+        }
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             self.unmount_stale_inline_searches(None);
             return;

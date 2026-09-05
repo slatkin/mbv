@@ -347,6 +347,19 @@ impl Default for InlineSearch {
 pub(in crate::app) trait InlineSearchHost {
     fn inline_search(&self) -> &InlineSearch;
     fn inline_search_mut(&mut self) -> &mut InlineSearch;
+
+    fn open_inline_search(&mut self) {
+        self.inline_search_mut().open();
+    }
+    fn close_inline_search(&mut self) {
+        self.inline_search_mut().close();
+    }
+    fn set_inline_search_content(&mut self, pool: SearchPool, loading: bool, focused: bool) {
+        let search = self.inline_search_mut();
+        search.set_pool(pool);
+        search.set_loading(loading);
+        let _ = focused;
+    }
 }
 
 /// Mounted `AppComponent` wrapper kept for the shell's overlay protocol
