@@ -5,9 +5,9 @@
 
 ## 2. Migrate projections
 
-- [ ] 2.1 TV episodes + music tracks + book chapters/files from `fmt_duration_approx` to helper with `Media` kind; verify `cargo nextest run -p mbv` passes and updated characterization tests show `M:SS`
+- [x] 2.1 TV episodes + music tracks + book chapters/files from `fmt_duration_approx` to helper with `Media` kind; verify `cargo nextest run -p mbv` passes and updated characterization tests show `M:SS`
 - [x] 2.2 Browser/Movies/generic, podcast shows/episodes, book titles, albums, TV series rows get explicit kind (`Collection` for containers, `Media` for playable leaves), `duration: None` unchanged; verify `cargo check` + existing buffer tests pass unchanged
-- [ ] 2.3 Fold `fmt_duration_mmss` (selection modal) and `feeds_model::format_duration` into helper, delete both; verify `rg fmt_duration_mmss|format_duration` shows no production callers and full test suite passes
+- [x] 2.3 Fold `fmt_duration_mmss` (selection modal) and `feeds_model::format_duration` into helper, delete both; verify `rg fmt_duration_mmss|format_duration` shows no production callers and full test suite passes
 
 ## 3. Gates
 
