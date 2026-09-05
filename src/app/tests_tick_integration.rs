@@ -10,8 +10,8 @@ use tuirealm::event::{
 
 use crate::app::components::msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
 use crate::app::components::{
-    ComponentId, ModalId, Msg, OverlayId, QueueRequest, SearchSidebarComponent, ShellRequest,
-    TerminalObserverEvent, UserEvent,
+    BrowserComponent, ComponentId, ModalId, Msg, OverlayId, QueueComponent, QueueRequest,
+    SearchSidebarComponent, ShellRequest, TerminalObserverEvent, UserEvent,
 };
 use crate::app::router::RouterOutcome;
 use crate::app::shell::apply_router_outcome;
@@ -598,5 +598,125 @@ fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
             .iter()
             .all(|msg| matches!(msg, Msg::TerminalEvent(_))),
         "the obscured queue must not receive the wheel once the menu is up"
+    );
+}
+
+// --- Task 7.1: with Queue and the Library destination both visible and no
+// overlay mounted, a click on each resolves through the real `tick()` sync
+// order to that surface's own message (D2 exclusivity holds with two
+// simultaneously eligible surfaces, not just one), and focus follows the
+// click via the same `sync_mounted_surfaces` pass a real frame uses.
+
+#[test]
+fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
+    let mut app = crate::app::render::make_queue_app(2);
+    app.panel_mode = PanelMode::Both;
+    app.panel_focus = PanelFocus::Library;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let library_child = harness
+        .model()
+        .emby_browser_id
+        .clone()
+        .expect("movie browser child mounted");
+    let eligible = &harness.model().mouse_subscribed;
+    assert!(
+        eligible.contains(&ComponentId::Queue) && eligible.contains(&library_child),
+        "Queue and the Library destination are simultaneously mouse-eligible with no overlay up: {eligible:?}"
+    );
+    assert_eq!(harness.model().application.focus(), Some(&library_child));
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+
+    let (queue_rect, _) = *harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Queue)
+        .expect("queue mounted")
+        .as_any_mut()
+        .downcast_mut::<QueueComponent>()
+        .expect("queue component type")
+        .test_rows()
+        .first()
+        .expect("queue painted at least one row");
+
+    let library_point = harness
+        .model_mut()
+        .application
+        .get_component_mut(&library_child)
+        .expect("library child mounted")
+        .as_any_mut()
+        .downcast_mut::<BrowserComponent>()
+        .expect("browser component type")
+        .test_layout()
+        .left_area;
+    assert!(
+        library_point.width > 0 && library_point.height > 0,
+        "the Library destination must have painted a non-empty list area"
+    );
+
+    let click = |column, row| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+
+    // A click inside Queue's painted rows resolves to a Queue-specific
+    // message, not a Library one, even though Library currently holds focus.
+    harness.inject(click(queue_rect.x, queue_rect.y));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::QueueRowClick { .. }))),
+        "a click on Queue's painted row must resolve through Queue"
+    );
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
+        "the click on Queue must not also resolve through Library"
+    );
+    apply_outcome(&mut harness, outcome);
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&ComponentId::Queue),
+        "focus follows the click onto Queue"
+    );
+
+    // A click inside Library's painted list resolves to a Library-specific
+    // message and focus follows back onto the Library destination.
+    harness.inject(click(library_point.x, library_point.y));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
+        "a click on Library's painted list must resolve through the Library destination"
+    );
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::QueueRowClick { .. }))),
+        "the click on Library must not also resolve through Queue"
+    );
+    apply_outcome(&mut harness, outcome);
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&library_child),
+        "focus follows the click back onto the Library destination"
     );
 }
