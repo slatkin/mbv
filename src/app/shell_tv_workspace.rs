@@ -204,12 +204,16 @@ impl Model {
         // Capture the outgoing host before the destination sync repoints it;
         // this is a discrete owner handoff, never a per-frame mirror.
         let outgoing = if wide {
-            self.emby_browser_id.as_ref()
+            self.emby_browser_id.clone()
         } else {
-            self.tv_workspace_id.as_ref()
+            self.tv_workspace_id.clone()
         };
-        self.inline_search_transfer =
-            outgoing.and_then(|id| self.capture_inline_search_transfer(id));
+        self.inline_search_transfer = outgoing
+            .as_ref()
+            .and_then(|id| self.capture_inline_search_transfer(id));
+        if let Some(id) = outgoing.as_ref() {
+            self.close_inline_search_host(id);
+        }
         match (
             wide,
             self.tv_workspace_id.clone(),
@@ -230,11 +234,6 @@ impl Model {
                 // Deliver after destination sync so Browser adopts the target
                 // without mirroring component-local cursor state.
                 self.tv_viewport_anchor = Some(anchor);
-                if let Some(transfer) = self.inline_search_transfer.take() {
-                    if let Some(browser_id) = self.emby_browser_id.clone() {
-                        self.apply_inline_search_transfer(&browser_id, transfer);
-                    }
-                }
             }
             // narrow -> wide: capture the Browser's painted anchor and deliver
             // it to the kept-mounted wide workspace on its next paint.
@@ -248,12 +247,6 @@ impl Model {
                     return;
                 };
                 self.tv_viewport_anchor = Some(anchor);
-                if let (Some(transfer), Some(tv_id)) = (
-                    self.inline_search_transfer.take(),
-                    self.tv_workspace_id.clone(),
-                ) {
-                    self.apply_inline_search_transfer(&tv_id, transfer);
-                }
             }
             _ => {
                 self.inline_search_transfer = None;

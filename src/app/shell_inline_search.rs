@@ -32,14 +32,10 @@ impl Model {
     }
 
     fn active_inline_search_host(&self) -> Option<ComponentId> {
-        // The pointer fields are the active-destination ownership boundary.
-        // Do not rediscover a mounted sibling: TV keeps both owners mounted
-        // across its breakpoint transition, but only one may receive search
-        // state and events.
-        self.tv_workspace_id
-            .clone()
-            .or_else(|| self.music_workspace_id.clone())
-            .or_else(|| self.emby_browser_id.clone())
+        // Resolve through the same active-destination pointer used for focus.
+        // TV keeps both owners mounted across a breakpoint transition, but only
+        // the destination selected for this tab may receive search state.
+        self.library_child_id()
             .filter(|id| self.application.mounted(id))
     }
 
@@ -182,6 +178,24 @@ impl Model {
         })
     }
 
+    pub(super) fn close_inline_search_host(&mut self, id: &ComponentId) {
+        if let Some(component) = self.application.get_component_mut(id) {
+            if let Some(host) = component.as_any_mut().downcast_mut::<BrowserComponent>() {
+                host.close_inline_search();
+            } else if let Some(host) = component
+                .as_any_mut()
+                .downcast_mut::<MusicWorkspaceComponent>()
+            {
+                host.close_inline_search();
+            } else if let Some(host) = component
+                .as_any_mut()
+                .downcast_mut::<TvWorkspaceComponent>()
+            {
+                host.close_inline_search();
+            }
+        }
+    }
+
     pub(super) fn apply_inline_search_transfer(
         &mut self,
         id: &ComponentId,
@@ -203,6 +217,16 @@ impl Model {
                 host.apply_inline_search_transfer(transfer.query, target, transfer.row_offset);
             }
         }
+    }
+
+    pub(super) fn apply_pending_inline_search_transfer(&mut self) {
+        let Some(transfer) = self.inline_search_transfer.take() else {
+            return;
+        };
+        let Some(id) = self.active_inline_search_host() else {
+            return;
+        };
+        self.apply_inline_search_transfer(&id, transfer);
     }
 
     pub(super) fn push_inline_search_content(&mut self) {
@@ -245,26 +269,12 @@ impl Model {
     }
 
     pub(super) fn open_inline_search(&mut self) {
-        let host_active = self.with_active_inline_search_host(|host| host.open_inline_search());
+        if !self.with_active_inline_search_host(|host| host.open_inline_search()) {
+            return;
+        }
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
-            self.unmount_stale_inline_searches(None);
             return;
         };
-        if !host_active {
-            let Some(id) = self.inline_search_expected_id(index) else {
-                return;
-            };
-            if !self.application.mounted(&id) {
-                self.unmount_stale_inline_searches(Some(&id));
-                self.application
-                    .mount(id.clone(), Box::new(InlineSearchComponent::new()), vec![])
-                    .expect("mount inline library Search");
-                self.register_destination(&id);
-                self.application
-                    .active(&id)
-                    .expect("activate inline library Search");
-            }
-        }
         let recursive = self.app.recursive_album_search_enabled(index);
         let mut needs_full_load = false;
         if recursive {
@@ -290,16 +300,7 @@ impl Model {
     }
 
     pub(super) fn dismiss_inline_search(&mut self) {
-        if self.with_active_inline_search_host(|host| host.close_inline_search()) {
-            return;
-        }
-        let TabSelection::EmbyLibrary(index) = self.app.tab else {
-            return;
-        };
-        if let Some(id) = self.inline_search_component_id(index) {
-            let _ = self.application.umount(&id);
-            self.unregister_destination(&id);
-        }
+        let _ = self.with_active_inline_search_host(|host| host.close_inline_search());
     }
 
     pub(super) fn activate_inline_search_item(&mut self, id: String, item_type: String) {

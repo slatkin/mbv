@@ -37,6 +37,9 @@ impl Model {
         self.hand_off_tv_breakpoint();
         self.sync_emby_browser();
         self.sync_tv_workspace();
+        // TV's narrow owner is already mounted, so consume its transfer only
+        // after the destination has received its current pool/loading state.
+        self.apply_pending_inline_search_transfer();
         self.sync_music_workspace();
         // Retire destination components whose Service library left the
         // catalog before the focus pass routes to the active destination

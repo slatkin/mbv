@@ -387,6 +387,9 @@ pub(in crate::app) trait InlineSearchHost {
         row_offset: usize,
     ) {
         let search = self.inline_search_mut();
+        // A transfer is the sole exception to the normal open/close lifecycle:
+        // it moves an already-open session to the other TV owner.
+        search.active = true;
         search.restore_query(query);
         search.restore_target(target, row_offset);
     }

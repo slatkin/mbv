@@ -40,7 +40,7 @@ impl Model {
         }
     }
 
-    fn library_child_id(&self) -> Option<ComponentId> {
+    pub(super) fn library_child_id(&self) -> Option<ComponentId> {
         match self.app.tab {
             TabSelection::Home => Some(ComponentId::Home),
             TabSelection::Feeds => Some(ComponentId::Feeds),
