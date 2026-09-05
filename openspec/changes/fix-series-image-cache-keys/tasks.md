@@ -6,8 +6,8 @@
 ## 2. Point the shell prefetch and loading state at the painted keys
 
 - [x] 2.1 Export one canonical Thumb-first chain constant from `src/app/render/components/hero_model.rs` (used by the `artwork_for` landscape mapping, no new `&["Thumb", ...]` literal anywhere) and update `push_tv_workspace_content` in `src/app/shell_tv_workspace.rs` to prefetch with that constant under the helper key and to derive `image_loading` from the same key; verify with a regression test that pushes Wide content, consumes its `HomeImagePaint`, calls `paint_home_image`, and asserts the same cache key stays reserved with no additional active/pending fetch, plus `push_tv_workspace_projects_uncached_and_cached_series_image_state` passes with its fixture key updated to the helper spelling.
-- [ ] 2.2 Update the narrow `image_loading` lookup in `src/app/render/components/list_narrow.rs` to the helper key with `&["Primary"]`, matching what `detail_series_view.rs` paints; verify a narrow Series selection shows the placeholder while uncached and the painted entry once cached.
-- [ ] 2.3 Widen the `tv_image_changed` gate in `src/app/shell_run.rs` from the `ends_with(":ser_primary")` match to the `:ser:` family; verify a completion under the Thumb-first key re-pushes TV workspace content while other image keys do not.
+- [x] 2.2 Update the narrow `image_loading` lookup in `src/app/render/components/list_narrow.rs` to the helper key with `&["Primary"]`, matching what `detail_series_view.rs` paints; verify a narrow Series selection shows the placeholder while uncached and the painted entry once cached.
+- [x] 2.3 Widen the `tv_image_changed` gate in `src/app/shell_run.rs` from the `ends_with(":ser_primary")` match to the `:ser:` family; verify a completion under the Thumb-first key re-pushes TV workspace content while other image keys do not.
 
 ## 3. Prove no stale key reference remains and the full gates pass
 
