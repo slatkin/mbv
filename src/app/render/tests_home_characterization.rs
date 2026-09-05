@@ -296,7 +296,7 @@ fn narrow_home_inline_hero_contrasts_with_pane_backdrop() {
 fn home_images_off_collapses_artwork_and_uses_full_text_width() {
     let mut app = home_app();
     app.image_protocol_enabled = false;
-    let (model, terminal) = render_home_shell_with(app, 200, 40, |m| {
+    let (_model, terminal) = render_home_shell_with(app, 200, 40, |m| {
         m.home_content.continue_items = vec![emby_cw_item()];
     });
     assert!(buffer_to_string(&terminal).contains("Focused Movie"));
