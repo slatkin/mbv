@@ -535,10 +535,11 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
         );
         let track_area = left_layout.track_area;
         if track_area.height > 0 && track_area.width > 0 && !track_list.is_empty() {
+            let (_, track_content_area) = hero_left::hero_on_left_main_content_box(f, track_area);
             let paint = super::media_list::render_wide_media_list(
                 f,
-                track_area,
-                track_area,
+                track_content_area,
+                track_content_area,
                 track_list,
                 left_focused,
                 palette::list_selected_row_bg(),
@@ -549,9 +550,9 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
                 if let Some(index) = index {
                     layout.wide_music_track_hitmap.push((
                         Rect {
-                            y: track_area.y + row as u16,
+                            y: track_content_area.y + row as u16,
                             height: 1,
-                            ..track_area
+                            ..track_content_area
                         },
                         index,
                     ));
