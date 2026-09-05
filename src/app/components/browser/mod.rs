@@ -97,6 +97,27 @@ pub struct BrowserComponent {
     pill_regions: HitRegions<usize>,
 }
 
+/// Derives the Emby-specific semantic state for a browse row. Both projection
+/// sites (Inline and Wide) call this so the two trees cannot drift; the
+/// provider-neutral `media_list` layer deliberately stays free of `EmbyItem`.
+fn emby_semantic_state(item: &EmbyItem) -> MediaSemanticState {
+    if item.playback_position_ticks > 0 && !item.played {
+        let progress = if item.runtime_ticks > 0 {
+            Some(
+                ((item.playback_position_ticks as u64 * 100) / item.runtime_ticks as u64).min(100)
+                    as u16,
+            )
+        } else {
+            None
+        };
+        MediaSemanticState::active(progress)
+    } else if item.played {
+        MediaSemanticState::Played
+    } else {
+        MediaSemanticState::Ordinary
+    }
+}
+
 impl BrowserComponent {
     pub fn new() -> Self {
         Self::new_for_kind(BrowserKind::Generic)
@@ -224,21 +245,7 @@ impl BrowserComponent {
             };
             let trailing = (!item.is_folder && item.production_year > 0)
                 .then(|| item.production_year.to_string());
-            let semantic_state = if item.playback_position_ticks > 0 && !item.played {
-                let progress = if item.runtime_ticks > 0 {
-                    Some(
-                        ((item.playback_position_ticks as u64 * 100) / item.runtime_ticks as u64)
-                            .min(100) as u16,
-                    )
-                } else {
-                    None
-                };
-                MediaSemanticState::active(progress)
-            } else if item.played {
-                MediaSemanticState::Played
-            } else {
-                MediaSemanticState::Ordinary
-            };
+            let semantic_state = emby_semantic_state(item);
             rows.push(MediaListRow::Item {
                 target: index,
                 primary,
@@ -272,21 +279,7 @@ impl BrowserComponent {
             } else {
                 item.display_name()
             };
-            let semantic_state = if item.playback_position_ticks > 0 && !item.played {
-                let progress = if item.runtime_ticks > 0 {
-                    Some(
-                        ((item.playback_position_ticks as u64 * 100) / item.runtime_ticks as u64)
-                            .min(100) as u16,
-                    )
-                } else {
-                    None
-                };
-                MediaSemanticState::active(progress)
-            } else if item.played {
-                MediaSemanticState::Played
-            } else {
-                MediaSemanticState::Ordinary
-            };
+            let semantic_state = emby_semantic_state(item);
             MediaListRow::Item {
                 target: index,
                 primary,
