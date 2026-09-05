@@ -219,14 +219,9 @@ impl Model {
         }
         self.application.view(id, frame, area);
         // Component owns painting; read back its painted geometry so the
-        // still-required legacy `LayoutMain` readers (interaction wide/narrow
-        // gating via `is_wide_podcast_active`, library column count, and
-        // overlay/menu anchors) stay correct once the legacy underpaint
-        // renderer is removed (task 5.3d.10d). Wide keeps a nonzero right
-        // area; narrow resets it to zero, including the wide-to-narrow
-        // redraw. The legacy `render_audiobookshelf_podcasts` still projects
-        // the same values this frame, so this mirror is idempotent until
-        // 5.3d.10e detaches it.
+        // still-required legacy `LayoutMain` readers (library column count
+        // and overlay/menu anchors) stay correct once the legacy underpaint
+        // renderer is removed (task 5.3d.10d).
         let projection = self
             .application
             .get_component_mut(id)
@@ -239,7 +234,6 @@ impl Model {
                 let geometry = component.geometry();
                 (
                     image_paint,
-                    geometry.right_area,
                     geometry.list_area,
                     geometry.hero_area,
                     geometry.inline_hero_area,
@@ -249,7 +243,6 @@ impl Model {
             });
         if let Some((
             image_paint,
-            right_area,
             list_area,
             hero_area,
             inline_hero_area,
@@ -258,7 +251,6 @@ impl Model {
         )) = projection
         {
             self.app.paint_home_image(frame, image_paint);
-            self.app.layout.main.audiobookshelf_podcast_right_area = right_area;
             self.app.layout.main.left_area = list_area;
             self.app.layout.main.hero_area = hero_area;
             self.app.layout.main.inline_hero_area = inline_hero_area;

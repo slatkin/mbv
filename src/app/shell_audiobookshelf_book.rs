@@ -4,7 +4,6 @@ use super::shell::Model;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
 use super::{PanelFocus, TabSelection};
 use mbv_core::config::ServiceKind;
-use ratatui::layout::Rect;
 
 impl Model {
     /// Applies a typed book request to the existing App operations. The
@@ -176,14 +175,11 @@ impl Model {
         }
         self.application.view(id, frame, area);
         // Component owns painting; read back its painted geometry so the
-        // still-required legacy `LayoutMain` readers (interaction wide/narrow
-        // gating via `is_wide_book_active` and overlay/menu anchors) stay
-        // correct once the legacy underpaint renderer was removed (2.1j). The
-        // page stride is now the component's own
+        // still-required legacy `LayoutMain` readers (overlay/menu anchors)
+        // stay correct once the legacy underpaint renderer was removed
+        // (2.1j). The page stride is now the component's own
         // (split-audiobookshelf-cursor-ownership D1), so the shell projects
-        // no page size in. Wide reports a nonzero right area and
-        // the painted left area; narrow resets both to the narrow content
-        // area / zero wide flag, including the wide-to-narrow redraw.
+        // no page size in.
         let projection = self
             .application
             .get_component_mut(id)
@@ -197,25 +193,16 @@ impl Model {
                 (
                     image_paint,
                     geometry.left_area,
-                    geometry.wide,
                     geometry.hero_area,
                     geometry.selected_item_rect,
                     geometry.selector_tabs.clone(),
                 )
             });
-        if let Some((image_paint, left_area, wide, hero_area, selected_item_rect, selector_tabs)) =
+        if let Some((image_paint, left_area, hero_area, selected_item_rect, selector_tabs)) =
             projection
         {
             self.app.paint_home_image(frame, image_paint);
             self.app.layout.main.left_area = left_area;
-            // Drive `is_wide_book_active` from the component-reported wide
-            // flag: wide keeps a nonzero right area, narrow resets it to
-            // zero (including the wide-to-narrow redraw).
-            self.app.layout.main.audiobookshelf_book_wide_right_area = if wide {
-                self.app.layout.main.audiobookshelf_book_area
-            } else {
-                Rect::default()
-            };
             self.app.layout.main.hero_area = hero_area.unwrap_or_default();
             self.app.layout.main.selected_item_rect = selected_item_rect;
             self.app.layout.main.selector_tabs = selector_tabs;

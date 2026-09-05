@@ -397,11 +397,10 @@ fn abs_podcast_component_image_plan_lifecycle() {
     assert!(component.take_image_paint().is_none());
 }
 
-/// Shell projection (task 5.3d.10d): the component owns painting and
+/// Shell projection (task 5.3d.10d, detached from the wide/narrow mirror by
+/// replace-wide-paint-inference 5.2): the component owns painting and
 /// computes its geometry during `view`; the shell mirrors the still-required
-/// fields into `LayoutMain` so legacy readers stay correct. Wide keeps a
-/// nonzero podcast right area; narrow resets it to zero, including the
-/// wide-to-narrow redraw.
+/// fields (list area, selector tabs) into `LayoutMain` at both breakpoints.
 #[test]
 fn abs_podcast_shell_projection_wide_narrow_right_area() {
     let backend = TestBackend::new(200, 50);
@@ -417,23 +416,6 @@ fn abs_podcast_shell_projection_wide_narrow_right_area() {
         .draw(|frame| model.render_audiobookshelf_podcast_component(frame))
         .unwrap();
     assert!(
-        model
-            .app
-            .layout
-            .main
-            .audiobookshelf_podcast_right_area
-            .width
-            > 0
-            && model
-                .app
-                .layout
-                .main
-                .audiobookshelf_podcast_right_area
-                .height
-                > 0,
-        "wide podcast right area must stay nonzero"
-    );
-    assert!(
         model.app.layout.main.left_area.width > 0 && model.app.layout.main.left_area.height > 0,
         "wide list_area must project a nonzero left_area"
     );
@@ -444,11 +426,6 @@ fn abs_podcast_shell_projection_wide_narrow_right_area() {
     terminal
         .draw(|frame| model.render_audiobookshelf_podcast_component(frame))
         .unwrap();
-    assert_eq!(
-        model.app.layout.main.audiobookshelf_podcast_right_area,
-        Rect::default(),
-        "narrow podcast right area must reset to zero"
-    );
     assert!(
         model.app.layout.main.left_area.width > 0 && model.app.layout.main.left_area.height > 0,
         "narrow list_area must project a nonzero left_area"
@@ -458,29 +435,22 @@ fn abs_podcast_shell_projection_wide_narrow_right_area() {
         "narrow pill bar must project selector_tabs"
     );
 
-    // Wide -> narrow redraw must also clear the right area.
+    // Wide -> narrow redraw must still project a nonzero left area.
     model.app.layout.main.audiobookshelf_podcast_area = wide;
     terminal
         .draw(|frame| model.render_audiobookshelf_podcast_component(frame))
         .unwrap();
     assert!(
-        model
-            .app
-            .layout
-            .main
-            .audiobookshelf_podcast_right_area
-            .width
-            > 0,
-        "wide->narrow must re-establish a nonzero right area"
+        model.app.layout.main.left_area.width > 0,
+        "wide->narrow must re-establish a nonzero left area"
     );
     model.app.layout.main.audiobookshelf_podcast_area = narrow;
     terminal
         .draw(|frame| model.render_audiobookshelf_podcast_component(frame))
         .unwrap();
-    assert_eq!(
-        model.app.layout.main.audiobookshelf_podcast_right_area,
-        Rect::default(),
-        "wide->narrow redraw must reset the right area to zero"
+    assert!(
+        model.app.layout.main.left_area.width > 0,
+        "wide->narrow redraw must still project a nonzero left area"
     );
 }
 
