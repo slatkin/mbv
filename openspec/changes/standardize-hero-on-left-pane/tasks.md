@@ -165,9 +165,14 @@
 - [x] 6.2 Add `hero_on_left_pane`, `LeftPaneFocus` and the `Hero` trait to the `mbv-frontend`
   skill's reuse list (`.agents/skills/mbv-frontend/SKILL.md` ~`:125` and ~`:195`) and mirror the
   edit to `.opencode/skills/mbv-frontend/SKILL.md` — verify both copies are identical.
-- [ ] 6.3 Run the full gate set: `rtk cargo fmt`, `rtk cargo clippy --workspace --all-targets`,
+- [x] 6.3 Run the full gate set: `rtk cargo fmt`, `rtk cargo clippy --workspace --all-targets`,
   `rtk cargo nextest run -p mbv`, `rtk ast-grep scan`, `rtk make check-code-file-lines` — verify
-  all pass clean.
+  all pass clean. **Exception (2026-09-05, user decision):** `ast-grep scan` reports 2
+  `no-mpsc-ownership` findings in `src/app/components/mouse/mod.rs` (commit `19b1fcf3`) — this
+  belongs to the separate, in-progress `restore-mouse-support` (#638) work, not this change; it is
+  #638's own gate to clear, not standardize-hero-on-left-pane's. fmt/clippy/nextest/file-lines all
+  pass clean; clippy's one new-looking `if_same_then_else` in `home_hero_emby.rs:220` was traced to
+  pre-existing code at `d2b5add8`, moved verbatim by 4.8's file split — not introduced here.
 - [ ] 6.4 SHRUNK FROM SCOPE (2026-09-05, user decision): one manual pass, not a full
   selection-state matrix. Run the app, view all seven destinations once at Wide geometry with an
   artwork-less item and images off — confirm each shows a filled pane and no right-column
