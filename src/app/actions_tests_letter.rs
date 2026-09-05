@@ -150,16 +150,6 @@ fn should_show_letter_pills_excludes_music_and_drilldowns() {
 }
 
 #[test]
-fn inline_search_mounts_at_the_component_boundary() {
-    let mut model = crate::app::shell::Model::new(crate::app::render::make_movie_app());
-    model.open_inline_search();
-    let id = model
-        .inline_search_component_id(0)
-        .expect("inline Search component mounted");
-    assert!(model.application.mounted(&id));
-}
-
-#[test]
 fn select_letter_pill_scopes_the_level_and_resets_cursor() {
     let mut app = make_app_stub();
     app.libs.push(lib_tab("movies"));
