@@ -156,9 +156,7 @@ impl FeedsManageComponent {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
-        let Some(stage) = self.stage.clone() else {
-            return None;
-        };
+        let stage = self.stage.clone()?;
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Click(at) => match &stage {
                 FeedsManageStage::List => {

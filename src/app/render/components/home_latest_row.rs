@@ -1,11 +1,19 @@
+#[cfg(test)]
+use crate::app::palette;
+#[cfg(test)]
 use crate::app::render::components::hero::{paint_hero_content, HeroContent};
 use crate::app::ui_util::*;
-use crate::app::{images, palette, App};
+use crate::app::{images, App};
+#[cfg(test)]
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::QueueItem;
+#[cfg(test)]
 use ratatui::layout::*;
+#[cfg(test)]
 use ratatui::style::*;
+#[cfg(test)]
 use ratatui::text::*;
+#[cfg(test)]
 use ratatui::Frame;
 use textwrap::wrap;
 
@@ -16,8 +24,11 @@ use textwrap::wrap;
 /// instead of asking for the whole content area, and the renderer can wrap
 /// each piece exactly once per frame.
 pub(in crate::app::render) struct HomeLatestDetailText {
+    #[cfg(test)]
     pub(in crate::app::render) title_lines: Vec<String>,
+    #[cfg(test)]
     pub(in crate::app::render) show_name: String,
+    #[cfg(test)]
     pub(in crate::app::render) overview_lines: Vec<(String, bool)>,
     pub(in crate::app::render) meta_height: u16,
 }
@@ -66,8 +77,11 @@ pub(in crate::app::render) fn home_latest_detail_text(
             1 + overview_lines.len() as u16 + 1 // overview block: pad + lines + pad
         };
     HomeLatestDetailText {
+        #[cfg(test)]
         title_lines,
+        #[cfg(test)]
         show_name,
+        #[cfg(test)]
         overview_lines,
         meta_height,
     }
@@ -121,6 +135,7 @@ impl App {
 /// overview, or the whole no-image hero for a Feed) without `App`, returning
 /// the Audiobookshelf cover's target `Rect` (if any) still needing paint.
 /// Shared by Home's render paths (task 3.4's confirmed extraction).
+#[cfg(test)]
 pub(in crate::app::render) fn render_home_latest_detail_content(
     f: &mut Frame,
     area: Rect,

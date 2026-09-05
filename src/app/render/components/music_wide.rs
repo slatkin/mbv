@@ -39,6 +39,7 @@ pub(in crate::app) struct MusicWideRenderCtx {
     pub(in crate::app) focused: bool,
     pub(in crate::app) images_enabled: bool,
     pub(in crate::app) album_tracks: Option<Vec<EmbyItem>>,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) album_tracks_loading: bool,
     pub(in crate::app) track_cursor: Option<usize>,
 }

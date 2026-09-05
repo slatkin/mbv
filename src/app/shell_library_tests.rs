@@ -340,11 +340,8 @@ fn feed_group_picker_libraries_route_to_browser_component_at_every_width() {
         app.tab = TabSelection::EmbyLibrary(0);
         app.panel_focus = PanelFocus::Library;
         app.panel_mode = PanelMode::Both;
-        app.layout.main.movies_wide_area = if wide {
-            ratatui::layout::Rect::new(0, 0, 200, 50)
-        } else {
-            ratatui::layout::Rect::default()
-        };
+        app.terminal_width = if wide { 160 } else { 80 };
+        app.terminal_height = 40;
         let mut model = Model::new(app);
         assert!(model.app.is_feed_home_video_group_view(0));
         model.sync_emby_browser();

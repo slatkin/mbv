@@ -218,9 +218,7 @@ impl App {
         show_placeholder: bool,
         centered: bool,
     ) {
-        if show_placeholder {
-            self.render_keep_watching_hero_image(f, area, cache_key, centered);
-        } else {
+        if show_placeholder || self.cached_image_protocol_mut(cache_key).is_some() {
             self.render_keep_watching_hero_image(f, area, cache_key, centered);
         }
     }
@@ -314,10 +312,9 @@ impl App {
             Some(HomeImagePaint::AudiobookshelfBookCover {
                 area,
                 library_item_id,
-                show_placeholder,
             }) => {
                 if let Some(cache_key) = self.audiobookshelf_book_cover_key(&library_item_id) {
-                    self.paint_audiobookshelf_cover(f, area, &cache_key, show_placeholder, false);
+                    self.paint_audiobookshelf_cover(f, area, &cache_key, true, false);
                 }
             }
             None => {}

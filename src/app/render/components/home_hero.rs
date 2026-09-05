@@ -1,9 +1,7 @@
 use crate::app::App;
 use mbv_core::playback_queue::QueueItem;
-use ratatui::layout::*;
-use ratatui::style::*;
-use ratatui::text::*;
-use ratatui::widgets::*;
+use ratatui::layout::Rect;
+use ratatui::text::Span;
 use ratatui::Frame;
 use textwrap::wrap;
 
@@ -212,7 +210,6 @@ pub(in crate::app) fn render_generic_hero_content(
                 QueueItem::AudiobookshelfBook(_) => HomeImagePaint::AudiobookshelfBookCover {
                     area: image_area,
                     library_item_id: item_id.to_owned(),
-                    show_placeholder: true,
                 },
                 _ => return None,
             };
@@ -268,11 +265,7 @@ pub(in crate::app) enum HomeImagePaint {
     /// Audiobookshelf book artwork must stay isolated from podcast artwork,
     /// including when both use the same library item ID (book-browsing spec
     /// line 124).
-    AudiobookshelfBookCover {
-        area: Rect,
-        library_item_id: String,
-        show_placeholder: bool,
-    },
+    AudiobookshelfBookCover { area: Rect, library_item_id: String },
 }
 
 fn render_hero_layout_meta_content(
@@ -300,7 +293,7 @@ fn render_hero_layout_meta_content(
         &layout.title_lines,
         hero.subtitle().unwrap_or(&layout.show_name),
         title_suffix,
-        hero.meta_rows(area.width),
+        meta_block.meta_rows,
         &layout.overview_lines,
         overview_pad,
         focused,
@@ -512,7 +505,7 @@ mod tests {
         let item = make_movie_app().libs[0].nav_stack[0].items[0].clone();
         let content = Rect::new(4, 3, 80, 40);
         let (layout, meta, artwork) = prepare_wide_emby_hero_card(&item, content, true).unwrap();
-        let expected_image_height = (content.width * 9 + 31) / 32;
+        let expected_image_height = (content.width * 9).div_ceil(32);
 
         let artwork = artwork.unwrap();
         assert_eq!(

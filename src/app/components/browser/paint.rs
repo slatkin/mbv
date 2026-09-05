@@ -213,7 +213,7 @@ impl BrowserComponent {
         final_scroll
     }
 
-    pub(crate) fn render_letter_pills_row(
+    pub(super) fn render_letter_pills_row(
         &mut self,
         f: &mut Frame,
         row_area: Rect,

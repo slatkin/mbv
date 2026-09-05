@@ -378,24 +378,19 @@ impl Model {
         let Some(id) = self.emby_browser_id.as_ref() else {
             return;
         };
-        // Task 5.3d.17a/17b: when the wide Movies/home-video layout is active
-        // the component paints the full hero-on-left rect, so hand it the full
-        // library area (`movies_wide_area`, published by the App render path
-        // this frame); otherwise hand it the narrow inner list area.
-        // Derive the presentation from the same shared arrangement predicate
-        // used by BrowserComponent::view. `movies_wide_area` is component
-        // layout state and is not populated until the component paints.
+        // When the wide Movies/home-video layout is active, the component
+        // paints the full hero-on-left rect; otherwise it paints the narrow
+        // inner list area. Derive the presentation from the same shared
+        // arrangement predicate used by BrowserComponent::view.
         let area = self.app.layout.main.left_area;
         let wide = shared_hero_presentation(area).is_some();
         if area.width == 0 || area.height == 0 {
             return;
         }
-        // Per-draw adapter (D18 step 1): the legacy base frame (self.app.compose_base_frame(f, None))
-        // has already populated movies_wide_right_area / movies_wide_area this
-        // frame. The base frame and the mounted component share one paint, so
-        // the 1-column right-rail stride (the only reader of this field) is
-        // consistent here. `home_video`/`letter_pills` tell the component which
-        // pill row to render in the wide right rail.
+        // Per-draw adapter (D18 step 1): the legacy base frame and the mounted
+        // component share one paint, so the 1-column right-rail stride is
+        // consistent here. `home_video`/`letter_pills` tell the component
+        // which pill row to render in the wide right rail.
         let (home_video, letter_pills) = if wide {
             match self.app.tab.emby_library_index() {
                 Some(lib_idx) => (

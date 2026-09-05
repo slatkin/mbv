@@ -105,7 +105,6 @@ pub(in crate::app) use components::chrome::{
 // sibling submodules (album, card, detail, home, list, music, pills, queue)
 // and/or `use super::*` in render/tests.rs.
 pub use components::indicators;
-use components::list_rows::{selection_marker, MarkerEdge};
 use components::widgets::{
     render_placeholder, render_right_scrollbar, render_selected_block_background,
     MUSIC_ALBUM_IMAGE_TYPES, RENDER_FILTER,

@@ -1,11 +1,20 @@
+#[cfg(test)]
 use super::list_rows::focused_or_subtle;
+#[cfg(test)]
 use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
+#[cfg(test)]
 use crate::app::palette;
+#[cfg(test)]
 use crate::app::ui_util::*;
+#[cfg(test)]
 use ratatui::layout::*;
+#[cfg(test)]
 use ratatui::style::*;
+#[cfg(test)]
 use ratatui::text::*;
+#[cfg(test)]
 use ratatui::widgets::*;
+#[cfg(test)]
 use ratatui::Frame;
 
 const MONTHS: [&str; 12] = [
@@ -45,6 +54,7 @@ pub(in crate::app::render) fn format_release_date(premiere_date: &str) -> String
         .unwrap_or_else(|| premiere_date.to_string())
 }
 
+#[cfg(test)]
 pub(in crate::app::render) fn render_home_video_item(
     f: &mut Frame,
     item: &mbv_core::api::EmbyItem,

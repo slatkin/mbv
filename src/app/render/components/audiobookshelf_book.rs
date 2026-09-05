@@ -455,7 +455,6 @@ fn render_book_hero(
         super::home_hero::HomeImagePaint::AudiobookshelfBookCover {
             area: result.img_rect.unwrap(),
             library_item_id: book.library_item_id.clone(),
-            show_placeholder: plan.placeholder,
         }
     })
 }
@@ -538,7 +537,6 @@ fn book_hero_plan(
             image_key: None,
             image_width: 0,
             image_height: 0,
-            placeholder: false,
             content_rows: HERO_TITLE_ROWS,
         };
     };
@@ -569,7 +567,6 @@ fn book_hero_plan(
         image_key: has_cover.then(|| book.library_item_id.clone()),
         image_width,
         image_height,
-        placeholder: has_cover,
         content_rows: image_height
             .saturating_add(1)
             .max(HERO_TITLE_ROWS + 2 + author_rows + overview_rows),
