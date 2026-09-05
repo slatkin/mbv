@@ -39,6 +39,7 @@ impl App {
             let is_now_playing_remote = self
                 .connected_session_state
                 .as_ref()
+                .filter(|s| s.now_playing.is_some())
                 .and_then(|s| s.now_playing_item_id.as_ref())
                 .zip(self.queue_for_scope(scope).emby_item_at(pos))
                 .map(|(npid, item)| item.id == *npid)

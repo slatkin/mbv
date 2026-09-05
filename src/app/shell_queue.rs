@@ -39,8 +39,13 @@ impl Model {
         // this is a routine content refresh: `Preserve` the component's own
         // selection pinned to its slot.
         let cursor = if self.app.queue_cursor_pushed {
+            let held_by_user = self.app.queue_cursor_held_by_user();
             self.app.queue_cursor_pushed = false;
-            QueueCursorUpdate::Set(self.app.queue_for_scope(scope).queue_cursor)
+            if held_by_user {
+                QueueCursorUpdate::Preserve
+            } else {
+                QueueCursorUpdate::Set(self.app.queue_for_scope(scope).queue_cursor)
+            }
         } else {
             QueueCursorUpdate::Preserve
         };
@@ -286,5 +291,55 @@ mod tests {
             model.app.player_tab.queue_cursor, 0,
             "QueueRequest::Cursor must not write App's follow cursor"
         );
+    }
+
+    #[test]
+    fn queue_enter_selection_wins_over_pending_playhead_push() {
+        let mut app = make_app_stub();
+        app.player_tab.set_queue_items(
+            vec![
+                mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item("one", "Movie"))),
+                mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item("two", "Movie"))),
+            ],
+            0,
+        );
+        app.panel_focus = PanelFocus::Queue;
+        let mut model = Model::new(app);
+        model.sync_queue();
+        let id = ComponentId::Queue;
+        let message = model
+            .application
+            .get_component_mut(&id)
+            .expect("Queue component mounted")
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Down,
+                modifiers: KeyModifiers::NONE,
+            }));
+        let Some(Msg::Queue(request @ QueueRequest::Cursor { .. })) = message else {
+            panic!("queue navigation must emit a slot cursor request");
+        };
+        model.handle_queue_request(request);
+        let message = model
+            .application
+            .get_component_mut(&id)
+            .expect("Queue component mounted")
+            .on(&Event::Keyboard(KeyEvent {
+                code: Key::Enter,
+                modifiers: KeyModifiers::NONE,
+            }));
+        let Some(Msg::Queue(request @ QueueRequest::Play { .. })) = message else {
+            panic!("queue Enter must emit a play request");
+        };
+        model.handle_queue_request(request);
+        model.app.queue_cursor_pushed = true;
+        model.sync_queue();
+
+        let cursor = model
+            .application
+            .get_component(&id)
+            .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+            .map(QueueComponent::test_cursor)
+            .expect("Queue component mounted");
+        assert_eq!(cursor, 1);
     }
 }
