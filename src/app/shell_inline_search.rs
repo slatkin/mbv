@@ -178,6 +178,12 @@ impl Model {
         })
     }
 
+    pub(super) fn dismiss_active_inline_search(&mut self) {
+        if let Some(id) = self.active_inline_search_host() {
+            self.close_inline_search_host(&id);
+        }
+    }
+
     pub(super) fn close_inline_search_host(&mut self, id: &ComponentId) {
         if let Some(component) = self.application.get_component_mut(id) {
             if let Some(host) = component.as_any_mut().downcast_mut::<BrowserComponent>() {
@@ -371,6 +377,15 @@ impl Model {
                 | super::LibEvent::NavigateTo { .. }
                 | super::LibEvent::SearchItemsLoaded { .. }
         );
+        if matches!(
+            &ev,
+            super::LibEvent::NavigateTo {
+                switch_tab: true,
+                ..
+            }
+        ) {
+            self.dismiss_active_inline_search();
+        }
         self.app.handle_lib_event(ev);
         if pushes_inline_search {
             self.push_inline_search_content();

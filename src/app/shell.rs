@@ -437,6 +437,7 @@ fn apply_terminal_observer(
         TerminalObserverEvent::MouseClick { column, row } => {
             let point = ratatui::layout::Position { x: column, y: row };
             if let Some(tab_pos) = model.app.layout.main.tab_at(point) {
+                model.dismiss_active_inline_search();
                 model.app.set_library_tab(tab_pos);
             }
         }
