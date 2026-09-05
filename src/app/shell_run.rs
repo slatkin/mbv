@@ -134,12 +134,8 @@ impl Model {
         let mut terminal = init_terminal()?;
         terminal.clear()?;
 
-        // Initialise image picker after terminal is in raw mode. The
-        // halfblock picker backs the dimmed-backdrop fallback: while a modal
-        // dims the backdrop, images re-encode to halfblocks so the dim
-        // applies uniformly (#451).
-        self.app.image_picker = Some(self.app.build_image_picker());
-        self.app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        // Image pickers are initialised in `main` before `Model::new` starts
+        // the TuiRealm listener — see `App::init_image_pickers` (#654).
 
         // Don't clobber a still-live flash message (e.g. try_auto_reconnect's
         // outcome, set during App::new) -- only show "Loading..." if there's

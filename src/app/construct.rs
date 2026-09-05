@@ -613,4 +613,26 @@ impl App {
         }
         picker
     }
+
+    /// Populate `image_picker` (terminal-detected, with the config override)
+    /// and `halfblock_picker` (the #451 dimmed-backdrop fallback: modals
+    /// re-encode images to halfblocks so the dim applies uniformly).
+    ///
+    /// MUST run before the TuiRealm crossterm listener starts
+    /// (`Application::init`): `Picker::from_query_stdio` writes a
+    /// `CSI 16 t` cell-size query to the terminal and reads the reply with a
+    /// raw `io::stdin().read()`. If the listener thread is already draining
+    /// stdin it eats the reply, the picker falls back to a wrong cell size,
+    /// and Kitty renders images clipped on the right/bottom (#654).
+    pub(crate) fn init_image_pickers(&mut self) {
+        let picker = self.build_image_picker();
+        log::debug!(
+            target: "startup",
+            "image picker: protocol={:?} font_size={:?}",
+            picker.protocol_type(),
+            picker.font_size()
+        );
+        self.image_picker = Some(picker);
+        self.halfblock_picker = Some(Picker::halfblocks());
+    }
 }

@@ -31,11 +31,9 @@ fn run_remote_app(
     endpoint: remote_player::DaemonEndpoint,
     config: config::Config,
 ) {
-    if let Err(e) = Model::new(App::new_remote_optional_with_config(
-        client, remote, player_rx, endpoint, config,
-    ))
-    .run()
-    {
+    let mut app = App::new_remote_optional_with_config(client, remote, player_rx, endpoint, config);
+    app.init_image_pickers();
+    if let Err(e) = Model::new(app).run() {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
