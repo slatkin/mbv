@@ -27,8 +27,8 @@
 
 ## 5. Detach book/podcast post-paint mirrors
 
-- [ ] 5.1 In `render_audiobookshelf_book_component` (`src/app/shell_audiobookshelf_book.rs:169-221`), stop writing `self.app.layout.main.audiobookshelf_book_wide_right_area` from `geometry.wide`; keep the rest of the projection (`left_area`, `hero_area`, `selected_item_rect`, `selector_tabs`) unchanged. Remove `geometry.wide` from the destructured tuple if it becomes otherwise unused. Verify: `cargo check -p mbv` (no unused-variable warning) and the book-tab render tests pass.
-- [ ] 5.2 In `render_audiobookshelf_podcast_component` (`src/app/shell_audiobookshelf_podcast.rs:212-263`), stop writing `self.app.layout.main.audiobookshelf_podcast_right_area` from `geometry.right_area`; keep the rest of the projection unchanged. Verify: `cargo check -p mbv` and the podcast-tab render tests pass.
+- [x] 5.1 In `render_audiobookshelf_book_component` (`src/app/shell_audiobookshelf_book.rs:169-221`), stop writing `self.app.layout.main.audiobookshelf_book_wide_right_area` from `geometry.wide`; keep the rest of the projection (`left_area`, `hero_area`, `selected_item_rect`, `selector_tabs`) unchanged. Remove `geometry.wide` from the destructured tuple if it becomes otherwise unused. Verify: `cargo check -p mbv` (no unused-variable warning) and the book-tab render tests pass.
+- [x] 5.2 In `render_audiobookshelf_podcast_component` (`src/app/shell_audiobookshelf_podcast.rs:212-263`), stop writing `self.app.layout.main.audiobookshelf_podcast_right_area` from `geometry.right_area`; keep the rest of the projection unchanged. Verify: `cargo check -p mbv` and the podcast-tab render tests pass.
 
 ## 6. Completion gate: delete predicates, delete orphaned fields, render tests
 
