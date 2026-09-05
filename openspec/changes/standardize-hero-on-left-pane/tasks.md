@@ -117,7 +117,7 @@
   parent-owned embedded `WideMediaList` controls in their Hero media-list slots. Preserve each
   parent's typed targets, local selection, scroll/anchor, and hit semantics; do not introduce a
   media-list trait. Verify each migration with the existing narrowest interaction/buffer coverage.
-- [ ] 4.3 Make the images-off collapse a layout decision, not a `HeroArtwork` variant (D10): the
+- [x] 4.3 Make the images-off collapse a layout decision, not a `HeroArtwork` variant (D10): the
   hero layout takes the global images setting and returns `Option<Rect>` for the artwork region,
   `None` when images are off, with text and metadata taking the full content width — verify a test
   renders two different surfaces with images off and asserts both collapse identically with no
