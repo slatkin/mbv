@@ -1,5 +1,8 @@
 use super::components::inline_search::InlineSearchHost;
-use super::components::{BrowserKey, BrowserKind, ComponentId, InlineSearchComponent, SearchPool};
+use super::components::{
+    BrowserComponent, BrowserKey, BrowserKind, ComponentId, InlineSearchComponent,
+    MusicWorkspaceComponent, SearchPool, TvWorkspaceComponent,
+};
 use super::shell::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
 use crate::app::render::shared_hero_presentation;
@@ -7,6 +10,28 @@ use mbv_core::config::ServiceKind;
 use ratatui::layout::Rect;
 
 impl Model {
+    pub(super) fn active_inline_search_is_open(&self) -> bool {
+        let Some(id) = self.active_inline_search_host() else {
+            return false;
+        };
+        self.application
+            .get_component(&id)
+            .is_some_and(|component| {
+                component
+                    .as_any()
+                    .downcast_ref::<BrowserComponent>()
+                    .is_some_and(|host| host.inline_search().is_active())
+                    || component
+                        .as_any()
+                        .downcast_ref::<MusicWorkspaceComponent>()
+                        .is_some_and(|host| host.inline_search().is_active())
+                    || component
+                        .as_any()
+                        .downcast_ref::<TvWorkspaceComponent>()
+                        .is_some_and(|host| host.inline_search().is_active())
+            })
+    }
+
     fn active_inline_search_host(&self) -> Option<ComponentId> {
         if let Some(id) = self.tv_workspace_component_id() {
             if self.application.mounted(&id) {

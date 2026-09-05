@@ -252,8 +252,8 @@ impl Model {
                 Some(
                     ComponentId::Overlay(OverlayId::Search)
                         | ComponentId::Overlay(OverlayId::Settings)
-                ) | Some(ComponentId::InlineSearch(_))
-            ),
+                )
+            ) || self.active_inline_search_is_open(),
             space_double_tap: self
                 .app
                 .last_space_press
