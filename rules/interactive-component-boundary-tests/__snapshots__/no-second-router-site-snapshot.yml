@@ -1,0 +1,131 @@
+id: no-second-router-site
+snapshots:
+  ? |
+    // A new "shadow" router calling both functions is a regression.
+    use crate::app::input_resolver::{resolve_key, InputContext, InputSnapshot, KeyChord, KeyResolution};
+    use crate::app::action::playback_command_for_key;
+    fn my_browser_router() -> (KeyResolution, Option<crate::app::action::Command>) {
+        let r = resolve_key(InputContext::Playback, &InputSnapshot { player_active: true, has_remote_session: false }, KeyChord::new(crossterm::event::KeyCode::Null, crossterm::event::KeyModifiers::NONE));
+        let c = playback_command_for_key(KeyChord::new(crossterm::event::KeyCode::Null, crossterm::event::KeyModifiers::NONE), true, false);
+        (r, c)
+    }
+  : labels:
+    - source: 'resolve_key(InputContext::Playback, &InputSnapshot { player_active: true, has_remote_session: false }, KeyChord::new(crossterm::event::KeyCode::Null, crossterm::event::KeyModifiers::NONE))'
+      style: primary
+      start: 309
+      end: 497
+    - source: resolve_key
+      style: secondary
+      start: 309
+      end: 320
+  ? |
+    // A new "shadow" router in shell_browser: not allowed.
+    use crate::app::input_resolver::resolve_key;
+    use crate::app::action::playback_command_for_key;
+    fn my_browser_router() {
+        let _r = resolve_key(Default::default(), &Default::default(), Default::default());
+        let _c = playback_command_for_key(Default::default(), true, false);
+    }
+  : labels:
+    - source: resolve_key(Default::default(), &Default::default(), Default::default())
+      style: primary
+      start: 189
+      end: 261
+    - source: resolve_key
+      style: secondary
+      start: 189
+      end: 200
+  ? |
+    // A new "shadow" router in shell_browser: not allowed.
+    use crate::app::input_resolver::resolve_key;
+    use crate::app::action::playback_command_for_key;
+    fn my_browser_router() {}
+  : labels:
+    - source: use crate::app::input_resolver::resolve_key;
+      style: primary
+      start: 56
+      end: 100
+  ? |
+    // Calling playback_command_for_key from a non-router module is a
+    // regression.
+    use crate::app::action::playback_command_for_key;
+    use crate::app::input_resolver::KeyChord;
+    fn my_local_router() -> Option<crate::app::action::Command> {
+        playback_command_for_key(KeyChord::new(crossterm::event::KeyCode::Null, crossterm::event::KeyModifiers::NONE), true, false)
+    }
+  : labels:
+    - source: playback_command_for_key(KeyChord::new(crossterm::event::KeyCode::Null, crossterm::event::KeyModifiers::NONE), true, false)
+      style: primary
+      start: 239
+      end: 362
+    - source: playback_command_for_key
+      style: secondary
+      start: 239
+      end: 263
+  ? |
+    // Calling playback_command_for_key from a non-router module is a regression.
+    use crate::app::action::playback_command_for_key;
+    fn my_local_router() {
+        let _ = playback_command_for_key(Default::default(), true, false);
+    }
+  : labels:
+    - source: playback_command_for_key(Default::default(), true, false)
+      style: primary
+      start: 163
+      end: 220
+    - source: playback_command_for_key
+      style: secondary
+      start: 163
+      end: 187
+  ? |
+    // Calling resolve_key from a non-router module is a regression.
+    use crate::app::input_resolver::resolve_key;
+    fn queue_key_handler() {
+        let _ = resolve_key;
+    }
+  : labels:
+    - source: use crate::app::input_resolver::resolve_key;
+      style: primary
+      start: 65
+      end: 109
+  ? |
+    // Calling resolve_key from a non-router module is a regression.
+    use crate::app::input_resolver::resolve_key;
+    use crate::app::input_resolver::InputContext;
+    fn queue_key_handler() {
+        let _ = resolve_key(InputContext::Playback, &Default::default(), Default::default());
+    }
+  : labels:
+    - source: resolve_key(InputContext::Playback, &Default::default(), Default::default())
+      style: primary
+      start: 193
+      end: 269
+    - source: resolve_key
+      style: secondary
+      start: 193
+      end: 204
+  ? |
+    // Calling resolve_key from a non-router module is a regression.
+    use crate::app::input_resolver::resolve_key;
+    use crate::app::input_resolver::{InputContext, InputSnapshot, KeyChord, KeyResolution};
+    fn queue_key_handler() -> KeyResolution {
+        resolve_key(InputContext::Playback, &InputSnapshot { player_active: true, has_remote_session: false }, KeyChord::new(crossterm::event::KeyCode::Null, crossterm::event::KeyModifiers::NONE))
+    }
+  : labels:
+    - source: 'resolve_key(InputContext::Playback, &InputSnapshot { player_active: true, has_remote_session: false }, KeyChord::new(crossterm::event::KeyCode::Null, crossterm::event::KeyModifiers::NONE))'
+      style: primary
+      start: 244
+      end: 432
+    - source: resolve_key
+      style: secondary
+      start: 244
+      end: 255
+  ? |
+    // Re-defining a router-like function in a non-router module.
+    use crate::app::action::playback_command_for_key;
+    fn my_local_router(_: playback_command_for_key) {}
+  : labels:
+    - source: use crate::app::action::playback_command_for_key;
+      style: primary
+      start: 62
+      end: 111

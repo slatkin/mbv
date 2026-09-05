@@ -1,26 +1,438 @@
-#![allow(unused_imports)]
-
 use super::chrome::play_icon;
-use super::indicators;
 use crate::app::layout::LayoutPlayback;
+use crate::app::palette;
 use crate::app::ui_util::*;
-use crate::app::{palette, App, PanelFocus, PanelMode, RemoteSlotState, TABBAR_LEFT_RESERVE};
-use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
-use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 
-fn uppercase_playback_span(span: Span<'static>) -> Span<'static> {
-    Span::styled(span.content.to_uppercase(), span.style)
+pub(in crate::app) struct PlaybackRenderContext<'a> {
+    pub(in crate::app) area: Rect,
+    pub(in crate::app) playback: &'a mut LayoutPlayback,
+    pub(in crate::app) player_h: u16,
+    pub(in crate::app) show_controls: bool,
+    pub(in crate::app) now_playing_title: Option<(String, Color)>,
+    pub(in crate::app) panel_bg: Color,
+    pub(in crate::app) narrow_player: bool,
+    pub(in crate::app) progress: (i64, i64, bool),
+    pub(in crate::app) use_nerd_fonts: bool,
+    pub(in crate::app) stop_available: bool,
+    pub(in crate::app) next_available: bool,
+    pub(in crate::app) status_indicators: Option<Vec<Span<'static>>>,
+    pub(in crate::app) throbber: Span<'static>,
+    pub(in crate::app) title_parts: Vec<(String, Color)>,
+    pub(in crate::app) idle_feed_title: Option<(String, bool)>,
+    pub(in crate::app) marquee_text: &'a mut String,
+    pub(in crate::app) marquee_started_at: &'a mut std::time::Instant,
 }
 
-/// Column offset for a slow left-right-left marquee pan `elapsed_ms` into
-/// its cycle, given `overflow` extra columns beyond the visible width.
-/// Holds briefly at each end before reversing.
+pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>) {
+    if ctx.player_h == 0 {
+        return;
+    }
+    ctx.playback.idle_feed_link_area = Rect::default();
+
+    let seek_area = Rect {
+        height: 1,
+        ..ctx.area
+    };
+    if ctx.show_controls {
+        render_seekbar(frame, seek_area, ctx.playback, ctx.progress, ctx.panel_bg);
+    } else {
+        ctx.playback.seekbar_area = Rect::default();
+        let bar = "\u{2594}".repeat(seek_area.width as usize);
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                bar,
+                Style::default().fg(palette::PROGRESS_TRACK),
+            ))
+            .style(Style::default().bg(ctx.panel_bg)),
+            seek_area,
+        );
+    }
+
+    if ctx.player_h >= 2 {
+        let title_row_area = Rect {
+            y: ctx.area.y + 1,
+            height: 1,
+            ..ctx.area
+        };
+        frame.render_widget(
+            Paragraph::new(Span::raw(" ".repeat(title_row_area.width as usize)))
+                .style(Style::default().bg(ctx.panel_bg)),
+            title_row_area,
+        );
+        let title_area = Rect {
+            x: ctx.area.x + 1,
+            width: ctx.area.width.saturating_sub(2),
+            y: ctx.area.y + 1,
+            height: 1,
+        };
+        if let Some((title, color)) = ctx.now_playing_title.clone() {
+            let row_title = if ctx.narrow_player {
+                ""
+            } else {
+                title.as_str()
+            };
+            render_title_row(frame, title_area, row_title, color, &mut ctx);
+        } else if !ctx.show_controls {
+            if let Some((title, has_link)) = ctx.idle_feed_title.clone() {
+                if has_link {
+                    ctx.playback.idle_feed_link_area = title_area;
+                }
+                let spans = marquee_spans(
+                    &mut ctx,
+                    &[(title, palette::ACCENT)],
+                    title_area.width as usize,
+                );
+                frame.render_widget(
+                    Paragraph::new(Line::from(spans))
+                        .style(Style::default().bg(ctx.panel_bg))
+                        .alignment(Alignment::Center),
+                    title_area,
+                );
+            }
+        }
+    }
+
+    if ctx.player_h >= 3 {
+        let blank_area = Rect {
+            y: ctx.area.y + 2,
+            height: 1,
+            ..ctx.area
+        };
+        frame.render_widget(
+            Paragraph::new(Span::raw(" ".repeat(blank_area.width as usize)))
+                .style(Style::default().bg(ctx.panel_bg)),
+            blank_area,
+        );
+    }
+
+    if ctx.player_h >= 4 {
+        let bottom_area = Rect {
+            y: ctx.area.y + 3,
+            height: 1,
+            ..ctx.area
+        };
+        frame.render_widget(
+            Paragraph::new(Span::raw(" ".repeat(bottom_area.width as usize)))
+                .style(Style::default().bg(palette::SURFACE_BACKDROP)),
+            bottom_area,
+        );
+        if ctx.narrow_player && ctx.show_controls {
+            if let Some((title, color)) = ctx.now_playing_title.clone() {
+                let prefix = "On Now: ";
+                let inset_area = Rect {
+                    x: bottom_area.x + 1,
+                    width: bottom_area.width.saturating_sub(2),
+                    ..bottom_area
+                };
+                let avail = inset_area.width as usize;
+                let title_avail = avail.saturating_sub(prefix.width());
+                let style = Style::default().fg(color);
+                let label = format!("{prefix}{title}");
+                let (line, alignment) = if label.width() <= avail || title_avail == 0 {
+                    (
+                        Line::from(Span::styled(trunc_str(&label, avail), style)),
+                        Alignment::Center,
+                    )
+                } else {
+                    let scrolled = marquee_spans(&mut ctx, &[(title, color)], title_avail)
+                        .into_iter()
+                        .next()
+                        .map(|span| span.content.to_string())
+                        .unwrap_or_default();
+                    (
+                        Line::from(vec![
+                            Span::styled(prefix, style),
+                            Span::styled(scrolled, style),
+                        ]),
+                        Alignment::Left,
+                    )
+                };
+                frame.render_widget(
+                    Paragraph::new(line)
+                        .style(Style::default().bg(palette::SURFACE_BACKDROP))
+                        .alignment(alignment),
+                    inset_area,
+                );
+            }
+        }
+    }
+}
+
+fn render_seekbar(
+    frame: &mut Frame,
+    area: Rect,
+    playback: &mut LayoutPlayback,
+    (position, runtime, _paused): (i64, i64, bool),
+    panel_bg: Color,
+) {
+    if area.height == 0 || area.width == 0 {
+        playback.seekbar_area = Rect::default();
+        return;
+    }
+    let ratio = if runtime > 0 {
+        (position as f64 / runtime as f64).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    playback.seekbar_area = area;
+    let width = area.width as usize;
+    let filled = ((ratio * width as f64).round() as usize).min(width);
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                "\u{2594}".repeat(filled),
+                Style::default().fg(palette::ACCENT),
+            ),
+            Span::styled(
+                "\u{2594}".repeat(width - filled),
+                Style::default().fg(palette::PROGRESS_TRACK),
+            ),
+        ]))
+        .style(Style::default().bg(panel_bg)),
+        area,
+    );
+}
+
+pub(in crate::app) fn render_title_row(
+    frame: &mut Frame,
+    area: Rect,
+    title: &str,
+    title_color: Color,
+    ctx: &mut PlaybackRenderContext<'_>,
+) {
+    if area.height == 0 || area.width == 0 {
+        ctx.playback.play_pause_area = Rect::default();
+        ctx.playback.stop_area = Rect::default();
+        ctx.playback.next_area = Rect::default();
+        return;
+    }
+
+    let (pos_ticks, rt_ticks, paused) = ctx.progress;
+    let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
+    let dur_str = fmt_duration_short(rt_ticks / mbv_core::api::TICKS_PER_SECOND);
+    let (glyph, gcolor): (&str, Color) = if paused {
+        (play_icon(ctx.use_nerd_fonts), palette::ACCENT)
+    } else {
+        (
+            if ctx.use_nerd_fonts { "\u{f04c}" } else { "||" },
+            palette::TEXT_FOCUS_ACCENT,
+        )
+    };
+    let stop_glyph = if ctx.use_nerd_fonts { "\u{f04d}" } else { "X" };
+    let next_glyph = if ctx.use_nerd_fonts { "\u{f051}" } else { ">>" };
+    let next_color = if ctx.next_available {
+        palette::TEXT_STRONG
+    } else {
+        palette::TEXT_MUTED
+    };
+    let stop_color = if ctx.stop_available {
+        palette::STATUS_ERROR
+    } else {
+        palette::TEXT_MUTED
+    };
+    let pill_bg = palette::SURFACE_BACKDROP;
+    let mut codec_value_next = false;
+    let mut right = ctx
+        .status_indicators
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|span| Span::styled(span.content.to_uppercase(), span.style))
+        .map(|span| {
+            let is_caption = matches!(span.content.as_ref(), "CODEC " | "RES " | "AUD " | "SUB ");
+            let is_codec_caption = span.content.as_ref() == "CODEC ";
+            if is_codec_caption {
+                codec_value_next = true;
+                Span::styled(
+                    span.content.to_string(),
+                    span.style.fg(palette::PLAYBACK_META_FG),
+                )
+            } else if codec_value_next {
+                codec_value_next = false;
+                Span::styled(
+                    span.content.to_string(),
+                    span.style.fg(palette::PLAYBACK_VALUE_FG),
+                )
+            } else if is_caption {
+                Span::styled(
+                    span.content.to_string(),
+                    span.style.fg(palette::PLAYBACK_META_FG),
+                )
+            } else {
+                span
+            }
+        })
+        .collect::<Vec<_>>();
+    for span in &mut right {
+        *span = Span::styled(span.content.to_string(), span.style.bg(pill_bg));
+    }
+    let pct_str = fmt_playback_pct(pos_ticks, rt_ticks);
+    let mut progress_spans = vec![
+        Span::styled(
+            ctx.throbber.content.to_string(),
+            ctx.throbber.style.bg(pill_bg),
+        ),
+        Span::styled(
+            pct_str,
+            Style::default().fg(palette::TEXT_METADATA).bg(pill_bg),
+        ),
+    ];
+    if right.is_empty() {
+        right = progress_spans;
+    } else {
+        progress_spans.push(Span::styled(
+            " \u{29F8} ",
+            Style::default().fg(palette::BORDER_UNFOCUSED).bg(pill_bg),
+        ));
+        progress_spans.extend(right);
+        right = progress_spans;
+    }
+    if !right.is_empty() {
+        right.push(Span::styled(" ", Style::default().bg(pill_bg)));
+    }
+
+    let time_sep = " ";
+    let right_full = {
+        let mut spans = right.clone();
+        spans.insert(
+            0,
+            Span::styled(
+                format!("{pos_str} / {dur_str}"),
+                Style::default().fg(palette::PLAYBACK_META_FG),
+            ),
+        );
+        spans.insert(1, Span::raw(time_sep));
+        spans
+    };
+    let right_elapsed = {
+        let mut spans = right;
+        spans.insert(
+            0,
+            Span::styled(
+                pos_str.clone(),
+                Style::default().fg(palette::PLAYBACK_META_FG),
+            ),
+        );
+        spans.insert(1, Span::raw(time_sep));
+        spans
+    };
+    let right_full_w: u16 = right_full
+        .iter()
+        .map(|span| span.content.width() as u16)
+        .sum();
+    let right_elapsed_w: u16 = right_elapsed
+        .iter()
+        .map(|span| span.content.width() as u16)
+        .sum();
+    let glyph_text = format!("{glyph} ");
+    let glyph_w = glyph_text.width() as u16;
+    let stop_w = stop_glyph.width() as u16;
+    let next_w = next_glyph.width() as u16;
+    let buttons_w = stop_w as usize + 1 + next_w as usize + 1;
+    let available = area.width as usize;
+    let mut show_buttons = true;
+    let (right, right_w) = if ctx.narrow_player {
+        (right_elapsed, right_elapsed_w)
+    } else if available.saturating_sub(glyph_w as usize + right_full_w as usize + buttons_w)
+        < title.width()
+    {
+        show_buttons = false;
+        if available.saturating_sub(glyph_w as usize + right_full_w as usize) < title.width() {
+            (right_elapsed, right_elapsed_w)
+        } else {
+            (right_full, right_full_w)
+        }
+    } else {
+        (right_full, right_full_w)
+    };
+
+    let mut left = vec![Span::styled(
+        glyph_text,
+        Style::default().fg(gcolor).add_modifier(Modifier::BOLD),
+    )];
+    let mut x = area.x;
+    ctx.playback.play_pause_area = Rect {
+        x,
+        y: area.y,
+        width: glyph_w,
+        height: 1,
+    };
+    x += glyph_w;
+    if show_buttons {
+        ctx.playback.stop_area = Rect {
+            x,
+            y: area.y,
+            width: stop_w,
+            height: 1,
+        };
+        x += stop_w;
+        left.push(Span::styled(stop_glyph, Style::default().fg(stop_color)));
+        left.push(Span::raw(" "));
+        x += 1;
+        ctx.playback.next_area = Rect {
+            x,
+            y: area.y,
+            width: next_w,
+            height: 1,
+        };
+        left.push(Span::styled(next_glyph, Style::default().fg(next_color)));
+        left.push(Span::raw(" "));
+    } else {
+        ctx.playback.stop_area = Rect::default();
+        ctx.playback.next_area = Rect::default();
+    }
+    let fixed_w = glyph_w as usize + right_w as usize + if show_buttons { buttons_w } else { 0 };
+    let title_parts = if ctx.narrow_player || ctx.title_parts.is_empty() {
+        vec![(title.to_string(), title_color)]
+    } else {
+        ctx.title_parts.clone()
+    };
+    left.extend(marquee_spans(
+        ctx,
+        &title_parts,
+        available.saturating_sub(fixed_w + 1),
+    ));
+    let left_w: u16 = left.iter().map(|span| span.content.width() as u16).sum();
+    let gap = available.saturating_sub(left_w as usize + right_w as usize);
+    left.push(Span::raw(" ".repeat(gap)));
+    left.extend(right);
+    frame.render_widget(
+        Paragraph::new(Line::from(left)).style(Style::default().bg(ctx.panel_bg)),
+        area,
+    );
+}
+
+fn marquee_spans(
+    ctx: &mut PlaybackRenderContext<'_>,
+    parts: &[(String, Color)],
+    max_width: usize,
+) -> Vec<Span<'static>> {
+    let total_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
+    if max_width == 0 || total_width <= max_width {
+        return parts
+            .iter()
+            .map(|(text, color)| Span::styled(text.clone(), Style::default().fg(*color)))
+            .collect();
+    }
+    let key: String = parts.iter().map(|(text, _)| text.as_str()).collect();
+    if *ctx.marquee_text != key {
+        *ctx.marquee_text = key;
+        *ctx.marquee_started_at = std::time::Instant::now();
+    }
+    let overflow = total_width - max_width;
+    colored_width_window(
+        parts,
+        marquee_col(overflow, ctx.marquee_started_at.elapsed().as_millis()),
+        max_width,
+    )
+}
+
 fn marquee_col(overflow: usize, elapsed_ms: u128) -> usize {
     if overflow == 0 {
         return 0;
@@ -41,11 +453,6 @@ fn marquee_col(overflow: usize, elapsed_ms: u128) -> usize {
     }
 }
 
-/// Slices the `width`-wide window of `parts` starting at display column
-/// `start_col`, emitting one `Span` per contiguous same-color run so the
-/// marquee preserves per-segment styling (e.g. a series name in one color
-/// followed by an episode name in another). A trailing wide char that would
-/// overflow `width` is dropped rather than split.
 fn colored_width_window(
     parts: &[(String, Color)],
     start_col: usize,
@@ -57,503 +464,37 @@ fn colored_width_window(
     let mut current: Option<(String, Color)> = None;
     'parts: for (text, color) in parts {
         for c in text.chars() {
-            let cw = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
-            if col + cw <= start_col {
-                col += cw;
+            let char_width = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+            if col + char_width <= start_col {
+                col += char_width;
                 continue;
             }
-            if taken + cw > width {
+            if taken + char_width > width {
                 break 'parts;
             }
             match &mut current {
-                Some((s, cur_color)) if cur_color == color => s.push(c),
+                Some((value, current_color)) if current_color == color => value.push(c),
                 _ => {
-                    if let Some((s, cur_color)) = current.take() {
-                        spans.push(Span::styled(s, Style::default().fg(cur_color)));
+                    if let Some((value, current_color)) = current.take() {
+                        spans.push(Span::styled(value, Style::default().fg(current_color)));
                     }
                     current = Some((c.to_string(), *color));
                 }
             }
-            taken += cw;
-            col += cw;
+            taken += char_width;
+            col += char_width;
         }
     }
-    if let Some((s, cur_color)) = current {
-        spans.push(Span::styled(s, Style::default().fg(cur_color)));
+    if let Some((value, color)) = current {
+        spans.push(Span::styled(value, Style::default().fg(color)));
     }
     spans
 }
 
-impl App {
-    pub(in crate::app::render) fn render_player_panel(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        layout: &mut LayoutPlayback,
-        player_h: u16,
-        show_controls: bool,
-        now_playing_title: &Option<(String, Color)>,
-        panel_bg: Color,
-    ) {
-        if player_h == 0 {
-            return;
-        }
-        layout.idle_feed_link_area = Rect::default();
-        // Seekbar row (always present when player_h > 0).
-        let seek_area = Rect { height: 1, ..area };
-        if show_controls {
-            self.render_seekbar(f, seek_area, layout, panel_bg);
-        } else {
-            layout.seekbar_area = Rect::default();
-            let bar = "\u{2594}".repeat(seek_area.width as usize);
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    bar,
-                    Style::default().fg(palette::PROGRESS_TRACK),
-                ))
-                .style(Style::default().bg(panel_bg)),
-                seek_area,
-            );
-        }
-        // Title row (when panel is expanded).
-        // Narrow queue-only fork: the title leaves the crowded control row
-        // and lives here on its own "Now Playing:" row, which is otherwise an
-        // empty #2d353b fill (see explanation below the `player_h >= 4` block).
-        let narrow_player = self.effective_panel_mode() == PanelMode::QueueOnly;
-
-        if player_h >= 2 {
-            let title_row_area = Rect {
-                y: area.y + 1,
-                height: 1,
-                ..area
-            };
-            f.render_widget(
-                Paragraph::new(Span::raw(" ".repeat(title_row_area.width as usize)))
-                    .style(Style::default().bg(panel_bg)),
-                title_row_area,
-            );
-            let title_area = Rect {
-                x: area.x + 1,
-                width: area.width.saturating_sub(2),
-                y: area.y + 1,
-                height: 1,
-            };
-            if let Some((ref title, color)) = now_playing_title {
-                if narrow_player {
-                    // Narrow queue-only fork: the title moves out of the
-                    // crowded control row to the bottom "Now Playing:" row
-                    // (see the `player_h >= 4` block below); the control row
-                    // keeps glyphs, time, and pills, just no title text.
-                    self.render_title_row(f, title_area, "", *color, layout, panel_bg);
-                } else {
-                    self.render_title_row(f, title_area, title, *color, layout, panel_bg);
-                }
-            } else if !show_controls {
-                // Idle state: show feed item title if available
-                if let Some(ref idle_feed) = self.idle_feed {
-                    if let Some(item) = idle_feed.items.get(idle_feed.current_index) {
-                        if item.link.as_deref().is_some_and(|link| !link.is_empty()) {
-                            layout.idle_feed_link_area = title_area;
-                        }
-                        let spans = self.marquee_spans(
-                            &[(item.title.clone(), palette::ACCENT)],
-                            title_area.width as usize,
-                        );
-                        f.render_widget(
-                            Paragraph::new(Line::from(spans))
-                                .style(Style::default().bg(panel_bg))
-                                .alignment(Alignment::Center),
-                            title_area,
-                        );
-                    }
-                }
-            }
-        }
-
-        if player_h >= 3 {
-            let blank_area = Rect {
-                y: area.y + 2,
-                height: 1,
-                ..area
-            };
-            f.render_widget(
-                Paragraph::new(Span::raw(" ".repeat(blank_area.width as usize)))
-                    .style(Style::default().bg(panel_bg)),
-                blank_area,
-            );
-        }
-
-        if player_h >= 4 {
-            let bottom_area = Rect {
-                y: area.y + 3,
-                height: 1,
-                ..area
-            };
-            // Plain #2d353b fill: in the two-pane view the library hero's top
-            // border overwrites this row; in narrow queue-only mode it was
-            // dead space, now repurposed for the "Now Playing:" title line.
-            f.render_widget(
-                Paragraph::new(Span::raw(" ".repeat(bottom_area.width as usize)))
-                    .style(Style::default().bg(palette::SURFACE_BACKDROP)),
-                bottom_area,
-            );
-            if narrow_player && show_controls {
-                if let Some((ref title, color)) = now_playing_title {
-                    let prefix = "On Now: ";
-                    let label = format!("{prefix}{title}");
-                    // Indent: never let the label touch the panel edges.
-                    let inset_area = Rect {
-                        x: bottom_area.x + 1,
-                        width: bottom_area.width.saturating_sub(2),
-                        ..bottom_area
-                    };
-                    let avail = inset_area.width as usize;
-                    let title_avail = avail.saturating_sub(prefix.width());
-                    let style = Style::default().fg(*color);
-                    let (line, alignment) = if label.width() <= avail || title_avail == 0 {
-                        (
-                            Line::from(Span::styled(trunc_str(&label, avail), style)),
-                            Alignment::Center,
-                        )
-                    } else {
-                        // Only the title pans; the "On Now: " prefix stays put.
-                        let scrolled: String = self
-                            .marquee_spans(&[(title.clone(), *color)], title_avail)
-                            .into_iter()
-                            .next()
-                            .map(|s| s.content.to_string())
-                            .unwrap_or_default();
-                        (
-                            Line::from(vec![
-                                Span::styled(prefix, style),
-                                Span::styled(scrolled, style),
-                            ]),
-                            Alignment::Left,
-                        )
-                    };
-                    f.render_widget(
-                        Paragraph::new(line)
-                            .style(Style::default().bg(palette::SURFACE_BACKDROP))
-                            .alignment(alignment),
-                        inset_area,
-                    );
-                }
-            }
-        }
-    }
-
-    /// Returns `parts` as styled `Span`s if they fit in `max_width`, or a
-    /// slow left-right-left marquee window across them if they don't. Resets
-    /// the shared marquee clock whenever the tracked text changes so a new
-    /// string always starts from the beginning. Callers pass color-tagged
-    /// segments so per-segment styling (e.g. series vs. episode name) is
-    /// preserved while scrolling.
-    fn marquee_spans(&mut self, parts: &[(String, Color)], max_width: usize) -> Vec<Span<'static>> {
-        let total_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
-        if max_width == 0 || total_width <= max_width {
-            return parts
-                .iter()
-                .map(|(text, color)| Span::styled(text.clone(), Style::default().fg(*color)))
-                .collect();
-        }
-        let key: String = parts.iter().map(|(text, _)| text.as_str()).collect();
-        if self.marquee_text != key {
-            self.marquee_text = key;
-            self.marquee_started_at = std::time::Instant::now();
-        }
-        let overflow = total_width - max_width;
-        let col = marquee_col(overflow, self.marquee_started_at.elapsed().as_millis());
-        colored_width_window(parts, col, max_width)
-    }
-
-    /// One-line now-playing header: play/pause, next, title, and time on the
-    /// left, with the status-indicator badges right-aligned. Records click
-    /// regions for the play/pause and next glyphs into `layout` (see issue
-    /// #112); next is greyed out (and, per `handle_mouse`, non-clickable)
-    /// when `transport_prev_next_available()` says the queue is at that
-    /// boundary.
-    pub(in crate::app::render) fn render_title_row(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        title: &str,
-        title_color: Color,
-        layout: &mut LayoutPlayback,
-        panel_bg: Color,
-    ) {
-        if area.height == 0 || area.width == 0 {
-            layout.play_pause_area = Rect::default();
-            layout.stop_area = Rect::default();
-            layout.next_area = Rect::default();
-            return;
-        }
-
-        let (pos_ticks, rt_ticks, paused) = self.playback_progress();
-        let pos_str = fmt_duration_short(pos_ticks / TICKS_PER_SECOND);
-        let dur_str = fmt_duration_short(rt_ticks / TICKS_PER_SECOND);
-        // Narrow queue-only mode declutters the control row: no title text
-        // and elapsed-only time (no duration).
-        let narrow_player = self.effective_panel_mode() == PanelMode::QueueOnly;
-
-        let (glyph, gcolor): (&str, Color) = if paused {
-            (play_icon(self.use_nerd_fonts), palette::ACCENT)
-        } else {
-            (
-                if self.use_nerd_fonts {
-                    "\u{f04c}"
-                } else {
-                    "||"
-                },
-                palette::TEXT_FOCUS_ACCENT,
-            )
-        };
-        let stop_glyph = if self.use_nerd_fonts { "\u{f04d}" } else { "X" };
-        let stop_gap = " ";
-
-        let next_glyph = if self.use_nerd_fonts {
-            "\u{f051}"
-        } else {
-            ">>"
-        };
-        let next_gap = " ";
-        let next_avail = self.transport_prev_next_available().1;
-        let next_color = if next_avail {
-            palette::TEXT_STRONG
-        } else {
-            palette::TEXT_MUTED
-        };
-        let stop_avail =
-            self.connected_session_id.is_some() || self.player.status.lock().unwrap().active;
-        let stop_color = if stop_avail {
-            palette::STATUS_ERROR
-        } else {
-            palette::TEXT_MUTED
-        };
-        let mut codec_value_next = false;
-        let mut right = self
-            .build_status_indicator_spans()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|span| {
-                let span = uppercase_playback_span(span);
-                let is_caption =
-                    matches!(span.content.as_ref(), "CODEC " | "RES " | "AUD " | "SUB ");
-                let is_codec_caption = span.content.as_ref() == "CODEC ";
-                if is_codec_caption {
-                    codec_value_next = true;
-                    Span::styled(
-                        span.content.to_string(),
-                        span.style.fg(palette::PLAYBACK_META_FG),
-                    )
-                } else if codec_value_next {
-                    codec_value_next = false;
-                    Span::styled(
-                        span.content.to_string(),
-                        span.style.fg(palette::PLAYBACK_VALUE_FG),
-                    )
-                } else if is_caption {
-                    Span::styled(
-                        span.content.to_string(),
-                        span.style.fg(palette::PLAYBACK_META_FG),
-                    )
-                } else {
-                    span
-                }
-            })
-            .map(|span| {
-                Span::styled(
-                    span.content.to_string(),
-                    span.style.bg(palette::SURFACE_BACKDROP),
-                )
-            })
-            .collect::<Vec<_>>();
-        let pill_bg = palette::SURFACE_BACKDROP;
-        let pct_str = fmt_playback_pct(pos_ticks, rt_ticks);
-        let throbber = self.now_playing_throbber_span();
-        let mut progress_spans: Vec<Span<'static>> = vec![
-            Span::styled(throbber.content, throbber.style.bg(pill_bg)),
-            Span::styled(
-                pct_str,
-                Style::default().fg(palette::TEXT_METADATA).bg(pill_bg),
-            ),
-        ];
-        if right.is_empty() {
-            right = progress_spans;
-        } else {
-            progress_spans.push(Span::styled(
-                " \u{29F8} ",
-                Style::default().fg(palette::BORDER_UNFOCUSED).bg(pill_bg),
-            ));
-            progress_spans.extend(right);
-            right = progress_spans;
-        }
-        if !right.is_empty() {
-            right.push(Span::styled(
-                " ",
-                Style::default().bg(palette::SURFACE_BACKDROP),
-            ));
-        }
-
-        // Left: glyph  stop  next  title. Right (gap-filled): elapsed / total  pills
-        // A running `x` cursor tracks where each clickable glyph lands in the
-        // rendered `Line`, so `layout.*_area` exactly matches what's on screen
-        // rather than an estimate.
-        let time_sep = " ";
-        let mut right_full = right; // status pills (with trailing space)
-        let mut right_elapsed = right_full.clone();
-        right_full.insert(
-            0,
-            Span::styled(
-                format!("{pos_str} / {dur_str}"),
-                Style::default().fg(palette::PLAYBACK_META_FG),
-            ),
-        );
-        right_full.insert(1, Span::raw(time_sep));
-        right_elapsed.insert(
-            0,
-            Span::styled(
-                pos_str.clone(),
-                Style::default().fg(palette::PLAYBACK_META_FG),
-            ),
-        );
-        right_elapsed.insert(1, Span::raw(time_sep));
-        let right_full_w: u16 = right_full.iter().map(|s| s.content.width() as u16).sum();
-        let right_elapsed_w: u16 = right_elapsed.iter().map(|s| s.content.width() as u16).sum();
-
-        let glyph_text = format!("{glyph} ");
-        let glyph_w = glyph_text.width() as u16;
-        let stop_w = stop_glyph.width() as u16;
-        let next_w = next_glyph.width() as u16;
-        let buttons_w = stop_w as usize + stop_gap.width() + next_w as usize + next_gap.width();
-        let av = area.width as usize;
-
-        // Sacrifice ladder for the normal panel, most intact first: keep both
-        // the two buttons and the duration, then drop the buttons, then the
-        // duration (elapsed only), and only split/truncate the title when none
-        // of those fit. Narrow queue-only mode uses elapsed-only time and an
-        // empty title (rendered separately on the "On Now:" bottom row).
-        let mut show_buttons = true;
-        let (mut right, mut right_w) = (right_full, right_full_w);
-        if narrow_player {
-            show_buttons = true;
-            (right, right_w) = (right_elapsed, right_elapsed_w);
-        } else if av.saturating_sub(glyph_w as usize + right_full_w as usize + buttons_w)
-            < title.width()
-        {
-            // Drop the two buttons first...
-            show_buttons = false;
-            if av.saturating_sub(glyph_w as usize + right_full_w as usize) < title.width() {
-                // ...then the duration (elapsed only) before truncating the title.
-                (right, right_w) = (right_elapsed, right_elapsed_w);
-            }
-        }
-
-        let mut left: Vec<Span> = Vec::new();
-        let mut x = area.x;
-
-        layout.play_pause_area = Rect {
-            x,
-            y: area.y,
-            width: glyph_w,
-            height: 1,
-        };
-        x += glyph_w;
-        left.push(Span::styled(
-            glyph_text,
-            Style::default().fg(gcolor).add_modifier(Modifier::BOLD),
-        ));
-
-        if show_buttons {
-            layout.stop_area = Rect {
-                x,
-                y: area.y,
-                width: stop_w,
-                height: 1,
-            };
-            x += stop_w;
-            left.push(Span::styled(stop_glyph, Style::default().fg(stop_color)));
-            left.push(Span::raw(stop_gap));
-            x += stop_gap.width() as u16;
-
-            layout.next_area = Rect {
-                x,
-                y: area.y,
-                width: next_w,
-                height: 1,
-            };
-            left.push(Span::styled(next_glyph, Style::default().fg(next_color)));
-            left.push(Span::raw(next_gap));
-        } else {
-            layout.stop_area = Rect::default();
-            layout.next_area = Rect::default();
-        }
-
-        let fixed_w =
-            glyph_w as usize + right_w as usize + if show_buttons { buttons_w } else { 0 };
-        let title_w = av.saturating_sub(fixed_w + 1);
-
-        left.extend(self.playback_title_spans(title, title_color, title_w));
-
-        let left_w: u16 = left.iter().map(|s| s.content.width() as u16).sum();
-        let gap = av.saturating_sub(left_w as usize + right_w as usize);
-
-        let mut spans = left;
-        spans.push(Span::raw(" ".repeat(gap)));
-        spans.extend(right);
-        f.render_widget(
-            Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
-            area,
-        );
-    }
-
-    /// Current playback position / runtime (ticks) and paused state, from the
-    /// connected remote session if any, otherwise the local player.
-    pub(in crate::app::render) fn playback_progress(&self) -> (i64, i64, bool) {
-        if let Some(ref remote) = self.connected_session_state {
-            let elapsed_s = self.remote_pos_at.elapsed().as_secs_f64();
-            let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
-            (
-                (pos_s * TICKS_PER_SECOND as f64) as i64,
-                remote.runtime_s * TICKS_PER_SECOND,
-                self.playback_transport_paused(),
-            )
-        } else {
-            let s = self.player.status.lock().unwrap();
-            (s.position_ticks, s.runtime_ticks, s.paused)
-        }
-    }
-
-    fn playback_title_spans(
-        &mut self,
-        title: &str,
-        title_color: Color,
-        max_width: usize,
-    ) -> Vec<Span<'static>> {
-        let playback = self.effective_playback_state();
-        let parts = playback
-            .active
-            .then(|| self.playback_queue().emby_item_at(playback.active_idx))
-            .flatten()
-            .filter(|item| item.item_type == "Episode" && !item.series_name.is_empty())
-            .filter(|item| item.display_name() == title)
-            .map(|item| {
-                vec![
-                    (item.series_name.clone(), palette::TEXT_FOCUS_ACCENT),
-                    (format!(" {}", item.name), palette::STATUS_AVAILABLE),
-                ]
-            })
-            .unwrap_or_else(|| vec![(title.to_string(), title_color)]);
-
-        self.marquee_spans(&parts, max_width)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::marquee_col;
-
     #[test]
     fn marquee_advances_five_columns_per_second() {
-        assert_eq!(marquee_col(10, 1_200 + 200 * 5), 5);
+        assert_eq!(super::marquee_col(10, 1_200 + 200 * 5), 5);
     }
 }

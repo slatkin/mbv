@@ -1,0 +1,48 @@
+id: no-block-style-color
+valid:
+  - |
+    use ratatui::widgets::Block;
+    use ratatui::style::Style;
+    use crate::app::palette;
+
+    fn render_correct(f: &mut Frame) {
+      let my_style = Style::default().bg(palette::SURFACE_BACKDROP);
+      f.render_widget(Block::default().style(my_style), area);
+    }
+  - |
+    use ratatui::widgets::Block;
+    use ratatui::style::Style;
+
+    fn render_with_chained_style(f: &mut Frame) {
+      f.render_widget(Block::default().style(Style::default().bg(Color::Blue)), area);
+    }
+  - |
+    use ratatui::widgets::Block;
+    use ratatui::style::Style;
+    use crate::app::palette;
+
+    fn render_with_explicit_fg(f: &mut Frame) {
+      f.render_widget(Block::default().style(Style::default().fg(palette::TEXT_PRIMARY)), area);
+    }
+invalid:
+  - |
+    use ratatui::widgets::Block;
+    use crate::app::palette;
+
+    fn render_wrong_color_const(f: &mut Frame) {
+      f.render_widget(Block::default().style(palette::SURFACE_BACKDROP), area);
+    }
+  - |
+    use ratatui::widgets::Block;
+    use crate::app::palette;
+
+    fn render_wrong_resolve_function(f: &mut Frame) {
+      let focused = true;
+      f.render_widget(Block::default().style(resolve_surface_focus(focused)), area);
+    }
+  - |
+    use ratatui::widgets::Block;
+
+    fn render_wrong_scoped_palette(f: &mut Frame) {
+      f.render_widget(Block::default().style(crate::app::palette::TEXT_MUTED), area);
+    }

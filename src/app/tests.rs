@@ -1,9 +1,6 @@
 use super::types_settings::SettingsDestination;
 use super::*;
 
-use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use mbv_core::playback_queue::QueueItem;
-
 use ratatui::backend::TestBackend;
 
 use ratatui::Terminal;
@@ -200,14 +197,6 @@ pub(crate) fn make_app_stub() -> App {
         album_indexes: std::collections::HashMap::new(),
         player_tab: PlayerTab::default(),
         remote_player_tab: None,
-        home: HomePane {
-            continue_items: Vec::new(),
-            continue_cursor: 0,
-            latest: Vec::new(),
-            section: 0,
-            home_cursor: 0,
-            home_scroll: 0,
-        },
         libs: Vec::new(),
         status: String::new(),
         status_expires: None,
@@ -216,16 +205,9 @@ pub(crate) fn make_app_stub() -> App {
         terminal_width: 80,
         terminal_height: 24,
 
-        home_loading: false,
-        mouse_col: 0,
-        mouse_row: 0,
-        last_click_time: std::time::Instant::now(),
-        last_drag_seek: std::time::Instant::now(),
         last_space_press: None,
         last_esc_press: None,
-        last_click_pos: (u16::MAX, u16::MAX),
-        confirm_modal: None,
-        daemon_lost_modal: None,
+        pending_overlay: None,
         pending_exit_message: None,
         pending_delete_slot: None,
         pending_queue_removal: None,
@@ -234,7 +216,6 @@ pub(crate) fn make_app_stub() -> App {
         pending_remote_move_cursor: None,
         pending_queue_edit_cursor: None,
         pending_active_idx: None,
-        skip_intro_end_ticks: None,
         next_up_item: None,
         panel_focus: PanelFocus::default(),
         tab: TabSelection::Home,
@@ -242,8 +223,6 @@ pub(crate) fn make_app_stub() -> App {
         panel_mode: PanelMode::default(),
         mini_view_focus: PanelFocus::Queue,
         library_tab_pending: 0,
-        home_section_pending: None,
-        queue_scroll: 0,
         last_played_item_id: None,
         last_played_completed: false,
         card_image_states: std::collections::HashMap::new(),
@@ -258,30 +237,17 @@ pub(crate) fn make_app_stub() -> App {
         halfblock_picker: None,
         dim_backdrop_active: false,
         image_cache_size_total: 50,
-        show_help: false,
-        show_settings: false,
-        settings_cursor: 0,
         settings_destination: SettingsDestination::Main,
-        services_cursor: 0,
-        settings_scroll: 0,
         settings_save_at: None,
         confirm_logout: false,
-        multiselect_popup: None,
-        selection_modal: None,
-        library_routes_popup: None,
-        help_scroll: 0,
         system_notifications: false,
         notif_failed: false,
         notif_action_tx,
         notif_action_rx,
-        context_menu: None,
         lib_tx,
         lib_rx,
         search_tx,
         search_rx,
-        search_debounce_deadline: None,
-        search_debounce_pending: None,
-        search_sidebar: None,
         force_clear: false,
         tab_scroll: 0,
         ui_volume: 100,
@@ -299,15 +265,11 @@ pub(crate) fn make_app_stub() -> App {
         sessions: Vec::new(),
         cast_receivers: Vec::new(),
         panel_targets: Vec::new(),
-        sessions_cursor: 0,
-        sessions_scroll: 0,
         sessions_loading: false,
-        show_sessions: false,
         playlists: Vec::new(),
         playlists_cursor: 0,
         playlists_scroll: 0,
         playlists_loading: false,
-        show_playlists: false,
         playlists_open: None,
         playlists_open_items: Vec::new(),
         playlists_open_cursor: 0,
@@ -316,7 +278,6 @@ pub(crate) fn make_app_stub() -> App {
         queue_source: crate::config::QueueSource::Unknown,
         queue_dirty: false,
         pending_queue_action: None,
-        remote_reanchor_popup: None,
         use_nerd_fonts: false,
         indicator_style: Default::default(),
         ws_send_tx: None,
@@ -350,9 +311,9 @@ pub(crate) fn make_app_stub() -> App {
         suspended_local: None,
         active_route: None,
         library_route_cache: std::collections::HashMap::new(),
-        last_scroll_at: Instant::now() - Duration::from_secs(1),
         last_nav_at: Instant::now() - Duration::from_secs(1),
         last_library_nav_at: Instant::now() - Duration::from_secs(1),
+        queue_cursor_pushed: false,
         library_position_dirty: false,
         library_position_dirty_at: Instant::now() - Duration::from_secs(1),
         // Default to "focused, past grace window" so existing mouse
@@ -369,7 +330,6 @@ pub(crate) fn make_app_stub() -> App {
         series_detail_cache: std::collections::HashMap::new(),
         series_detail_loading: std::collections::HashSet::new(),
         series_season_loading: std::collections::HashSet::new(),
-        save_playlist_dialog: None,
         image_lru: std::collections::VecDeque::new(),
         pending_image_fetches: std::collections::VecDeque::new(),
         image_fetches_active: 0,
@@ -383,7 +343,6 @@ pub(crate) fn make_app_stub() -> App {
         idle_feed: None,
         feed_seek_pending_slot: None,
         feed_tab: super::types_feed_tab::FeedTabState::default(),
-        feeds_manage_popup: None,
     }
 }
 
@@ -392,79 +351,104 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
     let mut app = make_app_stub();
     let client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
     let item = make_item("Ready item", "Audio");
-    app.apply_emby_completion(super::service_startup::Completion {
-        generation: app.emby_runtime.generation(),
-        result: Ok(super::service_startup::Startup {
-            client,
-            bootstrap: mbv_core::service_runtime::EmbyBootstrap {
-                continue_items: vec![item],
-                views: Vec::new(),
-                latest: Vec::new(),
+    // Home content is Model-owned now (task 5.3d): the completion returns the
+    // computed snapshot (prior pills empty in this bare stub), and the shell
+    // assigns it to `home_content`.
+    let content = app
+        .apply_emby_completion(
+            super::service_startup::Completion {
+                generation: app.emby_runtime.generation(),
+                result: Ok(super::service_startup::Startup {
+                    client,
+                    bootstrap: mbv_core::service_runtime::EmbyBootstrap {
+                        continue_items: vec![item],
+                        views: Vec::new(),
+                        latest: Vec::new(),
+                    },
+                    setup: mbv_core::config::EmbySetup::default(),
+                }),
             },
-            setup: mbv_core::config::EmbySetup::default(),
-        }),
-    });
+            &[],
+        )
+        .expect("Ok startup must bootstrap the Returned Home content");
     assert_eq!(
         app.emby_runtime.state,
         mbv_core::service_runtime::ServiceState::Ready
     );
     assert!(app.emby_runtime.client.is_some());
-    assert_eq!(app.home.continue_items.len(), 1);
-    assert!(!app.home_loading);
+    assert_eq!(content.continue_items.len(), 1);
+    assert!(!content.loading);
 }
 
 #[test]
 fn emby_completion_classifies_current_failures_without_client() {
     let mut app = make_app_stub();
-    app.apply_emby_completion(super::service_startup::Completion {
-        generation: app.emby_runtime.generation(),
-        result: Err(mbv_core::service_runtime::EmbyFailure {
-            class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
-            message: "HTTP 401 unauthorized".into(),
-        }),
-    });
+    let content = app.apply_emby_completion(
+        super::service_startup::Completion {
+            generation: app.emby_runtime.generation(),
+            result: Err(mbv_core::service_runtime::EmbyFailure {
+                class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
+                message: "HTTP 401 unauthorized".into(),
+            }),
+        },
+        &[],
+    );
     assert_eq!(
         app.emby_runtime.state,
         mbv_core::service_runtime::ServiceState::NeedsAuthentication
     );
     assert!(app.emby_runtime.client.is_none());
-    assert!(!app.home_loading);
+    assert!(
+        content.is_none(),
+        "failure completion must deliver no Home content snapshot"
+    );
 
     let mut app = make_app_stub();
-    app.apply_emby_completion(super::service_startup::Completion {
-        generation: app.emby_runtime.generation(),
-        result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
-            "connection refused",
-        )),
-    });
+    let content = app.apply_emby_completion(
+        super::service_startup::Completion {
+            generation: app.emby_runtime.generation(),
+            result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
+                "connection refused",
+            )),
+        },
+        &[],
+    );
     assert_eq!(
         app.emby_runtime.state,
         mbv_core::service_runtime::ServiceState::Unavailable
     );
     assert!(app.emby_runtime.client.is_none());
-    assert!(!app.home_loading);
+    assert!(content.is_none());
 }
 
 #[test]
 fn stale_emby_completion_does_not_change_runtime_or_home() {
     let mut app = make_app_stub();
-    app.home.continue_items = vec![make_item("current", "Audio")];
     app.emby_runtime.replace_setup();
     let stale_generation = mbv_core::service_runtime::SetupGeneration::default();
-    app.apply_emby_completion(super::service_startup::Completion {
-        generation: stale_generation,
-        result: Ok(super::service_startup::Startup {
-            client: mbv_core::api::EmbyClient::new(crate::config::Config::default()),
-            bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
-            setup: mbv_core::config::EmbySetup::default(),
-        }),
-    });
+    // Home content is Model-owned (task 5.3d): a stale completion returns no
+    // snapshot, so the shell leaves `home_content` untouched — the invariance
+    // that used to be asserted on `app.home.continue_items` here.
+    let content = app.apply_emby_completion(
+        super::service_startup::Completion {
+            generation: stale_generation,
+            result: Ok(super::service_startup::Startup {
+                client: mbv_core::api::EmbyClient::new(crate::config::Config::default()),
+                bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
+                setup: mbv_core::config::EmbySetup::default(),
+            }),
+        },
+        &[],
+    );
     assert_eq!(
         app.emby_runtime.state,
         mbv_core::service_runtime::ServiceState::Connecting
     );
     assert!(app.emby_runtime.client.is_none());
-    assert_eq!(app.home.continue_items[0].name, "current");
+    assert!(
+        content.is_none(),
+        "stale completion must not deliver a Home content snapshot"
+    );
 }
 
 pub(crate) fn make_built_app() -> App {
@@ -546,30 +530,45 @@ pub(crate) fn install_test_emby(app: &mut App, config: crate::config::Config) {
     ));
 }
 
-pub(crate) fn left_down(col: u16, row: u16) -> MouseEvent {
-    MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: col,
-        row,
-        modifiers: KeyModifiers::NONE,
-    }
+#[test]
+fn aggregate_zero_area_render_leaves_layout_untouched() {
+    // 2.1j aggregate: a 0-dimension terminal frame (`compute_frame_layout`
+    // returns None) must leave `self.layout` exactly as the last completed
+    // frame left it — no fresh-draft install, no partial mutation.
+    let mut app = make_app_stub();
+    app.layout.main.left_area = ratatui::layout::Rect::new(1, 2, 30, 12);
+    app.layout.main.hero_area = ratatui::layout::Rect::new(1, 2, 30, 12);
+    let before_left = app.layout.main.left_area;
+    let before_hero = app.layout.main.hero_area;
+    let mut term = Terminal::new(TestBackend::new(0, 0)).unwrap();
+    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
+    assert_eq!(
+        app.layout.main.left_area, before_left,
+        "zero-area render must not touch left_area"
+    );
+    assert_eq!(
+        app.layout.main.hero_area, before_hero,
+        "zero-area render must not touch hero_area"
+    );
 }
 
-pub(crate) fn render_app_to_string(app: &mut App, width: u16, height: u16) -> String {
-    let backend = TestBackend::new(width, height);
-    let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
+#[test]
+fn aggregate_surfaces_do_not_bleed_across_destinations() {
+    // 2.1j per-surface single-producer: after a normal frame, each surface
+    // family's geometry is produced only by its own checkpoint — no
+    // cross-surface bleed from one destination into another.
+    let mut app = make_app_stub();
+    let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
 
-    let buf = term.backend().buffer();
-    let area = *buf.area();
-    let mut out = String::new();
-    for y in 0..area.height {
-        for x in 0..area.width {
-            out.push_str(buf[(x, y)].symbol());
-        }
-        out.push('\n');
-    }
-    out
+    let main = &app.layout.main;
+    // Cross-surface bleed check: a nonzero queue area must not also be a
+    // nonzero music wide area (they are mutually exclusive destinations).
+    let queue_active = main.queue_area.width > 0 && main.queue_area.height > 0;
+    let music_wide_active = app.is_right_panel_wide();
+    // A stub may render a degenerate frame; the invariant is that neither
+    // surface's geometry is written by the other's producer.
+    assert!(!(queue_active && music_wide_active));
 }
 
 pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec<EmbyItem>) -> App {
@@ -666,20 +665,4 @@ pub(crate) fn emby_unified_state(
         revision: 1,
         source: crate::config::QueueSource::Remote,
     }
-}
-
-pub(in crate::app) fn sections(n: usize) -> Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)> {
-    (0..n)
-        .map(|i| {
-            (
-                format!("Sec {i}"),
-                HomeLatestSource::Emby(format!("lib{i}")),
-                make_items(3)
-                    .into_iter()
-                    .map(|item| QueueItem::Emby(Box::new(item)))
-                    .collect(),
-                0,
-            )
-        })
-        .collect()
 }

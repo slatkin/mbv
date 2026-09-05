@@ -1,4 +1,3 @@
-use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -41,22 +40,15 @@ enum ArtAnchorX {
     Right,
 }
 
-#[derive(Clone, Copy)]
-enum ArtAnchorY {
-    Top,
-}
-
 /// Places a `w`x`h` image within `container` anchored to the given corner/edge,
 /// letterboxing the leftover margin to the opposite side(s).
-fn align_art(container: Rect, w: u16, h: u16, ax: ArtAnchorX, ay: ArtAnchorY) -> Rect {
+fn align_art(container: Rect, w: u16, h: u16, ax: ArtAnchorX) -> Rect {
     let free_w = container.width.saturating_sub(w);
     let x = match ax {
         ArtAnchorX::Center => container.x + free_w / 2,
         ArtAnchorX::Right => container.x + free_w,
     };
-    let y = match ay {
-        ArtAnchorY::Top => container.y,
-    };
+    let y = container.y;
     Rect {
         x,
         y,
@@ -66,12 +58,40 @@ fn align_art(container: Rect, w: u16, h: u16, ax: ArtAnchorX, ay: ArtAnchorY) ->
 }
 
 impl App {
+    pub(in crate::app) fn paint_music_image(
+        &mut self,
+        f: &mut Frame,
+        image_paint: Option<MusicImagePaint>,
+    ) {
+        let Some(MusicImagePaint {
+            area,
+            album,
+            centered,
+        }) = image_paint
+        else {
+            return;
+        };
+        if !self.images_enabled() || area.width < 4 || area.height < 2 {
+            return;
+        }
+        self.fetch_card_image(
+            inline_album_art_cache_key(&album.id),
+            album.id.clone(),
+            album.series_id.clone(),
+            crate::app::render::MUSIC_ALBUM_IMAGE_TYPES,
+        );
+        if centered {
+            self.render_inline_album_art_centered(f, area, &album);
+        } else {
+            self.render_inline_album_art(f, area, &album);
+        }
+    }
+
     pub(in crate::app::render) fn render_inline_album_art(
         &mut self,
         f: &mut Frame,
         area: Rect,
         album: &mbv_core::api::EmbyItem,
-        _layout: &mut LayoutMain,
     ) {
         if !self.images_enabled() || area.width < 4 || area.height < 2 {
             return;
@@ -85,8 +105,7 @@ impl App {
             album,
             inline_album_art_cache_key(&album.id),
             nav_gate_open,
-            false,
-            (ArtAnchorX::Right, ArtAnchorY::Top),
+            ArtAnchorX::Right,
         );
     }
 
@@ -95,9 +114,8 @@ impl App {
         f: &mut Frame,
         area: Rect,
         album: &mbv_core::api::EmbyItem,
-        _layout: &mut LayoutMain,
     ) {
-        if !self.images_enabled() || area.width < 4 || area.height < 2 {
+        if area.width < 4 || area.height < 2 {
             return;
         }
 
@@ -118,8 +136,7 @@ impl App {
             album,
             inline_album_art_cache_key(&album.id),
             nav_gate_open,
-            false,
-            (ArtAnchorX::Center, ArtAnchorY::Top),
+            ArtAnchorX::Center,
         );
     }
 
@@ -127,39 +144,20 @@ impl App {
     /// `OVERLAY` loading placeholder while the image isn't yet decoded/gated.
     /// Returns the rect actually painted (image or placeholder).
     ///
-    /// When `square` is set, the cover is fetched center-cropped to a square
-    /// (via `fetch_card_image_square`) — the collage mode, giving uniform grid
-    /// tiles; otherwise the natural-aspect cover is fetched. Placement within
-    /// `cell` follows `anchor` (the standalone path uses `(Right, Top)`;
+    /// Placement within
+    /// `cell` follows `anchor` (the standalone path anchors `Right`;
     /// collage tiles anchor toward the box center so they abut).
     fn render_inline_art_cell(
         &mut self,
         f: &mut Frame,
         cell: Rect,
-        album: &mbv_core::api::EmbyItem,
+        _album: &mbv_core::api::EmbyItem,
         cache_key: String,
         nav_gate_open: bool,
-        square: bool,
-        anchor: (ArtAnchorX, ArtAnchorY),
+        anchor: ArtAnchorX,
     ) -> Rect {
         if cell.width == 0 || cell.height == 0 {
             return cell;
-        }
-
-        if square {
-            self.fetch_card_image_square(
-                cache_key.clone(),
-                album.id.clone(),
-                album.series_id.clone(),
-                crate::app::render::MUSIC_ALBUM_IMAGE_TYPES,
-            );
-        } else {
-            self.fetch_card_image(
-                cache_key.clone(),
-                album.id.clone(),
-                album.series_id.clone(),
-                crate::app::render::MUSIC_ALBUM_IMAGE_TYPES,
-            );
         }
 
         let mut img_rect = cell;
@@ -174,7 +172,7 @@ impl App {
                         height: cell.height,
                     },
                 ) {
-                    img_rect = align_art(cell, actual.width, actual.height, anchor.0, anchor.1);
+                    img_rect = align_art(cell, actual.width, actual.height, anchor);
                     use_placeholder = false;
                 }
             }
@@ -198,4 +196,12 @@ impl App {
 
         img_rect
     }
+}
+
+/// Album artwork that a render component computed but cannot paint because
+/// image-cache authority remains in the shell during the migration.
+pub(in crate::app) struct MusicImagePaint {
+    pub(in crate::app) area: Rect,
+    pub(in crate::app) album: Box<mbv_core::api::EmbyItem>,
+    pub(in crate::app) centered: bool,
 }

@@ -1,0 +1,9 @@
+id: no-app-as-type
+snapshots:
+  ? |
+    struct Holder { app: App, app_ref: &App, app_mut: &mut App }
+  : labels:
+    - source: App
+      style: primary
+      start: 21
+      end: 24

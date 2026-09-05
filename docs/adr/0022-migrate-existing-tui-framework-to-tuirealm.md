@@ -31,6 +31,12 @@ child's outer area; its TuiRealm `Component::view` implementation owns internal
 placement and delegates painting to existing Render Components. Adopting TuiRealm
 does not require replacing those painters with `tui-realm-stdlib` widgets.
 
+Canonical media-list composition uses `WideMediaList` for fixed-row Wide one-column rails and Queue, and `InlineMediaBrowser` for Normal/Narrow selected-row replacement. Inline Search remains the separate `InlineSearchComponent`; non-hero catalog browsers retain their existing two-column policy. The primary child owner/painter map is Home → `HomeComponent`, generic Emby/Movies/homevideos and Emby podcast → `BrowserComponent`, TV Series → `TvWorkspaceComponent` in Wide / `BrowserComponent` in Normal, grouped Music → `MusicWorkspaceComponent`, Audiobookshelf Podcast → `AudiobookshelfPodcastComponent`, Audiobookshelf Books → `AudiobookshelfBookComponent`, Feeds → `FeedsComponent`, and Queue → `QueueComponent`.
+
+> **Superseded for Inline Search by ADR 0025.** This historical migration
+> record retains the accepted separate-component clause above; destination-
+> embedded Inline Search is now the controlling architecture decision.
+
 This decision does not add a parallel custom `Component` trait, registry,
 dispatcher, focus framework, generic effect scheduler, Flux store architecture,
 or separate UI crate. TuiRealm supplies the application framework; mbv adds only
@@ -45,10 +51,34 @@ migration is complete only when every interactive-surface ledger row uses
 TuiRealm, component-local state and handlers have left `App`, `CONTEXT_STACK` and
 `AppLayout` are removed, and no parallel legacy interaction framework remains.
 
+> **Superseded by decision D16** (see
+> `openspec/changes/archive/2026-08-29-migrate-tui-to-tuirealm/design.md`).
+> The completion bar is about *authority*, not deletion. `AppLayout` loses global
+> interaction and hit-routing authority, but render-only load-bearing layout
+> state may remain. The real bar: no component reads geometry it did not itself
+> paint, and no keyboard or behaviour path branches on whether a rect was
+> painted.
+
 Existing input precedence, responsive behavior, images-disabled behavior, render
 characterization, and process-boundary behavior remain regression contracts.
 Search is not a proof of concept, and its existing correctness bugs are separate
 from this framework migration.
+
+### Residual debt
+
+Known deviations from the authority bar, each with an owner:
+
+- **Residual B — paint-inference keyboard branching.** Tracked by issue #643.
+  Keyboard paths branch on
+  `is_wide_*_active()` (`src/app/layout.rs:209`, `:213`, `:220`, `:227`), which
+  infers layout from the last painted frame and so is wrong for one frame after
+  a resize. Consumed at `src/app/input_browse_dispatch.rs:35`,
+  `src/app/actions_navigation.rs:205`, `src/app/shell_messages.rs:32`,
+  `src/app/audiobookshelf_book_modal_actions.rs:57-59`,
+  `src/app/shell_browser.rs:196`, `src/app/shell_inline_search.rs:49`,
+  `src/app/shell_inline_search.rs:267`.
+- **Residual C — page rows off global geometry.** Page-size rows are computed
+  from global layout geometry at `src/app/actions.rs:121`.
 
 ## Considered Options
 

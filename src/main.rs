@@ -5,7 +5,7 @@ mod mpris;
 mod single_instance;
 mod tray;
 
-use app::App;
+use app::{App, Model};
 use config::load_config;
 use mbv_core::api::EmbyClient;
 use mbv_core::{applog, player, remote_player};
@@ -31,9 +31,9 @@ fn run_remote_app(
     endpoint: remote_player::DaemonEndpoint,
     config: config::Config,
 ) {
-    if let Err(e) =
-        App::new_remote_optional_with_config(client, remote, player_rx, endpoint, config).run()
-    {
+    let mut app = App::new_remote_optional_with_config(client, remote, player_rx, endpoint, config);
+    app.init_image_pickers();
+    if let Err(e) = Model::new(app).run() {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
@@ -368,7 +368,7 @@ fn main() {
             if let Err(e) = guard.write_pid() {
                 log::warn!(target: "startup", "failed to write pid into lock file: {e}");
             }
-            if let Err(e) = App::new_independent(config).run() {
+            if let Err(e) = Model::new(App::new_independent(config)).run() {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }

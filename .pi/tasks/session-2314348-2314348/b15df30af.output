@@ -1,0 +1,6 @@
+    | ---------- method in this implementation
+...
+242 |     pub(super) fn home_section_pref(&self) -> String {
+    |                   ^^^^^^^^^^^^^^^^^
+cargo check: 0 errors, 37 warnings (1 crates)
+cargo nextest: 1152 passed (1 binary, 7.577s)

@@ -274,16 +274,21 @@ fn teardown_retires_remote_tracking_owned_state() {
         )
         .unwrap(),
     );
-    app.remote_reanchor_popup = Some(super::types_playback::RemoteReanchorPopup {
-        targets: vec![(0, "a".into())],
-        cursor: 0,
-    });
+    app.pending_overlay = Some(super::types_overlay::OverlayRequest::RemoteReanchor(
+        super::types_playback::RemoteReanchorPopup {
+            targets: vec![(0, "a".into())],
+            cursor: 0,
+        },
+    ));
 
     app.teardown(Duration::from_secs(1));
 
     assert!(app.remote_tracker.is_none());
     assert!(app.remote_queue_projection.is_none());
-    assert!(app.remote_reanchor_popup.is_none());
+    assert!(matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::DismissRemoteReanchor)
+    ));
 }
 
 #[test]
@@ -355,9 +360,6 @@ fn render_interval_is_slow_when_idle_with_no_fetches_in_flight() {
 fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
     let mut app = make_app_stub();
     app.config.lock().unwrap().auto_reconnect = false;
-    app.settings_cursor = (0..settings::settings_total_rows())
-        .find(|&idx| settings::settings_cursor_to_key(idx) == SettingKey::AutoReconnect)
-        .expect("AutoReconnect setting row must exist");
 
     let cfg = app.config.lock().unwrap().clone();
     assert_eq!(
@@ -369,7 +371,7 @@ fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
         "off"
     );
 
-    app.handle_settings_activate();
+    app.handle_settings_activate(SettingKey::AutoReconnect);
     let cfg = app.config.lock().unwrap().clone();
     assert!(cfg.auto_reconnect);
     assert_eq!(
@@ -381,7 +383,7 @@ fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
         "settings toggle must use the delayed save path"
     );
 
-    app.handle_settings_activate();
+    app.handle_settings_activate(SettingKey::AutoReconnect);
     assert!(!app.config.lock().unwrap().auto_reconnect);
 }
 
@@ -390,11 +392,8 @@ fn enabling_auto_reconnect_persists_the_active_remote_target() {
     let mut app = make_app_stub();
     app.config.lock().unwrap().auto_reconnect = false;
     app.active_route = Some("music".to_string());
-    app.settings_cursor = (0..settings::settings_total_rows())
-        .find(|&idx| settings::settings_cursor_to_key(idx) == SettingKey::AutoReconnect)
-        .expect("AutoReconnect setting row must exist");
 
-    app.handle_settings_activate();
+    app.handle_settings_activate(SettingKey::AutoReconnect);
 
     assert_eq!(
         crate::config::load_last_remote_connection().unwrap(),

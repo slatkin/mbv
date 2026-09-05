@@ -12,10 +12,6 @@ pub(crate) struct SearchSidebar {
     pub(super) list_height: usize,
 }
 
-pub(crate) struct SearchDrainOutcome {
-    pub(crate) received: usize,
-}
-
 fn is_navigable_type(item_type: &str) -> bool {
     matches!(
         item_type,

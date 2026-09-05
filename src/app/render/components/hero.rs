@@ -19,7 +19,7 @@ use crate::app::ui_util::trunc_str;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Paragraph, Wrap};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
@@ -71,11 +71,9 @@ pub(in crate::app::render) fn wrap_overview_lines(
     lines
 }
 /// The shared display-flow accounting for an inline selected-detail block.
-/// `offset` is the first display row in the viewport and
-/// `detail_screen_row` is the detail block's row relative to that viewport.
+/// `offset` is the first display row in the viewport.
 pub(in crate::app::render) struct InlineDetailFlow {
     pub offset: usize,
-    pub detail_screen_row: usize,
 }
 
 pub(in crate::app::render) enum InlineDisplayRow {
@@ -170,10 +168,7 @@ pub(in crate::app::render) fn inline_detail_flow(
         .saturating_sub(visible_rows)
         .min(cursor_row);
     let offset = stored_offset.clamp(lower_bound, cursor_row);
-    Some(InlineDetailFlow {
-        offset,
-        detail_screen_row: cursor_row - offset,
-    })
+    Some(InlineDetailFlow { offset })
 }
 
 /// Paints the hero block's outer shell -- the colored bg (focused/unfocused
@@ -280,7 +275,7 @@ pub(in crate::app::render) fn inline_hero_text_width(
     image_height: u16,
     row_from_top: u16,
 ) -> u16 {
-    if image_height > 0 && row_from_top <= image_height {
+    if image_height > 0 && row_from_top < image_height {
         area_width.saturating_sub(image_width.saturating_add(1))
     } else {
         area_width
@@ -596,7 +591,9 @@ pub(in crate::app::render) fn render_home_hero_meta_block(
         };
         // hero-on-left: paint recessed box behind overview.
         let recessed = if overview_pad > 0 {
-            let ov_height = overview_lines.len().min((max_y - row) as usize) as u16 + 2; // top and bottom padding rows
+            // Reserve the remaining rows; Paragraph performs the authoritative
+            // wrapping while painting into the final content rect.
+            let ov_height = (max_y - row).saturating_add(2); // top and bottom padding rows
             let ov_area = Rect {
                 x: area.x,
                 y: row.saturating_sub(1), // start 1 row earlier for top padding
@@ -604,43 +601,50 @@ pub(in crate::app::render) fn render_home_hero_meta_block(
                 height: ov_height,
             };
             Some(
-                crate::app::render::arrangements::hero_left::hero_on_left_recessed_box(
-                    f,
-                    ov_area,
-                    overview_pad,
-                    1,
+                crate::app::render::arrangements::hero_left::hero_on_left_main_content_box(
+                    f, ov_area,
                 ),
             )
         } else {
             None
         };
-        for (line, wide) in overview_lines {
-            if row >= max_y {
-                break;
-            }
-            let base = if *wide { wide_area } else { area };
-            let text_r = match &recessed {
-                Some((_, content)) => Rect {
-                    x: content.x,
-                    y: row,
-                    width: content.width,
-                    height: 1,
-                },
-                None => Rect {
+        if let Some((_, content)) = recessed {
+            let overview = overview_lines
+                .iter()
+                .map(|(line, _)| line.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
+            let text_area = Rect {
+                y: row,
+                height: max_y.saturating_sub(row),
+                ..content
+            };
+            f.render_widget(
+                Paragraph::new(Span::styled(overview, Style::default().fg(ov_color)))
+                    .wrap(Wrap { trim: true }),
+                text_area,
+            );
+        } else {
+            for (line, wide) in overview_lines {
+                if row >= max_y {
+                    break;
+                }
+                let base = if *wide { wide_area } else { area };
+                let text_r = Rect {
                     x: base.x + overview_pad,
                     y: row,
                     width: base.width.saturating_sub(overview_pad * 2),
                     height: 1,
-                },
-            };
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    line.clone(),
-                    Style::default().fg(ov_color),
-                ))),
-                text_r,
-            );
-            row += 1;
+                };
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        line.clone(),
+                        Style::default().fg(ov_color),
+                    ))),
+                    text_r,
+                );
+                row += 1;
+            }
         }
     }
 }
@@ -654,12 +658,7 @@ pub(in crate::app::render) fn render_home_hero_meta_block(
 /// resumes the pill bar row it replaces: same `PILL_ROW_BG` background and
 /// leading `⌘` glyph as `render_pill_bar`'s prefix, so swapping between pills
 /// and search doesn't shift the row's look, just its content.
-pub(in crate::app::render) fn render_search_box(
-    f: &mut Frame,
-    area: Rect,
-    query: &str,
-    loading: bool,
-) {
+pub(in crate::app) fn render_search_box(f: &mut Frame, area: Rect, query: &str, loading: bool) {
     use ratatui::widgets::Block;
 
     if area.width == 0 || area.height == 0 {

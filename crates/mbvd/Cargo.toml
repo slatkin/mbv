@@ -2,6 +2,7 @@
 name = "mbvd"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Daemon process for mbv media playback."
 
 [[bin]]

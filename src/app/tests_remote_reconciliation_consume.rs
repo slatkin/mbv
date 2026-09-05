@@ -432,7 +432,7 @@ fn consume_followed_by_direct_selection_targets_the_projected_occurrence() {
     // Direct selection of visible "b" (index 0) issues a Select intent for the
     // Submitted occurrence that still owns that slot.
     app.player_tab.queue_cursor = 0;
-    app.dispatch(crate::app::action::Command::QueuePlayCursor);
+    app.dispatch(crate::app::action::Command::QueuePlayCursor(0));
     assert_eq!(
         app.remote_tracker
             .as_ref()
@@ -509,7 +509,7 @@ fn consume_followed_by_duplicate_selection_targets_distinct_occurrence() {
     // Selecting the remaining duplicate targets occurrence 2, never the
     // consumed occurrence 1: duplicate media items keep distinct identities.
     app.player_tab.queue_cursor = 0;
-    app.dispatch(crate::app::action::Command::QueuePlayCursor);
+    app.dispatch(crate::app::action::Command::QueuePlayCursor(0));
     assert_eq!(
         app.remote_tracker
             .as_ref()

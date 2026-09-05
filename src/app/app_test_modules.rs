@@ -23,16 +23,13 @@ mod tests_library_position_activation;
 mod tests_library_position_restore;
 
 #[cfg(test)]
-#[path = "tests_mouse_browse_dispatch.rs"]
-mod tests_mouse_browse_dispatch;
+#[path = "split_browse_state_browse_level_tests.rs"]
+mod split_browse_state_browse_level_tests;
 
+#[cfg(test)]
 #[cfg(test)]
 #[path = "tests_panel_focus.rs"]
 mod tests_panel_focus;
-
-#[cfg(test)]
-#[path = "tests_audiobook.rs"]
-mod tests_audiobook;
 
 #[cfg(test)]
 #[path = "tests_home_latest.rs"]
@@ -79,10 +76,6 @@ mod tests_feeds_manage;
 mod tests_context_menu_placement;
 
 #[cfg(test)]
-#[path = "tests_services_settings.rs"]
-mod tests_services_settings;
-
-#[cfg(test)]
 #[path = "tests_services_settings_lifecycle.rs"]
 mod tests_services_settings_lifecycle;
 
@@ -105,6 +98,10 @@ mod tests_podcast_context_menu;
 #[cfg(test)]
 #[path = "tests_queue_scope.rs"]
 mod tests_queue_scope;
+
+#[cfg(test)]
+#[path = "tests_queue_regression.rs"]
+mod tests_queue_regression;
 
 #[cfg(test)]
 #[path = "tests_queue_consume.rs"]
@@ -135,13 +132,49 @@ mod tests_route_state_session;
 mod tests_reattach;
 
 #[cfg(test)]
-#[path = "tests_status_bar.rs"]
-mod tests_status_bar;
-
-#[cfg(test)]
 #[path = "tests_music_grouping.rs"]
 mod tests_music_grouping;
 
 #[cfg(test)]
 #[path = "tests_player_event.rs"]
 mod tests_player_event;
+
+#[cfg(test)]
+#[path = "tests_routing_matrix.rs"]
+mod tests_routing_matrix;
+
+#[cfg(test)]
+#[path = "tests_routing_matrix_support.rs"]
+mod tests_routing_matrix_support;
+
+#[cfg(test)]
+#[path = "tests_routing_matrix_blocking.rs"]
+mod tests_routing_matrix_blocking;
+
+#[cfg(test)]
+#[path = "tests_routing_matrix_focus.rs"]
+mod tests_routing_matrix_focus;
+
+#[cfg(test)]
+#[path = "tests_routing_matrix_playback.rs"]
+mod tests_routing_matrix_playback;
+
+#[cfg(test)]
+#[path = "tests_routing_matrix_globals.rs"]
+mod tests_routing_matrix_globals;
+
+#[cfg(test)]
+#[path = "tests_tick_harness.rs"]
+pub(crate) mod tests_tick_harness;
+
+#[cfg(test)]
+#[path = "tests_tick_integration.rs"]
+mod tests_tick_integration;
+
+#[cfg(test)]
+#[path = "tests_tick_integration_mouse.rs"]
+mod tests_tick_integration_mouse;
+
+#[cfg(test)]
+#[path = "tests_narrow_browse_migration.rs"]
+mod tests_narrow_browse_migration;

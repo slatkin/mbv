@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
+use crate::app::types_browse::BrowseResting;
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::backend::TestBackend;
@@ -36,16 +37,13 @@ pub(super) fn make_music_album_app() -> App {
     album2.is_folder = true;
 
     app.libs.push(LibraryTab {
-        library,
-        search: None,
         nav_stack: vec![
             BrowseLevel {
                 parent_id: "lib-music".into(),
                 title: "Music".into(),
                 items: vec![group],
                 total_count: 1,
-                cursor: 0,
-                scroll: 0,
+                resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -60,8 +58,7 @@ pub(super) fn make_music_album_app() -> App {
                 title: "Alpha".into(),
                 items: vec![album1, album2],
                 total_count: 2,
-                cursor: 0,
-                scroll: 0,
+                resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -72,11 +69,7 @@ pub(super) fn make_music_album_app() -> App {
                 music_grouping: None,
             },
         ],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app
@@ -135,16 +128,13 @@ pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> Ap
         .collect();
 
     app.libs.push(LibraryTab {
-        library,
-        search: None,
         nav_stack: vec![
             BrowseLevel {
                 parent_id: "lib-music".into(),
                 title: "Music".into(),
                 items: vec![group],
                 total_count: 1,
-                cursor: 0,
-                scroll: 0,
+                resting: BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -159,8 +149,7 @@ pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> Ap
                 title: "Alpha".into(),
                 items: albums,
                 total_count: album_count,
-                cursor,
-                scroll: 0,
+                resting: BrowseResting::new(cursor, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -171,11 +160,7 @@ pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> Ap
                 music_grouping: None,
             },
         ],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app
@@ -200,7 +185,7 @@ pub(super) fn add_following_artist_albums(app: &mut App, album_count: usize) {
 pub(super) fn render_full_app(app: &mut App, width: u16, height: u16) {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
+    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
 }
 
 pub(super) struct RecursiveFetchServer {

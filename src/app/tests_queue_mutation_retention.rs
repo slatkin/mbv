@@ -19,7 +19,7 @@ fn reorder_retires_tracking_after_successful_move() {
     app.player_tab.queue_cursor = 0;
     app.remote_tracker = Some(tracking_stub());
 
-    app.move_queue_item_down();
+    app.move_queue_item_down(app.player_tab.queue_cursor);
 
     assert!(app.remote_tracker.is_none());
     assert_eq!(
@@ -69,7 +69,7 @@ fn boundary_move_down_leaves_tracking_active() {
     app.player_tab.queue_cursor = 1;
     app.remote_tracker = Some(tracking_stub());
 
-    app.move_queue_item_down();
+    app.move_queue_item_down(app.player_tab.queue_cursor);
 
     assert!(app.remote_tracker.is_some());
     assert_eq!(app.player_tab.emby_items().len(), 2);
@@ -97,20 +97,14 @@ fn rejected_route_enqueue_leaves_tracking_active() {
     app.active_route = Some("music".to_string());
     let mut movies_item = make_item("Movies", "CollectionFolder");
     movies_item.id = "lib-movies".to_string();
-    app.libs.push(LibraryTab {
-        library: movies_item,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(movies_item));
     app.tab = TabSelection::EmbyLibrary(0);
     app.remote_tracker = Some(tracking_stub());
 
-    app.enqueue_selected(Some(0));
+    // `enqueue_selected` was deleted in task 4.3, R1; resolve the library
+    // root exactly as the context-menu Enqueue arm does.
+    let item = app.libs[0].library.clone();
+    app.enqueue_lib_item(0, item);
 
     assert!(app.remote_tracker.is_some());
     assert!(app.status.contains("Can't mix libraries in a routed queue"));
@@ -122,13 +116,11 @@ fn failed_folder_enqueue_leaves_tracking_active() {
     let mut app = make_app_stub();
     let mut folder = make_item("Folder", "CollectionFolder");
     folder.is_folder = true;
-    app.home.continue_items = vec![folder];
-    app.home.continue_cursor = 0;
     app.remote_tracker = Some(tracking_stub());
 
     // The stub client has no server URL configured, so the enqueue fetch
     // fails at the HTTP layer before anything can be appended.
-    app.enqueue_selected(None);
+    app.enqueue_home_item(folder);
 
     assert!(app.remote_tracker.is_some());
     assert!(app.player_tab.emby_items().is_empty());
@@ -149,11 +141,22 @@ fn canceled_active_item_removal_leaves_tracking_active() {
     app.remote_tracker = Some(tracking_stub());
 
     app.remove_from_queue(1);
-    assert!(app.confirm_modal.is_some());
+    assert!(matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::Confirm(_))
+    ));
 
-    app.handle_key_confirm_modal(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    let action = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        _ => panic!("confirmation request missing"),
+    };
+    app.apply_confirm_action(action, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    app.dismiss_confirm();
 
-    assert!(app.confirm_modal.is_none());
+    assert!(!matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::Confirm(_))
+    ));
     assert_eq!(app.player_tab.emby_items().len(), 3);
     assert!(app.remote_tracker.is_some());
 }
@@ -173,7 +176,14 @@ fn confirmed_active_item_removal_retires_tracking() {
     app.remote_tracker = Some(tracking_stub());
 
     app.remove_from_queue(1);
-    app.handle_key_confirm_modal(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+    let action = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        _ => panic!("confirmation request missing"),
+    };
+    app.apply_confirm_action(
+        action,
+        KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE),
+    );
 
     assert!(app.remote_tracker.is_none());
     assert_eq!(app.player_tab.emby_items().len(), 2);

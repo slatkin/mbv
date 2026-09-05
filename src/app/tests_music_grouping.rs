@@ -1,6 +1,7 @@
 use super::music_grouping::{build_grouped_album_catalog, derive_album_artist};
 use super::tests::{make_app_stub, make_item};
 use super::{BrowseLevel, LibraryTab, TabSelection};
+use crate::app::types_browse::BrowseResting;
 use mbv_core::api::EmbyItem;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -11,8 +12,7 @@ fn make_music_album_level(albums: Vec<EmbyItem>) -> BrowseLevel {
         title: "Alpha".into(),
         items: albums,
         total_count: 0,
-        cursor: 0,
-        scroll: 0,
+        resting: BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -33,8 +33,7 @@ fn make_group_level() -> BrowseLevel {
         title: "Music".into(),
         items: vec![group],
         total_count: 1,
-        cursor: 0,
-        scroll: 0,
+        resting: BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -57,14 +56,8 @@ fn make_music_app(albums: Vec<EmbyItem>) -> super::App {
     library.collection_type = "music".into();
 
     app.libs.push(LibraryTab {
-        library,
-        search: None,
         nav_stack: vec![make_group_level(), make_music_album_level(albums)],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app
 }
@@ -146,9 +139,6 @@ fn catalog_publication_groups_by_artist() {
     let resolved: HashMap<String, String> = HashMap::new();
     let catalog = build_grouped_album_catalog(&[a1, a2, a3], &resolved);
 
-    assert_eq!(catalog.groups.len(), 2, "should have two artist groups");
-    assert_eq!(catalog.groups[0].artist, "Alpha");
-    assert_eq!(catalog.groups[1].artist, "Beta");
     assert_eq!(catalog.entries.len(), 3);
     assert_eq!(catalog.entries[0].artist, "Alpha");
     assert_eq!(catalog.entries[1].artist, "Alpha");
@@ -353,19 +343,6 @@ fn repeated_same_items_produce_stable_catalog_order() {
             .collect::<Vec<_>>(),
         "same items should produce identical catalog order"
     );
-    assert_eq!(
-        catalog1
-            .groups
-            .iter()
-            .map(|g| g.artist.as_str())
-            .collect::<Vec<_>>(),
-        catalog2
-            .groups
-            .iter()
-            .map(|g| g.artist.as_str())
-            .collect::<Vec<_>>(),
-        "same items should produce identical group boundaries"
-    );
 }
 
 #[test]
@@ -393,7 +370,7 @@ fn commit_anchors_cursor_to_selected_album() {
     app.start_or_supersede_music_grouping(0);
     // Set cursor to album-2
     if let Some(level) = app.libs[0].nav_stack.last_mut() {
-        level.cursor = 1;
+        level.set_resting_cursor(1);
     }
 
     // Second settle (replacement) should anchor to album-2
@@ -404,7 +381,7 @@ fn commit_anchors_cursor_to_selected_album() {
     app.start_or_supersede_music_grouping(0);
 
     let level = app.libs[0].nav_stack.last().unwrap();
-    let cursor_id = level.items[level.cursor].id.clone();
+    let cursor_id = level.items[level.resting().cursor()].id.clone();
     assert_eq!(
         cursor_id, "album-2",
         "cursor should be anchored to the previously selected album"

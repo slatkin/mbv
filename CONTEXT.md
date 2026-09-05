@@ -279,6 +279,22 @@ _Avoid_: continue threshold, resume percent, watched threshold
 
 ## Browsing and tabs
 
+**WideMediaList**:
+A provider-neutral, one-column fixed-row TuiRealm Component embedded by a parent that owns the content authority. It provides shared list mechanics without choosing a Service or destination. It is the canonical control for Wide one-column rails, including Queue; non-hero two-column catalog presentation remains a parent arrangement.
+_Avoid_: generic list, two-column list, Inline Search
+
+**InlineMediaBrowser**:
+A provider-neutral, one-column TuiRealm Component that supports selected-row replacement while its parent owns content authority. Normal/Narrow hero-bearing browse surfaces use it for their one-column list. It is distinct from **Inline Search**, which is a library-scoped search capability embedded in a searchable destination and not a media-list control.
+_Avoid_: Inline Search, detail panel, generic list
+
+**Inline Search**:
+A library-scoped search capability embedded in the selected searchable Emby destination. The destination owns the local search control, session, query, result selection, painting, and keyboard/mouse interpretation; the shell owns full-library fetches, recursive album indexing, stale-completion guards, navigation effects, and activation effects. Browser, MusicWorkspace, or TvWorkspace is the sole owner and painter for the current presentation; TV transfers one snapshot between Normal and Wide, while an ordinary tab change dismisses search. It is distinct from the cross-library **Search sidebar**.
+_Avoid_: global search, Search sidebar, search overlay
+
+**Emby podcast channel list**:
+The Emby-side list for browsing podcast channels. It is distinct from the Feeds Service tab and from the Emby homevideos feed view.
+_Avoid_: podcast library, Feeds tab, Emby homevideos feed view
+
 **Tab selection**:
 The single selected destination in the left panel: Home, EmbyLibrary(index),
 AudiobookshelfLibrary(index), or Feeds. Tab positions are count-aware
@@ -376,6 +392,18 @@ shared width breakpoint and minimum-height guard are satisfied; otherwise the
 surface uses Inline hero.
 _Avoid_: separate detail block, split, side-by-side, hero-on-side
 
+**Hero pane**:
+The `#333c43` `SURFACE_RESTING` fill of Hero-on-left's left pane — the
+container surface itself, independent of what is painted inside it.
+_Avoid_: recessed box, hero panel, detail panel
+
+**Main content box**:
+The `#2d353b` `SURFACE_BACKDROP` inset within a Hero pane (or an inline hero's
+equivalent area), holding one kind-dependent payload at one shared padding
+value. Distinct from the Hero pane it sits inside: the pane is the outer
+container fill, the box is the inner content inset.
+_Avoid_: overview box, recessed box
+
 **Render Component**:
 A `src/app/render/components/` unit that takes a typed content model plus a
 `Rect` (and, for Ratatui, a `&mut Buffer`/`Frame`), paints, and computes its
@@ -389,6 +417,28 @@ A TuiRealm `AppComponent` under `src/app/components/` that owns one independentl
 routed surface's local presentation state, input interpretation, updates,
 rendering, and geometry, and returns typed requests for work outside its authority.
 _Avoid_: component (bare), controller, render component, widget
+
+**Keyboard Router**:
+The single keyboard routing authority, in the `UiRoot` Interactive Component
+(ADR 0023). It observes every chord regardless of focus and resolves it against
+ordered policy to one of ADR 0002's outcomes — `Command`, `Swallow`, or
+`FallThrough` — where `FallThrough` lets the focused Interactive Component's own
+typed request stand. There is exactly one.
+_Avoid_: input handler, dispatcher, context stack, key policy (the policy is
+data the router evaluates, not a second router)
+
+**Global chord**:
+A key combination whose meaning does not depend on which surface is focused, and
+which is therefore claimed by the Keyboard Router rather than interpreted by an
+Interactive Component. A selection-dependent chord (`.` for the context menu) is
+not global even though every destination binds it.
+_Avoid_: global key, hotkey, shortcut (bare — a shortcut may be leaf-local)
+
+**`component` state**:
+The intermediate interactive-surface ledger state in which an Interactive
+Component paints the surface while the shell still mirrors `App` state and/or
+legacy input still forwards; `App` teardown remains pending group 5.
+_Avoid_: migrated (until the mirror and legacy handler are removed)
 
 **Arrangement**:
 A `src/app/render/arrangements/` unit that takes a typed content model plus a
@@ -510,6 +560,19 @@ accumulated only while not paused. Episode sessions are keyed by
 _Avoid_: session, playback run, Emby session
 
 ## Feeds
+
+**Feeds Service / Feeds tab**:
+mbv's built-in Feeds Service and its Feeds tab, which manage RSS/Atom
+FeedSubscriptions and their FeedEntries. This is distinct from an Emby
+homevideos feed view.
+_Avoid_: feed view, Emby feed, homevideos feed
+
+**Emby homevideos feed view**:
+The grouped, feed-like browse surface of an Emby homevideos library, such as a
+configured YouTube tab. It is distinct from the Feeds Service/tab;
+`restore-feed-group-inline-expansion` concerns this Emby homevideos feed view,
+not the Feeds Service tab.
+_Avoid_: Feeds tab, Feeds Service, RSS subscription
 
 **FeedSubscription**:
 A user's subscription to one RSS/Atom feed: display name, URL, and FeedKind.

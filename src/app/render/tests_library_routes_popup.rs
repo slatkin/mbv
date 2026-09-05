@@ -1,12 +1,11 @@
 use super::test_helpers::buffer_to_string;
-use crate::app::tests::make_app_stub;
+use super::{render_library_routes_content, LibraryRoutesRenderModel};
 use crate::app::{LibraryRoutePopup, LibraryRouteStage};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 fn render_routes(width: u16, height: u16, cursor: usize) -> String {
-    let mut app = make_app_stub();
-    app.library_routes_popup = Some(LibraryRoutePopup {
+    let popup = LibraryRoutePopup {
         stage: LibraryRouteStage::PickLibrary {
             items: vec![
                 ("movies".into(), "Movies".into(), None),
@@ -14,11 +13,21 @@ fn render_routes(width: u16, height: u16, cursor: usize) -> String {
             ],
         },
         cursor,
-    });
+    };
+    let mut dim_backdrop_active = false;
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
-        .draw(|f| app.render_library_routes_popup(f))
+        .draw(|f| {
+            render_library_routes_content(
+                f,
+                &mut dim_backdrop_active,
+                LibraryRoutesRenderModel {
+                    stage: &popup.stage,
+                    cursor: popup.cursor,
+                },
+            );
+        })
         .unwrap();
     buffer_to_string(&terminal)
 }

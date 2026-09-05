@@ -1,4 +1,6 @@
-use super::hero::{paint_hero_content, HeroContent, HeroImage, HeroLine};
+use super::hero::{
+    paint_hero_content, render_home_hero_meta_block, HeroContent, HeroImage, HeroLine,
+};
 use crate::app::palette;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -40,12 +42,42 @@ fn inline_hero_image_has_shared_top_right_and_gutter_geometry() {
 
     assert_eq!(image_rect, Some(Rect::new(9, 1, 3, 2)));
     let buffer = terminal.backend().buffer();
-    for y in 1..=3 {
+    // The gutter is needed only while the image occupies the row; the row
+    // immediately below the image resumes the full text width.
+    for y in 1..=2 {
         assert_eq!(buffer[(8, y)].symbol(), " ", "missing gutter on row {y}");
     }
     assert_ne!(
         buffer[(8, 4)].symbol(),
         " ",
         "text did not resume full width"
+    );
+}
+
+#[test]
+fn hero_on_left_overview_reflows_at_recessed_content_width() {
+    let backend = TestBackend::new(16, 8);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| {
+            render_home_hero_meta_block(
+                frame,
+                Rect::new(0, 0, 16, 8),
+                Rect::new(0, 0, 16, 8),
+                &[],
+                "",
+                None,
+                vec![],
+                &[("ABC".to_string(), false), ("DEF".to_string(), false)],
+                2,
+                true,
+            );
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let row: String = (0..16).map(|x| buffer[(x, 2)].symbol()).collect();
+    assert!(
+        row.contains("ABC") && row.contains("DEF"),
+        "expected joined flow: {row:?}"
     );
 }

@@ -2,7 +2,7 @@
 name: rust-helper
 description: Mechanical Rust edits and routine git read/staging ops with no architectural ambiguity. Use for: renames, call-site updates after a signature change, removing dead code for clippy warnings, writing tests for already-specified behavior, rustdoc comments, git status/diff/log/add/stash/checkout, drafting commit message text for a described diff. Do NOT use for: WHY-questions about design, anything touching player.rs session state (pending_load, SessionReporter.ids), the daemon/remote_player boundary, divider-indicator width math, the lang-code sync between parse_audio_info and lang_code_to_name, actually running git commit or push, merge conflict resolution, or deciding commit granularity.
 model: haiku
-tools: Read, Edit, Write, Bash
+tools: Read, Edit, Write, Bash, mcp__zvec_grep__zvec_grep_search
 ---
 
 You make precise, narrow, mechanical Rust changes and handle routine git operations.

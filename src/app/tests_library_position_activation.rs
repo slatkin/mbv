@@ -7,16 +7,7 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
-    app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     app.library_position_state.libraries.insert(
         "lib-movies".into(),
         crate::config::LibraryPosition {
@@ -30,8 +21,8 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
-                    letter_filter_index: None,
-                    library_total: None,
+                    letter_filter_index: Some(2),
+                    library_total: Some(673),
                 },
                 crate::config::LibraryPositionLevel {
                     parent_id: "folder-b".into(),
@@ -59,6 +50,8 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
     assert!(level.loading);
     assert!(level.items.is_empty());
     assert_eq!(level.item_types.as_deref(), Some("Movie"));
+    assert_eq!(app.libs[0].library_total, Some(673));
+    assert_eq!(level.letter_filter.as_ref().map(|filter| filter.index), Some(2));
 }
 
 #[test]
@@ -71,16 +64,7 @@ fn activating_saved_position_initializes_feed_home_video_state() {
     library.id = "lib-youtube".into();
     library.collection_type = "homevideos".into();
     library.is_folder = true;
-    app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     app.library_position_state.libraries.insert(
         "lib-youtube".into(),
         crate::config::LibraryPosition {
@@ -122,16 +106,7 @@ fn ensure_lib_loaded_for_visible_library_accepts_restore_from_queue_focus() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
-    app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     let position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
@@ -164,8 +139,7 @@ fn ensure_lib_loaded_for_visible_library_accepts_restore_from_queue_focus() {
             title: "Power restored".into(),
             items: make_items(2),
             total_count: 2,
-            cursor: 1,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(1, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -190,16 +164,7 @@ fn library_tab_next_activates_saved_placeholder() {
     let mut app = make_app_stub();
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
-    app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     app.library_position_state.libraries.insert(
         "lib-movies".into(),
         crate::config::LibraryPosition {
@@ -234,16 +199,7 @@ fn library_tab_next_from_queue_focus_accepts_restore_result() {
     let mut app = make_app_stub();
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
-    app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     let position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
@@ -279,8 +235,7 @@ fn library_tab_next_from_queue_focus_accepts_restore_result() {
             title: "Power restored".into(),
             items: make_items(2),
             total_count: 2,
-            cursor: 1,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(1, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),

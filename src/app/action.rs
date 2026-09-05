@@ -6,10 +6,11 @@
 //! intercepted and *what* it means, without touching `App` at all. `dispatch`
 //! then owns the state transitions for each `Command` variant.
 //!
-//! Converted so far: `handle_playback_key` (the issue #78 pilot) and
-//! `handle_key_help` (see `src/app/input.rs`). Other modal handlers still
-//! speak directly to `App` and are expected to migrate to this same `Command`
-//! enum over time, one handler at a time.
+//! Converted so far, `handle_playback_key` (the issue #78 pilot). The help
+//! overlay was converted to a TuiRealm Interactive Component
+//! (`src/app/components/help.rs`) and no longer routes through this `Command`
+//! enum. Other modal handlers still speak directly to `App` and are expected to
+//! migrate to this same `Command` enum over time, one handler at a time.
 
 use super::input_resolver::KeyChord;
 use super::notify_actions::ToastSeverity;
@@ -22,6 +23,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Command {
     OpenIdleFeedLink,
+    ToggleVisualizer,
     TogglePlayPause,
     Stop,
     /// Relative seek in seconds; negative rewinds, positive fast-forwards.
@@ -55,25 +57,8 @@ pub(super) enum Command {
     /// helper.
     ToggleMuteOrCycleAudio,
 
-    // ── handle_key_help variants ────────────────────────────────────────
-    /// `q` while the help overlay is open.
-    Quit,
-    /// Esc or F1: dismiss the help overlay.
-    CloseHelp,
-    /// F2: dismiss help, open settings.
-    ShowSettings,
-    /// F3: dismiss help, open sessions.
-    ShowSessions,
-    /// F4: dismiss help, open the playlists panel.
-    ShowPlaylists,
-    /// Scroll `help_scroll` by a signed delta: negative clamps at zero
-    /// (`Up`/`PageUp`), positive does not (`Down`/`PageDown`, preserving the
-    /// pre-existing unclamped-scroll-down quirk — see `dispatch`).
-    ScrollBy(i64),
-    ScrollHome,
-
     // ── queue activation (issue #134) ───────────────────────────────────
-    /// Activate the item at the visible queue's cursor: `Enter` on the queue
+    /// Activate the item at the given queue index: `Enter` on the queue
     /// tab, or a double-click on a queue row (`handle_mouse`'s
     /// `is_double`/queue branch — the two were already made to match in
     /// a70ad7a, before either went through `Command`; this variant is the
@@ -82,23 +67,34 @@ pub(super) enum Command {
     /// the already-playing audio item, jumps to it if it's elsewhere in the
     /// active playback queue, or replaces the local playback queue and plays
     /// from this index if the visible queue isn't the one currently playing.
-    QueuePlayCursor,
-
-    // ──  inline album track mode ───────────────────────────────────
-    /// `Enter` while an inline album track is focused.
-    AlbumTrackEnter(usize),
-    /// `Esc`/`Backspace` while an inline album track is focused.
-    AlbumTrackDismiss(usize),
-    /// `Up`/`Down` while an inline album track is focused.
-    AlbumTrackMove {
-        lib_idx: usize,
-        delta: i64,
-    },
+    /// The target index is carried explicitly (split-queue-cursor-ownership
+    /// D2): the shell resolves the slot the user selected and passes it
+    /// rather than this command re-reading `queue.queue_cursor` as an
+    /// ambient argument channel.
+    QueuePlayCursor(usize),
 
     /// `x`: cycle the Power View layout through both, queue-only, and
     /// library-only (see `PanelMode`); below the mini-view threshold it
     /// toggles queue-only and library-only.
     CyclePanelMode,
+
+    // ── destination-independent routing ─────────────────────────────────
+    /// Quit the client through the normal dirty-queue/prefs shutdown path.
+    Quit,
+    NextLibraryTab,
+    PreviousLibraryTab,
+    SetLibraryTab(usize),
+    ForceClear,
+    /// Raise the "Clear queue?" confirmation prompt (the global `c` binding).
+    RequestClearQueue,
+    RefreshCurrentView,
+    ToggleSettings,
+    OpenSessions,
+    OpenPlaylists,
+    OpenSearch,
+    /// Model-owned because mounting Help belongs to the TuiRealm shell.
+    OpenHelp,
+    FocusPanel(super::PanelFocus),
 }
 
 /// Resolve the idle-feed link shortcut separately from transport bindings so
@@ -332,56 +328,6 @@ pub(super) const PLAYBACK_HELP_BINDINGS: &[PlaybackHelpBinding] = &[
     },
 ];
 
-/// Translate a key event into a help-overlay `Command`, or `None` if this key
-/// isn't bound. Pure function; no `App` access.
-///
-/// Unlike `playback_command_for_key`, gating is not per-key here: the caller
-/// (`handle_key_help`) only calls this after confirming `self.show_help`, so
-/// this function does no gating of its own. Also note: unlike the playback
-/// seam, `None` from this function does NOT mean "let the key fall through to
-/// other handlers" — the thin adapter in `input.rs` still swallows the key
-/// (`Some(false)`), matching the old code's `_ => {}` arm followed by an
-/// unconditional `Some(false)`.
-pub(super) fn help_command_for_key(chord: KeyChord) -> Option<Command> {
-    match chord.code {
-        KeyCode::Char('q') if chord.mods.is_empty() => Some(Command::Quit),
-        KeyCode::Esc | KeyCode::F(1) => Some(Command::CloseHelp),
-        KeyCode::F(2) => Some(Command::ShowSettings),
-        KeyCode::F(3) => Some(Command::ShowSessions),
-        KeyCode::F(4) => Some(Command::ShowPlaylists),
-        KeyCode::Up => Some(Command::ScrollBy(-1)),
-        KeyCode::Down => Some(Command::ScrollBy(1)),
-        KeyCode::PageUp => Some(Command::ScrollBy(-10)),
-        KeyCode::PageDown => Some(Command::ScrollBy(10)),
-        KeyCode::Home => Some(Command::ScrollHome),
-        _ => None,
-    }
-}
-
-/// Translate a key event in active inline album track mode.
-///
-/// This context is only active once `album_track_focus` is already `Some`, so
-/// entering track mode from the album row remains in the library-panel view
-/// handler. The command keeps `lib_idx` because the library panel can
-/// point at any library tab.
-pub(super) fn album_track_command_for_key(chord: KeyChord, lib_idx: usize) -> Option<Command> {
-    let is_nav = matches!(
-        chord.code,
-        KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
-    ) && chord.mods.contains(KeyModifiers::ALT);
-    if is_nav {
-        return None;
-    }
-
-    match chord.code {
-        KeyCode::Enter => Some(Command::AlbumTrackEnter(lib_idx)),
-        KeyCode::Esc | KeyCode::Backspace => Some(Command::AlbumTrackDismiss(lib_idx)),
-        KeyCode::Up => Some(Command::AlbumTrackMove { lib_idx, delta: -1 }),
-        KeyCode::Down => Some(Command::AlbumTrackMove { lib_idx, delta: 1 }),
-        _ => None,
-    }
-}
-
 impl App {
     /// Own the state transitions for a `Command`. Returns whether the app
     /// should quit (`true` only for `Command::Quit`'s non-prompting path;
@@ -393,11 +339,10 @@ impl App {
     /// #78 follow-up).
     pub(super) fn dispatch(&mut self, command: Command) -> bool {
         match command {
-            Command::Quit => return self.try_quit(),
-
             Command::OpenIdleFeedLink => {
                 self.open_idle_feed_link();
             }
+            Command::ToggleVisualizer => self.toggle_visualizer(),
 
             Command::TogglePlayPause => {
                 self.playback_target().toggle_play_pause(self);
@@ -435,39 +380,12 @@ impl App {
                 }
             }
 
-            Command::CloseHelp => {
-                self.show_help = false;
-            }
-            Command::ShowSettings | Command::ShowSessions | Command::ShowPlaylists => {
-                self.show_help = false;
-                match command {
-                    Command::ShowSettings => self.show_settings = true,
-                    Command::ShowSessions => self.show_sessions = true,
-                    Command::ShowPlaylists => self.open_playlists_panel(),
-                    _ => unreachable!(),
-                }
-            }
-            Command::ScrollBy(delta) => {
-                if delta < 0 {
-                    self.help_scroll = self.help_scroll.saturating_sub((-delta) as u16);
-                } else {
-                    // No upper clamp here, matching the pre-existing quirk in
-                    // the original inline handler (presumably clamped at
-                    // render time instead).
-                    self.help_scroll += delta as u16;
-                }
-            }
-            Command::ScrollHome => {
-                self.help_scroll = 0;
-            }
-
-            Command::QueuePlayCursor => {
-                let (t, n, item) = {
+            Command::QueuePlayCursor(t) => {
+                let (n, item) = {
                     let queue = self.displayed_queue();
-                    let t = queue.queue_cursor;
                     let n = queue.total_queue_len();
                     let item = queue.item_at(t).cloned();
-                    (t, n, item)
+                    (n, item)
                 };
                 if t >= n {
                     return false;
@@ -648,37 +566,30 @@ impl App {
                 }
             }
 
-            Command::AlbumTrackEnter(lib_idx) => {
-                if self
-                    .selected_album_item(lib_idx)
-                    .and_then(|album| {
-                        self.album_tracks_cache.get(&album.id).and_then(|tracks| {
-                            self.libs[lib_idx]
-                                .album_track_focus
-                                .and_then(|idx| tracks.get(idx))
-                        })
-                    })
-                    .is_some()
-                {
-                    self.select(lib_idx);
+            Command::Quit => return self.try_quit(),
+            Command::NextLibraryTab => self.library_tab_next(),
+            Command::PreviousLibraryTab => self.library_tab_prev(),
+            Command::SetLibraryTab(index) => {
+                if index < self.tab_count() {
+                    self.set_library_tab(index);
                 }
             }
-            Command::AlbumTrackDismiss(lib_idx) => {
-                self.libs[lib_idx].album_track_focus = None;
+            Command::ForceClear => self.force_clear = true,
+            Command::RequestClearQueue => self.request_clear_queue(),
+            Command::RefreshCurrentView => self.refresh_current_view(),
+            Command::ToggleSettings => self.request_sidebar_toggle(super::SidebarId::Settings),
+            Command::OpenSessions => self.request_sidebar_toggle(super::SidebarId::Sessions),
+            Command::OpenPlaylists => self.open_playlists_panel(),
+            Command::OpenSearch => self.open_search_sidebar(),
+            // Model handles this shell-only command before delegating the
+            // remaining commands to App::dispatch.
+            Command::OpenHelp => unreachable!("OpenHelp is dispatched by Model"),
+            Command::FocusPanel(focus) => {
+                self.set_panel_focus(focus);
+                self.last_card_height = 0;
+                self.last_card_width = 0;
             }
-            Command::AlbumTrackMove { lib_idx, delta } => {
-                if let Some(idx) = self.libs[lib_idx].album_track_focus {
-                    let track_count = self
-                        .selected_album_item(lib_idx)
-                        .and_then(|item| self.album_tracks_cache.get(&item.id))
-                        .map(|tracks| tracks.len())
-                        .unwrap_or(0);
-                    if track_count > 0 {
-                        let new_idx = super::ui_util::move_cursor(idx, delta, track_count);
-                        self.libs[lib_idx].album_track_focus = Some(new_idx);
-                    }
-                }
-            }
+
             Command::CyclePanelMode => {
                 // Narrow terminal (< MINI_VIEW_THRESHOLD columns): mini view
                 // toggles exactly two states, library-only ⇄ queue-only.

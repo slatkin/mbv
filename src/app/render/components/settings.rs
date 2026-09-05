@@ -1,16 +1,8 @@
-use super::super::super::layout::AppLayout;
-use super::super::super::palette;
-use super::super::super::settings::{
-    setting_label, setting_value, settings_cursor_to_key, settings_total_rows,
-};
-use super::super::super::types_settings::{ServiceEntry, SettingsDestination, SERVICE_ENTRIES};
+use super::super::super::types_overlay::OverlayRequest;
+use super::super::super::types_settings::SettingsDestination;
 use super::super::super::ui_util::{cycle_lang, next_subtitle_mode};
 use super::super::super::App;
-use super::super::super::{MultiSelectKind, SettingKey, SETTINGS_PANEL_W, SETTING_SECTIONS};
-use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
-use ratatui::Frame;
+use super::super::super::{MultiSelectKind, SettingKey};
 use std::time::{Duration, Instant};
 
 impl App {
@@ -19,39 +11,46 @@ impl App {
             let cfg = self.config.lock().unwrap().clone();
             crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
         }
-        self.show_settings = false;
+        self.request_sidebar_dismiss(crate::app::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Main;
     }
 
-    pub(crate) fn handle_settings_activate(&mut self) {
-        let key = settings_cursor_to_key(self.settings_cursor);
+    pub(crate) fn handle_settings_activate(&mut self, key: SettingKey) {
         match key {
             SettingKey::Services => {
                 self.open_services_settings();
                 return;
             }
             SettingKey::HiddenLibraries => {
-                self.open_multiselect_popup(MultiSelectKind::HiddenLibraries);
+                self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
+                    MultiSelectKind::HiddenLibraries,
+                ));
                 return;
             }
             SettingKey::HiddenLatest => {
-                self.open_multiselect_popup(MultiSelectKind::HiddenLatest);
+                self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
+                    MultiSelectKind::HiddenLatest,
+                ));
                 return;
             }
             SettingKey::MyLanguages => {
-                self.open_multiselect_popup(MultiSelectKind::MyLanguages);
+                self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
+                    MultiSelectKind::MyLanguages,
+                ));
                 return;
             }
             SettingKey::FeedViewLibraries => {
-                self.open_multiselect_popup(MultiSelectKind::FeedViewLibraries);
+                self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
+                    MultiSelectKind::FeedViewLibraries,
+                ));
                 return;
             }
             SettingKey::LibraryRoutes => {
-                self.open_library_routes_popup();
+                self.pending_overlay = Some(OverlayRequest::OpenLibraryRoutes);
                 return;
             }
             SettingKey::ManageFeeds => {
-                self.open_feeds_manage_popup();
+                self.pending_overlay = Some(OverlayRequest::OpenFeedsManage);
                 return;
             }
             SettingKey::LogOut => {
@@ -139,328 +138,5 @@ impl App {
             }
         }
         self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
-    }
-
-    pub(in crate::app::render) fn render_settings_panel(
-        &mut self,
-        f: &mut Frame,
-        layout: &mut AppLayout,
-        area: Option<ratatui::layout::Rect>,
-    ) {
-        if matches!(self.settings_destination, SettingsDestination::Services) {
-            self.render_services_panel(f, layout, area);
-            return;
-        }
-        let panel = area.is_some();
-        let content = match area {
-            Some(area) => {
-                Self::render_panel_shell_at(f, area, "SETTINGS", "[Space]toggle [Esc]close", true)
-            }
-            None => Self::render_panel_shell(
-                f,
-                f.area(),
-                SETTINGS_PANEL_W,
-                "SETTINGS",
-                "[Space]toggle [Esc]close",
-            ),
-        };
-        let content = if panel {
-            content
-        } else {
-            Self::settings_content_area(content)
-        };
-        layout.settings_content_area = content;
-
-        let cfg = self.config.lock().unwrap().clone();
-        let ui = self.ui_config_snapshot();
-
-        let cursor = self.settings_cursor;
-        let confirm_logout = self.confirm_logout;
-
-        let data_sections = &SETTING_SECTIONS[..SETTING_SECTIONS.len() - 1];
-
-        let mut lines: Vec<Line> = vec![];
-        let mut cursor_line = 0usize;
-        let mut item_idx = 0usize;
-        let mut line_of_cursor: Vec<usize> = Vec::new();
-
-        for (sec_name, keys) in data_sections {
-            lines.push(Line::from(vec![
-                Span::raw(""),
-                Span::styled(
-                    (*sec_name).to_owned(),
-                    Style::default()
-                        .fg(palette::TEXT_METADATA)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ]));
-            for &key in *keys {
-                line_of_cursor.push(lines.len());
-                if item_idx == cursor {
-                    cursor_line = lines.len();
-                }
-                let focused = item_idx == cursor;
-                let label = setting_label(key);
-                let val = setting_value(key, &cfg, &ui);
-                let label_style = if focused {
-                    Style::default().fg(palette::TEXT_PRIMARY)
-                } else {
-                    Style::default().fg(palette::PLAYBACK_META_FG)
-                };
-                let val_w = (content.width as usize).saturating_sub(label.len());
-                lines.push(Line::from(vec![
-                    Span::styled(label, label_style),
-                    Span::styled(
-                        format!("{:>w$}", val, w = val_w),
-                        Style::default().fg(palette::ACCENT),
-                    ),
-                ]));
-                item_idx += 1;
-            }
-            lines.push(Line::from(""));
-        }
-
-        let logout_cursor_idx = settings_total_rows() - 1;
-        line_of_cursor.push(lines.len());
-        if cursor == logout_cursor_idx {
-            cursor_line = lines.len();
-        }
-        let focused = cursor == logout_cursor_idx;
-        let (logout_text, logout_style) = if confirm_logout && focused {
-            (
-                "Log out? Press y to confirm",
-                Style::default().fg(palette::STATUS_ERROR),
-            )
-        } else if focused {
-            ("Log out", Style::default().fg(palette::STATUS_ERROR))
-        } else {
-            ("Log out", Style::default().fg(palette::PLAYBACK_META_FG))
-        };
-        lines.push(Line::from(Span::styled(logout_text, logout_style)));
-
-        let visible = content.height as usize;
-        if cursor_line < self.settings_scroll {
-            self.settings_scroll = cursor_line;
-        } else if cursor_line >= self.settings_scroll + visible {
-            self.settings_scroll = cursor_line + 1 - visible;
-        }
-        let total = lines.len();
-        self.settings_scroll = self.settings_scroll.min(total.saturating_sub(visible));
-        layout.settings_line_of_cursor = line_of_cursor;
-
-        f.render_widget(
-            Paragraph::new(lines).scroll((self.settings_scroll as u16, 0)),
-            content,
-        );
-        Self::render_sidebar_scrollbar(f, content, total, self.settings_scroll);
-    }
-
-    fn render_services_panel(
-        &mut self,
-        f: &mut Frame,
-        layout: &mut AppLayout,
-        area: Option<ratatui::layout::Rect>,
-    ) {
-        if self.emby_setup_form.is_some() {
-            self.render_emby_setup_panel(f, layout, area);
-            return;
-        }
-        if self.audiobookshelf_setup_form.is_some() {
-            self.render_audiobookshelf_setup_panel(f, layout, area);
-            return;
-        }
-        let content = match area {
-            Some(area) => {
-                Self::render_panel_shell_at(f, area, "SERVICES", "[↵]select [Esc]back", true)
-            }
-            None => Self::render_panel_shell(
-                f,
-                f.area(),
-                SETTINGS_PANEL_W,
-                "SERVICES",
-                "[↵]select [Esc]back",
-            ),
-        };
-        layout.settings_content_area = content;
-        let cursor = self.services_cursor;
-        let mut lines = Vec::with_capacity(SERVICE_ENTRIES.len());
-        let mut line_of_cursor = Vec::with_capacity(SERVICE_ENTRIES.len());
-        for (index, entry) in SERVICE_ENTRIES.iter().copied().enumerate() {
-            line_of_cursor.push(lines.len());
-            let focused = index == cursor;
-            let marker = if focused { "▸ " } else { "  " };
-            let name = Self::service_entry_name(entry);
-            let state = self.service_state_label(entry);
-            let context = self.service_context(entry);
-            let action = self.service_action_label(entry);
-            let detail = if context.is_empty() {
-                format!("{state} · {action}")
-            } else {
-                format!("{state} · {context} · {action}")
-            };
-            let name_style = if focused {
-                Style::default()
-                    .fg(palette::TEXT_PRIMARY)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette::TEXT_SECONDARY)
-            };
-            lines.push(Line::from(vec![
-                Span::raw(marker),
-                Span::styled(name, name_style),
-                Span::raw("  "),
-                Span::styled(
-                    detail,
-                    Style::default().fg(if entry == ServiceEntry::Audiobookshelf {
-                        palette::TEXT_MUTED
-                    } else {
-                        palette::ACCENT
-                    }),
-                ),
-            ]));
-        }
-        f.render_widget(Paragraph::new(lines), content);
-        layout.settings_line_of_cursor = line_of_cursor;
-        layout.settings_area = content;
-    }
-
-    fn render_emby_setup_panel(
-        &mut self,
-        f: &mut Frame,
-        layout: &mut AppLayout,
-        area: Option<ratatui::layout::Rect>,
-    ) {
-        let content = match area {
-            Some(area) => {
-                Self::render_panel_shell_at(f, area, "EMBY SETUP", "[↵]submit [Esc]back", true)
-            }
-            None => Self::render_panel_shell(
-                f,
-                f.area(),
-                SETTINGS_PANEL_W,
-                "EMBY SETUP",
-                "[↵]submit [Esc]back",
-            ),
-        };
-        layout.settings_content_area = content;
-        let Some(form) = self.emby_setup_form.as_ref() else {
-            return;
-        };
-        let labels = ["Server URL", "Username", "Password"];
-        let mut lines = Vec::with_capacity(8);
-        for (idx, label) in labels.iter().enumerate() {
-            let focused = form.focus == idx;
-            lines.push(Line::from(Span::styled(
-                *label,
-                Style::default()
-                    .fg(if focused {
-                        palette::TEXT_METADATA
-                    } else {
-                        palette::TEXT_SECONDARY
-                    })
-                    .add_modifier(if focused {
-                        Modifier::BOLD
-                    } else {
-                        Modifier::empty()
-                    }),
-            )));
-            let value = if idx == 2 {
-                "•".repeat(form.fields[idx].chars().count())
-            } else {
-                form.fields[idx].clone()
-            };
-            let cursor = if focused && !form.busy { "▏" } else { "" };
-            lines.push(Line::from(Span::styled(
-                format!("  {value}{cursor}"),
-                Style::default().fg(palette::TEXT_PRIMARY),
-            )));
-        }
-        lines.push(Line::from(""));
-        let status = if form.busy {
-            "Working…"
-        } else {
-            form.error.as_str()
-        };
-        lines.push(Line::from(Span::styled(
-            status,
-            Style::default().fg(if form.busy {
-                palette::TEXT_MUTED
-            } else {
-                palette::STATUS_ERROR
-            }),
-        )));
-        f.render_widget(Paragraph::new(lines), content);
-        layout.settings_area = content;
-    }
-
-    fn render_audiobookshelf_setup_panel(
-        &mut self,
-        f: &mut Frame,
-        layout: &mut AppLayout,
-        area: Option<ratatui::layout::Rect>,
-    ) {
-        let content = match area {
-            Some(area) => Self::render_panel_shell_at(
-                f,
-                area,
-                "AUDIOBOOKSHELF SETUP",
-                "[↵]submit [Esc]back",
-                true,
-            ),
-            None => Self::render_panel_shell(
-                f,
-                f.area(),
-                SETTINGS_PANEL_W,
-                "AUDIOBOOKSHELF SETUP",
-                "[↵]submit [Esc]back",
-            ),
-        };
-        layout.settings_content_area = content;
-        let Some(form) = self.audiobookshelf_setup_form.as_ref() else {
-            return;
-        };
-        let labels = ["Server URL", "API key"];
-        let mut lines = Vec::with_capacity(6);
-        for (idx, label) in labels.iter().enumerate() {
-            let focused = form.focus == idx;
-            lines.push(Line::from(Span::styled(
-                *label,
-                Style::default()
-                    .fg(if focused {
-                        palette::TEXT_METADATA
-                    } else {
-                        palette::TEXT_SECONDARY
-                    })
-                    .add_modifier(if focused {
-                        Modifier::BOLD
-                    } else {
-                        Modifier::empty()
-                    }),
-            )));
-            let value = if idx == 1 {
-                "•".repeat(form.fields[idx].chars().count())
-            } else {
-                form.fields[idx].clone()
-            };
-            lines.push(Line::from(Span::styled(
-                format!("  {value}{}", if focused && !form.busy { "▏" } else { "" }),
-                Style::default().fg(palette::TEXT_PRIMARY),
-            )));
-        }
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            if form.busy {
-                "Working…"
-            } else {
-                form.error.as_str()
-            },
-            Style::default().fg(if form.busy {
-                palette::TEXT_MUTED
-            } else {
-                palette::STATUS_ERROR
-            }),
-        )));
-        f.render_widget(Paragraph::new(lines), content);
-        layout.settings_area = content;
     }
 }

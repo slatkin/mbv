@@ -1,7 +1,6 @@
 use super::*;
 use crate::app::tests::*;
-
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::playback_queue::QueueItem;
 
 #[cfg(test)]
 #[path = "tests_queue_mutation_playlist_save.rs"]
@@ -24,35 +23,37 @@ fn tracking_stub() -> mbv_core::remote_reconciliation::ReconciliationTracker {
     .unwrap()
 }
 
+/// Task 5.3d, Home typed-effect keyboard ownership: the Ctrl+A chord is
+/// component-owned and reaches this effect as `ShellRequest::HomeEnqueue`
+/// (see `home_component_tests` + `shell_home_effects`); the App boundary is
+/// `App::home_enqueue_target`, which enqueues the shell-resolved CW item
+/// immediately. Home content is Model-owned, so the test supplies the item
+/// directly (the flat-cursor resolution is covered at the Model boundary).
 #[test]
-fn ctrl_a_enqueues_from_home_view() {
+fn home_enqueue_from_home_view_applies_immediately() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.home.section = 0;
-    app.home.continue_items = make_items(1);
-    app.home.continue_cursor = 0;
+    let item = make_items(1).remove(0);
 
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
+    app.home_enqueue_target(QueueItem::Emby(Box::new(item)), true);
 
-    assert!(!handled);
     assert_eq!(app.player_tab.emby_items().len(), 1);
     assert_eq!(app.player_tab.emby_items()[0].id, "id0");
 }
 
 #[test]
-fn ctrl_a_appends_to_direct_remote_queue() {
+fn home_enqueue_appends_to_direct_remote_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
     let local_items = make_items(2);
     let remote_items = make_items(3);
     let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(local_items, remote_items.clone());
     app.queue_scope = QueueScope::Remote;
-    app.home.section = 0;
-    app.home.continue_items = make_items(1);
-    app.home.continue_cursor = 0;
+    let item = make_items(1).remove(0);
 
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
+    // The shell resolves the CW item at the Model boundary (task 5.3d); the
+    // App effect receives it directly.
+    app.home_enqueue_target(QueueItem::Emby(Box::new(item)), true);
 
-    assert!(!handled);
     assert_eq!(
         app.remote_player_tab
             .as_ref()
@@ -82,13 +83,14 @@ fn ctrl_a_appends_to_direct_remote_queue() {
 fn enqueue_stops_tracking_and_applies_immediately() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.home.section = 0;
-    app.home.continue_items = make_items(1);
-    app.home.continue_cursor = 0;
+    let item = make_items(1).remove(0);
     app.remote_tracker = Some(tracking_stub());
 
-    app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
-    assert!(app.confirm_modal.is_none());
+    app.home_enqueue_target(QueueItem::Emby(Box::new(item)), true);
+    assert!(!matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::Confirm(_))
+    ));
     assert!(app.remote_tracker.is_none());
     assert_eq!(app.player_tab.emby_items().len(), 1);
 }
@@ -109,7 +111,10 @@ fn tracked_playlist_deletes_apply_immediately() {
     app.remove_from_queue(1);
 
     assert!(app.remote_tracker.is_none());
-    assert!(app.confirm_modal.is_none());
+    assert!(!matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::Confirm(_))
+    ));
     assert_eq!(
         app.player_tab
             .emby_items()
@@ -239,6 +244,49 @@ fn clearing_remote_queue_in_direct_remote_mode_leaves_local_queue_metadata_intac
     assert!(app.queue_dirty);
 }
 
+/// `c` (`request_clear_queue`) must raise the confirmation for a direct-remote
+/// daemon queue -- the queue lives in `remote_player_tab`, so the old
+/// `self.player_tab.total_queue_len() == 0` check (the always-empty local queue)
+/// silently swallowed the key. Clearing itself is already supported
+/// (`execute_pending_queue_action` -> `replace_direct_remote_queue`).
+#[test]
+fn clear_queue_prompt_opens_for_direct_remote_daemon_queue() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    // Empty local queue is the real socket-attached-mbvd state: the queue lives
+    // only in `remote_player_tab`. Pre-fix this made the old `player_tab` check
+    // early-return, so this test fails without the fix.
+    let mut app = make_remote_app_stub(Vec::new(), make_items(3));
+    app.set_queue_scope(QueueScope::Remote);
+    assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
+
+    app.request_clear_queue();
+
+    assert!(
+        matches!(
+            app.pending_overlay,
+            Some(super::types_overlay::OverlayRequest::Confirm(_))
+        ),
+        "clear-queue confirmation must open for a direct-remote daemon queue"
+    );
+}
+
+/// A connected Emby session owns its queue on the remote device; `c` still
+/// refuses it with the explanatory toast rather than opening the prompt.
+#[test]
+fn clear_queue_prompt_refused_for_connected_session_queue() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_remote_app_stub(make_items(2), make_items(3));
+    app.set_queue_scope(QueueScope::Remote);
+    app.connected_session_id = Some("session".into());
+
+    app.request_clear_queue();
+
+    assert!(!matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::Confirm(_))
+    ));
+}
+
 #[test]
 fn clearing_tracked_queue_applies_immediately_and_stops_tracking() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -250,7 +298,10 @@ fn clearing_tracked_queue_applies_immediately_and_stops_tracking() {
     app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
 
     assert!(app.remote_tracker.is_none());
-    assert!(app.confirm_modal.is_none());
+    assert!(!matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::Confirm(_))
+    ));
     assert!(app.player_tab.emby_items().is_empty());
 
     app.connected_session_id = Some("session".into());
@@ -375,7 +426,10 @@ fn clearing_remote_queue_does_not_prompt_to_save_local_playlist() {
 
     app.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
 
-    assert!(app.confirm_modal.is_none());
+    assert!(!matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::Confirm(_))
+    ));
     assert!(app.pending_queue_action.is_none());
     assert!(app
         .remote_player_tab
@@ -396,12 +450,13 @@ fn context_menu_remove_targets_displayed_remote_queue() {
     app.set_queue_scope(QueueScope::Remote);
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
 
-    app.open_context_menu();
+    app.open_context_menu(false, None);
 
-    let action = app
-        .context_menu
-        .as_ref()
-        .expect("context menu")
+    let menu = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu"),
+    };
+    let action = menu
         .entries
         .iter()
         .find_map(|entry| match entry.action.as_ref() {
@@ -411,7 +466,7 @@ fn context_menu_remove_targets_displayed_remote_queue() {
         .expect("remove from queue action");
     assert_eq!(action, 2);
 
-    app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)));
+    app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)), None);
 
     let item_ids = |items: &[EmbyItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
     assert_eq!(
@@ -435,12 +490,13 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
     app.set_queue_scope(QueueScope::Remote);
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
 
-    app.open_context_menu();
+    app.open_context_menu(false, None);
 
-    let action = app
-        .context_menu
-        .as_ref()
-        .expect("context menu")
+    let menu = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu"),
+    };
+    let action = menu
         .entries
         .iter()
         .find_map(|entry| match entry.action.as_ref() {
@@ -456,7 +512,7 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
         tab.queue.truncate_slots(2);
     }
 
-    app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)));
+    app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)), None);
 
     let item_ids = |items: &[EmbyItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
     assert_eq!(
@@ -479,7 +535,7 @@ fn boundary_queue_edit_does_not_retire_tracking() {
     app.remote_tracker = Some(tracking_stub());
     app.player_tab.queue_cursor = 0;
 
-    app.move_queue_item_up();
+    app.move_queue_item_up(app.player_tab.queue_cursor);
 
     assert!(app.remote_tracker.is_some());
     assert_eq!(app.player_tab.emby_items().len(), 2);

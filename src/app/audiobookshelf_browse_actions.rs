@@ -1,7 +1,5 @@
 use super::notify_actions::ToastSeverity;
-use super::types_audiobookshelf_browse::BookRow;
-use super::types_audiobookshelf_browse::{build_show_title_buckets, AudiobookshelfEpisodeFilter};
-use super::types_selection_modal::SelectionModalSource;
+use super::types_audiobookshelf_browse::{AudiobookshelfEpisodeFilter, BookRow};
 use super::App;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, QueueItem};
@@ -129,8 +127,10 @@ impl App {
             state.error = None;
             state.detail_cache.clear();
             state.episodes = None;
-            state.episode_selection = None;
-            state.scroll = 0;
+            // `episode_selection` / `scroll` are component-owned now
+            // (split-browse-state-interaction-fields task 3.2); the content
+            // push after this reset drops the selected show, which resets the
+            // component's own interaction state.
             state.loading_pages.clear();
             // Mark page 0 pending before re-issuing it so the catalog reloads
             // from the first page (the renderer shows a Loading placeholder
@@ -165,174 +165,60 @@ impl App {
             state.select(cursor.min(state.shows.len() - 1));
             state.selected_id.clone()
         };
-        self.save_audiobookshelf_position(index);
         if let Some(id) = selected_id {
             self.start_audiobookshelf_detail(id);
         }
     }
 
-    /// Selects the first show in a clicked alphabetical panel bucket. Podcast
-    /// pills are derived from the title-sorted show list, so the cursor itself
-    /// is the selected-bucket state.
-    pub(super) fn select_audiobookshelf_podcast_bucket(&mut self, bucket_pos: usize) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(bucket) = self.audiobookshelf_browse.get(index).and_then(|state| {
-            build_show_title_buckets(&state.shows)
-                .get(bucket_pos)
-                .copied()
-        }) else {
-            return;
-        };
-        self.select_audiobookshelf_show(bucket.start);
-    }
-
-    pub(super) fn move_audiobookshelf_show_cursor(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_browse.get(index) else {
-            return;
-        };
-        if state.shows.is_empty() || state.episode_selection.is_some() {
-            return;
-        }
-        let cursor = super::ui_util::move_cursor(state.cursor(), delta, state.shows.len());
-        self.select_audiobookshelf_show(cursor);
-    }
-
-    pub(super) fn move_audiobookshelf_show_rows(&mut self, rows: i64) {
-        let columns = crate::app::library_column_width::library_column_count(
-            self.layout.main.left_area.width,
-        );
-        self.move_audiobookshelf_show_cursor(rows * columns as i64);
-    }
-
-    pub(super) fn jump_audiobookshelf_show_cursor(&mut self, end: bool) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_browse.get(index) else {
-            return;
-        };
-        if state.shows.is_empty() || state.episode_selection.is_some() {
-            return;
-        }
-        self.select_audiobookshelf_show(if end { state.shows.len() - 1 } else { 0 });
-    }
-
-    pub(super) fn enter_audiobookshelf_episode_selection(&mut self) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
-            state.enter_episode_selection();
-        }
-    }
-
-    pub(super) fn leave_audiobookshelf_episode_selection(&mut self) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
-            state.episode_selection = None;
-        }
-    }
-
-    pub(super) fn move_audiobookshelf_episode_cursor(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
-            return;
-        };
-        let Some(cursor) = state.episode_selection else {
-            return;
-        };
-        let count = state.visible_episodes().len();
-        if count > 0 {
-            state.episode_selection = Some(super::ui_util::move_cursor(cursor, delta, count));
-        }
-    }
-
-    pub(super) fn cycle_audiobookshelf_filter(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
-            return;
-        };
-        if state.episode_selection.is_none() {
-            return;
-        }
-        let current = AudiobookshelfEpisodeFilter::ALL
-            .iter()
-            .position(|filter| *filter == state.episode_filter)
-            .unwrap_or(0);
-        let next = (current as i64 + delta).rem_euclid(3) as usize;
-        state.set_episode_filter(AudiobookshelfEpisodeFilter::ALL[next]);
-    }
-
-    /// Whether a click/target at `index` should route to the podcast episode
-    /// filter (selection-modal open for this podcast, or already browsing
-    /// its episode list) rather than the show/bucket list.
-    pub(super) fn podcast_filter_target_active(&self, index: usize) -> bool {
-        self.selection_modal
-            .as_ref()
-            .is_some_and(|modal| matches!(modal.source, SelectionModalSource::Podcast { .. }))
-            || self
-                .audiobookshelf_browse
-                .get(index)
-                .is_some_and(|state| state.episode_selection.is_some())
-    }
-
-    pub(super) fn select_audiobookshelf_filter(&mut self, target: usize) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        if self
-            .selection_modal
-            .as_ref()
-            .is_some_and(|modal| matches!(modal.source, SelectionModalSource::Podcast { .. }))
-        {
-            self.select_podcast_selection_modal_filter(target);
-            return;
-        }
-        let Some(filter) = AudiobookshelfEpisodeFilter::ALL.get(target).copied() else {
-            return;
-        };
-        if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
-            if state.episode_selection.is_some() {
-                state.set_episode_filter(filter);
-            }
-        }
-    }
-
-    /// Resolve the selected downloaded episode at the Audiobookshelf playback
-    /// boundary. Queue submission remains the responsibility of the later
-    /// action stage; browse state never sees credentials or playback state.
+    /// Resolve the downloaded episode at `episode_index` at the Audiobookshelf
+    /// playback boundary. Queue submission remains the responsibility of the
+    /// later action stage; browse state never sees credentials or playback
+    /// state. Read-only resolver seam for the pre-U5 App-level tests; the
+    /// shell play/enqueue path threads the component-resolved episode index
+    /// and filter directly (task 5.3d.11 U5). The episode filter is
+    /// component-owned (split-browse-state-interaction-fields task 3.2), so
+    /// this seam resolves against the unfiltered (`All`) view.
+    #[cfg(test)]
     pub(super) fn activate_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
+        episode_index: usize,
     ) -> Option<QueueItem> {
-        self.selected_audiobookshelf_queue_item(audiobookshelf_library_index)
+        self.selected_audiobookshelf_queue_item(
+            audiobookshelf_library_index,
+            episode_index,
+            AudiobookshelfEpisodeFilter::All,
+        )
     }
 
-    /// Resolve the selected downloaded episode for enqueue without mutating
-    /// any queue or opening a playback lifecycle.
+    /// Resolve the episode at `episode_index` for enqueue without mutating any
+    /// queue or opening a playback lifecycle (see `activate_audiobookshelf_episode`).
+    #[cfg(test)]
     pub(super) fn enqueue_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
+        episode_index: usize,
     ) -> Option<QueueItem> {
-        self.selected_audiobookshelf_queue_item(audiobookshelf_library_index)
+        self.selected_audiobookshelf_queue_item(
+            audiobookshelf_library_index,
+            episode_index,
+            AudiobookshelfEpisodeFilter::All,
+        )
     }
 
-    /// Ordinary play for a downloaded episode. Browse supplies only the
-    /// provider-native snapshot; canonical queue ownership and the eligible
-    /// Player boundary remain here with the other ordinary actions.
-    pub(super) fn play_selected_audiobookshelf_episode(&mut self, index: usize) {
-        let Some(item) = self.activate_audiobookshelf_episode(index) else {
+    /// Ordinary play for the downloaded episode at `episode_index`. The shell
+    /// resolves the target from the mounted component's selection (task
+    /// 5.3d.11 U5); the App only supplies the provider-native snapshot, while
+    /// canonical queue ownership and the eligible Player boundary remain here
+    /// with the other ordinary actions.
+    pub(super) fn play_selected_audiobookshelf_episode(
+        &mut self,
+        index: usize,
+        episode_index: usize,
+        filter: AudiobookshelfEpisodeFilter,
+    ) {
+        let Some(item) = self.selected_audiobookshelf_queue_item(index, episode_index, filter)
+        else {
             return;
         };
         if !self.player.can_admit_audiobookshelf() {
@@ -345,11 +231,18 @@ impl App {
         self.submit_queue_item(item, true);
     }
 
-    /// Ordinary enqueue for a downloaded episode. A cold local queue is the
-    /// Composed stage and is intentionally allowed without owner admission;
-    /// an active or remote playback target is Bound and must be eligible.
-    pub(super) fn enqueue_selected_audiobookshelf_episode(&mut self, index: usize) {
-        let Some(item) = self.enqueue_audiobookshelf_episode(index) else {
+    /// Ordinary enqueue for the downloaded episode at `episode_index`. A cold
+    /// local queue is the Composed stage and is intentionally allowed without
+    /// owner admission; an active or remote playback target is Bound and must
+    /// be eligible.
+    pub(super) fn enqueue_selected_audiobookshelf_episode(
+        &mut self,
+        index: usize,
+        episode_index: usize,
+        filter: AudiobookshelfEpisodeFilter,
+    ) {
+        let Some(item) = self.selected_audiobookshelf_queue_item(index, episode_index, filter)
+        else {
             return;
         };
         let scope = self.visible_queue_scope();
@@ -368,12 +261,16 @@ impl App {
     fn selected_audiobookshelf_queue_item(
         &self,
         audiobookshelf_library_index: usize,
+        episode_index: usize,
+        filter: AudiobookshelfEpisodeFilter,
     ) -> Option<QueueItem> {
         let state = self
             .audiobookshelf_browse
             .get(audiobookshelf_library_index)?;
-        let episode_index = state.episode_selection?;
-        let episode = state.visible_episodes().get(episode_index)?.to_owned();
+        let episode = state
+            .visible_episodes(filter)
+            .get(episode_index)?
+            .to_owned();
         if episode.library_item_id.trim().is_empty() || episode.episode_id.trim().is_empty() {
             return None;
         }
@@ -421,8 +318,6 @@ impl App {
             state.error = None;
             state.detail_cache.clear();
             state.detail_loading_ids.clear();
-            state.chapter_selection = None;
-            state.scroll = 0;
             state.loading_pages.clear();
             state.loading_pages.insert(0);
             (
@@ -459,87 +354,12 @@ impl App {
         }
     }
 
-    /// Moves the right-pane browser cursor within the selected surname
-    /// bucket only -- books outside it are not reachable by scrolling
-    /// (book-browsing spec) until a different bucket is selected.
-    pub(super) fn move_audiobookshelf_book_cursor(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_book_browse.get(index) else {
-            return;
-        };
-        let Some(bucket) = state.buckets.get(state.selected_bucket) else {
-            return;
-        };
-        if bucket.end <= bucket.start {
-            return;
-        }
-        let (start, end) = (bucket.start as i64, bucket.end as i64 - 1);
-        let cursor = (state.cursor() as i64).clamp(start, end);
-        let new_cursor = (cursor + delta).clamp(start, end) as usize;
-        self.select_audiobookshelf_book(new_cursor);
-    }
-
-    pub(super) fn jump_audiobookshelf_book_cursor(&mut self, end: bool) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_book_browse.get(index) else {
-            return;
-        };
-        let Some(bucket) = state.buckets.get(state.selected_bucket) else {
-            return;
-        };
-        if bucket.end <= bucket.start {
-            return;
-        }
-        self.select_audiobookshelf_book(if end { bucket.end - 1 } else { bucket.start });
-    }
-
-    /// Left/right pane-focus toggle (book-browsing spec: "Left/right arrow
-    /// toggles pane focus without hiding either pane"), replacing the old
-    /// Enter-to-enter/Esc-to-leave modal transition. `chapter_selection`
-    /// doubles as the focus flag -- `Some` focuses the hero's chapter list,
-    /// `None` focuses the right-pane browser -- analogous to Music's
-    /// `album_track_focus`.
-    pub(super) fn focus_audiobookshelf_book_chapters(&mut self) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
-            if state.selected_id.is_some() && state.chapter_selection.is_none() {
-                state.chapter_selection = Some(0);
-            }
-        }
-    }
-
-    pub(super) fn focus_audiobookshelf_book_browser(&mut self) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
-            state.chapter_selection = None;
-        }
-    }
-
-    /// Cycles the selected alphabetical-bucket pill by `delta`, wrapping
-    /// around -- the established pattern from `switch_music_group`/
-    /// `cycle_letter_pill`.
-    pub(super) fn cycle_audiobookshelf_book_bucket(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_book_browse.get(index) else {
-            return;
-        };
-        let n = state.buckets.len();
-        if n == 0 {
-            return;
-        }
-        let next = (state.selected_bucket as i64 + delta).rem_euclid(n as i64) as usize;
-        self.select_audiobookshelf_book_bucket(next);
-    }
+    /// The book chapter focus is component-owned interaction state
+    /// (split-browse-state-interaction-fields task 2.2): the component tracks
+    /// it locally and carries the resolved row at activation time. This
+    /// handler exists only so the `ChapterFocus` request stays claimed and
+    /// routed (a redraw nudge); it stores nothing shell-side.
+    pub(super) fn set_audiobookshelf_book_chapter_focus(&mut self, _selection: Option<usize>) {}
 
     /// Selects bucket `bucket_pos` (a position in `state.buckets`, matching
     /// the pill's click target -- the established pattern from
@@ -557,10 +377,9 @@ impl App {
             return;
         };
         let target = {
-            let Some(state) = self.audiobookshelf_book_browse.get_mut(index) else {
+            let Some(state) = self.audiobookshelf_book_browse.get(index) else {
                 return;
             };
-            state.selected_bucket = bucket_pos;
             let cursor = state.cursor();
             if cursor >= bucket.start && cursor < bucket.end {
                 cursor
@@ -575,31 +394,10 @@ impl App {
         }
     }
 
-    /// Move the chapter/audio-file selection inside the selected book.
-    pub(super) fn move_audiobookshelf_book_row(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_book_browse.get_mut(index) else {
-            return;
-        };
-        let Some(cursor) = state.chapter_selection else {
-            return;
-        };
-        let Some(id) = state.selected_id.as_deref() else {
-            return;
-        };
-        let count = state.visible_rows(id).len();
-        if count > 0 {
-            state.chapter_selection =
-                Some((cursor as i64 + delta).clamp(0, count as i64 - 1) as usize);
-        }
-    }
-
     /// Chapter-row activation: one absolute seek to `chapters[].start` on the
     /// active book's merged timeline, without stopping/reopening the queue
     /// slot or session (book-playback spec).
-    pub(super) fn activate_audiobookshelf_book_row(&mut self) {
+    pub(super) fn activate_audiobookshelf_book_row(&mut self, chapter_selection: Option<usize>) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -611,7 +409,7 @@ impl App {
             let Some(id) = state.selected_id.as_deref() else {
                 return;
             };
-            let Some(cursor) = state.chapter_selection else {
+            let Some(cursor) = chapter_selection else {
                 return;
             };
             let target = match state.visible_rows(id).get(cursor) {
@@ -772,3 +570,11 @@ fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
 #[cfg(test)]
 #[path = "audiobookshelf_book_seek_tests.rs"]
 mod book_seek_tests;
+
+#[cfg(test)]
+#[path = "split_browse_state_book_tests.rs"]
+mod split_browse_state_book_tests;
+
+#[cfg(test)]
+#[path = "split_browse_state_podcast_tests.rs"]
+mod split_browse_state_podcast_tests;

@@ -123,67 +123,20 @@ impl App {
             .max(1)
     }
 
-    pub(super) fn queue_page_size(&self) -> usize {
-        self.layout.main.queue_area.height.saturating_sub(1).max(1) as usize
-    }
-
-    pub(super) fn current_home_item(&self) -> Option<QueueItem> {
-        let sec = self.home.section;
-        if sec == 0 {
-            self.home
-                .continue_items
-                .get(self.home.continue_cursor)
-                .cloned()
-                .map(|item| QueueItem::Emby(Box::new(item)))
-        } else {
-            let col = self.home.latest.get(sec - 1)?;
-            col.2.get(col.3).cloned()
-        }
-    }
-
-    pub(super) fn current_lib_item(&self, lib_idx: usize) -> Option<EmbyItem> {
+    /// Resolve the item the library panel currently selects. `cursor` is the
+    /// resolved index the caller owns (component-resolved for the generic
+    /// browser, or the App nav-level cursor on the legacy context-menu/mouse
+    /// paths) — never re-read from `BrowseLevel` (task 4.3, R1).
+    pub(super) fn current_lib_item(&self, lib_idx: usize, cursor: usize) -> Option<EmbyItem> {
         let lib = self.libs.get(lib_idx)?;
         if lib.nav_stack.is_empty() {
             Some(lib.library.clone())
         } else {
-            if let Some(s) = &lib.search {
-                let idx = *s.results.get(s.cursor)?;
-                return s.items.get(idx).cloned();
-            }
             if self.is_feed_home_video_group_view(lib_idx) {
                 return self.selected_feed_home_video_item(lib_idx);
             }
-            // Track-selection mode (#145 task 4): when the left panel
-            // is sitting on the album-folder-listing nav level AND a track
-            // is focused (`album_track_focus = Some(idx)`), resolve to that
-            // track instead of the album folder item, so play/enqueue/
-            // context-menu actions target the focused track. Strictly
-            // gated on `is_viewing_album_folders` -- per Task 3's
-            // invariant, `album_track_focus` is only ever `Some` when that
-            // holds, so this branch is unreachable from every other tab
-            // and every other nav level. (The legacy `is_album_level`
-            // drilldown this used to also be unreachable from was removed
-            // entirely; mouse clicks now mirror Enter via
-            // `activate_album_folder_row`.)
-            if self.is_viewing_album_folders(lib_idx) {
-                if let Some(track_idx) = lib.album_track_focus {
-                    if let Some(album) = self.selected_album_item(lib_idx) {
-                        if let Some(track) = self
-                            .album_tracks_cache
-                            .get(&album.id)
-                            .and_then(|tracks| tracks.get(track_idx))
-                        {
-                            return Some(track.clone());
-                        }
-                    }
-                    // Cache miss (async fetch still in flight) or an
-                    // out-of-bounds index (shouldn't happen -- Up/Down
-                    // clamps -- but stay safe): fall back to the album
-                    // folder item below rather than returning None.
-                }
-            }
             let lvl = lib.nav_stack.last()?;
-            lvl.items.get(lvl.cursor).cloned()
+            lvl.items.get(cursor).cloned()
         }
     }
 
@@ -458,14 +411,8 @@ impl App {
 }
 
 #[cfg(test)]
-#[path = "actions_tests_audiobookshelf_modal_events.rs"]
-mod audiobookshelf_modal_event_tests;
-#[cfg(test)]
 #[path = "actions_tests_letter.rs"]
 mod letter_tests;
-#[cfg(test)]
-#[path = "actions_tests_modal_events.rs"]
-mod modal_event_tests;
 #[cfg(test)]
 #[path = "actions_tests_queue_enrich.rs"]
 mod queue_enrich_tests;

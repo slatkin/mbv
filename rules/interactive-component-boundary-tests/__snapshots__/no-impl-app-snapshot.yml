@@ -1,0 +1,24 @@
+id: no-impl-app
+snapshots:
+  ? |
+    impl App { fn handle(&mut self) {} }
+  : labels:
+    - source: impl App { fn handle(&mut self) {} }
+      style: primary
+      start: 0
+      end: 36
+    - source: App
+      style: secondary
+      start: 5
+      end: 8
+  ? |
+    impl SomeTrait for App { fn foo(&self) {} }
+  : labels:
+    - source: impl SomeTrait for App { fn foo(&self) {} }
+      style: primary
+      start: 0
+      end: 43
+    - source: App
+      style: secondary
+      start: 19
+      end: 22

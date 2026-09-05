@@ -4,9 +4,8 @@
 //! repository's file-size limit.
 
 use super::{attached_app, tracker};
-use crate::app::tests::{make_item, make_session};
+use crate::app::tests::make_session;
 use crate::app::*;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::remote_reconciliation::{RemoteObservation, TrackingState};
 
 // ── task 7.2: SUSPENDED retention vs the three-miss policy ────────────────
@@ -188,78 +187,4 @@ fn stopped_but_present_session_keeps_tracking_idle() {
         TrackingState::Tracking
     );
     assert_eq!(app.connected_session_id.as_deref(), Some("session"));
-}
-
-// ── task 8.2: tracking controls are explicit queue-context routes ─────────
-
-#[test]
-fn tracking_controls_fire_only_in_queue_context() {
-    let mut app = attached_app();
-    app.panel_focus = crate::app::PanelFocus::Queue;
-    let ticks = mbv_core::api::TICKS_PER_SECOND;
-    let mut tracking = tracker(&["a", "b"]);
-    tracking.observe(RemoteObservation::playing(
-        1,
-        "session",
-        "a",
-        100 * ticks,
-        200 * ticks,
-        1,
-    ));
-    tracking.observe(RemoteObservation::playing(
-        2,
-        "session",
-        "a",
-        10 * ticks,
-        200 * ticks,
-        2,
-    ));
-    assert_eq!(tracking.state(), TrackingState::Invalid);
-    app.remote_tracker = Some(tracking);
-
-    app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
-    assert_eq!(
-        app.remote_tracker.as_ref().unwrap().state(),
-        TrackingState::Tracking,
-        "Ctrl+R in queue context re-anchors from Invalid"
-    );
-
-    app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL));
-    assert!(app.remote_tracker.is_none());
-}
-
-#[test]
-fn library_focus_rescan_does_not_trigger_tracking_controls() {
-    let mut app = attached_app();
-    app.panel_focus = crate::app::PanelFocus::Library;
-    app.tab = TabSelection::EmbyLibrary(0);
-    let mut lib_item = make_item("Movies", "CollectionFolder");
-    lib_item.id = "lib-movies".into();
-    app.libs.push(LibraryTab {
-        library: lib_item,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
-    app.remote_tracker = Some(tracker(&["a", "b"]));
-
-    // Ctrl+R in library focus is the established library rescan, not the
-    // queue-context re-anchor.
-    app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
-    assert!(matches!(
-        app.confirm_modal.as_ref().map(|m| &m.on_confirm),
-        Some(ConfirmAction::RescanLibrary(_))
-    ));
-    assert!(app.remote_reanchor_popup.is_none());
-    assert!(app.remote_tracker.is_some());
-
-    // Ctrl+T in library focus is swallowed by the library context; tracking
-    // must not be stopped.
-    app.confirm_modal = None;
-    app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL));
-    assert!(app.remote_tracker.is_some());
 }

@@ -6,255 +6,250 @@ use super::list_rows::{
 };
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
+use crate::app::palette;
 use crate::app::ui_util::*;
-use crate::app::{palette, App};
 use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-impl App {
-    /// Letter-grouped list kind of `render_list`: non-music library
-    /// lists with 50+ items (or an active letter-range pill), bucketed under
-    /// `LetterHeader` rows. Returns the scroll offset to persist.
-    pub(in crate::app::render) fn render_letter_grouped_rows(
-        &mut self,
-        f: &mut Frame,
-        ctx: ListRenderCtx,
-        active_letter_filter: Option<LetterFilter>,
-        ungrouped_total: usize,
-        layout: &mut LayoutMain,
-    ) -> usize {
-        let ListRenderCtx {
-            content_area,
-            items,
-            cursor,
-            stored_scroll,
-            cols,
-            focused,
-            hero_rows,
-        } = ctx;
-        let n = items.len();
-        let visible = content_area.height as usize;
-        let cell_w = library_cell_width(content_area, cols) as usize;
+/// Letter-grouped list kind of `render_list`: non-music library lists with
+/// 50+ items (or an active letter-range pill), bucketed under `LetterHeader`
+/// rows. Returns the scroll offset to persist.
+pub(in crate::app) fn render_letter_grouped_rows(
+    f: &mut Frame,
+    ctx: ListRenderCtx,
+    active_letter_filter: Option<LetterFilter>,
+    ungrouped_total: usize,
+    layout: &mut LayoutMain,
+) -> usize {
+    let ListRenderCtx {
+        content_area,
+        items,
+        cursor,
+        stored_scroll,
+        cols,
+        focused,
+        hero_rows,
+    } = ctx;
+    let n = items.len();
+    let visible = content_area.height as usize;
+    let cell_w = library_cell_width(content_area, cols) as usize;
 
-        // Build display rows: inject a Spacer+LetterHeader at each bucket boundary.
-        // The spacer is omitted before the very first header.
-        // Sort item indices by the same effective key used for bucketing so that
-        // items within each group appear in article-stripped alphabetical order.
-        let mut sorted_indices: Vec<usize> = (0..n).collect();
-        sorted_indices.sort_by_key(|&i| natural_sort_key(effective_sort_str(&items[i])));
-        // Publish the sorted order so cursor navigation can follow display order.
-        layout.left_sorted_indices = sorted_indices.clone();
+    // Build display rows: inject a Spacer+LetterHeader at each bucket boundary.
+    // The spacer is omitted before the very first header.
+    // Sort item indices by the same effective key used for bucketing so that
+    // items within each group appear in article-stripped alphabetical order.
+    let mut sorted_indices: Vec<usize> = (0..n).collect();
+    sorted_indices.sort_by_key(|&i| natural_sort_key(effective_sort_str(&items[i])));
+    // Publish the sorted order so cursor navigation can follow display order.
+    layout.left_sorted_indices = sorted_indices.clone();
 
-        // With a letter-range pill active, the visible slice is already
-        // narrowed to one range (e.g. `A–C`) -- bucket by the individual
-        // first letter within it (`A`, `B`, `C`) rather than re-deriving
-        // a range bucket from the slice's own (small) size. Forcing
-        // `letter_bucket`'s `total >= 250` branch reuses its existing
-        // per-letter logic without a second code path.
-        let bucket_total = if active_letter_filter.is_some() {
-            usize::MAX
-        } else {
-            ungrouped_total
-        };
-        // Each letter bucket packs independently: a bucket always starts a
-        // fresh item row, so no row mixes items from two buckets. The cost
-        // is a ragged trailing cell at the end of every bucket, which is
-        // correct -- a row straddling the bucket boundary would put the
-        // header between its items.
-        let mut display_rows: Vec<DisplayRow> = Vec::new();
-        let mut last_bucket = String::new();
-        let mut current_row: Vec<usize> = Vec::with_capacity(cols.max(1));
-        for &idx in &sorted_indices {
-            let item = &items[idx];
-            let bucket = letter_bucket(item, bucket_total);
-            if bucket != last_bucket {
-                if !current_row.is_empty() {
-                    push_item_row(&mut display_rows, &mut current_row);
-                }
-                if !last_bucket.is_empty() {
-                    display_rows.push(DisplayRow::Spacer);
-                }
-                display_rows.push(DisplayRow::LetterHeader(bucket.clone()));
-                last_bucket = bucket;
-            }
-            current_row.push(idx);
-            if current_row.len() >= cols.max(1) {
+    // With a letter-range pill active, the visible slice is already
+    // narrowed to one range (e.g. `A–C`) -- bucket by the individual
+    // first letter within it (`A`, `B`, `C`) rather than re-deriving
+    // a range bucket from the slice's own (small) size. Forcing
+    // `letter_bucket`'s `total >= 250` branch reuses its existing
+    // per-letter logic without a second code path.
+    let bucket_total = if active_letter_filter.is_some() {
+        usize::MAX
+    } else {
+        ungrouped_total
+    };
+    // Each letter bucket packs independently: a bucket always starts a
+    // fresh item row, so no row mixes items from two buckets. The cost
+    // is a ragged trailing cell at the end of every bucket, which is
+    // correct -- a row straddling the bucket boundary would put the
+    // header between its items.
+    let mut display_rows: Vec<DisplayRow> = Vec::new();
+    let mut last_bucket = String::new();
+    let mut current_row: Vec<usize> = Vec::with_capacity(cols.max(1));
+    for &idx in &sorted_indices {
+        let item = &items[idx];
+        let bucket = letter_bucket(item, bucket_total);
+        if bucket != last_bucket {
+            if !current_row.is_empty() {
                 push_item_row(&mut display_rows, &mut current_row);
             }
+            if !last_bucket.is_empty() {
+                display_rows.push(DisplayRow::Spacer);
+            }
+            display_rows.push(DisplayRow::LetterHeader(bucket.clone()));
+            last_bucket = bucket;
         }
-        if !current_row.is_empty() {
+        current_row.push(idx);
+        if current_row.len() >= cols.max(1) {
             push_item_row(&mut display_rows, &mut current_row);
         }
+    }
+    if !current_row.is_empty() {
+        push_item_row(&mut display_rows, &mut current_row);
+    }
 
-        // Find the visual row of the current cursor item for scrolling
-        // (`display_cursor` is the *row containing* the cursor) and the
-        // cursor's column within that row.
-        let display_cursor = display_rows
-            .iter()
-            .position(|r| matches!(r, DisplayRow::Item(idxs) if idxs.contains(&cursor)))
-            .unwrap_or(0);
+    // Find the visual row of the current cursor item for scrolling
+    // (`display_cursor` is the *row containing* the cursor) and the
+    // cursor's column within that row.
+    let display_cursor = display_rows
+        .iter()
+        .position(|r| matches!(r, DisplayRow::Item(idxs) if idxs.contains(&cursor)))
+        .unwrap_or(0);
 
-        let plan = InlineReplacementPlan::new(
-            &display_rows,
-            display_cursor,
-            cursor,
-            hero_rows,
-            content_area.height,
-            stored_scroll,
-        );
-        let offset = plan.offset();
-        let detail_rows = plan.detail_rows();
-        let total_display = plan.total_display_rows();
-        let final_offset = offset;
+    let plan = InlineReplacementPlan::new(
+        &display_rows,
+        display_cursor,
+        cursor,
+        hero_rows,
+        content_area.height,
+        stored_scroll,
+    );
+    let offset = plan.offset();
+    let detail_rows = plan.detail_rows();
+    let total_display = plan.total_display_rows();
+    let final_offset = offset;
 
-        // Publish the full row structure (parallel to the display rows,
-        // empty entries for headers) so column-aware cursor movement and
-        // mouse hit-testing can resolve cells between frames.
-        let row_targets = plan.row_targets();
-        layout.left_row_map = (offset..total_display)
-            .take(visible)
-            .enumerate()
-            .map(|(visible_row, _)| row_targets[offset + visible_row])
-            .collect();
-        layout.left_item_rows = plan.item_rows();
+    // Publish the full row structure (parallel to the display rows,
+    // empty entries for headers) so column-aware cursor movement and
+    // mouse hit-testing can resolve cells between frames.
+    let row_targets = plan.row_targets();
+    layout.left_row_map = (offset..total_display)
+        .take(visible)
+        .enumerate()
+        .map(|(visible_row, _)| row_targets[offset + visible_row])
+        .collect();
+    layout.left_item_rows = plan.item_rows();
 
-        let show_scrollbar = focused && total_display > visible;
+    let show_scrollbar = focused && total_display > visible;
 
-        // Width available to title + duration on a list row: the 1-col
-        // leading separator, plus the letter-grouped rows' extra indent.
-        let normal_avail = cell_w.saturating_sub(4);
-        let list_items: Vec<ListItem> = (offset..total_display)
-            .take(visible)
-            .map(|display_row| {
-                match plan
-                    .display_row(display_row)
-                    .expect("display row is within the replacement flow")
-                {
-                    InlineDisplayRow::Replacement => ListItem::new(Line::default()),
-                    InlineDisplayRow::Source(source_row) => match &display_rows[source_row] {
-                        DisplayRow::Spacer => ListItem::new(Line::default()),
-                        DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
-                            Span::raw(" "),
-                            Span::styled(
-                                label.clone(),
-                                Style::default()
-                                    .fg(palette::TEXT_FOCUS_ACCENT)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                        ])),
-                        DisplayRow::Item(idxs) => {
-                            // Each item renders into its own cell, truncated to the
-                            // cell width; cells are padded to the cell boundary
-                            // (+ inter-column gap) so the next cell starts at its
-                            // own x offset. Trailing partial rows leave the empty
-                            // cells as plain list background.
-                            let mut spans: Vec<Span> = Vec::new();
-                            for (cell_idx, &idx) in idxs.iter().enumerate() {
-                                let item = &items[idx];
-                                let selected = idx == cursor;
-                                let (item_name, dur_str) = if item.is_folder {
-                                    let name = if item.item_type == "Folder" && item.total_count > 0
-                                    {
-                                        format!(
-                                            "{} \u{b7} {} items",
-                                            item.display_name(),
-                                            item.total_count
-                                        )
-                                    } else if item.unplayed_item_count > 0
-                                        && item.item_type != "Series"
-                                    {
-                                        format!(
-                                            "{} [{}]",
-                                            item.display_name(),
-                                            item.unplayed_item_count
-                                        )
-                                    } else {
-                                        item.display_name()
-                                    };
-                                    (name, String::new())
+    // Width available to title + duration on a list row: the 1-col
+    // leading separator, plus the letter-grouped rows' extra indent.
+    let normal_avail = cell_w.saturating_sub(4);
+    let list_items: Vec<ListItem> = (offset..total_display)
+        .take(visible)
+        .map(|display_row| {
+            match plan
+                .display_row(display_row)
+                .expect("display row is within the replacement flow")
+            {
+                InlineDisplayRow::Replacement => ListItem::new(Line::default()),
+                InlineDisplayRow::Source(source_row) => match &display_rows[source_row] {
+                    DisplayRow::Spacer => ListItem::new(Line::default()),
+                    DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
+                        Span::raw(" "),
+                        Span::styled(
+                            label.clone(),
+                            Style::default()
+                                .fg(palette::TEXT_FOCUS_ACCENT)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ])),
+                    DisplayRow::Item(idxs) => {
+                        // Each item renders into its own cell, truncated to the
+                        // cell width; cells are padded to the cell boundary
+                        // (+ inter-column gap) so the next cell starts at its
+                        // own x offset. Trailing partial rows leave the empty
+                        // cells as plain list background.
+                        let mut spans: Vec<Span> = Vec::new();
+                        for (cell_idx, &idx) in idxs.iter().enumerate() {
+                            let item = &items[idx];
+                            let selected = idx == cursor;
+                            let (item_name, dur_str) = if item.is_folder {
+                                let name = if item.item_type == "Folder" && item.total_count > 0 {
+                                    format!(
+                                        "{} \u{b7} {} items",
+                                        item.display_name(),
+                                        item.total_count
+                                    )
+                                } else if item.unplayed_item_count > 0 && item.item_type != "Series"
+                                {
+                                    format!(
+                                        "{} [{}]",
+                                        item.display_name(),
+                                        item.unplayed_item_count
+                                    )
                                 } else {
-                                    let year = if item.production_year > 0 {
-                                        format!(" {}", item.production_year)
-                                    } else {
-                                        String::new()
-                                    };
-                                    (item.display_name(), year)
+                                    item.display_name()
                                 };
-                                // Same width budget for every row (selected or not)
-                                // so titles align across the row; the selected
-                                // cell's 1-column leading separator carries the
-                                // highlight background rather than adding an indent.
-                                let avail = normal_avail;
-                                let name_w = avail.saturating_sub(dur_str.width());
-                                let (title, dur_str) = if selected && detail_rows > 0 {
-                                    (String::new(), String::new())
+                                (name, String::new())
+                            } else {
+                                let year = if item.production_year > 0 {
+                                    format!(" {}", item.production_year)
                                 } else {
-                                    (trunc_str(&item_name, name_w), dur_str)
+                                    String::new()
                                 };
-                                let fg = focused_or_subtle(focused);
-                                let pad_to = if cell_idx + 1 == idxs.len() {
-                                    cell_w
-                                } else {
-                                    cell_w + LIBRARY_COLUMN_GAP as usize
-                                };
-                                spans.extend(item_cell_spans(title, dur_str, selected, fg, pad_to));
-                            }
-                            ListItem::new(Line::from(spans))
+                                (item.display_name(), year)
+                            };
+                            // Same width budget for every row (selected or not)
+                            // so titles align across the row; the selected
+                            // cell's 1-column leading separator carries the
+                            // highlight background rather than adding an indent.
+                            let avail = normal_avail;
+                            let name_w = avail.saturating_sub(dur_str.width());
+                            let (title, dur_str) = if selected && detail_rows > 0 {
+                                (String::new(), String::new())
+                            } else {
+                                (trunc_str(&item_name, name_w), dur_str)
+                            };
+                            let fg = focused_or_subtle(focused);
+                            let pad_to = if cell_idx + 1 == idxs.len() {
+                                cell_w
+                            } else {
+                                cell_w + LIBRARY_COLUMN_GAP as usize
+                            };
+                            spans.extend(item_cell_spans(title, dur_str, selected, fg, pad_to));
                         }
-                    },
-                }
-            })
-            .collect();
+                        ListItem::new(Line::from(spans))
+                    }
+                },
+            }
+        })
+        .collect();
 
-        let mut state = ListState::default();
-        state.select(Some(display_cursor.saturating_sub(offset)));
-        layout.selected_item_rect = selected_cell_rect(
+    let mut state = ListState::default();
+    state.select(Some(display_cursor.saturating_sub(offset)));
+    layout.selected_item_rect = selected_cell_rect(
+        content_area,
+        cursor,
+        &layout.left_item_rows,
+        offset,
+        cols,
+        cell_w as u16,
+        LIBRARY_COLUMN_GAP,
+    );
+
+    if let Some(hero_area) = plan.hero_area(content_area) {
+        layout.hero_area = hero_area;
+        layout.inline_hero_area = layout.hero_area;
+        layout.selected_item_rect = Some(layout.hero_area);
+    }
+    f.render_stateful_widget(
+        List::new(list_items).highlight_style(Style::default()),
+        content_area,
+        &mut state,
+    );
+
+    if show_scrollbar {
+        let max_off = total_display.saturating_sub(visible);
+        crate::app::render::render_right_scrollbar(
+            f,
+            content_area,
+            max_off,
+            offset,
+            palette::SCROLLBAR,
+        );
+    }
+
+    if plan.should_draw_selection_markers() {
+        super::list_rows::draw_column_selection_markers(
+            f,
             content_area,
             cursor,
             &layout.left_item_rows,
             offset,
-            cols,
-            cell_w as u16,
-            LIBRARY_COLUMN_GAP,
         );
-
-        if let Some(hero_area) = plan.hero_area(content_area) {
-            layout.hero_area = hero_area;
-            layout.inline_hero_area = layout.hero_area;
-            layout.selected_item_rect = Some(layout.hero_area);
-        }
-        f.render_stateful_widget(
-            List::new(list_items).highlight_style(Style::default()),
-            content_area,
-            &mut state,
-        );
-
-        if show_scrollbar {
-            let max_off = total_display.saturating_sub(visible);
-            crate::app::render::render_right_scrollbar(
-                f,
-                content_area,
-                max_off,
-                offset,
-                palette::SCROLLBAR,
-            );
-        }
-
-        if plan.should_draw_selection_markers() {
-            super::list_rows::draw_column_selection_markers(
-                f,
-                content_area,
-                cursor,
-                &layout.left_item_rows,
-                offset,
-            );
-        }
-
-        final_offset
     }
+
+    final_offset
 }
 
 /// Flushes one packed item row into `display_rows`; `current_row` is

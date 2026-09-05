@@ -28,14 +28,10 @@ impl App {
         }
     }
 
-    fn has_sessions_panel_connection(&self) -> bool {
+    pub(super) fn can_disconnect_remote(&self) -> bool {
         self.connected_session_id.is_some()
             || self.connected_session_state.is_some()
             || self.direct_remote_connected
-    }
-
-    pub(super) fn can_disconnect_remote(&self) -> bool {
-        self.has_sessions_panel_connection()
     }
 
     pub(super) fn disconnect_remote(&mut self) {
@@ -53,14 +49,6 @@ impl App {
             self.restore_local_mode("Disconnected from direct remote session");
         } else {
             self.flash("No session selected".to_string(), ToastSeverity::Neutral);
-        }
-    }
-
-    pub(super) fn sessions_overlay_footer(&self) -> &'static str {
-        if self.can_disconnect_remote() {
-            "[↵]conn [d]disc [r]refresh [Esc]close"
-        } else {
-            "[↵]conn [r]refresh [Esc]close"
         }
     }
 }

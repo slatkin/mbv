@@ -1,0 +1,11 @@
+id: no-service-client-deps
+valid:
+  - |
+    use crate::QueueSlotId;
+    struct MyComp;
+    fn view(c: &MyComp) {}
+    // An opaque action key the shell resolves is allowed presentation data.
+    fn play(slot: QueueSlotId) {}
+invalid:
+  - |
+    struct WithClient { emby: EmbyClient, proxy: PlayerProxy, remote: RemotePlayer }

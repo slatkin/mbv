@@ -2,7 +2,7 @@
 //! file within the repository's file-size limit.
 
 use crate::app::notify_actions::ToastSeverity;
-use crate::app::{App, PanelFocus, SessionEvent};
+use crate::app::{App, PanelFocus, SessionEvent, SidebarId};
 use std::time::{Duration, Instant};
 
 impl App {
@@ -131,6 +131,9 @@ impl App {
                                     })
                                 {
                                     self.player_tab.queue_cursor = new_idx;
+                                    // Attached-Emby session item change: an
+                                    // authoritative follow-the-playhead move.
+                                    self.queue_cursor_pushed = true;
                                 }
                             }
                             self.runtime_zero_since = None;
@@ -256,7 +259,7 @@ impl App {
                     if let Some(action) = self.pending_queue_action.take() {
                         self.execute_pending_queue_action(action);
                     }
-                    self.show_playlists = false;
+                    self.request_sidebar_dismiss(SidebarId::Playlists);
                     self.set_panel_focus(PanelFocus::Queue);
                 }
             }

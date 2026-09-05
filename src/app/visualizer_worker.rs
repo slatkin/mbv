@@ -51,7 +51,7 @@ impl StereoSampleBuffer {
         if channels != 2 {
             return;
         }
-        for pair in bytes.chunks_exact(8) {
+        for pair in bytes.as_chunks::<8>().0 {
             let left = f32::from_le_bytes(pair[0..4].try_into().unwrap());
             let right = f32::from_le_bytes(pair[4..8].try_into().unwrap());
             if !left.is_finite() || !right.is_finite() {

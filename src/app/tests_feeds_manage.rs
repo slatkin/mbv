@@ -3,8 +3,20 @@ use super::types_feeds_manage::{
     FeedAddResult, FeedForm, FeedFormField, FeedsManagePopup, FeedsManageStage,
 };
 use super::*;
+use crate::app::components::{ComponentId, FeedsManageComponent, PopupId};
 use crate::app::tests::make_app_stub;
+use crate::app::Model;
 use mbv_core::config::{FeedKind, FeedSubscription};
+
+fn fm_component(model: &mut Model) -> &mut FeedsManageComponent {
+    model
+        .application
+        .get_component_mut(&ComponentId::Popup(PopupId::FeedManage))
+        .expect("FeedManage component mounted")
+        .as_any_mut()
+        .downcast_mut::<FeedsManageComponent>()
+        .expect("FeedManage component type")
+}
 
 fn sub(name: &str, url: &str, kind: FeedKind) -> FeedSubscription {
     FeedSubscription {
@@ -24,9 +36,7 @@ fn feed_state_transition_is_safe_without_emby() {
         FeedKind::Audio,
     )];
     app.sync_feed_subscriptions();
-    app.feed_tab_move_cursor(1);
     assert_eq!(app.feed_tab.subscriptions[0].name, "Feed-only");
-    assert_eq!(app.feed_tab.cursor, 0);
 }
 
 /// §6.3: editing a subscription changes only its name and kind. A URL
@@ -34,23 +44,23 @@ fn feed_state_transition_is_safe_without_emby() {
 /// reach the persisted subscription -- the original URL is always kept.
 #[test]
 fn edit_changes_name_and_kind_but_not_url() {
-    let mut app = make_app_stub();
-    app.config.lock().unwrap().feeds = vec![sub(
+    let mut model = Model::new(make_app_stub());
+    model.app.config.lock().unwrap().feeds = vec![sub(
         "Old Name",
         "https://example.test/original",
         FeedKind::Video,
     )];
-    app.feeds_manage_popup = Some(FeedsManagePopup::new());
-    let mut form = FeedForm::new_edit(0, &app.config.lock().unwrap().feeds[0].clone());
+    model.open_feeds_manage();
+    let mut form = FeedForm::new_edit(0, &model.app.config.lock().unwrap().feeds[0].clone());
     form.name = "New Name".to_string();
     form.url = "https://example.test/attempted-change".to_string();
     form.kind = FeedKind::Audio;
     form.focus = FeedFormField::Name;
-    app.feeds_manage_popup.as_mut().unwrap().stage = FeedsManageStage::Form(form);
+    fm_component(&mut model).set_stage(FeedsManageStage::Form(form));
 
-    app.submit_feed_form();
+    model.submit_feed_form();
 
-    let feeds = app.config.lock().unwrap().feeds.clone();
+    let feeds = model.app.config.lock().unwrap().feeds.clone();
     assert_eq!(feeds.len(), 1);
     assert_eq!(feeds[0].name, "New Name");
     assert_eq!(feeds[0].kind, FeedKind::Audio);
@@ -103,8 +113,7 @@ fn removing_last_subscription_falls_back_to_home() {
     );
 }
 
-/// §6.4: after any mutation, `feed_tab` entries are cleared and
-/// `selected_group`/cursor/scroll are clamped into range for the new
+/// §6.4: after any mutation, shell-owned Feed entries are cleared for the new
 /// (possibly shorter) subscription list -- no auto-fetch.
 #[test]
 fn post_mutation_clears_entries_and_clamps_group_and_cursor() {
@@ -143,9 +152,6 @@ fn post_mutation_clears_entries_and_clamps_group_and_cursor() {
         }],
     ];
     app.feed_tab.rebuild_all_entries();
-    app.feed_tab.selected_group = 2; // subscription B
-    app.feed_tab.cursor = 0;
-
     // Remove subscription B (index 1): group 2 no longer exists.
     app.remove_feed_confirmed(1);
 
@@ -155,12 +161,6 @@ fn post_mutation_clears_entries_and_clamps_group_and_cursor() {
         "fetched entries must be cleared, not carried over"
     );
     assert!(app.feed_tab.all_entries.is_empty());
-    assert!(app.feed_tab.visible_entries().is_empty());
-    assert!(
-        app.feed_tab.selected_group < app.feed_tab.group_count(),
-        "selected_group must be clamped into range"
-    );
-    assert_eq!(app.feed_tab.cursor, 0);
 }
 
 #[test]
@@ -198,7 +198,6 @@ fn stale_refresh_result_is_dropped_after_subscription_index_shifts() {
     app.drain_feed_tab_results();
 
     assert!(app.feed_tab.entries[0].is_empty());
-    assert!(app.feed_tab.visible_entries().is_empty());
 }
 
 /// §6.2: a background add result whose id no longer matches the popup's
@@ -206,8 +205,8 @@ fn stale_refresh_result_is_dropped_after_subscription_index_shifts() {
 /// dropped without touching config.
 #[test]
 fn stale_add_result_is_dropped() {
-    let mut app = make_app_stub();
-    let popup = FeedsManagePopup::new();
+    let mut model = Model::new(make_app_stub());
+    let mut popup = FeedsManagePopup::new();
     popup
         .add_tx
         .send(FeedAddResult {
@@ -218,16 +217,15 @@ fn stale_add_result_is_dropped() {
             result: Ok(()),
         })
         .unwrap();
-    let mut popup = popup;
     popup.pending_add = Some(5); // a newer submission is the current one
-    app.feeds_manage_popup = Some(popup);
+    model.feeds_manage = Some(popup);
 
-    let had_events = app.drain_feed_add_results();
+    let had_events = model.drain_feed_add_results();
 
     assert!(had_events, "the stale message should still be drained");
-    assert!(app.config.lock().unwrap().feeds.is_empty());
+    assert!(model.app.config.lock().unwrap().feeds.is_empty());
     assert_eq!(
-        app.feeds_manage_popup.as_ref().unwrap().pending_add,
+        model.feeds_manage.as_ref().unwrap().pending_add,
         Some(5),
         "the still-current pending id must be untouched"
     );
@@ -237,12 +235,10 @@ fn stale_add_result_is_dropped() {
 /// fetch's eventual result must then be dropped as stale.
 #[test]
 fn cancelled_add_result_is_dropped() {
-    let mut app = make_app_stub();
-    app.feeds_manage_popup = Some(FeedsManagePopup::new());
-    app.feeds_manage_popup.as_mut().unwrap().pending_add = Some(1);
-    app.feeds_manage_popup
-        .as_ref()
-        .unwrap()
+    let mut model = Model::new(make_app_stub());
+    let mut popup = FeedsManagePopup::new();
+    popup.pending_add = Some(1);
+    popup
         .add_tx
         .send(FeedAddResult {
             id: 1,
@@ -252,26 +248,28 @@ fn cancelled_add_result_is_dropped() {
             result: Ok(()),
         })
         .unwrap();
+    model.feeds_manage = Some(popup);
 
     // Esc while the add is in flight.
-    app.cancel_feed_form();
+    model.cancel_feed_form();
 
-    let had_events = app.drain_feed_add_results();
+    let had_events = model.drain_feed_add_results();
 
     assert!(had_events);
-    assert!(app.config.lock().unwrap().feeds.is_empty());
+    assert!(model.app.config.lock().unwrap().feeds.is_empty());
 }
 
 /// §6.2/§6.3: a matching add result appends to `config.feeds` and returns
 /// the overlay to the List stage.
 #[test]
 fn matching_add_result_appends_feed_and_returns_to_list() {
-    let mut app = make_app_stub();
-    app.feeds_manage_popup = Some(FeedsManagePopup::new());
-    app.feeds_manage_popup.as_mut().unwrap().pending_add = Some(7);
-    app.feeds_manage_popup.as_mut().unwrap().stage = FeedsManageStage::Form(FeedForm::new_add());
-    app.feeds_manage_popup
-        .as_ref()
+    let mut model = Model::new(make_app_stub());
+    model.open_feeds_manage();
+    model.feeds_manage.as_mut().unwrap().pending_add = Some(7);
+    fm_component(&mut model).set_stage(FeedsManageStage::Form(FeedForm::new_add()));
+    model
+        .feeds_manage
+        .as_mut()
         .unwrap()
         .add_tx
         .send(FeedAddResult {
@@ -283,28 +281,26 @@ fn matching_add_result_appends_feed_and_returns_to_list() {
         })
         .unwrap();
 
-    app.drain_feed_add_results();
+    model.drain_feed_add_results();
 
-    let feeds = app.config.lock().unwrap().feeds.clone();
+    let feeds = model.app.config.lock().unwrap().feeds.clone();
     assert_eq!(feeds.len(), 1);
     assert_eq!(feeds[0].name, "New Feed");
     assert!(matches!(
-        app.feeds_manage_popup.as_ref().unwrap().stage,
-        FeedsManageStage::List
+        fm_component(&mut model).stage_clone(),
+        Some(FeedsManageStage::List)
     ));
-    assert_eq!(app.feeds_manage_popup.as_ref().unwrap().pending_add, None);
+    assert_eq!(model.feeds_manage.as_ref().unwrap().pending_add, None);
 }
 
 /// §6.2: a fetch failure surfaces via the status/flash path and does not
 /// save.
 #[test]
 fn add_fetch_failure_does_not_save() {
-    let mut app = make_app_stub();
-    app.feeds_manage_popup = Some(FeedsManagePopup::new());
-    app.feeds_manage_popup.as_mut().unwrap().pending_add = Some(1);
-    app.feeds_manage_popup
-        .as_ref()
-        .unwrap()
+    let mut model = Model::new(make_app_stub());
+    let mut popup = FeedsManagePopup::new();
+    popup.pending_add = Some(1);
+    popup
         .add_tx
         .send(FeedAddResult {
             id: 1,
@@ -314,9 +310,10 @@ fn add_fetch_failure_does_not_save() {
             result: Err("connection refused".into()),
         })
         .unwrap();
+    model.feeds_manage = Some(popup);
 
-    app.drain_feed_add_results();
+    model.drain_feed_add_results();
 
-    assert!(app.config.lock().unwrap().feeds.is_empty());
-    assert!(app.status.contains("Couldn't add feed"));
+    assert!(model.app.config.lock().unwrap().feeds.is_empty());
+    assert!(model.app.status.contains("Couldn't add feed"));
 }

@@ -1,5 +1,6 @@
 use super::feed_parse::fetch_and_parse_rss;
 use super::notify_actions::ToastSeverity;
+use super::types_browse::BrowseResting;
 use super::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
 use mbv_core::api::EmbyItem;
 use std::collections::{HashMap, HashSet};
@@ -15,13 +16,12 @@ impl App {
         let feed = lib.feed_home_video.as_ref();
         log::debug!(
             target: "feedhv",
-            "{context}: lib_idx={lib_idx} lib={} nav_len={} root_parent={} root_items={} root_loading={} root_cursor={} feed_present={} feed_loading={} selected_group={} groups={} all_items={} video_cursor={} video_scroll={} group_view={}",
+            "{context}: lib_idx={lib_idx} lib={} nav_len={} root_parent={} root_items={} root_loading={} feed_present={} feed_loading={} selected_group={} groups={} all_items={} video_cursor={} video_scroll={} group_view={}",
             lib.library.name,
             lib.nav_stack.len(),
             root.map(|lvl| lvl.parent_id.as_str()).unwrap_or(""),
             root.map(|lvl| lvl.items.len()).unwrap_or(0),
             root.map(|lvl| lvl.loading).unwrap_or(false),
-            root.map(|lvl| lvl.cursor).unwrap_or(0),
             feed.is_some(),
             feed.map(|state| state.loading).unwrap_or(false),
             feed.map(|state| state.selected_group).unwrap_or(0),
@@ -348,13 +348,13 @@ impl App {
             title: lib_name.clone(),
             items: vec![],
             total_count: 0,
-            cursor: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             loading: true,
-            scroll: 0,
+
             all_items: None,
             letter_filter: None,
             music_grouping: None,
@@ -433,13 +433,13 @@ impl App {
             title: lib_name.clone(),
             items: vec![],
             total_count: 0,
-            cursor: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             loading: true,
-            scroll: 0,
+
             all_items: None,
             letter_filter: None,
             music_grouping: None,

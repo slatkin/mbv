@@ -1,6 +1,7 @@
+use super::types_playback::HomeContent;
 use super::{
-    notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState,
-    HomeLatestSource, LibEvent, PanelFocus, PendingQueueAction, TabSelection,
+    notify_actions::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, HomeLatestSource,
+    LibEvent, PanelFocus, PendingQueueAction, TabSelection,
 };
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
@@ -81,8 +82,19 @@ impl App {
                 }
                 match self.tab {
                     TabSelection::Home => {
-                        if let Err(e) = self.fetch_home() {
-                            self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
+                        match self.fetch_home() {
+                            Ok(content) => {
+                                // The fetch runs synchronously (its App-side
+                                // side effects are order-sensitive); the
+                                // computed content travels to Model-owned
+                                // `home_content` via lib_tx (task 5.3d).
+                                let _ = self
+                                    .lib_tx
+                                    .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+                            }
+                            Err(e) => {
+                                self.flash(format!("Refresh error: {e}"), ToastSeverity::Error)
+                            }
                         }
                     }
                     TabSelection::EmbyLibrary(lib_idx) => self.refresh_lib(lib_idx),
@@ -195,10 +207,9 @@ impl App {
     }
 
     pub(super) fn open_playlists_panel(&mut self) {
-        self.show_help = false;
-        self.show_sessions = false;
+        self.request_sidebar_dismiss(super::SidebarId::Sessions);
         self.close_settings();
-        self.show_playlists = true;
+        self.request_sidebar_open(super::SidebarId::Playlists);
         if self.playlists.is_empty() && !self.playlists_loading {
             self.spawn_load_playlists();
         }
@@ -240,8 +251,8 @@ impl App {
             },
         };
         self.replace_queue_or_prompt(action);
-        if self.confirm_modal.is_none() {
-            self.show_playlists = false;
+        if self.pending_overlay.is_none() {
+            self.request_sidebar_dismiss(super::SidebarId::Playlists);
             self.set_panel_focus(PanelFocus::Queue);
         }
     }
@@ -284,13 +295,12 @@ impl App {
                             title: lvl.title.clone(),
                             items: lvl.items.clone(),
                             total_count: lvl.total_count,
-                            cursor: lvl.cursor,
                             item_types: lvl.item_types.clone(),
                             unplayed_only: lvl.unplayed_only,
                             sort_by: lvl.sort_by.clone(),
                             sort_order: lvl.sort_order.clone(),
                             loading: false,
-                            scroll: lvl.scroll,
+                            resting: lvl.resting(),
                             all_items: lvl.all_items.clone(),
                             letter_filter: lvl.letter_filter.clone(),
                             music_grouping: lvl.music_grouping.clone(),
@@ -301,24 +311,24 @@ impl App {
             let feed_home_video = saved.and_then(|s| s.feed_home_video.clone());
             let library_total = saved.and_then(|s| s.library_total);
             self.libs.push(super::LibraryTab {
-                library: view.clone(),
-                search: None,
                 nav_stack: stack,
                 feed_home_video,
-
-                album_track_focus: None,
-                series_selection: None,
-                series_season_cursor: 0,
                 library_total,
+                ..super::LibraryTab::new(view.clone())
             });
         }
     }
 
-    pub(super) fn fetch_home(&mut self) -> Result<(), String> {
-        // The Emby-derived portion (Continue Watching, library tabs, Emby
-        // `latest` pills) is built only when an Emby Service is configured
-        // and connected. Without one it is skipped -- not an error -- so Home
-        // still populates from whatever local Sources exist (#543 Part 1).
+    /// Compute the full Home content snapshot (task 5.3d): the Emby-derived
+    /// portion (Continue Watching, library tabs rebuild, Emby `latest` pills)
+    /// is built only when an Emby Service is configured and connected.
+    /// Without one it is skipped -- not an error -- so Home still populates
+    /// from whatever local Sources exist (#543 Part 1). Returns the
+    /// computed `HomeContent` instead of writing deleted `App.home`; the
+    /// shell assigns it to `Model.home_content` (directly for shell-side
+    /// callers, via `LibEvent::HomeContentRefreshed` for App-internal ones)
+    /// and preserves the Continue Watching column cursor at the assignment.
+    pub(super) fn fetch_home(&mut self) -> Result<HomeContent, String> {
         let mut emby_fetched = false;
         let (continue_items, all_views, user_views) = if let Some(client) = self.emby_client() {
             emby_fetched = true;
@@ -340,7 +350,6 @@ impl App {
             (Vec::new(), Vec::new(), Vec::new())
         };
 
-        self.home.continue_items = continue_items;
         // Library tabs are Emby-modeled state; only rebuild them from the
         // freshly fetched views when Emby was actually reachable, so a broken
         // or absent Emby does not clear existing library tabs.
@@ -355,7 +364,12 @@ impl App {
         // reinserted at their previous positions, leaving any entries from
         // other providers untouched. This is what lets `fetch_home()` run
         // unconditionally (even before Emby connects) without clearing other
-        // providers' Home data whenever Emby is the writer.
+        // providers' Home data whenever Emby is the writer. All three
+        // provider portions (Emby, Audiobookshelf shelf cache, Feeds tab)
+        // are rebuilt into the local `latest` here; the per-pill cursor
+        // tuples are the preserved-but-vestigial legacy cursor fields (the
+        // mounted `HomeComponent` owns the real flat cursors).
+        let mut latest: Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)> = Vec::new();
         let mut emby_sections: Vec<(String, HomeLatestSource, Vec<QueueItem>)> = Vec::new();
         if let Some(client) = self.emby_client() {
             let client = client.lock().unwrap();
@@ -380,21 +394,30 @@ impl App {
                 ));
             }
         }
-        merge_home_sections(&mut self.home.latest, emby_sections, |source| {
+        merge_home_sections(&mut latest, emby_sections, |source| {
             matches!(source, HomeLatestSource::Emby(_))
         });
         // The Audiobookshelf portion is rebuilt from the async shelf cache
         // (never a network fetch here), re-applying `hidden_latest`.
-        self.rebuild_audiobookshelf_latest();
+        merge_home_sections(
+            &mut latest,
+            self.audiobookshelf_latest_sections(),
+            |source| matches!(source, HomeLatestSource::Audiobookshelf(_)),
+        );
         // The Feeds portion is rebuilt from the Feeds tab's combined entries
         // (never a network fetch here), re-applying `hidden_latest`.
-        self.rebuild_feeds_latest();
-
-        let n = 1 + self.home.latest.len();
-        if self.home.section >= n {
-            self.home.section = n.saturating_sub(1);
+        if let Some(feed_section) = self.feeds_latest_section() {
+            merge_home_sections(&mut latest, vec![feed_section], |source| {
+                matches!(source, HomeLatestSource::Feeds)
+            });
         }
-        Ok(())
+
+        Ok(HomeContent {
+            continue_items,
+            continue_cursor: 0,
+            latest,
+            loading: false,
+        })
     }
 
     /// The Audiobookshelf Latest-pill sections rebuildable from
@@ -427,24 +450,16 @@ impl App {
             .collect()
     }
 
-    /// Rebuilds the Audiobookshelf portion of `home.latest` from
-    /// `audiobookshelf_shelf_cache` without issuing a network fetch. Shared by
-    /// the shelf-fetch handler (Task 6.3) and `fetch_home()` (Task 7.1);
-    /// removing every `Audiobookshelf` section first means a library that was
-    /// hidden or stopped being cached also disappears on refresh.
-    pub(super) fn rebuild_audiobookshelf_latest(&mut self) {
-        let sections = self.audiobookshelf_latest_sections();
-        merge_home_sections(&mut self.home.latest, sections, |source| {
-            matches!(source, HomeLatestSource::Audiobookshelf(_))
-        });
-    }
-
     /// The single Feeds Latest-pill section, built from the Feeds tab's
     /// combined `all_entries` (newest-first "All" group). The pill exists
     /// only when feed subscriptions are configured (mirroring the
     /// Audiobookshelf pill, which exists only per library), and honors
-    /// `hidden_latest` via the literal `"feeds"` pseudo-name.
-    fn feeds_latest_section(&self) -> Option<(String, HomeLatestSource, Vec<QueueItem>)> {
+    /// `hidden_latest` via the literal `"feeds"` pseudo-name. Consumed by
+    /// `fetch_home()` and by the shell's feed-drain seam, which merges the
+    /// freshly computed section into Model-owned `latest` (task 5.3d).
+    pub(super) fn feeds_latest_section(
+        &self,
+    ) -> Option<(String, HomeLatestSource, Vec<QueueItem>)> {
         if !self.has_feeds_subscriptions() {
             return None;
         }
@@ -455,25 +470,8 @@ impl App {
         {
             return None;
         }
-        let items = self
-            .feed_tab
-            .all_entries
-            .iter()
-            .cloned()
-            .map(QueueItem::Feed)
-            .collect();
+        let items = self.feed_latest_items();
         Some(("Feeds".into(), HomeLatestSource::Feeds, items))
-    }
-
-    /// Rebuilds the Feeds portion of `home.latest` from the Feeds tab's
-    /// combined entries without issuing a network fetch. Shared by
-    /// `fetch_home()` (Task 11.1); removing the existing `Feeds` section
-    /// first means the pill also disappears when hidden.
-    pub(super) fn rebuild_feeds_latest(&mut self) {
-        let sections = self.feeds_latest_section().into_iter().collect::<Vec<_>>();
-        merge_home_sections(&mut self.home.latest, sections, |source| {
-            matches!(source, HomeLatestSource::Feeds)
-        });
     }
 
     /// The `Newest Episodes` shelf's entries as queue-able items, or an empty
@@ -498,79 +496,9 @@ impl App {
             })
             .unwrap_or_default()
     }
-
-    pub(super) fn settings_scroll_follow(&mut self) {
-        let cursor = self.settings_cursor;
-        let Some(&cursor_line) = self.layout.settings_line_of_cursor.get(cursor) else {
-            return;
-        };
-        let visible = self.layout.settings_content_area.height.max(1) as usize;
-        if cursor_line < self.settings_scroll {
-            self.settings_scroll = cursor_line;
-        } else if cursor_line >= self.settings_scroll + visible {
-            self.settings_scroll = cursor_line + 1 - visible;
-        }
-    }
-
-    pub(super) fn update_lib_search(&mut self, lib_idx: usize) {
-        use fuzzy_matcher::skim::SkimMatcherV2;
-        use fuzzy_matcher::FuzzyMatcher;
-
-        let query = match self.libs[lib_idx].search.as_ref() {
-            Some(s) => s.query.clone(),
-            None => return,
-        };
-        self.libs[lib_idx].series_selection = None;
-        self.libs[lib_idx].series_season_cursor = 0;
-
-        if query.chars().count() < 2 {
-            if let Some(s) = self.libs[lib_idx].search.as_mut() {
-                s.results.clear();
-                s.cursor = 0;
-            }
-            return;
-        }
-
-        let recursive_entries = self
-            .libs
-            .get(lib_idx)
-            .and_then(|lib| self.album_indexes.get(&lib.library.id))
-            .and_then(|state| match state {
-                AlbumIndexState::Ready(entries) => Some(entries),
-                _ => None,
-            });
-        let scored: Vec<(i64, usize)> = {
-            let items = self.libs[lib_idx]
-                .search
-                .as_ref()
-                .map(|s| s.items.as_slice())
-                .unwrap_or(&[]);
-            let matcher = SkimMatcherV2::default();
-            items
-                .iter()
-                .enumerate()
-                .filter_map(|(i, item)| {
-                    let score = recursive_entries
-                        .and_then(|entries| entries.get(i))
-                        .map(|entry| matcher.fuzzy_match(&entry.search_text, &query))
-                        .unwrap_or_else(|| matcher.fuzzy_match(&item.display_name(), &query));
-                    score.map(|score| (score, i))
-                })
-                .collect()
-        };
-
-        let mut results: Vec<(i64, usize)> = scored;
-        results.sort_unstable_by_key(|b| std::cmp::Reverse(b.0));
-        let results: Vec<usize> = results.into_iter().map(|(_, i)| i).collect();
-
-        if let Some(s) = self.libs[lib_idx].search.as_mut() {
-            s.results = results;
-            s.cursor = 0;
-        }
-    }
 }
 
-/// Position- and cursor-preserving splice for `HomePane.latest`: drops every
+/// Position- and cursor-preserving splice for `HomeContent.latest`: drops every
 /// section whose source matches `kind`, then reinserts `sections` at the
 /// previous positions, restoring each section's prior cursor clamped to its
 /// item count. Each Home writer (Emby in `fetch_home`, the Audiobookshelf

@@ -2,11 +2,12 @@
 //! and wrapped-text rendering for the two-pane layout shared by Music,
 //! Home, and future screens (design.md decisions 4–6).
 
+use super::padded_rect;
 use crate::app::palette;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 use textwrap::wrap;
 
@@ -28,16 +29,28 @@ const HERO_ON_LEFT_PILLS_GAP_ROWS: u16 = 1;
 /// (hero content, list panel, recessed boxes). One definition; surfaces that
 /// previously carried their own `PANE_PAD_X`/`PANE_PAD_Y` (or `HOME_HERO_PAD_*`)
 /// copy now import these.
-pub(in crate::app::render) const PANE_PAD_X: u16 = 2;
-pub(in crate::app::render) const PANE_PAD_Y: u16 = 1;
+pub(in crate::app) const PANE_PAD_X: u16 = 2;
+pub(in crate::app) const PANE_PAD_Y: u16 = 1;
 
 /// Resolves the only shared responsive decision for hero-bearing browsers and
 /// returns the pane geometry when the wide presentation fits. Callers provide
 /// content; they do not own a breakpoint or a height threshold.
-pub(in crate::app::render) fn shared_hero_presentation(content_area: Rect) -> Option<(Rect, Rect)> {
+///
+/// This primitive owns the one-row status-bar reserve: both returned panes
+/// already exclude the terminal's bottom status row, so every hero-on-left
+/// screen bottoms out exactly one row above it. Callers must not re-derive
+/// that reserve (no extra `saturating_sub(1)` on the panes, no `bottom_pad`
+/// on `hero_on_left_right_pane`) — doing so double-subtracts and shifts the
+/// screen a second row.
+pub(in crate::app) fn shared_hero_presentation(content_area: Rect) -> Option<(Rect, Rect)> {
     (content_area.width >= crate::app::TWO_COLUMN_THRESHOLD
         && content_area.height.saturating_sub(1) >= HERO_ON_LEFT_MIN_AREA_HEIGHT)
-        .then(|| hero_on_left_panes(content_area))
+        .then(|| {
+            let (mut left_pane, mut right_pane) = hero_on_left_panes(content_area);
+            left_pane.height = left_pane.height.saturating_sub(1);
+            right_pane.height = right_pane.height.saturating_sub(1);
+            (left_pane, right_pane)
+        })
 }
 
 #[cfg(test)]
@@ -74,6 +87,53 @@ mod tests {
             height: HERO_ON_LEFT_MIN_AREA_HEIGHT,
         })
         .is_none());
+    }
+
+    /// The primitive owns the one-row status-row reserve (task 5.1, D7):
+    /// both returned panes already exclude the terminal's bottom status row,
+    /// so callers must not shrink them again.
+    #[test]
+    fn shared_presentation_reserves_one_status_row_on_both_panes() {
+        let area = Rect {
+            x: 2,
+            y: 4,
+            width: crate::app::TWO_COLUMN_THRESHOLD,
+            height: 20,
+        };
+        let (left, right) = shared_hero_presentation(area).expect("wide area");
+        assert_eq!(left.height, area.height - 1);
+        assert_eq!(right.height, area.height - 1);
+        assert_eq!(left.bottom(), area.bottom() - 1);
+        assert_eq!(right.bottom(), area.bottom() - 1);
+    }
+
+    #[test]
+    fn pill_and_right_pane_geometry_saturate_short_areas() {
+        let areas = pill_bar_areas(Rect {
+            x: 4,
+            y: 7,
+            width: 10,
+            height: 1,
+        });
+        assert_eq!(areas.pills_area.height, 1);
+        assert_eq!(areas.spacer_area.height, 0);
+        assert_eq!(areas.content_area.height, 0);
+
+        let right = hero_on_left_right_pane(
+            Rect {
+                x: 20,
+                y: 3,
+                width: 10,
+                height: 1,
+            },
+            Rect {
+                x: 20,
+                y: 3,
+                width: 10,
+                height: 1,
+            },
+        );
+        assert_eq!(right.list_panel.height, 0);
     }
 }
 
@@ -114,16 +174,17 @@ pub(in crate::app::render) fn hero_on_left_panes(content_area: Rect) -> (Rect, R
 /// 6's "pill row at top of list pane"). `right_panel` is the pane's full
 /// rect (its `y`/`height` anchor the pill row and the panel's bottom);
 /// `right_area` is the vertically-inset pane used for the pill row's
-/// x/width. `bottom_pad` is the caller's own trailing padding reserve
-/// (grouped Music's `PANE_PAD_Y`), kept as a parameter rather than a second
-/// constant here so the two files do not each own a copy of the same value.
-pub(in crate::app::render) struct HeroOnLeftRightPane {
+/// x/width. The pane's own status-row reserve is owned by
+/// [`shared_hero_presentation`]; callers must not re-derive it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) struct HeroOnLeftRightPane {
     pub pills_area: Rect,
     pub spacer_area: Rect,
     pub list_panel: Rect,
 }
 
-pub(in crate::app::render) struct PillBarAreas {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) struct PillBarAreas {
     pub pills_area: Rect,
     pub spacer_area: Rect,
     pub content_area: Rect,
@@ -131,7 +192,7 @@ pub(in crate::app::render) struct PillBarAreas {
 
 /// Places the shared one-row pill bar, its one-row parent-background spacer,
 /// and the content below them.
-pub(in crate::app::render) fn pill_bar_areas(area: Rect) -> PillBarAreas {
+pub(in crate::app) fn pill_bar_areas(area: Rect) -> PillBarAreas {
     let reserved = HERO_ON_LEFT_PILLS_ROW_HEIGHT + HERO_ON_LEFT_PILLS_GAP_ROWS;
     PillBarAreas {
         pills_area: Rect {
@@ -151,21 +212,149 @@ pub(in crate::app::render) fn pill_bar_areas(area: Rect) -> PillBarAreas {
     }
 }
 
-pub(in crate::app::render) fn hero_on_left_right_pane(
+pub(in crate::app) fn hero_on_left_right_pane(
     right_panel: Rect,
     right_area: Rect,
-    bottom_pad: u16,
 ) -> HeroOnLeftRightPane {
     let areas = pill_bar_areas(Rect {
         x: right_area.x,
         y: right_panel.y,
         width: right_area.width,
-        height: right_panel.height.saturating_sub(bottom_pad),
+        height: right_panel.height,
     });
     HeroOnLeftRightPane {
         pills_area: areas.pills_area,
         spacer_area: areas.spacer_area,
         list_panel: areas.content_area,
+    }
+}
+
+/// The hero-on-left left pane's focus resolution (design.md D-B). A closed
+/// enum rather than a `bool`: the defect class this primitive exists to
+/// prevent is exactly the read-only-versus-workspace confusion (e.g. passing
+/// a bare `focused` when the correct value is `focused &&
+/// interaction.episode_selection.is_some()`). `ReadOnly` and `Workspace(..)`
+/// are two visibly different call shapes, so a reviewer can check the
+/// variant rather than the expression.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum LeftPaneFocus {
+    /// The pane is never focusable (Movies/home-videos/Emby-podcasts/
+    /// feed-group browser, Home, Feeds): always [`palette::SURFACE_RESTING`].
+    ReadOnly,
+    /// The pane belongs to a focusable workspace (TV, Music, ABS Books, ABS
+    /// Podcasts); `true` when that workspace currently holds focus.
+    Workspace(bool),
+}
+
+/// Paints the hero-on-left left pane: fills the [`shared_hero_presentation`]
+/// left panel with the surface [`LeftPaneFocus`] resolves to, and returns the
+/// shared content inset (`PANE_PAD_X`, `PANE_PAD_Y`). One owner for fill,
+/// extent, inset, and focus resolution (design.md D-A) -- callers must not
+/// resize, re-derive, or conditionally skip the fill, and must not apply a
+/// destination-specific inset.
+///
+/// Takes `content_area` rather than a pane rect so a caller has nothing to
+/// hand in but the rect the arrangement already consumes -- it cannot supply
+/// a mutated `left_panel`. `shared_hero_presentation` is pure and cheap, so
+/// recomputing it here costs nothing.
+pub(in crate::app) fn hero_on_left_pane(
+    f: &mut Frame,
+    content_area: Rect,
+    focus: LeftPaneFocus,
+) -> Option<Rect> {
+    let (left_panel, _right_panel) = shared_hero_presentation(content_area)?;
+    let background = match focus {
+        LeftPaneFocus::ReadOnly => palette::SURFACE_RESTING,
+        LeftPaneFocus::Workspace(held) => palette::resolve_surface_focus(held),
+    };
+    f.render_widget(
+        Block::default().style(Style::default().bg(background)),
+        left_panel,
+    );
+    Some(padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y))
+}
+
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod hero_on_left_pane_tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn wide_area() -> Rect {
+        Rect {
+            x: 3,
+            y: 2,
+            width: crate::app::TWO_COLUMN_THRESHOLD,
+            height: HERO_ON_LEFT_MIN_AREA_HEIGHT + 5,
+        }
+    }
+
+    #[test]
+    fn read_only_never_resolves_to_the_focused_surface() {
+        let area = wide_area();
+        let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
+        let (left_panel, _) = shared_hero_presentation(area).expect("wide fits");
+        terminal
+            .draw(|f| {
+                let returned =
+                    hero_on_left_pane(f, area, LeftPaneFocus::ReadOnly).expect("wide fits");
+                assert_eq!(returned, padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y));
+            })
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
+        assert_eq!(cell.bg, palette::SURFACE_RESTING);
+        assert_ne!(cell.bg, palette::resolve_surface_focus(true));
+    }
+
+    #[test]
+    fn workspace_resolves_focus_and_returns_the_shared_inset() {
+        let area = wide_area();
+        let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
+        let (left_panel, _) = shared_hero_presentation(area).expect("wide fits");
+        let expected = padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y);
+        terminal
+            .draw(|f| {
+                let returned =
+                    hero_on_left_pane(f, area, LeftPaneFocus::Workspace(true)).expect("wide fits");
+                assert_eq!(returned.x, left_panel.x + PANE_PAD_X);
+                assert_eq!(returned.y, left_panel.y + PANE_PAD_Y);
+                assert_eq!(returned, expected);
+            })
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
+        assert_eq!(cell.bg, palette::resolve_surface_focus(true));
+
+        let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
+        terminal
+            .draw(|f| {
+                hero_on_left_pane(f, area, LeftPaneFocus::Workspace(false)).expect("wide fits");
+            })
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
+        assert_eq!(cell.bg, palette::resolve_surface_focus(false));
+    }
+
+    #[test]
+    fn sub_breakpoint_content_area_returns_none_without_painting() {
+        let area = Rect {
+            x: 0,
+            y: 0,
+            width: crate::app::TWO_COLUMN_THRESHOLD - 1,
+            height: 20,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
+        terminal
+            .draw(|f| {
+                assert_eq!(hero_on_left_pane(f, area, LeftPaneFocus::ReadOnly), None);
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        for y in 0..area.height {
+            for x in 0..area.width {
+                assert_eq!(buffer[(x, y)].bg, ratatui::style::Color::Reset);
+            }
+        }
     }
 }
 
@@ -176,7 +365,7 @@ pub(in crate::app::render) fn hero_on_left_right_pane(
 /// (`offset = 0`, fully visible, padding rows `[1, height - 2]`); this is
 /// hero-on-left's thin shell entry point, the same role `hero_block_shell`
 /// plays for inline presentation.
-pub(in crate::app::render) fn hero_on_left_list_panel_border(
+pub(in crate::app) fn hero_on_left_list_panel_border(
     f: &mut Frame,
     list_panel: Rect,
     focused: bool,
@@ -202,24 +391,22 @@ pub(in crate::app::render) fn hero_on_left_list_panel_border(
     );
 }
 
-/// Paints the hero-on-left component's standard recessed content block:
-/// a [`palette::SURFACE_BACKDROP`] rect inset by `pad_x` from `area`'s
-/// horizontal edges, with an inner content rect further inset by
-/// `pad_x` / `pad_y`.  Returns both rects so callers can use `panel` for
+/// Paints the hero-on-left arrangement's main content box: a
+/// [`palette::SURFACE_BACKDROP`] inset within the hero-on-left left pane,
+/// present on every hero-on-left surface with a kind-dependent payload (the
+/// episode listing on TV, the track listing on Music, item description and
+/// metadata elsewhere) and one shared padding value (design.md D9, matching
+/// the pane inset from D6). Returns both rects so callers can use `panel` for
 /// full-bleed row backgrounds and `content` for text layout.
 ///
 /// Shared by Music's track panel and Home's overview block.
-pub(in crate::app::render) fn hero_on_left_recessed_box(
+pub(in crate::app::render) fn hero_on_left_main_content_box(
     f: &mut Frame,
     area: Rect,
-    pad_x: u16,
-    pad_y: u16,
 ) -> (Rect, Rect) {
-    use ratatui::widgets::Block;
-
     let panel = Rect {
-        x: area.x.saturating_add(pad_x),
-        width: area.width.saturating_sub(pad_x * 2),
+        x: area.x.saturating_add(PANE_PAD_X),
+        width: area.width.saturating_sub(PANE_PAD_X * 2),
         ..area
     };
     f.render_widget(
@@ -227,12 +414,157 @@ pub(in crate::app::render) fn hero_on_left_recessed_box(
         panel,
     );
     let content = Rect {
-        x: panel.x.saturating_add(pad_x),
-        y: panel.y.saturating_add(pad_y),
-        width: panel.width.saturating_sub(pad_x * 2),
-        height: panel.height.saturating_sub(pad_y * 2),
+        x: panel.x.saturating_add(PANE_PAD_X),
+        y: panel.y.saturating_add(PANE_PAD_Y),
+        width: panel.width.saturating_sub(PANE_PAD_X * 2),
+        height: panel.height.saturating_sub(PANE_PAD_Y * 2),
     };
     (panel, content)
+}
+
+/// Named Rect-only extension points within a hero-on-left content rect
+/// (design.md D-D): an optional artwork region and the overview text area
+/// filling the remainder. Placement only -- no painting, no Service/image
+/// effects, no list ownership.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) struct HeroLeftSlots {
+    pub artwork: Option<Rect>,
+    pub overview: Rect,
+}
+
+/// Slices `content` top-to-bottom into `HeroLeftSlots`: an `artwork_height`
+/// row artwork slot (omitted when `0`), and the overview slot filling the
+/// remainder. Callers place an embedded media list afterward via
+/// [`place_media_list_below`].
+pub(in crate::app::render) fn hero_left_slots(
+    content: Rect,
+    artwork_height: u16,
+    images_enabled: bool,
+) -> HeroLeftSlots {
+    let artwork_height = artwork_height.min(content.height);
+    let artwork = hero_artwork_slot(
+        Rect {
+            height: artwork_height,
+            ..content
+        },
+        images_enabled,
+    );
+    // One blank row between the artwork and the title below it, matching the
+    // wide hero-on-left card (`prepare_wide_emby_hero_card`, which starts its
+    // metadata at `img_area.bottom() + 1`) and every other tab's hero.
+    let reserved_artwork_height = artwork.map_or(0, |area| area.height + 1);
+    let reserved_artwork_height = reserved_artwork_height.min(content.height);
+    let overview = Rect {
+        y: content.y.saturating_add(reserved_artwork_height),
+        height: content.height.saturating_sub(reserved_artwork_height),
+        ..content
+    };
+    HeroLeftSlots { artwork, overview }
+}
+
+/// Applies the global image policy to an artwork region. Images-off removes
+/// the region entirely so its sibling can use the full content width.
+pub(in crate::app::render) fn hero_artwork_slot(area: Rect, images_enabled: bool) -> Option<Rect> {
+    (images_enabled && area.width > 0 && area.height > 0).then_some(area)
+}
+
+/// Places an embedded media-list box `gap` rows below `overview_bottom` (the
+/// caller's already-painted overview content's real bottom row -- not a
+/// pre-reserved slot height), sized to `height` rows and clamped to fit
+/// within `content`'s bottom edge. Returns `None` when there is no room
+/// (same "omitted when no room" convention as [`hero_left_slots`]).
+///
+/// Rect-only: no painting, no text measurement -- callers supply the
+/// already-measured overview bottom and desired height. Reusable by any
+/// hero-on-left surface embedding a media list below its overview (TV's
+/// episode list; a future Music tracks / Audiobookshelf list).
+pub(in crate::app::render) fn place_media_list_below(
+    content: Rect,
+    overview_bottom: u16,
+    gap: u16,
+    height: u16,
+) -> Option<Rect> {
+    let y = overview_bottom.saturating_add(gap);
+    if y >= content.bottom() {
+        return None;
+    }
+    let height = height.min(content.bottom().saturating_sub(y));
+    (height > 0).then_some(Rect {
+        x: content.x,
+        y,
+        width: content.width,
+        height,
+    })
+}
+
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod hero_left_slots_tests {
+    use super::*;
+
+    fn content() -> Rect {
+        Rect {
+            x: 1,
+            y: 2,
+            width: 30,
+            height: 20,
+        }
+    }
+
+    #[test]
+    fn splits_artwork_and_overview_slots() {
+        let slots = hero_left_slots(content(), 5, true);
+        let artwork = slots.artwork.expect("artwork slot present");
+        assert_eq!(artwork.y, content().y);
+        assert_eq!(artwork.height, 5);
+        assert_eq!(slots.overview.y, artwork.bottom() + 1);
+        assert_eq!(slots.overview.bottom(), content().bottom());
+    }
+
+    #[test]
+    fn omits_absent_artwork_slot() {
+        let slots = hero_left_slots(content(), 0, true);
+        assert!(slots.artwork.is_none());
+        assert_eq!(slots.overview, content());
+    }
+
+    #[test]
+    fn images_off_collapses_artwork_and_preserves_full_content_width() {
+        let area = content();
+        let slots = hero_left_slots(area, 5, false);
+        assert!(slots.artwork.is_none());
+        assert_eq!(slots.overview, area);
+        assert_eq!(hero_artwork_slot(area, false), None);
+    }
+
+    #[test]
+    fn place_media_list_below_starts_one_gap_row_after_overview_bottom() {
+        let area = content();
+        let overview_bottom = area.y + 5;
+        let placed =
+            place_media_list_below(area, overview_bottom, 1, 6).expect("room for media list");
+        assert_eq!(placed.y, overview_bottom + 1);
+        assert_eq!(placed.height, 6);
+        assert_eq!(placed.x, area.x);
+        assert_eq!(placed.width, area.width);
+    }
+
+    #[test]
+    fn place_media_list_below_clamps_to_content_bottom() {
+        let area = content();
+        let overview_bottom = area.bottom() - 3;
+        let placed =
+            place_media_list_below(area, overview_bottom, 1, 6).expect("some room remains");
+        assert_eq!(placed.height, 2);
+        assert_eq!(placed.bottom(), area.bottom());
+    }
+
+    #[test]
+    fn place_media_list_below_returns_none_without_room() {
+        let area = content();
+        let overview_bottom = area.bottom();
+        assert!(place_media_list_below(area, overview_bottom, 1, 6).is_none());
+    }
 }
 
 /// One line of the `Hero` component's hero-on-left text block. Unlike

@@ -2,13 +2,13 @@ use ratatui::style::Color;
 
 pub(super) const BASE: Color = Color::Rgb(26, 26, 26); // near-black, for text on colored bg
 pub(super) const PANEL_BG: Color = Color::Rgb(60, 66, 74); // #3c424a sidebar/panel background   // near-black, for text on colored bg
+pub(super) const ARTWORK_PLACEHOLDER: Color = Color::Rgb(45, 53, 59); // no-artwork surface
 pub(super) const OVERLAY: Color = Color::Rgb(63, 63, 63); // gray, unfocused borders
 pub(super) const MUTED: Color = Color::Rgb(108, 108, 108); // dim text, icons
 pub(super) const SUBTLE: Color = Color::Rgb(158, 158, 158); // secondary text
 pub(super) const TEXT: Color = Color::Rgb(230, 230, 230); // primary text
 pub(super) const WHITE: Color = Color::Rgb(253, 246, 227); // warm white (#fdf6e3)
 pub(super) const BG_GREEN_SOFT: Color = Color::Rgb(72, 88, 78); // softer green-grey (#48584e)
-pub(super) const QUEUE_UNFOCUSED_FG: Color = BG_GREEN_SOFT; // queue row text
 pub(super) const YELLOW: Color = Color::Rgb(219, 188, 127); // muted gold (#dbbc7f)
 pub(super) const AQUA: Color = Color::Rgb(53, 167, 124); // emby green — folders, watched (#35a77c)
 pub(super) const AMBER: Color = Color::Rgb(199, 152, 71); // audiobookshelf gold (#c79847)
@@ -24,10 +24,6 @@ pub(super) const LIBRARY_SIDE_BG: Color = Color::Rgb(45, 53, 59); // library-sid
 pub(super) const PLAYBACK_PANEL_BG: Color = Color::Rgb(51, 60, 67); // now-playing panel background (#333c43)
 pub(super) const PLAYBACK_CONTENT_FG: Color = Color::Rgb(131, 192, 146); // playback title/codec value (#83c092)
 pub(super) const PLAYBACK_META_FG: Color = Color::Rgb(133, 146, 137); // playback metadata captions/time (#859289)
-pub(super) const TOAST_BG: Color = RED; // toast background (#e57e80)
-pub(super) const TOAST_BG_SUCCESS: Color = Color::Rgb(100, 140, 90); // success toast green (#648c5a)
-pub(super) const TOAST_BG_WARNING: Color = Color::Rgb(180, 150, 80); // warning toast yellow (#b49650)
-pub(super) const TOAST_FG: Color = Color::Rgb(30, 35, 38); // toast foreground (#1e2326)
 pub(super) const MUTED_GREEN: Color = Color::Rgb(108, 118, 108); // muted greenish-grey for detail/label text (#6c766c)
 pub(super) const SOFT_WHITE: Color = Color::Rgb(244, 234, 211); // warm off-white (#f4ead3)
 pub(super) const PILL_SELECTOR_ROW_BG: Color = Color::Rgb(30, 35, 38); // pill-selector row background (#1e2326)

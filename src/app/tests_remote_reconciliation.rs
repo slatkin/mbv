@@ -1,10 +1,7 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_item, make_session};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use mbv_core::playback_queue::QueueSlotId;
-use mbv_core::remote_reconciliation::{
-    ReconciliationTracker, RemoteObservation, SubmittedOccurrence, TrackingState,
-};
+use mbv_core::remote_reconciliation::{ReconciliationTracker, SubmittedOccurrence, TrackingState};
 
 #[cfg(test)]
 #[path = "tests_remote_reconciliation_consume.rs"]
@@ -45,62 +42,20 @@ fn attached_app() -> App {
 }
 
 #[test]
-fn duplicate_reanchor_opens_picker_and_enter_selects_occurrence() {
-    let mut app = attached_app();
-    app.panel_focus = crate::app::PanelFocus::Queue;
-    app.player_tab.emby_items()[0].id = "a".into();
-    app.player_tab.emby_items()[1].id = "b".into();
-    let mut tracking = tracker(&["a", "a", "b"]);
-    tracking.observe(RemoteObservation::playing(1, "session", "a", 80, 100, 1));
-    tracking.observe(RemoteObservation::playing(2, "session", "a", 1, 100, 2));
-    app.remote_tracker = Some(tracking);
-
-    app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
-    assert_eq!(app.remote_reanchor_popup.as_ref().unwrap().targets.len(), 2);
-
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(app.remote_reanchor_popup.is_none());
-    assert_eq!(
-        app.remote_tracker.as_ref().unwrap().state(),
-        TrackingState::Tracking
-    );
-    assert_eq!(
-        app.remote_tracker.as_ref().unwrap().current_index(),
-        Some(1)
-    );
-}
-
-#[test]
-fn reanchor_popup_blocks_mouse_dispatch() {
-    let mut app = attached_app();
-    app.player_tab.queue_cursor = 1;
-    app.remote_reanchor_popup = Some(super::types_playback::RemoteReanchorPopup {
-        targets: vec![(0, "a".into())],
-        cursor: 0,
-    });
-
-    app.handle_mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: 2,
-        row: 2,
-        modifiers: KeyModifiers::NONE,
-    });
-
-    assert_eq!(app.player_tab.queue_cursor, 1);
-    assert!(app.remote_reanchor_popup.is_some());
-}
-
-#[test]
 fn tracking_retirement_clears_reanchor_popup() {
     let mut app = attached_app();
     app.remote_tracker = Some(tracker(&["a", "b"]));
-    app.remote_reanchor_popup = Some(super::types_playback::RemoteReanchorPopup {
-        targets: vec![(0, "a".into())],
-        cursor: 0,
-    });
+    app.pending_overlay = Some(super::types_overlay::OverlayRequest::RemoteReanchor(
+        super::types_playback::RemoteReanchorPopup {
+            targets: vec![(0, "a".into())],
+            cursor: 0,
+        },
+    ));
     app.retire_remote_tracking(false);
-    assert!(app.remote_reanchor_popup.is_none());
+    assert!(matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::DismissRemoteReanchor)
+    ));
 }
 
 #[test]
@@ -125,26 +80,6 @@ fn submitted_sequence_without_exact_visible_queue_has_no_projection() {
     app.submit_attached_sequence("session", &submitted, 0);
     assert!(app.remote_tracker.is_some());
     assert!(app.remote_queue_projection.is_none());
-}
-
-#[test]
-fn stop_tracking_and_queue_edits_are_input_gated() {
-    let mut app = attached_app();
-    app.panel_focus = crate::app::PanelFocus::Queue;
-    app.remote_tracker = Some(tracker(&["a", "b"]));
-    app.home.continue_items = vec![make_item("a", "Movie")];
-
-    app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL));
-    assert!(app.remote_tracker.is_none());
-
-    // Enqueue is an ordinary queue edit from Home focus: it applies without
-    // a tracking-specific confirmation and retires tracking.
-    app.remote_tracker = Some(tracker(&["a", "b"]));
-    app.panel_focus = crate::app::PanelFocus::Library;
-    app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
-    assert!(app.confirm_modal.is_none());
-    assert_eq!(app.player_tab.emby_items().len(), 3);
-    assert!(app.remote_tracker.is_none());
 }
 
 #[test]

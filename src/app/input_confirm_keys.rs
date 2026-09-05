@@ -1,11 +1,10 @@
 use super::notify_actions::ToastSeverity;
 use super::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
-    SavePlaylistDialog, SavePlaylistStage, UndoEntry,
+    SavePlaylistDialog, SavePlaylistStage, SidebarId, UndoEntry,
 };
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use mbv_core::playback_queue::RemoveSlotResult;
-use mbv_core::player::PlayerCommand;
 
 impl App {
     /// Shared dispatcher for the confirmation-modal component (see
@@ -13,11 +12,13 @@ impl App {
     /// which `ConfirmAction` is pending and re-uses each action's existing
     /// effect, preserving the exact key bindings each confirmation had
     /// before migrating off status-bar toast text / bespoke dialogs.
-    pub(super) fn handle_key_confirm_modal(&mut self, key: KeyEvent) -> Option<bool> {
-        let action = self.confirm_modal.as_ref()?.on_confirm.clone();
+    pub(super) fn apply_confirm_action(
+        &mut self,
+        action: ConfirmAction,
+        key: KeyEvent,
+    ) -> Option<bool> {
         match action {
             ConfirmAction::ClearQueue => {
-                self.confirm_modal = None;
                 if matches!(
                     key.code,
                     KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
@@ -26,17 +27,7 @@ impl App {
                 }
             }
             ConfirmAction::RemoveActiveQueueItem(pos) => {
-                self.confirm_modal = None;
                 if matches!(key.code, KeyCode::Char('y')) {
-                    // Remove the slot from the queue model immediately, rather
-                    // than deferring it until PlayerEvent::Stopped arrives back
-                    // from the player thread — that round trip (send stop() ->
-                    // mpv actually stops -> event travels back) is a real,
-                    // noticeable delay for something the user should see happen
-                    // right away. The gated remove_slot/remove_slot_at (used by
-                    // ordinary removals) refuses the active slot, so this goes
-                    // through remove_active_slot_confirmed directly, same as
-                    // the Stopped handler used to do.
                     let scope = self.visible_queue_scope();
                     let slot_id = self.queue_for_scope_mut(scope).slot_id_at(pos);
                     if let Some(slot_id) = slot_id {
@@ -58,12 +49,6 @@ impl App {
                             if !self.player.is_remote() {
                                 self.queue_undo_stack.push(UndoEntry::Remove(pos, item));
                             }
-
-                            // Only stop playback and record the deferred
-                            // player-side removal if the app model actually
-                            // removed the requested slot. The confirmation
-                            // can outlive a queue refresh, making the slot
-                            // stale by the time the user confirms it.
                             self.pending_delete_slot = Some(slot_id);
                             if self.connected_session_id.is_some() {
                                 self.playback_target().stop(self);
@@ -79,7 +64,6 @@ impl App {
                 }
             }
             ConfirmAction::RescanLibrary(lib_idx) => {
-                self.confirm_modal = None;
                 if matches!(
                     key.code,
                     KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
@@ -89,12 +73,10 @@ impl App {
             }
             ConfirmAction::SaveOverwritePlaylist { existing_id, name } => match key.code {
                 KeyCode::Char('y') => {
-                    self.confirm_modal = None;
                     self.do_overwrite_playlist(&existing_id, &name);
                 }
                 KeyCode::Esc => {
-                    self.confirm_modal = None;
-                    self.save_playlist_dialog = Some(SavePlaylistDialog {
+                    self.open_save_playlist_dialog(SavePlaylistDialog {
                         input: name,
                         stage: SavePlaylistStage::EnterName,
                     });
@@ -103,16 +85,12 @@ impl App {
             },
             ConfirmAction::DeletePlaylist { id, name } => match key.code {
                 KeyCode::Char('y') => {
-                    self.confirm_modal = None;
                     self.spawn_delete_playlist(id, name);
                 }
-                KeyCode::Esc => {
-                    self.confirm_modal = None;
-                }
+                KeyCode::Esc => {}
                 _ => {}
             },
             ConfirmAction::RemoveFeedSubscription(index) => {
-                self.confirm_modal = None;
                 if matches!(key.code, KeyCode::Char('y')) {
                     self.remove_feed_confirmed(index);
                 }
@@ -122,21 +100,17 @@ impl App {
                     key.code,
                     KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
                 ) {
-                    self.confirm_modal = None;
                     self.remove_emby_confirmed();
                 } else if key.code == KeyCode::Esc {
-                    self.confirm_modal = None;
                 }
             }
             ConfirmAction::ReplaceEmby(generation) => {
                 if key.code == KeyCode::Esc {
-                    self.confirm_modal = None;
                     self.pending_emby_replacement = None;
                 } else if matches!(
                     key.code,
                     KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
                 ) {
-                    self.confirm_modal = None;
                     self.replace_emby_confirmed(generation);
                 }
             }
@@ -145,21 +119,17 @@ impl App {
                     key.code,
                     KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
                 ) {
-                    self.confirm_modal = None;
                     self.remove_audiobookshelf_confirmed();
                 } else if key.code == KeyCode::Esc {
-                    self.confirm_modal = None;
                 }
             }
             ConfirmAction::ReplaceAudiobookshelf(generation) => {
                 if key.code == KeyCode::Esc {
-                    self.confirm_modal = None;
                     self.pending_audiobookshelf_replacement = None;
                 } else if matches!(
                     key.code,
                     KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
                 ) {
-                    self.confirm_modal = None;
                     self.replace_audiobookshelf_confirmed(generation);
                 }
             }
@@ -170,25 +140,18 @@ impl App {
                 );
                 match key.code {
                     KeyCode::Char('s') | KeyCode::Char('S') => {
-                        self.confirm_modal = None;
                         self.save_playlist_to_emby();
-                        // Keep the replacement queued until the coordinator
-                        // reports that this save crossed its mutation boundary.
-                        // Starting it here could snapshot/recreate the same
-                        // playlist before the save has executed.
                     }
                     KeyCode::Char('d') | KeyCode::Char('D') => {
-                        self.confirm_modal = None;
                         if let Some(action) = self.pending_queue_action.take() {
                             self.execute_pending_queue_action(action);
                         }
                         if play_after {
-                            self.show_playlists = false;
+                            self.request_sidebar_dismiss(SidebarId::Playlists);
                             self.set_panel_focus(PanelFocus::Queue);
                         }
                     }
                     KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
-                        self.confirm_modal = None;
                         self.pending_queue_action = None;
                     }
                     _ => {}
@@ -198,86 +161,30 @@ impl App {
         Some(false)
     }
 
-    pub(super) fn handle_key_confirm_skip_intro(&mut self, key: KeyEvent) -> Option<bool> {
-        self.skip_intro_end_ticks?;
-        if matches!(
-            key.code,
-            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-        ) {
-            if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
-                let secs = end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
-                self.player.send_command(PlayerCommand::SeekAbsolute(secs));
-                self.player.send_command(PlayerCommand::SkipIntroDismiss);
-                self.status.clear();
-            }
-        } else {
-            self.skip_intro_end_ticks = None;
-            self.player.send_command(PlayerCommand::SkipIntroDismiss);
-            self.status.clear();
-        }
-        Some(false)
-    }
-
-    pub(super) fn handle_key_confirm_next_up(&mut self, key: KeyEvent) -> Option<bool> {
-        self.next_up_item.as_ref()?;
-        if matches!(
-            key.code,
-            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-        ) {
-            if let Some(item) = self.next_up_item.take() {
-                if let Some(idx) = self
-                    .playback_queue()
-                    .slots()
-                    .iter()
-                    .position(|s| matches!(&s.item, mbv_core::playback_queue::QueueItem::Emby(e) if e.id == item.id))
-                {
-                    let label = item.playback_label();
-                    self.player.send_command(PlayerCommand::JumpTo(idx));
-                    self.playback_queue_mut().queue_cursor = idx;
-                    self.flash(label, ToastSeverity::Success);
-                }
-            }
-        } else {
-            self.next_up_item = None;
-            self.player.send_command(PlayerCommand::NextUpDismiss);
-            self.status.clear();
-        }
-        Some(false)
-    }
-
-    pub(super) fn handle_key_clear_queue_prompt(&mut self, key: KeyEvent) -> Option<bool> {
-        // Behavior change (phase 6, #135): gate on an open context menu. Before
-        // this fix, `clear_queue_prompt_c` sat above `context_menu` in
-        // CONTEXT_STACK with no guard, so pressing 'c' while a context menu was
-        // open silently opened the clear-queue confirmation instead of being
-        // swallowed by the menu (which has no 'c' binding of its own). See
-        // docs/adr/0002-centralized-input-handling.md phase 6.
-        if key.code != KeyCode::Char('c') || key.modifiers.contains(KeyModifiers::ALT) {
-            return None;
-        }
-        if matches!(self.effective_panel_focus(), PanelFocus::Queue)
-            && self.visible_queue_scope() == QueueScope::Remote
-        {
+    /// Show the clear-queue confirmation modal (called from QueueIntent::Clear).
+    pub(super) fn request_clear_queue(&mut self) {
+        let scope = self.visible_queue_scope();
+        // Legacy `handle_key_clear_queue_prompt` refused a Queue-focused remote
+        // scope outright, which also swallowed `c` for a socket-attached mbvd
+        // whose queue the confirm's `y` handler can clear. Narrow the refusal to
+        // a connected Emby session (queue owned on the remote device); the
+        // direct-remote daemon queue falls through to the same prompt a local
+        // queue gets.
+        if scope == QueueScope::Remote && self.connected_session_id.is_some() {
             self.flash(
                 "Remote queue is controlled by the daemon".into(),
                 ToastSeverity::Error,
             );
-            return Some(false);
+            return;
         }
-        if self.player_tab.total_queue_len() == 0 {
-            return Some(false);
+        if self.queue_for_scope(scope).total_queue_len() == 0 {
+            return;
         }
-        self.notify_with_actions(
-            "mbv",
-            "Clear queue?",
-            &[("clear:yes", "Clear"), ("clear:no", "Cancel")],
-        );
-        self.confirm_modal = Some(ConfirmModal {
+        self.ask_confirm(ConfirmModal {
             title: " Clear Queue ".into(),
             message: "Clear the queue?".into(),
             hint: "[y] Confirm    [Esc] Cancel".into(),
             on_confirm: ConfirmAction::ClearQueue,
         });
-        Some(false)
     }
 }

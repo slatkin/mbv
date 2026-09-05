@@ -254,7 +254,6 @@ impl App {
         self.remote_seek_pending_until = Instant::now() - Duration::from_secs(1);
         self.runtime_zero_since = None;
         self.next_up_item = None;
-        self.skip_intro_end_ticks = None;
         if has_initial_items {
             self.set_queue_scope(QueueScope::Remote);
         } else {

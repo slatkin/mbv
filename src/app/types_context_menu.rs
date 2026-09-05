@@ -7,6 +7,7 @@ use super::PanelFocus;
 /// How a context menu's position is anchored. A keyboard-opened menu keeps a
 /// selected-item anchor resolved from each fresh frame's layout; a
 /// mouse-opened menu keeps its click point and is independent of selection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ContextMenuAnchor {
     /// Keyboard opening: anchor to the focused panel's selected item.
     SelectedItem(PanelFocus),
@@ -19,6 +20,11 @@ pub(super) enum ContextMenuAnchor {
 #[derive(Clone, Debug)]
 pub(super) enum ContextAction {
     Play,
+    /// Play the queue item at this explicit index (split-queue-cursor-
+    /// ownership D2): the queue menu retains the index resolved when the
+    /// menu opened (the right-clicked slot), so a follow update to
+    /// `queue_cursor` cannot redirect playback to another row.
+    PlayQueue(usize),
     PlayFolder(String),
     ShuffleFolder(String),
     Enqueue,
@@ -32,12 +38,16 @@ pub(super) enum ContextAction {
     GoToLibrary(String, String), // (item_id, item_type)
 }
 
+#[derive(Clone)]
 pub(super) struct ContextMenuEntry {
     pub(super) label: &'static str,
     pub(super) action: Option<ContextAction>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+/// One multiselect row: `(name_lower, display_name, is_hidden)`.
+pub(crate) type MultiSelectItem = (String, String, bool);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MultiSelectKind {
     HiddenLibraries,
     HiddenLatest,
@@ -45,9 +55,10 @@ pub(crate) enum MultiSelectKind {
     FeedViewLibraries,
 }
 
+#[derive(Clone)]
 pub(super) struct MultiSelectPopup {
     pub(super) kind: MultiSelectKind,
-    pub(super) items: Vec<(String, String, bool)>, // (name_lower, display_name, is_hidden)
+    pub(super) items: Vec<MultiSelectItem>,
     pub(super) cursor: usize,
 }
 

@@ -1,16 +1,22 @@
 use super::test_helpers::buffer_to_string;
-use crate::app::tests::make_app_stub;
+use crate::app::render::components::help::{help_destination, render_help_panel, HelpDestination};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 
 fn render_help(width: u16, height: u16, scroll: u16) -> String {
-    let mut app = make_app_stub();
-    app.help_scroll = scroll;
+    let mut scroll = scroll;
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
-        .draw(|f| app.render_help_panel(f, Some(Rect::new(0, 0, width, height))))
+        .draw(|f| {
+            render_help_panel(
+                f,
+                Some(Rect::new(0, 0, width, height)),
+                &mut scroll,
+                HelpDestination::EmbyLibrary,
+            )
+        })
         .unwrap();
     buffer_to_string(&terminal)
 }
@@ -24,4 +30,13 @@ fn help_buffer_characterization_covers_default_focused_narrow_and_selected_state
             "help shell missing: {output:?}"
         );
     }
+}
+
+#[test]
+fn help_destination_queue_focus_returns_queue() {
+    use crate::app::{PanelFocus, TabSelection};
+    assert_eq!(
+        help_destination(PanelFocus::Queue, TabSelection::Home),
+        HelpDestination::Queue
+    );
 }

@@ -1,22 +1,34 @@
 use super::test_helpers::buffer_to_string;
-use crate::app::tests::make_app_stub;
+use super::{render_multiselect_content, MultiSelectRenderModel};
 use crate::app::types_context_menu::{MultiSelectKind, MultiSelectPopup};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 fn render_multiselect(width: u16, height: u16, cursor: usize, kind: MultiSelectKind) -> String {
-    let mut app = make_app_stub();
-    app.multiselect_popup = Some(MultiSelectPopup {
+    let popup = MultiSelectPopup {
         kind,
         items: vec![
             ("movies".into(), "Movies".into(), false),
             ("shows".into(), "Shows".into(), true),
         ],
         cursor,
-    });
+    };
+    let mut dim_backdrop_active = false;
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|f| app.render_multiselect_popup(f)).unwrap();
+    terminal
+        .draw(|f| {
+            render_multiselect_content(
+                f,
+                &mut dim_backdrop_active,
+                MultiSelectRenderModel {
+                    kind: popup.kind,
+                    items: &popup.items,
+                    cursor: popup.cursor,
+                },
+            );
+        })
+        .unwrap();
     buffer_to_string(&terminal)
 }
 

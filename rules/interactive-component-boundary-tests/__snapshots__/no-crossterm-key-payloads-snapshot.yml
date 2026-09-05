@@ -1,0 +1,34 @@
+id: no-crossterm-key-payloads
+snapshots:
+  ? |
+    use crossterm::event::MouseEvent;
+    struct MyComp;
+    impl MyComp {
+        fn on(&mut self, _m: MouseEvent) -> Option<Msg> { None }
+    }
+  : labels:
+    - source: use crossterm::event::MouseEvent;
+      style: primary
+      start: 0
+      end: 33
+  ? |
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    struct MyComp;
+    impl MyComp {
+        fn on(&mut self, k: KeyEvent) -> Option<Msg> {
+            if k.code == KeyCode::Esc { Some(Msg::Dismiss) } else { None }
+        }
+    }
+  : labels:
+    - source: use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+      style: primary
+      start: 0
+      end: 56
+  ? |
+    use crossterm::event;
+    fn view(e: event::KeyEvent) {}
+  : labels:
+    - source: use crossterm::event;
+      style: primary
+      start: 0
+      end: 21

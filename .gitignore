@@ -1,4 +1,8 @@
+.pi
+.commandcode
 .vscode
+.zcode
+.zvec-grep
 .obsidian/
 /target
 *.jpg

@@ -156,106 +156,6 @@ fn o_opens_an_idle_feed_link_only_when_available() {
     );
 }
 
-// ── help_command_for_key: no gating (caller already checked show_help) ───
-
-#[test]
-fn help_q_fires_quit() {
-    assert_eq!(
-        help_command_for_key(key(KeyCode::Char('q'))),
-        Some(Command::Quit)
-    );
-}
-
-#[test]
-fn help_ctrl_q_does_not_fire() {
-    assert_eq!(help_command_for_key(key_ctrl(KeyCode::Char('q'))), None);
-}
-
-#[test]
-fn help_esc_fires_close_help() {
-    assert_eq!(
-        help_command_for_key(key(KeyCode::Esc)),
-        Some(Command::CloseHelp)
-    );
-}
-
-#[test]
-fn help_f1_fires_close_help() {
-    assert_eq!(
-        help_command_for_key(key(KeyCode::F(1))),
-        Some(Command::CloseHelp)
-    );
-}
-
-#[test]
-fn help_f2_fires_show_settings() {
-    assert_eq!(
-        help_command_for_key(key(KeyCode::F(2))),
-        Some(Command::ShowSettings)
-    );
-}
-
-#[test]
-fn help_f3_fires_show_sessions() {
-    assert_eq!(
-        help_command_for_key(key(KeyCode::F(3))),
-        Some(Command::ShowSessions)
-    );
-}
-
-#[test]
-fn help_f4_fires_show_playlists() {
-    assert_eq!(
-        help_command_for_key(key(KeyCode::F(4))),
-        Some(Command::ShowPlaylists)
-    );
-}
-
-#[test]
-fn help_up_fires_scroll_by_negative_one() {
-    assert_eq!(
-        help_command_for_key(key(KeyCode::Up)),
-        Some(Command::ScrollBy(-1))
-    );
-}
-
-#[test]
-fn help_down_fires_scroll_by_one() {
-    assert_eq!(
-        help_command_for_key(key(KeyCode::Down)),
-        Some(Command::ScrollBy(1))
-    );
-}
-
-#[test]
-fn help_page_up_fires_scroll_by_negative_ten() {
-    assert_eq!(
-        help_command_for_key(key(KeyCode::PageUp)),
-        Some(Command::ScrollBy(-10))
-    );
-}
-
-#[test]
-fn help_page_down_fires_scroll_by_ten() {
-    assert_eq!(
-        help_command_for_key(key(KeyCode::PageDown)),
-        Some(Command::ScrollBy(10))
-    );
-}
-
-#[test]
-fn help_home_fires_scroll_home() {
-    assert_eq!(
-        help_command_for_key(key(KeyCode::Home)),
-        Some(Command::ScrollHome)
-    );
-}
-
-#[test]
-fn help_unrelated_key_does_not_fire() {
-    assert_eq!(help_command_for_key(key(KeyCode::Char('x'))), None);
-}
-
 // ── dispatch: state-mutating variants ────────────────────────────────────
 
 // `MBV_SYSTEM` is a process-global env var, so tests that touch it must
@@ -383,103 +283,6 @@ fn dispatch_toggle_play_pause_remote_does_not_touch_local_player() {
     );
 }
 
-// ── dispatch: handle_key_help variants ───────────────────────────────────
-
-#[test]
-fn dispatch_close_help_clears_show_help() {
-    let mut app = make_app_stub();
-    app.show_help = true;
-    assert!(!app.dispatch(Command::CloseHelp));
-    assert!(!app.show_help);
-}
-
-#[test]
-fn dispatch_show_settings_switches_panels() {
-    let mut app = make_app_stub();
-    app.show_help = true;
-    assert!(!app.dispatch(Command::ShowSettings));
-    assert!(!app.show_help);
-    assert!(app.show_settings);
-}
-
-#[test]
-fn dispatch_show_sessions_switches_panels() {
-    let mut app = make_app_stub();
-    app.show_help = true;
-    assert!(!app.dispatch(Command::ShowSessions));
-    assert!(!app.show_help);
-    assert!(app.show_sessions);
-}
-
-#[test]
-fn dispatch_show_playlists_switches_panels() {
-    let mut app = make_app_stub();
-    app.show_help = true;
-    // Pre-populate `playlists` so `open_playlists_panel`'s
-    // `playlists.is_empty() && !playlists_loading` guard is false and it
-    // never spawns the background network-loading thread.
-    app.playlists = vec![crate::app::tests::make_item("Playlist", "Playlist")];
-    assert!(!app.dispatch(Command::ShowPlaylists));
-    assert!(!app.show_help);
-    assert!(app.show_playlists);
-}
-
-#[test]
-fn dispatch_scroll_home_resets_to_zero() {
-    let mut app = make_app_stub();
-    app.help_scroll = 7;
-    assert!(!app.dispatch(Command::ScrollHome));
-    assert_eq!(app.help_scroll, 0);
-}
-
-#[test]
-fn dispatch_scroll_by_negative_one_saturates_at_zero() {
-    let mut app = make_app_stub();
-    app.help_scroll = 0;
-    app.dispatch(Command::ScrollBy(-1));
-    assert_eq!(app.help_scroll, 0);
-}
-
-#[test]
-fn dispatch_scroll_by_negative_ten_saturates_at_zero() {
-    let mut app = make_app_stub();
-    app.help_scroll = 3;
-    app.dispatch(Command::ScrollBy(-10));
-    assert_eq!(app.help_scroll, 0);
-}
-
-#[test]
-fn dispatch_scroll_by_one_increments() {
-    let mut app = make_app_stub();
-    app.help_scroll = 5;
-    app.dispatch(Command::ScrollBy(1));
-    assert_eq!(app.help_scroll, 6);
-}
-
-#[test]
-fn dispatch_scroll_by_ten_increments() {
-    let mut app = make_app_stub();
-    app.help_scroll = 5;
-    app.dispatch(Command::ScrollBy(10));
-    assert_eq!(app.help_scroll, 15);
-}
-
-#[test]
-fn dispatch_quit_when_queue_not_dirty_returns_true_and_persists() {
-    let _g = ENV_LOCK.lock().unwrap();
-    let _xdg = XdgStateHomeGuard::new();
-
-    let mut app = make_app_stub();
-    assert!(!app.queue_dirty);
-    assert!(app.dispatch(Command::Quit));
-
-    let prefs_path = crate::config::prefs_path();
-    assert!(
-        std::fs::read_to_string(&prefs_path).is_ok(),
-        "try_quit's non-dirty path should have called save_prefs()"
-    );
-}
-
 // ── dispatch: QueuePlayCursor (issue #134) ───────────────────────────────
 // Shared by the queue tab's `Enter` key and a double-click on a queue row
 // (`handle_mouse`); see the `Command::QueuePlayCursor` doc comment.
@@ -494,7 +297,7 @@ fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_core::api::EmbyItem
 #[test]
 fn queue_play_cursor_on_empty_queue_is_a_no_op() {
     let mut app = make_app_stub();
-    assert!(!app.dispatch(Command::QueuePlayCursor));
+    assert!(!app.dispatch(Command::QueuePlayCursor(0)));
     assert!(app.status.is_empty());
 }
 
@@ -511,7 +314,7 @@ fn queue_play_cursor_while_attached_to_session_hands_off_to_session() {
     );
     app.connected_session_id = Some("session-1".into());
 
-    app.dispatch(Command::QueuePlayCursor);
+    app.dispatch(Command::QueuePlayCursor(1));
 
     assert!(
         app.status.contains("Requesting playback"),
@@ -527,7 +330,7 @@ fn queue_play_cursor_with_direct_remote_switches_to_remote_scope() {
     app.set_queue_scope(QueueScope::Local);
     app.connected_session_id = Some("session-1".into());
 
-    app.dispatch(Command::QueuePlayCursor);
+    app.dispatch(Command::QueuePlayCursor(1));
 
     assert!(
         app.status.contains("Requesting playback"),
@@ -554,7 +357,7 @@ fn queue_play_cursor_without_direct_remote_stays_on_local_scope() {
     );
     app.connected_session_id = Some("session-1".into());
 
-    app.dispatch(Command::QueuePlayCursor);
+    app.dispatch(Command::QueuePlayCursor(1));
 
     assert!(
         app.status.contains("Requesting playback"),
@@ -586,7 +389,7 @@ fn queue_play_cursor_jumps_to_cursor_when_active_and_playback_scope() {
     }
     let rx = app.player.spy_on_commands();
 
-    app.dispatch(Command::QueuePlayCursor);
+    app.dispatch(Command::QueuePlayCursor(1));
 
     assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))));
 }
@@ -602,7 +405,7 @@ fn queue_play_cursor_seeks_to_start_when_cursor_is_the_current_playing_audio_ite
     }
     let rx = app.player.spy_on_commands();
 
-    app.dispatch(Command::QueuePlayCursor);
+    app.dispatch(Command::QueuePlayCursor(0));
 
     assert!(matches!(
         rx.try_recv(),
@@ -661,33 +464,4 @@ fn playlist_items_load_error_preserves_existing_items_and_flashes() {
     assert_eq!(app.playlists_open_items.len(), 1);
     assert_eq!(app.playlists_open_items[0].name, "Track 1");
     assert!(app.status.contains("timeout"));
-}
-
-#[test]
-fn search_drain_error_does_not_produce_flash() {
-    // Regression: `drain_search_results` used to flash "Search error: …"
-    // redundantly alongside the inline "Search failed: …" in the search
-    // sidebar. Now errors are only surfaced inline.
-    let mut app = make_app_stub();
-    let mut sidebar = crate::app::search_sidebar::SearchSidebar::new();
-    sidebar.query = "test".into();
-    sidebar.loading = true;
-    app.search_sidebar = Some(sidebar);
-
-    let _ = app
-        .search_tx
-        .send(("test".into(), Err("API timeout".into())));
-    app.drain_search_results();
-
-    // The inline error is recorded on the sidebar.
-    assert_eq!(
-        app.search_sidebar
-            .as_ref()
-            .unwrap()
-            .last_drain_error
-            .as_deref(),
-        Some("API timeout")
-    );
-    // But no flash was produced -- status stays empty.
-    assert!(app.status.is_empty());
 }

@@ -1,9 +1,6 @@
-use super::types_settings::{
-    ServiceActionIntent, ServiceEntry, SettingsDestination, SERVICE_ENTRIES,
-};
+use super::types_settings::{ServiceActionIntent, ServiceEntry, SettingsDestination};
 use super::App;
 use super::{ConfirmAction, ConfirmModal};
-use crossterm::event::{KeyCode, KeyEvent};
 use mbv_core::service_runtime::ServiceState;
 
 pub(super) struct EmbySetupForm {
@@ -47,9 +44,8 @@ impl EmbySetupForm {
 
 impl App {
     pub(crate) fn open_services_settings(&mut self) {
-        self.show_settings = true;
+        self.request_sidebar_open(super::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Services;
-        self.services_cursor = self.services_cursor.min(SERVICE_ENTRIES.len() - 1);
     }
 
     fn open_emby_setup(&mut self) {
@@ -76,7 +72,7 @@ impl App {
         });
     }
 
-    fn cancel_emby_setup(&mut self) {
+    pub(super) fn cancel_emby_setup(&mut self) {
         if let Some(form) = self.emby_setup_form.take() {
             if let Some(generation) = form.generation {
                 self.emby_runtime
@@ -86,7 +82,7 @@ impl App {
         self.emby_setup_rx = None;
     }
 
-    fn cancel_audiobookshelf_setup(&mut self) {
+    pub(super) fn cancel_audiobookshelf_setup(&mut self) {
         if let Some(mut form) = self.audiobookshelf_setup_form.take() {
             form.fields[1].clear();
             if let Some(generation) = form.generation {
@@ -97,7 +93,7 @@ impl App {
         self.audiobookshelf_setup_rx = None;
     }
 
-    fn submit_audiobookshelf_setup(&mut self) {
+    pub(super) fn submit_audiobookshelf_setup(&mut self) {
         let Some(form) = self.audiobookshelf_setup_form.as_mut() else {
             return;
         };
@@ -142,7 +138,7 @@ impl App {
         self.emby_setup_rx = None;
     }
 
-    fn submit_emby_setup(&mut self) {
+    pub(super) fn submit_emby_setup(&mut self) {
         let Some(form) = self.emby_setup_form.as_mut() else {
             return;
         };
@@ -177,172 +173,7 @@ impl App {
         ));
     }
 
-    fn close_services_settings(&mut self) {
-        self.settings_destination = SettingsDestination::Main;
-        self.services_cursor = 0;
-    }
-
-    pub(super) fn handle_key_services_settings(&mut self, key: KeyEvent) -> Option<bool> {
-        if !matches!(self.settings_destination, SettingsDestination::Services) {
-            return None;
-        }
-        if self.emby_setup_form.is_some() {
-            return Some(self.handle_key_emby_setup(key));
-        }
-        if self.audiobookshelf_setup_form.is_some() {
-            return Some(self.handle_key_audiobookshelf_setup(key));
-        }
-        match key.code {
-            KeyCode::Esc => self.close_services_settings(),
-            KeyCode::Up => self.services_cursor = self.services_cursor.saturating_sub(1),
-            KeyCode::Down => {
-                self.services_cursor = (self.services_cursor + 1).min(SERVICE_ENTRIES.len() - 1)
-            }
-            KeyCode::Enter | KeyCode::Char(' ') => self.activate_service_entry(),
-            KeyCode::Char('d') | KeyCode::Char('D') if self.services_cursor == 0 => {
-                self.request_emby_removal();
-            }
-            KeyCode::Char('t') | KeyCode::Char('T') if self.services_cursor == 1 => {
-                self.test_audiobookshelf_connection();
-            }
-            KeyCode::Char('r') | KeyCode::Char('R') if self.services_cursor == 1 => {
-                self.route_service_action(ServiceActionIntent::ReplaceAudiobookshelf);
-            }
-            KeyCode::Char('d') | KeyCode::Char('D') if self.services_cursor == 1 => {
-                self.route_service_action(ServiceActionIntent::RemoveAudiobookshelf);
-            }
-            KeyCode::Char('q') if key.modifiers.is_empty() => return Some(self.try_quit()),
-            KeyCode::F(1) => {
-                self.close_settings();
-                self.show_help = true;
-            }
-            KeyCode::F(3) => {
-                self.close_settings();
-                self.show_sessions = true;
-            }
-            KeyCode::F(4) => {
-                self.close_settings();
-                self.open_playlists_panel();
-            }
-            _ => {}
-        }
-        Some(false)
-    }
-
-    fn handle_key_audiobookshelf_setup(&mut self, key: KeyEvent) -> bool {
-        if self
-            .audiobookshelf_setup_form
-            .as_ref()
-            .is_some_and(|form| form.busy)
-        {
-            if key.code == KeyCode::Esc {
-                self.cancel_audiobookshelf_setup();
-            }
-            return false;
-        }
-        match key.code {
-            KeyCode::Esc => self.cancel_audiobookshelf_setup(),
-            KeyCode::Tab | KeyCode::Down => {
-                if let Some(form) = self.audiobookshelf_setup_form.as_mut() {
-                    form.focus = (form.focus + 1) % 2
-                }
-            }
-            KeyCode::BackTab | KeyCode::Up => {
-                if let Some(form) = self.audiobookshelf_setup_form.as_mut() {
-                    form.focus = if form.focus == 0 { 1 } else { 0 }
-                }
-            }
-            KeyCode::Enter => {
-                if self
-                    .audiobookshelf_setup_form
-                    .as_ref()
-                    .is_some_and(|form| form.focus == 0)
-                {
-                    self.audiobookshelf_setup_form.as_mut().unwrap().focus = 1;
-                } else {
-                    self.submit_audiobookshelf_setup();
-                }
-            }
-            KeyCode::Backspace => {
-                if let Some(form) = self.audiobookshelf_setup_form.as_mut() {
-                    form.fields[form.focus].pop();
-                    form.error.clear();
-                }
-            }
-            KeyCode::Char(c)
-                if key.modifiers.is_empty()
-                    || key.modifiers == crossterm::event::KeyModifiers::SHIFT =>
-            {
-                if let Some(form) = self.audiobookshelf_setup_form.as_mut() {
-                    form.fields[form.focus].push(c);
-                    form.error.clear();
-                }
-            }
-            _ => {}
-        }
-        false
-    }
-
-    fn handle_key_emby_setup(&mut self, key: KeyEvent) -> bool {
-        if self.emby_setup_form.as_ref().is_some_and(|form| form.busy) {
-            match key.code {
-                KeyCode::Esc => self.cancel_emby_setup(),
-                KeyCode::Enter => {}
-                _ => {}
-            }
-            return false;
-        }
-        match key.code {
-            KeyCode::Esc => self.cancel_emby_setup(),
-            KeyCode::Tab | KeyCode::Down => {
-                if let Some(form) = self.emby_setup_form.as_mut() {
-                    form.focus = (form.focus + 1) % 3;
-                }
-            }
-            KeyCode::BackTab | KeyCode::Up => {
-                if let Some(form) = self.emby_setup_form.as_mut() {
-                    form.focus = if form.focus == 0 { 2 } else { form.focus - 1 };
-                }
-            }
-            KeyCode::Enter => {
-                if self
-                    .emby_setup_form
-                    .as_ref()
-                    .is_some_and(|form| form.focus < 2)
-                {
-                    if let Some(form) = self.emby_setup_form.as_mut() {
-                        form.focus += 1;
-                    }
-                } else {
-                    self.submit_emby_setup();
-                }
-            }
-            KeyCode::Backspace => {
-                if let Some(form) = self.emby_setup_form.as_mut() {
-                    form.fields[form.focus].pop();
-                    form.error.clear();
-                }
-            }
-            KeyCode::Char(c)
-                if key.modifiers.is_empty()
-                    || key.modifiers == crossterm::event::KeyModifiers::SHIFT =>
-            {
-                if let Some(form) = self.emby_setup_form.as_mut() {
-                    if !form.busy {
-                        form.fields[form.focus].push(c);
-                        form.error.clear();
-                    }
-                }
-            }
-            _ => {}
-        }
-        false
-    }
-
-    pub(super) fn activate_service_entry(&mut self) {
-        let Some(&entry) = SERVICE_ENTRIES.get(self.services_cursor) else {
-            return;
-        };
+    pub(super) fn activate_service_entry(&mut self, entry: ServiceEntry) {
         let intent = match entry {
             ServiceEntry::Emby => match self.emby_runtime.state {
                 ServiceState::NotConfigured | ServiceState::NeedsAuthentication => {
@@ -365,9 +196,11 @@ impl App {
         self.route_service_action(intent);
     }
 
-    fn route_service_action(&mut self, intent: ServiceActionIntent) {
+    pub(super) fn route_service_action(&mut self, intent: ServiceActionIntent) {
         match intent {
-            ServiceActionIntent::ManageFeeds => self.open_feeds_manage_popup(),
+            ServiceActionIntent::ManageFeeds => {
+                self.pending_overlay = Some(super::types_overlay::OverlayRequest::OpenFeedsManage);
+            }
             ServiceActionIntent::SetupAudiobookshelf => self.open_audiobookshelf_setup(),
             ServiceActionIntent::TestAudiobookshelf => self.test_audiobookshelf_connection(),
             ServiceActionIntent::RemoveAudiobookshelf => self.request_audiobookshelf_removal(),
@@ -390,7 +223,7 @@ impl App {
         if self.emby_runtime.state == ServiceState::NotConfigured {
             return;
         }
-        self.confirm_modal = Some(ConfirmModal {
+        self.ask_confirm(ConfirmModal {
             title: " Remove Emby ".into(),
             message: "Remove Emby? Service-owned setup and state will be cleared.".into(),
             hint: "[y/Enter] Confirm    [Esc] Cancel".into(),
@@ -402,7 +235,7 @@ impl App {
         if self.audiobookshelf_runtime.state == ServiceState::NotConfigured {
             return;
         }
-        self.confirm_modal = Some(ConfirmModal {
+        self.ask_confirm(ConfirmModal {
             title: " Remove Audiobookshelf ".into(),
             message: "Remove Audiobookshelf? Service-owned setup and state will be cleared.".into(),
             hint: "[y/Enter] Confirm    [Esc] Cancel".into(),

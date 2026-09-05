@@ -128,6 +128,9 @@ impl App {
             selected_slot.and_then(|selected| self.player_tab.queue.slot_index(selected))
         {
             self.player_tab.queue_cursor = index;
+            // Projected removal from an attached session's queue: an
+            // authoritative follow-the-playhead move.
+            self.queue_cursor_pushed = true;
         }
         // An attached session must still persist an intentionally empty queue;
         // the ordinary empty-save guard protects unrelated remote-control UI.

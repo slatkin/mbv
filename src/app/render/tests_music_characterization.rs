@@ -1,5 +1,6 @@
 use super::test_helpers::{
-    assert_surface_pills, buffer_to_string, make_music_group_app, render_library_to_string_sized,
+    buffer_to_string, draw_mounted_frame, make_music_group_app, mounted_model_at,
+    render_library_to_string_sized,
 };
 use super::*;
 use crate::app::layout::LayoutMain;
@@ -8,12 +9,20 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 
-fn render_music(app: &mut App, width: u16, height: u16, focused: bool) -> String {
+/// Narrow grouped Music is painted by the mounted `MusicWorkspaceComponent`
+/// now (task 3.8), so route the narrow characterization renders through the
+/// real `Model::draw_frame` shell path.
+fn render_narrow_music(app: App, width: u16, height: u16) -> String {
+    let mut model = mounted_model_at(app, width, height);
+    draw_mounted_frame(&mut model, width, height)
+}
+
+fn render_music_legacy(app: &mut App, width: u16, height: u16, _focused: bool) -> String {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     let mut layout = LayoutMain::default();
     terminal
         .draw(|f| {
-            app.render_library(f, Rect::new(0, 0, width, height), focused, &mut layout);
+            app.render_library(f, Rect::new(0, 0, width, height), &mut layout, None);
         })
         .unwrap();
     buffer_to_string(&terminal)
@@ -21,52 +30,30 @@ fn render_music(app: &mut App, width: u16, height: u16, focused: bool) -> String
 
 #[test]
 fn music_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states() {
-    let states = [(120, 30, true, 0), (120, 30, false, 0), (60, 30, true, 0)];
-    for (width, height, focused, cursor) in states {
+    // Wide grouped Music: the legacy base frame is now geometry-only — the
+    // mounted `MusicWorkspaceComponent` is the sole painter (#613), so
+    // `render_library` paints no grouped-album rows at the wide breakpoint.
+    for (width, height, focused) in [(120, 30, true), (120, 30, false)] {
         let mut app = make_music_group_app();
-        app.libs[0].nav_stack[1].cursor = cursor;
-        let output = render_music(&mut app, width, height, focused);
+        app.libs[0].nav_stack[1].set_resting_cursor(0);
+        let output = render_music_legacy(&mut app, width, height, focused);
         assert!(
-            output.contains("First Album"),
-            "music rows missing in {width}x{height}: {output:?}"
+            !output.contains("First Album"),
+            "wide legacy frame must not paint music rows in {width}x{height}: {output:?}"
         );
     }
 
-    let mut selected = make_music_group_app();
-    selected.libs[0].nav_stack[1].cursor = 0;
-    let output = render_music(&mut selected, 60, 8, true);
-    assert!(
-        output.contains("First Album"),
-        "selected music row missing: {output:?}"
-    );
-}
-
-#[test]
-fn music_group_pill_row_and_targets_are_characterized_end_to_end() {
-    let mut app = make_music_group_app();
-    let mut layout = LayoutMain::default();
-    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
-    terminal
-        .draw(|f| app.render_library(f, Rect::new(0, 0, 120, 30), true, &mut layout))
-        .unwrap();
-
-    assert_surface_pills(
-        &terminal,
-        &layout,
-        Rect {
-            y: layout.selector_tabs[0].0.y,
-            height: layout
-                .wide_music_right_area
-                .bottom()
-                .saturating_sub(layout.selector_tabs[0].0.y),
-            ..layout.wide_music_right_area
-        },
-        1,
-        palette::SURFACE_BACKDROP,
-        &[0, 1, 2, 3, 4, 5],
-        &["⌘", "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"],
-        0,
-    );
+    // Narrow grouped Music is painted by the mounted `MusicWorkspaceComponent`
+    // now (task 3.8), reached through the full `Model::draw_frame` path.
+    for (width, height) in [(60, 30), (60, 20)] {
+        let mut app = make_music_group_app();
+        app.libs[0].nav_stack[1].set_resting_cursor(0);
+        let output = render_narrow_music(app, width, height);
+        assert!(
+            output.contains("First Album"),
+            "narrow music row missing in {width}x{height}: {output:?}"
+        );
+    }
 }
 
 /// Task 3.1/3.2: the narrow grouped-album inline hero used to expand the
@@ -87,7 +74,7 @@ fn narrow_grouped_music_hero_shows_only_title_meta_no_track_table_or_action_hint
         .collect();
     app.album_tracks_cache.insert("album-1".into(), tracks);
 
-    let output = render_music(&mut app, 60, 30, true);
+    let output = render_narrow_music(app, 60, 30);
 
     assert!(
         output.contains("First Album"),
@@ -104,11 +91,76 @@ fn narrow_grouped_music_hero_shows_only_title_meta_no_track_table_or_action_hint
 }
 
 #[test]
+fn wide_grouped_music_publishes_same_frame_layout_geometry() {
+    let mut app = make_music_group_app();
+    let mut layout = LayoutMain::default();
+    let _ = render_library_to_string_sized(&mut app, &mut layout, 120, 30);
+
+    assert_eq!(layout.wide_music_area, Rect::new(0, 0, 120, 30));
+    assert!(layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0);
+    assert!(layout.left_area.width > 0);
+    assert!(layout.hero_area.width > 0);
+    assert!(layout.wide_music_right_area.width > 0);
+}
+
+/// D4 proof: at the wide breakpoint the legacy base frame publishes the
+/// `wide_music_*` hand-off geometry but paints no grouped-album rows — the
+/// mounted `MusicWorkspaceComponent` is the sole painter (#613). Mirrors
+/// `tests_non_music::wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows`.
+#[test]
+fn wide_music_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
+    let mut app = make_music_group_app();
+    app.libs[0].nav_stack[1].set_resting_cursor(0);
+    let mut layout = LayoutMain::default();
+    let mut term = Terminal::new(TestBackend::new(120, 40)).unwrap();
+    term.draw(|f| {
+        app.render_library(f, Rect::new(0, 0, 120, 40), &mut layout, None);
+    })
+    .unwrap();
+
+    assert!(
+        layout.wide_music_area.width > 0 && layout.wide_music_area.height > 0,
+        "wide music area hand-off must still be reserved: {:?}",
+        layout.wide_music_area
+    );
+    assert!(
+        layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0,
+        "wide music right area hand-off must still be reserved: {:?}",
+        layout.wide_music_right_area
+    );
+    let output = buffer_to_string(&term);
+    assert!(
+        !output.contains("First Album"),
+        "legacy base frame must not paint grouped-album rows at the wide breakpoint: {output:?}"
+    );
+}
+
+#[test]
 fn narrow_grouped_music_publishes_no_wide_track_targets() {
     let mut app = make_music_group_app();
     let mut layout = LayoutMain::default();
     let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 30);
 
-    assert!(!layout.is_wide_music_active());
+    assert!(!(layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0));
     assert!(layout.wide_music_track_hitmap.is_empty());
+}
+
+#[test]
+fn narrow_grouped_music_shows_group_pill_bar() {
+    // Task 3.6a: the narrow branch reserves a group pill row above the album
+    // rows, mirroring narrow TV and the narrow browser. Before the fix the
+    // narrow branch rendered album rows straight into the full area and never
+    // published `selector_tabs`.
+    let app = make_music_group_app();
+    let mut model = mounted_model_at(app, 60, 30);
+    let output = draw_mounted_frame(&mut model, 60, 30);
+    let layout = super::test_helpers::mounted_music_layout(&model);
+    assert!(
+        !layout.selector_tabs.is_empty(),
+        "narrow grouped Music must publish group selector pills:\n{output}"
+    );
+    assert!(
+        output.contains("Beta"),
+        "group pill labels must paint:\n{output}"
+    );
 }

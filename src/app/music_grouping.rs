@@ -34,14 +34,6 @@ pub(super) struct GroupedAlbumEntry {
     pub(super) name: String,
 }
 
-#[derive(Clone)]
-pub(super) struct GroupedAlbumGroup {
-    #[allow(dead_code)] // used in tests
-    pub(super) artist: String,
-    pub(super) start: usize,
-    pub(super) end: usize,
-}
-
 /// A settled, source-derived grouping for one music album browse level:
 /// resolved artist identities, display metadata, precomputed sort keys,
 /// sorted album order, group boundaries, and identity lookups.
@@ -52,8 +44,6 @@ pub(super) struct GroupedAlbumCatalog {
     /// Entries sorted by `sort_key`; `entries[i].album_index` indexes the
     /// raw `items` slice the catalog was built from.
     pub(super) entries: Vec<GroupedAlbumEntry>,
-    /// Artist groups as `[start, end)` ranges into `entries`.
-    pub(super) groups: Vec<GroupedAlbumGroup>,
     /// raw album index -> position in `entries`.
     pub(super) index_to_entry: HashMap<usize, usize>,
     /// album id -> position in `entries`.
@@ -142,18 +132,6 @@ pub(super) fn build_grouped_album_catalog(
     }
     entries.sort_by_key(|e| e.sort_key.clone());
 
-    let mut groups: Vec<GroupedAlbumGroup> = Vec::new();
-    let mut start = 0;
-    while start < entries.len() {
-        let artist = entries[start].artist.clone();
-        let mut end = start + 1;
-        while end < entries.len() && entries[end].artist == artist {
-            end += 1;
-        }
-        groups.push(GroupedAlbumGroup { artist, start, end });
-        start = end;
-    }
-
     let mut index_to_entry = HashMap::with_capacity(entries.len());
     let mut id_to_entry = HashMap::with_capacity(entries.len());
     for (pos, entry) in entries.iter().enumerate() {
@@ -165,7 +143,6 @@ pub(super) fn build_grouped_album_catalog(
         revision: 0,
         parent_id: String::new(),
         entries,
-        groups,
         index_to_entry,
         id_to_entry,
     }
@@ -304,6 +281,7 @@ impl App {
         let Some(level) = lib.nav_stack.last_mut() else {
             return;
         };
+        let resting_cursor = level.resting().cursor();
         let Some(state) = level.music_grouping.as_mut() else {
             return;
         };
@@ -316,20 +294,22 @@ impl App {
         let anchor_album_id = state
             .settled
             .is_some()
-            .then(|| level.items.get(level.cursor).map(|item| item.id.clone()));
+            .then(|| level.items.get(resting_cursor).map(|item| item.id.clone()));
         let mut catalog = build_grouped_album_catalog(&level.items, &candidate.resolved);
         catalog.revision = candidate.revision;
         catalog.parent_id = candidate.parent_id;
         state.settled = Some(catalog);
         let catalog = state.settled.as_ref().expect("catalog just inserted");
-        if let Some(Some(id)) = anchor_album_id {
-            if let Some(&pos) = catalog.id_to_entry.get(&id) {
-                level.cursor = catalog.entries[pos].album_index;
-            } else if let Some(first) = catalog.entries.first() {
-                level.cursor = first.album_index;
-            }
-        } else if let Some(first) = catalog.entries.first() {
-            level.cursor = first.album_index;
+        let anchored_cursor = match anchor_album_id {
+            Some(Some(id)) => catalog
+                .id_to_entry
+                .get(&id)
+                .map(|&pos| catalog.entries[pos].album_index)
+                .or_else(|| catalog.entries.first().map(|first| first.album_index)),
+            _ => catalog.entries.first().map(|first| first.album_index),
+        };
+        if let Some(cursor) = anchored_cursor {
+            level.set_resting_cursor(cursor);
         }
     }
 }

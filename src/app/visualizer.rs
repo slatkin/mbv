@@ -110,49 +110,6 @@ mod tests {
     }
 
     #[test]
-    fn attached_session_v_key_toggles_selection_without_local_capture() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let (mut app, cmd_rx) =
-            crate::app::tests::make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
-        app.connected_session_id = Some("session-1".to_string());
-        app.visualizer_enabled = false;
-        app.player.status.lock().unwrap().active = true;
-
-        let handled = app.handle_key_visualizer(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char('v'),
-            crossterm::event::KeyModifiers::NONE,
-        ));
-
-        assert_eq!(handled, Some(false));
-        assert!(
-            app.visualizer_enabled,
-            "v flips artwork/visualizer selection even in an attached session"
-        );
-        assert!(cmd_rx.try_recv().is_err());
-        assert!(!app.visualizer_should_run());
-        app.sync_visualizer();
-        assert!(
-            app.visualizer.is_none(),
-            "attached-session playback must not start a local PipeWire capture"
-        );
-    }
-
-    #[test]
-    fn local_visualizer_key_still_toggles() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let mut app = crate::app::tests::make_app_stub();
-        app.visualizer_enabled = false;
-
-        let handled = app.handle_key_visualizer(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char('v'),
-            crossterm::event::KeyModifiers::NONE,
-        ));
-
-        assert_eq!(handled, Some(false));
-        assert!(app.visualizer_enabled);
-    }
-
-    #[test]
     fn selecting_artwork_stops_capture() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = crate::app::tests::make_app_stub();

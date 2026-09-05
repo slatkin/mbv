@@ -48,7 +48,6 @@ impl App {
                     position_ticks / mbv_core::api::TICKS_PER_SECOND);
                 if self.player.is_remote_disconnected() {
                     self.next_up_item = None;
-                    self.skip_intro_end_ticks = None;
                     // An announced shutdown never reaches here: the reader
                     // thread sends PlayerEvent::DaemonShutdownAnnounced
                     // instead of a synthetic Stopped for that case (see the
@@ -134,7 +133,6 @@ impl App {
                     }
                 }
                 self.next_up_item = None;
-                self.skip_intro_end_ticks = None;
                 self.status.clear();
                 if is_delete {
                     // The removal, undo-push, and cursor-clamp already happened
@@ -222,7 +220,6 @@ impl App {
             }
             PlayerEvent::TrackChanged(idx) => {
                 self.visualizer_failed = false;
-                self.skip_intro_end_ticks = None;
                 self.next_up_item = None;
                 if self.status.starts_with("Next up:") {
                     self.status.clear();
@@ -273,6 +270,9 @@ impl App {
                 self.player.status.lock().unwrap().current_idx = adjusted;
                 if !self.queue_cursor_held_by_user() {
                     self.playback_queue_mut().queue_cursor = adjusted;
+                    // Local mpv advance: an authoritative follow-the-playhead
+                    // move, must win over slot-identity reconciliation.
+                    self.queue_cursor_pushed = true;
                 }
                 if !self.has_direct_remote_queue() {
                     if let Some(item) = self.playback_queue().emby_item_at(adjusted) {
@@ -292,16 +292,7 @@ impl App {
                     let show_title = item.series_name.clone();
                     let ep_title = item.name.clone();
                     let artist = item.artist.clone();
-                    let label = item.playback_label();
                     self.next_up_item = Some(item.clone());
-                    let next_up_msg = format!("Next up: {} (Y/n)", label);
-                    self.notify_with_actions(
-                        &item.name,
-                        "Next up?",
-                        &[("next_up:play", "Play Now"), ("next_up:skip", "Skip")],
-                    );
-                    self.status = next_up_msg;
-                    self.status_expires = None;
                     // Daemon sends NextUpShow to mpv directly; only send from local player.
                     if !self.player.is_remote() {
                         self.player.send_command(PlayerCommand::NextUpShow {
@@ -329,6 +320,9 @@ impl App {
                     {
                         self.player.send_command(PlayerCommand::JumpTo(idx));
                         self.playback_queue_mut().queue_cursor = idx;
+                        // Auto-advance to the next-up item: an authoritative
+                        // follow-the-playhead move.
+                        self.queue_cursor_pushed = true;
                         self.flash(label, ToastSeverity::Neutral);
                     } else {
                         log::warn!(target: "app", "next-up: item not in queue, cannot jump");
@@ -347,12 +341,17 @@ impl App {
                 let active_cursor = active_index.unwrap_or(0);
 
                 let pending_local_cursor = self.pending_queue_edit_cursor.take();
+                // Preserving the user's held selection carries no new
+                // cursor intent (the value is just what's already there);
+                // every other branch computes a fresh authoritative index.
+                let user_holding_local =
+                    !self.has_direct_remote_queue() && self.queue_cursor_held_by_user();
                 let cursor = if self.has_direct_remote_queue() {
                     self.pending_remote_move_cursor
                         .take()
                         .filter(|pc| *pc < total)
                         .unwrap_or(active_cursor)
-                } else if self.queue_cursor_held_by_user() {
+                } else if user_holding_local {
                     // User is actively navigating — preserve their
                     // selection cursor, but still replace the queue
                     // contents so slot data stays current.
@@ -367,6 +366,11 @@ impl App {
                 let queue = self.playback_queue_mut();
                 queue.set_unified_state(&unified, cursor);
                 self.queue_source = source;
+                if !user_holding_local {
+                    // Unified/direct-remote reconciliation: an authoritative
+                    // follow-the-playhead move.
+                    self.queue_cursor_pushed = true;
+                }
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 // mbvd never auto-seeks on this event itself — it always
@@ -377,34 +381,14 @@ impl App {
                     let secs = intro_end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
                     self.player.send_command(PlayerCommand::SeekAbsolute(secs));
                     self.player.send_command(PlayerCommand::SkipIntroDismiss);
-                } else {
-                    self.skip_intro_end_ticks = Some(intro_end_ticks);
-                    let playing_title = self
-                        .playback_queue()
-                        .item_at(self.playback_queue().queue_cursor)
-                        .map(|i| i.title().to_string())
-                        .unwrap_or_else(|| "mbv".into());
-                    self.notify_with_actions(
-                        &playing_title,
-                        "Skip intro?",
-                        &[("skip_intro:skip", "Skip"), ("skip_intro:ignore", "Ignore")],
-                    );
-                    self.status = "Skip intro? (Y/n)".into();
-                    self.status_expires = None;
                 }
             }
-            PlayerEvent::IntroEnded => {
-                if self.skip_intro_end_ticks.take().is_some() {
-                    self.status.clear();
-                }
-            }
+            PlayerEvent::IntroEnded => {}
             PlayerEvent::SkipIntroPlay => {
-                self.skip_intro_end_ticks = None;
                 self.status.clear();
             }
             PlayerEvent::MpvQuit => {
                 self.next_up_item = None;
-                self.skip_intro_end_ticks = None;
                 self.status.clear();
                 self.refresh_after_stop();
             }
@@ -546,23 +530,25 @@ impl App {
     /// Raises the blocking daemon-lost modal (task 7.1), replacing whatever
     /// other blocking overlay was showing -- only one is ever active.
     fn raise_daemon_lost_modal(&mut self) {
-        self.context_menu = None;
-        self.layout.context_menu_rect = None;
-        self.confirm_modal = None;
-        self.save_playlist_dialog = None;
+        // Closing the context menu is re-homed: the DaemonLost `OverlayRequest`
+        // arm calls `dismiss_blocking_modals`, which now also unmounts the
+        // ContextMenu component (task 5.3c). `pending_overlay` is a single slot,
+        // so it cannot both dismiss the menu and raise DaemonLost here.
         let last_playing_title = {
             let idx = self.player.status.lock().unwrap().current_idx;
             self.playback_queue()
                 .item_at(idx)
                 .map(|item| item.title().to_string())
         };
-        self.daemon_lost_modal = Some(DaemonLostModal {
-            last_playing_title,
-            daemon_log_path: crate::state_dir()
-                .join("local-daemon.log")
-                .display()
-                .to_string(),
-            restart_error: None,
-        });
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DaemonLost(
+            DaemonLostModal {
+                last_playing_title,
+                daemon_log_path: crate::state_dir()
+                    .join("local-daemon.log")
+                    .display()
+                    .to_string(),
+                restart_error: None,
+            },
+        ));
     }
 }

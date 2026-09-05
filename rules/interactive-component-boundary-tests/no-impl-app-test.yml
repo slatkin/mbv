@@ -1,0 +1,12 @@
+id: no-impl-app
+valid:
+  - |
+    struct MyComp;
+    impl MyComp { fn view(&self) {} }
+    // AppComponent is the TuiRealm trait, not the shell App: not a violation.
+    impl AppComponent for MyComp { fn on(&mut self) {} }
+invalid:
+  - |
+    impl App { fn handle(&mut self) {} }
+  - |
+    impl SomeTrait for App { fn foo(&self) {} }

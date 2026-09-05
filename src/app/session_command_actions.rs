@@ -135,7 +135,7 @@ impl App {
     pub(super) fn retire_remote_tracking(&mut self, invalidate_lineage: bool) {
         self.remote_tracker = None;
         self.remote_queue_projection = None;
-        self.remote_reanchor_popup = None;
+        self.dismiss_remote_reanchor();
         if invalidate_lineage {
             self.remote_queue_lineage = self.remote_queue_lineage.saturating_add(1);
         }
@@ -178,21 +178,17 @@ impl App {
                 self.flash("Queue tracking updated".into(), ToastSeverity::Success);
             }
         } else {
-            self.remote_reanchor_popup = Some(super::RemoteReanchorPopup { targets, cursor: 0 });
+            self.pending_overlay = Some(super::types_overlay::OverlayRequest::RemoteReanchor(
+                super::RemoteReanchorPopup { targets, cursor: 0 },
+            ));
         }
     }
 
-    pub(super) fn select_remote_reanchor_target(&mut self) {
-        let Some(popup) = self.remote_reanchor_popup.take() else {
-            return;
-        };
-        let Some((target, _)) = popup.targets.get(popup.cursor) else {
-            return;
-        };
+    pub(super) fn reanchor_remote_target(&mut self, target: usize) {
         let effects = self
             .remote_tracker
             .as_mut()
-            .map(|tracker| tracker.reanchor(*target))
+            .map(|tracker| tracker.reanchor(target))
             .unwrap_or_default();
         self.update_remote_projection_epoch();
         if effects.is_empty() {
@@ -310,7 +306,6 @@ impl App {
     }
 
     pub(super) fn clear_playback_overlays(&mut self) {
-        self.skip_intro_end_ticks = None;
         self.next_up_item = None;
         self.status.clear();
     }

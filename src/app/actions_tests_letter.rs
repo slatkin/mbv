@@ -1,4 +1,5 @@
 #![allow(dead_code, unused_imports)]
+use crate::app::types_browse::BrowseResting;
 
 use super::*;
 use crate::app::library_browse_actions::{
@@ -7,7 +8,7 @@ use crate::app::library_browse_actions::{
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibSearch, LibraryTab, QueueScope, TabSelection,
+    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
 };
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerEvent;
@@ -36,32 +37,14 @@ fn recursive_music_app() -> App {
     library.id = "music-lib".into();
     library.collection_type = "music".into();
     library.is_folder = true;
-    app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     app
 }
 fn lib_tab(collection_type: &str) -> LibraryTab {
     let mut library = make_item("Lib", "CollectionFolder");
     library.id = "lib-1".into();
     library.collection_type = collection_type.into();
-    LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    }
+    LibraryTab::new(library)
 }
 
 #[test]
@@ -106,8 +89,7 @@ fn push_top_level(lib: &mut LibraryTab, item_count: usize) {
         title: lib.library.name.clone(),
         items: make_items(item_count),
         total_count: item_count,
-        cursor: 0,
-        scroll: 0,
+        resting: BrowseResting::new(0, 0),
         item_types: Some("Movie".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -135,7 +117,7 @@ fn should_show_letter_pills_true_for_any_captured_total() {
 }
 
 #[test]
-fn should_show_letter_pills_excludes_music_search_and_drilldowns() {
+fn should_show_letter_pills_excludes_music_and_drilldowns() {
     let mut app = make_app_stub();
     app.libs.push(lib_tab("music"));
     push_top_level(&mut app.libs[0], 10);
@@ -149,17 +131,6 @@ fn should_show_letter_pills_excludes_music_search_and_drilldowns() {
     push_top_level(&mut app.libs[1], 10);
     app.libs[1].library_total = Some(1000);
     assert!(app.should_show_letter_pills(1));
-
-    app.libs[1].search = Some(crate::app::LibSearch {
-        query: String::new(),
-        items: Vec::new(),
-        results: Vec::new(),
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-    assert!(!app.should_show_letter_pills(1), "hidden while searching");
-    app.libs[1].search = None;
 
     // A second nav level (drilled into a folder) is no longer the "top"
     // browse level.
@@ -184,8 +155,8 @@ fn select_letter_pill_scopes_the_level_and_resets_cursor() {
     app.libs.push(lib_tab("movies"));
     push_top_level(&mut app.libs[0], 10);
     app.libs[0].library_total = Some(1000);
-    app.libs[0].nav_stack[0].cursor = 4;
-    app.libs[0].nav_stack[0].scroll = 2;
+    app.libs[0].nav_stack[0].set_resting_cursor(4);
+    app.libs[0].nav_stack[0].set_resting_scroll(2);
 
     app.select_letter_pill(0, 4); // "M–O"
 
@@ -195,8 +166,8 @@ fn select_letter_pill_scopes_the_level_and_resets_cursor() {
     assert_eq!(filter.label, "M\u{2013}O");
     assert_eq!(filter.name_ge, Some("M"));
     assert_eq!(filter.name_lt, Some("P"));
-    assert_eq!(lvl.cursor, 0);
-    assert_eq!(lvl.scroll, 0);
+    assert_eq!(lvl.resting().cursor(), 0);
+    assert_eq!(lvl.resting().scroll(), 0);
     assert!(lvl.loading, "a scoped refresh should be in flight");
 }
 
@@ -278,8 +249,7 @@ fn push_top_level_tv(lib: &mut LibraryTab, item_count: usize) {
         title: lib.library.name.clone(),
         items: make_items(item_count),
         total_count: item_count,
-        cursor: 0,
-        scroll: 0,
+        resting: BrowseResting::new(0, 0),
         item_types: Some("Series".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -333,8 +303,8 @@ fn select_letter_pill_scopes_tv_to_series() {
     assert_eq!(filter.name_ge, Some("M"));
     assert_eq!(filter.name_lt, Some("P"));
     assert_eq!(lvl.item_types, Some("Series".to_string()));
-    assert_eq!(lvl.cursor, 0);
-    assert_eq!(lvl.scroll, 0);
+    assert_eq!(lvl.resting().cursor(), 0);
+    assert_eq!(lvl.resting().scroll(), 0);
     assert!(lvl.loading, "TV scoped refresh should be in flight");
 }
 
@@ -387,24 +357,4 @@ fn select_letter_pill_is_noop_on_tv_drilldown() {
         lvl.letter_filter.is_none(),
         "pill selection should be ignored below the top browse level"
     );
-}
-
-#[test]
-fn select_letter_pill_is_noop_during_tv_search() {
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("tvshows"));
-    push_top_level_tv(&mut app.libs[0], 10);
-    app.libs[0].library_total = Some(1000);
-    app.libs[0].search = Some(LibSearch {
-        query: String::new(),
-        items: Vec::new(),
-        results: Vec::new(),
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-
-    app.select_letter_pill(0, 0);
-    let lvl = app.libs[0].nav_stack.last().unwrap();
-    assert!(lvl.letter_filter.is_none(), "hidden while searching");
 }

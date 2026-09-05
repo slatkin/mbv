@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 
 use super::indicators;
-use crate::app::layout::LayoutPlayback;
+use crate::app::layout::{LayoutMain, LayoutPlayback};
 use crate::app::ui_util::*;
 use crate::app::{palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -17,9 +17,7 @@ impl App {
     /// Build the playback status indicator items (res/codec, audio lang, CC), space-separated.
     /// Returns None if the local player is not active.
     /// Callers wrap these in [ ... ] with whatever surrounding style they need.
-    pub(in crate::app::render) fn build_status_indicator_spans(
-        &self,
-    ) -> Option<Vec<Span<'static>>> {
+    pub(in crate::app) fn build_status_indicator_spans(&self) -> Option<Vec<Span<'static>>> {
         let data = self.playback_indicator_target().indicator_data(self)?;
         Some(indicators::indicator_spans(
             self.indicator_style,
@@ -28,13 +26,17 @@ impl App {
         ))
     }
 
-    /// Renders the tab bar within the given 1-row `area` and populates
+    /// Renders the tab bar within the given 1-row `area` and publishes
     /// `layout.tabs_area` for mouse hit testing.
-    pub(in crate::app::render) fn render_tabs(
+    ///
+    /// `tabs_area` is the precomputed hit-target rect (root/chrome geometry,
+    /// task 2.1a) and is painted around, never recomputed here.
+    pub(in crate::app) fn render_tabs(
         &mut self,
         f: &mut Frame,
         area: Rect,
-        tabs_area_out: &mut Rect,
+        tabs_area: Rect,
+        layout: &mut LayoutMain,
     ) {
         // Fill the tab bar area with the tab box's own background.
         f.render_widget(
@@ -49,15 +51,11 @@ impl App {
             ..area
         };
 
-        let pb_h: u16 = 2; // 2-col padding inside the coloured box
-        let tabs_x = area.x + 1;
-        let tabs_w = area.width.saturating_sub(2 * pb_h + TABBAR_LEFT_RESERVE);
-        let tabs_area = Rect {
-            x: tabs_x,
-            width: tabs_w,
-            ..tab_row
-        };
-        *tabs_area_out = tabs_area;
+        // Hit-target geometry was precomputed paint-free by
+        // `compute_frame_layout`; recover the paint-side inputs from it so
+        // the published rect and the painted bar cannot diverge.
+        let tabs_x = tabs_area.x;
+        let tabs_w = tabs_area.width;
 
         let (vis_start, vis_end) = self.visible_tab_range(tabs_w);
         let has_left = vis_start > 0;
@@ -93,6 +91,7 @@ impl App {
             width: tabs_w.saturating_sub(left_w + right_w),
             height: area.height,
         };
+        layout.tabs_hitmap.clear();
         let all_names: Vec<String> = std::iter::once("Home".to_string())
             .chain(self.libs.iter().map(|l| l.library.name.clone()))
             .chain(self.audiobookshelf_libraries.iter().map(|l| l.name.clone()))
@@ -110,12 +109,13 @@ impl App {
         } else {
             tab_pos - vis_start
         };
+        let mut tab_x = inner_tabs.x;
         let tab_titles: Vec<Line> = all_names[vis_start..vis_end]
             .iter()
             .enumerate()
             .map(|(i, n)| {
                 let n = n.to_uppercase();
-                if i == selected_tab {
+                let line = if i == selected_tab {
                     Line::from(vec![
                         Span::styled("▐", Style::default().fg(palette::ACCENT)),
                         Span::styled(
@@ -130,7 +130,19 @@ impl App {
                         format!("  {n}  "),
                         Style::default().fg(Color::Rgb(73, 81, 86)),
                     ))
-                }
+                };
+                let width = line.width() as u16;
+                layout.tabs_hitmap.push((
+                    Rect {
+                        x: tab_x,
+                        y: inner_tabs.y,
+                        width,
+                        height: 1,
+                    },
+                    vis_start + i,
+                ));
+                tab_x += width;
+                line
             })
             .collect();
         f.render_widget(

@@ -1,0 +1,17 @@
+id: no-app-as-type
+language: rust
+severity: error
+message: >-
+  src/app/components/ must not import or use `App` as a type (field, parameter,
+  return, or local). Components receive owned presentation models, not the shell.
+  See openspec/changes/migrate-tui-to-tuirealm design D10 and spec
+  interactive-component-framework "Interactive ownership is mechanically
+  enforced".
+files:
+  - "src/app/components/**"
+rule:
+  any:
+    - kind: type_identifier
+      regex: "^App$"
+    - kind: use_declaration
+      regex: "\\bApp\\b"

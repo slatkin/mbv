@@ -12,7 +12,6 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
-use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
@@ -33,7 +32,7 @@ pub fn socket_path() -> PathBuf {
 /// Held for the process lifetime of the Player-owning app. Dropping it
 /// releases the flock (also happens automatically on any process death).
 pub struct LockGuard {
-    file: File,
+    file: nix::fcntl::Flock<File>,
 }
 
 impl LockGuard {
@@ -72,23 +71,21 @@ pub fn resolve(socket: &Path, lock: &Path) -> io::Result<Resolution> {
         .write(true)
         .truncate(false)
         .open(lock)?;
-    let fd = file.as_raw_fd();
-    let rc = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
-    if rc == 0 {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(lock, std::fs::Permissions::from_mode(0o600));
-        return Ok(Resolution::Fresh(LockGuard { file }));
-    }
-    let err = io::Error::last_os_error();
-    if err.kind() != io::ErrorKind::WouldBlock {
-        return Err(err);
-    }
-    // A live app holds the lock. Never trust socket-file existence — only
-    // a successful connect counts (ADR 0006).
-    match UnixStream::connect(socket) {
-        Ok(_) => Ok(Resolution::Attach),
-        Err(_) => Ok(Resolution::Refuse),
-    }
+    let file = match nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock) {
+        Ok(file) => file,
+        Err((_, nix::errno::Errno::EWOULDBLOCK)) => {
+            // A live app holds the lock. Never trust socket-file existence — only
+            // a successful connect counts (ADR 0006).
+            return match UnixStream::connect(socket) {
+                Ok(_) => Ok(Resolution::Attach),
+                Err(_) => Ok(Resolution::Refuse),
+            };
+        }
+        Err((_, errno)) => return Err(io::Error::from_raw_os_error(errno as i32)),
+    };
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(lock, std::fs::Permissions::from_mode(0o600));
+    Ok(Resolution::Fresh(LockGuard { file }))
 }
 
 /// Read the PID out of the lock file (best-effort, used by `mbv -q`).

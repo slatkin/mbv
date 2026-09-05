@@ -2,6 +2,10 @@
 
 use super::music_track_test_support::*;
 use super::*;
+use crate::app::components::msg::Msg;
+use crate::app::components::music_workspace::MusicWorkspaceComponent;
+use crate::app::components::{ComponentId, ShellRequest};
+use crate::app::shell::Model;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
@@ -9,19 +13,50 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::io::{Read, Write};
+use tuirealm::component::AppComponent;
+use tuirealm::event::{Event, Key, KeyEvent as TuiKeyEvent, KeyModifiers as TuiKeyModifiers};
 
-// ── Task 4: scope-correct actions (#145) ─────────────────────────────
+/// Wide music-group fixture with `album-1`'s cached tracks.
+fn wide_track_focus_model(track_count: usize) -> (Model, ComponentId) {
+    let mut app = make_music_album_app();
+    push_tracks(&mut app, "album-1", track_count);
+    let mut model = Model::new(app);
+    model.app.terminal_width = 160;
+    model.app.terminal_height = 40;
+    model.sync_music_workspace();
+    model.sync_active_destination();
+    let id = model
+        .music_workspace_id
+        .clone()
+        .expect("wide Music workspace mounted");
+    (model, id)
+}
+
+fn enter_track_focus(model: &mut Model, id: &ComponentId) {
+    model
+        .application
+        .get_component_mut(id)
+        .unwrap()
+        .on(&Event::Keyboard(TuiKeyEvent {
+            code: Key::Enter,
+            modifiers: TuiKeyModifiers::NONE,
+        }));
+}
+
+// ── Task 4: scope-correct actions (#145), re-homed at the shell boundary ──
 
 #[test]
 fn current_lib_item_in_list_mode_returns_album_folder_not_a_track() {
-    // Regression: album-list mode (`album_track_focus == None`) must
-    // keep resolving to the selected album folder itself, exactly as
-    // before Task 4.
+    // Regression: album-list mode must keep resolving to the selected album
+    // folder itself, exactly as before Task 4. Focused-track resolution
+    // lives at the shell/component boundary now (`focused_music_track`), not
+    // in `current_lib_item`.
     let mut app = make_music_album_app();
     push_tracks(&mut app, "album-1", 3);
-    assert!(app.libs[0].album_track_focus.is_none());
 
-    let item = app.current_lib_item(0);
+    // `current_lib_item` takes the resolved cursor (task 4.3, R1); the
+    // fixture sits at album-level cursor 0.
+    let item = app.current_lib_item(0, 0);
 
     let item = item.expect("current_lib_item should resolve the selected album");
     assert_eq!(item.id, "album-1");
@@ -29,48 +64,58 @@ fn current_lib_item_in_list_mode_returns_album_folder_not_a_track() {
 }
 
 #[test]
-fn current_lib_item_in_track_mode_returns_focused_track() {
-    let mut app = make_music_album_app();
-    push_tracks(&mut app, "album-1", 3);
-    app.libs[0].album_track_focus = Some(1);
+fn focused_music_track_in_track_mode_resolves_focused_track() {
+    let (mut model, id) = wide_track_focus_model(3);
+    enter_track_focus(&mut model, &id);
 
-    let item = app.current_lib_item(0);
+    let (album_id, track) = model
+        .focused_music_track()
+        .expect("focused track should resolve");
 
-    let item = item.expect("current_lib_item should resolve the focused track");
-    assert_eq!(item.id, "album-1-track-1");
+    assert_eq!(album_id, "album-1");
+    assert_eq!(track.id, "album-1-track-0");
+    assert!(!track.is_folder, "track mode must resolve to the track");
+}
+
+#[test]
+fn focused_music_track_falls_back_safely_when_cache_missing() {
+    // Async fetch still in flight: `album_tracks_cache` has no entry for
+    // "album-1" yet (the cursor index still resolves to nothing). Must not
+    // panic and the shell target must stay `None`.
+    let (mut model, _) = wide_track_focus_model(0);
+    // `push_tracks(.., 0)` inserts an empty vec; drop even that so the cache
+    // genuinely has no entry for the selected album.
+    model.app.album_tracks_cache.remove("album-1");
+    assert!(!model.app.album_tracks_cache.contains_key("album-1"));
     assert!(
-        !item.is_folder,
-        "track mode must resolve to the track, not the album folder"
+        model.focused_music_track().is_none(),
+        "cache-missing focused track must stay None, not panic"
     );
 }
 
 #[test]
-fn current_lib_item_in_track_mode_falls_back_safely_when_cache_missing() {
-    // Async fetch still in flight: `album_tracks_cache` has no entry for
-    // "album-1" yet. Must not panic and must not index out of bounds.
-    let mut app = make_music_album_app();
-    app.libs[0].album_track_focus = Some(0);
-    assert!(!app.album_tracks_cache.contains_key("album-1"));
+fn enter_in_track_mode_with_missing_cache_does_not_panic() {
+    // Track focused in the component but the cache is then dropped: the
+    // activation message still fires, the shell resolves nothing, and the
+    // nav stack is untouched.
+    let (mut model, id) = wide_track_focus_model(2);
+    enter_track_focus(&mut model, &id);
+    model.app.album_tracks_cache.remove("album-1");
+    let nav_len_before = model.app.libs[0].nav_stack.len();
 
-    let item = app.current_lib_item(0);
-
-    let item = item.expect("must fall back to the album folder item, not None");
-    assert_eq!(item.id, "album-1");
-    assert!(item.is_folder);
-}
-
-#[test]
-fn enter_again_in_track_mode_with_missing_cache_does_not_panic() {
-    let mut app = make_music_album_app();
-    // No `push_tracks` -- cache miss, async fetch still in flight.
-    app.libs[0].album_track_focus = Some(0);
-    let nav_len_before = app.libs[0].nav_stack.len();
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    assert!(!handled);
-    assert_eq!(app.libs[0].album_track_focus, Some(0));
-    assert_eq!(app.libs[0].nav_stack.len(), nav_len_before);
+    let msg = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .on(&Event::Keyboard(TuiKeyEvent {
+            code: Key::Enter,
+            modifiers: TuiKeyModifiers::NONE,
+        }));
+    assert!(matches!(
+        msg,
+        Some(Msg::Shell(ShellRequest::MusicTrackActivate))
+    ));
+    assert_eq!(model.app.libs[0].nav_stack.len(), nav_len_before);
 }
 
 #[test]
@@ -78,11 +123,13 @@ fn context_menu_in_list_mode_offers_folder_scoped_actions_for_selected_album() {
     // Regression: album-list mode's context menu must still target the
     // selected ALBUM's id via the folder-scoped actions.
     let mut app = make_music_album_app();
-    assert!(app.libs[0].album_track_focus.is_none());
 
-    app.open_context_menu();
+    app.open_context_menu(false, None);
 
-    let menu = app.context_menu.as_ref().expect("context menu should open");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu should open"),
+    };
     let actions: Vec<_> = menu
         .entries
         .iter()
@@ -109,14 +156,22 @@ fn context_menu_in_list_mode_offers_folder_scoped_actions_for_selected_album() {
 }
 
 #[test]
-fn context_menu_in_track_mode_offers_track_scoped_actions_not_folder_actions() {
-    let mut app = make_music_album_app();
-    push_tracks(&mut app, "album-1", 3);
-    app.libs[0].album_track_focus = Some(1);
+fn context_menu_for_focused_track_offers_track_scoped_actions_not_folder_actions() {
+    // '.' in track mode reaches the shell as `MusicTrackContextMenu`, which
+    // resolves the focused track and raises the menu for that item -- the
+    // generic per-item actions, never album-folder scoped ones.
+    let (mut model, id) = wide_track_focus_model(3);
+    enter_track_focus(&mut model, &id);
+    let (_, track) = model
+        .focused_music_track()
+        .expect("focused track should resolve");
 
-    app.open_context_menu();
+    model.app.open_context_menu_for(track);
 
-    let menu = app.context_menu.as_ref().expect("context menu should open");
+    let menu = match model.app.pending_overlay.as_ref() {
+        Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu should open"),
+    };
     let actions: Vec<_> = menu
         .entries
         .iter()

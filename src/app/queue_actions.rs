@@ -27,7 +27,7 @@ impl App {
             return;
         }
         if controls_playback_queue && active && current_idx == pos {
-            self.confirm_modal = Some(ConfirmModal {
+            self.ask_confirm(ConfirmModal {
                 title: " Remove Item ".into(),
                 message: "Remove now-playing item and stop playback?".into(),
                 hint: "[y] Confirm    [Esc] Cancel".into(),
@@ -44,7 +44,7 @@ impl App {
                 .map(|(npid, item)| item.id == *npid)
                 .unwrap_or(false);
             if is_now_playing_remote {
-                self.confirm_modal = Some(ConfirmModal {
+                self.ask_confirm(ConfirmModal {
                     title: " Remove Item ".into(),
                     message: "Remove now-playing item and stop playback?".into(),
                     hint: "[y] Confirm    [Esc] Cancel".into(),
@@ -106,22 +106,26 @@ impl App {
         self.retire_remote_tracking(true);
     }
 
-    /// Moves the item at the displayed queue's cursor one position earlier.
-    /// No-op at the start of the queue.
-    pub(super) fn move_queue_item_up(&mut self) {
-        self.move_queue_item_by(-1);
+    /// Moves the item at `from` one position earlier. No-op at the start of
+    /// the queue.
+    pub(super) fn move_queue_item_up(&mut self, from: usize) {
+        self.move_queue_item_by(from, -1);
     }
 
-    /// Moves the item at the displayed queue's cursor one position later.
-    /// No-op at the end of the queue.
-    pub(super) fn move_queue_item_down(&mut self) {
-        self.move_queue_item_by(1);
+    /// Moves the item at `from` one position later. No-op at the end of the
+    /// queue.
+    pub(super) fn move_queue_item_down(&mut self, from: usize) {
+        self.move_queue_item_by(from, 1);
     }
 
-    fn move_queue_item_by(&mut self, delta: isize) {
+    /// Moves the item at `from` by `delta` within the displayed queue's
+    /// scope. The target is passed explicitly (split-queue-cursor-ownership
+    /// D2): the shell resolves the slot the user selected and hands it over
+    /// rather than this function re-reading `queue.queue_cursor` as an
+    /// ambient argument channel.
+    fn move_queue_item_by(&mut self, from: usize, delta: isize) {
         let scope = self.visible_queue_scope();
         let queue = self.queue_for_scope(scope);
-        let from = queue.queue_cursor;
         let len = queue.total_queue_len();
         let to = if delta < 0 {
             match from.checked_sub(1) {
@@ -260,7 +264,7 @@ impl App {
         {
             self.pending_queue_action = Some(action);
             let name = super::ui_util::trunc_str(self.queue_playlist_name(), 36);
-            self.confirm_modal = Some(ConfirmModal {
+            self.ask_confirm(ConfirmModal {
                 title: " Unsaved Playlist Changes ".into(),
                 message: format!("Save changes to \"{}\"?", name),
                 hint: "[s]Save  [d]Discard  [Esc]Cancel".into(),

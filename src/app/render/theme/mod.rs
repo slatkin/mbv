@@ -20,6 +20,7 @@ pub const SURFACE_ACCENT_SOFT: Color = primitives::BG_GREEN_SOFT;
 pub const SURFACE_ITEM_FOCUSED: Color = primitives::FOCUSED;
 pub const SURFACE_STATUS_PILL: Color = SURFACE_CHROME; // pills sit on the chrome status row; same bg
 pub const SURFACE_SIDEBAR: Color = primitives::PANEL_BG; // plain (non-hero) sidebar/panel background
+pub const SURFACE_ARTWORK_PLACEHOLDER: Color = primitives::ARTWORK_PLACEHOLDER;
 
 // Accents
 pub const ACCENT: Color = primitives::AQUA; // selection marker, watched, folders, Emby brand glyph
@@ -63,14 +64,6 @@ pub const PLAYBACK_META_FG: Color = primitives::PLAYBACK_META_FG; // captions/ti
 
 // Progress and queue
 pub const PROGRESS_TRACK: Color = primitives::SEEK_TRACK; // unplayed seek/progress track
-pub const QUEUE_ROW_FG: Color = primitives::QUEUE_UNFOCUSED_FG;
-
-// Toast severities
-pub const TOAST_BG_NEUTRAL: Color = primitives::DARK_BG;
-pub const TOAST_BG_SUCCESS: Color = primitives::TOAST_BG_SUCCESS;
-pub const TOAST_BG_WARNING: Color = primitives::TOAST_BG_WARNING;
-pub const TOAST_BG_ERROR: Color = primitives::TOAST_BG;
-pub const TOAST_FG: Color = primitives::TOAST_FG;
 
 // Chrome
 pub const SCROLLBAR: Color = primitives::SCROLLBAR;
@@ -89,4 +82,16 @@ pub fn resolve_surface_focus(focused: bool) -> Color {
     } else {
         SURFACE_RESTING
     }
+}
+
+/// The focused selected-row background for a canonical media list. The row
+/// "punches through" to the surface *containing* the panel that holds the
+/// list, not the list panel itself. Every library rail plus Home and Feeds
+/// sits inside a resting-surface parent — even while the list panel is
+/// focused-green — so this is the constant [`SURFACE_RESTING`], not
+/// `resolve_surface_focus(focused)`. Queue is the one non-library caller
+/// whose parent is itself focus-green; it passes [`SURFACE_FOCUSED`]
+/// directly instead of calling this.
+pub fn list_selected_row_bg() -> Color {
+    SURFACE_RESTING
 }

@@ -1,4 +1,5 @@
 use super::queue_state_tests::XdgHomeGuard;
+use crate::app::types_browse::BrowseResting;
 use crate::app::{BrowseLevel, FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection};
 
 use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
@@ -10,30 +11,22 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
     library.id = "lib-movies".into();
     library.is_folder = true;
     app.libs.push(LibraryTab {
-        library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "parent".into(),
             title: "Loading".into(),
             items: vec![],
             total_count: 0,
-            cursor: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             loading: true,
-            scroll: 0,
             all_items: None,
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     let level = BrowseLevel {
@@ -41,13 +34,12 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
         title: "Loaded".into(),
         items: crate::app::tests::make_items(2),
         total_count: 2,
-        cursor: 1,
+        resting: BrowseResting::new(1, 3),
         item_types: None,
         unplayed_only: false,
         sort_by: "DateCreated".into(),
         sort_order: "Descending".into(),
         loading: false,
-        scroll: 3,
         all_items: None,
         letter_filter: None,
         music_grouping: None,
@@ -59,7 +51,7 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
     assert_eq!(last.title, "Loaded");
     assert_eq!(last.items.len(), 2);
     assert_eq!(last.total_count, 2);
-    assert_eq!(last.cursor, 1);
+    assert_eq!(last.resting().cursor(), 1);
     assert_eq!(last.sort_by, "DateCreated");
     assert_eq!(last.sort_order, "Descending");
     assert!(!last.loading);
@@ -76,30 +68,22 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
     library.id = "lib-tv".into();
     library.is_folder = true;
     app.libs.push(LibraryTab {
-        library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "series".into(),
             title: "Season 1".into(),
             items: vec![second, first],
             total_count: 2,
-            cursor: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: Some("Episode".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             loading: false,
-            scroll: 0,
             all_items: None,
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.normalize_current_browse_level_items(0);
@@ -120,20 +104,13 @@ fn ensure_feed_library_preserves_saved_feed_position() {
     library.is_folder = true;
     library.collection_type = "homevideos".into();
     app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
         feed_home_video: Some(FeedHomeVideoState {
             selected_group: 2,
             video_cursor: 3,
             video_scroll: 4,
             ..Default::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.ensure_lib_loaded_for(0);
@@ -155,20 +132,13 @@ fn ensure_podcast_library_preserves_saved_feed_position() {
     library.is_folder = true;
     library.collection_type = "podcasts".into();
     app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
         feed_home_video: Some(FeedHomeVideoState {
             selected_group: 1,
             video_cursor: 5,
             video_scroll: 6,
             ..Default::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.ensure_lib_loaded_for(0);

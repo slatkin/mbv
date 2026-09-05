@@ -1,15 +1,11 @@
-use super::home_video::format_release_date;
-use crate::app::render::RENDER_FILTER;
-use crate::app::ui_util::*;
-use crate::app::{palette, App};
-use mbv_core::api::TICKS_PER_SECOND;
+use crate::app::App;
 use mbv_core::playback_queue::QueueItem;
-use ratatui::layout::*;
-use ratatui::style::*;
-use ratatui::text::*;
-use ratatui::widgets::*;
+use ratatui::layout::Rect;
+use ratatui::text::Span;
 use ratatui::Frame;
 use textwrap::wrap;
+
+use super::hero_model::{Hero, HeroArtwork};
 
 /// The two-column (wide) hero's original 2-col horizontal padding around
 /// the overview text block. The single-column hero has none (flush with
@@ -24,7 +20,7 @@ pub(in crate::app::render) const WIDE_OVERVIEW_PAD: usize = 2;
 /// Emby Keep Watching hero and the generic Audiobookshelf hero -- both are
 /// beside-image, inline items and use the same wrap-around-the-image
 /// shape.
-pub(in crate::app::render) struct KeepWatchingHeroLayout {
+pub(in crate::app) struct KeepWatchingHeroLayout {
     title_lines: Vec<String>,
     show_name: String,
     /// Overview text lines with a per-line flag: `true` once the line has
@@ -54,21 +50,35 @@ pub(in crate::app::render) struct HeroMetaBlock {
 /// full content width for both narrow and wide wrapping (no wrap-around
 /// split — the image sits above text, not beside it), matching Home's wide
 /// hero-on-left presentation.
-pub(in crate::app::render) fn prepare_wide_emby_hero_card(
+pub(in crate::app) fn prepare_wide_emby_hero_card(
     item: &mbv_core::api::EmbyItem,
     content_area: Rect,
-) -> Option<(KeepWatchingHeroLayout, Rect, Rect)> {
+    images_enabled: bool,
+) -> Option<(KeepWatchingHeroLayout, Rect, Option<Rect>)> {
     let meta_w = content_area.width as usize;
     let meta_layout = App::keep_watching_hero_layout(item, meta_w, meta_w, 0, WIDE_OVERVIEW_PAD);
-    // Terminal cells are roughly twice as tall as they are wide, so a
-    // 16:9 image needs 9 rows for every 32 columns. Ceiling (matching
-    // `render_keep_watching_hero_image`'s own budget) so the reserved
-    // box never ends above where the image actually draws -- a smaller
-    // box would let the image's last row overlap the title's first row.
+    if meta_layout.height < 4 {
+        return None;
+    }
+    if !images_enabled {
+        let meta_height = meta_layout.height.min(content_area.height);
+        return Some((
+            meta_layout,
+            Rect {
+                x: content_area.x,
+                y: content_area.y,
+                width: content_area.width,
+                height: meta_height,
+            },
+            None,
+        ));
+    }
+    // Preserve the image-on geometry: the image reserves its original
+    // 16:9 budget and the metadata keeps its full measured height.
     let image_height = (content_area.width.saturating_mul(9).saturating_add(31) / 32)
         .max(1)
         .min(content_area.height.saturating_sub(meta_layout.height));
-    if meta_layout.height < 4 || image_height == 0 {
+    if image_height == 0 {
         return None;
     }
     let img_area = Rect {
@@ -77,343 +87,230 @@ pub(in crate::app::render) fn prepare_wide_emby_hero_card(
         width: content_area.width,
         height: image_height,
     };
+    let img_area =
+        super::super::arrangements::hero_left::hero_artwork_slot(img_area, images_enabled);
+    let meta_y = img_area.map_or(content_area.y, |area| area.bottom() + 1);
     let meta_area = Rect {
         x: content_area.x,
-        y: content_area.y + img_area.height + 1,
+        y: meta_y,
         width: content_area.width,
         height: meta_layout.height,
     };
     Some((meta_layout, meta_area, img_area))
 }
 
-pub(in crate::app::render) enum HeroData {
-    Emby(
-        Box<mbv_core::api::EmbyItem>,
-        Rect,
-        Rect,
-        Rect,
-        KeepWatchingHeroLayout,
-    ),
-    GenericBeside(QueueItem, Rect, Rect, Rect, KeepWatchingHeroLayout),
-    Generic(QueueItem, Rect),
+pub(in crate::app) struct HeroData {
+    item: Box<mbv_core::api::EmbyItem>,
+    meta_area: Rect,
+    wide_area: Rect,
+    img_area: Option<Rect>,
+    meta_layout: KeepWatchingHeroLayout,
 }
 
-impl App {
-    /// Image types to request for the Keep Watching hero panel, mirroring
-    /// the per-type conventions used for the queue card (`render_card`).
-    pub(in crate::app::render) fn keep_watching_hero_image_types(
-        item: &mbv_core::api::EmbyItem,
-    ) -> &'static [&'static str] {
-        match item.item_type.as_str() {
-            "Movie" => &["Backdrop", "Primary", "Logo"],
-            _ => &["Primary", "Backdrop"],
-        }
-    }
-
-    /// Builds the Keep Watching hero panel's metadata layout for `item`,
-    /// delegating to the shared [`hero_text_layout`] (also used by the
-    /// generic Audiobookshelf hero, so both inline items share one
-    /// wrap-around-the-image implementation).
-    pub(in crate::app::render) fn keep_watching_hero_layout(
-        item: &mbv_core::api::EmbyItem,
-        text_w: usize,
-        wide_w: usize,
-        image_rows: u16,
-        overview_pad: usize,
-    ) -> KeepWatchingHeroLayout {
-        let show_name = if item.item_type == "Episode" {
-            item.series_name.clone()
-        } else {
-            String::new()
-        };
-        let overview = if item.overview.is_empty() {
-            String::new()
-        } else {
-            clean_overview(&item.overview)
-        };
-        hero_text_layout(
-            &item.name,
-            &show_name,
-            &overview,
-            text_w,
-            wide_w,
-            image_rows,
-            overview_pad,
-            2, // release-date row + duration row
-        )
-    }
-
-    /// Renders the Keep Watching hero panel's image column into `area`,
-    /// top-aligned and, in wide two-column layouts, horizontally centered. The column is a fixed reserved
-    /// box (unlike the queue card's growing/shrinking slot), so a dim
-    /// placeholder simply fills it while no artwork is ready yet. Shared by
-    /// the Emby and generic Audiobookshelf heroes.
-    pub(in crate::app::render) fn render_keep_watching_hero_image(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        cache_key: &str,
-        centered: bool,
-    ) {
-        if area.width == 0 || area.height == 0 {
-            return;
-        }
-        let img_area = area;
-        // `img_area`'s height is sometimes stretched to match the metadata
-        // column beside it (e.g. a long overview in narrow layout, home.rs's
-        // `hero_height = image_rows.max(meta_layout.height)`), so it can be
-        // taller than the image's own 16:9 row budget -- the text layout
-        // already wrapped its overview around that budget (`image_rows` in
-        // `hero_text_layout`), not around the stretched panel height. A 16:9
-        // backdrop naturally renders within the budget regardless, but a
-        // squarer cover (Audiobookshelf/podcast art) would otherwise grow
-        // into the stretched extra space and overlap the "past the image"
-        // overview text that assumed it wouldn't. Cap `avail` to the same
-        // budget the placeholder below already caps to, so the real image
-        // never renders past where the text thinks it ends.
-        let natural_h = (img_area.width.saturating_mul(9).saturating_add(31) / 32)
-            .max(1)
-            .min(img_area.height);
-        if let Some(state) = self.cached_image_protocol_mut(cache_key) {
-            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-            let avail = Size {
-                width: img_area.width,
-                height: natural_h,
-            };
-            if let Some(actual) =
-                state.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
-            {
-                let img_rect = Rect {
-                    x: if centered {
-                        img_area.x + img_area.width.saturating_sub(actual.width) / 2
-                    } else {
-                        img_area.x + img_area.width.saturating_sub(actual.width)
-                    },
-                    y: img_area.y,
-                    width: actual.width,
-                    height: actual.height,
-                };
-                f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
-                    img_rect,
-                    state,
-                );
-                return;
-            }
-        }
-        // Same budget as the real-image branch above, so the placeholder
-        // never renders as a too-tall block while no artwork is ready yet.
-        f.render_widget(
-            Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
-            Rect {
-                height: natural_h,
-                ..img_area
-            },
-        );
-    }
-
-    /// Builds the Keep Watching hero's meta content: the watch-state glyph to
-    /// render one space after the title, plus the metadata rows (release
-    /// date, then the duration on its own row in green). Emby-specific input
-    /// to `render_beside_image_hero`'s shared `meta_block` parameter.
-    pub(in crate::app::render) fn keep_watching_hero_meta_block(
-        item: &mbv_core::api::EmbyItem,
-        width: u16,
-        use_nerd_fonts: bool,
-    ) -> HeroMetaBlock {
-        let release_date = if item.premiere_date.is_empty() {
-            String::new()
-        } else {
-            format_release_date(&item.premiere_date)
-        };
-        let dur_str = if item.runtime_ticks > 0 {
-            fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
-        } else {
-            String::new()
-        };
-        // Watch-state glyph: watched, in-progress, or unwatched. Icons are
-        // Nerd Font codepoints (watched e001, in-progress e004, unwatched
-        // e002); without Nerd Fonts, fall back to Unicode symbols that render
-        // in ordinary terminal fonts.
-        let (glyph, color) = if item.played {
-            (
-                if use_nerd_fonts { "\u{e001}" } else { "●" },
-                palette::ACCENT,
-            )
-        } else if item.playback_position_ticks > 0 {
-            (
-                if use_nerd_fonts { "\u{e004}" } else { "◐" },
-                palette::TEXT_FOCUS_ACCENT,
-            )
-        } else {
-            (
-                if use_nerd_fonts { "\u{e002}" } else { "○" },
-                palette::STATUS_ERROR,
-            )
-        };
-        let title_suffix = Some(Span::styled(glyph, Style::default().fg(color)));
-
-        let mut meta_rows: Vec<Vec<Span<'static>>> = Vec::new();
-        if !release_date.is_empty() {
-            meta_rows.push(vec![Span::styled(
-                release_date,
-                Style::default().fg(palette::TEXT_SECONDARY),
-            )]);
-        }
-        if !dur_str.is_empty() {
-            meta_rows.push(vec![Span::styled(
-                trunc_str(&dur_str, width as usize),
-                Style::default().fg(palette::STATUS_AVAILABLE),
-            )]);
-        }
-        HeroMetaBlock {
-            title_suffix,
-            meta_rows,
-        }
-    }
-
-    /// Renders a [`KeepWatchingHeroLayout`]'s title/show-name/meta/overview
-    /// block, shared by the Emby Keep Watching hero and the generic
-    /// Audiobookshelf hero (`home.rs`'s narrow-layout beside-image case) --
-    /// only the per-provider `meta_spans` (release date/progress for Emby,
-    /// duration alone for Audiobookshelf) differ.
-    pub(in crate::app::render) fn render_hero_layout_meta(
-        &self,
-        f: &mut Frame,
-        area: Rect,
-        wide_area: Rect,
-        layout: &KeepWatchingHeroLayout,
-        meta_block: HeroMetaBlock,
-        overview_pad: u16,
-        focused: bool,
-    ) {
-        super::hero::render_home_hero_meta_block(
-            f,
-            area,
-            wide_area,
-            &layout.title_lines,
-            &layout.show_name,
-            meta_block.title_suffix,
-            meta_block.meta_rows,
-            &layout.overview_lines,
-            overview_pad,
-            focused,
-        );
-    }
-
-    /// Renders a beside-image inline item: image column then text
-    /// column, unconditionally and in that order for every provider. The
-    /// single call site every inline item with a cover goes through
-    /// (Emby Keep Watching and the generic Audiobookshelf hero), so the two
-    /// can't drift out of sync the way two hand-written call sites can --
-    /// the image render in particular must never be skipped (not even when
-    /// there's no cache key yet), or the image column is left showing
-    /// whatever the terminal had there before, with text drawn over it.
-    #[allow(clippy::too_many_arguments)]
-    pub(in crate::app::render) fn render_beside_image_hero(
-        &mut self,
-        f: &mut Frame,
+impl HeroData {
+    pub(in crate::app) fn new(
+        item: Box<mbv_core::api::EmbyItem>,
         meta_area: Rect,
         wide_area: Rect,
-        img_area: Rect,
-        layout: &KeepWatchingHeroLayout,
-        meta_block: HeroMetaBlock,
-        image_cache_key: &str,
-        overview_pad: u16,
-        focused: bool,
-        centered: bool,
-    ) {
-        self.render_keep_watching_hero_image(f, img_area, image_cache_key, centered);
-        self.render_hero_layout_meta(
-            f,
+        img_area: Option<Rect>,
+        meta_layout: KeepWatchingHeroLayout,
+    ) -> Self {
+        Self {
+            item,
             meta_area,
             wide_area,
-            layout,
-            meta_block,
-            overview_pad,
-            focused,
-        );
-    }
-
-    pub(in crate::app::render) fn render_home_hero_data(
-        &mut self,
-        f: &mut Frame,
-        hero_data: &HeroData,
-        two_column: bool,
-        focused: bool,
-    ) {
-        let overview_pad = if two_column {
-            WIDE_OVERVIEW_PAD as u16
-        } else {
-            0
-        };
-        match hero_data {
-            HeroData::Emby(item, meta_area, wide_area, img_area, meta_layout) => {
-                let cache_key = format!("{}:pwr_kw", item.id);
-                if self.images_enabled() {
-                    let img_types = Self::keep_watching_hero_image_types(item);
-                    self.fetch_card_image(
-                        cache_key.clone(),
-                        item.id.clone(),
-                        item.series_id.clone(),
-                        img_types,
-                    );
-                }
-                let meta_block =
-                    Self::keep_watching_hero_meta_block(item, meta_area.width, self.use_nerd_fonts);
-                self.render_beside_image_hero(
-                    f,
-                    *meta_area,
-                    *wide_area,
-                    *img_area,
-                    meta_layout,
-                    meta_block,
-                    &cache_key,
-                    overview_pad,
-                    focused,
-                    two_column,
-                );
-            }
-            HeroData::GenericBeside(item, meta_area, wide_area, img_area, meta_layout) => {
-                let cache_key = match item {
-                    QueueItem::Audiobookshelf(episode) => self
-                        .audiobookshelf_cover_key(&episode.library_item_id)
-                        .unwrap_or_default(),
-                    _ => String::new(),
-                };
-                let meta_block = HeroMetaBlock {
-                    title_suffix: None,
-                    meta_rows: item
-                        .duration()
-                        .map(|ticks| {
-                            vec![vec![Span::styled(
-                                trunc_str(
-                                    &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
-                                    meta_area.width as usize,
-                                ),
-                                Style::default().fg(palette::TEXT_SECONDARY),
-                            )]]
-                        })
-                        .unwrap_or_default(),
-                };
-                self.render_beside_image_hero(
-                    f,
-                    *meta_area,
-                    *wide_area,
-                    *img_area,
-                    meta_layout,
-                    meta_block,
-                    &cache_key,
-                    0,
-                    focused,
-                    false,
-                );
-            }
-            HeroData::Generic(item, area) => {
-                self.render_home_latest_detail(f, *area, item, focused, overview_pad as usize);
-            }
+            img_area,
+            meta_layout,
         }
     }
+
+    fn render_content(
+        &self,
+        f: &mut Frame,
+        two_column: bool,
+        focused: bool,
+        use_nerd_fonts: bool,
+    ) -> Option<HomeImagePaint> {
+        let meta_block =
+            App::keep_watching_hero_meta_block(&self.item, self.meta_area.width, use_nerd_fonts);
+        render_hero_layout_meta_content(
+            f,
+            self.meta_area,
+            self.wide_area,
+            &self.meta_layout,
+            meta_block,
+            if two_column {
+                WIDE_OVERVIEW_PAD as u16
+            } else {
+                0
+            },
+            focused,
+            use_nerd_fonts,
+            self.item.as_ref(),
+        );
+        self.img_area.map(|area| HomeImagePaint::Emby {
+            area,
+            item: self.item.clone(),
+            centered: two_column,
+        })
+    }
+}
+
+/// Renders a generic (non-Emby) inline hero's content: title/metadata/
+/// overview beside its cover (if any), plus the cover image request (if
+/// any) still needing paint. Mirrors [`HeroData::render_content`] for the
+/// Emby case, but generic providers (Audiobookshelf, Feeds) use a
+/// different `Hero`-trait-driven measurement path that doesn't converge
+/// with Emby's `KeepWatchingHeroLayout` preparation, so the two stay
+/// separate rather than share one enum/match.
+pub(in crate::app) fn render_generic_hero_content(
+    f: &mut Frame,
+    item: &QueueItem,
+    area: Rect,
+    focused: bool,
+    use_nerd_fonts: bool,
+    images_enabled: bool,
+) -> Option<HomeImagePaint> {
+    let hero: &dyn Hero = item;
+    let overview = hero.description().unwrap_or_default();
+    let (img_w, layout, image_rows) = beside_image_hero_dims(
+        hero.title(),
+        hero.subtitle().unwrap_or_default(),
+        &overview,
+        area.width,
+        area.height,
+        hero.meta_rows(area.width).len() as u16,
+        images_enabled,
+    );
+    let (meta_area, image_area) =
+        beside_image_hero_rects(area, img_w, layout.height, image_rows, images_enabled);
+    render_hero_layout_meta_content(
+        f,
+        meta_area,
+        area,
+        &layout,
+        HeroMetaBlock {
+            title_suffix: hero.title_suffix(),
+            meta_rows: hero.meta_rows(meta_area.width),
+        },
+        0,
+        focused,
+        use_nerd_fonts,
+        hero,
+    );
+    match hero.artwork() {
+        HeroArtwork::Image { item_id, .. } if images_enabled => {
+            let image = match item {
+                QueueItem::Audiobookshelf(_) => HomeImagePaint::AudiobookshelfCover {
+                    area: image_area,
+                    library_item_id: item_id.to_owned(),
+                    show_placeholder: true,
+                },
+                QueueItem::AudiobookshelfBook(_) => HomeImagePaint::AudiobookshelfBookCover {
+                    area: image_area,
+                    library_item_id: item_id.to_owned(),
+                },
+                _ => return None,
+            };
+            Some(image)
+        }
+        HeroArtwork::Placeholder if images_enabled => {
+            super::artwork_placeholder::render_artwork_placeholder(f, image_area);
+            None
+        }
+        _ => None,
+    }
+}
+
+/// The image an in-progress Home hero render needs painted, computed
+/// without `App` (design D2): the shell on the `HomeComponent`'s behalf
+/// fetches/looks up the cached protocol and paints it into `area` using App's
+/// image-cache authority right after `view()` returns (task 3.4's confirmed
+/// extraction: share orchestration, defer only the pixel paint).
+pub(in crate::app) enum HomeImagePaint {
+    Emby {
+        area: Rect,
+        item: Box<mbv_core::api::EmbyItem>,
+        centered: bool,
+    },
+    Series {
+        area: Rect,
+        item: Box<mbv_core::api::EmbyItem>,
+        show_placeholder: bool,
+        /// Ordered Emby image-type candidate chain to fetch, so wide TV's
+        /// landscape hero can request the `Thumb`-first chain while other
+        /// callers keep the narrow inline detail's `&["Primary"]`.
+        image_types: &'static [&'static str],
+    },
+    /// The compact movie/Series detail banner's poster. Painted byte-identically
+    /// to the legacy inline `render_compact_detail` block: a dim placeholder
+    /// while `show_placeholder`, else the cached protocol rendered straight into
+    /// `area` (no `fetch_*` -- the prefetch loop owns fetching, #287).
+    CompactBanner {
+        area: Rect,
+        item: Box<mbv_core::api::EmbyItem>,
+        show_placeholder: bool,
+    },
+    AudiobookshelfCover {
+        area: Rect,
+        library_item_id: String,
+        /// `true` for the narrow beside-image hero (`GenericBeside`), which
+        /// always shows the dim placeholder while uncached, matching every
+        /// other beside-image hero; `false` for the two-column/text `Generic`
+        /// detail block, which renders nothing until the cover is cached (an
+        /// existing, preserved difference between the two call sites).
+        show_placeholder: bool,
+    },
+    /// Audiobookshelf book artwork must stay isolated from podcast artwork,
+    /// including when both use the same library item ID (book-browsing spec
+    /// line 124).
+    AudiobookshelfBookCover { area: Rect, library_item_id: String },
+}
+
+fn render_hero_layout_meta_content(
+    f: &mut Frame,
+    area: Rect,
+    wide_area: Rect,
+    layout: &KeepWatchingHeroLayout,
+    meta_block: HeroMetaBlock,
+    overview_pad: u16,
+    focused: bool,
+    use_nerd_fonts: bool,
+    hero: &dyn Hero,
+) {
+    // Preserve the precomputed Nerd Font glyphs; Emby's Hero suffix is the
+    // ordinary-Unicode fallback and must not shadow them.
+    let title_suffix = if use_nerd_fonts {
+        meta_block.title_suffix
+    } else {
+        hero.title_suffix().or(meta_block.title_suffix)
+    };
+    super::hero::render_home_hero_meta_block(
+        f,
+        area,
+        wide_area,
+        &layout.title_lines,
+        hero.subtitle().unwrap_or(&layout.show_name),
+        title_suffix,
+        meta_block.meta_rows,
+        &layout.overview_lines,
+        overview_pad,
+        focused,
+    );
+}
+
+/// Renders an Emby Home hero's non-image content (title/meta/overview text)
+/// without `App`, returning the cover image (if any) still needing paint for
+/// the `HomeComponent` render path (task 3.4's confirmed extraction). See
+/// [`render_generic_hero_content`] for the non-Emby equivalent.
+pub(in crate::app) fn render_home_hero_content(
+    f: &mut Frame,
+    hero_data: &HeroData,
+    two_column: bool,
+    focused: bool,
+    use_nerd_fonts: bool,
+) -> Option<HomeImagePaint> {
+    hero_data.render_content(f, two_column, focused, use_nerd_fonts)
 }
 
 /// Beside-image inline dims: image width, the wrap-around text layout,
@@ -427,8 +324,9 @@ pub(in crate::app::render) fn beside_image_hero_dims(
     inner_w: u16,
     max_allowed: u16,
     meta_row_count: u16,
+    images_enabled: bool,
 ) -> (u16, KeepWatchingHeroLayout, u16) {
-    let img_w = inner_w / 2;
+    let img_w = if images_enabled { inner_w / 2 } else { 0 };
     let meta_w = inner_w.saturating_sub(img_w + 1) as usize;
     let image_rows = (img_w.saturating_mul(9).saturating_add(31) / 32).min(max_allowed);
     let layout = hero_text_layout(
@@ -453,6 +351,7 @@ pub(in crate::app::render) fn beside_image_hero_rects(
     img_w: u16,
     layout_height: u16,
     image_rows: u16,
+    images_enabled: bool,
 ) -> (Rect, Rect) {
     // Clamp to `hero_content.height` -- the panel's actual granted height,
     // which `placement-neutral geometry` can clamp smaller than what `image_rows`/
@@ -462,6 +361,9 @@ pub(in crate::app::render) fn beside_image_hero_rects(
     // bottom edge, where the image's overflow gets drawn over by whatever
     // renders below it (pills/list) -- looking like the image is cut off.
     let hero_height = image_rows.max(layout_height).min(hero_content.height);
+    if !images_enabled {
+        return (hero_content, Rect::default());
+    }
     let meta_area = Rect {
         x: hero_content.x,
         y: hero_content.y,
@@ -574,5 +476,42 @@ pub(in crate::app::render) fn hero_text_layout(
         show_name: show_name.to_string(),
         overview_lines,
         height,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::prepare_wide_emby_hero_card;
+    use crate::app::render::make_movie_app;
+    use ratatui::layout::Rect;
+
+    #[test]
+    fn wide_emby_hero_without_images_starts_full_width_meta_at_content_start() {
+        let item = make_movie_app().libs[0].nav_stack[0].items[0].clone();
+        let content = Rect::new(4, 3, 80, 30);
+        let (layout, meta, artwork) = prepare_wide_emby_hero_card(&item, content, false).unwrap();
+
+        assert!(artwork.is_none());
+        assert_eq!(meta.x, content.x);
+        assert_eq!(meta.y, content.y);
+        assert_eq!(meta.width, content.width);
+        assert_eq!(meta.height, layout.height.min(content.height));
+    }
+
+    #[test]
+    fn wide_emby_hero_with_images_preserves_artwork_and_meta_dimensions() {
+        let item = make_movie_app().libs[0].nav_stack[0].items[0].clone();
+        let content = Rect::new(4, 3, 80, 40);
+        let (layout, meta, artwork) = prepare_wide_emby_hero_card(&item, content, true).unwrap();
+        let expected_image_height = (content.width * 9).div_ceil(32);
+
+        let artwork = artwork.unwrap();
+        assert_eq!(
+            artwork.height,
+            expected_image_height.min(content.height - layout.height)
+        );
+        assert_eq!(meta.y, artwork.bottom() + 1);
+        assert_eq!(meta.width, content.width);
+        assert_eq!(meta.height, layout.height);
     }
 }

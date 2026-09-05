@@ -1,4 +1,5 @@
 use super::types_browse::BrowseLevel;
+use super::types_browse::BrowseResting;
 use super::types_feed::FeedHomeVideoState;
 use super::App;
 use std::time::{Duration, Instant};
@@ -23,6 +24,17 @@ impl App {
     /// `flush_library_position_if_idle` (called from the run loop) and
     /// `flush_library_position_now` (called at teardown so a final burst is
     /// never lost).
+    pub(super) fn persist_library_scroll(&mut self, lib_idx: usize, scroll: usize) {
+        if let Some(level) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.nav_stack.last_mut())
+        {
+            level.set_resting_scroll(scroll);
+            self.save_default_library_position(lib_idx);
+        }
+    }
+
     pub(super) fn save_default_library_position(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
@@ -156,15 +168,17 @@ impl App {
                     title: root.title.clone(),
                     items: Vec::new(),
                     total_count: 0,
-                    cursor: 0,
+                    resting: BrowseResting::new(0, 0),
                     item_types: root.item_types.clone(),
                     unplayed_only: root.unplayed_only,
                     sort_by: root.sort_by.clone(),
                     sort_order: root.sort_order.clone(),
                     loading: true,
-                    scroll: 0,
+
                     all_items: None,
-                    letter_filter: None,
+                    letter_filter: root
+                        .letter_filter_index
+                        .and_then(crate::app::render::LetterFilter::for_index),
                     music_grouping: None,
                 };
                 if let Some(lib) = self.libs.get_mut(lib_idx) {

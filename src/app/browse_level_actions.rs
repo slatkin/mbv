@@ -1,3 +1,4 @@
+use super::types_browse::BrowseResting;
 use super::ui_util::sort_episodes;
 use super::{App, BrowseLevel};
 
@@ -82,7 +83,7 @@ impl App {
                 .libs
                 .get(lib_idx)
                 .and_then(|lib| lib.nav_stack.last())
-                .and_then(|l| l.items.get(l.cursor))
+                .and_then(|l| l.items.get(l.resting().cursor()))
                 .map(|s| (s.id.clone(), s.name.clone()))
                 .unwrap_or_default();
             if !season_id.is_empty() {
@@ -92,13 +93,12 @@ impl App {
                         title: season_name.clone(),
                         items: vec![],
                         total_count: 0,
-                        cursor: 0,
+                        resting: BrowseResting::new(0, 0),
                         item_types: Some("Episode".into()),
                         unplayed_only: false,
                         sort_by: "SortName".into(),
                         sort_order: "Ascending".into(),
                         loading: true,
-                        scroll: 0,
                         all_items: None,
                         letter_filter: None,
                         music_grouping: None,

@@ -14,7 +14,14 @@ impl App {
         self.maybe_auto_push_tv_season_level(lib_idx);
         self.maybe_auto_push_music_group_level(lib_idx);
         self.maybe_aggregate_feed_after_loaded(lib_idx);
-        self.maybe_fetch_next_page(lib_idx);
+        self.maybe_fetch_next_page(
+            lib_idx,
+            self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .map(|l| l.resting().cursor())
+                .unwrap_or(0),
+        );
         self.spawn_all_items_prefetch(lib_idx);
     }
 
@@ -90,7 +97,14 @@ impl App {
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
         self.maybe_aggregate_feed_after_page_append(lib_idx, &parent_id);
-        self.maybe_fetch_next_page(lib_idx);
+        self.maybe_fetch_next_page(
+            lib_idx,
+            self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .map(|l| l.resting().cursor())
+                .unwrap_or(0),
+        );
     }
 
     fn handle_lib_refreshed(
@@ -291,6 +305,7 @@ impl App {
                         book_id: library_item_id,
                     },
                     modal_state,
+                    None,
                 );
             }
             return;
@@ -304,43 +319,41 @@ impl App {
             if !self.audiobookshelf_runtime.accepts(generation) {
                 return;
             }
-            let modal_state = match result {
+            let state = self.audiobookshelf_browse.iter_mut().find(|state| {
+                state
+                    .shows
+                    .iter()
+                    .any(|show| show.library_item_id == library_item_id)
+            });
+            match result {
                 Ok(episodes) => {
-                    let state = self.audiobookshelf_browse.iter_mut().find(|state| {
-                        state
-                            .shows
-                            .iter()
-                            .any(|show| show.library_item_id == library_item_id)
-                    });
-                    state.map(|state| {
+                    if let Some(state) = state {
                         state.detail_loading = false;
                         state.cache_detail(library_item_id.clone(), episodes.clone());
                         if state.selected_id.as_deref() == Some(&library_item_id) {
                             state.episodes = Some(episodes);
                         }
-                        super::audiobookshelf_podcast_modal_actions::podcast_modal_state_for_detail(
-                            state,
-                            &library_item_id,
-                        )
-                    })
+                    }
+                    // Rebuild the modal at its own selected filter (the filter
+                    // is component-owned now,
+                    // split-browse-state-interaction-fields task 3.2); no-op
+                    // when the modal is showing a different show or is closed.
+                    self.pending_overlay = Some(
+                        super::types_overlay::OverlayRequest::RefreshSelectionModalAtSelectedFilter {
+                            source: SelectionModalSource::Podcast { library_item_id },
+                        },
+                    );
                 }
                 Err(_error) => {
-                    if let Some(state) = self.audiobookshelf_browse.iter_mut().find(|state| {
-                        state
-                            .shows
-                            .iter()
-                            .any(|show| show.library_item_id == library_item_id)
-                    }) {
+                    if let Some(state) = state {
                         state.detail_loading = false;
                     }
-                    Some(SelectionModalListState::Empty)
+                    self.refresh_selection_modal(
+                        SelectionModalSource::Podcast { library_item_id },
+                        SelectionModalListState::Empty,
+                        None,
+                    );
                 }
-            };
-            if let Some(modal_state) = modal_state {
-                self.refresh_selection_modal(
-                    SelectionModalSource::Podcast { library_item_id },
-                    modal_state,
-                );
             }
             return;
         }
@@ -399,7 +412,12 @@ impl App {
             if let Ok(shelves) = result {
                 let items = App::newest_episodes_items(shelves);
                 self.audiobookshelf_shelf_cache.insert(library_id, items);
-                self.rebuild_audiobookshelf_latest();
+                // The App owns the shelf cache; the cross-provider pill splice
+                // runs in the shell against Model-owned `latest` (task 5.3d).
+                // The lib_rx while-drain picks this up in the same drain pass.
+                let _ = self.lib_tx.send(LibEvent::AudiobookshelfLatestRebuilt(
+                    self.audiobookshelf_latest_sections(),
+                ));
             }
             return;
         }
@@ -446,16 +464,21 @@ impl App {
                 parent_id,
                 items,
             } => {
+                // The flat inline-search fetch re-homes the write the deleted
+                // direct flat-result projector used to do against the
+                // component: the completion lands in the nav level's
+                // `all_items` cache (the same guarded write as
+                // `AllItemsPrefetched`) and the shell's event-scoped
+                // projection (5.3d.20c) pushes it into the component. A
+                // completion racing a navigation -- `parent_id` no longer the
+                // last level's -- is stale and must not write.
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    let current_parent = lib.nav_stack.last().map(|l| l.parent_id.as_str());
-                    if current_parent == Some(&parent_id) {
-                        if let Some(s) = lib.search.as_mut() {
-                            s.items = items;
-                            s.loading = false;
+                    if let Some(last) = lib.nav_stack.last_mut() {
+                        if last.parent_id == parent_id {
+                            last.all_items = Some(items);
                         }
                     }
                 }
-                self.update_lib_search(lib_idx);
             }
             LibEvent::AlbumIndexBuilt { library_id, result } => {
                 let rebuild_pending = matches!(
@@ -487,13 +510,6 @@ impl App {
                             );
                         }
                     }
-                    if let Some(lib_idx) = self
-                        .libs
-                        .iter()
-                        .position(|lib| lib.library.id == library_id)
-                    {
-                        self.sync_recursive_album_search(lib_idx);
-                    }
                 }
             }
             LibEvent::RecursiveAlbumActivated {
@@ -509,9 +525,11 @@ impl App {
                 };
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     lib.nav_stack = nav_stack;
-                    lib.search = None;
-                    lib.album_track_focus = Some(0);
                 }
+                // Entering inline track focus for the activated album is the
+                // shell's job now (the component owns the cursor; the shell
+                // delivers a one-shot enter request at the next sync — wide
+                // only, narrow stays unfocused).
                 self.save_default_library_position(lib_idx);
             }
             LibEvent::AllItemsPrefetched {
@@ -571,7 +589,7 @@ impl App {
                 sort_audio_tracks(&mut tracks);
                 let state = album_modal_state(&tracks);
                 self.album_tracks_cache.insert(album_id.clone(), tracks);
-                self.refresh_selection_modal(SelectionModalSource::Album { album_id }, state);
+                self.refresh_selection_modal(SelectionModalSource::Album { album_id }, state, None);
             }
             LibEvent::SeriesDetailFetched {
                 series_id,
@@ -609,7 +627,6 @@ impl App {
             } => {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     lib.nav_stack = nav_stack;
-                    lib.search = None;
                 }
                 if switch_tab {
                     self.set_library_tab(lib_idx + 1);
@@ -649,142 +666,27 @@ impl App {
                 self.flash_error(error);
             }
             LibEvent::PlaylistRenamed { new_name } => {
-                self.save_playlist_dialog = None;
+                self.dismiss_save_playlist();
                 self.force_clear = true;
                 self.flash(format!("Renamed to '{new_name}'"), ToastSeverity::Success);
             }
             LibEvent::PlaylistDeleted { name } => {
-                self.confirm_modal = None;
+                self.dismiss_confirm();
                 self.flash(format!("Deleted '{name}'"), ToastSeverity::Success);
             }
             LibEvent::QueueEnriched { items } => {
                 let _ = self.merge_refreshed_queue(QueueScope::Local, items);
             }
+            // Shell-intercepted Home content-delivery variants (task 5.3d):
+            // the lib_rx drain handles them at the Model boundary, so they
+            // are unreachable here; the arms keep the exhaustive match total.
+            LibEvent::HomeContentRefreshed(_)
+            | LibEvent::HomeContentCleared
+            | LibEvent::AudiobookshelfLatestRebuilt(_)
+            | LibEvent::FeedsLatestRebuilt(_) => {}
             LibEvent::Error(e) => {
                 self.flash(format!("Library error: {e}"), ToastSeverity::Error);
             }
-        }
-    }
-
-    /// Shared acknowledged-progress reconcile used by both the bare owner
-    /// (`LibEvent::AudiobookshelfProgressAcknowledged`) and a Local-daemon
-    /// client (`PlayerEvent::AudiobookshelfProgress`): matches queue slots by
-    /// provider-qualified identity, applies position/completion, writes every
-    /// browse state's progress map, and persists the queue. A no-match event
-    /// still updates browse state; only persistence is gated on a queue match.
-    /// Generation gating is the caller's concern: the bare owner gates on its
-    /// own runtime generation, while the daemon drops stale updates before
-    /// emitting, so the daemon client reconciles unconditionally.
-    pub(super) fn reconcile_audiobookshelf_progress(
-        &mut self,
-        library_item_id: &str,
-        episode_id: &str,
-        position_ticks: i64,
-        current_time_seconds: f64,
-        is_finished: bool,
-    ) {
-        let matching_slot_ids: Vec<_> = self
-            .player_tab
-            .queue
-            .slots()
-            .iter()
-            .filter_map(|slot| {
-                slot.item.as_audiobookshelf().and_then(|episode| {
-                    (episode.library_item_id == library_item_id && episode.episode_id == episode_id)
-                        .then_some(slot.slot_id)
-                })
-            })
-            .collect();
-        for slot_id in matching_slot_ids.iter().cloned() {
-            self.player_tab
-                .queue
-                .apply_progress(slot_id, position_ticks, is_finished);
-        }
-        for state in &mut self.audiobookshelf_browse {
-            state.progress.insert(
-                (library_item_id.to_string(), episode_id.to_string()),
-                mbv_core::audiobookshelf::AudiobookshelfProgress {
-                    library_item_id: library_item_id.to_string(),
-                    episode_id: episode_id.to_string(),
-                    current_time_seconds,
-                    is_finished,
-                },
-            );
-        }
-        let podcast_modal_state = self.selection_modal.as_ref().and_then(|modal| {
-            let SelectionModalSource::Podcast { library_item_id } = &modal.source else {
-                return None;
-            };
-            self.audiobookshelf_browse
-                .iter()
-                .find(|state| {
-                    state
-                        .shows
-                        .iter()
-                        .any(|show| show.library_item_id == *library_item_id)
-                })
-                .and_then(|state| {
-                    let modal_state = if state.detail_cache.contains_key(library_item_id) {
-                        super::audiobookshelf_podcast_modal_actions::podcast_modal_state_for_detail(
-                            state,
-                            library_item_id,
-                        )
-                    } else if state.selected_id.as_deref() == Some(library_item_id) {
-                        super::audiobookshelf_podcast_modal_actions::podcast_modal_state(state)
-                    } else {
-                        return None;
-                    };
-                    Some((library_item_id.clone(), modal_state))
-                })
-        });
-        if let Some((library_item_id, state)) = podcast_modal_state {
-            self.refresh_selection_modal(SelectionModalSource::Podcast { library_item_id }, state);
-        }
-        if !matching_slot_ids.is_empty() {
-            self.save_queue_state();
-        }
-    }
-
-    /// Book-shaped counterpart to `reconcile_audiobookshelf_progress`:
-    /// matches queue slots by `library_item_id` only and applies
-    /// position/completion. Every book browse state's progress map (keyed by
-    /// `library_item_id` only) is updated the way the episode reconcile
-    /// updates `audiobookshelf_browse`.
-    pub(super) fn reconcile_audiobookshelf_book_progress(
-        &mut self,
-        library_item_id: &str,
-        position_ticks: i64,
-        is_finished: bool,
-    ) {
-        let matching_slot_ids: Vec<_> = self
-            .player_tab
-            .queue
-            .slots()
-            .iter()
-            .filter_map(|slot| {
-                slot.item.as_audiobookshelf_book().and_then(|book| {
-                    (book.library_item_id == library_item_id).then_some(slot.slot_id)
-                })
-            })
-            .collect();
-        for slot_id in matching_slot_ids.iter().cloned() {
-            self.player_tab
-                .queue
-                .apply_progress(slot_id, position_ticks, is_finished);
-        }
-        let current_time_seconds = position_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
-        for state in &mut self.audiobookshelf_book_browse {
-            state.progress.insert(
-                library_item_id.to_string(),
-                mbv_core::audiobookshelf::AudiobookshelfBookProgress {
-                    library_item_id: library_item_id.to_string(),
-                    current_time_seconds,
-                    is_finished,
-                },
-            );
-        }
-        if !matching_slot_ids.is_empty() {
-            self.save_queue_state();
         }
     }
 }

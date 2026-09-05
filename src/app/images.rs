@@ -26,6 +26,23 @@ pub(super) fn audiobookshelf_book_cover_cache_key(server: &str, id: &str, suffix
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:bookcover:{id}:{suffix}")
 }
 
+/// The infix opening a Series artwork key: `{id}{SERIES_IMAGE_CACHE_KEY_INFIX}{types}`.
+/// No other cache-key namespace uses it, which is what lets the image-completion
+/// gate recognise the whole Series family from the key alone.
+pub(in crate::app) const SERIES_IMAGE_CACHE_KEY_INFIX: &str = ":ser:";
+
+/// Cache key for Series artwork under the `{id}:ser:{types}` scheme.
+/// Shared by the `paint_home_image` Series arm and the shell-side
+/// prefetch/loading lookups so the two can never format the key
+/// differently and silently miss each other's cache entries. Formats only;
+/// chain ownership stays with the callers.
+pub(in crate::app) fn series_image_cache_key(item_id: &str, image_types: &[&str]) -> String {
+    format!(
+        "{item_id}{SERIES_IMAGE_CACHE_KEY_INFIX}{}",
+        image_types.join(",")
+    )
+}
+
 const MAX_IMAGE_FETCHES: usize = 6;
 const MAX_ALBUM_ARTIST_FETCHES: usize = 6;
 
@@ -69,10 +86,6 @@ pub(super) struct ImageFetchReq {
     pub item_id: String,
     pub series_id: String,
     pub types: Vec<String>,
-    /// When true, the decoded image is center-cropped to a square before it is
-    /// handed to the protocol. Used by the artist-header collage so its tiles
-    /// are uniform squares regardless of the cover's native aspect ratio.
-    pub square_crop: bool,
     pub source: ImageSource,
 }
 
@@ -121,6 +134,9 @@ impl App {
     /// Inline series detail pane can render without the user
     /// drilling in first.
     pub(super) fn fetch_series_detail(&mut self, series_id: String) {
+        if series_id.is_empty() {
+            return;
+        }
         if self.series_detail_loading.contains(&series_id)
             || self.series_detail_cache.contains_key(&series_id)
         {
@@ -284,20 +300,7 @@ impl App {
         series_id: String,
         types: &[&str],
     ) {
-        self.queue_card_image_fetch(cache_key, item_id, series_id, types, false);
-    }
-
-    /// Like [`fetch_card_image`], but the decoded image is center-cropped to a
-    /// square. Use a cache key distinct from the standalone image (e.g. a
-    /// `:sq` suffix) so the un-cropped variant is not clobbered.
-    pub(super) fn fetch_card_image_square(
-        &mut self,
-        cache_key: String,
-        item_id: String,
-        series_id: String,
-        types: &[&str],
-    ) {
-        self.queue_card_image_fetch(cache_key, item_id, series_id, types, true);
+        self.queue_card_image_fetch(cache_key, item_id, series_id, types);
     }
 
     fn queue_card_image_fetch(
@@ -306,7 +309,6 @@ impl App {
         item_id: String,
         series_id: String,
         types: &[&str],
-        square_crop: bool,
     ) {
         if self.card_image_loading.contains(&cache_key)
             || self.card_image_states.contains_key(&cache_key)
@@ -320,7 +322,6 @@ impl App {
             item_id,
             series_id,
             types: types.iter().map(|s| s.to_string()).collect(),
-            square_crop,
             source: ImageSource::Emby,
         };
         if self.image_fetches_active >= MAX_IMAGE_FETCHES {
@@ -372,7 +373,6 @@ impl App {
             item_id,
             series_id: String::new(),
             types: Vec::new(),
-            square_crop: false,
             source: ImageSource::Audiobookshelf {
                 server_url,
                 api_key,
@@ -583,7 +583,6 @@ impl App {
             item_id,
             series_id,
             types,
-            square_crop,
             source,
         } = req;
         std::thread::spawn(move || {
@@ -660,7 +659,7 @@ impl App {
                             return fetch_url(&url);
                         }
                         let src = match t.as_str() {
-                            "Logo" | "Backdrop" if !series_id.is_empty() => &series_id,
+                            "Logo" | "Backdrop" | "Thumb" if !series_id.is_empty() => &series_id,
                             _ => &item_id,
                         };
                         let url = match t.as_str() {
@@ -670,6 +669,10 @@ impl App {
                             ),
                             "Logo" => format!(
                                 "{}/Items/{}/Images/Logo?maxHeight=400&quality=80&api_key={}",
+                                server_url, src, token
+                            ),
+                            "Thumb" => format!(
+                                "{}/Items/{}/Images/Thumb?maxHeight=400&quality=80&api_key={}",
                                 server_url, src, token
                             ),
                             _ => format!(
@@ -688,20 +691,7 @@ impl App {
                     fetched
                 };
                 // Decode off the UI thread; the main loop only builds the protocol.
-                let img = bytes
-                    .and_then(|b| image::load_from_memory(&b).ok())
-                    .map(|img| {
-                        if square_crop {
-                            // Center-crop to a square so collage tiles are uniform
-                            // regardless of the cover's native aspect ratio.
-                            let side = img.width().min(img.height());
-                            let x = (img.width() - side) / 2;
-                            let y = (img.height() - side) / 2;
-                            img.crop_imm(x, y, side, side)
-                        } else {
-                            img
-                        }
-                    });
+                let img = bytes.and_then(|b| image::load_from_memory(&b).ok());
                 let _ = tx.send((cache_key, img));
             }));
             if result.is_err() {
@@ -717,9 +707,21 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use super::NAV_IMAGE_FETCH_IDLE_DELAY;
+    use super::{series_image_cache_key, NAV_IMAGE_FETCH_IDLE_DELAY};
     use crate::app::tests::make_app_stub;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn series_image_cache_key_pins_both_live_chains() {
+        assert_eq!(
+            series_image_cache_key("abc", &["Primary"]),
+            "abc:ser:Primary"
+        );
+        assert_eq!(
+            series_image_cache_key("abc", &["Thumb", "Primary", "Backdrop", "Logo"]),
+            "abc:ser:Thumb,Primary,Backdrop,Logo"
+        );
+    }
 
     #[test]
     fn recent_navigation_blocks_list_card_image_fetch() {

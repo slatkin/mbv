@@ -1,14 +1,5 @@
 use mbv_core::api::EmbyItem;
 
-pub(super) struct LibSearch {
-    pub(super) query: String,
-    pub(super) items: Vec<mbv_core::api::EmbyItem>,
-    pub(super) results: Vec<usize>, // indices into items, sorted by score desc
-    pub(super) cursor: usize,       // position within results
-    pub(super) scroll: usize,       // viewport scroll offset for the results list
-    pub(super) loading: bool,       // true while full-library fetch is in flight
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct AlbumPathPart {
     pub(super) id: String,
@@ -39,13 +30,41 @@ pub(super) struct SeriesDetail {
     pub(super) episodes: std::collections::HashMap<String, Vec<EmbyItem>>,
 }
 
+/// Where a browse level rests when it is *not* the visible one: the cursor and
+/// viewport scroll the shell restores on re-entry and serializes into
+/// `LibraryPosition`. This is a distinct fact from the live cursor the mounted
+/// component owns while the level is on screen (see `design.md` D1); reading it
+/// through this type rather than the raw fields keeps the two uses from being
+/// spelled identically.
+///
+/// The resting values are owned directly by each `BrowseLevel` and are used
+/// for persistence and re-entry when the level is not visible.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct BrowseResting {
+    cursor: usize,
+    scroll: usize,
+}
+
+impl BrowseResting {
+    pub(super) fn new(cursor: usize, scroll: usize) -> Self {
+        Self { cursor, scroll }
+    }
+
+    pub(super) fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    pub(super) fn scroll(&self) -> usize {
+        self.scroll
+    }
+}
+
 pub(super) struct BrowseLevel {
     pub(super) parent_id: String,
     pub(super) title: String,
     pub(super) items: Vec<EmbyItem>,
     pub(super) total_count: usize,
-    pub(super) cursor: usize,
-    pub(super) scroll: usize, // viewport scroll offset for the list
+    pub(super) resting: BrowseResting,
     pub(super) item_types: Option<String>,
     pub(super) unplayed_only: bool,
     pub(super) sort_by: String,
@@ -84,8 +103,7 @@ impl BrowseLevel {
             title: saved.title.clone(),
             items,
             total_count,
-            cursor,
-            scroll,
+            resting: BrowseResting::new(cursor, scroll),
             item_types: saved.item_types.clone(),
             unplayed_only: saved.unplayed_only,
             sort_by: saved.sort_by.clone(),
@@ -99,12 +117,27 @@ impl BrowseLevel {
         }
     }
 
+    /// The level's resting cursor/scroll — the persistence-facing view of its
+    /// position, distinct from the live component cursor (`design.md` D1).
+    pub(super) fn resting(&self) -> BrowseResting {
+        self.resting
+    }
+
+    pub(super) fn set_resting_cursor(&mut self, cursor: usize) {
+        self.resting.cursor = cursor;
+    }
+
+    pub(super) fn set_resting_scroll(&mut self, scroll: usize) {
+        self.resting.scroll = scroll;
+    }
+
     pub(super) fn to_position_level(&self) -> crate::config::LibraryPositionLevel {
+        let resting = self.resting();
         crate::config::LibraryPositionLevel {
             parent_id: self.parent_id.clone(),
             title: self.title.clone(),
-            focused_item_id: self.items.get(self.cursor).map(|item| item.id.clone()),
-            cursor_index: self.cursor,
+            focused_item_id: self.items.get(resting.cursor()).map(|item| item.id.clone()),
+            cursor_index: resting.cursor(),
             item_types: self.item_types.clone(),
             unplayed_only: self.unplayed_only,
             sort_by: self.sort_by.clone(),

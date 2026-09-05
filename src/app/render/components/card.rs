@@ -254,7 +254,7 @@ impl App {
     /// `rows_used`/`cols_used` are 0 if the queue is empty or the image is not
     /// yet ready. `image_loading` is true when a fetch is in-flight (caller
     /// should defer rendering the rest of the view until the image arrives).
-    pub(in crate::app::render) fn render_card(
+    pub(in crate::app) fn render_card(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -372,15 +372,12 @@ mod tests {
         movie.id = "movie-focused".into();
 
         app.libs.push(LibraryTab {
-            library,
-            search: None,
             nav_stack: vec![BrowseLevel {
                 parent_id: "lib-movies".into(),
                 title: "Movies".into(),
                 items: vec![movie],
                 total_count: 1,
-                cursor: 0,
-                scroll: 0,
+                resting: crate::app::types_browse::BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -390,12 +387,7 @@ mod tests {
                 letter_filter: None,
                 music_grouping: None,
             }],
-            feed_home_video: None,
-
-            album_track_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
+            ..LibraryTab::new(library)
         });
 
         app

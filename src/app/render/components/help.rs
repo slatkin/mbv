@@ -1,7 +1,7 @@
 use super::super::super::action::PLAYBACK_HELP_BINDINGS;
 use super::super::super::palette;
-use super::super::super::App;
 use super::super::super::HELP_PANEL_W;
+use super::chrome;
 use crate::app::{PanelFocus, TabSelection};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -26,8 +26,11 @@ enum HelpSection {
 /// destination is retained below it (spec "User opens help while the queue has
 /// focus"). With library focus the selected destination is matched
 /// exhaustively — there is no default-to-Emby branch.
+//
+// `pub(in crate::app)` so the Interactive Component (`src/app/components/help.rs`)
+// can receive a destination from the shell and pass it into `render_help_panel`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum HelpDestination {
+pub(in crate::app) enum HelpDestination {
     Queue,
     Home,
     EmbyLibrary,
@@ -35,17 +38,24 @@ enum HelpDestination {
     Feeds,
 }
 
-impl App {
-    fn help_destination(&self) -> HelpDestination {
-        if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
-            return HelpDestination::Queue;
-        }
-        match self.tab {
-            TabSelection::Home => HelpDestination::Home,
-            TabSelection::EmbyLibrary(_) => HelpDestination::EmbyLibrary,
-            TabSelection::AudiobookshelfLibrary(_) => HelpDestination::Audiobookshelf,
-            TabSelection::Feeds => HelpDestination::Feeds,
-        }
+/// Compute the help destination from panel focus and selected tab.
+///
+/// Extracted from `impl App::help_destination` so the shell can call it
+/// without `App` access in the Interactive Component path (design D5: the
+/// shell computes the presentation model and writes it into the component
+/// via `get_component_mut`+downcast).
+pub(in crate::app) fn help_destination(
+    panel_focus: PanelFocus,
+    tab: TabSelection,
+) -> HelpDestination {
+    if matches!(panel_focus, PanelFocus::Queue) {
+        return HelpDestination::Queue;
+    }
+    match tab {
+        TabSelection::Home => HelpDestination::Home,
+        TabSelection::EmbyLibrary(_) => HelpDestination::EmbyLibrary,
+        TabSelection::AudiobookshelfLibrary(_) => HelpDestination::Audiobookshelf,
+        TabSelection::Feeds => HelpDestination::Feeds,
     }
 }
 
@@ -242,56 +252,62 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
     ]
 }
 
-impl App {
-    pub(in crate::app::render) fn render_help_panel(
-        &mut self,
-        f: &mut Frame,
-        area: Option<ratatui::layout::Rect>,
-    ) {
-        let content = match area {
-            Some(area) => Self::render_panel_shell_at(
-                f,
-                area,
-                "KEYBOARD SHORTCUTS",
-                "[↑↓]scroll [Esc]close",
-                true,
-            ),
-            None => Self::render_panel_shell(
-                f,
-                f.area(),
-                HELP_PANEL_W,
-                "KEYBOARD SHORTCUTS",
-                "[↑↓]scroll [Esc]close",
-            ),
-        };
-        let key_w = 16usize;
+/// Render the help sidebar panel.
+///
+/// Extracted from `impl App::render_help_panel` so the Interactive Component
+/// (`src/app/components/help.rs`) can call it in `view()` without `App` access
+/// (design D9: a component's `view()` calls the existing render substrate).
+/// The shell-owned scroll offset and destination are passed in; the function
+/// clamps scroll to the visible content and mutates the caller's `scroll`.
+//
+// `pub(in crate::app)` so the Interactive Component can call it.
+pub(in crate::app) fn render_help_panel(
+    f: &mut Frame,
+    area: Option<ratatui::layout::Rect>,
+    scroll: &mut u16,
+    dest: HelpDestination,
+) {
+    let content = match area {
+        Some(area) => chrome::render_panel_shell_at(
+            f,
+            area,
+            "KEYBOARD SHORTCUTS",
+            "[↑↓]scroll [Esc]close",
+            true,
+        ),
+        None => chrome::render_panel_shell(
+            f,
+            f.area(),
+            HELP_PANEL_W,
+            "KEYBOARD SHORTCUTS",
+            "[↑↓]scroll [Esc]close",
+        ),
+    };
+    let key_w = 16usize;
 
-        let mut sections: [Option<Vec<Line<'static>>>; 7] = std::array::from_fn(|_| None);
-        for (name, lines) in build_help_sections(key_w) {
-            sections[name.index()] = Some(lines);
-        }
-        let dest = self.help_destination();
-        let order = help_section_order(dest);
-        let mut lines: Vec<Line> = Vec::new();
-        for section in order {
-            if let Some(section_lines) = sections[section.index()].take() {
-                lines.extend(section_lines);
-            }
-        }
-        lines.push(help_blank());
-
-        let total = lines.len();
-        let visible = content.height as usize;
-        self.help_scroll = self.help_scroll.min(total.saturating_sub(visible) as u16);
-        f.render_widget(Paragraph::new(lines).scroll((self.help_scroll, 0)), content);
-        Self::render_sidebar_scrollbar(f, content, total, self.help_scroll as usize);
+    let mut sections: [Option<Vec<Line<'static>>>; 7] = std::array::from_fn(|_| None);
+    for (name, lines) in build_help_sections(key_w) {
+        sections[name.index()] = Some(lines);
     }
+    let order = help_section_order(dest);
+    let mut lines: Vec<Line> = Vec::new();
+    for section in order {
+        if let Some(section_lines) = sections[section.index()].take() {
+            lines.extend(section_lines);
+        }
+    }
+    lines.push(help_blank());
+
+    let total = lines.len();
+    let visible = content.height as usize;
+    *scroll = (*scroll).min(total.saturating_sub(visible) as u16);
+    f.render_widget(Paragraph::new(lines).scroll((*scroll, 0)), content);
+    chrome::render_sidebar_scrollbar(f, content, total, *scroll as usize);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::make_app_stub;
 
     /// Flatten a section's styled lines to plain text so tests can assert
     /// ordering and exact key strings without comparing full terminal buffers.
@@ -309,12 +325,15 @@ mod tests {
 
     #[test]
     fn audiobookshelf_destination_classifies_as_its_own_section() {
-        let mut app = make_app_stub();
-        app.panel_focus = PanelFocus::Library;
-        app.tab = TabSelection::AudiobookshelfLibrary(0);
-        assert_eq!(app.help_destination(), HelpDestination::Audiobookshelf);
+        assert_eq!(
+            help_destination(PanelFocus::Library, TabSelection::AudiobookshelfLibrary(0)),
+            HelpDestination::Audiobookshelf
+        );
         // Not classified as an Emby library.
-        assert_ne!(app.help_destination(), HelpDestination::EmbyLibrary);
+        assert_ne!(
+            help_destination(PanelFocus::Library, TabSelection::AudiobookshelfLibrary(0)),
+            HelpDestination::EmbyLibrary
+        );
     }
 
     #[test]
@@ -372,18 +391,14 @@ mod tests {
 
     #[test]
     fn queue_focus_puts_queue_first_and_retains_browse_destination() {
-        let mut app = make_app_stub();
         // Queue focus over a retained Audiobookshelf destination.
-        app.panel_focus = PanelFocus::Queue;
-        app.tab = TabSelection::AudiobookshelfLibrary(0);
-        assert_eq!(app.help_destination(), HelpDestination::Queue);
+        let dest = help_destination(PanelFocus::Queue, TabSelection::AudiobookshelfLibrary(0));
+        assert_eq!(dest, HelpDestination::Queue);
         let order = help_section_order(HelpDestination::Queue);
         assert_eq!(order[0], HelpSection::Queue);
         assert!(
             order.contains(&HelpSection::Audiobookshelf),
             "queue help must retain the selected Audiobookshelf destination below Queue: {order:?}"
         );
-        // The retained browse destination itself is unchanged.
-        assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(0)));
     }
 }

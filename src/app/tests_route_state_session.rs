@@ -101,7 +101,10 @@ fn announced_shutdown_of_current_remote_target_does_not_quit_local_daemon_home()
     app.handle_player_event(PlayerEvent::DaemonShutdownAnnounced);
 
     assert!(!QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
-    assert!(app.daemon_lost_modal.is_none());
+    assert!(!matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::DaemonLost(_))
+    ));
     assert!(
         app.is_local_daemon(),
         "restore should reconnect the home daemon"

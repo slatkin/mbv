@@ -21,16 +21,7 @@ fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
-    app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     let level = crate::config::LibraryPositionLevel {
         parent_id: "lib-movies".into(),
         title: "Power".into(),
@@ -75,16 +66,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
-    app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     let pre_feature_position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
@@ -113,8 +95,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
             title: "Movies".into(),
             items: make_items(2),
             total_count: 673,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -143,23 +124,7 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
     app.tab = TabSelection::EmbyLibrary(0);
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
-    app.libs.push(LibraryTab {
-        library,
-        search: Some(LibSearch {
-            query: "stale".into(),
-            items: make_items(1),
-            results: vec![0],
-            cursor: 0,
-            scroll: 0,
-            loading: false,
-        }),
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: Some(0),
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     let stale = crate::config::LibraryPosition {
         levels: vec![
             crate::config::LibraryPositionLevel {
@@ -197,8 +162,7 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
         title: "Movies".into(),
         items: restored_items.clone(),
         total_count: restored_items.len(),
-        cursor: 1,
-        scroll: 0,
+        resting: crate::app::types_browse::BrowseResting::new(1, 0),
         item_types: Some("Movie".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -237,8 +201,6 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
         saved.libraries.get("lib-movies").cloned(),
         Some(expected_position)
     );
-    assert!(app.libs[0].search.is_none());
-    assert!(app.libs[0].album_track_focus.is_none());
 }
 
 #[test]
@@ -247,16 +209,7 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
     let mut app = make_app_stub();
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
-    app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     let requested = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
@@ -284,8 +237,7 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
             title: "Movies".into(),
             items: make_items(2),
             total_count: 2,
-            cursor: 1,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(1, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -310,15 +262,12 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
-        library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Power".into(),
             items: make_items(2),
             total_count: 2,
-            cursor: 1,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(1, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "DateCreated".into(),
@@ -328,11 +277,7 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     let position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
@@ -360,8 +305,7 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
             title: "Power restored".into(),
             items: make_items(2),
             total_count: 2,
-            cursor: 1,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(1, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "DateCreated".into(),

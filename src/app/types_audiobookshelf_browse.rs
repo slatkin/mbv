@@ -27,8 +27,9 @@ impl AudiobookshelfBrowseKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) enum AudiobookshelfEpisodeFilter {
+    #[default]
     All,
     Played,
     Unplayed,
@@ -61,9 +62,6 @@ pub(super) struct AudiobookshelfBrowseState {
     pub detail_cache: HashMap<String, Vec<AudiobookshelfDownloadedEpisode>>,
     pub detail_loading: bool,
     pub progress: HashMap<(String, String), AudiobookshelfProgress>,
-    pub episode_filter: AudiobookshelfEpisodeFilter,
-    pub episode_selection: Option<usize>,
-    pub scroll: usize,
 }
 
 impl AudiobookshelfBrowseState {
@@ -80,9 +78,6 @@ impl AudiobookshelfBrowseState {
             detail_cache: HashMap::new(),
             detail_loading: false,
             progress: HashMap::new(),
-            episode_filter: AudiobookshelfEpisodeFilter::All,
-            episode_selection: None,
-            scroll: 0,
         }
     }
 
@@ -99,21 +94,24 @@ impl AudiobookshelfBrowseState {
             .unwrap_or(0)
     }
 
+    /// Whether the last `select()` changed the selected show. The component
+    /// owns the episode filter / episode-mode selection and consults this to
+    /// reset them on an identity change (the reset moved off this content
+    /// struct in split-browse-state-interaction-fields task 3.2).
+    pub fn select_changed_identity(&self, cursor: usize) -> bool {
+        self.shows.get(cursor).map(|show| &show.library_item_id) != self.selected_id.as_ref()
+    }
+
     pub fn select(&mut self, cursor: usize) {
-        let previous_id = self.selected_id.clone();
         self.selected_id = self
             .shows
             .get(cursor)
             .map(|show| show.library_item_id.clone());
-        if self.selected_id != previous_id {
-            self.episode_filter = AudiobookshelfEpisodeFilter::All;
-        }
         self.episodes = self
             .selected_id
             .as_ref()
             .and_then(|id| self.detail_cache.get(id).cloned());
         self.detail_loading = false;
-        self.episode_selection = None;
     }
 
     pub fn cache_detail(&mut self, id: String, episodes: Vec<AudiobookshelfDownloadedEpisode>) {
@@ -125,17 +123,21 @@ impl AudiobookshelfBrowseState {
         self.shows.iter().find(|show| show.library_item_id == id)
     }
 
-    pub fn visible_episodes(&self) -> Vec<&AudiobookshelfDownloadedEpisode> {
-        self.visible_episodes_from(self.episodes.as_deref().unwrap_or_default())
+    pub fn visible_episodes(
+        &self,
+        filter: AudiobookshelfEpisodeFilter,
+    ) -> Vec<&AudiobookshelfDownloadedEpisode> {
+        self.visible_episodes_from(self.episodes.as_deref().unwrap_or_default(), filter)
     }
 
     pub fn visible_episodes_from<'a>(
         &self,
         source: &'a [AudiobookshelfDownloadedEpisode],
+        filter: AudiobookshelfEpisodeFilter,
     ) -> Vec<&'a AudiobookshelfDownloadedEpisode> {
         let mut episodes = source
             .iter()
-            .filter(|episode| match self.episode_filter {
+            .filter(|episode| match filter {
                 AudiobookshelfEpisodeFilter::All => true,
                 AudiobookshelfEpisodeFilter::Played => self
                     .progress
@@ -151,17 +153,6 @@ impl AudiobookshelfBrowseState {
             compare_publication_dates(left.published_at.as_deref(), right.published_at.as_deref())
         });
         episodes
-    }
-
-    pub fn set_episode_filter(&mut self, filter: AudiobookshelfEpisodeFilter) {
-        self.episode_filter = filter;
-        if self.episode_selection.is_some() {
-            self.episode_selection = Some(0);
-        }
-    }
-
-    pub fn enter_episode_selection(&mut self) {
-        self.episode_selection = Some(0);
     }
 
     pub fn append_page(
@@ -322,6 +313,11 @@ pub(super) struct AudiobookshelfBookBrowseState {
     pub total: usize,
     pub next_page: usize,
     pub loading_pages: HashSet<usize>,
+    /// The shell's *resting* selected book -- the last committed selection,
+    /// written at the select/bucket/restore event and read by position save
+    /// and detail-fetch routing. The component owns the live highlight;
+    /// `chapter_selection` and `selected_bucket` are component-only and never
+    /// projected (split-browse-state-interaction-fields D1/D2).
     pub selected_id: Option<String>,
     pub error: Option<String>,
     pub detail_cache: HashMap<String, (Vec<AudiobookshelfChapter>, Vec<AudiobookshelfAudioFile>)>,
@@ -329,19 +325,9 @@ pub(super) struct AudiobookshelfBookBrowseState {
     pub detail_loading_ids: HashSet<String>,
     pub detail_loading: bool,
     pub progress: HashMap<String, AudiobookshelfBookProgress>,
-    /// Which chapter row is focused within the always-visible hero/chapters
-    /// pane (`Some`), analogous to Music's `album_track_focus`, or the
-    /// right-pane book browser is focused (`None`). No longer gates which
-    /// pane renders -- both panes are always visible; see
-    /// `render_audiobookshelf_books`.
-    pub chapter_selection: Option<usize>,
-    pub scroll: usize,
     /// Fixed alphabetical author-surname ranges over `books`, recomputed
     /// whenever `books` changes (see `append_page_books`).
     pub buckets: Vec<SurnameBucket>,
-    /// Index into `buckets` (not a fixed range index -- empty ranges are
-    /// omitted) filtering the right-pane book list to one bucket.
-    pub selected_bucket: usize,
 }
 
 impl AudiobookshelfBookBrowseState {
@@ -358,10 +344,7 @@ impl AudiobookshelfBookBrowseState {
             detail_loading_ids: HashSet::new(),
             detail_loading: false,
             progress: HashMap::new(),
-            chapter_selection: None,
-            scroll: 0,
             buckets: Vec::new(),
-            selected_bucket: 0,
         }
     }
 
@@ -381,7 +364,6 @@ impl AudiobookshelfBookBrowseState {
             .books
             .get(cursor)
             .map(|book| book.library_item_id.clone());
-        self.chapter_selection = None;
         self.detail_loading = self
             .selected_id
             .as_ref()
@@ -445,23 +427,11 @@ impl AudiobookshelfBookBrowseState {
         });
 
         // Recompute the alphabetical surname buckets against the
-        // refreshed/paged-in list, then re-anchor the selected bucket to
-        // wherever the still-selected book landed (book-browsing spec:
-        // refresh/page loading preserves the selected book regardless of its
-        // new bucket).
-        let selected_index = self.selected_id.as_ref().and_then(|id| {
-            self.books
-                .iter()
-                .position(|book| &book.library_item_id == id)
-        });
+        // refreshed/paged-in list. The component re-anchors its
+        // `selected_bucket` onto the still-selected book when it receives the
+        // refreshed content (book-browsing spec: refresh/page loading
+        // preserves the selected book regardless of its new bucket).
         self.buckets = build_surname_buckets(&self.books);
-        self.selected_bucket = selected_index
-            .and_then(|idx| {
-                self.buckets
-                    .iter()
-                    .position(|bucket| idx >= bucket.start && idx < bucket.end)
-            })
-            .unwrap_or(0);
 
         if self.selected_id.is_none() && !self.books.is_empty() {
             self.select(0);
@@ -541,15 +511,14 @@ mod tests {
     }
 
     #[test]
-    fn rows_move_between_show_and_episode_identity() {
+    fn select_drops_the_prior_shows_episodes_and_reports_identity_change() {
         let mut state = AudiobookshelfBrowseState::new(library());
         state.append_page(1, 20, 2, vec![show("a", "A"), show("b", "B")]);
+        state.select(0);
         state.episodes = Some(vec![episode("a", "shared"), episode("a", "two")]);
-        state.enter_episode_selection();
+        assert!(state.select_changed_identity(1));
         state.select(1);
         assert_eq!(state.episodes, None);
-        assert_eq!(state.episode_selection, None);
-        assert_eq!(state.episode_filter, AudiobookshelfEpisodeFilter::All);
     }
 
     #[test]
@@ -606,12 +575,13 @@ mod tests {
             },
         );
 
-        state.set_episode_filter(AudiobookshelfEpisodeFilter::Played);
-        assert_eq!(state.visible_episodes()[0].episode_id, "finished");
-        state.set_episode_filter(AudiobookshelfEpisodeFilter::Unplayed);
+        assert_eq!(
+            state.visible_episodes(AudiobookshelfEpisodeFilter::Played)[0].episode_id,
+            "finished"
+        );
         assert_eq!(
             state
-                .visible_episodes()
+                .visible_episodes(AudiobookshelfEpisodeFilter::Unplayed)
                 .into_iter()
                 .map(|episode| episode.episode_id.as_str())
                 .collect::<Vec<_>>(),
@@ -631,7 +601,7 @@ mod tests {
 
         assert_eq!(
             state
-                .visible_episodes()
+                .visible_episodes(AudiobookshelfEpisodeFilter::All)
                 .into_iter()
                 .map(|episode| episode.episode_id.as_str())
                 .collect::<Vec<_>>(),

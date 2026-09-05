@@ -63,11 +63,12 @@ pub(super) struct FeedAddResult {
     pub result: Result<(), String>,
 }
 
-/// State for the feeds management overlay (§6), opened from F2 Settings.
+/// Shell-side state for the feeds management overlay (§6), opened from F2
+/// Settings. The component owns the interaction state (stage/cursor/form
+/// edits); this holds only the background add-feed channel, the in-flight
+/// add marker and the add-attempt id counter — the piece that cannot live in
+/// the component (task 5.3d).
 pub(super) struct FeedsManagePopup {
-    pub stage: FeedsManageStage,
-    /// Cursor into `config.feeds` while `stage` is `List`.
-    pub cursor: usize,
     /// The id of an in-flight add submission, or `None` when nothing is
     /// being fetched. Set on submit, cleared on cancel (Esc) or once its
     /// result is applied/discarded by `drain_feed_add_results`.
@@ -81,8 +82,6 @@ impl FeedsManagePopup {
     pub(super) fn new() -> Self {
         let (add_tx, add_rx) = mpsc::channel();
         Self {
-            stage: FeedsManageStage::List,
-            cursor: 0,
             pending_add: None,
             next_add_id: 0,
             add_tx,

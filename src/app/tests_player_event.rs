@@ -18,13 +18,13 @@ fn intro_started_auto_skips_when_client_prefers_it() {
     ));
     assert!(matches!(rx.try_recv(), Ok(PlayerCommand::SkipIntroDismiss)));
     assert!(
-        app.skip_intro_end_ticks.is_none(),
-        "auto-skip must not also arm the manual prompt"
+        app.status.is_empty(),
+        "auto-skip must not leave a TUI prompt"
     );
 }
 
 #[test]
-fn intro_started_keeps_manual_prompt_when_client_prefers_it() {
+fn intro_started_does_not_show_tui_prompt_when_client_does_not_auto_skip() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.config.lock().unwrap().always_skip_intro = false;
@@ -35,6 +35,8 @@ fn intro_started_keeps_manual_prompt_when_client_prefers_it() {
     });
 
     assert!(rx.try_recv().is_err(), "manual mode must not auto-seek");
-    assert_eq!(app.skip_intro_end_ticks, Some(300_000_000));
-    assert_eq!(app.status, "Skip intro? (Y/n)");
+    assert!(
+        app.status.is_empty(),
+        "manual mode must not show a TUI prompt"
+    );
 }

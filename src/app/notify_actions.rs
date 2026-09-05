@@ -23,18 +23,6 @@ impl ToastSeverity {
             ToastSeverity::Warning | ToastSeverity::Error => Duration::from_secs(5),
         }
     }
-
-    /// Toast background color for this severity when rendered as a colored
-    /// toast (not status-bar styling). Neutral is never rendered this way,
-    /// but is mapped for exhaustiveness rather than left `unreachable!()`.
-    pub fn toast_bg(&self) -> ratatui::style::Color {
-        match self {
-            ToastSeverity::Neutral => super::palette::TOAST_BG_NEUTRAL,
-            ToastSeverity::Success => super::palette::TOAST_BG_SUCCESS,
-            ToastSeverity::Warning => super::palette::TOAST_BG_WARNING,
-            ToastSeverity::Error => super::palette::TOAST_BG_ERROR,
-        }
-    }
 }
 
 impl App {
@@ -52,30 +40,6 @@ impl App {
                 }
             });
         }
-    }
-
-    pub(super) fn notify_with_actions(&self, title: &str, body: &str, actions: &[(&str, &str)]) {
-        if !self.system_notifications {
-            return;
-        }
-        let mut cmd = std::process::Command::new("notify-send");
-        cmd.arg("--app-name=mbv")
-            .arg(title)
-            .arg(body)
-            .stderr(std::process::Stdio::null());
-        for (id, label) in actions {
-            cmd.arg(format!("--action={}={}", id, label));
-        }
-        let tx = self.notif_action_tx.clone();
-        std::thread::spawn(move || match cmd.output() {
-            Ok(out) if out.status.success() => {
-                let chosen = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                let _ = tx.send(chosen);
-            }
-            _ => {
-                let _ = tx.send("__notif_failed__".into());
-            }
-        });
     }
 
     pub(super) fn trigger_lib_rescan(&mut self, lib_idx: usize) {

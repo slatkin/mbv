@@ -1,0 +1,12 @@
+id: no-app-as-type
+valid:
+  - |
+    use tuirealm::AppComponent;
+    struct MyComp;
+    fn view(c: &MyComp) {}
+    // AppConfig / Application are distinct identifiers, not the shell App.
+    struct AppConfig;
+    fn cfg(c: AppConfig) {}
+invalid:
+  - |
+    struct Holder { app: App, app_ref: &App, app_mut: &mut App }

@@ -1,3 +1,4 @@
+use super::types_browse::BrowseResting;
 use super::{App, BrowseLevel};
 
 impl App {
@@ -38,24 +39,24 @@ impl App {
         }
 
         // Verify count before popping so we never lose the album level.
+        // Nothing to switch between with fewer than two groups: bail before
+        // popping/re-fetching so `[`/`]` is a true no-op there.
         let n = self.libs[lib_idx].nav_stack[stack_len - 2].items.len();
-        if n == 0 {
+        if n < 2 {
             return;
         }
-
-        self.libs[lib_idx].clear_music_focus();
 
         // Pop the album level.
         self.libs[lib_idx].nav_stack.pop();
         let cur = self.libs[lib_idx]
             .nav_stack
             .last()
-            .map(|l| l.cursor)
+            .map(|l| l.resting().cursor())
             .unwrap_or(0);
         // Wrap-around navigation (unlike seasons which clamp).
         let new_cursor = (cur as i64 + delta).rem_euclid(n as i64) as usize;
         if let Some(group_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-            group_lvl.cursor = new_cursor;
+            group_lvl.set_resting_cursor(new_cursor);
         }
 
         // Collect new group's identity.
@@ -75,13 +76,13 @@ impl App {
             title: group_name.clone(),
             items: vec![],
             total_count: 0,
-            cursor: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             loading: true,
-            scroll: 0,
+
             all_items: None,
             letter_filter: None,
             music_grouping: None,
@@ -106,10 +107,9 @@ impl App {
         if group_cursor >= n {
             return;
         }
-        self.libs[lib_idx].clear_music_focus();
         self.libs[lib_idx].nav_stack.pop();
         if let Some(group_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-            group_lvl.cursor = group_cursor;
+            group_lvl.set_resting_cursor(group_cursor);
         }
         let (group_id, group_name) = self.libs[lib_idx]
             .nav_stack
@@ -125,13 +125,12 @@ impl App {
             title: group_name.clone(),
             items: vec![],
             total_count: 0,
-            cursor: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             loading: true,
-            scroll: 0,
             all_items: None,
             letter_filter: None,
             music_grouping: None,
@@ -162,9 +161,6 @@ impl App {
             return false;
         }
         if self.is_home_video_view(lib_idx) {
-            return false;
-        }
-        if lib.search.is_some() {
             return false;
         }
         if lib.nav_stack.len() != 1 {
@@ -199,8 +195,8 @@ impl App {
         let sort_order = lvl.sort_order.clone();
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.letter_filter = Some(filter.clone());
-            last.cursor = 0;
-            last.scroll = 0;
+            last.set_resting_cursor(0);
+            last.set_resting_scroll(0);
             last.loading = true;
             last.items.clear();
             last.all_items = None;
@@ -257,7 +253,7 @@ impl App {
         if !should_push {
             return;
         }
-        let cur = self.libs[lib_idx].nav_stack[0].cursor;
+        let cur = self.libs[lib_idx].nav_stack[0].resting().cursor();
         let n = self.libs[lib_idx].nav_stack[0].items.len();
         if cur >= n {
             return;
@@ -271,13 +267,12 @@ impl App {
             title: group_name.clone(),
             items: vec![],
             total_count: 0,
-            cursor: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             loading: true,
-            scroll: 0,
             all_items: None,
             letter_filter: None,
             music_grouping: None,
@@ -331,7 +326,7 @@ impl App {
                 .libs
                 .get(lib_idx)
                 .and_then(|lib| lib.nav_stack.last())
-                .and_then(|l| l.items.get(l.cursor))
+                .and_then(|l| l.items.get(l.resting().cursor()))
                 .map(|g| (g.id.clone(), g.name.clone()))
                 .unwrap_or_default();
             if !group_id.is_empty() {
@@ -341,13 +336,12 @@ impl App {
                         title: group_name.clone(),
                         items: vec![],
                         total_count: 0,
-                        cursor: 0,
+                        resting: BrowseResting::new(0, 0),
                         item_types: None,
                         unplayed_only: false,
                         sort_by: "SortName".into(),
                         sort_order: "Ascending".into(),
                         loading: true,
-                        scroll: 0,
                         all_items: None,
                         letter_filter: None,
                         music_grouping: None,

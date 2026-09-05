@@ -133,7 +133,7 @@ impl AudiobookshelfBookQueueItem {
 // serde-defaulted so old queue payloads and ctrl snapshots remain loadable.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FeedEntry {
     pub guid: String,
     pub title: String,

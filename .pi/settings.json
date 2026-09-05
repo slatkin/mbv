@@ -1,5 +1,18 @@
 {
   "subagents": {
-    "projectRootResolution": "git-root"
+    "projectRootResolution": "git-root",
+    "agentOverrides": {
+      "worker": {
+        "extensions": []
+      },
+      "reviewer": {
+        "extensions": []
+      },
+      "scout": {
+        "extensions": [
+          "/home/slatkin/.pi/agent/npm/node_modules/pi-lens/dist/index.js"
+        ]
+      }
+    }
   }
 }

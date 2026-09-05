@@ -1,0 +1,15 @@
+id: no-service-client-deps
+language: rust
+severity: error
+message: >-
+  src/app/components/ must not depend on Service clients (`EmbyClient`,
+  `AudiobookshelfClient`, `CastClient`, `SharedClient`), `PlayerProxy`, or
+  `RemotePlayer`. Components emit typed `Msg` requests; the shell Model performs
+  Service and Player effects. See openspec/changes/migrate-tui-to-tuirealm
+  design D10 and spec interactive-component-framework "Interactive components
+  own only presentation authority".
+files:
+  - "src/app/components/**"
+rule:
+  kind: type_identifier
+  regex: "^(EmbyClient|AudiobookshelfClient|CastClient|SharedClient|PlayerProxy|RemotePlayer)$"

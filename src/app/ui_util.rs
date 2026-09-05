@@ -1,5 +1,4 @@
 use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::QueueSlot;
 use unicode_width::UnicodeWidthStr;
 
 /// Advance subtitle mode through the standard cycle.
@@ -49,6 +48,42 @@ pub fn natural_sort_key(s: &str) -> String {
     out
 }
 
+/// Returns the letter-group bucket label for the sort key `key` given `total`
+/// items in the list. "#" for keys starting with a digit or non-ASCII-alphabetic
+/// character; individual letters for 250+ items; three-letter ranges below that.
+///
+/// KNOWN LIMITATION: any non-ASCII-alphabetic first character (accented letters
+/// like "Æon"/"Élan" included, codepoint > 'Z') buckets here as "#". But the "#"
+/// *pill*'s Emby fetch bounds are `NameLessThan("A")` -- only titles that SORT
+/// BEFORE "A" -- so an accented title with a codepoint after 'Z' is actually
+/// fetched by the `V–Z` pill (`name_ge = "V"`, no upper bound) yet renders under
+/// this "#" header, making it unreachable from the "#" pill's scoped fetch.
+/// Left as-is; flagged for a follow-up.
+pub fn letter_bucket_label(key: &str, total: usize) -> String {
+    let first = key
+        .chars()
+        .next()
+        .map(|c| c.to_ascii_uppercase())
+        .unwrap_or('\0');
+    if !first.is_ascii_alphabetic() {
+        return "#".to_string();
+    }
+    if total >= 250 {
+        return first.to_string();
+    }
+    match first {
+        'A'..='C' => "A\u{2013}C",
+        'D'..='F' => "D\u{2013}F",
+        'G'..='I' => "G\u{2013}I",
+        'J'..='L' => "J\u{2013}L",
+        'M'..='O' => "M\u{2013}O",
+        'P'..='R' => "P\u{2013}R",
+        'S'..='U' => "S\u{2013}U",
+        _ => "V\u{2013}Z",
+    }
+    .to_string()
+}
+
 pub fn is_playable(item: &EmbyItem) -> bool {
     matches!(item.media_type.as_str(), "Video" | "Audio")
 }
@@ -86,6 +121,12 @@ pub fn fmt_duration_short(s: i64) -> String {
     }
 }
 
+/// Canonical media-list duration text: `fmt_duration_short` of `s` seconds,
+/// or `None` when `s` is not positive (no duration to show).
+pub fn list_duration_secs(s: i64) -> Option<String> {
+    (s > 0).then(|| fmt_duration_short(s))
+}
+
 /// Format duration without seconds — for video items in the queue and the
 /// hero meta row.
 /// Examples: "<1m", "37m", "1h12m", "2h15m".
@@ -105,14 +146,6 @@ pub fn fmt_duration_approx(s: i64) -> String {
     } else {
         "0m".to_string()
     }
-}
-
-/// Format duration as minutes:seconds — for music tracks.
-/// Examples: "0:47", "3:47", "12:05".
-pub fn fmt_duration_mmss(s: i64) -> String {
-    let m = s / 60;
-    let s = s % 60;
-    format!("{}:{:02}", m, s)
 }
 
 /// Format playback progress as "N%", capped at 99% (100% reads as finished,
@@ -226,104 +259,5 @@ pub fn trunc_str(s: &str, max: usize) -> String {
         }
         out.push('\u{2026}');
         out
-    }
-}
-
-/// A visual row in the queue. The queue list has no grouping/headers — every
-/// row is a slot from the canonical `PlaybackQueue`, in order.  The cursor
-/// is a slot index.
-#[derive(Clone)]
-pub(super) enum QueueRow {
-    Slot { slot_idx: usize },
-}
-
-/// Build the flat visual rows for the queue: one row per canonical slot.
-pub(super) fn build_queue_rows(slots: &[QueueSlot]) -> Vec<QueueRow> {
-    (0..slots.len())
-        .map(|slot_idx| QueueRow::Slot { slot_idx })
-        .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::tests::make_item;
-    use mbv_core::api::EmbyItem;
-    use mbv_core::playback_queue::{FeedEntry, PlaybackQueue, QueueItem};
-
-    fn make_audio_item(album: &str, album_id: &str, artist: &str) -> EmbyItem {
-        let mut item = make_item(album, "Audio");
-        item.album = album.to_string();
-        item.album_id = album_id.to_string();
-        item.artist = artist.to_string();
-        item
-    }
-
-    fn make_slots(items: &[EmbyItem], feed_items: &[FeedEntry]) -> Vec<QueueSlot> {
-        let mut queue = PlaybackQueue::from_items(items.to_vec(), None);
-        for entry in feed_items {
-            queue.append(QueueItem::Feed(entry.clone()));
-        }
-        queue.into_slots()
-    }
-
-    #[test]
-    fn build_queue_rows_is_flat_in_item_order() {
-        let items = vec![
-            make_audio_item("Album A", "a1", "Artist"),
-            make_audio_item("Album A", "a1", "Artist"),
-            make_audio_item("Album A", "a1", "Artist"),
-        ];
-        let slots = make_slots(&items, &[]);
-        let rows = build_queue_rows(&slots);
-
-        assert_eq!(rows.len(), 3);
-        assert!(matches!(rows[0], QueueRow::Slot { slot_idx: 0 }));
-        assert!(matches!(rows[1], QueueRow::Slot { slot_idx: 1 }));
-        assert!(matches!(rows[2], QueueRow::Slot { slot_idx: 2 }));
-    }
-
-    #[test]
-    fn build_queue_rows_appends_feed_rows_after_tracks() {
-        let items = vec![
-            make_audio_item("Album A", "a1", "Artist"),
-            make_audio_item("Album A", "a1", "Artist"),
-        ];
-        let feed_items = vec![
-            FeedEntry {
-                guid: "f1".to_string(),
-                title: "Feed 1".to_string(),
-                enclosure_url: None,
-                link: None,
-                mime_type: None,
-                duration_ticks: None,
-                pub_date_secs: None,
-                feed_kind: Some(mbv_core::config::FeedKind::Audio),
-                feed_id: None,
-                position_ticks: 0,
-                played: false,
-            },
-            FeedEntry {
-                guid: "f2".to_string(),
-                title: "Feed 2".to_string(),
-                enclosure_url: None,
-                link: None,
-                mime_type: None,
-                duration_ticks: None,
-                pub_date_secs: None,
-                feed_kind: Some(mbv_core::config::FeedKind::Audio),
-                feed_id: None,
-                position_ticks: 0,
-                played: false,
-            },
-        ];
-        let slots = make_slots(&items, &feed_items);
-        let rows = build_queue_rows(&slots);
-
-        assert_eq!(rows.len(), 4);
-        assert!(matches!(rows[0], QueueRow::Slot { slot_idx: 0 }));
-        assert!(matches!(rows[1], QueueRow::Slot { slot_idx: 1 }));
-        assert!(matches!(rows[2], QueueRow::Slot { slot_idx: 2 }));
-        assert!(matches!(rows[3], QueueRow::Slot { slot_idx: 3 }));
     }
 }

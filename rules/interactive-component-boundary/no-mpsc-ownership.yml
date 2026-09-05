@@ -1,0 +1,24 @@
+id: no-mpsc-ownership
+language: rust
+severity: error
+message: >-
+  src/app/components/ must not own or use `std::sync::mpsc` channels. Runtime
+  completions reach components as `UserEvent` tokens or shell-staged owned
+  presentation models, never as channels. See
+  openspec/changes/migrate-tui-to-tuirealm design D10 and spec
+  interactive-component-framework "Interactive components own only presentation
+  authority".
+files:
+  - "src/app/components/**"
+ignores:
+  - "src/app/components/**/*tests*.rs"
+rule:
+  any:
+    - kind: use_declaration
+      regex: "std::sync::mpsc"
+    - kind: call_expression
+      has:
+        kind: scoped_identifier
+        regex: "std::sync::mpsc"
+    - kind: scoped_type_identifier
+      regex: "std::sync::mpsc"

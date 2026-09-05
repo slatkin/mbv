@@ -1,0 +1,20 @@
+{
+  "id": "b671b9066",
+  "name": "Verify mbv tests",
+  "command": "rtk cargo nextest run -p mbv",
+  "description": "Verify whether the reported full-suite failure persists at current HEAD before continuing Unit C.",
+  "status": "completed",
+  "outputPath": ".pi/tasks/session-2723338-2723338/b671b9066.output",
+  "cwd": "/home/slatkin/Dev/mbv/.worktrees/migrate-tui-to-tuirealm",
+  "startTime": 1787766315490,
+  "endTime": 1787766325385,
+  "exitCode": 0,
+  "signal": null,
+  "pid": 2817034,
+  "bytesWritten": 46,
+  "isAgent": false,
+  "notified": true,
+  "notifyOnCompletion": true,
+  "triggerOnCompletion": true,
+  "timeoutSeconds": 900
+}

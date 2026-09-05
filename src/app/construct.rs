@@ -1,4 +1,4 @@
-use super::types_playback::{HomeLatestSource, HomePane, QueueScope};
+use super::types_playback::QueueScope;
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode};
 use super::types_tab_selection::TabSelection;
@@ -76,9 +76,6 @@ impl App {
             lib_rx: init.lib_rx,
             search_tx: init.search_tx,
             search_rx: init.search_rx,
-            search_debounce_deadline: None,
-            search_debounce_pending: None,
-            search_sidebar: None,
             sessions_tx: init.sessions_tx,
             sessions_rx: init.sessions_rx,
             card_image_tx: init.card_image_tx,
@@ -87,14 +84,6 @@ impl App {
             resize_response_rx,
             notif_action_tx: init.notif_action_tx,
             notif_action_rx: init.notif_action_rx,
-            home: HomePane {
-                continue_items: Vec::new(),
-                continue_cursor: 0,
-                latest: Vec::new(),
-                section: 0,
-                home_cursor: 0,
-                home_scroll: 0,
-            },
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
@@ -103,16 +92,9 @@ impl App {
             terminal_width: 80,
             terminal_height: 24,
 
-            home_loading: true,
-            mouse_col: 0,
-            mouse_row: 0,
-            last_click_time: Instant::now(),
-            last_drag_seek: Instant::now() - Duration::from_secs(1),
             last_space_press: None,
             last_esc_press: None,
-            last_click_pos: (u16::MAX, u16::MAX),
-            confirm_modal: None,
-            daemon_lost_modal: None,
+            pending_overlay: None,
             pending_exit_message: None,
             pending_delete_slot: None,
             pending_queue_removal: None,
@@ -121,7 +103,6 @@ impl App {
             pending_remote_move_cursor: None,
             pending_queue_edit_cursor: None,
             pending_active_idx: None,
-            skip_intro_end_ticks: None,
             next_up_item: None,
             // #361: read the new prefs key, falling back to the pre-#361 one
             // for one release. `power_focus`/`power_left_tab`/`power_left_width`
@@ -144,12 +125,6 @@ impl App {
             // Always start on Home. The saved queue is restored independently;
             // the saved library tab remains available for runtime persistence.
             library_tab_pending: 0,
-            // The last-selected Home pill, restored by source identity once a
-            // matching section exists. Absent/empty means Continue Watching.
-            home_section_pending: prefs["home_section"]
-                .as_str()
-                .and_then(HomeLatestSource::from_pref_key),
-            queue_scroll: 0,
             ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
             pre_mute_volume: prefs["pre_mute_volume"].as_u64().map(|v| v as u8),
             mute_on: prefs["mute_on"].as_bool().unwrap_or(false),
@@ -174,32 +149,18 @@ impl App {
             halfblock_picker: None,
             dim_backdrop_active: false,
             image_cache_size_total: init.image_cache_size.saturating_mul(2),
-            show_help: false,
-            show_settings: false,
-            settings_cursor: 0,
             settings_destination: super::types_settings::SettingsDestination::Main,
-            services_cursor: 0,
-            settings_scroll: 0,
             settings_save_at: None,
             confirm_logout: false,
-            multiselect_popup: None,
-            selection_modal: None,
-            library_routes_popup: None,
-            help_scroll: 0,
             notif_failed: false,
-            context_menu: None,
             sessions: Vec::new(),
             cast_receivers: Vec::new(),
             panel_targets: Vec::new(),
-            sessions_cursor: 0,
-            sessions_scroll: 0,
             sessions_loading: false,
-            show_sessions: false,
             playlists: Vec::new(),
             playlists_cursor: 0,
             playlists_scroll: 0,
             playlists_loading: false,
-            show_playlists: false,
             playlists_open: None,
             playlists_open_items: Vec::new(),
             playlists_open_cursor: 0,
@@ -208,7 +169,6 @@ impl App {
             queue_source: crate::config::QueueSource::Unknown,
             queue_dirty: false,
             pending_queue_action: None,
-            remote_reanchor_popup: None,
             last_keepalive: Instant::now(),
             last_capabilities: Instant::now(),
             connected_session_id: None,
@@ -239,9 +199,9 @@ impl App {
             library_route_cache: std::collections::HashMap::new(),
             force_clear: false,
             tab_scroll: 0,
-            last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             last_library_nav_at: Instant::now() - Duration::from_secs(1),
+            queue_cursor_pushed: false,
             library_position_dirty: false,
             library_position_dirty_at: Instant::now() - Duration::from_secs(1),
             refocus_at: None,
@@ -254,7 +214,6 @@ impl App {
             series_detail_cache: std::collections::HashMap::new(),
             series_detail_loading: std::collections::HashSet::new(),
             series_season_loading: std::collections::HashSet::new(),
-            save_playlist_dialog: None,
             image_lru: std::collections::VecDeque::new(),
             pending_image_fetches: std::collections::VecDeque::new(),
             image_fetches_active: 0,
@@ -265,7 +224,6 @@ impl App {
             idle_feed: init.idle_feed,
             feed_seek_pending_slot: None,
             feed_tab: super::types_feed_tab::FeedTabState::default(),
-            feeds_manage_popup: None,
         };
         app.sync_feed_subscriptions();
         app
@@ -654,5 +612,27 @@ impl App {
             picker.set_protocol_type(proto);
         }
         picker
+    }
+
+    /// Populate `image_picker` (terminal-detected, with the config override)
+    /// and `halfblock_picker` (the #451 dimmed-backdrop fallback: modals
+    /// re-encode images to halfblocks so the dim applies uniformly).
+    ///
+    /// MUST run before the TuiRealm crossterm listener starts
+    /// (`Application::init`): `Picker::from_query_stdio` writes a
+    /// `CSI 16 t` cell-size query to the terminal and reads the reply with a
+    /// raw `io::stdin().read()`. If the listener thread is already draining
+    /// stdin it eats the reply, the picker falls back to a wrong cell size,
+    /// and Kitty renders images clipped on the right/bottom (#654).
+    pub(crate) fn init_image_pickers(&mut self) {
+        let picker = self.build_image_picker();
+        log::debug!(
+            target: "startup",
+            "image picker: protocol={:?} font_size={:?}",
+            picker.protocol_type(),
+            picker.font_size()
+        );
+        self.image_picker = Some(picker);
+        self.halfblock_picker = Some(Picker::halfblocks());
     }
 }

@@ -3,27 +3,23 @@ use super::layout;
 use super::panel_targets::PanelTarget;
 use super::render;
 use super::resize::{ResizeRegisterTx, ResizeResponseRx};
-use super::search_sidebar::SearchSidebar;
 use super::types_browse::{AlbumIndexState, SeriesDetail};
 use super::types_cast::{CastAttachment, CastEvent};
 use super::types_confirm::ConfirmModal;
-use super::types_context_menu::{ContextMenu, LibraryRoutePopup, MultiSelectPopup};
-use super::types_daemon_lost::DaemonLostModal;
 use super::types_events::{LibEvent, SessionEvent};
 use super::types_feed::IdleFeed;
 use super::types_feed::SavePlaylistDialog;
 use super::types_feed_tab::FeedTabState;
-use super::types_feeds_manage::FeedsManagePopup;
 use super::types_library_tab::LibraryTab;
 use super::types_playback::{
-    HomeLatestSource, HomePane, PendingQueueAction, PlaylistMutationState, QueueScope,
-    RemoteQueueProjection, RemoteReanchorPopup, SuspendedLocalSession, UndoEntry,
+    PendingQueueAction, PlaylistMutationState, QueueScope, RemoteQueueProjection,
+    SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
-use super::types_selection_modal::SelectionModal;
 use super::types_settings::{PanelFocus, PanelMode, SettingsDestination};
 use super::types_tab_selection::TabSelection;
 use super::visualizer_worker::{PipeWireWorker, StereoSampleWindow};
+use super::SidebarId;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
@@ -103,7 +99,6 @@ pub struct App {
         mpsc::Receiver<mbv_core::audiobookshelf_socket::SocketEvent>,
     pub(super) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
     pub(super) audiobookshelf_socket_generation: Option<mbv_core::service_runtime::SetupGeneration>,
-    pub(super) home: HomePane,
     pub(super) libs: Vec<LibraryTab>,
     pub(super) player_tab: PlayerTab,
     pub(super) remote_player_tab: Option<PlayerTab>,
@@ -150,29 +145,11 @@ pub struct App {
     pub(super) layout: layout::AppLayout,
     pub(super) terminal_width: u16,
     pub(super) terminal_height: u16,
-
-    /// True from startup until the first `fetch_home` completes. While true,
-    /// the home view doesn't yet know how many remote sections exist, so the
-    /// renderer fills the reserved area with skeleton placeholders instead of
-    /// collapsing to just the sections that happen to be populated so far.
-    pub(super) home_loading: bool,
-    pub(super) mouse_col: u16,
-    pub(super) mouse_row: u16,
-    pub(super) last_click_time: Instant,
-    pub(super) last_click_pos: (u16, u16),
-    pub(super) last_drag_seek: Instant,
     pub(super) last_space_press: Option<Instant>,
     pub(super) last_esc_press: Option<Instant>,
-    /// The single active yes/no confirmation prompt (clear queue, remove
-    /// now-playing item, rescan library, save-playlist overwrite/discard),
-    /// rendered and dispatched by the shared confirmation-modal component.
-    pub(super) confirm_modal: Option<ConfirmModal>,
-    /// The blocking modal raised on an unannounced local-daemon disconnect
-    /// (task 7.1-7.3). Distinct from `confirm_modal`/`save_playlist_dialog`:
-    /// it has three named choices, not yes/no, and its own diagnostics.
-    /// `raise_daemon_lost_modal` clears the other two when it sets this, so
-    /// only one blocking overlay is ever active.
-    pub(super) daemon_lost_modal: Option<DaemonLostModal>,
+    /// Shell handoff for a modal raised by App-owned effects. The mounted
+    /// component owns the modal after the next Model tick.
+    pub(super) pending_overlay: Option<super::types_overlay::OverlayRequest>,
     /// Set right before requesting a clean exit on an announced daemon
     /// shutdown (task 7.2); printed once by `run()` after the terminal is
     /// restored, since anything written while still in the alternate screen
@@ -189,7 +166,6 @@ pub struct App {
     /// `remove_from_queue` and `PlayerEvent::UnifiedQueueUpdated`.
     pub(super) pending_queue_edit_cursor: Option<usize>,
     pub(super) pending_active_idx: Option<usize>,
-    pub(super) skip_intro_end_ticks: Option<i64>,
     pub(super) next_up_item: Option<EmbyItem>,
     // Main UI scalars.
     // reuses shared self.libs.
@@ -203,8 +179,6 @@ pub struct App {
     pub(super) queue_column_width: u16,
     pub(super) panel_mode: PanelMode,
     pub(super) library_tab_pending: usize, // restored from prefs; applied once libs have loaded
-    pub(super) home_section_pending: Option<HomeLatestSource>, // restored from prefs; applied once a Home pill matching it exists
-    pub(super) queue_scroll: usize,
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,
     pub(super) card_image_states: std::collections::HashMap<String, images::CachedImage>,
@@ -233,19 +207,9 @@ pub struct App {
     pub(super) halfblock_picker: Option<Picker>,
     pub(super) dim_backdrop_active: bool,
     pub(super) image_cache_size_total: usize,
-    pub(super) context_menu: Option<ContextMenu>,
-    pub(super) show_help: bool,
-    pub(super) show_settings: bool,
-    pub(super) settings_cursor: usize,
     pub(super) settings_destination: SettingsDestination,
-    pub(super) services_cursor: usize,
-    pub(super) settings_scroll: usize,
     pub(super) settings_save_at: Option<Instant>,
     pub(super) confirm_logout: bool,
-    pub(super) multiselect_popup: Option<MultiSelectPopup>,
-    pub(super) selection_modal: Option<SelectionModal>,
-    pub(super) library_routes_popup: Option<LibraryRoutePopup>,
-    pub(super) help_scroll: u16,
     pub(super) system_notifications: bool,
     pub(super) notif_failed: bool,
     pub(super) notif_action_tx: mpsc::Sender<String>,
@@ -254,26 +218,22 @@ pub struct App {
     pub(super) lib_rx: mpsc::Receiver<LibEvent>,
     pub(super) search_tx: mpsc::Sender<(String, Result<Vec<EmbyItem>, String>)>,
     pub(super) search_rx: mpsc::Receiver<(String, Result<Vec<EmbyItem>, String>)>,
-    pub(super) search_debounce_deadline: Option<Instant>,
-    pub(super) search_debounce_pending: Option<String>,
-    pub(super) search_sidebar: Option<SearchSidebar>,
+    /// Whether the global Search sidebar overlay is open. The
+    /// `SearchSidebarComponent` owns the sidebar state (query, cursor, scroll,
+    /// results, debounce); this flag tells the legacy render/input path the
+    /// overlay is active (task 3.2).
     pub(super) sessions: Vec<mbv_core::api::SessionInfo>,
     /// Last cast discovery browse result (8.1), independent of `sessions`'s
     /// own reload cadence -- see `panel_targets::build_panel_targets`.
     pub(super) cast_receivers: Vec<mbv_core::cast_discovery::CastReceiver>,
     /// The F3 panel's merged Emby+Cast target list, rebuilt from `sessions`/
     /// `cast_receivers` by `App::rebuild_panel_targets` (8.1/8.2).
-    /// `sessions_cursor` indexes this list, not `sessions` directly.
     pub(super) panel_targets: Vec<PanelTarget>,
-    pub(super) sessions_cursor: usize,
-    pub(super) sessions_scroll: usize,
     pub(super) sessions_loading: bool,
-    pub(super) show_sessions: bool,
     pub(super) playlists: Vec<EmbyItem>,
     pub(super) playlists_cursor: usize,
     pub(super) playlists_scroll: usize,
     pub(super) playlists_loading: bool,
-    pub(super) show_playlists: bool,
     pub(super) playlists_open: Option<EmbyItem>, // playlist currently being browsed
     pub(super) playlists_open_items: Vec<EmbyItem>,
     pub(super) playlists_open_cursor: usize,
@@ -282,7 +242,6 @@ pub struct App {
     pub(super) queue_source: crate::config::QueueSource,
     pub(super) queue_dirty: bool,
     pub(super) pending_queue_action: Option<PendingQueueAction>,
-    pub(super) remote_reanchor_popup: Option<RemoteReanchorPopup>,
     pub(super) use_nerd_fonts: bool,
     pub(super) indicator_style: render::indicators::IndicatorStyle,
     pub(super) ws_send_tx: Option<mbv_core::ws::WsSender>,
@@ -355,9 +314,14 @@ pub struct App {
     /// (mini-view "On Now", standard title row, idle feed title).
     pub(super) marquee_text: String,
     pub(super) marquee_started_at: std::time::Instant,
-    pub(super) last_scroll_at: Instant,
     pub(super) last_nav_at: Instant,
     pub(super) last_library_nav_at: Instant,
+    /// Set by an authoritative `queue_cursor` write (follow-the-playhead,
+    /// jump-to-now-playing, wheel scroll, scope switch) so the next
+    /// `sync_queue` pushes it into `QueueComponent` as a `Set` rather than
+    /// reconciling by slot identity (`QueueCursorUpdate::Preserve`).
+    /// Cleared once consumed.
+    pub(super) queue_cursor_pushed: bool,
     /// Set once `library_position_state` has an unflushed in-memory change.
     /// The disk write + shared-document sync are debounced off this rather
     /// than run synchronously on every cursor move -- see
@@ -394,16 +358,12 @@ pub struct App {
     pub(super) series_detail_cache: std::collections::HashMap<String, SeriesDetail>,
     pub(super) series_detail_loading: std::collections::HashSet<String>,
     pub(super) series_season_loading: std::collections::HashSet<(String, String)>,
-    pub(super) save_playlist_dialog: Option<SavePlaylistDialog>,
     pub(super) image_protocol: Option<String>,
     pub(super) image_protocol_enabled: bool,
     pub(super) library_position_state: crate::config::LibraryPositionState,
     pub(super) queue_scope: QueueScope,
     pub(super) idle_feed: Option<IdleFeed>,
     pub(super) feed_tab: FeedTabState,
-    /// State for the feeds management overlay (§6), opened from F2
-    /// Settings' `Manage feeds` row. `None` when the overlay is closed.
-    pub(super) feeds_manage_popup: Option<FeedsManagePopup>,
     /// When a seek was issued during Feed playback, the slot_id is stored
     /// here. The next `OutputStarted` clears it and persists the resulting
     /// position. This prevents ordinary output restarts (buffering,
@@ -411,4 +371,44 @@ pub struct App {
     pub(super) feed_seek_pending_slot: Option<mbv_core::playback_queue::QueueSlotId>,
     #[cfg(test)]
     pub(super) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
+}
+
+impl App {
+    pub(super) fn request_sidebar_open(&mut self, sidebar: SidebarId) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::OpenSidebar(sidebar));
+    }
+
+    pub(super) fn request_sidebar_dismiss(&mut self, sidebar: SidebarId) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissSidebar(
+            sidebar,
+        ));
+    }
+
+    pub(super) fn request_sidebar_toggle(&mut self, sidebar: SidebarId) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::ToggleSidebar(sidebar));
+    }
+
+    pub(super) fn ask_confirm(&mut self, modal: ConfirmModal) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::Confirm(modal));
+    }
+
+    pub(super) fn open_save_playlist_dialog(&mut self, dialog: SavePlaylistDialog) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::SavePlaylist(dialog));
+    }
+
+    pub(super) fn dismiss_confirm(&mut self) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissConfirm);
+    }
+
+    pub(super) fn dismiss_daemon_lost(&mut self) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissDaemonLost);
+    }
+
+    pub(super) fn dismiss_remote_reanchor(&mut self) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissRemoteReanchor);
+    }
+
+    pub(super) fn dismiss_save_playlist(&mut self) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissSavePlaylist);
+    }
 }

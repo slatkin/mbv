@@ -1,6 +1,7 @@
 use super::tests_podcast::{add_emby_movie_library, audiobookshelf_app};
 use super::*;
 use crate::app::tests::*;
+use crate::app::types_browse::BrowseResting;
 
 #[test]
 fn podcast_library_detects_collection_type() {
@@ -10,17 +11,7 @@ fn podcast_library_detects_collection_type() {
     library.collection_type = "podcasts".into();
     library.is_folder = true;
 
-    app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
 
     assert!(app.is_podcast_library(0));
 }
@@ -32,17 +23,7 @@ fn podcast_library_detects_name_when_collection_type_missing() {
     library.id = "lib-podcasts".into();
     library.is_folder = true;
 
-    app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
 
     assert!(app.is_podcast_library(0));
 }
@@ -61,15 +42,12 @@ fn podcast_folder_context_menu_uses_play_labels_and_item_state() {
     show.unplayed_item_count = 0;
 
     app.libs.push(LibraryTab {
-        library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-podcasts".into(),
             title: "Podcasts".into(),
             items: vec![show],
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -79,18 +57,16 @@ fn podcast_folder_context_menu_uses_play_labels_and_item_state() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app.tab = TabSelection::EmbyLibrary(0);
 
-    app.open_context_menu();
+    app.open_context_menu(false, None);
 
-    let menu = app.context_menu.as_ref().expect("context menu");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu"),
+    };
     let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
     assert!(labels.contains(&"Mark Unplayed"));
     assert!(!labels.contains(&"Mark Played"));
@@ -112,15 +88,12 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
     show.unplayed_item_count = 3;
 
     app.libs.push(LibraryTab {
-        library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-podcasts".into(),
             title: "Podcasts".into(),
             items: vec![show],
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -130,18 +103,16 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app.tab = TabSelection::EmbyLibrary(0);
 
-    app.open_context_menu();
+    app.open_context_menu(false, None);
 
-    let menu = app.context_menu.as_ref().expect("context menu");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu"),
+    };
     let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
     assert!(labels.contains(&"Mark Played"));
     assert!(!labels.contains(&"Mark Unplayed"));
@@ -168,15 +139,12 @@ fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
     second.played = true;
 
     app.libs.push(LibraryTab {
-        library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-podcasts".into(),
             title: "Podcasts".into(),
             items: vec![show.clone()],
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -196,18 +164,17 @@ fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
             selected_group: 1,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app.panel_focus = PanelFocus::Library;
     app.tab = TabSelection::EmbyLibrary(0);
 
-    app.open_context_menu();
+    app.open_context_menu(false, None);
 
-    let menu = app.context_menu.as_ref().expect("context menu");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu"),
+    };
     let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
     assert!(labels.contains(&"────────"));
     assert!(labels.contains(&"Mark All Played"));
@@ -266,15 +233,12 @@ fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
     second.media_type = "Audio".into();
 
     app.libs.push(LibraryTab {
-        library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-podcasts".into(),
             title: "Podcasts".into(),
             items: vec![first_show.clone(), second_show.clone()],
             total_count: 2,
-            cursor: 0,
-            scroll: 0,
+            resting: BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -300,18 +264,17 @@ fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
             selected_group: 0,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app.panel_focus = PanelFocus::Library;
     app.tab = TabSelection::EmbyLibrary(0);
 
-    app.open_context_menu();
+    app.open_context_menu(false, None);
 
-    let menu = app.context_menu.as_ref().expect("context menu");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu"),
+    };
     let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
     assert_eq!(labels[labels.len() - 3], "────────");
     assert_eq!(labels[labels.len() - 2], "Mark All Played");
@@ -348,7 +311,6 @@ fn audiobookshelf_f5_restarts_catalog_after_clear() {
     assert!(state.shows.is_empty(), "catalog must be cleared on refresh");
     assert_eq!(state.total, 0);
     assert!(state.episodes.is_none());
-    assert_eq!(state.episode_selection, None);
     assert!(
         state.loading_pages.contains(&0),
         "page 0 must be marked pending so the catalog request restarts"

@@ -1,3 +1,4 @@
+use super::types_browse::BrowseResting;
 use super::ui_util::sort_episodes;
 use super::{AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, LibEvent, LibraryTab, PAGE_SIZE};
 use mbv_core::api::EmbyItem;
@@ -133,20 +134,23 @@ impl App {
         if self.libs[idx].nav_stack.is_empty() {
             if let Some(saved) = self.saved_library_position(idx) {
                 if let Some(root) = saved.levels.first() {
+                    self.libs[idx].library_total = root.library_total;
                     self.libs[idx].nav_stack.push(BrowseLevel {
                         parent_id: root.parent_id.clone(),
                         title: root.title.clone(),
                         items: Vec::new(),
                         total_count: 0,
-                        cursor: 0,
+                        resting: BrowseResting::new(0, 0),
                         item_types: root.item_types.clone(),
                         unplayed_only: root.unplayed_only,
                         sort_by: root.sort_by.clone(),
                         sort_order: root.sort_order.clone(),
                         loading: true,
-                        scroll: 0,
+
                         all_items: None,
-                        letter_filter: None,
+                        letter_filter: root
+                            .letter_filter_index
+                            .and_then(super::render::LetterFilter::for_index),
                         music_grouping: None,
                     });
                     self.spawn_restore_library_position(idx, saved);
@@ -173,13 +177,13 @@ impl App {
                 title: lib_name.clone(),
                 items: vec![],
                 total_count: 0,
-                cursor: 0,
+                resting: BrowseResting::new(0, 0),
                 item_types: item_types.clone(),
                 unplayed_only,
                 sort_by: sort_by.into(),
                 sort_order: sort_order.into(),
                 loading: true,
-                scroll: 0,
+
                 all_items: None,
                 letter_filter: None,
                 music_grouping: None,
@@ -260,7 +264,14 @@ impl App {
     }
 
     pub(super) fn refresh_after_stop(&mut self) {
-        let _ = self.fetch_home();
+        if let Ok(content) = self.fetch_home() {
+            // The fetch runs synchronously (order-sensitive side
+            // effects); the computed content travels to Model-owned
+            // `home_content` via lib_tx (task 5.3d).
+            let _ = self
+                .lib_tx
+                .send(LibEvent::HomeContentRefreshed(Box::new(content)));
+        }
         if self.last_played_completed {
             if let Some(ref item_id) = self.last_played_item_id.clone() {
                 for lib_idx in 0..self.libs.len() {
@@ -357,13 +368,13 @@ impl App {
                             title,
                             items,
                             total_count,
-                            cursor: 0,
+                            resting: BrowseResting::new(0, 0),
                             item_types,
                             unplayed_only,
                             sort_by,
                             sort_order,
                             loading: false,
-                            scroll: 0,
+
                             all_items: None,
                             letter_filter: None,
                             music_grouping: None,
@@ -470,13 +481,13 @@ impl App {
                     title: String::new(),
                     items,
                     total_count,
-                    cursor,
+                    resting: BrowseResting::new(cursor, 0),
                     item_types: None,
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
                     loading: false,
-                    scroll: 0,
+
                     all_items: None,
                     letter_filter: None,
                     music_grouping: None,

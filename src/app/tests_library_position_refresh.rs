@@ -10,15 +10,12 @@ fn mixed_services_app() -> App {
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
-        library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(1),
             total_count: 1,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -28,11 +25,7 @@ fn mixed_services_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     let abs_library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
@@ -125,14 +118,12 @@ fn refresh_current_view_with_queue_focus_leaves_browse_destinations_untouched() 
 fn stale_emby_lib_index_mutates_no_library() {
     let mut app = two_emby_libraries_app();
     let stale = app.libs.len() + 1;
-    app.move_lib_cursor(stale, 1);
-    app.jump_lib_cursor(stale, true);
     app.go_back(stale);
-    app.shuffle_play(stale);
+    app.shuffle_play_target(stale, None);
     app.refresh_lib(stale);
     for idx in 0..2 {
         let lvl = &app.libs[idx].nav_stack[0];
-        assert_eq!(lvl.cursor, 0, "lib {idx} cursor");
+        assert_eq!(lvl.resting().cursor(), 0, "lib {idx} cursor");
         assert!(!lvl.loading, "lib {idx} not loading");
     }
 }
@@ -148,8 +139,7 @@ fn two_emby_libraries_app() -> App {
             title: title.into(),
             items: make_items(2),
             total_count: 2,
-            cursor: 0,
-            scroll: 0,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -160,14 +150,8 @@ fn two_emby_libraries_app() -> App {
             music_grouping: None,
         };
         app.libs.push(LibraryTab {
-            library,
-            search: None,
             nav_stack: vec![level],
-            feed_home_video: None,
-            album_track_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
+            ..LibraryTab::new(library)
         });
     }
     app

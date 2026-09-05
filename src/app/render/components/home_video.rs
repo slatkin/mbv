@@ -1,34 +1,21 @@
+#[cfg(test)]
 use super::list_rows::focused_or_subtle;
+#[cfg(test)]
 use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
-use crate::app::layout::LayoutMain;
+#[cfg(test)]
+use crate::app::palette;
+#[cfg(test)]
 use crate::app::ui_util::*;
-use crate::app::{palette, App};
+#[cfg(test)]
 use ratatui::layout::*;
+#[cfg(test)]
 use ratatui::style::*;
+#[cfg(test)]
 use ratatui::text::*;
+#[cfg(test)]
 use ratatui::widgets::*;
+#[cfg(test)]
 use ratatui::Frame;
-
-/// Clamp the panel scroll offset (in terminal rows, content-space) so the grid row
-/// spanning `[cur_top, cur_bot)` is fully visible within a viewport of `view_h` rows,
-/// and never scrolls past the end of `total_h` rows of content.
-pub(in crate::app::render) fn home_panel_scroll(
-    current: u16,
-    cur_top: u16,
-    cur_bot: u16,
-    total_h: u16,
-    view_h: u16,
-) -> u16 {
-    let max_scroll = total_h.saturating_sub(view_h);
-    let mut s = current.min(max_scroll);
-    if cur_top < s {
-        s = cur_top;
-    }
-    if cur_bot > s + view_h {
-        s = cur_bot.saturating_sub(view_h);
-    }
-    s
-}
 
 const MONTHS: [&str; 12] = [
     "January",
@@ -67,6 +54,7 @@ pub(in crate::app::render) fn format_release_date(premiere_date: &str) -> String
         .unwrap_or_else(|| premiere_date.to_string())
 }
 
+#[cfg(test)]
 pub(in crate::app::render) fn render_home_video_item(
     f: &mut Frame,
     item: &mbv_core::api::EmbyItem,
@@ -153,40 +141,6 @@ pub(in crate::app::render) fn render_home_video_item(
             1,
             item_h.saturating_sub(2) as usize,
             super::widgets::SelectedBlockBorderStyle::Framed,
-        );
-    }
-}
-
-impl App {
-    pub(in crate::app::render) fn render_selected_home_video_detail(
-        &mut self,
-        f: &mut Frame,
-        content_area: Rect,
-        row_y: u16,
-        item_h: u16,
-        lib_idx: usize,
-        focused: bool,
-        layout: &mut LayoutMain,
-    ) {
-        let detail_height = item_h.saturating_sub(5);
-        if detail_height == 0 {
-            return;
-        }
-
-        self.render_compact_detail(
-            f,
-            Rect {
-                x: content_area.x + SELECTED_BLOCK_SIDE_PADDING,
-                y: row_y + 3,
-                width: content_area
-                    .width
-                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
-                height: detail_height,
-            },
-            lib_idx,
-            focused,
-            false,
-            layout,
         );
     }
 }

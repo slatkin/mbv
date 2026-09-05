@@ -1,7 +1,7 @@
 //! The `List` component (design.md "Component catalogue"): row rendering,
 //! the shared `SelectionMarker`, and the row/cell padding it composes with,
 //! extracted from and shared by movies/TV's list renderers
-//! (`list_letter_groups.rs`, `list_plain.rs`, both consumers of
+//! (`list_letter_groups.rs`, `media_list.rs`, both consumers of
 //! `item_cell_spans`/`draw_column_selection_markers` below) and reused by
 //! the audiobookshelf show grid. `ListRenderCtx`/`DisplayRow` are its row
 //! model; `render_right_scrollbar` (`widgets.rs`) is its `Scrollbar`.
@@ -27,24 +27,6 @@ pub(in crate::app::render) fn focused_or_subtle(focused: bool) -> Color {
         palette::TEXT_EMPHASIS
     } else {
         palette::TEXT_SECONDARY
-    }
-}
-
-/// Returns `palette::TEXT_FOCUS_ACCENT` when `focused`, `palette::TEXT_MUTED` otherwise.
-pub(in crate::app::render) fn focused_or_muted(focused: bool) -> Color {
-    if focused {
-        palette::TEXT_FOCUS_ACCENT
-    } else {
-        palette::TEXT_MUTED
-    }
-}
-
-/// Returns `palette::TEXT_EMPHASIS` when `focused`, `palette::TEXT_MUTED` otherwise.
-pub(in crate::app::render) fn focused_or_muted_soft_white(focused: bool) -> Color {
-    if focused {
-        palette::TEXT_EMPHASIS
-    } else {
-        palette::TEXT_MUTED
     }
 }
 
@@ -156,11 +138,6 @@ impl<'a> InlineReplacementPlan<'a> {
         self.total_display_rows
     }
 
-    #[cfg(test)]
-    pub(in crate::app::render) fn detail_screen_row(&self) -> Option<usize> {
-        self.detail_screen_row
-    }
-
     pub(in crate::app::render) fn hero_area(&self, content_area: Rect) -> Option<Rect> {
         self.detail_screen_row.map(|screen_row| Rect {
             y: content_area.y + screen_row as u16,
@@ -229,7 +206,7 @@ impl<'a> InlineReplacementPlan<'a> {
 }
 
 /// Shared inputs to the per-kind row-rendering bodies of `render_list`
-/// (`render_letter_grouped_rows`, `render_plain_rows`): the
+/// (`render_letter_grouped_rows`, `media_list::render_plain_rows`): the
 /// prelude values both kinds' bodies read, factored out so each callee takes
 /// one struct instead of the same six-plus positional arguments.
 pub(in crate::app::render) struct ListRenderCtx<'a> {
@@ -243,6 +220,118 @@ pub(in crate::app::render) struct ListRenderCtx<'a> {
     pub(in crate::app::render) cols: usize,
     pub(in crate::app::render) focused: bool,
     pub(in crate::app::render) hero_rows: u16,
+}
+
+/// Owned browser-list inputs shared by narrow and wide renderers. The shell
+/// builds this once from the active source; renderers no longer choose between
+/// search results and the navigation level while painting rows.
+#[derive(Clone)]
+pub(in crate::app) struct LibraryListRenderCtx {
+    pub(in crate::app) items: Vec<mbv_core::api::EmbyItem>,
+    pub(in crate::app::render) cursor: usize,
+    pub(in crate::app::render) scroll: usize,
+    pub(in crate::app) total_count: usize,
+    pub(in crate::app) library_total: Option<usize>,
+    pub(in crate::app) letter_filter: Option<super::super::LetterFilter>,
+    pub(in crate::app) loading: bool,
+    pub(in crate::app) search_query: Option<String>,
+    pub(in crate::app) search_loading: bool,
+    /// The projected surface shows a feed/home-video group-pill row
+    /// (`is_feed_home_video_group_view`; migrate-narrow-browse task 2.2). The
+    /// focused `BrowserComponent`'s `[`/`]` chord then means group cycling
+    /// (`BrowserCycleGroup`) rather than letter-pill cycling.
+    pub(in crate::app) group_pills: bool,
+}
+
+impl LibraryListRenderCtx {
+    pub(in crate::app) fn from_items(
+        items: Vec<mbv_core::api::EmbyItem>,
+        cursor: usize,
+        scroll: usize,
+    ) -> Self {
+        let total_count = items.len();
+        Self {
+            items,
+            cursor,
+            scroll,
+            total_count,
+            library_total: None,
+            letter_filter: None,
+            loading: false,
+            search_query: None,
+            search_loading: false,
+            group_pills: false,
+        }
+    }
+
+    /// Marks this projection as a feed/home-video group picker (task 2.2).
+    pub(in crate::app) fn with_group_pills(mut self, group_pills: bool) -> Self {
+        self.group_pills = group_pills;
+        self
+    }
+
+    pub(in crate::app) fn with_loading(mut self, loading: bool) -> Self {
+        self.loading = loading;
+        self
+    }
+
+    pub(in crate::app) fn with_cursor_scroll(mut self, cursor: usize, scroll: usize) -> Self {
+        self.cursor = cursor;
+        self.scroll = scroll;
+        self
+    }
+
+    pub(in crate::app) fn with_search(mut self, query: String, loading: bool) -> Self {
+        self.search_query = Some(query);
+        self.search_loading = loading;
+        self
+    }
+
+    pub(in crate::app) fn item_count(&self) -> usize {
+        self.items.len()
+    }
+
+    pub(in crate::app) fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    pub(in crate::app) fn scroll(&self) -> usize {
+        self.scroll
+    }
+
+    pub(in crate::app) fn selected_item(&self) -> Option<&mbv_core::api::EmbyItem> {
+        self.items.get(self.cursor)
+    }
+
+    pub(in crate::app::render) fn rows(
+        &self,
+        content_area: Rect,
+        cols: usize,
+        focused: bool,
+        hero_rows: u16,
+    ) -> ListRenderCtx<'_> {
+        ListRenderCtx {
+            content_area,
+            items: &self.items,
+            cursor: self.cursor,
+            stored_scroll: self.scroll,
+            cols,
+            focused,
+            hero_rows,
+        }
+    }
+
+    pub(in crate::app) fn is_search_active(&self) -> bool {
+        self.search_query.is_some()
+    }
+
+    pub(in crate::app) fn true_total(&self) -> usize {
+        self.library_total.unwrap_or(self.total_count)
+    }
+
+    pub(in crate::app) fn has_letter_filter(&self) -> bool {
+        self.letter_filter.is_some()
+    }
 }
 
 /// Builds the title (+ optional duration) spans for one list row, shared by
@@ -382,6 +471,27 @@ pub(in crate::app::render) fn draw_column_selection_markers(
     item_rows: &[Vec<usize>],
     row_offset: usize,
 ) {
+    draw_column_selection_markers_with_background(
+        f,
+        content_area,
+        cursor,
+        item_rows,
+        row_offset,
+        palette::SURFACE_RESTING,
+    );
+}
+
+/// Draws selection markers with the selected row's surface. Most catalog
+/// lists use the resting selected-row surface; hero-on-left Feeds rows use
+/// their focus-resolved surface instead.
+pub(in crate::app::render) fn draw_column_selection_markers_with_background(
+    f: &mut Frame,
+    content_area: Rect,
+    cursor: usize,
+    item_rows: &[Vec<usize>],
+    row_offset: usize,
+    background: Color,
+) {
     let Some(cursor_row) = item_rows.iter().position(|row| row.contains(&cursor)) else {
         return;
     };
@@ -397,7 +507,7 @@ pub(in crate::app::render) fn draw_column_selection_markers(
 
     if col_in_row == 0 {
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
+            Block::default().style(Style::default().bg(background)),
             Rect {
                 x: content_area.x.saturating_sub(2),
                 y: row_y,
@@ -416,7 +526,7 @@ pub(in crate::app::render) fn draw_column_selection_markers(
         );
     } else {
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
+            Block::default().style(Style::default().bg(background)),
             Rect {
                 x: content_area.x + content_area.width,
                 y: row_y,

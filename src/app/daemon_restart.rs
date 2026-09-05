@@ -106,8 +106,7 @@ impl App {
         debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
         self.sync_subtitle_prefs_to_player();
         self.next_up_item = None;
-        self.skip_intro_end_ticks = None;
-        self.daemon_lost_modal = None;
+        self.dismiss_daemon_lost();
 
         if adoption_failed {
             self.handle_failed_local_daemon_adoption();

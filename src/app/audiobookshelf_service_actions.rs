@@ -70,7 +70,7 @@ impl App {
                             previous_state: completion.previous_state,
                         });
                     self.audiobookshelf_setup_form = None;
-                    self.confirm_modal = Some(super::types_confirm::ConfirmModal {
+                    self.ask_confirm(super::types_confirm::ConfirmModal {
                         title: " Replace Audiobookshelf ".into(),
                         message:
                             "Replace Audiobookshelf? Service-owned setup and state will be cleared."

@@ -1,114 +1,100 @@
+use super::shell::Model;
 use super::types_audiobookshelf_browse::{AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter};
 use super::types_selection_modal::{
     SelectionModalFilter, SelectionModalItem, SelectionModalListState, SelectionModalRow,
     SelectionModalSource,
 };
-use super::App;
 use crate::app::ui_util::fmt_duration_approx;
 
-impl App {
-    /// Opens the podcast constituent-list modal (design.md decisions 3/4):
-    /// a flat scrollable list of the selected show's `Item` rows, no headers
-    /// (episodes aren't hierarchical), with the played/unplayed filter shown
-    /// as pills at the modal's top. Mirrors `open_series_selection_modal`'s
-    /// shape; unlike Series/Album, whose ids are globally unique, an episode
-    /// id is only unique within its show (`(library_item_id, episode_id)`,
-    /// see `types_audiobookshelf_browse`'s progress-map key), so activation
-    /// resolves through the currently selected show's own filtered episode
-    /// list (`activate_selection_modal_item`) rather than a global scan.
+impl Model {
     pub(super) fn open_podcast_selection_modal(&mut self) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
+        let Some(index) = self.app.tab.audiobookshelf_index() else {
             return;
         };
-        let Some(state) = self.audiobookshelf_browse.get(index) else {
-            return;
+        // The episode filter is component-owned
+        // (split-browse-state-interaction-fields task 3.2); default to `All`
+        // when the component is not the active mounted browser.
+        let episode_filter = self
+            .abs_podcast_component_mut(index)
+            .map(|component| component.episode_filter())
+            .unwrap_or_default();
+        let (title, library_item_id, list_state) = {
+            let Some(state) = self.app.audiobookshelf_browse.get(index) else {
+                return;
+            };
+            let Some(show) = state.selected_show() else {
+                return;
+            };
+            (
+                show.title.clone(),
+                show.library_item_id.clone(),
+                podcast_modal_state(state, episode_filter),
+            )
         };
-        let Some(show) = state.selected_show() else {
-            return;
-        };
-        let title = show.title.clone();
-        let list_state = podcast_modal_state(state);
         let labels = AudiobookshelfEpisodeFilter::ALL
             .iter()
             .map(|filter| filter.label().to_string())
             .collect();
         let selected = AudiobookshelfEpisodeFilter::ALL
             .iter()
-            .position(|filter| *filter == state.episode_filter)
+            .position(|filter| *filter == episode_filter)
             .unwrap_or(0);
-        self.open_selection_modal(
-            SelectionModalSource::Podcast {
-                library_item_id: show.library_item_id.clone(),
-            },
+        self.app.open_selection_modal(
+            SelectionModalSource::Podcast { library_item_id },
             title,
             list_state,
             Some(SelectionModalFilter { labels, selected }),
         );
     }
 
-    /// Cycles the played/unplayed filter shown as pills at the top of the
-    /// open podcast selection modal (design.md decision 4), rebuilding
-    /// modal state from the newly filtered episode list. Resets the cursor
-    /// to the first episode row, mirroring `AudiobookshelfEpisodeFilter`'s
-    /// existing reset-to-0 behavior for the (wide-only) in-hero episode
-    /// table (see `AudiobookshelfBrowseState::set_episode_filter`).
-    pub(super) fn cycle_podcast_selection_modal_filter(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_browse.get(index) else {
-            return;
-        };
-        let current = AudiobookshelfEpisodeFilter::ALL
-            .iter()
-            .position(|filter| *filter == state.episode_filter)
-            .unwrap_or(0);
-        let next = (current as i64 + delta)
-            .rem_euclid(AudiobookshelfEpisodeFilter::ALL.len() as i64) as usize;
-        self.select_podcast_selection_modal_filter(next);
-    }
-
     /// Selects a visible modal filter, rebuilding the modal rows for both
-    /// keyboard and mouse selection. The shared pill hit-test dispatch calls
-    /// `select_audiobookshelf_filter`, so the modal path must not depend on
-    /// the wide-only `episode_selection` state.
-    pub(super) fn select_podcast_selection_modal_filter(&mut self, selected: usize) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
+    /// keyboard and mouse selection. The shared `SelectionModalFilterSelected`
+    /// shell request dispatches through
+    /// `Model::handle_selection_modal_request`, so the modal path must not
+    /// depend on the wide-only `episode_selection` state.
+    pub(super) fn select_podcast_selection_modal_filter(
+        &mut self,
+        library_item_id: String,
+        selected: usize,
+    ) {
         let Some(filter) = AudiobookshelfEpisodeFilter::ALL.get(selected).copied() else {
             return;
         };
-        let (rows, loading) = {
-            let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
+        let Some(index) = self.app.audiobookshelf_browse.iter().position(|state| {
+            state
+                .shows
+                .iter()
+                .any(|show| show.library_item_id == library_item_id)
+        }) else {
+            return;
+        };
+        if let Some(component) = self.abs_podcast_component_mut(index) {
+            component.set_episode_filter(filter);
+        }
+        let modal_state = {
+            let Some(state) = self.app.audiobookshelf_browse.get(index) else {
                 return;
             };
-            state.episode_filter = filter;
-            let loading = state.detail_loading || state.episodes.is_none();
-            (
-                podcast_episode_modal_rows(state, state.episodes.as_deref().unwrap_or_default()),
-                loading,
-            )
+            // The modal shows one specific show's episodes: prefer that
+            // show's cached detail, falling back to the live `episodes` only
+            // when it is the selected show (the wide filter-cycle case).
+            let episodes = state.detail_cache.get(&library_item_id).or_else(|| {
+                (state.selected_id.as_deref() == Some(&library_item_id))
+                    .then_some(state.episodes.as_ref())
+                    .flatten()
+            });
+            match episodes {
+                Some(episodes) if !state.detail_loading => SelectionModalListState::ready(
+                    podcast_episode_modal_rows(state, episodes, filter),
+                ),
+                _ => SelectionModalListState::Loading,
+            }
         };
-
-        let Some(modal) = self.selection_modal.as_mut() else {
-            return;
-        };
-        if !matches!(modal.source, SelectionModalSource::Podcast { .. }) {
-            return;
-        }
-        modal.cursor = rows
-            .iter()
-            .position(|row| matches!(row, SelectionModalRow::Item(_)))
-            .unwrap_or(0);
-        modal.state = if loading {
-            SelectionModalListState::Loading
-        } else {
-            SelectionModalListState::ready(rows)
-        };
-        if let Some(filter) = modal.filter.as_mut() {
-            filter.selected = selected;
-        }
+        self.app.refresh_selection_modal(
+            SelectionModalSource::Podcast { library_item_id },
+            modal_state,
+            None,
+        );
     }
 }
 
@@ -121,9 +107,10 @@ impl App {
 fn podcast_episode_modal_rows(
     state: &AudiobookshelfBrowseState,
     episodes: &[mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode],
+    filter: AudiobookshelfEpisodeFilter,
 ) -> Vec<SelectionModalRow> {
     state
-        .visible_episodes_from(episodes)
+        .visible_episodes_from(episodes, filter)
         .iter()
         .map(|episode| {
             let mut meta_parts = Vec::new();
@@ -146,23 +133,17 @@ fn podcast_episode_modal_rows(
         .collect()
 }
 
-pub(super) fn podcast_modal_state(state: &AudiobookshelfBrowseState) -> SelectionModalListState {
+pub(super) fn podcast_modal_state(
+    state: &AudiobookshelfBrowseState,
+    filter: AudiobookshelfEpisodeFilter,
+) -> SelectionModalListState {
     if state.detail_loading || state.episodes.is_none() {
         SelectionModalListState::Loading
     } else {
         SelectionModalListState::ready(podcast_episode_modal_rows(
             state,
             state.episodes.as_deref().unwrap_or_default(),
+            filter,
         ))
     }
-}
-
-pub(super) fn podcast_modal_state_for_detail(
-    state: &AudiobookshelfBrowseState,
-    library_item_id: &str,
-) -> SelectionModalListState {
-    let Some(episodes) = state.detail_cache.get(library_item_id) else {
-        return SelectionModalListState::Loading;
-    };
-    SelectionModalListState::ready(podcast_episode_modal_rows(state, episodes))
 }

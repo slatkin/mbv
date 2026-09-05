@@ -1,19 +1,22 @@
 use super::test_helpers::buffer_to_string;
-use crate::app::tests::make_app_stub;
-use crate::app::types_daemon_lost::DaemonLostModal;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 fn render_daemon_lost(width: u16, height: u16, with_error: bool) -> String {
-    let mut app = make_app_stub();
-    app.daemon_lost_modal = Some(DaemonLostModal {
-        last_playing_title: Some("Birthday Clip".into()),
-        daemon_log_path: "/tmp/mbvd.log".into(),
-        restart_error: with_error.then(|| "connection refused".into()),
-    });
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|f| app.render_daemon_lost_modal(f)).unwrap();
+    let mut dim_flag = false;
+    terminal
+        .draw(|f| {
+            crate::app::render::render_daemon_lost_modal_content(
+                f,
+                &mut dim_flag,
+                Some("Birthday Clip"),
+                "/tmp/mbvd.log",
+                with_error.then_some("connection refused"),
+            )
+        })
+        .unwrap();
     buffer_to_string(&terminal)
 }
 

@@ -1,0 +1,31 @@
+id: no-raw-fallback-variants
+snapshots:
+  ? |
+    use crate::app::components::msg::Msg;
+    use crate::app::GlobalViewKey;
+    fn emit_raw(g: GlobalViewKey) -> Msg { Msg::GlobalViewKey(g) }
+  : labels:
+    - source: Msg::GlobalViewKey(g)
+      style: primary
+      start: 108
+      end: 129
+  ? |
+    use crate::app::components::msg::Msg;
+    use crate::app::components::msg::PersistRequest;
+    fn emit_persist(p: PersistRequest) -> Msg { Msg::Persist(p) }
+  : labels:
+    - source: Msg::Persist(p)
+      style: primary
+      start: 131
+      end: 146
+  ? |
+    use crate::app::components::msg::Msg;
+    use crate::app::components::msg::ShellRequest;
+    fn emit_settings_key(k: crossterm::event::KeyEvent) -> Msg {
+        Msg::Shell(ShellRequest::SettingsKey(k.into()))
+    }
+  : labels:
+    - source: SettingsKey
+      style: primary
+      start: 175
+      end: 186

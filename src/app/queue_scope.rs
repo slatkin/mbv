@@ -287,11 +287,20 @@ impl App {
     }
 
     pub(super) fn set_queue_scope(&mut self, scope: QueueScope) {
-        self.queue_scope = if scope == QueueScope::Remote && self.has_direct_remote_queue() {
+        let resolved = if scope == QueueScope::Remote && self.has_direct_remote_queue() {
             QueueScope::Remote
         } else {
             QueueScope::Local
         };
-        self.queue_scroll = 0;
+        if resolved != self.queue_scope {
+            // A real scope switch (`[`/`]`, scope pill, session
+            // attach/detach) must adopt the new scope's own follow
+            // position rather than reconciling by slot identity: the two
+            // queues hand out colliding `QueueSlotId`s (each is a
+            // per-`PlaybackQueue` counter starting at 1), so identity
+            // reconciliation can park the cursor on an unrelated slot.
+            self.queue_cursor_pushed = true;
+        }
+        self.queue_scope = resolved;
     }
 }
