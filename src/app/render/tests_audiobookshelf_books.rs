@@ -52,7 +52,8 @@ fn book_each_breakpoint_runs_exactly_one_canonical_list_painter() {
     };
 
     let mut wide = AudiobookshelfBookComponent::new();
-    wide.set_content(&state, true, false);
+    wide.set_content(&state, false);
+    wide.set_focused(true);
     reset();
     let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
     term.draw(|f| wide.view(f, f.area())).unwrap();
@@ -61,7 +62,8 @@ fn book_each_breakpoint_runs_exactly_one_canonical_list_painter() {
     assert_eq!(PLAIN_ROWS_PAINTS.with(std::cell::Cell::get), 0);
 
     let mut narrow = AudiobookshelfBookComponent::new();
-    narrow.set_content(&state, true, false);
+    narrow.set_content(&state, false);
+    narrow.set_focused(true);
     reset();
     let mut term = Terminal::new(TestBackend::new(60, 24)).unwrap();
     term.draw(|f| narrow.view(f, f.area())).unwrap();

@@ -217,7 +217,7 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
     // `TvWorkspaceComponent` paints the surface pills over it, exactly as
     // the live shell does.
     let mut component = crate::app::components::TvWorkspaceComponent::new();
-    component.set_content(app.wide_tv_render_ctx(0, true, None));
+    component.set_content(app.wide_tv_render_ctx(0, None));
     let wide_area = ratatui::layout::Rect::new(0, 0, 120, 20);
     terminal
         .draw(|f| {
@@ -365,7 +365,8 @@ fn wide_book_panes_leave_exactly_one_row_above_the_status_bar() {
     let app = make_audiobookshelf_book_app();
     let mut component = AudiobookshelfBookComponent::new();
     if let Some(state) = app.audiobookshelf_book_browse.first() {
-        component.set_content(state, true, app.images_enabled());
+        component.set_content(state, app.images_enabled());
+        component.set_focused(true);
     }
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
     terminal.draw(|frame| component.view(frame, area)).unwrap();

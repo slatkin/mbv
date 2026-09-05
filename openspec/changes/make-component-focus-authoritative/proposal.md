@@ -1,3 +1,5 @@
+**Tracking issue:** [GitHub issue #655](https://github.com/slatkin/mbv/issues/655).
+
 ## Why
 
 Mounted Interactive Components discard TuiRealm's `Attribute::Focus` notifications and instead receive duplicated focus booleans through content projection. Event-driven projections can therefore leave component input and focused styling stale after Panel focus moves between Library and Queue, as observed in the Music and Wide TV destinations.

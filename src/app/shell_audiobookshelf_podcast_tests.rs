@@ -4,6 +4,7 @@ use crate::app::components::{Msg, ShellRequest};
 use crate::app::render::HomeImagePaint;
 use crate::app::tests_podcast::audiobookshelf_app;
 use crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState;
+use crate::app::PanelFocus;
 use mbv_core::audiobookshelf::{AudiobookshelfLibrary, AudiobookshelfShow};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -27,6 +28,7 @@ fn abs_podcast_shell_mounts_and_routes_component() {
         }],
     );
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     let id = model
         .abs_podcast_id
         .clone()
@@ -78,6 +80,7 @@ fn abs_podcast_shell_push_drops_stale_component_episode_state() {
         }],
     );
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     model
         .abs_podcast_component_mut(0)
         .expect("podcast component mounted")
@@ -88,6 +91,7 @@ fn abs_podcast_shell_push_drops_stale_component_episode_state() {
     state.shows.retain(|show| show.library_item_id != "show-a");
     state.selected_id = Some("show-b".into());
     model.push_audiobookshelf_podcast_content();
+    model.sync_active_destination();
 
     assert_eq!(
         model
@@ -120,6 +124,7 @@ fn abs_podcast_shell_routes_episode_transition_to_app() {
         },
     ]);
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     let id = model
         .abs_podcast_id
         .clone()
@@ -160,6 +165,7 @@ fn abs_podcast_shell_routes_action_intent_to_app() {
     // mounted component (task 5.3d.11 U2), so mount it first and read the
     // selection back through the U0 accessor.
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::FocusOrPlay);
     assert_eq!(
         model
@@ -189,6 +195,7 @@ fn abs_podcast_focus_play_uses_component_selection_not_stale_app_mirror() {
     crate::app::tests_podcast::add_emby_movie_library(&mut model.app);
     // Only the component owns the resolved episode target.
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     model
         .abs_podcast_component_mut(0)
         .expect("podcast component mounted")
@@ -226,6 +233,7 @@ fn abs_podcast_focus_play_uses_component_selection_not_stale_app_mirror() {
 fn abs_podcast_enqueue_uses_component_selection_over_stale_app_mirror() {
     let mut model = Model::new(audiobookshelf_app());
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     model
         .abs_podcast_component_mut(0)
         .expect("podcast component mounted")
@@ -257,6 +265,7 @@ fn abs_podcast_shell_space_and_ctrla_are_inert_without_owner() {
     crate::app::tests_podcast::add_emby_movie_library(&mut model.app);
     let nav_len = model.app.libs[0].nav_stack.len();
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     let id = model
         .abs_podcast_id
         .clone()
@@ -364,13 +373,15 @@ fn abs_podcast_component_image_plan_lifecycle() {
     let area = Rect::new(0, 0, 100, 40);
 
     // Images disabled: no plan, even with a selected show.
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     terminal.draw(|frame| component.view(frame, area)).unwrap();
     assert!(component.take_image_paint().is_none());
 
     // Images enabled with a selected show: plan carries the show id and a
     // nonzero paint rect (mirrors the ABS Book component handoff).
-    component.set_content(&state, true, true);
+    component.set_content(&state, true);
+    component.set_focused(true);
     terminal.draw(|frame| component.view(frame, area)).unwrap();
     let plan = component.take_image_paint();
     let Some(HomeImagePaint::AudiobookshelfCover {
@@ -392,7 +403,8 @@ fn abs_podcast_component_image_plan_lifecycle() {
     );
 
     // A subsequent disabled view must clear the plan (no stale paint).
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     terminal.draw(|frame| component.view(frame, area)).unwrap();
     assert!(component.take_image_paint().is_none());
 }
@@ -408,6 +420,7 @@ fn abs_podcast_shell_projection_wide_narrow_right_area() {
 
     let mut model = Model::new(audiobookshelf_app());
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
 
     // Wide presentation: area clears the two-column breakpoint and height.
     let wide = Rect::new(0, 0, 200, 50);
@@ -480,6 +493,7 @@ fn abs_podcast_stays_mounted_and_preserves_selection_across_switch() {
     );
     let mut model = Model::new(app);
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     let id = model
         .abs_podcast_id
         .clone()
@@ -515,6 +529,7 @@ fn abs_podcast_stays_mounted_and_preserves_selection_across_switch() {
         }],
     );
     model.push_audiobookshelf_podcast_content();
+    model.sync_active_destination();
     let message = model
         .application
         .get_component_mut(&id)
@@ -531,6 +546,7 @@ fn abs_podcast_stays_mounted_and_preserves_selection_across_switch() {
     ));
     model.app.select_audiobookshelf_show(1);
     model.push_audiobookshelf_podcast_content();
+    model.sync_active_destination();
     assert_eq!(
         selected_id(&model),
         Some("show-b".into()),
@@ -540,6 +556,7 @@ fn abs_podcast_stays_mounted_and_preserves_selection_across_switch() {
     // Switch to the Book library: the podcast component stays mounted.
     model.app.tab = TabSelection::AudiobookshelfLibrary(1);
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     assert_eq!(model.abs_podcast_id, None);
     assert!(
         model.application.mounted(&id),
@@ -550,6 +567,7 @@ fn abs_podcast_stays_mounted_and_preserves_selection_across_switch() {
     // its selection is preserved.
     model.app.tab = TabSelection::AudiobookshelfLibrary(0);
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     assert_eq!(
         model.abs_podcast_id.as_ref(),
         Some(&id),
@@ -569,6 +587,7 @@ fn abs_podcast_stays_mounted_and_preserves_selection_across_switch() {
 fn abs_podcast_show_move_pulls_panel_focus_to_library() {
     let mut model = Model::new(audiobookshelf_app());
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     model.app.panel_focus = PanelFocus::Queue;
     model.handle_terminal_message(
         Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { index: 0 }),
@@ -591,6 +610,7 @@ fn podcast_episode_activation_branch_flips_on_resize_tick_before_repaint() {
     model.app.terminal_width = 60;
     model.app.terminal_height = 24;
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     let id = model
         .abs_podcast_id
         .clone()

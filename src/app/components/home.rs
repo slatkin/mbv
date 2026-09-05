@@ -186,6 +186,7 @@ impl HomeComponent {
         self.inline_list.set_content(rows);
     }
 
+    #[cfg(test)]
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
     }
@@ -683,7 +684,11 @@ impl Component for HomeComponent {
         None
     }
 
-    fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
+    fn attr(&mut self, attr: Attribute, value: AttrValue) {
+        if attr == Attribute::Focus {
+            self.focused = matches!(value, AttrValue::Flag(true));
+        }
+    }
 
     fn state(&self) -> State {
         State::None

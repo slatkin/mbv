@@ -20,6 +20,7 @@ fn narrow_short_wide_grouped_music_moves_one_album_per_down_and_page() {
         model.app.libs[0].nav_stack[1].items.push(album);
     }
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model.music_workspace_id.clone().unwrap();
     let mut terminal = Terminal::new(TestBackend::new(100, 6)).unwrap();
     terminal
@@ -63,6 +64,7 @@ fn narrow_music_album_click_selects_and_requests_cursor_move() {
         model.app.libs[0].nav_stack[1].items.push(album);
     }
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model.music_workspace_id.clone().unwrap();
     let mut terminal = Terminal::new(TestBackend::new(60, 9)).unwrap();
     terminal
@@ -129,6 +131,7 @@ fn narrow_music_album_double_click_requests_activation() {
         model.app.libs[0].nav_stack[1].items.push(album);
     }
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model.music_workspace_id.clone().unwrap();
     let mut terminal = Terminal::new(TestBackend::new(60, 9)).unwrap();
     terminal
@@ -166,6 +169,7 @@ fn narrow_music_group_pill_click_requests_relative_group_switch() {
     model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 6);
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::default();
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model.music_workspace_id.clone().unwrap();
     let mut terminal = Terminal::new(TestBackend::new(100, 6)).unwrap();
     terminal
@@ -216,6 +220,7 @@ fn narrow_music_album_right_click_carries_pointer_anchor() {
         model.app.libs[0].nav_stack[1].items.push(album);
     }
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model.music_workspace_id.clone().unwrap();
     let mut terminal = Terminal::new(TestBackend::new(60, 9)).unwrap();
     terminal
@@ -256,6 +261,7 @@ fn wide_music_album_rail_click_still_requests_cursor_move() {
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model.music_workspace_id.clone().unwrap();
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal
@@ -306,6 +312,7 @@ fn music_mouse_track_click_stays_component_local() {
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()

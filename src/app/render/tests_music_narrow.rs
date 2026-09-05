@@ -61,6 +61,7 @@ fn render_narrow(
     context.focused = focused;
     let mut component = MusicWorkspaceComponent::new();
     component.set_content(context);
+    component.set_focused(focused);
     component.re_anchor(cursor, 0);
     let mut terminal = Terminal::new(TestBackend::new(NW, NH)).unwrap();
     terminal
@@ -160,6 +161,7 @@ fn narrow_music_falls_back_to_the_ordinary_selected_row_when_the_block_cannot_fi
     context.focused = true;
     let mut component = MusicWorkspaceComponent::new();
     component.set_content(context);
+    component.set_focused(true);
     component.re_anchor(0, 0);
 
     // A viewport barely taller than the pill row: the detail block cannot be
@@ -190,10 +192,12 @@ fn narrow_music_focused_selection_carries_the_canonical_highlight() {
     context.focused = true;
     let mut focused = MusicWorkspaceComponent::new();
     focused.set_content(context.clone());
+    focused.set_focused(true);
     focused.re_anchor(0, 0);
     let mut unfocused = MusicWorkspaceComponent::new();
     context.focused = false;
     unfocused.set_content(context);
+    unfocused.set_focused(false);
     unfocused.re_anchor(0, 0);
 
     let area = Rect::new(0, 0, NW, 8);

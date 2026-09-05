@@ -1,6 +1,6 @@
 use super::components::{BrowserComponent, BrowserKey, BrowserKind, ComponentId, ShellRequest};
 use super::shell::Model;
-use super::{ConfirmAction, ConfirmModal, PanelFocus, TabSelection};
+use super::{ConfirmAction, ConfirmModal, TabSelection};
 use crate::app::components::browser::{BrowserContent, BrowserIdentity};
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use crate::app::render::{shared_hero_presentation, LibraryListRenderCtx};
@@ -288,7 +288,7 @@ impl Model {
         // reads/writes `feed_home_video.{video_cursor,video_scroll}`. Project
         // the selected group's items with that cursor/scroll and flag the
         // group-pill row so the component's `[`/`]` chord means group cycling.
-        let (mut context, cursor, scroll) = if self.app.is_feed_home_video_group_view(index) {
+        let (context, cursor, scroll) = if self.app.is_feed_home_video_group_view(index) {
             let (cursor, scroll) = self.app.libs[index]
                 .feed_home_video
                 .as_ref()
@@ -331,10 +331,9 @@ impl Model {
         };
         let content = BrowserContent::from_render_ctx(context);
         let identity = self.browse_identity(index);
-        let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {
-                browser.set_content(content, focused);
+                browser.set_content(content);
                 // Position re-seeds only on a browse-identity change; within one
                 // identity (pagination, loading completion, refresh, the
                 // component's own cursor echo) the control keeps its cursor.

@@ -27,6 +27,7 @@ fn shell_emby_browser_wide_movies_renders_letter_pills() {
     app.panel_mode = PanelMode::LibraryOnly;
     let mut model = Model::new(app);
     model.sync_emby_browser();
+    model.sync_active_destination();
 
     let backend = TestBackend::new(200, 40);
     let mut terminal = Terminal::new(backend).unwrap();
@@ -56,6 +57,7 @@ fn shell_emby_browser_wide_movies_paints_one_item_per_row() {
     app.panel_mode = PanelMode::LibraryOnly;
     let mut model = Model::new(app);
     model.sync_emby_browser();
+    model.sync_active_destination();
     let id = model.emby_browser_id.clone().expect("browser mounted");
     let backend = TestBackend::new(200, 30);
     let mut terminal = Terminal::new(backend).unwrap();
@@ -98,6 +100,7 @@ fn shell_emby_browser_wide_movies_guards_hero_to_movie_items() {
         app.panel_mode = PanelMode::LibraryOnly;
         let mut model = Model::new(app);
         model.sync_emby_browser();
+        model.sync_active_destination();
 
         let backend = TestBackend::new(200, 30);
         let mut terminal = Terminal::new(backend).unwrap();
@@ -162,6 +165,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(browser_app_with_folder_and_movie());
     model.sync_emby_browser();
+    model.sync_active_destination();
     let id = model.emby_browser_id.clone().expect("browser mounted");
 
     // Drive the component cursor onto the movie (index 1) while App's
@@ -498,6 +502,7 @@ fn browser_app_with_folder_and_movie() -> App {
 fn shell_mounts_and_syncs_the_generic_emby_browser() {
     let mut model = Model::new(make_movie_app());
     model.sync_emby_browser();
+    model.sync_active_destination();
     let id = model.emby_browser_id.clone().expect("browser mounted");
     let message = {
         model
@@ -519,6 +524,7 @@ fn shell_mounts_and_syncs_the_generic_emby_browser() {
     assert_eq!(index, 1, "Down must resolve to item 1");
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     model.sync_emby_browser();
+    model.sync_active_destination();
     assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
     assert!(model
         .application
@@ -553,6 +559,7 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     app.panel_mode = PanelMode::LibraryOnly;
     let mut model = Model::new(app);
     model.sync_emby_browser();
+    model.sync_active_destination();
     let id = model.emby_browser_id.clone().expect("browser mounted");
 
     // Paint the App and the mounted browser at 150 columns: both derive
@@ -560,6 +567,7 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     // generic library never takes the wide-Movies 1-column rail).
     render_browser_model(&mut model, 150, 40);
     model.sync_emby_browser();
+    model.sync_active_destination();
 
     // Down: the focused component returns `BrowserMoveRows { rows: 1 }`
     // (one display row, in place of the raw key), and the shell runs
@@ -649,6 +657,7 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     model.app.panel_mode = PanelMode::Both;
     render_browser_model(&mut model, 100, 40);
     model.sync_emby_browser();
+    model.sync_active_destination();
     for key in [Key::Left, Key::Right, Key::Char('h'), Key::Char('l')] {
         assert_eq!(
             drive_browser_key(&mut model, &id, key, KeyModifiers::NONE),
@@ -699,6 +708,7 @@ fn browser_activate_series_opens_selection_modal_at_narrow_width() {
     let mut model = Model::new(browser_app_with_folder_and_movie());
     model.app.libs[0].library.collection_type = "tvshows".into();
     model.sync_emby_browser();
+    model.sync_active_destination();
 
     let mut series = make_item("Show A", "Series");
     series.id = "series-a".into();
@@ -738,6 +748,7 @@ fn browser_navigation_persists_live_scroll_at_level_boundaries() {
     let mut model = Model::new(browser_app_with_folder_and_movie());
     model.app.libs[0].nav_stack[0].set_resting_scroll(7);
     model.sync_emby_browser();
+    model.sync_active_destination();
     let mut folder = make_item("Folder A", "CollectionFolder");
     folder.id = "folder-a".into();
     folder.is_folder = true;
@@ -752,6 +763,7 @@ fn browser_navigation_persists_live_scroll_at_level_boundaries() {
 
     model.app.libs[0].nav_stack[1].set_resting_scroll(3);
     model.sync_emby_browser();
+    model.sync_active_destination();
     model.handle_browser_request(ShellRequest::BrowserBack);
     assert_eq!(model.app.libs[0].nav_stack.len(), 1);
     assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 7);
@@ -763,6 +775,7 @@ fn teardown_flush_captures_live_browser_scroll_without_navigation() {
     let mut model = Model::new(browser_app_with_folder_and_movie());
     model.app.libs[0].nav_stack[0].set_resting_scroll(6);
     model.sync_emby_browser();
+    model.sync_active_destination();
     model.app.libs[0].nav_stack[0].set_resting_scroll(0);
 
     model.persist_emby_browser_scroll_for_active_library();

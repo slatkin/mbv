@@ -36,7 +36,8 @@ fn feed_component_with_entries(entries: Vec<FeedEntry>) -> FeedsComponent {
     let entries = vec![entries];
     let all_entries = entries[0].clone();
     let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &entries, &all_entries, false, true);
+    component.set_content(&subscriptions, &entries, &all_entries, false);
+    component.set_focused(true);
     component
 }
 
@@ -198,7 +199,8 @@ fn wide_feeds_selected_row_punches_through_to_the_resting_surface() {
         ]];
         let all_entries = entries[0].clone();
         let mut component = FeedsComponent::new();
-        component.set_content(&subscriptions, &entries, &all_entries, false, focused);
+        component.set_content(&subscriptions, &entries, &all_entries, false);
+        component.set_focused(focused);
         let terminal = terminal_for(&mut component, 120, 30);
         let layout = component.layout();
         let buffer = terminal.backend().buffer();
@@ -413,7 +415,8 @@ fn feeds_pill_row_and_targets_are_characterized_end_to_end() {
         url: "https://example.test/feed".into(),
         kind: FeedKind::Audio,
     }];
-    no_hero_component.set_content(&no_hero_subscriptions, &[Vec::new()], &[], false, true);
+    no_hero_component.set_content(&no_hero_subscriptions, &[Vec::new()], &[], false);
+    no_hero_component.set_focused(true);
     let no_hero_terminal = terminal_for(&mut no_hero_component, 60, 20);
     assert_geometry(&no_hero_terminal, no_hero_component.layout());
 

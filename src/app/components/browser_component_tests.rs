@@ -48,7 +48,8 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
     ];
     for (key, from, expected) in cases {
         let mut browser = BrowserComponent::new();
-        browser.set_content(BrowserContent::from_items(make_items(40)), true);
+        browser.set_content(BrowserContent::from_items(make_items(40)));
+        browser.set_focused(true);
         browser.set_cursor_for_test(from);
         let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
         terminal
@@ -73,7 +74,8 @@ fn browser_local_navigation_mirrors_legacy_flat_movement() {
     // Unfocused (Queue/playback own panel focus): movement keys do not
     // mutate the component cursor and remain unclaimed by this component.
     let mut browser = BrowserComponent::new();
-    browser.set_content(BrowserContent::from_items(make_items(40)), false);
+    browser.set_content(BrowserContent::from_items(make_items(40)));
+    browser.set_focused(false);
     browser.set_cursor_for_test(7);
     let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
     terminal
@@ -165,7 +167,8 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
     ];
     for (key, from, expected) in cases {
         let mut browser = BrowserComponent::new();
-        browser.set_content(BrowserContent::from_items(items.clone()), true);
+        browser.set_content(BrowserContent::from_items(items.clone()));
+        browser.set_focused(true);
         browser.set_cursor_for_test(from);
         let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
         terminal
@@ -186,7 +189,8 @@ fn browser_local_navigation_skips_letter_headers_and_ragged_rows() {
 #[test]
 fn browser_control_transition_preserves_the_selected_viewport_offset() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(make_items(40)), true);
+    browser.set_content(BrowserContent::from_items(make_items(40)));
+    browser.set_focused(true);
     browser.set_narrow_extras(NarrowBrowseExtras {
         hero_placeholder: true,
         ..NarrowBrowseExtras::default()
@@ -241,7 +245,8 @@ fn browser_control_transition_preserves_the_selected_viewport_offset() {
 #[test]
 fn browser_local_navigation_strides_one_column_for_wide_movies() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(make_items(12)), true);
+    browser.set_content(BrowserContent::from_items(make_items(12)));
+    browser.set_focused(true);
     browser.configure_wide_movies(false, false);
     let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
     terminal
@@ -291,7 +296,8 @@ fn browser_local_navigation_strides_one_column_for_wide_movies() {
 #[test]
 fn browser_alt_navigation_stays_unclaimed() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(BrowserContent::from_items(make_items(2)), true);
+    browser.set_content(BrowserContent::from_items(make_items(2)));
+    browser.set_focused(true);
 
     for code in [Key::Left, Key::Right, Key::Up, Key::Down] {
         let message = browser.on(&Event::Keyboard(TuiKeyEvent {
@@ -309,7 +315,8 @@ fn browser_alt_navigation_stays_unclaimed() {
 #[test]
 fn browser_alt_refresh_stays_component_owned() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(BrowserContent::from_items(make_items(1)), true);
+    browser.set_content(BrowserContent::from_items(make_items(1)));
+    browser.set_focused(true);
 
     let message = browser.on(&Event::Keyboard(TuiKeyEvent {
         code: Key::Char('r'),
@@ -326,7 +333,8 @@ fn browser_alt_refresh_stays_component_owned() {
 #[test]
 fn browser_context_menu_requires_bare_dot() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(BrowserContent::from_items(make_items(1)), true);
+    browser.set_content(BrowserContent::from_items(make_items(1)));
+    browser.set_focused(true);
 
     let modified = browser.on(&Event::Keyboard(TuiKeyEvent {
         code: Key::Char('.'),
@@ -351,7 +359,8 @@ fn browser_context_menu_requires_bare_dot() {
 fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
     let mut browser = BrowserComponent::new();
     let items = || make_items(4);
-    browser.set_content(BrowserContent::from_items(items()), true);
+    browser.set_content(BrowserContent::from_items(items()));
+    browser.set_focused(true);
 
     browser.apply_position(1, 2);
     assert_eq!(browser.cursor(), 1);
@@ -360,10 +369,10 @@ fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
     // Position in the render context is deliberately stripped before content
     // reaches the control, so a nonzero incoming cursor/scroll cannot replace
     // its current position.
-    browser.set_content(
-        BrowserContent::from_render_ctx(LibraryListRenderCtx::from_items(items(), 3, 7)),
-        true,
-    );
+    browser.set_content(BrowserContent::from_render_ctx(
+        LibraryListRenderCtx::from_items(items(), 3, 7),
+    ));
+    browser.set_focused(true);
     assert_eq!(browser.cursor(), 1);
     assert_eq!(browser.scroll(), 2);
 
@@ -387,7 +396,8 @@ fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
         // Unchanged browse identity means pagination, loading completion, and
         // refresh content pushes cannot re-seed the component's position.
         assert!(!browser.note_browse_identity(identity.clone()), "{label}");
-        browser.set_content(content, true);
+        browser.set_content(content);
+        browser.set_focused(true);
         assert_eq!(browser.cursor(), 1, "{label} cursor");
         assert_eq!(browser.scroll(), 2, "{label} scroll");
     }
@@ -446,10 +456,8 @@ fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
             browser.note_browse_identity(changed_identity),
             "{label} must be a new browse identity"
         );
-        browser.set_content(
-            content(LibraryListRenderCtx::from_items(items(), 0, 0)),
-            true,
-        );
+        browser.set_content(content(LibraryListRenderCtx::from_items(items(), 0, 0)));
+        browser.set_focused(true);
         assert_eq!(browser.cursor(), 1, "{label} before explicit position");
         assert_eq!(browser.scroll(), 2, "{label} before explicit position");
         browser.apply_position(2, 3);
@@ -461,10 +469,11 @@ fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
 #[test]
 fn browser_renders_the_shared_generic_rows() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(
-        BrowserContent::from_items(vec![make_item("Movie one", "Movie")]),
-        true,
-    );
+    browser.set_content(BrowserContent::from_items(vec![make_item(
+        "Movie one",
+        "Movie",
+    )]));
+    browser.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
     terminal
         .draw(|frame| browser.view(frame, frame.area()))
@@ -479,13 +488,11 @@ fn browser_renders_the_shared_generic_rows() {
 #[test]
 fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(
-        BrowserContent::from_items(vec![
-            make_item("first", "Movie"),
-            make_item("second", "Movie"),
-        ]),
-        true,
-    );
+    browser.set_content(BrowserContent::from_items(vec![
+        make_item("first", "Movie"),
+        make_item("second", "Movie"),
+    ]));
+    browser.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(100, 6)).unwrap();
     terminal
         .draw(|frame| browser.view(frame, frame.area()))
@@ -533,7 +540,8 @@ fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
 #[test]
 fn narrow_canonical_list_click_moves_cursor_and_emits_row_click() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(make_items(6)), true);
+    browser.set_content(BrowserContent::from_items(make_items(6)));
+    browser.set_focused(true);
     browser.set_narrow_extras(NarrowBrowseExtras {
         hero_placeholder: true,
         ..NarrowBrowseExtras::default()
@@ -578,7 +586,8 @@ fn narrow_canonical_list_click_moves_cursor_and_emits_row_click() {
 #[test]
 fn narrow_canonical_list_double_click_emits_row_activate() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(make_items(6)), true);
+    browser.set_content(BrowserContent::from_items(make_items(6)));
+    browser.set_focused(true);
     browser.set_narrow_extras(NarrowBrowseExtras {
         hero_placeholder: true,
         ..NarrowBrowseExtras::default()
@@ -621,7 +630,8 @@ fn narrow_canonical_list_double_click_emits_row_activate() {
 #[test]
 fn narrow_canonical_list_right_click_emits_row_context_menu() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(make_items(6)), true);
+    browser.set_content(BrowserContent::from_items(make_items(6)));
+    browser.set_focused(true);
     browser.set_narrow_extras(NarrowBrowseExtras {
         hero_placeholder: true,
         ..NarrowBrowseExtras::default()
@@ -663,7 +673,8 @@ fn narrow_canonical_list_right_click_emits_row_context_menu() {
 #[test]
 fn narrow_canonical_list_pill_click_emits_pill_click() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(make_items(6)), true);
+    browser.set_content(BrowserContent::from_items(make_items(6)));
+    browser.set_focused(true);
     browser.set_narrow_extras(NarrowBrowseExtras {
         hero_placeholder: true,
         show_letter_pills: true,
@@ -700,7 +711,8 @@ fn narrow_canonical_list_pill_click_emits_pill_click() {
 #[test]
 fn emby_browser_slash_opens_inline_search() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(BrowserContent::from_items(make_items(3)), true);
+    browser.set_content(BrowserContent::from_items(make_items(3)));
+    browser.set_focused(true);
     assert!(!browser.inline_search().is_active());
 
     let message = browser.handle_tui_key(TuiKeyEvent {
@@ -719,7 +731,8 @@ fn emby_browser_slash_opens_inline_search() {
 #[test]
 fn emby_browser_search_open_shortcut_letter_becomes_query_text() {
     let mut browser = BrowserComponent::new();
-    browser.set_content(BrowserContent::from_items(make_items(3)), true);
+    browser.set_content(BrowserContent::from_items(make_items(3)));
+    browser.set_focused(true);
     browser.handle_tui_key(TuiKeyEvent {
         code: Key::Char('/'),
         modifiers: KeyModifiers::NONE,
@@ -747,10 +760,11 @@ fn emby_browser_wide_right_rail_paints_inline_search() {
     // deliberately distinct from the search result's name below, so a text
     // match can only come from an actual painted result row in the right
     // rail, never from the Hero pane sharing a screen row.
-    browser.set_content(
-        BrowserContent::from_items(vec![make_item("Focused Movie", "Movie")]),
-        true,
-    );
+    browser.set_content(BrowserContent::from_items(vec![make_item(
+        "Focused Movie",
+        "Movie",
+    )]));
+    browser.set_focused(true);
     browser.handle_tui_key(TuiKeyEvent {
         code: Key::Char('/'),
         modifiers: KeyModifiers::NONE,

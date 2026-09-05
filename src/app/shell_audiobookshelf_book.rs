@@ -2,7 +2,7 @@ use super::components::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, S
 use super::components::{AudiobookshelfBookComponent, BrowserKey, BrowserKind, ComponentId};
 use super::shell::Model;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
-use super::{PanelFocus, TabSelection};
+use super::TabSelection;
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -153,14 +153,13 @@ impl Model {
         let Some(snapshot) = self.app.audiobookshelf_book_browse.get(index) else {
             return;
         };
-        let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
         let images_enabled = self.app.images_enabled();
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(book) = comp
                 .as_any_mut()
                 .downcast_mut::<AudiobookshelfBookComponent>()
             {
-                book.set_content(snapshot, focused, images_enabled);
+                book.set_content(snapshot, images_enabled);
             }
         }
     }
@@ -217,6 +216,7 @@ mod tests {
     use crate::app::components::{Msg, ShellRequest};
     use crate::app::tests::make_app_stub;
     use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
+    use crate::app::PanelFocus;
     use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfLibrary};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
@@ -265,6 +265,7 @@ mod tests {
 
         let mut model = Model::new(app);
         model.sync_audiobookshelf_book();
+        model.sync_active_destination();
         model.app.layout.main.audiobookshelf_book_area = Rect::new(0, 0, 100, 40);
         let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
         terminal
@@ -338,6 +339,7 @@ mod tests {
         app.panel_focus = PanelFocus::Library;
         let mut model = Model::new(app);
         model.sync_audiobookshelf_book();
+        model.sync_active_destination();
         let id = model.abs_book_id.clone().expect("book component mounted");
         let message = model
             .application
@@ -480,6 +482,7 @@ mod tests {
         app.panel_focus = PanelFocus::Library;
         let mut model = Model::new(app);
         model.sync_audiobookshelf_book();
+        model.sync_active_destination();
         let id = model.abs_book_id.clone().expect("book component mounted");
         let selected_book_id = |model: &Model| {
             model
@@ -510,6 +513,7 @@ mod tests {
             AudiobookshelfBookMove::Book(1),
         ));
         model.sync_audiobookshelf_book();
+        model.sync_active_destination();
         assert_eq!(
             selected_book_id(&model),
             Some("book-b".into()),
@@ -519,6 +523,7 @@ mod tests {
         // Switch to the Podcast library: the book component stays mounted.
         model.app.tab = TabSelection::AudiobookshelfLibrary(1);
         model.sync_audiobookshelf_book();
+        model.sync_active_destination();
         assert_eq!(model.abs_book_id, None);
         assert!(
             model.application.mounted(&id),
@@ -529,6 +534,7 @@ mod tests {
         // its selection is preserved.
         model.app.tab = TabSelection::AudiobookshelfLibrary(0);
         model.sync_audiobookshelf_book();
+        model.sync_active_destination();
         assert_eq!(
             model.abs_book_id.as_ref(),
             Some(&id),
@@ -589,6 +595,7 @@ mod tests {
         app.panel_focus = PanelFocus::Library;
         let mut model = Model::new(app);
         model.sync_audiobookshelf_book();
+        model.sync_active_destination();
         let id = model.abs_book_id.clone().expect("book component mounted");
 
         // Paint wide so the chapter pane exists, then focus it locally.
@@ -619,6 +626,7 @@ mod tests {
         state.buckets =
             crate::app::types_audiobookshelf_browse::build_surname_buckets(&state.books);
         model.push_audiobookshelf_book_content();
+        model.sync_active_destination();
 
         let chapter_selection = model
             .application
@@ -678,6 +686,7 @@ mod tests {
         app.panel_focus = PanelFocus::Library;
         let mut model = Model::new(app);
         model.sync_audiobookshelf_book();
+        model.sync_active_destination();
         // Narrow book area (60x20): the component paints the narrow
         // presentation; the mirror must project the narrow content area.
         model.app.layout.main.audiobookshelf_book_area = Rect::new(0, 0, 60, 20);

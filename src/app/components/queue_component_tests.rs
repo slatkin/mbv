@@ -43,10 +43,10 @@ fn queue_activation_uses_slot_id_after_snapshot_reorder() {
         slots.clone(),
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
 
     assert!(matches!(
         component.on(&Event::Keyboard(key(Key::Down))),
@@ -59,10 +59,10 @@ fn queue_activation_uses_slot_id_after_snapshot_reorder() {
         reordered,
         QueueCursorUpdate::Preserve,
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     assert!(matches!(
         component.on(&Event::Keyboard(key(Key::Enter))),
         Some(Msg::Queue(QueueRequest::Play { slot_id, .. })) if slot_id == second
@@ -85,10 +85,10 @@ fn queue_set_content_follow_the_playhead_moves_cursor_when_slots_persist() {
         slots.clone(),
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     assert_eq!(component.test_cursor(), 0);
 
     // Same slot list, no removal: an identity-based `Preserve` would find
@@ -97,10 +97,10 @@ fn queue_set_content_follow_the_playhead_moves_cursor_when_slots_persist() {
         slots,
         QueueCursorUpdate::Set(1),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     assert_eq!(
         component.test_cursor(),
         1,
@@ -115,10 +115,10 @@ fn queue_component_emits_typed_keyboard_intents() {
         queue(),
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     assert!(matches!(
         component.on(&Event::Keyboard(chord(Key::Char(']'), KeyModifiers::NONE))),
         Some(Msg::Queue(QueueRequest::Scope(QueueScope::Remote)))
@@ -166,10 +166,10 @@ fn queue_component_renders_a_snapshot_without_app_state() {
         queue(),
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
 
     terminal
@@ -192,10 +192,10 @@ fn queue_right_click_uses_the_rendered_slot_target() {
         slots,
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
@@ -237,10 +237,10 @@ fn queue_component_upward_scrolling_reaches_top() {
         long_queue(),
         QueueCursorUpdate::Set(29),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
@@ -262,10 +262,10 @@ fn queue_component_page_up_from_bottom_reaches_top() {
         long_queue(),
         QueueCursorUpdate::Set(29),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     component.set_area(ratatui::layout::Rect::new(0, 0, 40, 8));
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     terminal
@@ -289,19 +289,19 @@ fn queue_component_instances_isolate_viewport_state() {
         slots.clone(),
         QueueCursorUpdate::Set(29),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    bottom.set_focused(true);
     let mut untouched = QueueComponent::new();
     untouched.set_content(
         slots,
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    untouched.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     terminal
         .draw(|frame| bottom.view(frame, frame.area()))
@@ -355,10 +355,10 @@ fn queue_refresh_retains_selected_target_and_scrolls_to_it() {
         slots.clone(),
         QueueCursorUpdate::Set(20),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
@@ -367,10 +367,10 @@ fn queue_refresh_retains_selected_target_and_scrolls_to_it() {
         slots,
         QueueCursorUpdate::Preserve,
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
@@ -386,10 +386,10 @@ fn queue_movement_uses_single_row_stride_and_follows_focus() {
         long_queue(),
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     assert!(matches!(
         component.on(&Event::Keyboard(key(Key::Down))),
         Some(Msg::Queue(QueueRequest::Cursor { .. }))
@@ -414,7 +414,6 @@ fn now_playing_queue_row_shows_elapsed_next_to_duration() {
         slot,
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
-        true,
         PlaybackState {
             active: true,
             active_idx: 0,
@@ -424,6 +423,7 @@ fn now_playing_queue_row_shows_elapsed_next_to_duration() {
         },
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
@@ -446,10 +446,10 @@ fn queue_scope_switch_resets_component_scroll() {
         slots,
         QueueCursorUpdate::Set(29),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
@@ -479,10 +479,10 @@ fn queue_scope_switch_resets_component_scroll() {
         long_queue(),
         QueueCursorUpdate::Set(29),
         QueueScope::Remote,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
@@ -502,10 +502,10 @@ fn queue_scope_switch_resets_component_scroll() {
         // renders as scroll 0 if the reset actually fired.
         QueueCursorUpdate::Set(3),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         QueueTitleModel::default(),
     );
+    component.set_focused(true);
     // Assert after a draw, not immediately after `set_content`: only a draw
     // proves the reset survives the render pass rather than just the field
     // write.
@@ -541,10 +541,10 @@ fn queue_scope_mouse_pills_reset_component_scroll_from_nonzero() {
         slots,
         QueueCursorUpdate::Set(29),
         QueueScope::Local,
-        true,
         PlaybackState::default(),
         title.clone(),
     );
+    component.set_focused(true);
     component.set_title_area(Some(ratatui::layout::Rect::new(0, 0, 40, 1)));
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     terminal

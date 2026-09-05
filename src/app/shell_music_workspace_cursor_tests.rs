@@ -17,6 +17,7 @@ fn music_resize_push_uses_current_frame_geometry() {
         .album_tracks_cache
         .insert("album-1".into(), vec![track]);
     model.sync_music_workspace();
+    model.sync_active_destination();
 
     let mut wide_terminal = Terminal::new(TestBackend::new(160, 30)).unwrap();
     wide_terminal
@@ -86,6 +87,7 @@ fn narrow_music_workspace_requests_album_activation() {
             && model.app.layout.main.wide_music_right_area.height > 0)
     );
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()
@@ -123,6 +125,7 @@ fn wide_music_workspace_allows_enter_for_inline_track_focus() {
     model.app.terminal_height = 40;
     assert!(model.app.is_right_panel_wide());
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()
@@ -159,6 +162,7 @@ fn recursive_album_activation_enters_track_focus_only_in_wide() {
         .album_tracks_cache
         .insert("album-1".into(), vec![track]);
     model.sync_music_workspace();
+    model.sync_active_destination();
     assert!(
         !(model.app.layout.main.wide_music_right_area.width > 0
             && model.app.layout.main.wide_music_right_area.height > 0)
@@ -213,6 +217,7 @@ fn position_restore_request_clears_track_focus_at_next_sync() {
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()
@@ -230,6 +235,7 @@ fn position_restore_request_clears_track_focus_at_next_sync() {
     // clears the component's inline track focus at the next content push.
     model.music_track_focus_request = Some(false);
     model.sync_music_workspace();
+    model.sync_active_destination();
     assert_eq!(model.music_track_focus_request, Some(false));
     model.push_music_workspace_content();
     let component = model
@@ -317,6 +323,7 @@ fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()
@@ -386,6 +393,7 @@ fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
         music_grouping: None,
     });
     model.sync_music_workspace();
+    model.sync_active_destination();
     assert!(!model.app.is_viewing_album_folders(0));
     assert_eq!(model.music_workspace_id, None);
     assert!(
@@ -398,6 +406,7 @@ fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
     // divergent component-local cursor.
     model.app.go_back(0);
     model.sync_music_workspace();
+    model.sync_active_destination();
     assert!(model.app.is_viewing_album_folders(0));
     assert_eq!(
         model.music_workspace_id.as_ref(),
@@ -437,6 +446,8 @@ fn narrow_grouped_music_workspace_is_rendered_and_focusable() {
     );
 
     model.sync_music_workspace();
+
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()
@@ -504,6 +515,7 @@ fn music_workspace_first_mount_adopts_restored_album_cursor() {
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()
@@ -517,6 +529,7 @@ fn music_workspace_reanchor_lands_regardless_of_prior_local_move() {
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()
@@ -546,6 +559,7 @@ fn music_workspace_ordinary_push_does_not_touch_album_cursor() {
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()

@@ -13,6 +13,7 @@ use tuirealm::event::{
 #[test]
 fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
     let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(
             vec![
@@ -26,7 +27,6 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
         None,
         0,
         None,
-        true,
         false,
     ));
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
@@ -78,13 +78,13 @@ fn tv_right_selects_first_episode_for_activation() {
         episodes: [("season-id".into(), vec![episode])].into_iter().collect(),
     };
     let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
         Some(series),
         Some(detail),
         0,
         None,
-        true,
         false,
     ));
 
@@ -124,6 +124,7 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
         episodes: [("season-id".into(), episodes)].into_iter().collect(),
     };
     let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
         Some(series.clone()),
@@ -134,7 +135,6 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
         ])),
         0,
         None,
-        true,
         false,
     ));
     let key = |code| {
@@ -159,7 +159,6 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
         None,
         0,
         Some(2),
-        true,
         false,
     ));
     assert_eq!(
@@ -173,7 +172,6 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
         Some(detail(vec![episode("Episode 1", "episode-1")])),
         0,
         Some(2),
-        true,
         false,
     ));
     assert_eq!(
@@ -194,7 +192,6 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
         Some(detail(Vec::new())),
         0,
         Some(0),
-        true,
         false,
     ));
     assert_eq!(component.episode_activation_selection(), None);
@@ -203,6 +200,7 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
 #[test]
 fn tv_keyboard_leaves_key_unclaimed_when_queue_is_focused() {
     let mut component = TvWorkspaceComponent::new();
+    component.set_focused(false);
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(
             vec![
@@ -216,7 +214,6 @@ fn tv_keyboard_leaves_key_unclaimed_when_queue_is_focused() {
         None,
         0,
         None,
-        false,
         true,
     ));
 
@@ -231,13 +228,13 @@ fn tv_keyboard_leaves_key_unclaimed_when_queue_is_focused() {
 #[test]
 fn tv_episode_brackets_with_modifiers_are_unclaimed() {
     let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
         None,
         None,
         0,
         Some(0),
-        true,
         false,
     ));
 
@@ -267,13 +264,14 @@ fn tv_grouped_cursor_mirrors_rendered_sorted_rows() {
     items.extend((3..50).map(|index| make_item(&format!("Series {index}"), "Series")));
 
     let mut component = TvWorkspaceComponent::new();
+
+    component.set_focused(true);
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(items, 1, 0),
         None,
         None,
         0,
         None,
-        true,
         false,
     ));
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
@@ -296,6 +294,7 @@ fn tv_grouped_cursor_mirrors_rendered_sorted_rows() {
 #[test]
 fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
     let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(
             vec![
@@ -309,7 +308,6 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
         None,
         0,
         None,
-        true,
         true,
     ));
 
@@ -355,6 +353,7 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
 #[test]
 fn dot_emits_library_context_menu() {
     let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
     let series = make_item("Series", "Series");
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![series], 0, 0),
@@ -362,7 +361,6 @@ fn dot_emits_library_context_menu() {
         None,
         0,
         None,
-        true,
         false,
     ));
     assert!(matches!(
@@ -374,13 +372,13 @@ fn dot_emits_library_context_menu() {
 #[test]
 fn slash_emits_open_inline_search() {
     let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
         None,
         None,
         0,
         None,
-        true,
         false,
     ));
     assert_eq!(
@@ -398,6 +396,7 @@ fn slash_emits_open_inline_search() {
 #[test]
 fn wide_tv_search_paints_in_right_rail_not_left_pane() {
     let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
     let mut series = make_item("Series", "Series");
     series.id = "series-id".into();
     component.set_content(TvWideRenderCtx::new(
@@ -406,7 +405,6 @@ fn wide_tv_search_paints_in_right_rail_not_left_pane() {
         None,
         0,
         None,
-        true,
         false,
     ));
     component.on(&Event::Keyboard(KeyEvent {
@@ -473,13 +471,13 @@ fn dot_with_episode_focus_targets_series() {
         episodes: [("season-id".into(), vec![episode])].into_iter().collect(),
     };
     let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
         Some(series),
         Some(detail),
         0,
         None,
-        true,
         false,
     ));
     component.on(&Event::Keyboard(KeyEvent {
@@ -496,13 +494,13 @@ fn dot_with_episode_focus_targets_series() {
 #[test]
 fn ctrl_r_emits_library_rescan() {
     let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
         None,
         None,
         0,
         None,
-        true,
         false,
     ));
 
@@ -528,13 +526,13 @@ fn ctrl_w_emits_library_toggle_watched() {
         episodes: [("season-id".into(), vec![episode])].into_iter().collect(),
     };
     let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
         Some(series.clone()),
         Some(detail),
         0,
         None,
-        true,
         false,
     ));
 

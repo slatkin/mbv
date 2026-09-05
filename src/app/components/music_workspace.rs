@@ -118,7 +118,6 @@ impl MusicWorkspaceComponent {
                 Vec::new(),
                 Vec::new(),
                 false,
-                false,
                 None,
                 false,
                 None,
@@ -221,6 +220,13 @@ impl MusicWorkspaceComponent {
         self.pending_anchor = Some(anchor);
     }
 
+    /// Test-only: drive framework focus the way `Component::attr` does when
+    /// TuiRealm delivers `Attribute::Focus`.
+    #[cfg(test)]
+    pub(in crate::app) fn set_focused(&mut self, focused: bool) {
+        self.context.focused = focused;
+    }
+
     pub(in crate::app) fn set_inline_track_focus_enabled(&mut self, enabled: bool) {
         self.inline_track_focus_enabled = enabled;
         if !enabled {
@@ -246,7 +252,11 @@ impl MusicWorkspaceComponent {
             .selected_album
             .as_ref()
             .map(|album| album.id.clone());
+        // Content projection never carries framework focus; preserve the
+        // component-owned value across the shell snapshot swap.
+        let focused = self.context.focused;
         self.context = context;
+        self.context.focused = focused;
         self.track_list.set_content(build_track_rows(
             self.context.album_tracks.as_deref().unwrap_or_default(),
         ));
@@ -639,7 +649,11 @@ impl Component for MusicWorkspaceComponent {
         None
     }
 
-    fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
+    fn attr(&mut self, attr: Attribute, value: AttrValue) {
+        if attr == Attribute::Focus {
+            self.context.focused = matches!(value, AttrValue::Flag(true));
+        }
+    }
 
     fn state(&self) -> State {
         State::None

@@ -37,13 +37,8 @@ fn component() -> FeedsComponent {
     let entries = vec![entry("First", false), entry("Second", true)];
     let grouped_entries = vec![entries];
     let mut component = FeedsComponent::new();
-    component.set_content(
-        &subscriptions,
-        &grouped_entries,
-        &grouped_entries[0],
-        false,
-        true,
-    );
+    component.set_content(&subscriptions, &grouped_entries, &grouped_entries[0], false);
+    component.set_focused(true);
     component
 }
 
@@ -66,7 +61,8 @@ fn grouped_component() -> FeedsComponent {
     ];
     let all_entries = entries.iter().flatten().cloned().collect::<Vec<_>>();
     let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &entries, &all_entries, false, true);
+    component.set_content(&subscriptions, &entries, &all_entries, false);
+    component.set_focused(true);
     component
 }
 
@@ -84,8 +80,8 @@ fn unfocused_component_ignores_keyboard_input() {
         std::slice::from_ref(&entries),
         &entries,
         false,
-        false,
     );
+    component.set_focused(false);
     let keys = [
         Key::Char('r'),
         Key::Char('w'),
@@ -166,7 +162,8 @@ fn group_count_includes_all() {
 #[test]
 fn clamp_state_works() {
     let mut component = component();
-    component.set_content(&[], &[], &[], false, true);
+    component.set_content(&[], &[], &[], false);
+    component.set_focused(true);
     assert_eq!(component.cursor(), 0);
     assert_eq!(component.scroll(), 0);
 }
@@ -218,7 +215,8 @@ fn watched_filter_empty_result() {
     }];
     let entries = vec![vec![entry("First", false)]];
     let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &entries, &entries[0], false, true);
+    component.set_content(&subscriptions, &entries, &entries[0], false);
+    component.set_focused(true);
     component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
         code: Key::Char('w'),
         modifiers: KeyModifiers::NONE,
@@ -283,8 +281,8 @@ fn unfocused_component_handles_mouse_input() {
         std::slice::from_ref(&entries),
         &entries,
         false,
-        false,
     );
+    component.set_focused(false);
     let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
     terminal
         .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
@@ -337,7 +335,8 @@ fn subscription_change_resets_component_selection() {
         url: "https://example.test/replacement".into(),
         kind: FeedKind::Audio,
     }];
-    component.set_content(&subscriptions, &[Vec::new()], &[], false, true);
+    component.set_content(&subscriptions, &[Vec::new()], &[], false);
+    component.set_focused(true);
     assert_eq!(component.selected_group(), 0);
     assert_eq!(component.cursor(), 0);
     assert_eq!(component.scroll(), 0);
@@ -357,7 +356,8 @@ fn playback_requests_use_the_selected_entry_guid() {
     ];
     let mut component = FeedsComponent::new();
     let grouped_entries = vec![entries.clone()];
-    component.set_content(&subscriptions, &grouped_entries, &entries, false, true);
+    component.set_content(&subscriptions, &grouped_entries, &entries, false);
+    component.set_focused(true);
     component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
         code: Key::Char('w'),
         modifiers: KeyModifiers::NONE,
@@ -410,7 +410,8 @@ fn feed_actions_preserve_the_selected_entry_when_guids_collide() {
     let entries = vec![vec![first.clone()], vec![second.clone()]];
     let all_entries = entries.iter().flatten().cloned().collect::<Vec<_>>();
     let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &entries, &all_entries, false, true);
+    component.set_content(&subscriptions, &entries, &all_entries, false);
+    component.set_focused(true);
     for _ in 0..2 {
         component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
             code: Key::Char(']'),
@@ -437,7 +438,8 @@ fn feed_actions_preserve_the_selected_entry_when_guids_collide() {
 #[test]
 fn empty_feed_actions_request_shell_feedback() {
     let mut component = FeedsComponent::new();
-    component.set_content(&[], &[], &[], false, true);
+    component.set_content(&[], &[], &[], false);
+    component.set_focused(true);
 
     assert_eq!(
         component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
@@ -517,7 +519,8 @@ fn unchanged_snapshot_does_not_overwrite_component_cursor() {
     }];
     let entries = vec![entry("First", false), entry("Second", true)];
     let grouped_entries = vec![entries.clone()];
-    component.set_content(&subscriptions, &grouped_entries, &entries, false, true);
+    component.set_content(&subscriptions, &grouped_entries, &entries, false);
+    component.set_focused(true);
 
     assert_eq!(component.cursor(), 1);
 }
@@ -560,7 +563,8 @@ fn dated_component(entries: Vec<FeedEntry>) -> FeedsComponent {
     }];
     let grouped = vec![entries.clone()];
     let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &grouped, &entries, false, true);
+    component.set_content(&subscriptions, &grouped, &entries, false);
+    component.set_focused(true);
     component
 }
 

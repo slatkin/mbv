@@ -53,7 +53,8 @@ fn abs_book_component_keeps_local_cursor_and_renders_without_app_state() {
     state.selected_id = Some("one".into());
 
     let mut component = AudiobookshelfBookComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
@@ -100,7 +101,8 @@ fn abs_book_component_keeps_local_cursor_and_renders_without_app_state() {
 fn abs_book_component_returns_none_when_unfocused_without_mutating_state() {
     let state = book_state(4, true);
     let mut component = AudiobookshelfBookComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     // Focus the chapter list locally so there is interaction state to guard.
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
     terminal
@@ -111,7 +113,8 @@ fn abs_book_component_returns_none_when_unfocused_without_mutating_state() {
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(component.chapter_selection(), Some(0));
-    component.set_content(&state, false, false);
+    component.set_content(&state, false);
+    component.set_focused(false);
 
     for (code, modifiers) in [
         (Key::Down, KeyModifiers::NONE),
@@ -185,7 +188,8 @@ fn book_state(count: usize, with_chapters: bool) -> AudiobookshelfBookBrowseStat
 fn abs_book_component_does_not_focus_hidden_chapters_on_narrow_left() {
     let state = book_state(1, true);
     let mut component = AudiobookshelfBookComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
 
     for rendered in [false, true] {
         if rendered {
@@ -229,7 +233,8 @@ fn abs_book_component_gates_chapter_focus_after_wide_to_narrow_resize() {
     let state = book_state(1, true);
     assert_eq!(state.visible_rows("book-0").len(), 1);
     let mut component = AudiobookshelfBookComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
@@ -302,7 +307,8 @@ fn abs_book_component_page_stride_comes_from_painted_geometry() {
     let page_jump = |height: u16| {
         let state = book_state(30, false);
         let mut component = AudiobookshelfBookComponent::new();
-        component.set_content(&state, true, false);
+        component.set_content(&state, false);
+        component.set_focused(true);
         let mut terminal = Terminal::new(TestBackend::new(60, height)).unwrap();
         terminal
             .draw(|frame| component.view(frame, frame.area()))
@@ -340,7 +346,8 @@ fn abs_book_component_page_stride_comes_from_painted_geometry() {
 fn abs_book_component_drops_stale_chapter_focus_when_selection_vanishes() {
     let state = book_state(1, true);
     let mut component = AudiobookshelfBookComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
@@ -367,7 +374,8 @@ fn abs_book_component_drops_stale_chapter_focus_when_selection_vanishes() {
     replacement.selected_id = Some("book-99".into());
     replacement.buckets =
         crate::app::types_audiobookshelf_browse::build_surname_buckets(&replacement.books);
-    component.set_content(&replacement, true, false);
+    component.set_content(&replacement, false);
+    component.set_focused(true);
 
     assert_eq!(
         component.chapter_selection(),
@@ -385,7 +393,8 @@ fn abs_book_viewport_anchor_round_trips_across_wide_narrow_wide() {
     state.select(state.books.len() - 1);
     let selected_id = state.selected_id.clone().unwrap();
     let mut component = AudiobookshelfBookComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
 
     let wide = ratatui::layout::Rect::new(0, 0, 120, 12);
     let narrow = ratatui::layout::Rect::new(0, 0, 60, 12);
@@ -416,7 +425,8 @@ fn abs_book_viewport_anchor_round_trips_across_wide_narrow_wide() {
 #[test]
 fn abs_book_component_unmatched_shift_bracket_stays_unclaimed() {
     let mut component = AudiobookshelfBookComponent::new();
-    component.set_content(&book_state(2, false), true, false);
+    component.set_content(&book_state(2, false), false);
+    component.set_focused(true);
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('['),
         modifiers: KeyModifiers::SHIFT,
@@ -431,7 +441,8 @@ fn abs_book_component_unmatched_shift_bracket_stays_unclaimed() {
 fn abs_book_mouse_click_resolves_row_and_right_click_is_ignored() {
     let state = book_state(6, false);
     let mut component = AudiobookshelfBookComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
@@ -473,7 +484,8 @@ fn abs_book_mouse_click_resolves_row_and_right_click_is_ignored() {
 fn abs_book_mouse_double_click_emits_activate_intent() {
     let state = book_state(6, false);
     let mut component = AudiobookshelfBookComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
@@ -514,7 +526,8 @@ fn abs_book_mouse_double_click_emits_activate_intent() {
 fn abs_book_mouse_wheel_pages_the_book_list() {
     let state = book_state(20, false);
     let mut component = AudiobookshelfBookComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))

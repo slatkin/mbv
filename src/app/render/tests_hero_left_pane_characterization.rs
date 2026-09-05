@@ -50,7 +50,8 @@ fn movies_family_wide_left_pane_unconditional_fill_double_horizontal_inset() {
     let mut component = BrowserComponent::new_for_kind(BrowserKind::Movies);
     let mut item = make_item("Focused Movie", "Movie");
     item.overview = "A short overview.".into();
-    component.set_content(BrowserContent::from_items(vec![item]), true);
+    component.set_content(BrowserContent::from_items(vec![item]));
+    component.set_focused(true);
     let area = wide_area();
     let terminal = direct_terminal(|f| component.view(f, area));
     let buffer = terminal.backend().buffer();
@@ -96,7 +97,6 @@ fn tv_wide_left_pane_unconditional_fill_shared_inset() {
         None,
         0,
         None,
-        true,
         false,
     ));
     let area = wide_area();
@@ -190,7 +190,8 @@ fn feed_component_with_entries(entries: Vec<FeedEntry>) -> FeedsComponent {
     let grouped = vec![entries];
     let all_entries = grouped[0].clone();
     let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &grouped, &all_entries, false, true);
+    component.set_content(&subscriptions, &grouped, &all_entries, false);
+    component.set_focused(true);
     component
 }
 
@@ -343,7 +344,8 @@ fn abs_books_wide_left_pane_fills_via_shared_primitive() {
     let app = make_audiobookshelf_book_app();
     let mut component = AudiobookshelfBookComponent::new();
     if let Some(state) = app.audiobookshelf_book_browse.first() {
-        component.set_content(state, true, app.images_enabled());
+        component.set_content(state, app.images_enabled());
+        component.set_focused(true);
     }
     let area = wide_area();
     let terminal = direct_terminal(|f| component.view(f, area));
@@ -383,7 +385,8 @@ fn abs_podcasts_wide_left_pane_fills_via_shared_primitive() {
     let app = crate::app::tests_podcast::audiobookshelf_app();
     let mut component = AudiobookshelfPodcastComponent::new();
     if let Some(state) = app.audiobookshelf_browse.first() {
-        component.set_content(state, true, app.images_enabled());
+        component.set_content(state, app.images_enabled());
+        component.set_focused(true);
     }
     let area = wide_area();
     let terminal = direct_terminal(|f| component.view(f, area));
@@ -416,9 +419,9 @@ fn abs_book_wide_hero_keeps_text_with_images_on_or_off() {
         let mut component = AudiobookshelfBookComponent::new();
         component.set_content(
             app.audiobookshelf_book_browse.first().expect("book state"),
-            true,
             images_enabled,
         );
+        component.set_focused(true);
         let terminal = direct_terminal(|f| component.view(f, wide_area()));
         assert!(buffer_to_string(&terminal).contains("Alpha Tales"));
     }
@@ -431,9 +434,9 @@ fn abs_podcast_wide_hero_keeps_text_with_images_on_or_off() {
         let mut component = AudiobookshelfPodcastComponent::new();
         component.set_content(
             app.audiobookshelf_browse.first().expect("podcast state"),
-            true,
             images_enabled,
         );
+        component.set_focused(true);
         let terminal = direct_terminal(|f| component.view(f, wide_area()));
         assert!(buffer_to_string(&terminal).contains("Show A"));
     }

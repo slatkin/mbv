@@ -384,6 +384,7 @@ pub fn render_home_shell_with(
     let mut model = crate::app::shell::Model::new(app);
     seed(&mut model);
     model.push_home_content();
+    model.sync_active_destination();
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {

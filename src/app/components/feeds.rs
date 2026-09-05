@@ -90,13 +90,18 @@ impl FeedsComponent {
         self.images_enabled = images_enabled;
     }
 
+    /// Test-only: drive framework focus the way `Component::attr` does.
+    #[cfg(test)]
+    pub(in crate::app) fn set_focused(&mut self, focused: bool) {
+        self.focused = focused;
+    }
+
     pub(in crate::app) fn set_content(
         &mut self,
         subscriptions: &[FeedSubscription],
         entries: &[Vec<FeedEntry>],
         all_entries: &[FeedEntry],
         loading: bool,
-        focused: bool,
     ) {
         let subscription_urls: Vec<String> = subscriptions
             .iter()
@@ -111,7 +116,6 @@ impl FeedsComponent {
             .selected_group
             .min(self.group_count().saturating_sub(1));
         self.loading = loading;
-        self.focused = focused;
         self.rebuild_visible_entries();
         // An ordinary refresh keeps the active control authoritative (the
         // selected target is preserved by `ListCore::set_content`); only a
@@ -466,7 +470,11 @@ impl Component for FeedsComponent {
         None
     }
 
-    fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
+    fn attr(&mut self, attr: Attribute, value: AttrValue) {
+        if attr == Attribute::Focus {
+            self.focused = matches!(value, AttrValue::Flag(true));
+        }
+    }
 
     fn state(&self) -> State {
         State::None

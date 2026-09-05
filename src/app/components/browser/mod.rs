@@ -167,9 +167,14 @@ impl BrowserComponent {
     /// only through the identity-gated `apply_position`. The one exception is
     /// the `ViewportAnchor` breakpoint seam, whose preserved target is
     /// re-resolved against the new item list here.
-    pub(in crate::app) fn set_content(&mut self, content: BrowserContent, focused: bool) {
-        self.context = content;
+    /// Test-only: drive framework focus the way `Component::attr` does.
+    #[cfg(test)]
+    pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
+    }
+
+    pub(in crate::app) fn set_content(&mut self, content: BrowserContent) {
+        self.context = content;
         let anchor_target = self
             .preserved_anchor
             .as_ref()
@@ -740,7 +745,11 @@ impl Component for BrowserComponent {
         None
     }
 
-    fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
+    fn attr(&mut self, attr: Attribute, value: AttrValue) {
+        if attr == Attribute::Focus {
+            self.focused = matches!(value, AttrValue::Flag(true));
+        }
+    }
 
     fn state(&self) -> State {
         State::None

@@ -55,6 +55,7 @@ fn render_wide(
     context.focused = focused;
     let mut component = MusicWorkspaceComponent::new();
     component.set_content(context);
+    component.set_focused(focused);
     component.re_anchor(cursor, 0);
     let mut terminal = Terminal::new(TestBackend::new(W, H)).unwrap();
     terminal

@@ -378,3 +378,96 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
             "TvBack restores the series cursor by parent_id (row of movie-third), not a reset 0, the popped child cursor 99, or the stale 1"
         );
 }
+
+/// Renders the wide TV workspace through the shell paint path and returns the
+/// painted buffer with the component-owned right series-rail rect.
+fn render_wide_tv(model: &mut Model) -> (ratatui::buffer::Buffer, Rect) {
+    let area = model.app.layout.main.tv_wide_area;
+    assert!(
+        area.width > 0 && area.height > 0,
+        "wide TV geometry must be primed by the sync pass: {area:?}"
+    );
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(160, 40)).unwrap();
+    terminal
+        .draw(|f| model.render_tv_workspace_component(f))
+        .unwrap();
+    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+    let rail = model
+        .application
+        .get_component(&id)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<TvWorkspaceComponent>()
+        .unwrap()
+        .test_layout()
+        .tv_wide_list_area;
+    (terminal.backend().buffer().clone(), rail)
+}
+
+/// Whether the accent selected-row marker glyph is painted anywhere in the
+/// right series rail band.
+fn rail_has_selection_marker(buf: &ratatui::buffer::Buffer, rail: Rect) -> bool {
+    (rail.y..rail.bottom()).any(|y| {
+        (rail.x.saturating_sub(4)..rail.right()).any(|x| buf[(x, y)].symbol() == "\u{258e}")
+    })
+}
+
+fn tv_selected_id(model: &Model, id: &ComponentId) -> Option<String> {
+    model
+        .application
+        .get_component(id)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<TvWorkspaceComponent>()
+        .unwrap()
+        .selected_item_id()
+}
+
+/// Through the real shell synchronisation order: moving Panel focus to Queue
+/// drops the wide TV right rail's focused surface and selected-row marker on
+/// the next frame, without losing the selected series identity.
+#[test]
+fn wide_tv_focus_to_queue_drops_right_rail_treatment_via_shell_sync() {
+    let mut model = mounted_tv_model();
+    model.sync_mounted_surfaces();
+    let id = model
+        .tv_workspace_id
+        .clone()
+        .expect("wide TV workspace mounted");
+    assert_eq!(model.application.focus(), Some(&id));
+    let selected = tv_selected_id(&model, &id);
+    assert!(selected.is_some(), "a series row must be selected");
+
+    let (focused_buf, rail) = render_wide_tv(&mut model);
+    assert_eq!(
+        focused_buf[(rail.x.saturating_sub(1), rail.y.saturating_sub(1))].bg,
+        crate::app::palette::resolve_surface_focus(true),
+        "focused right rail paints the focused surface"
+    );
+    assert!(
+        rail_has_selection_marker(&focused_buf, rail),
+        "focused right rail paints the selected-row marker"
+    );
+
+    // Panel focus moves to Queue via the production sync sequence.
+    model.app.panel_focus = crate::app::PanelFocus::Queue;
+    model.sync_mounted_surfaces();
+    assert_eq!(model.application.focus(), Some(&ComponentId::Queue));
+
+    let (blurred_buf, rail) = render_wide_tv(&mut model);
+    assert_eq!(
+        blurred_buf[(rail.x.saturating_sub(1), rail.y.saturating_sub(1))].bg,
+        crate::app::palette::resolve_surface_focus(false),
+        "blurred right rail drops the focused surface"
+    );
+    assert!(
+        !rail_has_selection_marker(&blurred_buf, rail),
+        "blurred right rail drops the selected-row marker"
+    );
+
+    assert_eq!(
+        tv_selected_id(&model, &id),
+        selected,
+        "selected series identity survives the focus change"
+    );
+}

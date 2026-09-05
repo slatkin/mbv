@@ -49,7 +49,7 @@ impl Model {
         let title_area = self.app.layout.main.queue_title_area;
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
-                queue.set_content(slots, cursor, scope, queue_focused, playback, title);
+                queue.set_content(slots, cursor, scope, playback, title);
                 queue.set_area(self.app.layout.main.queue_area);
                 queue.set_title_area(title_area);
             }

@@ -5,7 +5,7 @@ use super::images::series_image_cache_key;
 use super::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use super::render::TvWideRenderCtx;
 use super::shell::Model;
-use super::{PanelFocus, TabSelection};
+use super::TabSelection;
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -113,7 +113,7 @@ impl Model {
             .and_then(|idx| self.app.wide_tv_library_area(idx).map(|area| (idx, area)))
         {
             Some((idx, lib_area)) => {
-                let ctx = self.app.wide_tv_render_ctx(idx, false, None);
+                let ctx = self.app.wide_tv_render_ctx(idx, None);
                 ctx.publish_geometry(lib_area, &mut self.app.layout.main);
             }
             None => {
@@ -341,7 +341,6 @@ impl Model {
             series_detail,
             0,
             None,
-            matches!(self.app.effective_panel_focus(), PanelFocus::Library),
             self.app.should_show_letter_pills(index),
         )
         .with_image_state(self.app.images_enabled(), image_loading);

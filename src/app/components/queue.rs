@@ -77,12 +77,17 @@ impl QueueComponent {
         }
     }
 
+    /// Test-only: drive framework focus the way `Component::attr` does.
+    #[cfg(test)]
+    pub(in crate::app) fn set_focused(&mut self, focused: bool) {
+        self.focused = focused;
+    }
+
     pub(in crate::app) fn set_content(
         &mut self,
         slots: Vec<QueueSlot>,
         cursor: QueueCursorUpdate,
         scope: QueueScope,
-        focused: bool,
         playback: PlaybackState,
         title: QueueTitleModel,
     ) {
@@ -105,7 +110,6 @@ impl QueueComponent {
         self.list
             .set_scroll(self.list.scroll().min(self.list.cursor()));
         self.scope = scope;
-        self.focused = focused;
         self.empty_text = if scope == QueueScope::Local {
             "  Add items with p from Home or library tabs".into()
         } else {
@@ -459,7 +463,11 @@ impl Component for QueueComponent {
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
         None
     }
-    fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
+    fn attr(&mut self, attr: Attribute, value: AttrValue) {
+        if attr == Attribute::Focus {
+            self.focused = matches!(value, AttrValue::Flag(true));
+        }
+    }
     fn state(&self) -> State {
         State::None
     }

@@ -19,6 +19,7 @@ fn wide_grouped_music_prewarms_neighbour_album_images() {
     model.app.libs[0].nav_stack[1].set_resting_cursor(2);
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
 
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal
@@ -46,6 +47,7 @@ fn stale_grouped_music_order_prefetches_painted_neighbours() {
     model.app.libs[0].nav_stack[1].set_resting_cursor(2);
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
 
     // Leave the component's pushed context intact, but make the fallback
     // order used by a fresh render context disagree with its painted order.
@@ -76,6 +78,7 @@ fn narrow_grouped_music_prewarms_neighbour_album_images() {
     model.app.libs[0].nav_stack[1].set_resting_cursor(2);
     model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 81, 20);
     model.sync_music_workspace();
+    model.sync_active_destination();
 
     let mut terminal = Terminal::new(TestBackend::new(81, 20)).unwrap();
     terminal

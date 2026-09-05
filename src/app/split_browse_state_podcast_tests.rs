@@ -76,13 +76,15 @@ fn component_episode_filter_and_selection_survive_a_show_refresh() {
     state.select(1);
 
     let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     component.set_episode_filter(AudiobookshelfEpisodeFilter::Unplayed);
     component.set_episode_selection(Some(2));
 
     // Refresh that keeps the selected show (show-b): the component's own
     // interaction state must ride through the re-projection unchanged.
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
 
     assert_eq!(
         component.episode_filter(),

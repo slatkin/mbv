@@ -222,7 +222,8 @@ fn wide_letter_grouped_row_map_indexes_items_without_counting_headings() {
         })
         .collect();
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(items), true);
+    browser.set_content(BrowserContent::from_items(items));
+    browser.set_focused(true);
     browser.apply_position(54, 40);
 
     let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
@@ -274,7 +275,8 @@ fn wide_movies_selected_row_punches_through_to_the_resting_surface() {
             })
             .collect();
         let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-        browser.set_content(BrowserContent::from_items(items), focused);
+        browser.set_content(BrowserContent::from_items(items));
+        browser.set_focused(focused);
         browser.apply_position(0, 40);
         let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
         terminal
@@ -326,7 +328,8 @@ fn wide_movies_list_panel_leaves_exactly_one_row_above_the_status_bar() {
         })
         .collect();
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(items), true);
+    browser.set_content(BrowserContent::from_items(items));
+    browser.set_focused(true);
     browser.apply_position(0, 40);
 
     let area = ratatui::layout::Rect::new(0, 0, 120, 40);

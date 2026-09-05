@@ -1,6 +1,5 @@
 use super::components::{ComponentId, FeedsComponent};
 use super::shell::Model;
-use super::PanelFocus;
 
 impl Model {
     pub(super) fn mount_feeds(&mut self) {
@@ -14,7 +13,6 @@ impl Model {
             return;
         }
         let state = &self.app.feed_tab;
-        let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
         if let Some(comp) = self.application.get_component_mut(&ComponentId::Feeds) {
             if let Some(feeds) = comp.as_any_mut().downcast_mut::<FeedsComponent>() {
                 feeds.set_images_enabled(self.app.images_enabled());
@@ -23,7 +21,6 @@ impl Model {
                     &state.entries,
                     &state.all_entries,
                     state.loading,
-                    focused,
                 );
             }
         }
@@ -45,6 +42,7 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::tests::make_app_stub;
+    use crate::app::PanelFocus;
     use mbv_core::config::{FeedKind, FeedSubscription};
 
     #[test]

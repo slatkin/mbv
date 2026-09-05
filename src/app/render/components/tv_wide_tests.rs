@@ -27,9 +27,10 @@ fn render_tv_workspace(app: &mut App, layout: &mut LayoutMain) -> (String, TvWor
     let area = Rect::new(0, 0, 100, 40);
     let mut component = TvWorkspaceComponent::new();
     component.set_content(
-        app.wide_tv_render_ctx(0, true, None)
+        app.wide_tv_render_ctx(0, None)
             .with_image_state(false, false),
     );
+    component.set_focused(true);
     term.draw(|f| {
         app.render_library(f, area, true, layout, None);
         component.view(f, area);
@@ -112,7 +113,8 @@ fn is_right_panel_wide_reflects_terminal_size_paint_free() {
 fn wide_tv_requests_selected_series_primary_image_with_budget_and_placeholder() {
     let app = tv_app();
     let mut component = TvWorkspaceComponent::new();
-    component.set_content(app.wide_tv_render_ctx(0, true, None));
+    component.set_content(app.wide_tv_render_ctx(0, None));
+    component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal.draw(|f| component.view(f, f.area())).unwrap();
     match component.take_image_paint() {
@@ -295,9 +297,10 @@ fn wide_tv_episode_list_uses_soft_accent_when_focused() {
         .push(second_episode);
     let mut component = TvWorkspaceComponent::new();
     component.set_content(
-        app.wide_tv_render_ctx(0, true, None)
+        app.wide_tv_render_ctx(0, None)
             .with_image_state(false, false),
     );
+    component.set_focused(true);
     component.on(&tuirealm::event::Event::Keyboard(
         tuirealm::event::KeyEvent {
             code: tuirealm::event::Key::Right,
@@ -329,9 +332,10 @@ fn wide_tv_series_rail_leaves_exactly_one_row_above_the_status_bar() {
     let app = tv_app();
     let mut component = TvWorkspaceComponent::new();
     component.set_content(
-        app.wide_tv_render_ctx(0, true, None)
+        app.wide_tv_render_ctx(0, None)
             .with_image_state(false, false),
     );
+    component.set_focused(true);
     let area = Rect::new(0, 0, 100, 30);
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
     terminal.draw(|f| component.view(f, area)).unwrap();
@@ -352,9 +356,10 @@ fn wide_tv_left_focus_drops_the_right_rail_to_the_resting_surface() {
     let app = tv_app();
     let mut component = TvWorkspaceComponent::new();
     component.set_content(
-        app.wide_tv_render_ctx(0, true, None)
+        app.wide_tv_render_ctx(0, None)
             .with_image_state(false, false),
     );
+    component.set_focused(true);
     component.on(&tuirealm::event::Event::Keyboard(
         tuirealm::event::KeyEvent {
             code: tuirealm::event::Key::Right,
@@ -380,7 +385,8 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
         let area = Rect::new(0, 0, 100, 30);
         let mut layout = LayoutMain::default();
         let mut component = TvWorkspaceComponent::new();
-        component.set_content(app.wide_tv_render_ctx(0, focused, None));
+        component.set_content(app.wide_tv_render_ctx(0, None));
+        component.set_focused(focused);
         let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
         terminal
             .draw(|f| {

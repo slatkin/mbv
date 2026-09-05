@@ -1,7 +1,7 @@
 use super::components::{AudiobookshelfPodcastComponent, BrowserKey, BrowserKind, ComponentId};
 use super::shell::Model;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
-use super::{PanelFocus, TabSelection};
+use super::TabSelection;
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -173,13 +173,12 @@ impl Model {
         let Some(snapshot) = self.app.audiobookshelf_browse.get(index) else {
             return;
         };
-        let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(podcast) = comp
                 .as_any_mut()
                 .downcast_mut::<AudiobookshelfPodcastComponent>()
             {
-                podcast.set_content(snapshot, focused, self.app.images_enabled());
+                podcast.set_content(snapshot, self.app.images_enabled());
             }
         }
         // Cover-fetch bridge (task 5.3d.9): the selected show's cover was

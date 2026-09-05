@@ -28,6 +28,7 @@ fn mounted_tv_model() -> Model {
     app.terminal_height = 40;
     let mut model = Model::new(app);
     model.sync_tv_workspace();
+    model.sync_active_destination();
     model
 }
 
@@ -283,6 +284,7 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     model.app.terminal_width = 80;
     model.app.terminal_height = 24;
     model.sync_tv_workspace();
+    model.sync_active_destination();
     assert_eq!(model.tv_workspace_id, None);
     assert!(
         model.application.mounted(&id),
@@ -293,6 +295,7 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     model.app.terminal_width = 160;
     model.app.terminal_height = 40;
     model.sync_tv_workspace();
+    model.sync_active_destination();
     assert_eq!(
         model.tv_workspace_id.as_ref(),
         Some(&id),
@@ -495,7 +498,7 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
 /// correct immediately.
 #[test]
 fn entering_wide_tv_library_does_not_flash_the_narrow_browser() {
-    use crate::app::PanelMode;
+    use crate::app::{PanelFocus, PanelMode};
 
     let mut app = make_movie_app();
     // Second library is the wide TV one; start focused on the first (Movies).
@@ -648,6 +651,7 @@ fn wide_tv_handoff_does_not_fetch_empty_series_id() {
     // This is the first wide-TV handoff, so the mounted component cannot have
     // already captured a valid ID before the guard is exercised.
     model.sync_tv_workspace();
+    model.sync_active_destination();
 
     assert!(model.app.series_detail_loading.is_empty());
     assert!(model.app.series_detail_cache.is_empty());
@@ -659,6 +663,7 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     model.app.terminal_width = 80;
     model.app.terminal_height = 24;
     model.sync_tv_workspace();
+    model.sync_active_destination();
     model.sync_emby_browser();
 
     // Divergence: the mounted BrowserComponent selects index 0 while App's
@@ -763,6 +768,7 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
     app.terminal_height = 40;
     let mut model = Model::new(app);
     model.sync_tv_workspace();
+    model.sync_active_destination();
 
     assert!(model.app.wide_tv_library_area(0).is_none());
     assert!(model.app.wide_tv_library_area(1).is_some());
@@ -787,6 +793,7 @@ fn tv_series_activation_branch_flips_on_resize_tick_before_repaint() {
     model.app.terminal_width = 60;
     model.app.terminal_height = 24;
     model.sync_tv_workspace();
+    model.sync_active_destination();
     assert!(model.app.wide_tv_library_area(0).is_none());
 
     // Narrow: activation opens the Series selection modal, never the

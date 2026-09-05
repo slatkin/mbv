@@ -575,7 +575,7 @@ impl App {
                         )
                         .is_some()
                     {
-                        let ctx = self.wide_tv_render_ctx(lib_idx, focused, cursor_scroll);
+                        let ctx = self.wide_tv_render_ctx(lib_idx, cursor_scroll);
                         ctx.publish_geometry(area, layout);
                     }
                     // BrowserComponent owns the browse body at every width;

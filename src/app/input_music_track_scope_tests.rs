@@ -24,6 +24,7 @@ fn wide_track_focus_model(track_count: usize) -> (Model, ComponentId) {
     model.app.terminal_width = 160;
     model.app.terminal_height = 40;
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()

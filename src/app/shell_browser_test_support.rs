@@ -107,6 +107,7 @@ pub(super) fn browser_component_cursor(model: &Model, id: &ComponentId) -> usize
 fn mounted_music_model() -> Model {
     let mut model = Model::new(crate::app::render::make_music_group_app());
     model.sync_music_workspace();
+    model.sync_active_destination();
     model
 }
 
@@ -123,6 +124,7 @@ fn mounted_tv_model() -> Model {
     app.terminal_height = 40;
     let mut model = Model::new(app);
     model.sync_tv_workspace();
+    model.sync_active_destination();
     model
 }
 

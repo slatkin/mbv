@@ -50,6 +50,7 @@ fn render_podcast_shell_with(
 
     let mut model = Model::new(app);
     model.sync_audiobookshelf_podcast();
+    model.sync_active_destination();
     configure(&mut model);
 
     let backend = TestBackend::new(width, height);
@@ -528,7 +529,8 @@ fn podcast_each_breakpoint_runs_exactly_one_canonical_list_painter() {
     };
 
     let mut wide = AudiobookshelfPodcastComponent::new();
-    wide.set_content(&state, true, false);
+    wide.set_content(&state, false);
+    wide.set_focused(true);
     reset();
     let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
     term.draw(|f| wide.view(f, f.area())).unwrap();
@@ -537,7 +539,8 @@ fn podcast_each_breakpoint_runs_exactly_one_canonical_list_painter() {
     assert_eq!(PLAIN_ROWS_PAINTS.with(std::cell::Cell::get), 0);
 
     let mut narrow = AudiobookshelfPodcastComponent::new();
-    narrow.set_content(&state, true, false);
+    narrow.set_content(&state, false);
+    narrow.set_focused(true);
     reset();
     let mut term = Terminal::new(TestBackend::new(60, 24)).unwrap();
     term.draw(|f| narrow.view(f, f.area())).unwrap();
@@ -557,7 +560,8 @@ fn podcast_viewport_anchor_round_trips_across_wide_narrow_wide() {
     state.select(state.shows.len() - 1);
     let selected_id = state.selected_id.clone().unwrap();
     let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
 
     let wide = Rect::new(0, 0, 120, 12);
     let narrow = Rect::new(0, 0, 60, 12);

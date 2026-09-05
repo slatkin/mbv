@@ -81,13 +81,15 @@ fn selected_bucket_reanchors_to_selected_book_after_page_append() {
     state.append_page_books(0, 4, books(&["Brown", "Davis"]));
     state.selected_id = Some("book-Davis".into());
     let mut component = AudiobookshelfBookComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
 
     // Page in earlier surnames, shifting "Davis" to a higher index. The
     // content push re-anchors the component's bucket onto the still-selected
     // book.
     state.append_page_books(1, 4, books(&["Adams", "Carter"]));
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
 
     let davis_after = state
         .books

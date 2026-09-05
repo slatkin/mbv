@@ -6,7 +6,7 @@
 
 use super::components::{ComponentId, HomeComponent, ShellRequest};
 use super::shell::Model;
-use super::{PanelFocus, TabSelection};
+use super::TabSelection;
 use mbv_core::playback_queue::QueueItem;
 
 impl Model {
@@ -101,7 +101,6 @@ impl Model {
             .map(|(title, source, items, _cursor)| (title.clone(), source.clone(), items.clone()))
             .collect();
         let cw_item = self.home_cw_item();
-        let focused = !matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
         let use_nerd_fonts = self.app.use_nerd_fonts;
         let images_enabled = self.app.images_enabled();
         // Snapshot the pending persisted-pill restore before the component
@@ -112,7 +111,6 @@ impl Model {
             if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
                 home.set_content(continue_items, latest, self.home_content.loading);
                 home.set_continue_watching_item(cw_item);
-                home.set_focused(focused);
                 home.set_use_nerd_fonts(use_nerd_fonts);
                 home.set_images_enabled(images_enabled);
                 if let Some(pending_source) = &pending {
@@ -158,12 +156,6 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
-        let focused = !matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
-        if let Some(comp) = self.application.get_component_mut(&ComponentId::Home) {
-            if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
-                home.set_focused(focused);
-            }
-        }
         self.application.view(&ComponentId::Home, f, area);
         let image_paint = self
             .application
@@ -178,6 +170,7 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::components::Msg;
+    use crate::app::PanelFocus;
 
     /// Route a `ShellRequest` through the Model's terminal-message dispatch,
     /// the same path `handle_terminal_message` takes for a folded mouse `Msg`.
@@ -277,6 +270,7 @@ mod tests {
         let mut model = Model::new(make_app_stub());
         model.home_content.continue_items = crate::app::tests::make_items(2);
         model.push_home_content();
+        model.sync_active_destination();
 
         let message = {
             let component = model

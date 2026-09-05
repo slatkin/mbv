@@ -21,6 +21,7 @@ fn mounted_wide_tv_model() -> Model {
     app.terminal_height = 40;
     let mut model = Model::new(app);
     model.sync_tv_workspace();
+    model.sync_active_destination();
     model
 }
 

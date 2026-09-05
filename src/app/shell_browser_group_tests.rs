@@ -54,6 +54,7 @@ fn narrow_browser_shell_render_prefetches_only_when_idle_and_available() {
     model.app.image_protocol_enabled = true;
     model.app.image_fetches_active = 6;
     model.sync_emby_browser();
+    model.sync_active_destination();
     let id = model.emby_browser_id.clone().expect("browser mounted");
 
     assert!(matches!(
@@ -100,6 +101,7 @@ fn emby_browser_stays_mounted_and_preserves_cursor_across_switch() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(two_library_app());
     model.sync_emby_browser();
+    model.sync_active_destination();
     let a_id = model.emby_browser_id.clone().expect("A browser mounted");
 
     // Move A's browser cursor to row 2 (component emits the typed index
@@ -116,6 +118,7 @@ fn emby_browser_stays_mounted_and_preserves_cursor_across_switch() {
     // Switch to library B: A's component must stay mounted (keep-mounted).
     model.app.tab = TabSelection::EmbyLibrary(1);
     model.sync_emby_browser();
+    model.sync_active_destination();
     assert!(
         model.application.mounted(&a_id),
         "A's browser must stay mounted after switching to B"
@@ -127,6 +130,7 @@ fn emby_browser_stays_mounted_and_preserves_cursor_across_switch() {
     // Switch back to A: still mounted, and the cursor is N (not 0).
     model.app.tab = TabSelection::EmbyLibrary(0);
     model.sync_emby_browser();
+    model.sync_active_destination();
     assert_eq!(model.emby_browser_id.as_ref(), Some(&a_id));
     assert!(
         model.application.mounted(&a_id),
@@ -149,11 +153,13 @@ fn emby_browser_refreshes_content_on_repoint_after_switch() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(two_library_app());
     model.sync_emby_browser();
+    model.sync_active_destination();
     let a_id = model.emby_browser_id.clone().expect("A browser mounted");
 
     // Switch away to B (A stays mounted with its pre-mutation content).
     model.app.tab = TabSelection::EmbyLibrary(1);
     model.sync_emby_browser();
+    model.sync_active_destination();
     assert!(model.application.mounted(&a_id));
 
     // Mutate A's item list while away: replace every item with a new one.
@@ -165,6 +171,7 @@ fn emby_browser_refreshes_content_on_repoint_after_switch() {
     // Switch back to A and paint the first frame.
     model.app.tab = TabSelection::EmbyLibrary(0);
     model.sync_emby_browser();
+    model.sync_active_destination();
     let backend = TestBackend::new(120, 40);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
@@ -251,6 +258,7 @@ fn feed_group_picker_bracket_keys_cycle_groups() {
     model.app.panel_mode = PanelMode::Both;
     assert!(model.app.is_feed_home_video_group_view(0));
     model.sync_emby_browser();
+    model.sync_active_destination();
     let id = model
         .emby_browser_id
         .clone()

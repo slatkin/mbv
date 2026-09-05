@@ -11,7 +11,7 @@ use crate::app::render::components::hero_model::{Hero, HeroArtwork, HeroArtworkA
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::HomeImagePaint;
 use crate::app::render::{render_pill_bar, render_placeholder, PillBar};
-use crate::app::{palette, App, PanelFocus, PanelMode, SeriesDetail};
+use crate::app::{palette, App, PanelMode, SeriesDetail};
 use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -51,7 +51,6 @@ impl TvWideRenderCtx {
         series_detail: Option<SeriesDetail>,
         season_cursor: usize,
         episode_cursor: Option<usize>,
-        focused: bool,
         show_letter_pills: bool,
     ) -> Self {
         Self {
@@ -60,7 +59,9 @@ impl TvWideRenderCtx {
             series_detail,
             season_cursor,
             episode_cursor,
-            focused,
+            // Framework focus is owned by `TvWorkspaceComponent` and applied
+            // from `Attribute::Focus`; content projection never sets it.
+            focused: false,
             show_letter_pills,
             images_enabled: true,
             image_loading: true,
@@ -175,7 +176,6 @@ impl App {
     pub(in crate::app) fn wide_tv_render_ctx(
         &self,
         lib_idx: usize,
-        focused: bool,
         cursor_scroll: Option<(usize, usize)>,
     ) -> TvWideRenderCtx {
         let list = self.library_list_render_ctx(
@@ -197,7 +197,6 @@ impl App {
             series_detail,
             0,
             None,
-            focused && matches!(self.effective_panel_focus(), PanelFocus::Library),
             self.should_show_letter_pills(lib_idx),
         )
     }

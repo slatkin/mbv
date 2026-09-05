@@ -21,7 +21,7 @@ use crate::app::render::components::list_rows::{
 };
 use crate::app::render::components::music_wide_browser::render_wide_right_album_browser_with_ctx;
 use crate::app::render::MusicImagePaint;
-use crate::app::{palette, App, PanelFocus};
+use crate::app::{palette, App};
 use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -53,7 +53,6 @@ impl MusicWideRenderCtx {
         group_cursor: usize,
         album_info: Vec<(String, String, String)>,
         album_order: Vec<usize>,
-        focused: bool,
         images_enabled: bool,
         album_tracks: Option<Vec<EmbyItem>>,
         album_tracks_loading: bool,
@@ -67,7 +66,9 @@ impl MusicWideRenderCtx {
             group_cursor,
             album_info,
             album_order,
-            focused,
+            // Framework focus is owned by `MusicWorkspaceComponent` and applied
+            // from `Attribute::Focus`; content projection never sets it.
+            focused: false,
             images_enabled,
             album_tracks,
             album_tracks_loading,
@@ -307,7 +308,6 @@ impl App {
             group_cursor,
             album_info,
             album_order,
-            matches!(self.effective_panel_focus(), PanelFocus::Library),
             self.images_enabled(),
             album_tracks,
             album_tracks_loading,

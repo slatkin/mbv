@@ -92,10 +92,15 @@ impl AudiobookshelfPodcastComponent {
         })
     }
 
+    /// Test-only: drive framework focus the way `Component::attr` does.
+    #[cfg(test)]
+    pub(in crate::app) fn set_focused(&mut self, focused: bool) {
+        self.focused = focused;
+    }
+
     pub(in crate::app) fn set_content(
         &mut self,
         snapshot: &AudiobookshelfBrowseState,
-        focused: bool,
         images_enabled: bool,
     ) {
         // Content and interaction are separate types now: the projected
@@ -120,7 +125,6 @@ impl AudiobookshelfPodcastComponent {
             self.scroll = 0;
         }
         self.initialized = true;
-        self.focused = focused;
         self.images_enabled = images_enabled;
     }
 
@@ -458,7 +462,11 @@ impl Component for AudiobookshelfPodcastComponent {
         None
     }
 
-    fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
+    fn attr(&mut self, attr: Attribute, value: AttrValue) {
+        if attr == Attribute::Focus {
+            self.focused = matches!(value, AttrValue::Flag(true));
+        }
+    }
 
     fn state(&self) -> State {
         State::None

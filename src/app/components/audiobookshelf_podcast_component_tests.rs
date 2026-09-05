@@ -46,7 +46,8 @@ fn abs_podcast_component_drops_stale_episode_state_when_selection_vanishes() {
     first.select(0);
 
     let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(&first, true, false);
+    component.set_content(&first, false);
+    component.set_focused(true);
     component.set_episode_selection(Some(1));
     component.set_episode_filter(AudiobookshelfEpisodeFilter::Unplayed);
 
@@ -56,7 +57,8 @@ fn abs_podcast_component_drops_stale_episode_state_when_selection_vanishes() {
     let mut second = AudiobookshelfBrowseState::new(library);
     second.append_page(0, 20, 1, vec![show("show-b", "Show B")]);
 
-    component.set_content(&second, true, false);
+    component.set_content(&second, false);
+    component.set_focused(true);
 
     assert_eq!(
         component.episode_selection(),
@@ -75,7 +77,8 @@ fn abs_podcast_component_keeps_local_show_cursor_and_renders_without_app_state()
     let app = crate::app::tests_podcast::audiobookshelf_app();
     let state = &app.audiobookshelf_browse[0];
     let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(state, true, false);
+    component.set_content(state, false);
+    component.set_focused(true);
 
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Down,
@@ -106,7 +109,8 @@ fn abs_podcast_component_emits_typed_episode_transitions_in_episode_mode() {
     let app = crate::app::tests_podcast::audiobookshelf_app();
     let state = &app.audiobookshelf_browse[0];
     let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(state, true, false);
+    component.set_content(state, false);
+    component.set_focused(true);
     component.set_episode_selection(Some(0));
 
     let message = component.on(&Event::Keyboard(KeyEvent {
@@ -147,7 +151,8 @@ fn abs_podcast_component_emits_typed_episode_transitions_in_episode_mode() {
 fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
     let state = &crate::app::tests_podcast::audiobookshelf_app().audiobookshelf_browse[0];
     let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(state, true, false);
+    component.set_content(state, false);
+    component.set_focused(true);
 
     // One representative action key per intent: the component reports only the
     // matched intent (task 5.3d.7); the shell resolves conditions at the Model
@@ -228,7 +233,8 @@ fn view_narrow(component: &mut AudiobookshelfPodcastComponent, width: u16, heigh
 fn abs_podcast_narrow_one_column_navigation_uses_page_rows() {
     let state = narrow_grid_component_state();
     let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     view_narrow(&mut component, 100, 6);
     assert_eq!(component.geometry().columns, 1);
     assert!(matches!(
@@ -250,7 +256,8 @@ fn abs_podcast_narrow_one_column_navigation_uses_page_rows() {
         }))
     ));
     let mut page_component = AudiobookshelfPodcastComponent::new();
-    page_component.set_content(&state, true, false);
+    page_component.set_content(&state, false);
+    page_component.set_focused(true);
     view_narrow(&mut page_component, 100, 6);
     let page_rows = page_component
         .geometry()
@@ -269,7 +276,8 @@ fn abs_podcast_narrow_one_column_navigation_uses_page_rows() {
 fn abs_podcast_wheel_moves_three_rows_and_ignores_outside_list() {
     let state = narrow_grid_component_state();
     let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     view_narrow(&mut component, 100, 6);
     let list = component.geometry().list_area;
     let inside = MouseEvent {
@@ -315,7 +323,8 @@ fn abs_podcast_wheel_moves_three_rows_and_ignores_outside_list() {
 fn abs_podcast_row_mouse_selects_the_clicked_show_and_bucket_start() {
     let state = narrow_grid_component_state();
     let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     view_narrow(&mut component, 100, 6);
     let rects = component.geometry().show_rows.clone();
     let (rect, clicked) = rects
@@ -354,7 +363,8 @@ fn abs_podcast_row_mouse_selects_the_clicked_show_and_bucket_start() {
 fn abs_podcast_component_returns_none_when_unfocused() {
     let state = &crate::app::tests_podcast::audiobookshelf_app().audiobookshelf_browse[0];
     let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(state, false, false);
+    component.set_content(state, false);
+    component.set_focused(false);
     let cursor = component.cursor();
 
     for code in [Key::Down, Key::Enter, Key::Char('z')] {
@@ -436,7 +446,8 @@ fn abs_podcast_component_geometry_is_wide_coherent_and_narrow_resets_wide() {
     state.select(0);
 
     let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
 
     let wide = Rect::new(0, 0, 100, 40);
     let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
@@ -514,7 +525,8 @@ fn abs_podcast_component_geometry_is_wide_coherent_and_narrow_resets_wide() {
         media_type: "podcast".into(),
     });
     let mut empty_component = AudiobookshelfPodcastComponent::new();
-    empty_component.set_content(&empty, true, false);
+    empty_component.set_content(&empty, false);
+    empty_component.set_focused(true);
     let mut empty_terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
 
     empty_terminal
@@ -557,7 +569,8 @@ fn abs_podcast_component_geometry_is_wide_coherent_and_narrow_resets_wide() {
 fn abs_podcast_mouse_double_click_emits_open_or_play_and_right_click_ignored() {
     let state = narrow_grid_component_state();
     let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(&state, true, false);
+    component.set_content(&state, false);
+    component.set_focused(true);
     view_narrow(&mut component, 100, 6);
     let (rect, clicked) = component
         .geometry()

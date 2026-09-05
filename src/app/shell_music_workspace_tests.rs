@@ -21,6 +21,7 @@ fn music_mouse_album_click_emits_and_shell_applies_cursor() {
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal
         .draw(|frame| model.render_music_workspace_component(frame))
@@ -80,6 +81,7 @@ fn shell_music_shortcuts_use_component_selection() {
     let mut model = Model::new(make_music_group_app());
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()
@@ -126,6 +128,7 @@ fn shell_mounts_and_syncs_music_workspace() {
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 200, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(100, 0, 100, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()
@@ -171,6 +174,7 @@ fn push_music_workspace_fetches_selected_album_tracks() {
         std::sync::Mutex::new(client),
     ));
     model.sync_music_workspace();
+    model.sync_active_destination();
     assert!(model.app.album_tracks_loading.contains("album-1"));
     let component = model
         .application
@@ -204,6 +208,8 @@ fn grouped_music_cursor_no_fallthrough_when_left_sorted_indices_empty() {
     assert!(model.app.layout.main.left_sorted_indices.is_empty());
 
     model.sync_music_workspace();
+
+    model.sync_active_destination();
     let id = model.music_workspace_id.clone().expect("mounted");
 
     let order = model.app.wide_music_render_ctx(0, None).album_order.clone();
@@ -251,6 +257,7 @@ fn shell_executes_grouped_music_image_paint() {
     model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
     model.sync_music_workspace();
+    model.sync_active_destination();
 
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal
@@ -266,6 +273,7 @@ fn narrow_music_workspace_emits_selected_album_image_request() {
     model.app.image_protocol_enabled = true;
     model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 81, 20);
     model.sync_music_workspace();
+    model.sync_active_destination();
 
     let mut terminal = Terminal::new(TestBackend::new(81, 20)).unwrap();
     terminal
@@ -292,6 +300,7 @@ fn shell_mounts_music_workspace_in_narrow_mode() {
     assert_eq!(wide_area.width, 0);
     assert_eq!(wide_area.height, 0);
     model.sync_music_workspace();
+    model.sync_active_destination();
     let id = model
         .music_workspace_id
         .clone()

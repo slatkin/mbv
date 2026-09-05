@@ -91,7 +91,8 @@ fn render_book_component(
     let area = Rect::new(0, 0, width, height);
     let mut component = AudiobookshelfBookComponent::new();
     if let Some(state) = app.audiobookshelf_book_browse.first() {
-        component.set_content(state, true, app.images_enabled());
+        component.set_content(state, app.images_enabled());
+        component.set_focused(true);
     }
     terminal.draw(|frame| component.view(frame, area)).unwrap();
     let geometry = component.geometry();
@@ -114,7 +115,8 @@ fn render_podcast_component(
     let area = Rect::new(0, 0, width, height);
     let mut component = AudiobookshelfPodcastComponent::new();
     if let Some(state) = app.audiobookshelf_browse.first() {
-        component.set_content(state, true, app.images_enabled());
+        component.set_content(state, app.images_enabled());
+        component.set_focused(true);
     }
     terminal.draw(|frame| component.view(frame, area)).unwrap();
     let geometry = component.geometry();
@@ -255,7 +257,8 @@ fn feed_component() -> FeedsComponent {
     }]];
     let all_entries = entries[0].clone();
     let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &entries, &all_entries, false, true);
+    component.set_content(&subscriptions, &entries, &all_entries, false);
+    component.set_focused(true);
     component
 }
 

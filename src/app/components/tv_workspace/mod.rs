@@ -111,7 +111,6 @@ impl TvWorkspaceComponent {
             0,
             None,
             false,
-            false,
         );
         Self {
             context,
@@ -207,7 +206,11 @@ impl TvWorkspaceComponent {
             }
             self.initialized = true;
         }
+        // Content projection never carries framework focus; preserve the
+        // component-owned value across the shell snapshot swap.
+        let focused = self.context.focused;
         self.context = context;
+        self.context.focused = focused;
         self.cursor = self.list.cursor();
         let season_count = self
             .context
@@ -226,6 +229,12 @@ impl TvWorkspaceComponent {
                 self.episodes.select_index(index);
             }
         }
+    }
+
+    /// Test-only: drive framework focus the way `Component::attr` does.
+    #[cfg(test)]
+    pub(in crate::app) fn set_focused(&mut self, focused: bool) {
+        self.context.focused = focused;
     }
 
     /// The current season's episode `Vec`, `&[]` when the season has no
@@ -561,7 +570,11 @@ impl Component for TvWorkspaceComponent {
         None
     }
 
-    fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
+    fn attr(&mut self, attr: Attribute, value: AttrValue) {
+        if attr == Attribute::Focus {
+            self.context.focused = matches!(value, AttrValue::Flag(true));
+        }
+    }
 
     fn state(&self) -> State {
         State::None
@@ -600,6 +613,7 @@ mod tests {
     #[test]
     fn tv_workspace_keeps_episode_pane_cursor_local_between_syncs() {
         let mut component = TvWorkspaceComponent::new();
+        component.set_focused(true);
         let mut series = make_item("Series", "Series");
         series.id = "series-id".into();
         let mut season = make_item("Season 1", "Season");
@@ -627,7 +641,6 @@ mod tests {
             Some(detail.clone()),
             0,
             None,
-            true,
             false,
         ));
         component.on(&Event::Keyboard(KeyEvent {
@@ -650,7 +663,6 @@ mod tests {
             Some(detail),
             0,
             None,
-            true,
             false,
         ));
         assert_eq!(component.episodes.cursor(), 1);
@@ -659,6 +671,7 @@ mod tests {
     #[test]
     fn tv_workspace_series_change_resets_local_selection() {
         let mut component = TvWorkspaceComponent::new();
+        component.set_focused(true);
         let mut season_one = make_item("Season 1", "Season");
         season_one.id = "season-1".into();
         let mut season_two = make_item("Season 2", "Season");
@@ -678,7 +691,6 @@ mod tests {
             Some(detail.clone()),
             0,
             None,
-            true,
             false,
         ));
         component.move_season(1);
@@ -689,7 +701,6 @@ mod tests {
             Some(detail),
             0,
             None,
-            true,
             false,
         ));
 
@@ -701,13 +712,13 @@ mod tests {
     #[test]
     fn tv_workspace_renders_the_wide_workspace_without_app() {
         let mut component = TvWorkspaceComponent::new();
+        component.set_focused(true);
         component.set_content(TvWideRenderCtx::new(
             LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
             None,
             None,
             0,
             None,
-            true,
             false,
         ));
         let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
