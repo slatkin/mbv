@@ -1,4 +1,5 @@
 use crate::app::render::components::hero::HERO_TITLE_ROWS;
+use crate::app::ui_util::list_duration_secs;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::FeedEntry;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -75,22 +76,11 @@ pub(in crate::app) fn current_time_secs() -> u64 {
         .as_secs()
 }
 
-/// Format a tick count into a human-readable duration string.
-pub(in crate::app) fn format_duration(ticks: Option<u64>) -> String {
-    match ticks {
-        Some(t) if t > 0 => {
-            let total_secs = t / TICKS_PER_SECOND as u64;
-            let h = total_secs / 3600;
-            let m = (total_secs % 3600) / 60;
-            let s = total_secs % 60;
-            if h > 0 {
-                format!("{h}:{m:02}:{s:02}")
-            } else {
-                format!("{m}:{s:02}")
-            }
-        }
-        _ => String::new(),
-    }
+/// Convert an optional feed tick count to canonical list duration text.
+pub(in crate::app) fn feed_duration_text(ticks: Option<u64>) -> Option<String> {
+    ticks
+        .map(|t| (t / TICKS_PER_SECOND as u64) as i64)
+        .and_then(list_duration_secs)
 }
 
 /// Format a pub_date_secs value into a short date string for display.
@@ -128,8 +118,7 @@ pub(in crate::app::render) fn feed_hero_content_rows(show_title: bool) -> u16 {
 /// (design.md decision 6).
 pub(in crate::app::render) fn feed_entry_meta_line(entry: &FeedEntry) -> String {
     let mut parts = Vec::new();
-    let duration = format_duration(entry.duration_ticks);
-    if !duration.is_empty() {
+    if let Some(duration) = feed_duration_text(entry.duration_ticks) {
         parts.push(duration);
     }
     let date = format_pub_date(entry.pub_date_secs);

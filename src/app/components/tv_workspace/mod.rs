@@ -25,7 +25,7 @@ use crate::app::layout::LayoutMain;
 use crate::app::render::{
     effective_sort_str, letter_bucket, render_wide_tv_with_ctx, HomeImagePaint, TvWideRenderCtx,
 };
-use crate::app::ui_util::{fmt_duration_approx, natural_sort_key};
+use crate::app::ui_util::{list_duration_secs, natural_sort_key};
 #[cfg(test)]
 use tuirealm::event::Key;
 
@@ -85,17 +85,11 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
             } else {
                 index as i64 + 1
             };
-            let length = episode.runtime_ticks / TICKS_PER_SECOND;
-            let duration = if length > 0 {
-                fmt_duration_approx(length)
-            } else {
-                "\u{2014}".into()
-            };
             MediaListRow::Item {
                 target: episode.id.clone(),
                 primary: format!("{number}. {}", episode.name),
                 trailing: None,
-                duration: Some(duration),
+                duration: list_duration_secs(episode.runtime_ticks / TICKS_PER_SECOND),
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
             }

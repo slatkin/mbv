@@ -209,7 +209,7 @@ fn wide_tv_persists_series_workspace_and_separate_targets() {
     );
     assert!(output.contains("The Series"));
     assert!(output.contains("Pilot"));
-    assert!(output.contains("1h"));
+    assert!(output.contains("1:00:00"));
 }
 
 /// `remove-migrated-surface-underpaint` 3.3 (D4): at the wide hero-on-left

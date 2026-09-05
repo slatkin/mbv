@@ -44,7 +44,7 @@ pub(in crate::app) use components::list_narrow::{
 };
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
 pub(in crate::app) use screens::feeds_model::{
-    current_time_secs, feed_display_rows, format_duration, FeedDisplayRow,
+    current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow,
 };
 // Task 5.3d.17a: BrowserComponent paints the wide Movies/home-video
 // hero-on-left layout itself (mirroring HomeComponent's image-deferral),

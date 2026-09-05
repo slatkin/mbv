@@ -24,7 +24,7 @@ use crate::app::render::{
     render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, shared_hero_presentation,
     MusicImagePaint, MusicWideRenderCtx,
 };
-use crate::app::ui_util::fmt_duration_approx;
+use crate::app::ui_util::list_duration_secs;
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 
 fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
@@ -37,8 +37,7 @@ fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
             } else {
                 index as i64 + 1
             };
-            let duration = (track.runtime_ticks > 0)
-                .then(|| fmt_duration_approx(track.runtime_ticks / TICKS_PER_SECOND));
+            let duration = list_duration_secs(track.runtime_ticks / TICKS_PER_SECOND);
             MediaListRow::Item {
                 target: track.id.clone(),
                 primary: format!("{number}. {}", track.name),

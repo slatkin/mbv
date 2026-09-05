@@ -25,7 +25,7 @@ use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{
-    current_time_secs, feed_display_rows, format_duration, render_feeds_content, FeedDisplayRow,
+    current_time_secs, feed_display_rows, feed_duration_text, render_feeds_content, FeedDisplayRow,
     FeedsRenderModel,
 };
 use crate::app::types_feed_tab::WatchedFilter;
@@ -203,12 +203,11 @@ impl FeedsComponent {
                 },
                 FeedDisplayRow::Entry(index) => {
                     let entry = &self.visible_entries[index];
-                    let duration = format_duration(entry.duration_ticks);
                     MediaListRow::Item {
                         target: entry.guid.clone(),
                         primary: entry.title.clone(),
                         trailing: None,
-                        duration: (!duration.is_empty()).then_some(duration),
+                        duration: feed_duration_text(entry.duration_ticks),
                         kind: MediaKind::Media,
                         semantic_state: if entry.played {
                             MediaSemanticState::Played

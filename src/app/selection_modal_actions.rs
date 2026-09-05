@@ -3,7 +3,7 @@ use super::{
     App, SelectionModal, SelectionModalFilter, SelectionModalListState, SelectionModalRow,
     SelectionModalSource,
 };
-use crate::app::ui_util::fmt_duration_mmss;
+use crate::app::ui_util::list_duration_secs;
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 
 pub(crate) fn album_modal_state(tracks: &[EmbyItem]) -> SelectionModalListState {
@@ -18,11 +18,8 @@ pub(crate) fn album_modal_state(tracks: &[EmbyItem]) -> SelectionModalListState 
             };
             SelectionModalRow::Item(SelectionModalItem {
                 name,
-                meta: if track.runtime_ticks > 0 {
-                    fmt_duration_mmss(track.runtime_ticks / TICKS_PER_SECOND)
-                } else {
-                    String::new()
-                },
+                meta: list_duration_secs(track.runtime_ticks / TICKS_PER_SECOND)
+                    .unwrap_or_default(),
                 id: track.id.clone(),
             })
         })

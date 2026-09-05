@@ -19,7 +19,7 @@ use crate::app::render::components::media_list::{
 };
 use crate::app::render::{render_pill_bar, render_placeholder, PillBar};
 use crate::app::types_audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
-use crate::app::ui_util::fmt_duration_approx;
+use crate::app::ui_util::{fmt_duration_approx, list_duration_secs};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 
@@ -492,18 +492,18 @@ fn render_book_rows(
             let (primary, duration) = match row {
                 BookRow::Chapter { title, start, end } => (
                     title.clone(),
-                    Some(fmt_duration_approx((end - start).max(0.0) as i64)),
+                    list_duration_secs((end - start).max(0.0) as i64),
                 ),
                 BookRow::AudioFile { index, duration } => (
                     format!("Part {index}"),
-                    Some(fmt_duration_approx(*duration as i64)),
+                    list_duration_secs(*duration as i64),
                 ),
             };
             MediaListRow::Item {
                 target: index.to_string(),
                 primary,
                 trailing: None,
-                duration: show_length.then_some(duration.unwrap()),
+                duration: if show_length { duration } else { None },
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
             }

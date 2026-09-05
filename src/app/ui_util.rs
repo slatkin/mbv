@@ -148,14 +148,6 @@ pub fn fmt_duration_approx(s: i64) -> String {
     }
 }
 
-/// Format duration as minutes:seconds — for music tracks.
-/// Examples: "0:47", "3:47", "12:05".
-pub fn fmt_duration_mmss(s: i64) -> String {
-    let m = s / 60;
-    let s = s % 60;
-    format!("{}:{:02}", m, s)
-}
-
 /// Format playback progress as "N%", capped at 99% (100% reads as finished,
 /// not "in progress"). Empty when there's no meaningful progress to show.
 pub fn fmt_playback_pct(pos_ticks: i64, runtime_ticks: i64) -> String {
