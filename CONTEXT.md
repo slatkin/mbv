@@ -280,11 +280,11 @@ _Avoid_: continue threshold, resume percent, watched threshold
 ## Browsing and tabs
 
 **WideMediaList**:
-A provider-neutral, one-column fixed-row TuiRealm Component embedded by a parent that owns the content authority. It provides shared list mechanics without choosing a Service or destination.
+A provider-neutral, one-column fixed-row TuiRealm Component embedded by a parent that owns the content authority. It provides shared list mechanics without choosing a Service or destination. It is the canonical control for Wide one-column rails, including Queue; non-hero two-column catalog presentation remains a parent arrangement.
 _Avoid_: generic list, two-column list, Inline Search
 
 **InlineMediaBrowser**:
-A provider-neutral, one-column TuiRealm Component that supports selected-row replacement while its parent owns content authority. It is distinct from **Inline Search**, which is the global search surface and not a media-list control.
+A provider-neutral, one-column TuiRealm Component that supports selected-row replacement while its parent owns content authority. Normal/Narrow hero-bearing browse surfaces use it for their one-column list. It is distinct from **Inline Search**, which is the global search surface and not a media-list control.
 _Avoid_: Inline Search, detail panel, generic list
 
 **Emby podcast channel list**:

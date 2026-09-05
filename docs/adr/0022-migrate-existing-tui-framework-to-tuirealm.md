@@ -31,6 +31,8 @@ child's outer area; its TuiRealm `Component::view` implementation owns internal
 placement and delegates painting to existing Render Components. Adopting TuiRealm
 does not require replacing those painters with `tui-realm-stdlib` widgets.
 
+Canonical media-list composition uses `WideMediaList` for fixed-row Wide one-column rails and Queue, and `InlineMediaBrowser` for Normal/Narrow selected-row replacement. Inline Search remains the separate `InlineSearchComponent`; non-hero catalog browsers retain their existing two-column policy. The primary child owner/painter map is Home → `HomeComponent`, generic Emby/Movies/homevideos and Emby podcast → `BrowserComponent`, TV Series → `TvWorkspaceComponent` in Wide / `BrowserComponent` in Normal, grouped Music → `MusicWorkspaceComponent`, Audiobookshelf Podcast → `AudiobookshelfPodcastComponent`, Audiobookshelf Books → `AudiobookshelfBookComponent`, Feeds → `FeedsComponent`, and Queue → `QueueComponent`.
+
 This decision does not add a parallel custom `Component` trait, registry,
 dispatcher, focus framework, generic effect scheduler, Flux store architecture,
 or separate UI crate. TuiRealm supplies the application framework; mbv adds only

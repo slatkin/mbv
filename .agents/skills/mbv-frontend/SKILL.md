@@ -68,6 +68,21 @@ helpers that project validated snapshots. A `sync_*` that reads component-local
 interaction state back into `App` reintroduces exactly the mirror that was
 removed — if you find yourself needing one, the state is on the wrong side.
 
+## Canonical media-list composition
+
+Use `WideMediaList` for fixed-row, one-column Wide rails and Queue. Use
+`InlineMediaBrowser` for one-column Normal/Narrow selected-row replacement. These
+controls are embedded and painted by their destination parent; `Inline Search`
+is the separate `InlineSearchComponent`, not a media-list variant. Non-hero
+catalogs retain the existing two-column policy.
+
+The primary destination owners and painters are Home (`HomeComponent`), generic
+Emby/Movies/homevideos and Emby podcast (`BrowserComponent`), TV Series
+(`TvWorkspaceComponent` in Wide, `BrowserComponent` in Normal), grouped Music
+(`MusicWorkspaceComponent`), Audiobookshelf Podcast (`AudiobookshelfPodcastComponent`),
+Audiobookshelf Books (`AudiobookshelfBookComponent`), Feeds (`FeedsComponent`),
+and Queue (`QueueComponent`). The ledger is the detailed breakpoint record.
+
 ## Keyboard routing (ADR 0023)
 
 There is exactly one keyboard resolution site: `src/app/router.rs`, with its

@@ -70,6 +70,8 @@ one owner and one painter". A cell reading `none` means the surface is pure
 shell derivation with no mounted component / no body painter. The Queue row is
 the one open F2 (two painters), deferred to #629.
 
+Canonical media-list destinations use `WideMediaList` for fixed-row Wide rails and Queue, and `InlineMediaBrowser` for Normal/Narrow selected-row replacement. Inline Search remains `InlineSearchComponent`; non-hero catalogs retain their existing two-column arrangement. Primary owner/painter mapping: Home — `HomeComponent`; generic Emby, Movies, homevideos, and Emby podcast — `BrowserComponent`; TV Series — `TvWorkspaceComponent` in Wide and `BrowserComponent` in Normal; grouped Music — `MusicWorkspaceComponent`; Audiobookshelf Podcast — `AudiobookshelfPodcastComponent`; Audiobookshelf Books — `AudiobookshelfBookComponent`; Feeds — `FeedsComponent`; Queue — `QueueComponent`.
+
 ### #607 acceptance criterion — "component-local interaction state has one owner" (met 2026-08-31)
 
 `delete-browse-level-cursor-scroll` task 4.3
