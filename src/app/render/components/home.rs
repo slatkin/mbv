@@ -161,6 +161,11 @@ pub(in crate::app) fn render_home_content(
     // image's bottom edge render at full width; the generic detail
     // block renders into a single content area.
     let hero_data: Option<HeroData>;
+    // The non-Emby (Audiobookshelf/Feeds) hero item, sized into `hero_content`
+    // — a sibling to `hero_data` rather than a shared variant, since generic
+    // providers use a different `Hero`-trait-driven measurement path that
+    // doesn't converge with Emby's `KeepWatchingHeroLayout` preparation.
+    let mut generic_hero: Option<(QueueItem, Rect)> = None;
     let list_area: Rect;
     // Narrow layout's hero shell (area, row count), painted after the
     // pill-gap fill below rather than inline here: `placement-neutral geometry`
@@ -198,7 +203,7 @@ pub(in crate::app) fn render_home_content(
                     images_enabled,
                 )
                 .map(|(meta_layout, meta_area, img_area)| {
-                    HeroData::Emby(
+                    HeroData::new(
                         Box::new(item),
                         meta_area,
                         meta_area, // wide_area same as meta_area in hero-on-left
@@ -207,37 +212,40 @@ pub(in crate::app) fn render_home_content(
                     )
                 })
             }
-            None => current_item
-                .filter(|item| item.as_emby().is_none())
-                .map(|item| {
-                    // Size the generic hero to its actual content
-                    // (title/overview text, plus a cover for
-                    // Audiobookshelf) instead of the full column height —
-                    // otherwise short items (feeds have no cover at all)
-                    // leave a mostly-empty panel. Artwork is top-anchored
-                    // with the text by `render_home_latest_detail_content`.
-                    let text_w = hero_content.width as usize;
-                    // The recessed overview box applies the shared pane
-                    // padding twice (panel and content), so measure against
-                    // its actual text width.
-                    let ov_w = text_w;
-                    let text =
-                        crate::app::render::components::home_latest_row::home_latest_detail_text(
-                            &item, text_w, ov_w,
-                        );
-                    let rows = if matches!(item, QueueItem::Audiobookshelf(_)) {
-                        let image_rows =
-                            hero_content.width.saturating_mul(9).saturating_add(31) / 32;
-                        text.meta_height + 1 + image_rows
-                    } else {
-                        text.meta_height
-                    };
-                    hero_content.height = rows.min(hero_col_height);
-                    HeroData::Generic(item, hero_content)
-                }),
+            None => {
+                generic_hero = current_item
+                    .filter(|item| item.as_emby().is_none())
+                    .map(|item| {
+                        // Size the generic hero to its actual content
+                        // (title/overview text, plus a cover for
+                        // Audiobookshelf) instead of the full column height —
+                        // otherwise short items (feeds have no cover at all)
+                        // leave a mostly-empty panel. Artwork is top-anchored
+                        // with the text by `render_home_latest_detail_content`.
+                        let text_w = hero_content.width as usize;
+                        // The recessed overview box applies the shared pane
+                        // padding twice (panel and content), so measure against
+                        // its actual text width.
+                        let ov_w = text_w;
+                        let text =
+                            crate::app::render::components::home_latest_row::home_latest_detail_text(
+                                &item, text_w, ov_w,
+                            );
+                        let rows = if matches!(item, QueueItem::Audiobookshelf(_)) {
+                            let image_rows =
+                                hero_content.width.saturating_mul(9).saturating_add(31) / 32;
+                            text.meta_height + 1 + image_rows
+                        } else {
+                            text.meta_height
+                        };
+                        hero_content.height = rows.min(hero_col_height);
+                        (item, hero_content)
+                    });
+                None
+            }
         };
 
-        list_area = if hero_data.is_some() {
+        list_area = if hero_data.is_some() || generic_hero.is_some() {
             right_panel
         } else {
             // No hero item: list takes full width
@@ -347,7 +355,7 @@ pub(in crate::app) fn render_home_content(
     // audiobooks via `hero_left::hero_on_left_right_pane`). With no hero item
     // there is no right pane at all -- pills span the full row and the
     // list takes the full width, same as the single-column layout.
-    let wide_pill_section = two_column && hero_data.is_some();
+    let wide_pill_section = two_column && (hero_data.is_some() || generic_hero.is_some());
     let (pills_area, spacer_area, green_panel_full): (Rect, Rect, Option<Rect>) =
         if wide_pill_section {
             let right_area = padded_rect(list_area, 0, PANE_PAD_Y);
@@ -429,6 +437,15 @@ pub(in crate::app) fn render_home_content(
                 use_nerd_fonts,
                 images_enabled,
             );
+        } else if let Some((item, area)) = &generic_hero {
+            image_paint = home_hero::render_generic_hero_content(
+                f,
+                item,
+                *area,
+                focused,
+                use_nerd_fonts,
+                images_enabled,
+            );
         }
     }
 
@@ -481,18 +498,31 @@ pub(in crate::app) fn render_home_content(
                     SELECTED_BLOCK_SIDE_PADDING,
                     HERO_BLOCK_EXTRA_ROWS,
                 );
-                if let Some(hero_data) = narrow_dims
+                match narrow_dims
                     .take()
                     .and_then(|dims| narrow_hero_data(dims, hero_content, images_enabled))
                 {
-                    image_paint = home_hero::render_home_hero_content(
-                        f,
-                        &hero_data,
-                        false,
-                        focused,
-                        use_nerd_fonts,
-                        images_enabled,
-                    );
+                    Some(NarrowHeroPaint::Emby(hero_data)) => {
+                        image_paint = home_hero::render_home_hero_content(
+                            f,
+                            &hero_data,
+                            false,
+                            focused,
+                            use_nerd_fonts,
+                            images_enabled,
+                        );
+                    }
+                    Some(NarrowHeroPaint::Generic(item, area)) => {
+                        image_paint = home_hero::render_generic_hero_content(
+                            f,
+                            &item,
+                            area,
+                            focused,
+                            use_nerd_fonts,
+                            images_enabled,
+                        );
+                    }
+                    None => {}
                 }
                 Some(hero_area)
             }
@@ -526,13 +556,21 @@ enum HeroContentDims {
     None,
 }
 
-/// Build the parent-owned narrow `HeroData` once the canonical control has
+/// The narrow hero to paint once the canonical control has resolved the
+/// on-screen detail-block rect: Emby's `HeroData`, or a generic (non-Emby)
+/// item + its content area for [`home_hero::render_generic_hero_content`].
+enum NarrowHeroPaint {
+    Emby(HeroData),
+    Generic(QueueItem, Rect),
+}
+
+/// Build the parent-owned narrow hero paint once the canonical control has
 /// resolved the on-screen detail-block rect.
 fn narrow_hero_data(
     dims: HeroContentDims,
     hero_content: Rect,
     images_enabled: bool,
-) -> Option<HeroData> {
+) -> Option<NarrowHeroPaint> {
     match dims {
         HeroContentDims::Emby(item, img_w, meta_layout, image_rows) => {
             let (meta_area, img_area) =
@@ -543,15 +581,15 @@ fn narrow_hero_data(
                     image_rows,
                     images_enabled,
                 );
-            Some(HeroData::Emby(
+            Some(NarrowHeroPaint::Emby(HeroData::new(
                 item,
                 meta_area,
                 hero_content,
                 Some(img_area),
                 meta_layout,
-            ))
+            )))
         }
-        HeroContentDims::Generic(item, _) => Some(HeroData::Generic(item, hero_content)),
+        HeroContentDims::Generic(item, _) => Some(NarrowHeroPaint::Generic(item, hero_content)),
         HeroContentDims::None => None,
     }
 }

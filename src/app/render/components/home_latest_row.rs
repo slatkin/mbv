@@ -78,7 +78,7 @@ impl App {
     /// returns its image cache key, or `None` with no server configured.
     /// Shared by every generic-hero cover: the two-column/Feed stacked-below
     /// detail (`render_home_latest_detail_content`) and the narrow beside-image
-    /// hero (`home.rs`'s `HeroData::GenericBeside`).
+    /// hero (`home_hero.rs`'s `render_generic_hero_content`).
     pub(in crate::app::render) fn audiobookshelf_cover_key(
         &mut self,
         library_item_id: &str,

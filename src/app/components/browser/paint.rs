@@ -68,7 +68,7 @@ impl BrowserComponent {
             .and_then(|item| {
                 prepare_wide_emby_hero_card(item, hero_content, self.images_enabled).map(
                     |(meta_layout, meta_area, img_area)| {
-                        HeroData::Emby(
+                        HeroData::new(
                             Box::new(item.clone()),
                             meta_area,
                             meta_area,

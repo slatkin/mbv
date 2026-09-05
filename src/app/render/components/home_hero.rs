@@ -105,111 +105,128 @@ pub(in crate::app) fn prepare_wide_emby_hero_card(
     Some((meta_layout, meta_area, img_area))
 }
 
-pub(in crate::app) enum HeroData {
-    Emby(
-        Box<mbv_core::api::EmbyItem>,
-        Rect,
-        Rect,
-        Option<Rect>,
-        KeepWatchingHeroLayout,
-    ),
-    Generic(QueueItem, Rect),
+pub(in crate::app) struct HeroData {
+    item: Box<mbv_core::api::EmbyItem>,
+    meta_area: Rect,
+    wide_area: Rect,
+    img_area: Option<Rect>,
+    meta_layout: KeepWatchingHeroLayout,
 }
 
 impl HeroData {
+    pub(in crate::app) fn new(
+        item: Box<mbv_core::api::EmbyItem>,
+        meta_area: Rect,
+        wide_area: Rect,
+        img_area: Option<Rect>,
+        meta_layout: KeepWatchingHeroLayout,
+    ) -> Self {
+        Self {
+            item,
+            meta_area,
+            wide_area,
+            img_area,
+            meta_layout,
+        }
+    }
+
     fn render_content(
         &self,
         f: &mut Frame,
         two_column: bool,
         focused: bool,
         use_nerd_fonts: bool,
-        images_enabled: bool,
+        _images_enabled: bool,
     ) -> Option<HomeImagePaint> {
-        match self {
-            Self::Emby(item, meta_area, wide_area, img_area, meta_layout) => {
-                let meta_block =
-                    App::keep_watching_hero_meta_block(item, meta_area.width, use_nerd_fonts);
-                render_hero_layout_meta_content(
-                    f,
-                    *meta_area,
-                    *wide_area,
-                    meta_layout,
-                    meta_block,
-                    if two_column {
-                        WIDE_OVERVIEW_PAD as u16
-                    } else {
-                        0
-                    },
-                    focused,
-                    use_nerd_fonts,
-                    item.as_ref(),
-                );
-                img_area.map(|area| HomeImagePaint::Emby {
-                    area,
-                    item: item.clone(),
-                    centered: two_column,
-                })
-            }
-            Self::Generic(item, area) => {
-                let hero: &dyn Hero = item;
-                let overview = hero.description().unwrap_or_default();
-                let (img_w, layout, image_rows) = beside_image_hero_dims(
-                    hero.title(),
-                    hero.subtitle().unwrap_or_default(),
-                    &overview,
-                    area.width,
-                    area.height,
-                    hero.meta_rows(area.width).len() as u16,
-                    images_enabled,
-                );
-                let (meta_area, image_area) = beside_image_hero_rects(
-                    *area,
-                    img_w,
-                    layout.height,
-                    image_rows,
-                    images_enabled,
-                );
-                render_hero_layout_meta_content(
-                    f,
-                    meta_area,
-                    *area,
-                    &layout,
-                    HeroMetaBlock {
-                        title_suffix: hero.title_suffix(),
-                        meta_rows: hero.meta_rows(meta_area.width),
-                    },
-                    0,
-                    focused,
-                    use_nerd_fonts,
-                    hero,
-                );
-                match hero.artwork() {
-                    HeroArtwork::Image { item_id, .. } if images_enabled => {
-                        let image = match item {
-                            QueueItem::Audiobookshelf(_) => HomeImagePaint::AudiobookshelfCover {
-                                area: image_area,
-                                library_item_id: item_id.to_owned(),
-                                show_placeholder: true,
-                            },
-                            QueueItem::AudiobookshelfBook(_) => {
-                                HomeImagePaint::AudiobookshelfBookCover {
-                                    area: image_area,
-                                    library_item_id: item_id.to_owned(),
-                                    show_placeholder: true,
-                                }
-                            }
-                            _ => return None,
-                        };
-                        Some(image)
-                    }
-                    HeroArtwork::Placeholder if images_enabled => {
-                        super::artwork_placeholder::render_artwork_placeholder(f, image_area);
-                        None
-                    }
-                    _ => None,
-                }
-            }
+        let meta_block =
+            App::keep_watching_hero_meta_block(&self.item, self.meta_area.width, use_nerd_fonts);
+        render_hero_layout_meta_content(
+            f,
+            self.meta_area,
+            self.wide_area,
+            &self.meta_layout,
+            meta_block,
+            if two_column {
+                WIDE_OVERVIEW_PAD as u16
+            } else {
+                0
+            },
+            focused,
+            use_nerd_fonts,
+            self.item.as_ref(),
+        );
+        self.img_area.map(|area| HomeImagePaint::Emby {
+            area,
+            item: self.item.clone(),
+            centered: two_column,
+        })
+    }
+}
+
+/// Renders a generic (non-Emby) inline hero's content: title/metadata/
+/// overview beside its cover (if any), plus the cover image request (if
+/// any) still needing paint. Mirrors [`HeroData::render_content`] for the
+/// Emby case, but generic providers (Audiobookshelf, Feeds) use a
+/// different `Hero`-trait-driven measurement path that doesn't converge
+/// with Emby's `KeepWatchingHeroLayout` preparation, so the two stay
+/// separate rather than share one enum/match.
+pub(in crate::app) fn render_generic_hero_content(
+    f: &mut Frame,
+    item: &QueueItem,
+    area: Rect,
+    focused: bool,
+    use_nerd_fonts: bool,
+    images_enabled: bool,
+) -> Option<HomeImagePaint> {
+    let hero: &dyn Hero = item;
+    let overview = hero.description().unwrap_or_default();
+    let (img_w, layout, image_rows) = beside_image_hero_dims(
+        hero.title(),
+        hero.subtitle().unwrap_or_default(),
+        &overview,
+        area.width,
+        area.height,
+        hero.meta_rows(area.width).len() as u16,
+        images_enabled,
+    );
+    let (meta_area, image_area) =
+        beside_image_hero_rects(area, img_w, layout.height, image_rows, images_enabled);
+    render_hero_layout_meta_content(
+        f,
+        meta_area,
+        area,
+        &layout,
+        HeroMetaBlock {
+            title_suffix: hero.title_suffix(),
+            meta_rows: hero.meta_rows(meta_area.width),
+        },
+        0,
+        focused,
+        use_nerd_fonts,
+        hero,
+    );
+    match hero.artwork() {
+        HeroArtwork::Image { item_id, .. } if images_enabled => {
+            let image = match item {
+                QueueItem::Audiobookshelf(_) => HomeImagePaint::AudiobookshelfCover {
+                    area: image_area,
+                    library_item_id: item_id.to_owned(),
+                    show_placeholder: true,
+                },
+                QueueItem::AudiobookshelfBook(_) => HomeImagePaint::AudiobookshelfBookCover {
+                    area: image_area,
+                    library_item_id: item_id.to_owned(),
+                    show_placeholder: true,
+                },
+                _ => return None,
+            };
+            Some(image)
         }
+        HeroArtwork::Placeholder if images_enabled => {
+            super::artwork_placeholder::render_artwork_placeholder(f, image_area);
+            None
+        }
+        _ => None,
     }
 }
 
@@ -607,10 +624,10 @@ fn render_hero_layout_meta_content(
     );
 }
 
-/// Renders a Home hero's non-image content (title/meta/overview text, or --
-/// for the text-only `Generic` variant -- the whole detail block) without
-/// `App`, returning the cover image (if any) still needing paint for the
-/// `HomeComponent` render path (task 3.4's confirmed extraction).
+/// Renders an Emby Home hero's non-image content (title/meta/overview text)
+/// without `App`, returning the cover image (if any) still needing paint for
+/// the `HomeComponent` render path (task 3.4's confirmed extraction). See
+/// [`render_generic_hero_content`] for the non-Emby equivalent.
 pub(in crate::app) fn render_home_hero_content(
     f: &mut Frame,
     hero_data: &HeroData,
