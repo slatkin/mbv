@@ -79,7 +79,7 @@ fn shell_frame_uses_queue_component_geometry_for_keyboard_context_menu_anchor() 
         .expect("queue cursor movement emits a request");
     let mut resize_music = false;
     let mut resize_tv = false;
-    model.handle_terminal_message(message, Some(&queue_id), &mut resize_music, &mut resize_tv);
+    model.handle_terminal_message(message, &mut resize_music, &mut resize_tv);
     terminal
         .draw(|frame| model.draw_frame(frame, false, false))
         .unwrap();
@@ -95,7 +95,7 @@ fn shell_frame_uses_queue_component_geometry_for_keyboard_context_menu_anchor() 
         home_cw_selected: false,
         cw_item: None,
     });
-    model.handle_terminal_message(message, Some(&queue_id), &mut resize_music, &mut resize_tv);
+    model.handle_terminal_message(message, &mut resize_music, &mut resize_tv);
     model.sync_mounted_surfaces();
     terminal
         .draw(|frame| model.draw_frame(frame, false, false))
@@ -153,7 +153,7 @@ fn queue_arrow_press_leaves_exactly_one_highlighted_row() {
     assert!(matches!(message, Msg::Queue(QueueRequest::Cursor { .. })));
     let mut resize_music = false;
     let mut resize_tv = false;
-    model.handle_terminal_message(message, Some(&queue_id), &mut resize_music, &mut resize_tv);
+    model.handle_terminal_message(message, &mut resize_music, &mut resize_tv);
 
     terminal
         .draw(|frame| model.draw_frame(frame, false, false))

@@ -38,18 +38,10 @@ pub(super) enum ContextAction {
     GoToLibrary(String, String), // (item_id, item_type)
 }
 
+#[derive(Clone)]
 pub(super) struct ContextMenuEntry {
     pub(super) label: &'static str,
     pub(super) action: Option<ContextAction>,
-}
-
-impl Clone for ContextMenuEntry {
-    fn clone(&self) -> Self {
-        Self {
-            label: self.label,
-            action: self.action.clone(),
-        }
-    }
 }
 
 /// One multiselect row: `(name_lower, display_name, is_hidden)`.

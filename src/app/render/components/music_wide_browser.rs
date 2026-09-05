@@ -1,5 +1,5 @@
 use crate::app::components::media_list::WideMediaList;
-use crate::app::layout::{LayoutMain, LibraryRowTarget};
+use crate::app::layout::LayoutMain;
 use crate::app::palette;
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::components::music_wide::grouped_album_rows;
@@ -78,7 +78,7 @@ pub(in crate::app) fn render_wide_right_album_browser_with_ctx(
         if let Some(id) = target {
             if let Some(index) = list.items.iter().position(|item| &item.id == id) {
                 if let Some(slot) = layout.left_row_targets.get_mut(screen_row) {
-                    *slot = Some(LibraryRowTarget::Album(index));
+                    *slot = Some(index);
                 }
             }
         }

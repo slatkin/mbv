@@ -105,7 +105,6 @@ fn narrow_music_workspace_requests_album_activation() {
     let mut tv_resize = false;
     model.handle_terminal_message(
         message.expect("album activation request"),
-        Some(&id),
         &mut music_resize,
         &mut tv_resize,
     );
@@ -612,7 +611,6 @@ fn music_album_folder_activation_branch_flips_on_resize_tick_before_repaint() {
             width: 160,
             height: 40,
         }),
-        None,
         &mut music_resize,
         &mut tv_resize,
     );

@@ -323,8 +323,7 @@ impl Model {
                 .last()
                 .map_or(0, |l| l.resting().scroll());
             (
-                self.app
-                    .library_list_render_ctx(index, false, cursor, scroll),
+                self.app.library_list_render_ctx(index, cursor, scroll),
                 cursor,
                 scroll,
             )
@@ -431,7 +430,6 @@ impl Model {
                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
                         let ctx = self.app.library_list_render_ctx(
                             lib_idx,
-                            true,
                             browser.cursor(),
                             browser.scroll(),
                         );

@@ -43,11 +43,8 @@ impl Model {
         let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
         let projection = PlaybackProjection {
             state,
-            title,
             player_area: self.app.layout.playback.player_area,
-            status_area: self.app.layout.playback.status_area,
             show_controls,
-            focused,
             player_h: self.app.layout.playback.player_area.height.max(4),
             panel_bg: if focused {
                 palette::SURFACE_FOCUSED
@@ -73,12 +70,6 @@ impl Model {
             use_nerd_fonts: self.app.use_nerd_fonts,
             stop_available: self.app.connected_session_id.is_some() || state.active,
             next_available: self.app.transport_prev_next_available().1,
-            volume: self
-                .app
-                .playback_display_target()
-                .displayed_volume(&self.app)
-                .to_string(),
-            muted: self.app.playback_display_target().displayed_mute(&self.app),
         };
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(playback) = comp.as_any_mut().downcast_mut::<PlaybackComponent>() {

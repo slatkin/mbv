@@ -182,7 +182,6 @@ impl App {
     ) -> TvWideRenderCtx {
         let list = self.library_list_render_ctx(
             lib_idx,
-            false,
             cursor_scroll.map_or_else(|| 0, |v| v.0),
             cursor_scroll.map_or_else(|| 0, |v| v.1),
         );
@@ -385,7 +384,7 @@ fn render_tv_series_selection(
         .max(EPISODE_LIST_VISIBLE_ROWS)
         .saturating_add(1) // season pill row
         .saturating_add(PANE_PAD_Y * 2);
-    let slots = hero_left::hero_left_slots(area, artwork_height, images_enabled, None);
+    let slots = hero_left::hero_left_slots(area, artwork_height, images_enabled);
 
     let image_paint = slots.artwork.and_then(|artwork_area| {
         match item.artwork_for(HeroArtworkAspect::Landscape) {

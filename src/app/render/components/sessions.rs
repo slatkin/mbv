@@ -35,12 +35,7 @@ pub(in crate::app) fn render_sessions_overlay_content(
             chrome::render_panel_shell(f, f.area(), SESSIONS_PANEL_W, "REMOTE SESSIONS", footer)
         }
     };
-    let panel_area = area.unwrap_or_else(|| Rect {
-        x: f.area().x,
-        y: f.area().y + 2,
-        width: SESSIONS_PANEL_W.min(f.area().width),
-        height: f.area().height.saturating_sub(2),
-    });
+    let panel_area = area.unwrap_or_else(|| chrome::panel_shell_rect(f.area(), SESSIONS_PANEL_W));
     let ix = content.x;
     let inner_w = content.width;
     let list_y = content.y;

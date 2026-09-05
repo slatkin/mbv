@@ -24,13 +24,7 @@ fn render_library(app: &mut App, width: u16, height: u16) -> (Terminal<TestBacke
     let mut layout = LayoutMain::default();
     terminal
         .draw(|frame| {
-            app.render_library(
-                frame,
-                Rect::new(0, 0, width, height),
-                true,
-                &mut layout,
-                None,
-            );
+            app.render_library(frame, Rect::new(0, 0, width, height), &mut layout, None);
         })
         .unwrap();
     (terminal, layout)

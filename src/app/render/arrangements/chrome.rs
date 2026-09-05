@@ -151,7 +151,5 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         status_area,
         right_visible,
         queue_focused,
-        left_w,
-        right_w,
     }
 }

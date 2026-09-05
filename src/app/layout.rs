@@ -86,7 +86,7 @@ pub(crate) struct LayoutMain {
     pub left_screen_offset: usize,
     /// Grouped-album row targets for visible packed screen rows. The grouped
     /// display plan publishes these before any row or detail painter.
-    pub left_row_targets: Vec<Option<LibraryRowTarget>>,
+    pub left_row_targets: Vec<Option<usize>>,
     /// Source-item order published by the authoritative grouped display plan
     /// (and identity order for ungrouped lists).
     pub left_sorted_indices: Vec<usize>,
@@ -109,8 +109,6 @@ pub(crate) struct LayoutMain {
     /// Queue placement and scope areas published independently of mounted
     /// component-local queue geometry.
     pub queue_area: Rect,
-    /// Whether the queue panel reserved a title row in this frame.
-    pub queue_title_reserved: bool,
     pub queue_title_area: Option<Rect>,
     /// Screen rect of the selected row/cell in the library panel. The outer
     /// selectable renderer owns this; nested detail/hero renderers never
@@ -200,11 +198,6 @@ impl LayoutMain {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum LibraryRowTarget {
-    Album(usize),
-}
-
 /// Root/chrome frame geometry computed paint-free by
 /// `App::compute_frame_layout` and consumed by `App::render_main` and the
 /// chrome painters. This is the partial typed subresult of the staged
@@ -241,13 +234,6 @@ pub(crate) struct FrameChromeGeometry {
     pub right_visible: bool,
     /// Whether the queue panel holds panel focus this frame.
     pub queue_focused: bool,
-    /// Left column width in columns (queue panel width in `Both` mode).
-    // TODO(interactive-surface-ledger): retain published geometry for legacy input consumers.
-    #[allow(dead_code)]
-    pub left_w: u16,
-    /// Right column width in columns.
-    #[allow(dead_code)]
-    pub right_w: u16,
 }
 
 /// All per-frame layout geometry, grouped by the view that produces it.

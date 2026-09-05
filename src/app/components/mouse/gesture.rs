@@ -8,12 +8,9 @@
 //! nor the position-keyed cross-surface clock that D16 forbade (design.md D3,
 //! "Reconciling with D16").
 //!
-//! Recognition is deliberately additive: `DragStart`/`DragMove`/`DragEnd` and
-//! `HoverEnter`/`HoverLeave` are reserved as variants now and left
-//! unrecognized. Turning them on later is a change here plus a `Msg` variant in
-//! the parent — nothing in `mouse_sub()`, eligibility, or the fold moves
-//! (design.md D7). `Moved` and `Drag` events are accepted and ignored here;
-//! hover-move spam is dropped by the consuming component's first `on()` arm
+//! Recognition covers `Click`/`DoubleClick`/`RightClick` and wheel `Scroll`.
+//! `Moved` and `Drag` events are accepted and ignored here; hover-move spam
+//! is dropped by the consuming component's first `on()` arm
 //! (`MouseEventKind::Moved => return None`), never by this module (design.md
 //! D7).
 //!
@@ -40,9 +37,7 @@ const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(400);
 /// Minimum gap between emitted `Scroll` gestures. See module docs.
 const WHEEL_THROTTLE: Duration = Duration::from_millis(30);
 
-/// A recognized pointer gesture. `Drag*`/`Hover*` are reserved (design.md D7)
-/// and never produced by [`MouseGestureState::recognize`] yet.
-#[allow(dead_code)] // consumers land in tasks 3.4-3.6
+/// A recognized pointer gesture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MouseGesture {
     Click(Position),
@@ -53,12 +48,6 @@ pub enum MouseGesture {
         at: Position,
         delta: i64,
     },
-    // --- reserved, not yet recognized (design.md D7) ---
-    DragStart(Position),
-    DragMove(Position),
-    DragEnd(Position),
-    HoverEnter(Position),
-    HoverLeave(Position),
 }
 
 /// Per-parent gesture recognition state. One per mounted parent.

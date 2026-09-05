@@ -591,7 +591,6 @@ fn abs_podcast_show_move_pulls_panel_focus_to_library() {
     model.app.panel_focus = PanelFocus::Queue;
     model.handle_terminal_message(
         Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { index: 0 }),
-        None,
         &mut false,
         &mut false,
     );
@@ -636,7 +635,6 @@ fn podcast_episode_activation_branch_flips_on_resize_tick_before_repaint() {
             width: 160,
             height: 40,
         }),
-        None,
         &mut music_resize,
         &mut tv_resize,
     );

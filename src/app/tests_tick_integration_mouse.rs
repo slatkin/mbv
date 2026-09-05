@@ -174,15 +174,11 @@ fn tick_blocking_remote_reanchor_modal_suppresses_underlying_mouse_activity() {
 // point keyboard tab-cycling uses).
 
 fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
-    let focused = outcome.pre_fold_focus.clone();
     let (mut music_resize, mut tv_resize) = (false, false);
     for message in outcome.messages {
-        harness.model_mut().handle_terminal_message(
-            message,
-            focused.as_ref(),
-            &mut music_resize,
-            &mut tv_resize,
-        );
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
     }
 }
 

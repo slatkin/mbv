@@ -489,12 +489,10 @@ pub(in crate::app) fn render_placeholder(f: &mut Frame, area: Rect, msg: &str) {
 }
 
 impl App {
-    #[allow(unused_variables)]
     pub(in crate::app) fn render_library(
         &mut self,
-        f: &mut Frame,
+        _f: &mut Frame,
         area: Rect,
-        focused: bool,
         layout: &mut LayoutMain,
         cursor_scroll: Option<(usize, usize)>,
     ) {

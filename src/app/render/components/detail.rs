@@ -106,7 +106,7 @@ impl App {
         lib_idx: usize,
         cursor: usize,
     ) -> Option<mbv_core::api::EmbyItem> {
-        let ctx = self.library_list_render_ctx(lib_idx, false, cursor, 0);
+        let ctx = self.library_list_render_ctx(lib_idx, cursor, 0);
         self.selected_movie_item_with_ctx(lib_idx, &ctx)
     }
 
@@ -142,7 +142,7 @@ impl App {
         lib_idx: usize,
         cursor: usize,
     ) -> Option<mbv_core::api::EmbyItem> {
-        let ctx = self.library_list_render_ctx(lib_idx, false, cursor, 0);
+        let ctx = self.library_list_render_ctx(lib_idx, cursor, 0);
         self.selected_series_item_with_ctx(lib_idx, &ctx)
     }
 

@@ -225,13 +225,7 @@ impl App {
             status_area,
             right_visible,
             queue_focused,
-            // Widths are carried by the precomputed areas; kept for the typed
-            // subresult contract but not consumed by the paint body.
-            left_w: _,
-            right_w: _,
         } = *chrome;
-        let left_focused = !queue_focused;
-
         // Header row removed — the tab bar above indicates current location.
         layout.breadcrumbs = Vec::new();
         layout.selector_tabs = Vec::new();
@@ -335,7 +329,6 @@ impl App {
 
         if self.effective_panel_mode() != PanelMode::LibraryOnly {
             render_queue_panel_frame(f, queue_geometry.panel_area, queue_focused);
-            layout.queue_title_reserved = queue_geometry.title_reserved;
             layout.queue_title_area = queue_geometry.title_area;
             layout.queue_area = queue_geometry.content_area;
             layout.queue_selected_item_rect = None;
@@ -349,7 +342,7 @@ impl App {
             }
         }
         if right_visible {
-            self.render_library(f, render_lib_area, left_focused, layout, cursor_scroll);
+            self.render_library(f, render_lib_area, layout, cursor_scroll);
         }
 
         // Status bar at the bottom of the right panel. Playback prompts are

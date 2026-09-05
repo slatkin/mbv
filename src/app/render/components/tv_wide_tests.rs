@@ -32,7 +32,7 @@ fn render_tv_workspace(app: &mut App, layout: &mut LayoutMain) -> (String, TvWor
     );
     component.set_focused(true);
     term.draw(|f| {
-        app.render_library(f, area, true, layout, None);
+        app.render_library(f, area, layout, None);
         component.view(f, area);
     })
     .unwrap();
@@ -226,7 +226,7 @@ fn wide_tv_legacy_base_frame_publishes_geometry_but_paints_no_workspace() {
     let area = Rect::new(0, 0, 100, 30);
     let mut term = Terminal::new(TestBackend::new(100, 30)).unwrap();
     term.draw(|f| {
-        app.render_library(f, area, true, &mut layout, None);
+        app.render_library(f, area, &mut layout, None);
     })
     .unwrap();
 
@@ -394,7 +394,7 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
                     Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
                     area,
                 );
-                app.render_library(f, area, focused, &mut layout, None);
+                app.render_library(f, area, &mut layout, None);
                 component.view(f, area);
             })
             .unwrap();

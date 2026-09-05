@@ -93,23 +93,19 @@ fn terminal_resize_observer_preserves_layout_side_effects() {
     model.app.card_image_loading.insert("stale".into());
     let mut music_resize = false;
     let mut tv_resize = false;
-    let mut quit = false;
     apply_terminal_observer(
         &mut model,
         TerminalObserverEvent::Resize {
             width: 80,
             height: 24,
         },
-        Some(&ComponentId::Playback),
         &mut music_resize,
         &mut tv_resize,
-        &mut quit,
     );
     assert!(model.app.force_clear);
     assert!(model.app.card_image_states.is_empty());
     assert!(model.app.card_image_loading.is_empty());
     assert!(music_resize && tv_resize);
-    assert!(!quit);
 }
 
 #[test]
@@ -120,17 +116,14 @@ fn terminal_resize_observer_applies_new_size_before_paint() {
     assert!(!model.app.is_right_panel_wide());
     let mut music_resize = false;
     let mut tv_resize = false;
-    let mut quit = false;
     apply_terminal_observer(
         &mut model,
         TerminalObserverEvent::Resize {
             width: 150,
             height: 24,
         },
-        Some(&ComponentId::Playback),
         &mut music_resize,
         &mut tv_resize,
-        &mut quit,
     );
     assert_eq!(model.app.terminal_width, 150);
     assert_eq!(model.app.terminal_height, 24);
@@ -142,24 +135,18 @@ fn terminal_focus_observer_preserves_refocus_side_effects() {
     let mut model = Model::new(make_app_stub());
     let mut music_resize = false;
     let mut tv_resize = false;
-    let mut quit = false;
     apply_terminal_observer(
         &mut model,
         TerminalObserverEvent::FocusGained,
-        Some(&ComponentId::Playback),
         &mut music_resize,
         &mut tv_resize,
-        &mut quit,
     );
     assert!(model.app.refocus_at.is_some());
     apply_terminal_observer(
         &mut model,
         TerminalObserverEvent::FocusLost,
-        Some(&ComponentId::Playback),
         &mut music_resize,
         &mut tv_resize,
-        &mut quit,
     );
     assert!(model.app.refocus_at.is_none());
-    assert!(!quit);
 }

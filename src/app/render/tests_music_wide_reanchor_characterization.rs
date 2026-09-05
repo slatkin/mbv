@@ -16,7 +16,6 @@ use super::test_helpers::{
 };
 use super::*;
 use crate::app::components::{ComponentId, MusicWorkspaceComponent};
-use crate::app::layout::LibraryRowTarget;
 use crate::app::shell::Model;
 use crate::app::tests::make_item;
 use crate::app::PanelFocus;
@@ -62,9 +61,7 @@ fn album_targets(model: &Model, want: usize) -> Vec<usize> {
         .left_row_targets
         .iter()
         .enumerate()
-        .filter_map(|(row, target)| {
-            matches!(target, Some(LibraryRowTarget::Album(idx)) if *idx == want).then_some(row)
-        })
+        .filter_map(|(row, target)| matches!(target, Some(idx) if *idx == want).then_some(row))
         .collect()
 }
 

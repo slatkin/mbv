@@ -815,7 +815,6 @@ fn tv_series_activation_branch_flips_on_resize_tick_before_repaint() {
             width: 160,
             height: 40,
         }),
-        None,
         &mut music_resize,
         &mut tv_resize,
     );

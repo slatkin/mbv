@@ -183,7 +183,6 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             focused && interaction.chapter_selection.is_some(),
             true,
             &plan,
-            true,
         );
         let chapters_area = Rect {
             y: hero_content_area.y + hero_height,
@@ -331,7 +330,7 @@ fn render_narrow_book(
     selected_detail_shell(frame, hero_area, hero_area.height, focused);
     geometry.hero_area = Some(hero_area);
     geometry.selected_item_rect = Some(hero_area);
-    render_book_hero(frame, hero_area, state, focused, true, &plan, false)
+    render_book_hero(frame, hero_area, state, focused, true, &plan)
 }
 
 fn render_book_pills(
@@ -368,7 +367,6 @@ fn render_book_hero(
     focused: bool,
     show_title: bool,
     plan: &BookHeroPlan,
-    _wide: bool,
 ) -> Option<super::home_hero::HomeImagePaint> {
     let book = state.selected_book()?;
     let mut meta = Vec::new();
@@ -411,7 +409,7 @@ fn render_book_hero(
     // HeroImage is right-aligned by the painter; keep its fixed cover width
     // separate from the full-width text area. The old slot calculation passed
     // the whole pane as the artwork width, leaving no room for text.
-    let (image_width, image_height) = if plan.image_key.is_some() {
+    let (image_width, image_height) = if plan.has_image {
         (plan.image_width, plan.image_height)
     } else {
         (0, 0)
@@ -451,7 +449,7 @@ fn render_book_hero(
         },
         focused,
     );
-    (plan.image_key.is_some() && result.img_rect.is_some()).then(|| {
+    (plan.has_image && result.img_rect.is_some()).then(|| {
         super::home_hero::HomeImagePaint::AudiobookshelfBookCover {
             area: result.img_rect.unwrap(),
             library_item_id: book.library_item_id.clone(),
@@ -534,7 +532,7 @@ fn book_hero_plan(
 ) -> BookHeroPlan {
     let Some(book) = state.selected_book() else {
         return BookHeroPlan {
-            image_key: None,
+            has_image: false,
             image_width: 0,
             image_height: 0,
             content_rows: HERO_TITLE_ROWS,
@@ -564,7 +562,7 @@ fn book_hero_plan(
     })
     .len() as u16;
     BookHeroPlan {
-        image_key: has_cover.then(|| book.library_item_id.clone()),
+        has_image: has_cover,
         image_width,
         image_height,
         content_rows: image_height

@@ -41,35 +41,6 @@ pub(crate) enum HeroArtwork<'a> {
     Placeholder,
 }
 
-impl Hero for mbv_core::playback_queue::FeedEntry {
-    fn title(&self) -> &str {
-        &self.title
-    }
-    fn subtitle(&self) -> Option<&str> {
-        None
-    }
-    fn meta_rows(&self, width: u16) -> Vec<Vec<Span<'static>>> {
-        let line = crate::app::render::screens::feeds_model::feed_entry_meta_line(self);
-        if line.is_empty() {
-            Vec::new()
-        } else {
-            vec![vec![Span::styled(
-                trunc_str(&line, width as usize),
-                Style::default().fg(palette::TEXT_SECONDARY),
-            )]]
-        }
-    }
-    fn title_suffix(&self) -> Option<Span<'static>> {
-        None
-    }
-    fn description(&self) -> Option<String> {
-        None
-    }
-    fn artwork_for(&self, _aspect: HeroArtworkAspect) -> HeroArtwork<'_> {
-        HeroArtwork::Placeholder
-    }
-}
-
 impl Hero for QueueItem {
     fn title(&self) -> &str {
         self.title()

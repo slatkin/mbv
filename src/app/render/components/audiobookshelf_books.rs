@@ -4,7 +4,7 @@
 /// because the component renderer still builds and constrains it.
 #[derive(Clone)]
 pub(in crate::app::render) struct BookHeroPlan {
-    pub(in crate::app::render) image_key: Option<String>,
+    pub(in crate::app::render) has_image: bool,
     pub(in crate::app::render) image_width: u16,
     pub(in crate::app::render) image_height: u16,
     pub(in crate::app::render) content_rows: u16,

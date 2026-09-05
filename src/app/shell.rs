@@ -243,7 +243,7 @@ impl Model {
             connected_session_id_present: self.app.connected_session_id.is_some(),
             panel_mode: self.app.effective_panel_mode(),
             panel_focus: self.app.effective_panel_focus(),
-            blocking_overlay_open: self.is_blocking_overlay_open(),
+            blocking_overlay_open: self.blocking_overlay_active(),
             help_overlay_open: self
                 .application
                 .mounted(&ComponentId::Overlay(OverlayId::Help)),
@@ -411,10 +411,8 @@ impl Model {
 fn apply_terminal_observer(
     model: &mut Model,
     event: TerminalObserverEvent,
-    _focused: Option<&ComponentId>,
     music_resize: &mut bool,
     tv_resize: &mut bool,
-    _quit: &mut bool,
 ) {
     match event {
         TerminalObserverEvent::Resize { width, height } => {

@@ -450,7 +450,6 @@ impl BrowserComponent {
                     .saturating_add_signed(delta as isize)
                     .min(max_offset);
                 Some(Msg::Shell(ShellRequest::BrowserScroll {
-                    delta,
                     offset: self.scroll,
                 }))
             }
@@ -485,7 +484,6 @@ impl BrowserComponent {
                     anchor: (mouse.column, mouse.row),
                 }))
             }
-            _ => None,
         }
     }
 

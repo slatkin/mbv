@@ -17,17 +17,11 @@ use crate::app::palette;
 use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::types_playback::PlaybackState;
 
-/// Set while the active Emby library has inline Search open.
-pub const ATTR_LIB_SEARCH_ACTIVE: Attribute = Attribute::Custom("lib_search_active");
-
 #[derive(Clone, Debug, PartialEq)]
 pub(in crate::app) struct PlaybackProjection {
     pub state: PlaybackState,
-    pub title: Option<String>,
     pub player_area: Rect,
-    pub status_area: Rect,
     pub show_controls: bool,
-    pub focused: bool,
     pub player_h: u16,
     pub panel_bg: Color,
     pub narrow_player: bool,
@@ -39,8 +33,6 @@ pub(in crate::app) struct PlaybackProjection {
     pub use_nerd_fonts: bool,
     pub stop_available: bool,
     pub next_available: bool,
-    pub volume: String,
-    pub muted: bool,
 }
 
 pub struct PlaybackComponent {
@@ -58,16 +50,11 @@ pub struct PlaybackComponent {
 
 impl PlaybackComponent {
     pub fn new() -> Self {
-        let mut props = Props::default();
-        props.set(ATTR_LIB_SEARCH_ACTIVE, AttrValue::Flag(false));
         Self {
             projection: PlaybackProjection {
                 state: PlaybackState::default(),
-                title: None,
                 player_area: Rect::default(),
-                status_area: Rect::default(),
                 show_controls: false,
-                focused: false,
                 player_h: 0,
                 panel_bg: palette::SURFACE_PLAYBACK,
                 narrow_player: false,
@@ -79,10 +66,8 @@ impl PlaybackComponent {
                 use_nerd_fonts: false,
                 stop_available: false,
                 next_available: false,
-                volume: String::new(),
-                muted: false,
             },
-            props,
+            props: Props::default(),
             last_space: None,
             last_escape: None,
             play_pause_area: Rect::default(),
@@ -249,11 +234,8 @@ mod tests {
         let mut component = PlaybackComponent::new();
         component.set_projection(PlaybackProjection {
             state: PlaybackState::default(),
-            title: Some("Example".into()),
             player_area: Rect::new(10, 5, 40, 4),
-            status_area: Rect::new(10, 9, 40, 1),
             show_controls: true,
-            focused: false,
             player_h: 4,
             panel_bg: palette::SURFACE_PLAYBACK,
             narrow_player: false,
@@ -265,8 +247,6 @@ mod tests {
             use_nerd_fonts: false,
             stop_available: true,
             next_available: true,
-            volume: "50%".into(),
-            muted: false,
         });
         let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
         terminal
@@ -311,11 +291,8 @@ mod tests {
         let mut component = PlaybackComponent::new();
         component.set_projection(PlaybackProjection {
             state: PlaybackState::default(),
-            title: Some("Example".into()),
             player_area: Rect::new(0, 0, 40, 3),
-            status_area: Rect::new(0, 3, 40, 1),
             show_controls: true,
-            focused: false,
             player_h: 3,
             panel_bg: palette::SURFACE_PLAYBACK,
             narrow_player: false,
@@ -327,8 +304,6 @@ mod tests {
             use_nerd_fonts: false,
             stop_available: false,
             next_available: false,
-            volume: "50%".into(),
-            muted: false,
         });
         let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
         terminal

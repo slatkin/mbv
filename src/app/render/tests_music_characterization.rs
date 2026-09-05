@@ -17,18 +17,12 @@ fn render_narrow_music(app: App, width: u16, height: u16) -> String {
     draw_mounted_frame(&mut model, width, height)
 }
 
-fn render_music_legacy(app: &mut App, width: u16, height: u16, focused: bool) -> String {
+fn render_music_legacy(app: &mut App, width: u16, height: u16, _focused: bool) -> String {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     let mut layout = LayoutMain::default();
     terminal
         .draw(|f| {
-            app.render_library(
-                f,
-                Rect::new(0, 0, width, height),
-                focused,
-                &mut layout,
-                None,
-            );
+            app.render_library(f, Rect::new(0, 0, width, height), &mut layout, None);
         })
         .unwrap();
     buffer_to_string(&terminal)
@@ -120,7 +114,7 @@ fn wide_music_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
     let mut layout = LayoutMain::default();
     let mut term = Terminal::new(TestBackend::new(120, 40)).unwrap();
     term.draw(|f| {
-        app.render_library(f, Rect::new(0, 0, 120, 40), true, &mut layout, None);
+        app.render_library(f, Rect::new(0, 0, 120, 40), &mut layout, None);
     })
     .unwrap();
 

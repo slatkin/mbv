@@ -429,7 +429,6 @@ impl TvWorkspaceComponent {
                     anchor: (mouse.column, mouse.row),
                 }))
             }
-            _ => None,
         }
     }
 

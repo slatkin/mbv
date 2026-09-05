@@ -5,7 +5,6 @@ impl App {
     pub(in crate::app) fn library_list_render_ctx(
         &self,
         lib_idx: usize,
-        _display_recursive_albums: bool,
         cursor: usize,
         scroll: usize,
     ) -> LibraryListRenderCtx {

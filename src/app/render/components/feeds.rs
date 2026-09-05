@@ -333,15 +333,7 @@ fn paint_feed_hero(
         focused,
     );
     if let Some(image_area) = result.img_rect {
-        if matches!(
-            <FeedEntry as crate::app::render::components::hero_model::Hero>::artwork_for(
-                entry,
-                crate::app::render::components::hero_model::HeroArtworkAspect::Default
-            ),
-            crate::app::render::components::hero_model::HeroArtwork::Placeholder
-        ) {
-            render_artwork_placeholder(f, image_area);
-        }
+        render_artwork_placeholder(f, image_area);
     }
 }
 

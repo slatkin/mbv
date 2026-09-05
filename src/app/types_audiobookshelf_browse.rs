@@ -27,7 +27,7 @@ impl AudiobookshelfBrowseKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) enum AudiobookshelfEpisodeFilter {
     #[default]
     All,

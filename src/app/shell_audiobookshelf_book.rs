@@ -804,7 +804,6 @@ mod tests {
                 width: 160,
                 height: 40,
             }),
-            None,
             &mut music_resize,
             &mut tv_resize,
         );

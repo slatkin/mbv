@@ -130,7 +130,6 @@ impl HeroData {
         two_column: bool,
         focused: bool,
         use_nerd_fonts: bool,
-        _images_enabled: bool,
     ) -> Option<HomeImagePaint> {
         let meta_block =
             App::keep_watching_hero_meta_block(&self.item, self.meta_area.width, use_nerd_fonts);
@@ -310,9 +309,8 @@ pub(in crate::app) fn render_home_hero_content(
     two_column: bool,
     focused: bool,
     use_nerd_fonts: bool,
-    images_enabled: bool,
 ) -> Option<HomeImagePaint> {
-    hero_data.render_content(f, two_column, focused, use_nerd_fonts, images_enabled)
+    hero_data.render_content(f, two_column, focused, use_nerd_fonts)
 }
 
 /// Beside-image inline dims: image width, the wrap-around text layout,

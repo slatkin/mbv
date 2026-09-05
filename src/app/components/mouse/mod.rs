@@ -3,16 +3,10 @@
 //! Phase 1 of `restore-mouse-support`: the subscription helper that every
 //! mouse-eligible component is subscribed with by `sync_mouse_subscriptions`
 //! (`src/app/shell_library.rs`). Phase 2 adds [`hit`] (`HitRegions<Tag>`) and
-//! [`gesture`] (`MouseGestureState`) alongside this; their consumers land in
-//! tasks 3.4-3.6.
+//! [`gesture`] (`MouseGestureState`) alongside this.
 
 pub mod gesture;
 pub mod hit;
-
-#[allow(unused_imports)] // consumers land in tasks 3.4-3.6
-pub use gesture::{MouseGesture, MouseGestureState};
-#[allow(unused_imports)] // consumers land in tasks 3.4-3.6
-pub use hit::HitRegions;
 
 use tuirealm::event::{KeyModifiers, MouseEventKind};
 use tuirealm::subscription::{EventClause, MouseEventClause, Sub, SubClause};

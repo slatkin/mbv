@@ -80,7 +80,6 @@ fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
             app.render_library(
                 f,
                 ratatui::layout::Rect::new(0, 0, 120, 40),
-                true,
                 &mut layout,
                 None,
             );
@@ -221,7 +220,7 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
     let wide_area = ratatui::layout::Rect::new(0, 0, 120, 20);
     terminal
         .draw(|f| {
-            app.render_library(f, wide_area, true, &mut layout, None);
+            app.render_library(f, wide_area, &mut layout, None);
             component.view(f, wide_area);
         })
         .unwrap();

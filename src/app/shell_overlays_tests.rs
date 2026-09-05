@@ -391,7 +391,7 @@ mod tests {
             ShellRequest::ContextMenuSelect(0)
         ));
 
-        model.handle_terminal_message(Msg::Shell(request), None, &mut false, &mut false);
+        model.handle_terminal_message(Msg::Shell(request), &mut false, &mut false);
         assert!(
             !model.application.mounted(&id),
             "executing a menu entry must close the menu"

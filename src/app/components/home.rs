@@ -384,7 +384,7 @@ impl HomeComponent {
     /// Handle a keyboard event using TuiRealm key types. Home claims
     /// only its local navigation and typed effect requests; destination-
     /// independent chords are resolved by the central router.
-    pub(in crate::app) fn handle_crossterm_key(&mut self, key: KeyEvent) -> Option<Msg> {
+    fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if !self.focused {
             return None;
         }
@@ -440,9 +440,6 @@ impl HomeComponent {
         }
     }
 
-    fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        self.handle_crossterm_key(*key)
-    }
     fn section_msg(&self, changed: bool) -> Option<Msg> {
         changed.then_some(Msg::Shell(ShellRequest::HomeSectionSelected(self.section)))
     }
@@ -513,7 +510,6 @@ impl HomeComponent {
                     anchor: (mouse.column, mouse.row),
                 }))
             }
-            _ => None,
         }
     }
 

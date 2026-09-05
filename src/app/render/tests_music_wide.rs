@@ -12,7 +12,6 @@ use super::components::media_list::{PLAIN_ROWS_PAINTS, WIDE_MEDIA_LIST_PAINTS};
 use super::test_helpers::{buffer_to_string, make_music_group_app};
 use super::*;
 use crate::app::components::MusicWorkspaceComponent;
-use crate::app::layout::LibraryRowTarget;
 use crate::app::tests::make_item;
 use crate::app::PanelFocus;
 use ratatui::backend::TestBackend;
@@ -115,7 +114,7 @@ fn wide_music_headings_and_spacers_are_not_selectable_row_targets() {
     let album_rows = layout
         .left_row_targets
         .iter()
-        .filter(|t| matches!(t, Some(LibraryRowTarget::Album(_))))
+        .filter(|t| t.is_some())
         .count();
     let structural_rows = layout
         .left_row_targets

@@ -88,14 +88,8 @@ pub(in crate::app) use components::tv_wide::{render_wide_tv_with_ctx, TvWideRend
 pub(in crate::app) use components::widgets::{render_count_label, render_pill_bar, PillBar};
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the
-// Interactive Components in `crate::app::components` (task 3.2+); the
-// `#[allow(unused_imports)]` silences the dead-code lint until the first
-// component imports them.
-#[allow(unused_imports)]
-pub(in crate::app) use components::chrome::{
-    left_panel_content_area, panel_content_area, panel_row_text_width, render_panel_row,
-    render_panel_shell, render_panel_shell_at, render_sidebar_scrollbar,
-};
+// Interactive Components in `crate::app::components` (task 3.2+).
+pub(in crate::app) use components::chrome::{render_panel_shell_at, render_sidebar_scrollbar};
 
 // Re-exports so paths that resolved at `render::X` (or, from render's other
 // submodules, `super::X`) before the render/mod.rs split (issue #365 step 2,

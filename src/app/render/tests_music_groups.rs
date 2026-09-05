@@ -85,9 +85,7 @@ fn narrow_grouped_music_replaces_selected_album_row_with_hero_detail() {
         layout
             .left_row_targets
             .iter()
-            .filter(|target| {
-                matches!(target, Some(crate::app::layout::LibraryRowTarget::Album(0)))
-            })
+            .filter(|target| { matches!(target, Some(0)) })
             .count(),
         1,
         "the selected album must publish one replacement parent target"
@@ -169,9 +167,7 @@ fn narrow_grouped_music_keeps_bottom_hero_fully_visible() {
         layout
             .left_row_targets
             .iter()
-            .filter(|target| {
-                matches!(target, Some(crate::app::layout::LibraryRowTarget::Album(idx)) if *idx == cursor)
-            })
+            .filter(|target| { matches!(target, Some(idx) if *idx == cursor) })
             .count(),
         1,
         "the admitted hero publishes exactly one selected parent target"
@@ -264,7 +260,7 @@ fn short_grouped_music_restores_the_ordinary_selected_album_row() {
     assert!(layout
         .left_row_targets
         .iter()
-        .any(|target| matches!(target, Some(crate::app::layout::LibraryRowTarget::Album(0)))));
+        .any(|target| matches!(target, Some(0))));
 }
 
 #[test]
@@ -329,9 +325,7 @@ fn grouped_music_maps_reordered_non_contiguous_album_source() {
         layout
             .left_row_targets
             .iter()
-            .filter(|target| {
-                matches!(target, Some(crate::app::layout::LibraryRowTarget::Album(3)))
-            })
+            .filter(|target| { matches!(target, Some(3)) })
             .count(),
         1
     );

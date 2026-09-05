@@ -36,11 +36,10 @@ use mbv_core::audiobookshelf::AudiobookshelfShow;
 pub(in crate::app::render) fn podcast_hero_content_rows(
     state: &AudiobookshelfBrowseState,
     interaction: PodcastInteraction,
-    show_title: bool,
     width: u16,
     images_enabled: bool,
 ) -> u16 {
-    let title_rows = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
+    let title_rows = HERO_TITLE_ROWS;
     let author_rows = state
         .selected_show()
         .and_then(|show| show.author.as_ref())
@@ -367,8 +366,7 @@ fn render_narrow_podcast(
         .width
         .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
     let desired_detail_rows =
-        podcast_hero_content_rows(state, interaction, true, hero_content_width, images_enabled)
-            as usize
+        podcast_hero_content_rows(state, interaction, hero_content_width, images_enabled) as usize
             + HERO_BLOCK_EXTRA_ROWS as usize;
 
     let result = render_inline_media_browser(
@@ -603,11 +601,10 @@ mod tests {
     fn legacy_hero_content_rows(
         state: &AudiobookshelfBrowseState,
         interaction: PodcastInteraction,
-        show_title: bool,
         width: u16,
         images_enabled: bool,
     ) -> u16 {
-        let title_rows = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
+        let title_rows = HERO_TITLE_ROWS;
         let author_rows = state
             .selected_show()
             .and_then(|show| show.author.as_ref())
@@ -653,8 +650,8 @@ mod tests {
         width: u16,
         images_enabled: bool,
     ) {
-        let got = podcast_hero_content_rows(state, interaction, true, width, images_enabled);
-        let expected = legacy_hero_content_rows(state, interaction, true, width, images_enabled);
+        let got = podcast_hero_content_rows(state, interaction, width, images_enabled);
+        let expected = legacy_hero_content_rows(state, interaction, width, images_enabled);
         assert_eq!(got, expected, "shared helper must match legacy rule");
     }
 
@@ -669,7 +666,7 @@ mod tests {
         });
         // title(1) + author(1) + trailing(1) = 3; no image minimum.
         assert_eq!(
-            podcast_hero_content_rows(&state, interaction(None), true, 40, false),
+            podcast_hero_content_rows(&state, interaction(None), 40, false),
             3
         );
         assert_matches_legacy(&state, interaction(None), 40, false);
@@ -733,7 +730,7 @@ mod tests {
         });
         // Images enabled lifts even a title-only budget to SERIES_IMAGE_ROWS+1.
         assert_eq!(
-            podcast_hero_content_rows(&state, interaction(None), true, 40, true),
+            podcast_hero_content_rows(&state, interaction(None), 40, true),
             SERIES_IMAGE_ROWS + 1
         );
         assert_matches_legacy(&state, interaction(None), 40, true);

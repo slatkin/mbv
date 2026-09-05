@@ -6,14 +6,13 @@ impl Model {
     pub(crate) fn handle_terminal_message(
         &mut self,
         msg: Msg,
-        focused: Option<&ComponentId>,
         music_resize: &mut bool,
         tv_resize: &mut bool,
     ) -> bool {
         let mut quit = false;
         match msg {
             Msg::TerminalEvent(event) => {
-                apply_terminal_observer(self, event, focused, music_resize, tv_resize, &mut quit)
+                apply_terminal_observer(self, event, music_resize, tv_resize)
             }
             Msg::Shell(request) => match request {
                 ShellRequest::MusicAlbumActivate => {
@@ -74,8 +73,8 @@ impl Model {
                 // the shell resolves it to the cached track and runs
                 // the App effect (task 5.3d, Album track focus).
                 ShellRequest::MusicTrackActivate => {
-                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                        if let Some((album_id, track)) = self.focused_music_track(lib_idx) {
+                    if self.app.tab.emby_library_index().is_some() {
+                        if let Some((album_id, track)) = self.focused_music_track() {
                             self.app.play_album_track(&album_id, &track);
                         }
                     }
@@ -83,7 +82,7 @@ impl Model {
                 }
                 ShellRequest::MusicTrackEnqueue => {
                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                        if let Some((_, track)) = self.focused_music_track(lib_idx) {
+                        if let Some((_, track)) = self.focused_music_track() {
                             self.app.enqueue_lib_item(lib_idx, track);
                         }
                     }
@@ -94,7 +93,7 @@ impl Model {
                         .app
                         .tab
                         .emby_library_index()
-                        .and_then(|lib_idx| self.focused_music_track(lib_idx))
+                        .and_then(|_| self.focused_music_track())
                     {
                         self.app.open_context_menu_for(track);
                     }
@@ -310,7 +309,7 @@ impl Model {
                 // `BrowserComponent`'s private `MouseGestureState` (ADR 0024,
                 // design.md D3/D4): it owns the wheel throttle and resolves the
                 // row target itself, so the shell only applies the effect.
-                ShellRequest::BrowserScroll { delta: _, offset } => {
+                ShellRequest::BrowserScroll { offset } => {
                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
                         if self.app.is_feed_home_video_group_view(lib_idx) {
                             if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
@@ -561,8 +560,6 @@ impl Model {
                     quit = true;
                 }
             }
-            // NavTarget is an unbuilt placeholder (msg.rs); navigation routing is not wired yet.
-            Msg::Navigate(_) => {}
         }
         quit
     }

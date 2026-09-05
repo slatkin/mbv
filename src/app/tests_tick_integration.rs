@@ -235,15 +235,11 @@ fn esc_closes_a_sidebar_in_mini_view() {
 
     harness.inject(key(Key::Esc));
     let outcome = harness.step();
-    let focused = outcome.pre_fold_focus.clone();
     let (mut music_resize, mut tv_resize) = (false, false);
     for message in outcome.messages {
-        harness.model_mut().handle_terminal_message(
-            message,
-            focused.as_ref(),
-            &mut music_resize,
-            &mut tv_resize,
-        );
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
     }
     harness.model_mut().sync_mounted_surfaces();
     assert!(!harness.model().application.mounted(&id));
@@ -436,7 +432,6 @@ fn blocking_overlay_focus_loss_and_restoration_through_live_tick() {
     let (mut music_resize, mut tv_resize) = (false, false);
     harness.model_mut().handle_terminal_message(
         Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Accept)),
-        Some(&confirm_id),
         &mut music_resize,
         &mut tv_resize,
     );

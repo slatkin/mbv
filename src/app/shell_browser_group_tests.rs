@@ -384,12 +384,11 @@ fn feed_group_picker_routes_at_visible_narrow_and_wide_widths() {
             assert!(
                 matches!(msg, Some(Msg::Shell(ShellRequest::BrowserCycleGroup { delta: d })) if d == delta)
             );
-            let focused = harness.model().application.focus().cloned();
+            let _focused = harness.model().application.focus().cloned();
             let mut music_resize = false;
             let mut tv_resize = false;
             harness.model_mut().handle_terminal_message(
                 msg.expect("group cycle message"),
-                focused.as_ref(),
                 &mut music_resize,
                 &mut tv_resize,
             );
@@ -405,7 +404,7 @@ fn feed_group_picker_routes_at_visible_narrow_and_wide_widths() {
 
         // Exercise the actual Application::tick path and prove Enter survives
         // the shell router as a typed activation request.
-        let focused = harness.model().application.focus().cloned();
+        let _focused = harness.model().application.focus().cloned();
         let activation =
             drive_browser_key(harness.model_mut(), &id, Key::Enter, KeyModifiers::NONE)
                 .into_iter()
@@ -422,7 +421,6 @@ fn feed_group_picker_routes_at_visible_narrow_and_wide_widths() {
         let mut tv_resize = false;
         harness.model_mut().handle_terminal_message(
             Msg::Shell(activation),
-            focused.as_ref(),
             &mut music_resize,
             &mut tv_resize,
         );

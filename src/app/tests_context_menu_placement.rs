@@ -303,7 +303,6 @@ fn pointer_anchor_selects_wide_tv_branch_on_resize_tick_before_repaint() {
             width: 150,
             height: 24,
         }),
-        None,
         &mut music_resize,
         &mut tv_resize,
     );

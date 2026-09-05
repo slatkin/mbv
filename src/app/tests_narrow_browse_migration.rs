@@ -189,7 +189,7 @@ fn press(model: &mut Model, code: Key) {
         if let Some(msg) = msg {
             let mut music_resize = false;
             let mut tv_resize = false;
-            model.handle_terminal_message(msg, focused.as_ref(), &mut music_resize, &mut tv_resize);
+            model.handle_terminal_message(msg, &mut music_resize, &mut tv_resize);
         }
     }
     model.sync_mounted_surfaces();
@@ -602,7 +602,6 @@ fn feed_home_video_group_browser_scroll_updates_video_scroll() {
     };
     let max_offset = total_rows.saturating_sub(area.height as usize);
     assert!(max_offset > 0, "feed fixture must overflow the mounted control");
-    let focused = model.application.focus().cloned();
     let mut music_resize = false;
     let mut tv_resize = false;
     // Drive the existing typed wheel path through the mounted control: the
@@ -628,7 +627,7 @@ fn feed_home_video_group_browser_scroll_updates_video_scroll() {
                 modifiers: KeyModifiers::NONE,
             }))
             .expect("scroll emits typed request");
-        model.handle_terminal_message(msg, focused.as_ref(), &mut music_resize, &mut tv_resize);
+        model.handle_terminal_message(msg, &mut music_resize, &mut tv_resize);
     }
     assert_ne!(max_offset + 1, max_offset);
     let control_scroll = model

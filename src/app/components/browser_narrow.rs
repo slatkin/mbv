@@ -48,7 +48,6 @@ pub(in crate::app) struct NarrowBrowseExtras {
     pub(in crate::app) feed_items: Option<Vec<mbv_core::api::EmbyItem>>,
     pub(in crate::app) feed_groups: Vec<String>,
     pub(in crate::app) feed_group_cursor: usize,
-    pub(in crate::app) feed_video_cursor: usize,
     /// Feed picker selected-row replacement height: `banner.content_rows() + 5`.
     /// Computed shell-side because banner layout may access the image cache;
     /// components must not perform effects while painting.

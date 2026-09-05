@@ -37,22 +37,11 @@ fn home_item_at(
     latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
     cursor: usize,
 ) -> Option<QueueItem> {
-    let mut pos = 0usize;
-    for item in continue_items {
-        if pos == cursor {
-            return Some(item.clone());
-        }
-        pos += 1;
-    }
-    for (_, _, items) in latest {
-        for item in items {
-            if pos == cursor {
-                return Some(item.clone());
-            }
-            pos += 1;
-        }
-    }
-    None
+    continue_items
+        .iter()
+        .chain(latest.iter().flat_map(|(_, _, i)| i.iter()))
+        .nth(cursor)
+        .cloned()
 }
 
 /// Paints Home's parent-owned hero + section pills + list-surface chrome
@@ -90,18 +79,14 @@ pub(in crate::app) fn render_home_content(
 
     struct Section {
         section_idx: usize,
-        flat_start: usize,
         items: Vec<QueueItem>,
     }
-    let mut flat = continue_items.len();
     let mut new_sections: Vec<Section> = Vec::new();
     for (idx, (_title, _source, items)) in latest.iter().enumerate() {
         new_sections.push(Section {
             section_idx: idx + 1,
-            flat_start: flat,
             items: items.clone(),
         });
-        flat += items.len();
     }
 
     // The caller resolves which section is *persisted*; a section that no
@@ -133,18 +118,11 @@ pub(in crate::app) fn render_home_content(
     // per-screen declaration).
     let content_area = narrow_pill_areas.content_area;
 
-    // The active section's flat indices (Continue Watching is section 0; each
-    // latest pill is section N). Only this section is projected into the
-    // canonical control; the parent keeps section identity. `cursor` is the
-    // already-clamped flat cursor the component derived from the control.
-    let active_flat: Vec<usize> = if section == 0 {
-        (0..continue_items.len()).collect()
-    } else if let Some(sec) = selected_new {
-        (sec.flat_start..sec.flat_start + sec.items.len()).collect()
+    let control_empty = if section == 0 {
+        continue_items.is_empty()
     } else {
-        Vec::new()
+        selected_new.is_none_or(|sec| sec.items.is_empty())
     };
-    let control_empty = active_flat.is_empty();
 
     // --- Home hero panel ----------------------------------------------
     // Shared hero above the selected Home list. It reflects the current
@@ -429,14 +407,8 @@ pub(in crate::app) fn render_home_content(
     // (its geometry was resolved above, before the pill/list split).
     if two_column {
         if let Some(hero_data) = &hero_data {
-            image_paint = home_hero::render_home_hero_content(
-                f,
-                hero_data,
-                true,
-                focused,
-                use_nerd_fonts,
-                images_enabled,
-            );
+            image_paint =
+                home_hero::render_home_hero_content(f, hero_data, true, focused, use_nerd_fonts);
         } else if let Some((item, area)) = &generic_hero {
             image_paint = home_hero::render_generic_hero_content(
                 f,
@@ -509,7 +481,6 @@ pub(in crate::app) fn render_home_content(
                             false,
                             focused,
                             use_nerd_fonts,
-                            images_enabled,
                         );
                     }
                     Some(NarrowHeroPaint::Generic(item, area)) => {

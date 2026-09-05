@@ -175,7 +175,7 @@ mod tests {
     /// Route a `ShellRequest` through the Model's terminal-message dispatch,
     /// the same path `handle_terminal_message` takes for a folded mouse `Msg`.
     fn route(model: &mut Model, request: ShellRequest) {
-        model.handle_terminal_message(Msg::Shell(request), None, &mut false, &mut false);
+        model.handle_terminal_message(Msg::Shell(request), &mut false, &mut false);
     }
     use crate::app::tests::{make_app_stub, make_item, make_items};
     use tuirealm::component::AppComponent;

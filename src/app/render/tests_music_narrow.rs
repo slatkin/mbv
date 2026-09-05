@@ -16,7 +16,6 @@ use super::test_helpers::{
 };
 use super::*;
 use crate::app::components::{ComponentId, MusicWorkspaceComponent};
-use crate::app::layout::LibraryRowTarget;
 use crate::app::shell::Model;
 use crate::app::tests::make_item;
 use crate::app::PanelFocus;
@@ -84,7 +83,7 @@ fn press(model: &mut Model, code: Key) {
         if let Some(msg) = msg {
             let mut music_resize = false;
             let mut tv_resize = false;
-            model.handle_terminal_message(msg, focused.as_ref(), &mut music_resize, &mut tv_resize);
+            model.handle_terminal_message(msg, &mut music_resize, &mut tv_resize);
         }
     }
     model.sync_mounted_surfaces();
@@ -114,7 +113,7 @@ fn narrow_music_one_column_geometry_and_non_selectable_structural_rows() {
     let album_rows = layout
         .left_row_targets
         .iter()
-        .filter(|t| matches!(t, Some(LibraryRowTarget::Album(_))))
+        .filter(|t| t.is_some())
         .count();
     let structural_rows = layout
         .left_row_targets
@@ -147,7 +146,7 @@ fn narrow_music_admits_the_selected_album_detail_block() {
         layout
             .left_row_targets
             .iter()
-            .filter(|t| matches!(t, Some(LibraryRowTarget::Album(0))))
+            .filter(|t| matches!(t, Some(0)))
             .count(),
         1
     );
@@ -259,7 +258,7 @@ fn narrow_music_ordinary_refresh_retains_the_selected_album_target() {
         mounted_music_layout(&model)
             .left_row_targets
             .iter()
-            .filter(|t| matches!(t, Some(LibraryRowTarget::Album(idx)) if *idx == moved))
+            .filter(|t| matches!(t, Some(idx) if *idx == moved))
             .count(),
         1
     );

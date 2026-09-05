@@ -146,7 +146,6 @@ fn dispatch_component_key(
     let mut tv_resize = false;
     model.handle_terminal_message(
         Msg::Shell(request.clone()),
-        Some(id),
         &mut music_resize,
         &mut tv_resize,
     );

@@ -352,7 +352,6 @@ pub enum ShellRequest {
     /// D3). The component owns the wheel throttle and updates its own scroll;
     /// `offset` is the clamped scroll it landed on.
     BrowserScroll {
-        delta: i64,
         offset: usize,
     },
     /// A row the user single-clicked in the browser list or inline hero,

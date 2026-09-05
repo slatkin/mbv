@@ -336,7 +336,7 @@ impl App {
         let feed_group_view = self.is_feed_home_video_group_view(lib_idx);
         let home_video = self.is_home_video_view(lib_idx) && !feed_group_view;
         let show_letter_pills = self.should_show_letter_pills(lib_idx);
-        let (feed_items, feed_groups, feed_group_cursor, feed_video_cursor) = if feed_group_view {
+        let (feed_items, feed_groups, feed_group_cursor) = if feed_group_view {
             let items = self.feed_home_video_selected_items(lib_idx);
             let groups = self.libs[lib_idx]
                 .feed_home_video
@@ -344,13 +344,9 @@ impl App {
                 .map(|s| s.groups.iter().map(|g| g.folder.name.clone()).collect())
                 .unwrap_or_default();
             let cursor = self.feed_home_video_selected_group_index(lib_idx);
-            let video_cursor = self.libs[lib_idx]
-                .feed_home_video
-                .as_ref()
-                .map_or(0, |s| s.video_cursor);
-            (Some(items), groups, cursor, video_cursor)
+            (Some(items), groups, cursor)
         } else {
-            (None, Vec::new(), 0, 0)
+            (None, Vec::new(), 0)
         };
         let use_shared_replacement_plan = matches!(coll.as_str(), "movies" | "tvshows");
         let season_grid = self.is_viewing_season_grid(lib_idx);
@@ -440,7 +436,6 @@ impl App {
             feed_items,
             feed_groups,
             feed_group_cursor,
-            feed_video_cursor,
             feed_selected_height,
             inline_hero,
         }

@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::app::components::{BrowserComponent, MusicWorkspaceComponent, TvWorkspaceComponent};
-use crate::app::layout::{AppLayout, LayoutPlayback, LibraryRowTarget};
+use crate::app::layout::{AppLayout, LayoutPlayback};
 use crate::app::render::components::widgets::render_right_scrollbar_with_viewport;
 use crate::app::shell::Model;
 use crate::app::tests::{make_app_stub, make_item};
@@ -230,14 +230,6 @@ pub fn assert_surface_pills(
 }
 
 pub fn render_library_to_terminal(app: &mut App, layout: &mut LayoutMain) -> Terminal<TestBackend> {
-    render_library_to_terminal_focused(app, layout, true)
-}
-
-pub fn render_library_to_terminal_focused(
-    app: &mut App,
-    layout: &mut LayoutMain,
-    focused: bool,
-) -> Terminal<TestBackend> {
     let backend = TestBackend::new(60, 20);
     let mut term = Terminal::new(backend).unwrap();
     let mut model = crate::app::shell::Model::new(std::mem::replace(app, make_app_stub()));
@@ -245,7 +237,7 @@ pub fn render_library_to_terminal_focused(
     term.draw(|f| {
         model
             .app
-            .render_library(f, Rect::new(0, 0, 60, 20), focused, layout, None);
+            .render_library(f, Rect::new(0, 0, 60, 20), layout, None);
         model.render_emby_browser_component(f);
         model.render_music_workspace_component(f);
     })
@@ -275,7 +267,7 @@ pub fn render_library_to_string_sized(
     term.draw(|f| {
         model
             .app
-            .render_library(f, Rect::new(0, 0, width, height), true, layout, None);
+            .render_library(f, Rect::new(0, 0, width, height), layout, None);
         model.render_emby_browser_component(f);
         model.render_music_workspace_component(f);
     })

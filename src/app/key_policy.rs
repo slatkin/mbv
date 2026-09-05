@@ -5,8 +5,6 @@
 //! precedence belongs to the router, not to distributed component mirrors.
 
 use super::action::{idle_feed_command_for_key, Command};
-use super::components::component_id::OverlayId;
-use super::components::ComponentId;
 use super::input_resolver::{resolve_key, InputContext, InputSnapshot, KeyChord, KeyResolution};
 use super::types_settings::{PanelFocus, PanelMode};
 use crossterm::event::{KeyCode, KeyModifiers};
@@ -46,22 +44,13 @@ pub(super) struct RouterSnapshot {
 #[derive(Debug, Clone)]
 pub(super) struct KeyPolicyEntry {
     pub name: &'static str,
-    pub owner: KeyPolicyOwner,
+    /// Whether the central router (UiRoot) owns the binding.
+    pub global: bool,
     pub binding: KeyPolicyBinding,
     pub gate: KeyPolicyGate,
     pub blocking: bool,
 }
 
-/// The component or router surface associated with a policy layer.
-#[derive(Debug, Clone)]
-// TODO(interactive-surface-ledger): owner payload is reserved for focused-leaf routing.
-#[allow(dead_code)]
-pub(super) enum KeyPolicyOwner {
-    /// The active/focused component receives the key first.
-    Active(Option<ComponentId>),
-    /// The central router owns the binding.
-    Sub(ComponentId),
-}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum KeyPolicyBinding {
     Any,
@@ -87,7 +76,6 @@ pub(super) enum KeyPolicyBinding {
     Playback,
     CtrlL,
     F5,
-    ViewDispatch,
 }
 
 impl KeyPolicyBinding {
@@ -136,7 +124,6 @@ impl KeyPolicyBinding {
                 chord.code == KeyCode::Char('l') && chord.mods.contains(KeyModifiers::CONTROL)
             }
             Self::F5 => chord.code == KeyCode::F(5),
-            Self::ViewDispatch => false,
         }
     }
 }
@@ -145,7 +132,6 @@ impl KeyPolicyBinding {
 /// `RouterSnapshot`; no component attribute or subscription state participates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum KeyPolicyGate {
-    Always,
     SelectionModal,
     NoBlockingOverlay,
     NoBlockingOverlayAndHelpClosed,
@@ -160,7 +146,6 @@ pub(super) enum KeyPolicyGate {
 impl KeyPolicyGate {
     fn allows(self, chord: KeyChord, snapshot: &RouterSnapshot) -> bool {
         match self {
-            Self::Always => true,
             Self::SelectionModal => snapshot.selection_modal_open,
             Self::NoBlockingOverlay => !snapshot.blocking_overlay_open,
             Self::NoBlockingOverlayAndHelpClosed => {
@@ -206,170 +191,163 @@ impl KeyPolicyGate {
 pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
     KeyPolicyEntry {
         name: "selection_modal",
-        owner: KeyPolicyOwner::Active(Some(ComponentId::Overlay(OverlayId::SelectionModal))),
+        global: false,
         binding: KeyPolicyBinding::Any,
         gate: KeyPolicyGate::SelectionModal,
         blocking: true,
     },
     KeyPolicyEntry {
         name: "settings_open",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::SettingsOpen,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "sessions_open",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::SessionsOpen,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "playlists_open",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::PlaylistsOpen,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "search_open",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::SearchOpen,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "help_open",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::HelpOpen,
         gate: KeyPolicyGate::NoBlockingOverlayAndHelpClosed,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "quit",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::Quit,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "next_library_tab",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::NextLibraryTab,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "previous_library_tab",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::PreviousLibraryTab,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "queue_column_width",
-        owner: KeyPolicyOwner::Sub(ComponentId::Queue),
+        global: false,
         binding: KeyPolicyBinding::QueueColumnWidth,
         gate: KeyPolicyGate::QueueColumnWidth,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "panel_mode_cycle_x",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::PanelModeCycle,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "clear_queue_prompt_c",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::ClearQueue,
         gate: KeyPolicyGate::ClearQueuePrompt,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "visualizer",
-        owner: KeyPolicyOwner::Sub(ComponentId::Playback),
+        global: false,
         binding: KeyPolicyBinding::Visualizer,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "sessions_sidebar_escape",
-        owner: KeyPolicyOwner::Active(Some(ComponentId::Overlay(OverlayId::Sessions))),
+        global: false,
         binding: KeyPolicyBinding::SessionsDismiss,
         gate: KeyPolicyGate::SessionsSidebarOpen,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "playback",
-        owner: KeyPolicyOwner::Sub(ComponentId::Playback),
+        global: false,
         binding: KeyPolicyBinding::Playback,
         gate: KeyPolicyGate::Playback,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "ctrl_l_force_clear",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::CtrlL,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "f5_refresh",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::F5,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "alt_panel_right",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::AltPanelRight,
         gate: KeyPolicyGate::PanelFocusQueue,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "alt_panel_left",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::AltPanelLeft,
         gate: KeyPolicyGate::PanelFocusLibraryBoth,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "alt_previous_library_tab",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::AltPreviousLibraryTab,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "alt_next_library_tab",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::AltNextLibraryTab,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
     KeyPolicyEntry {
         name: "alt_swallow",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::AltSwallow,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: true,
     },
     KeyPolicyEntry {
         name: "library_tab_jump",
-        owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
+        global: true,
         binding: KeyPolicyBinding::LibraryTabJump,
         gate: KeyPolicyGate::NoBlockingOverlay,
-        blocking: false,
-    },
-    KeyPolicyEntry {
-        name: "view_dispatch",
-        owner: KeyPolicyOwner::Active(None),
-        binding: KeyPolicyBinding::ViewDispatch,
-        gate: KeyPolicyGate::Always,
         blocking: false,
     },
 ];
@@ -486,7 +464,6 @@ mod tests {
         sorted.dedup();
         assert_eq!(sorted.len(), names.len());
         assert_eq!(names.remove(0), "selection_modal");
-        assert_eq!(names.last(), Some(&"view_dispatch"));
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 use super::super::*;
 use crate::app::components::{BrowserComponent, MusicWorkspaceComponent, TvWorkspaceComponent};
-use crate::app::layout::{AppLayout, LayoutPlayback, LibraryRowTarget};
+use crate::app::layout::{AppLayout, LayoutPlayback};
 use crate::app::shell::Model;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::types_audiobookshelf_browse::{

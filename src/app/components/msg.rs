@@ -37,7 +37,6 @@ pub use self::shell::ShellRequest;
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Msg {
-    Navigate(NavTarget),
     Playback(PlaybackRequest),
     Queue(QueueRequest),
     Service(ServiceRequest),
@@ -74,8 +73,3 @@ pub enum TerminalObserverEvent {
     },
     NoOp,
 }
-
-// TODO(migrate-tui-to-tuirealm): flesh out navigation targets as root/overlay
-// routing converts (tasks 5.1/5.2).
-#[derive(Debug, Clone, PartialEq)]
-pub struct NavTarget;

@@ -11,7 +11,7 @@ use crossterm::event::KeyEvent;
 use super::action::Command;
 use super::components::ComponentId;
 use super::input_resolver::KeyChord;
-use super::key_policy::{command_for_policy, resolve_policy, KeyPolicyOwner};
+use super::key_policy::{command_for_policy, resolve_policy};
 
 pub(super) use super::key_policy::RouterSnapshot;
 
@@ -45,7 +45,7 @@ pub(super) enum RouterOutcome {
 ///    is one of the blocking-overlay `ComponentId`s), return `FallThrough`
 ///    so the leaf's request stands.
 /// 2. **Global bindings require no text entry focused.** When the policy
-///    matches a global binding owned by `ComponentId::UiRoot` and
+///    matches a global binding and
 ///    `snapshot.text_entry_focused` is true, return `FallThrough` instead
 ///    of `Command` so the leaf's character input stands.
 ///
@@ -69,7 +69,7 @@ pub(super) fn resolve_router_outcome_with_focused(
         }
         Some(entry) if entry.blocking => RouterOutcome::Swallow,
         Some(entry) => {
-            if snapshot.text_entry_focused && is_global_binding(&entry.owner) {
+            if snapshot.text_entry_focused && entry.global {
                 return RouterOutcome::FallThrough;
             }
             match command_for_policy(entry.binding, chord, snapshot) {
@@ -117,11 +117,4 @@ pub(super) fn is_blocking_overlay(id: &ComponentId) -> bool {
                 PopupId::Multiselect | PopupId::LibraryRoutes | PopupId::FeedManage,
             )
     )
-}
-
-/// Whether a policy owner is a global (shell/UiRoot-owned) binding. Global
-/// bindings are the ones that fire while typing; they are gated on the
-/// focused leaf not being a text-entry component.
-pub(super) fn is_global_binding(owner: &KeyPolicyOwner) -> bool {
-    matches!(owner, KeyPolicyOwner::Sub(ComponentId::UiRoot))
 }

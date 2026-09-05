@@ -12,7 +12,7 @@ impl Model {
     /// component owns the cursor index, the shell owns the target resolution
     /// (album + cached track list). Returns `None` when no track is focused,
     /// the cache has no entry, or the cursor is out of bounds.
-    pub(super) fn focused_music_track(&self, _lib_idx: usize) -> Option<(String, EmbyItem)> {
+    pub(super) fn focused_music_track(&self) -> Option<(String, EmbyItem)> {
         let id = self.music_workspace_id.as_ref()?;
         let comp = self
             .application
@@ -124,7 +124,6 @@ impl Model {
         };
         let list = self.app.library_list_render_ctx(
             index,
-            true,
             cursor_scroll.map_or(0, |(cursor, _)| cursor),
             cursor_scroll.map_or(0, |(_, scroll)| scroll),
         );

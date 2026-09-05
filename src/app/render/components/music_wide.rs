@@ -5,7 +5,6 @@ use crate::app::components::media_list::{
     InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
 };
 use crate::app::layout::LayoutMain;
-use crate::app::layout::LibraryRowTarget;
 use crate::app::render::arrangements::hero_left::{self, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::library::selected_detail_content_area;
@@ -252,7 +251,6 @@ impl App {
     ) -> MusicWideRenderCtx {
         let list = self.library_list_render_ctx(
             lib_idx,
-            true,
             cursor_scroll.map_or(0, |v| v.0),
             cursor_scroll.map_or(0, |v| v.1),
         );
@@ -427,7 +425,7 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
         .targets()
         .skip(offset)
         .take(visible)
-        .map(|target| target.and_then(id_to_index).map(LibraryRowTarget::Album))
+        .map(|target| target.and_then(id_to_index))
         .collect();
 
     let mut image_paint = None;
@@ -467,7 +465,7 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
                         .items
                         .get(cursor)
                         .filter(|_| images_enabled && img_rect.width >= 4 && img_rect.height >= 2)
-                        .map(|album| MusicImagePaint::Album {
+                        .map(|album| MusicImagePaint {
                             area: img_rect,
                             album: Box::new(album.clone()),
                             centered: false,
@@ -503,11 +501,10 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     // The pure arrangement is computed exactly once here in
     // `publish_geometry`; the paint path below consumes the returned panes
     // and left layout rather than recomputing them.
-    let Some((panes, _published_left_layout)) = ctx.publish_geometry(area, layout) else {
+    let Some((panes, left_layout)) = ctx.publish_geometry(area, layout) else {
         return output;
     };
     layout.wide_music_track_hitmap.clear();
-    let left_panel = panes.left_panel;
     let right_panel = panes.right_panel;
     let right_area = panes.right_area;
     let track_active = ctx.track_cursor.is_some();
@@ -520,11 +517,6 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     ) else {
         return output;
     };
-    let left_layout = music_arrangement::wide_music_left_layout(
-        left_panel,
-        ctx.selected_album.is_some() && ctx.images_enabled,
-        ctx.album_tracks.as_ref().map_or(0, Vec::len),
-    );
     layout.left_area = left_area;
 
     if let Some(album) = ctx.selected_album.as_ref() {
@@ -539,9 +531,14 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
         );
         let track_area = left_layout.track_area;
         if track_area.height > 0 && track_area.width > 0 && !track_list.is_empty() {
-            let (paint, track_content_area) = super::media_list::render_wide_media_list_in_box(
+            let (_, track_content_area) =
+                crate::app::render::arrangements::hero_left::hero_on_left_main_content_box(
+                    f, track_area,
+                );
+            let paint = super::media_list::render_wide_media_list(
                 f,
-                track_area,
+                track_content_area,
+                track_content_area,
                 track_list,
                 left_focused,
                 palette::list_selected_row_bg(),
@@ -692,7 +689,7 @@ fn render_wide_left_hero(
     hero_left::paint_hero_on_left_text(f, left_layout.text_area, &hero_lines);
 
     if images_enabled && left_layout.art_area.width > 0 && left_layout.art_area.height > 0 {
-        return Some(MusicImagePaint::Album {
+        return Some(MusicImagePaint {
             area: left_layout.art_area,
             album: Box::new(album.clone()),
             centered: left_layout.stack_metadata,

@@ -13,7 +13,6 @@ pub(in crate::app::render) const SERIES_DETAIL_EPISODE_ROWS_ESTIMATE: usize = 8;
 pub(in crate::app::render) const SERIES_DETAIL_TRAILING_BLANK_ROWS: usize = 1;
 pub(in crate::app::render) const SERIES_IMAGE_COLS: u16 = 18;
 pub(in crate::app::render) const SERIES_IMAGE_ROWS: u16 = 12;
-pub(in crate::app::render) const SERIES_IMAGE_PLACEHOLDER_ROWS: u16 = SERIES_IMAGE_ROWS;
 
 pub(in crate::app::render) fn series_meta_line(item: &mbv_core::api::EmbyItem) -> String {
     let year_range = match (item.production_year, item.end_year) {
@@ -59,17 +58,12 @@ pub(in crate::app::render) fn render_series_inline_detail(
     // ── Series Primary image sizing (right-aligned, text wraps around
     //    it) -- resolved here (needs `self`'s image cache) and handed to
     //    the `Hero` component to lay text out around ───────────────────
-    let img_loading = !item.id.is_empty() && ctx.images_enabled && ctx.image_loading;
     let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) = {
         if ctx.images_enabled {
             // The shell owns cache lookup. `image_loading` is the only
             // component-visible state that should select the placeholder;
             // cached artwork must reach the Series-specific painter.
-            (
-                SERIES_IMAGE_COLS,
-                SERIES_IMAGE_PLACEHOLDER_ROWS,
-                ctx.image_loading,
-            )
+            (SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS, ctx.image_loading)
         } else {
             (0, 0, false)
         }
@@ -102,10 +96,7 @@ pub(in crate::app::render) fn render_series_inline_detail(
         // so the reserved space and what's actually drawn stay in sync.
         // Narrow renders no season/episode block below, so nothing is
         // reserved for it there.
-        let reserved_for_below = 0;
-        let available_rows = (max_y
-            .saturating_sub(overview_start_row)
-            .saturating_sub(reserved_for_below)) as usize;
+        let available_rows = max_y.saturating_sub(overview_start_row) as usize;
         lines.into_iter().take(available_rows).collect()
     } else {
         Vec::new()
@@ -139,7 +130,7 @@ pub(in crate::app::render) fn render_series_inline_detail(
     result.img_rect.map(|image_area| HomeImagePaint::Series {
         area: image_area,
         item: Box::new(item.clone()),
-        show_placeholder: img_is_placeholder || img_loading,
+        show_placeholder: img_is_placeholder,
         image_types: &["Primary"],
     })
 }

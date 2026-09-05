@@ -1,7 +1,6 @@
 use super::*;
 use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
 use crate::app::components::Msg;
-use crate::app::layout::LibraryRowTarget;
 pub(crate) use crate::app::render::make_music_group_app;
 pub(crate) use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
@@ -44,10 +43,7 @@ fn music_mouse_album_click_emits_and_shell_applies_cursor() {
     let (row, target) = left_row_targets
         .iter()
         .enumerate()
-        .filter_map(|(row, target)| match target {
-            Some(LibraryRowTarget::Album(album)) => Some((row, *album)),
-            _ => None,
-        })
+        .filter_map(|(row, target)| target.as_ref().map(|album| (row, *album)))
         .nth(1)
         .expect("second painted album target");
     let message = model
@@ -70,7 +66,6 @@ fn music_mouse_album_click_emits_and_shell_applies_cursor() {
     let (mut music_resize, mut tv_resize) = (false, false);
     model.handle_terminal_message(
         message.expect("album cursor request"),
-        Some(&id),
         &mut music_resize,
         &mut tv_resize,
     );
@@ -104,7 +99,6 @@ fn shell_music_shortcuts_use_component_selection() {
     let (mut music_resize, mut tv_resize) = (false, false);
     model.handle_terminal_message(
         Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item }),
-        Some(&id),
         &mut music_resize,
         &mut tv_resize,
     );

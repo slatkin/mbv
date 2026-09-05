@@ -339,7 +339,6 @@ impl QueueComponent {
                     anchor: (mouse.column, mouse.row),
                 }))
             }
-            _ => None,
         }
     }
 

@@ -69,7 +69,7 @@ fn focused_music_track_in_track_mode_resolves_focused_track() {
     enter_track_focus(&mut model, &id);
 
     let (album_id, track) = model
-        .focused_music_track(0)
+        .focused_music_track()
         .expect("focused track should resolve");
 
     assert_eq!(album_id, "album-1");
@@ -88,7 +88,7 @@ fn focused_music_track_falls_back_safely_when_cache_missing() {
     model.app.album_tracks_cache.remove("album-1");
     assert!(!model.app.album_tracks_cache.contains_key("album-1"));
     assert!(
-        model.focused_music_track(0).is_none(),
+        model.focused_music_track().is_none(),
         "cache-missing focused track must stay None, not panic"
     );
 }
@@ -163,7 +163,7 @@ fn context_menu_for_focused_track_offers_track_scoped_actions_not_folder_actions
     let (mut model, id) = wide_track_focus_model(3);
     enter_track_focus(&mut model, &id);
     let (_, track) = model
-        .focused_music_track(0)
+        .focused_music_track()
         .expect("focused track should resolve");
 
     model.app.open_context_menu_for(track);

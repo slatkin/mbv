@@ -271,7 +271,6 @@ impl Model {
         }
         let list = self.app.library_list_render_ctx(
             index,
-            false,
             self.app.libs[index]
                 .nav_stack
                 .last()
