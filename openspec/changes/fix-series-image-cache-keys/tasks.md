@@ -1,7 +1,7 @@
 ## 1. Centralize the Series artwork cache key
 
-- [ ] 1.1 Add `series_image_cache_key(item_id, image_types)` beside the other cache-key constructors in `src/app/images.rs` and verify a unit test pins both the `Primary` and `Thumb,Primary,Backdrop,Logo` spellings.
-- [ ] 1.2 Adopt the helper at the paint site (`paint_home_image`'s `Series` arm in `src/app/render/components/home_hero_emby.rs`) with no behavior change, and verify `cargo nextest run -p mbv` stays green for the hero paint tests.
+- [x] 1.1 Add `series_image_cache_key(item_id, image_types)` beside the other cache-key constructors in `src/app/images.rs` and verify a unit test pins both the `Primary` and `Thumb,Primary,Backdrop,Logo` spellings.
+- [x] 1.2 Adopt the helper at the paint site (`paint_home_image`'s `Series` arm in `src/app/render/components/home_hero_emby.rs`) with no behavior change, and verify `cargo nextest run -p mbv` stays green for the hero paint tests.
 
 ## 2. Point the shell prefetch and loading state at the painted keys
 
