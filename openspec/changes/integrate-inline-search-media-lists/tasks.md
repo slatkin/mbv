@@ -1,8 +1,8 @@
 ## 1. Shared Inline Search control
 
-- [ ] 1.1 Rebase onto the completed `replace-wide-paint-inference` change, confirm no Inline Search path selects presentation from last-frame paint geometry, and verify with `cargo check -p mbv`.
-- [ ] 1.2 Convert `src/app/components/inline_search.rs` from a mounted `AppComponent` into an embedded `InlineSearch` control plus the minimal `InlineSearchHost` contract; retain plain and recursive-album pools, store scored result indices, support empty and one-character queries, preserve stable selection on pool replacement, and adapt the existing Inline Search tests to verify query ordering, cursor/page movement, activation identity, and empty-query Backspace dismissal with `cargo nextest run -p mbv inline_library_search`.
-- [ ] 1.3 Add the shared three-row search arrangement and bordered input/results Render Component, including the too-short fallback and column-aware result geometry; replace the existing brittle render assertion with one buffer test that proves exact input/list placement and verify with `cargo nextest run -p mbv inline_library_search`.
+- [x] 1.1 Rebase onto the completed `replace-wide-paint-inference` change, confirm no Inline Search path selects presentation from last-frame paint geometry, and verify with `cargo check -p mbv`.
+- [x] 1.2 Convert `src/app/components/inline_search.rs` from a mounted `AppComponent` into an embedded `InlineSearch` control plus the minimal `InlineSearchHost` contract; retain plain and recursive-album pools, store scored result indices, support empty and one-character queries, preserve stable selection on pool replacement, and adapt the existing Inline Search tests to verify query ordering, cursor/page movement, activation identity, and empty-query Backspace dismissal with `cargo nextest run -p mbv inline_library_search`.
+- [x] 1.3 Add the shared three-row search arrangement and bordered input/results Render Component, including the too-short fallback and column-aware result geometry; replace the existing brittle render assertion with one buffer test that proves exact input/list placement and verify with `cargo nextest run -p mbv inline_library_search`.
 
 ## 2. Destination ownership
 

@@ -34,6 +34,7 @@ pub(in crate::app) use components::feeds_manage::{
 pub(in crate::app) use components::help::{help_destination, render_help_panel, HelpDestination};
 pub(in crate::app) use components::home::render_home_content;
 pub(in crate::app) use components::home_hero::HomeImagePaint;
+pub(in crate::app) use components::inline_search::render_inline_search;
 pub(in crate::app) use components::library_routes::{
     render_library_routes_content, save_route_config, LibraryRoutesRenderModel,
 };

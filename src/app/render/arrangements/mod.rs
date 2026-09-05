@@ -2,6 +2,7 @@ use ratatui::layout::Rect;
 
 pub(in crate::app) mod chrome;
 pub(in crate::app) mod hero_left;
+pub(in crate::app) mod inline_search;
 pub(in crate::app) mod library;
 pub(in crate::app) mod music;
 pub(in crate::app) mod queue;

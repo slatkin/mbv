@@ -34,6 +34,7 @@ pub(super) mod home_latest_row;
 pub(super) mod home_pills;
 pub(super) mod home_video;
 pub mod indicators;
+pub(in crate::app) mod inline_search;
 pub(super) mod library_routes;
 pub(super) mod list;
 pub(super) mod list_context;
