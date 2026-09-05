@@ -313,7 +313,33 @@ Hero content SHALL be independent of responsive placement. The same surface decl
 
 #### Scenario: Wide Movies card changes centrally
 - **WHEN** the shared Home selected-media card presentation changes
-- **THEN** wide Movies renders the change without a Movies-specific card edit
+- **THEN** wide Movies renders that change without a Movies-specific card edit
+
+### Requirement: Series hero artwork has consistent cache identity
+
+Series artwork SHALL be cached per declared image-type chain under one shared key
+constructor, so every fetch, loading-state lookup, and completion match for the
+same series and chain resolves to the same cache entry. The TV Wide shell prefetch
+SHALL request the same canonical type chain the TV Wide painter declares, so the
+prefetch warms the painted entry instead of a key no painter reads. The TV
+workspace completion gate SHALL match the whole Series key family, so any Series
+chain completion re-pushes TV content.
+
+#### Scenario: Series prefetch warms the painted entry
+- **WHEN** a Series is selected on the wide TV workspace
+- **THEN** the shell prefetch fetches the same canonical image-type chain the painter declares
+- **AND** paint-time handling starts no additional worker or network request for the same series and chain
+
+#### Scenario: Series placeholder shows until the painted entry lands
+- **WHEN** a Series is selected on wide TV or narrow inline detail and its painted
+  cache entry is absent
+- **THEN** the loading placeholder is shown
+- **AND** no blank is shown in place of the pending artwork
+
+#### Scenario: Series completion re-pushes the TV workspace
+- **WHEN** any Series image chain for the selected series completes fetching
+- **THEN** the TV workspace content is re-pushed
+- **AND** the completed artwork paints without waiting for the next render cadence
 
 ### Requirement: Feed group picker uses the shared selected-row replacement
 
