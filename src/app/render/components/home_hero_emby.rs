@@ -1,5 +1,6 @@
 use super::home_hero::{HeroMetaBlock, HomeImagePaint, KeepWatchingHeroLayout};
 use super::home_video::format_release_date;
+use crate::app::images::series_image_cache_key;
 use crate::app::ui_util::*;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -257,7 +258,7 @@ impl App {
                 show_placeholder,
                 image_types,
             }) => {
-                let cache_key = format!("{}:ser:{}", item.id, image_types.join(","));
+                let cache_key = series_image_cache_key(&item.id, image_types);
                 if self.images_enabled() {
                     self.fetch_card_image(
                         cache_key.clone(),

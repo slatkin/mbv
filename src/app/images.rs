@@ -26,6 +26,15 @@ pub(super) fn audiobookshelf_book_cover_cache_key(server: &str, id: &str, suffix
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:bookcover:{id}:{suffix}")
 }
 
+/// Cache key for Series artwork under the `{id}:ser:{types}` scheme.
+/// Shared by the `paint_home_image` Series arm and the shell-side
+/// prefetch/loading lookups so the two can never format the key
+/// differently and silently miss each other's cache entries. Formats only;
+/// chain ownership stays with the callers.
+pub(in crate::app) fn series_image_cache_key(item_id: &str, image_types: &[&str]) -> String {
+    format!("{item_id}:ser:{}", image_types.join(","))
+}
+
 const MAX_IMAGE_FETCHES: usize = 6;
 const MAX_ALBUM_ARTIST_FETCHES: usize = 6;
 
@@ -690,9 +699,21 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use super::NAV_IMAGE_FETCH_IDLE_DELAY;
+    use super::{series_image_cache_key, NAV_IMAGE_FETCH_IDLE_DELAY};
     use crate::app::tests::make_app_stub;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn series_image_cache_key_pins_both_live_chains() {
+        assert_eq!(
+            series_image_cache_key("abc", &["Primary"]),
+            "abc:ser:Primary"
+        );
+        assert_eq!(
+            series_image_cache_key("abc", &["Thumb", "Primary", "Backdrop", "Logo"]),
+            "abc:ser:Thumb,Primary,Backdrop,Logo"
+        );
+    }
 
     #[test]
     fn recent_navigation_blocks_list_card_image_fetch() {
