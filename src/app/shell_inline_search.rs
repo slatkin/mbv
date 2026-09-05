@@ -1,3 +1,4 @@
+use super::components::inline_search::InlineSearchHost;
 use super::components::{BrowserKey, BrowserKind, ComponentId, InlineSearchComponent, SearchPool};
 use super::shell::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
@@ -6,6 +7,21 @@ use mbv_core::config::ServiceKind;
 use ratatui::layout::Rect;
 
 impl Model {
+    fn active_inline_search_host(&self) -> Option<ComponentId> {
+        if let Some(id) = self.tv_workspace_component_id() {
+            if self.application.mounted(&id) {
+                return Some(id);
+            }
+        }
+        if let Some(id) = self.music_workspace_component_id() {
+            if self.application.mounted(&id) {
+                return Some(id);
+            }
+        }
+        self.emby_browser_component_id()
+            .filter(|id| self.application.mounted(id))
+    }
+
     fn inline_search_expected_id(&self, index: usize) -> Option<ComponentId> {
         let library = self.app.libs.get(index)?;
         Some(ComponentId::InlineSearch(BrowserKey {

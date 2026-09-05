@@ -51,9 +51,6 @@ impl Model {
 
     fn emby_library_child_id(&self, index: usize) -> Option<ComponentId> {
         let library = self.app.libs.get(index)?;
-        if let Some(id) = self.inline_search_component_id(index) {
-            return Some(id);
-        }
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
         // Wide TV focuses `TvWorkspaceComponent` under its distinct
         // `ComponentId::TvWorkspace`; narrow TV focuses the mounted
