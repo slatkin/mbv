@@ -1,4 +1,5 @@
 use super::music_workspace::MusicWorkspaceComponent;
+use crate::app::components::inline_search::{InlineSearchHost, SearchPool};
 use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
 use crate::app::components::Msg;
 use crate::app::render::{LibraryListRenderCtx, MusicWideRenderCtx};
@@ -591,4 +592,104 @@ fn ctrl_p_empty_list_is_unclaimed() {
     }));
 
     assert_eq!(message, None);
+}
+
+/// Wide Inline Search suppresses the grouped album rail's artist headers
+/// (design.md D3) and paints flat scored results instead, while the Hero
+/// pane painted alongside it remains visible.
+#[test]
+fn music_workspace_wide_search_hides_grouped_rows_and_paints_flat_results() {
+    let mut component = MusicWorkspaceComponent::new();
+    // `grouped_context` groups all four albums under a single "Artist"
+    // heading; the ordinary wide rail would paint that heading above them.
+    component.set_content(grouped_context(0, vec![0, 1, 2, 3], true, None));
+
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(component.inline_search().is_active());
+    component
+        .inline_search_mut()
+        .set_pool(SearchPool::Items(vec![make_item(
+            "Zeta Album Match",
+            "MusicAlbum",
+        )]));
+
+    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+
+    let list_area = component.inline_search().layout().left_area;
+    assert!(list_area.width > 0 && list_area.height > 0);
+    assert!(
+        list_area.x > 0,
+        "search paints in the right rail, not over the Hero pane: {list_area:?}"
+    );
+
+    let buffer = terminal.backend().buffer();
+    let mut found_result = false;
+    let mut found_heading = false;
+    for y in list_area.y..list_area.y + list_area.height {
+        let row: String = (list_area.x..list_area.x + list_area.width)
+            .map(|x| buffer.cell((x, y)).unwrap().symbol())
+            .collect();
+        if row.contains("Zeta Album Match") {
+            found_result = true;
+        }
+        if row.contains("Artist") {
+            found_heading = true;
+        }
+    }
+    assert!(found_result, "flat search result painted in the rail");
+    assert!(
+        !found_heading,
+        "no artist heading painted in the search list area"
+    );
+
+    // The Hero pane (left of the rail) remains painted.
+    let mut hero_painted = false;
+    for y in 0..30 {
+        let row: String = (0..list_area.x)
+            .map(|x| buffer.cell((x, y)).unwrap().symbol())
+            .collect();
+        if row.contains("Album 0") {
+            hero_painted = true;
+        }
+    }
+    assert!(hero_painted, "Hero pane remains visible during search");
+}
+
+/// Dismissing search restores the prior album position (design.md D4):
+/// Inline Search's cursor is local to the control, so the component's own
+/// `album_cursor` -- never touched while search is open -- is unchanged.
+#[test]
+fn music_workspace_dismiss_restores_prior_album_position() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(grouped_context(0, vec![0, 1, 2, 3], true, None));
+    component.re_anchor(2, 0);
+    assert_eq!(component.album_cursor(), 2);
+
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(component.inline_search().is_active());
+
+    let message = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Esc,
+        modifiers: KeyModifiers::NONE,
+    }));
+
+    assert_eq!(
+        message, None,
+        "Escape dismisses locally with no shell effect"
+    );
+    assert!(!component.inline_search().is_active());
+    assert_eq!(
+        component.album_cursor(),
+        2,
+        "the prior album position is unchanged by the local search session"
+    );
 }

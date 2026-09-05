@@ -11,6 +11,7 @@ use tuirealm::event::{Event, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::media_list::{
     InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
 };
@@ -98,6 +99,11 @@ pub struct MusicWorkspaceComponent {
     /// `layout.selector_tabs` — the pill painter's own output — for both
     /// breakpoints. The tag is the 0-based group index.
     pill_regions: HitRegions<usize>,
+    /// The embedded Inline Search control (design.md D1). See
+    /// `BrowserComponent::inline_search` for the migration-phase notes.
+    /// `pub(super)`, matching `track_cursor`/`album_cursor`, so the sibling
+    /// `music_workspace_keys` module (split out for file size) can reach it.
+    pub(super) inline_search: InlineSearch,
 }
 
 impl MusicWorkspaceComponent {
@@ -137,6 +143,7 @@ impl MusicWorkspaceComponent {
             track_list: WideMediaList::new(),
             narrow_list_area: Rect::default(),
             pill_regions: HitRegions::new(),
+            inline_search: InlineSearch::new(),
         }
     }
 
@@ -367,6 +374,13 @@ impl MusicWorkspaceComponent {
     /// track table keeps its component-local cursor claim unchanged — its
     /// full mouse surface is net-new work in task 6.1.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        // Inline Search gets first refusal while active (design.md D6): it
+        // is painted over the same area the ordinary album rail/rows would
+        // occupy, so they never mutate for points there.
+        if self.inline_search.is_active() {
+            self.inline_search.handle_mouse(mouse);
+            return None;
+        }
         // Music does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
@@ -487,6 +501,16 @@ impl Default for MusicWorkspaceComponent {
     }
 }
 
+impl InlineSearchHost for MusicWorkspaceComponent {
+    fn inline_search(&self) -> &InlineSearch {
+        &self.inline_search
+    }
+
+    fn inline_search_mut(&mut self) -> &mut InlineSearch {
+        &mut self.inline_search
+    }
+}
+
 impl Component for MusicWorkspaceComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = LayoutMain::default();
@@ -528,7 +552,33 @@ impl Component for MusicWorkspaceComponent {
             self.album_scroll,
             self.track_cursor,
         );
-        if !wide {
+        if !wide && self.inline_search.is_active() {
+            // Normal Music passes its whole list area to the shared search
+            // painter (design.md D3); the ordinary grouped composer does not
+            // also paint it.
+            let items = self.inline_search.ordered_items();
+            let query = self.inline_search.query().to_string();
+            let loading = self.inline_search.loading();
+            let cursor = self.inline_search.cursor();
+            let scroll_in = self.inline_search.scroll();
+            let columns = crate::app::library_column_width::library_column_count(area.width);
+            let new_scroll = crate::app::render::render_inline_search(
+                frame,
+                area,
+                &query,
+                loading,
+                items,
+                cursor,
+                scroll_in,
+                self.context.focused,
+                columns,
+                self.inline_search.layout_mut(),
+            );
+            self.inline_search.set_scroll(new_scroll);
+            self.album_scroll = new_scroll;
+            self.narrow_list_area = Rect::default();
+            self.image_paint = None;
+        } else if !wide {
             let output = render_narrow_music_group_with_ctx(
                 frame,
                 area,
@@ -551,6 +601,7 @@ impl Component for MusicWorkspaceComponent {
                 &mut self.layout,
                 &mut self.wide_list,
                 &mut self.track_list,
+                &mut self.inline_search,
             );
             self.album_scroll = output.final_scroll;
             self.image_paint = output.image_paint;

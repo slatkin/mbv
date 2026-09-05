@@ -4,6 +4,7 @@
 
 use tuirealm::event::{Key, KeyModifiers};
 
+use super::inline_search::InlineSearchAction;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::music_workspace::MusicWorkspaceComponent;
 use crate::app::ui_util::move_cursor;
@@ -45,6 +46,26 @@ impl MusicWorkspaceComponent {
     }
 
     pub(super) fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
+        // Inline Search gets first refusal while active (design.md D4): the
+        // component returns immediately after delegating, even when search
+        // consumes the key without producing a message.
+        if self.inline_search.is_active() {
+            return match self.inline_search.handle_key(key) {
+                Some(InlineSearchAction::Activate { id, item_type }) => {
+                    Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+                        id,
+                        item_type,
+                    }))
+                }
+                Some(InlineSearchAction::Dismiss) => {
+                    // Escape/empty-query Backspace dismiss locally
+                    // (design.md D4); no shell effect.
+                    self.inline_search.close();
+                    None
+                }
+                None => None,
+            };
+        }
         if !self.context.focused {
             return None;
         }
@@ -149,6 +170,7 @@ impl MusicWorkspaceComponent {
                 }))
             }
             Key::Char('/') if self.track_cursor.is_none() => {
+                self.inline_search.open();
                 Some(Msg::Shell(ShellRequest::OpenInlineSearch))
             }
             // `[`/`]` at the album-list level cycle the App-owned group pill.

@@ -1,5 +1,6 @@
 //! Grouped Music's wide hero-on-left component.
 
+use crate::app::components::inline_search::InlineSearch;
 use crate::app::components::media_list::{
     InlineMediaBrowser, MediaListRow, MediaSemanticState, WideMediaList,
 };
@@ -494,6 +495,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     layout: &mut LayoutMain,
     album_list: &mut WideMediaList<String>,
     track_list: &mut WideMediaList<String>,
+    inline_search: &mut InlineSearch,
 ) -> MusicWideRenderOutput {
     let mut output = MusicWideRenderOutput::default();
     // The pure arrangement is computed exactly once here in
@@ -598,7 +600,32 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     // `render_wide_tv_with_ctx`.
     hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     if browser_area.height > 0 && browser_area.width > 0 {
-        if ctx.list.is_search_active() {
+        if inline_search.is_active() {
+            // Hero-on-left Wide passes only the right-rail library-list area
+            // (design.md D3); the Hero pane and track pane painted above
+            // remain visible, and the ordinary grouped album rail does not
+            // also paint `browser_area`.
+            album_list.set_content(Vec::new());
+            let items = inline_search.ordered_items();
+            let query = inline_search.query().to_string();
+            let loading = inline_search.loading();
+            let cursor = inline_search.cursor();
+            let scroll_in = inline_search.scroll();
+            let new_scroll = crate::app::render::render_inline_search(
+                f,
+                browser_area,
+                &query,
+                loading,
+                items,
+                cursor,
+                scroll_in,
+                right_focused,
+                1,
+                inline_search.layout_mut(),
+            );
+            inline_search.set_scroll(new_scroll);
+            output.final_scroll = new_scroll;
+        } else if ctx.list.is_search_active() {
             // The search-results grid is not the canonical album rail; keep
             // the rail control empty so a stray mouse hit resolves to nothing.
             album_list.set_content(Vec::new());
