@@ -9,10 +9,9 @@ use tuirealm::event::{
 };
 
 use crate::app::components::msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
-use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::{
-    BrowserComponent, ComponentId, ModalId, Msg, OverlayId, QueueRequest, SearchSidebarComponent,
-    ShellRequest, TerminalObserverEvent, TvWorkspaceComponent, UserEvent,
+    ComponentId, ModalId, Msg, OverlayId, QueueRequest, SearchSidebarComponent, ShellRequest,
+    TerminalObserverEvent, UserEvent,
 };
 use crate::app::router::RouterOutcome;
 use crate::app::shell::apply_router_outcome;
@@ -51,31 +50,6 @@ fn arm_search_query(harness: &mut TickHarness, query: &str) {
         let message = search_component_mut(harness).on(&key(Key::Char(c)));
         assert!(message.is_none(), "typing search chars stays local");
     }
-}
-
-fn apply_tick_messages(harness: &mut TickHarness, outcome: crate::app::tests_tick_harness::StepOutcome) {
-    let focused = outcome.pre_fold_focus;
-    let (mut music_resize, mut tv_resize) = (false, false);
-    for message in outcome.messages {
-        harness.model_mut().handle_terminal_message(
-            message,
-            focused.as_ref(),
-            &mut music_resize,
-            &mut tv_resize,
-        );
-    }
-    harness.model_mut().sync_mounted_surfaces();
-}
-
-fn draw_model(harness: &mut TickHarness, width: u16, height: u16) -> String {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    terminal
-        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    (0..height)
-        .flat_map(|y| (0..width).map(move |x| buffer.cell((x, y)).unwrap().symbol()))
-        .collect()
 }
 
 /// Phase 1 delivery proof (task 2.7): with Queue focused, a click on the
