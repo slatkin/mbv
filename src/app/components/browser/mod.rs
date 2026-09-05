@@ -17,6 +17,7 @@ use mbv_core::api::EmbyItem;
 
 use super::browser_narrow::NarrowBrowseExtras;
 use super::component_id::BrowserKind;
+use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::media_list::{
     InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
 };
@@ -95,6 +96,13 @@ pub struct BrowserComponent {
     /// rectangles (design.md D6). Repopulated in `view()` from the pill rects
     /// the narrow/wide composer just painted into `self.layout.selector_tabs`.
     pill_regions: HitRegions<usize>,
+    /// The embedded Inline Search control (design.md D1). `BrowserComponent`
+    /// is its sole event boundary: it gets keyboard/mouse first refusal while
+    /// active and is painted at the existing list composition point instead
+    /// of the ordinary rows. Section 2 embeds this alongside the still-live
+    /// mounted `InlineSearchComponent` overlay; Section 3 rewires the shell
+    /// to talk to this control instead and Section 4 deletes the overlay.
+    inline_search: InlineSearch,
 }
 
 /// Derives the Emby-specific semantic state for a browse row. Both projection
@@ -145,6 +153,7 @@ impl BrowserComponent {
             inline_browser: InlineMediaBrowser::new(),
             mouse_gestures: MouseGestureState::new(),
             pill_regions: HitRegions::new(),
+            inline_search: InlineSearch::new(),
         }
     }
 
@@ -411,6 +420,13 @@ impl BrowserComponent {
     /// target — never raw coordinates — except the context-menu anchor, which
     /// is display geometry it legitimately forwards (design.md D4).
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        // Inline Search gets first refusal while active (design.md D6): it
+        // is painted over the same area the ordinary list would occupy, so
+        // the ordinary list never mutates for points there.
+        if self.inline_search.is_active() {
+            self.inline_search.handle_mouse(mouse);
+            return None;
+        }
         // Browse does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
@@ -568,6 +584,16 @@ impl Default for BrowserComponent {
     }
 }
 
+impl InlineSearchHost for BrowserComponent {
+    fn inline_search(&self) -> &InlineSearch {
+        &self.inline_search
+    }
+
+    fn inline_search_mut(&mut self) -> &mut InlineSearch {
+        &mut self.inline_search
+    }
+}
+
 impl Component for BrowserComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         // Compute the next presentation before consuming a pending anchor so a
@@ -631,6 +657,31 @@ impl Component for BrowserComponent {
         // narrow list-row behavior.
         self.scroll = if wide {
             self.render_wide_movies(frame, area, &context)
+        } else if self.inline_search.is_active() {
+            // Normal/non-Hero catalogs pass their whole list area to the
+            // shared search painter (design.md D3); the ordinary narrow
+            // composer does not also paint it.
+            let items = self.inline_search.ordered_items();
+            let query = self.inline_search.query().to_string();
+            let loading = self.inline_search.loading();
+            let cursor = self.inline_search.cursor();
+            let scroll_in = self.inline_search.scroll();
+            let columns = crate::app::library_column_width::library_column_count(area.width);
+            let new_scroll = crate::app::render::render_inline_search(
+                frame,
+                area,
+                &query,
+                loading,
+                items,
+                cursor,
+                scroll_in,
+                self.focused,
+                columns,
+                &mut self.layout,
+            );
+            self.inline_search.set_scroll(new_scroll);
+            self.image_paint = None;
+            new_scroll
         } else {
             // Narrow generic/Movies/home-video: the component owns the full
             // surface via the `browser_narrow` composer (task 3.3). It returns

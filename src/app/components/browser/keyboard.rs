@@ -1,12 +1,35 @@
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::BrowserComponent;
+use crate::app::components::inline_search::InlineSearchAction;
 use crate::app::components::msg::{Msg, ShellRequest};
 
 impl BrowserComponent {
     pub(in crate::app) fn handle_tui_key(&mut self, key: KeyEvent) -> Option<Msg> {
+        // Inline Search gets first refusal while active (design.md D4): the
+        // component returns immediately after delegating, even when search
+        // consumes the key without producing a message, so no printable
+        // character or list shortcut reaches the ordinary handling below.
+        if self.inline_search.is_active() {
+            return match self.inline_search.handle_key(&key) {
+                Some(InlineSearchAction::Activate { id, item_type }) => {
+                    Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+                        id,
+                        item_type,
+                    }))
+                }
+                Some(InlineSearchAction::Dismiss) => {
+                    // Escape/empty-query Backspace dismiss locally
+                    // (design.md D4); no shell effect.
+                    self.inline_search.close();
+                    None
+                }
+                None => None,
+            };
+        }
         match key.code {
             Key::Char('/') if key.modifiers.is_empty() => {
+                self.inline_search.open();
                 return Some(Msg::Shell(ShellRequest::OpenInlineSearch));
             }
             _ => {}

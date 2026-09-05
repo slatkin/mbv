@@ -126,7 +126,30 @@ impl BrowserComponent {
         // panel background, so it must run before `render_wide_media_list`
         // paints the selected-row bar (matches TV / Music ordering).
         hero_on_left_list_panel_border(f, list_panel, self.focused);
-        let final_scroll = if self.wide_list.is_empty() {
+        let final_scroll = if self.inline_search.is_active() {
+            // Hero-on-left Wide passes only the right-rail library-list area
+            // (design.md D3); the Hero pane painted above remains visible and
+            // the ordinary canonical list does not also paint `content`.
+            let items = self.inline_search.ordered_items();
+            let query = self.inline_search.query().to_string();
+            let loading = self.inline_search.loading();
+            let cursor = self.inline_search.cursor();
+            let scroll_in = self.inline_search.scroll();
+            let new_scroll = crate::app::render::render_inline_search(
+                f,
+                content,
+                &query,
+                loading,
+                items,
+                cursor,
+                scroll_in,
+                self.focused,
+                1,
+                &mut self.layout,
+            );
+            self.inline_search.set_scroll(new_scroll);
+            new_scroll
+        } else if self.wide_list.is_empty() {
             crate::app::render::components::widgets::render_placeholder(
                 f,
                 content,

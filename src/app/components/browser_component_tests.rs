@@ -2,6 +2,7 @@ use super::browser::BrowserComponent;
 use super::browser_narrow::NarrowBrowseExtras;
 use super::component_id::BrowserKind;
 use crate::app::components::browser::{BrowserContent, BrowserIdentity};
+use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::render::LibraryListRenderCtx;
@@ -691,4 +692,94 @@ fn narrow_canonical_list_pill_click_emits_pill_click() {
         message,
         Some(Msg::Shell(ShellRequest::BrowserPillClick { target }))
     );
+}
+
+/// `/` opens the embedded Inline Search control locally (design.md D1/D4)
+/// and still emits `OpenInlineSearch` for the shell-side full-library-load
+/// work the control has no authority over.
+#[test]
+fn emby_browser_slash_opens_inline_search() {
+    let mut browser = BrowserComponent::new();
+    browser.set_content(BrowserContent::from_items(make_items(3)), true);
+    assert!(!browser.inline_search().is_active());
+
+    let message = browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    });
+
+    assert!(browser.inline_search().is_active());
+    assert_eq!(message, Some(Msg::Shell(ShellRequest::OpenInlineSearch)));
+}
+
+/// While search is open, a character that is otherwise a list shortcut (`r`
+/// -> `BrowserRefresh`) is appended to the query instead of running the
+/// shortcut, and the component returns immediately without an ordinary
+/// `Msg` (design.md D4).
+#[test]
+fn emby_browser_search_open_shortcut_letter_becomes_query_text() {
+    let mut browser = BrowserComponent::new();
+    browser.set_content(BrowserContent::from_items(make_items(3)), true);
+    browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    });
+
+    let message = browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Char('r'),
+        modifiers: KeyModifiers::NONE,
+    });
+
+    assert_eq!(browser.inline_search().query(), "r");
+    assert_eq!(
+        message, None,
+        "shortcut letter must not reach the ordinary handler while search is open"
+    );
+}
+
+/// Hero-on-left Wide paints Inline Search in the right rail (design.md D3):
+/// the shared bordered input/result painter lands to the right of the Hero
+/// pane, not overlapping it, and the Hero pane itself remains painted.
+#[test]
+fn emby_browser_wide_right_rail_paints_inline_search() {
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    browser.set_content(
+        BrowserContent::from_items(vec![make_item("Focused Movie", "Movie")]),
+        true,
+    );
+    browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    });
+    browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Char('f'),
+        modifiers: KeyModifiers::NONE,
+    });
+
+    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+
+    let list_area = browser.test_layout().left_area;
+    assert!(
+        list_area.width > 0 && list_area.height > 0,
+        "search result geometry must be published"
+    );
+    assert!(
+        list_area.x > 0,
+        "search paints in the right rail, not flush with the Hero pane at x=0: {list_area:?}"
+    );
+
+    let buffer = terminal.backend().buffer();
+    let mut found = false;
+    for y in list_area.y..list_area.y + list_area.height {
+        let row: String = (0..120)
+            .map(|x| buffer.cell((x, y)).unwrap().symbol())
+            .collect();
+        if row.contains("Focused Movie") {
+            found = true;
+        }
+    }
+    assert!(found, "matching result row painted in the right rail");
 }
