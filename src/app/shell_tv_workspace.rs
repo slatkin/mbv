@@ -34,7 +34,7 @@ impl Model {
             | ShellRequest::TvCycleLetterPill { .. } => {
                 match request {
                     ShellRequest::TvActivate { item } => {
-                        self.app.activate_selected_series_item(&item);
+                        self.app.activate_selected_series_item(lib_idx, &item);
                     }
                     ShellRequest::TvBack => self.app.go_back(lib_idx),
                     ShellRequest::TvCycleLetterPill { delta } => {

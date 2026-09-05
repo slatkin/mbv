@@ -17,23 +17,26 @@ impl App {
         let Some(item) = self.selected_series_item(lib_idx, cursor) else {
             return false;
         };
-        self.activate_selected_series_item(&item)
+        self.activate_selected_series_item(lib_idx, &item)
     }
 
     /// Item-targeted Series activation: the caller supplies the resolved
-    /// Series item instead of an App browse cursor.
+    /// Series item instead of an App browse cursor, along with the library
+    /// index the wide/narrow gate should check.
     ///
     /// Keeps the non-Series guard (`enter_series_selection` also enforces
     /// `item_type == "Series"` and a non-empty id) and the wide-fetch vs
-    /// narrow-modal branch. `enter_series_selection`'s `lib_idx` parameter is
-    /// unused (it only fetches the series detail), so the item-targeted path
-    /// passes 0.
-    pub(super) fn activate_selected_series_item(&mut self, item: &EmbyItem) -> bool {
+    /// narrow-modal branch.
+    pub(super) fn activate_selected_series_item(
+        &mut self,
+        lib_idx: usize,
+        item: &EmbyItem,
+    ) -> bool {
         if item.item_type != "Series" || item.id.is_empty() {
             return false;
         }
-        if self.wide_tv_library_area(0).is_some() {
-            self.enter_series_selection(0, item);
+        if self.wide_tv_library_area(lib_idx).is_some() {
+            self.enter_series_selection(lib_idx, item);
         } else {
             self.open_series_selection_modal(item);
         }

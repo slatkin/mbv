@@ -795,6 +795,43 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     assert!(!model.app.activate_selected_series(0));
 }
 
+/// Regression for the replace-wide-paint-inference review finding (#643):
+/// `activate_selected_series_item` must gate wide/narrow on the *caller's*
+/// `lib_idx`, not a hardcoded 0. Movies sits at library index 0 (never wide
+/// TV) and the wide-eligible TV Shows library sits at index 1, mirroring a
+/// common multi-library Emby account. Activating the Series selected in
+/// library 1 must enter the wide persistent workspace, not fall back to the
+/// narrow selection modal.
+#[test]
+fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
+    let mut app = make_movie_app();
+    // library 0 stays "movies" (never wide TV eligible).
+    let mut tv_app = make_movie_app();
+    let mut tv_lib = tv_app.libs.remove(0);
+    tv_lib.library.id = "lib-tvshows".into();
+    tv_lib.library.collection_type = "tvshows".into();
+    for item in &mut tv_lib.nav_stack[0].items {
+        item.item_type = "Series".into();
+    }
+    app.libs.push(tv_lib);
+    app.tab = TabSelection::EmbyLibrary(1);
+    app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
+    app.terminal_width = 160;
+    app.terminal_height = 40;
+    let mut model = Model::new(app);
+    model.sync_tv_workspace();
+
+    assert!(model.app.wide_tv_library_area(0).is_none());
+    assert!(model.app.wide_tv_library_area(1).is_some());
+
+    assert!(model.app.activate_selected_series(1));
+    assert!(
+        model.app.pending_overlay.is_none(),
+        "library 1 is wide-eligible; activation must enter the persistent \
+         workspace, not open the narrow series selection modal"
+    );
+}
+
 /// replace-wide-paint-inference completion gate (6.3): `activate_selected_series`
 /// gates on `App::wide_tv_library_area`, a paint-free predicate driven solely
 /// by terminal size. Resizing narrow -> wide through the real

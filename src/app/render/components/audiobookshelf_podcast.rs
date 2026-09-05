@@ -108,8 +108,7 @@ pub(in crate::app) struct AudiobookshelfPodcastGeometry {
     /// the shell can anchor overlays after render ownership moved to the
     /// component (task 5.3d.10c).
     pub list_area: Rect,
-    /// Wide-only right panel rect; zero in the narrow layout. Mirrors the
-    /// legacy `LayoutMain.audiobookshelf_podcast_right_area`.
+    /// Wide-only right panel rect; zero in the narrow layout.
     pub right_area: Rect,
     /// Hero rect the component painted (wide hero panel, or narrow
     /// inline-detail hero). Zero when no hero was painted.

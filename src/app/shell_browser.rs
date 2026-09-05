@@ -32,7 +32,9 @@ impl Model {
             // it was not a Series (or had no id), so fall back to the normal
             // select-item path, including the folder scroll-persist.
             ShellRequest::BrowserActivate { item } => {
-                if item.item_type == "Series" && self.app.activate_selected_series_item(&item) {
+                if item.item_type == "Series"
+                    && self.app.activate_selected_series_item(lib_idx, &item)
+                {
                     // handled by Series activation (season-selection modal at
                     // narrow width, persistent workspace at wide)
                 } else {
