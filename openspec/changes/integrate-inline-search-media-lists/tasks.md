@@ -12,9 +12,9 @@
 
 ## 3. Shell lifecycle and responsive transfer
 
-- [ ] 3.1 Replace mounted-search lookup with one active-host adapter for open, candidate-pool/loading pushes, text-entry snapshot derivation, and activation dispatch; retain full-library fetch, recursive album-index, stale-completion, and navigation-effect guards, then adapt the existing shell loading/recursive activation tests and verify with `cargo nextest run -p mbv inline_library_search recursive_album_search album_index`.
-- [ ] 3.2 Extend the existing TV Normal/Wide active-destination handoff with a one-shot `InlineSearchTransfer` keyed by stable selected target and viewport row offset; add one real `Application::tick()` resize test that crosses Normal→Wide→Normal and proves the query, selected target, visibility, sole painter, and active destination survive, then verify it with `cargo nextest run -p mbv inline_search_survives_tv_responsive_transition`.
-- [ ] 3.3 Update Keyboard Router snapshot construction and mouse eligibility so the active destination remains the sole event boundary during search; strengthen an existing tick test to prove printable global/list shortcut letters reach the search while ordinary destination mutation is suppressed, and verify with `cargo nextest run -p mbv tests_tick_integration`.
+- [x] 3.1 Replace mounted-search lookup with one active-host adapter for open, candidate-pool/loading pushes, text-entry snapshot derivation, and activation dispatch; retain full-library fetch, recursive album-index, stale-completion, and navigation-effect guards, then adapt the existing shell loading/recursive activation tests and verify with `cargo nextest run -p mbv inline_library_search recursive_album_search album_index`.
+- [x] 3.2 Extend the existing TV Normal/Wide active-destination handoff with a one-shot `InlineSearchTransfer` keyed by stable selected target and viewport row offset; add one real `Application::tick()` resize test that crosses Normal→Wide→Normal and proves the query, selected target, visibility, sole painter, and active destination survive, then verify it with `cargo nextest run -p mbv inline_search_survives_tv_responsive_transition`.
+- [x] 3.3 Update Keyboard Router snapshot construction and mouse eligibility so the active destination remains the sole event boundary during search; strengthen an existing tick test to prove printable global/list shortcut letters reach the search while ordinary destination mutation is suppressed, and verify with `cargo nextest run -p mbv tests_tick_integration`.
 
 ## 4. Remove the obsolete overlay protocol
 
