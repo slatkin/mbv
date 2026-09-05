@@ -1,7 +1,7 @@
 ## 1. Foundation: paint-free predicate
 
-- [ ] 1.1 In `src/app/render/components/tv_wide.rs`, extract `right_panel_lib_area(&self) -> Option<Rect>` from the existing `chrome_geometry` → `right_visible` → `right_panel_content_area` steps inside `wide_tv_library_area` (`:131-152`), and reimplement `wide_tv_library_area` to call it. Verify: `cargo check -p mbv` compiles and `cargo nextest run -p mbv render::components::tv_wide` still passes unchanged (no behavior change, pure refactor).
-- [ ] 1.2 Add `App::is_right_panel_wide(&self) -> bool` next to `right_panel_lib_area`, per design.md Decision 1 (`right_panel_lib_area().is_some_and(|area| hero_left::shared_hero_presentation(area).is_some())`). Verify: a new unit test in `tv_wide.rs`'s test module asserts `is_right_panel_wide()` is `true`/`false` at a wide/narrow terminal size respectively, with no paint performed first (constructing the `App` and calling it directly, no `Model`/render pass).
+- [x] 1.1 In `src/app/render/components/tv_wide.rs`, extract `right_panel_lib_area(&self) -> Option<Rect>` from the existing `chrome_geometry` → `right_visible` → `right_panel_content_area` steps inside `wide_tv_library_area` (`:131-152`), and reimplement `wide_tv_library_area` to call it. Verify: `cargo check -p mbv` compiles and `cargo nextest run -p mbv render::components::tv_wide` still passes unchanged (no behavior change, pure refactor).
+- [x] 1.2 Add `App::is_right_panel_wide(&self) -> bool` next to `right_panel_lib_area`, per design.md Decision 1 (`right_panel_lib_area().is_some_and(|area| hero_left::shared_hero_presentation(area).is_some())`). Verify: a new unit test in `tv_wide.rs`'s test module asserts `is_right_panel_wide()` is `true`/`false` at a wide/narrow terminal size respectively, with no paint performed first (constructing the `App` and calling it directly, no `Model`/render pass).
 
 ## 2. Foundation: Resize carries terminal size
 
