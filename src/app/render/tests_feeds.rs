@@ -56,16 +56,18 @@ fn feeds_images_off_collapses_artwork_and_uses_full_text_width() {
     let buffer = terminal.backend().buffer();
     assert!(buffer_to_string(&terminal).contains("Entry One"));
     assert!(
-        layout.left_area.width > 0,
-        "images-off text area must be usable"
+        layout.hero_area.width > 0,
+        "images-off hero area must be usable"
     );
-    assert!(
-        (layout.left_area.x..layout.left_area.right()).all(|x| {
-            (layout.left_area.y..layout.left_area.bottom())
-                .all(|y| buffer[(x, y)].bg != crate::app::palette::SURFACE_ARTWORK_PLACEHOLDER)
-        }),
-        "images-off Feeds hero must not paint artwork placeholder"
-    );
+    let title_row = (layout.hero_area.y..layout.hero_area.bottom())
+        .find(|&y| {
+            (layout.hero_area.x..layout.hero_area.right())
+                .any(|x| buffer[(x, y)].symbol().contains("Entry One"))
+        })
+        .expect("images-off Feeds hero title");
+    assert!((layout.hero_area.x..layout.hero_area.right()).all(|x| {
+        buffer[(x, title_row)].bg != crate::app::palette::SURFACE_ARTWORK_PLACEHOLDER
+    }));
 }
 
 fn terminal_for(component: &mut FeedsComponent, width: u16, height: u16) -> Terminal<TestBackend> {

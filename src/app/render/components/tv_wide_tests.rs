@@ -35,14 +35,13 @@ fn render_tv_workspace(app: &mut App, layout: &mut LayoutMain) -> (String, TvWor
         component.view(f, area);
     })
     .unwrap();
-    let layout = component.test_layout();
     let buffer = term.backend().buffer();
     assert!(
-        (layout.tv_wide_right_area.x..layout.tv_wide_right_area.right()).all(|x| {
-            (layout.tv_wide_right_area.y..layout.tv_wide_right_area.bottom())
+        (0..buffer.area().width).all(|x| {
+            (0..buffer.area().height)
                 .all(|y| buffer[(x, y)].bg != palette::SURFACE_ARTWORK_PLACEHOLDER)
         }),
-        "images-off TV hero must not reserve artwork placeholder cells"
+        "images-off TV must not reserve artwork placeholder cells"
     );
     (buffer_to_string(&term), component)
 }
