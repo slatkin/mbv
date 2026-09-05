@@ -11,6 +11,6 @@
 
 ## 3. Prove no stale key reference remains and the full gates pass
 
-- [ ] 3.1 Remove the stale `ser_primary` fixture key in `src/app/shell_tv_workspace_tests.rs`, search the tree for remaining `ser_primary` / inline `ser:` key formats outside the helper and its tests, and verify none remain.
-- [ ] 3.2 Run `cargo fmt`, `cargo check -p mbv`, `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`, `make check-code-file-lines`, and `ast-grep scan`; verify all are clean and the mbv-frontend completion checklist (render boundary, narrow-width behavior, component boundary, buffer tests) holds.
+- [x] 3.1 Remove the stale `ser_primary` fixture key in `src/app/shell_tv_workspace_tests.rs`, search the tree for remaining `ser_primary` / inline `ser:` key formats outside the helper and its tests, and verify none remain.
+- [x] 3.2 Run `cargo fmt`, `cargo check -p mbv`, `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`, `make check-code-file-lines`, and `ast-grep scan`; verify all are clean and the mbv-frontend completion checklist (render boundary, narrow-width behavior, component boundary, buffer tests) holds.
 - [ ] 3.3 Run `openspec validate "fix-series-image-cache-keys" --strict` and verify the change validates.
