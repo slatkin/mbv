@@ -146,7 +146,7 @@
   test-infrastructure weight for this change; revisit only if a real regression surfaces here.
 - [ ] 5.2 CUT FROM SCOPE (2026-09-05, user decision): file split that existed only to host 5.1's
   new assertions. No longer needed since 5.1 is cut.
-- [ ] 5.3 Add an `ast-grep` rule under `rules/frontend-boundary/` rejecting
+- [x] 5.3 Add an `ast-grep` rule under `rules/frontend-boundary/` rejecting
   `Block::default().style(<expr of type Color>)` and requiring explicit `.bg()`/`.fg()`, with
   fixtures — verify `rtk ast-grep test` passes and the unscoped `rtk ast-grep scan` reports zero
   findings tree-wide (fix or separately file any pre-existing hits recorded in task 1.2; a
