@@ -18,12 +18,12 @@
 
 ## 4. Migrate Music/Book/Podcast consumers (generic predicate)
 
-- [ ] 4.1 `src/app/actions_navigation.rs:205` (`activate_album_folder_row`): replace `self.layout.main.is_wide_music_active()` with `self.is_right_panel_wide()`. Verify: existing album-folder activation tests pass at both breakpoints.
-- [ ] 4.2 `src/app/shell_music_workspace.rs:143`: replace `self.app.layout.main.is_wide_music_active()` with `self.app.is_right_panel_wide()`. Verify: `shell_music_workspace_tests.rs` and `shell_music_workspace_cursor_tests.rs` pass unchanged.
-- [ ] 4.3 `src/app/shell_messages.rs:32`: replace `self.app.layout.main.is_wide_music_active()` with `self.app.is_right_panel_wide()`. Verify: the `ShellRequest` album-selection-modal test covering this branch passes.
-- [ ] 4.4 `src/app/audiobookshelf_book_modal_actions.rs:57`: replace `self.layout.main.is_wide_book_active()` with `self.is_right_panel_wide()`. Verify: `activate_audiobookshelf_book_parent` tests covering narrow-with-hero vs. wide pass.
-- [ ] 4.5 `src/app/shell_audiobookshelf_book.rs:41`: replace `self.app.layout.main.is_wide_book_active()` with `self.app.is_right_panel_wide()`. Verify: relevant book-tab test at this call site passes.
-- [ ] 4.6 `src/app/shell_audiobookshelf_podcast.rs:49`: replace `self.app.layout.main.is_wide_podcast_active()` with `self.app.is_right_panel_wide()`. Verify: relevant podcast-tab test at this call site passes.
+- [x] 4.1 `src/app/actions_navigation.rs:205` (`activate_album_folder_row`): replace `self.layout.main.is_wide_music_active()` with `self.is_right_panel_wide()`. Verify: existing album-folder activation tests pass at both breakpoints.
+- [x] 4.2 `src/app/shell_music_workspace.rs:143`: replace `self.app.layout.main.is_wide_music_active()` with `self.app.is_right_panel_wide()`. Verify: `shell_music_workspace_tests.rs` and `shell_music_workspace_cursor_tests.rs` pass unchanged.
+- [x] 4.3 `src/app/shell_messages.rs:32`: replace `self.app.layout.main.is_wide_music_active()` with `self.app.is_right_panel_wide()`. Verify: the `ShellRequest` album-selection-modal test covering this branch passes.
+- [x] 4.4 `src/app/audiobookshelf_book_modal_actions.rs:57`: replace `self.layout.main.is_wide_book_active()` with `self.is_right_panel_wide()`. Verify: `activate_audiobookshelf_book_parent` tests covering narrow-with-hero vs. wide pass.
+- [x] 4.5 `src/app/shell_audiobookshelf_book.rs:41`: replace `self.app.layout.main.is_wide_book_active()` with `self.app.is_right_panel_wide()`. Verify: relevant book-tab test at this call site passes.
+- [x] 4.6 `src/app/shell_audiobookshelf_podcast.rs:49`: replace `self.app.layout.main.is_wide_podcast_active()` with `self.app.is_right_panel_wide()`. Verify: relevant podcast-tab test at this call site passes.
 
 ## 5. Detach book/podcast post-paint mirrors
 
