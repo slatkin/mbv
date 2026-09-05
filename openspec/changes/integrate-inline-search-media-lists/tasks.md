@@ -18,8 +18,8 @@
 
 ## 4. Remove the obsolete overlay protocol
 
-- [ ] 4.1 Delete `ComponentId::InlineSearch`, separate mount/focus/render and area-selection functions, `set_wide`, Browser-only query projection, the draw-frame overlay pass, obsolete dismissal/projection state, and mount-reconciliation tests; verify there are no remaining mounted-search or two-painter references with `rg "InlineSearchComponent|ComponentId::InlineSearch|inline_search_area|set_wide|render_inline_search_component|project_inline_search_active" src/app` returning no matches and `cargo check -p mbv` passing.
-- [ ] 4.2 Remove or consolidate tests that only assert deleted getters, mount IDs, or overlay plumbing while preserving stronger behavior/integration coverage, and verify the focused suites with `cargo nextest run -p mbv inline_library_search emby_browser music_workspace tv_workspace`.
+- [x] 4.1 Delete `ComponentId::InlineSearch`, separate mount/focus/render and area-selection functions, `set_wide`, Browser-only query projection, the draw-frame overlay pass, obsolete dismissal/projection state, and mount-reconciliation tests; verify there are no remaining mounted-search or two-painter references with `rg "InlineSearchComponent|ComponentId::InlineSearch|inline_search_area|set_wide|render_inline_search_component|project_inline_search_active" src/app` returning no matches and `cargo check -p mbv` passing.
+- [x] 4.2 Remove or consolidate tests that only assert deleted getters, mount IDs, or overlay plumbing while preserving stronger behavior/integration coverage, and verify the focused suites with `cargo nextest run -p mbv inline_library_search emby_browser music_workspace tv_workspace`.
 
 ## 5. Record architecture and verify
 
