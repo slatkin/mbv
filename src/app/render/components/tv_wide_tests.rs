@@ -35,6 +35,15 @@ fn render_tv_workspace(app: &mut App, layout: &mut LayoutMain) -> (String, TvWor
         component.view(f, area);
     })
     .unwrap();
+    let layout = component.test_layout();
+    let buffer = term.backend().buffer();
+    assert!(
+        (layout.tv_wide_right_area.x..layout.tv_wide_right_area.right()).all(|x| {
+            (layout.tv_wide_right_area.y..layout.tv_wide_right_area.bottom())
+                .all(|y| buffer[(x, y)].bg != palette::SURFACE_ARTWORK_PLACEHOLDER)
+        }),
+        "images-off TV hero must not reserve artwork placeholder cells"
+    );
     (buffer_to_string(&term), component)
 }
 
@@ -114,7 +123,9 @@ fn wide_tv_requests_selected_series_primary_image_with_budget_and_placeholder() 
 fn wide_tv_images_off_collapses_artwork_and_uses_full_text_width() {
     let mut app = tv_app();
     let (output, component) = render_tv_workspace(&mut app, &mut LayoutMain::default());
-    assert!(component.test_layout().tv_wide_left_area.width > 0);
+    let layout = component.test_layout();
+    assert!(layout.tv_wide_left_area.width > 0);
+    assert!(layout.tv_wide_right_area.width > layout.tv_wide_left_area.width / 2);
     assert!(output.contains("The Series"));
     assert!(
         output.contains("Pilot"),
