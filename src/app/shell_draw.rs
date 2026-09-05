@@ -239,7 +239,7 @@ impl App {
         // Pre-body legacy chrome (column backgrounds, tab bar) underpaints the
         // card/queue/library body below. The right-column player panel is
         // painted solely by the mounted `PlaybackComponent` (row 3.9).
-        self.paint_legacy_chrome(f, chrome);
+        self.paint_legacy_chrome(f, chrome, layout);
 
         let (lib_area, queue_geometry) = if self.effective_panel_mode() == PanelMode::LibraryOnly {
             (right_area, Default::default())
@@ -378,6 +378,7 @@ impl App {
         &mut self,
         f: &mut Frame,
         chrome: &FrameChromeGeometry,
+        layout: &mut LayoutMain,
     ) {
         let FrameChromeGeometry {
             left_area,
@@ -400,7 +401,7 @@ impl App {
 
         // Tab bar at the very top of the right column.
         if right_visible {
-            self.render_tabs(f, tab_bar_area, tabs_area);
+            self.render_tabs(f, tab_bar_area, tabs_area, layout);
         }
     }
 }

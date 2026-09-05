@@ -2,7 +2,7 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::Event;
+use tuirealm::event::{Event, MouseButton, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 use tuirealm::subscription::{EventClause, Sub, SubClause};
@@ -72,9 +72,20 @@ impl AppComponent<Msg, UserEvent> for UiRootComponent {
             Event::WindowResize(_, _) => TerminalObserverEvent::Resize,
             Event::FocusGained => TerminalObserverEvent::FocusGained,
             Event::FocusLost => TerminalObserverEvent::FocusLost,
-            // Mouse events are delivered to components through `mouse_sub()`
-            // subscriptions (ADR 0024); the observer only needs them as a
-            // redraw signal, same as the other non-chord events.
+            // Mouse events are otherwise delivered to components through
+            // `mouse_sub()` subscriptions (ADR 0024); the observer only needs
+            // them as a redraw signal, same as the other non-chord events. A
+            // left-click press is the one exception: it is also the only
+            // signal shell-painted chrome with no mounted component of its
+            // own (the tab bar, task 6.5) ever sees, so it is carried through
+            // as `MouseClick` for the shell to resolve against painted
+            // geometry.
+            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
+                TerminalObserverEvent::MouseClick {
+                    column: mouse.column,
+                    row: mouse.row,
+                }
+            }
             Event::Mouse(_) | Event::None | Event::Paste(_) | Event::Tick | Event::User(_) => {
                 TerminalObserverEvent::NoOp
             }

@@ -60,6 +60,15 @@ pub enum TerminalObserverEvent {
     Resize,
     FocusGained,
     FocusLost,
+    /// A left mouse button press, carried through so the shell can resolve
+    /// it against shell-painted chrome (e.g. the tab bar, task 6.5) that has
+    /// no mounted component of its own to claim it via `mouse_sub()`. Not a
+    /// mouse-fold "claim" (it stays wrapped in `TerminalEvent`), so it never
+    /// competes with a mounted component's own claim for the same click.
+    MouseClick {
+        column: u16,
+        row: u16,
+    },
     NoOp,
 }
 

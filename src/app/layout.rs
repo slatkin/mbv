@@ -130,6 +130,13 @@ pub(crate) struct LayoutMain {
     /// that logical track. Cleared every frame; populated only when the
     /// wide Music layout is active. This remains paint-coupled by design.
     pub wide_music_track_hitmap: Vec<(Rect, usize)>,
+    /// Per-tab hit targets published by `render_tabs` (task 6.5). Each entry
+    /// is `(screen_rect, tab_position)` for a visible tab, using the tab's
+    /// real position (`all_names` index), not its visible-slot index. Does
+    /// not include the `«`/`»` scroll-indicator glyphs. Cleared and
+    /// repopulated every frame; paint-coupled by design, mirroring
+    /// `wide_music_track_hitmap` above.
+    pub tabs_hitmap: Vec<(Rect, usize)>,
     /// Bounding rect of the wide Music left pane's hero artwork area.
     /// Clicks here should not activate track selection or playback.
     pub wide_music_art_area: Rect,
@@ -227,6 +234,14 @@ impl LayoutMain {
             .iter()
             .find(|(rect, _)| rect.contains(pos))
             .map(|(_, track_idx)| *track_idx)
+    }
+
+    /// Returns the tab position whose hit target contains `pos`, if any.
+    pub(crate) fn tab_at(&self, pos: ratatui::layout::Position) -> Option<usize> {
+        self.tabs_hitmap
+            .iter()
+            .find(|(rect, _)| rect.contains(pos))
+            .map(|(_, tab_pos)| *tab_pos)
     }
 }
 

@@ -16,7 +16,7 @@ use crate::app::components::{
 use crate::app::router::RouterOutcome;
 use crate::app::shell::apply_router_outcome;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::tests_tick_harness::TickHarness;
+use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
 use crate::app::types_confirm::{ConfirmAction, ConfirmModal};
 use crate::app::types_context_menu::{
     ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
@@ -448,6 +448,100 @@ fn tick_blocking_remote_reanchor_modal_suppresses_underlying_mouse_activity() {
     );
 
     assert_blocking_modal_suppresses_sidebar_clicks(&mut harness, &rows);
+}
+
+// --- Task 6.5: tab-bar click-to-switch. The tab bar is shell-painted chrome
+// with no mounted component, so it has no `mouse_sub()` claim; the click is
+// resolved by the shell against `layout.tabs_hitmap` via the `MouseClick`
+// observer signal, then driven through `set_library_tab` (the same entry
+// point keyboard tab-cycling uses).
+
+fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
+    let focused = outcome.pre_fold_focus.clone();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness.model_mut().handle_terminal_message(
+            message,
+            focused.as_ref(),
+            &mut music_resize,
+            &mut tv_resize,
+        );
+    }
+}
+
+#[test]
+fn tab_bar_click_switches_active_tab() {
+    let mut app = crate::app::render::make_movie_app();
+    app.tab = TabSelection::Home;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+
+    let (rect, tab_pos) = harness
+        .model()
+        .app
+        .layout
+        .main
+        .tabs_hitmap
+        .iter()
+        .find(|(_, pos)| *pos == 1)
+        .copied()
+        .expect("Movies tab painted at position 1");
+    assert_eq!(tab_pos, 1);
+
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: rect.x,
+        row: rect.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    apply_outcome(&mut harness, outcome);
+
+    assert_eq!(
+        harness.model().app.tab,
+        TabSelection::EmbyLibrary(0),
+        "clicking the Movies tab switches to it, mirroring keyboard tab-cycling"
+    );
+}
+
+#[test]
+fn tab_bar_click_outside_tabs_area_is_noop() {
+    let mut app = crate::app::render::make_movie_app();
+    app.tab = TabSelection::Home;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+
+    assert!(
+        !harness.model().app.layout.tabs_area.contains(
+            ratatui::layout::Position { x: 0, y: 0 }
+        ),
+        "top-left corner must fall outside the tab bar for this assertion to be meaningful"
+    );
+
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: 0,
+        row: 0,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    apply_outcome(&mut harness, outcome);
+
+    assert_eq!(
+        harness.model().app.tab,
+        TabSelection::Home,
+        "a click outside tabs_area is a no-op"
+    );
 }
 
 /// Task 5.4 (D2 rung 2 exclusivity): with the context menu mounted, a wheel
