@@ -136,7 +136,7 @@
 - [x] 4.7 Delete the `HeroData::Generic` variant (`home_hero.rs:97`) and collapse `HeroData` to the
   layout-carrying form — verify `rtk cargo check -p mbv` passes and `grep -rn "HeroData::" src/`
   shows no `Generic` hit, so the clamp deleted in 2.4 has no branch to return to.
-- [ ] 4.8 Measure `home_hero.rs` and split it if it crossed 800 lines — verify `rtk make
+- [x] 4.8 Measure `home_hero.rs` and split it if it crossed 800 lines — verify `rtk make
   check-code-file-lines` is clean.
 
 ## 5. Drift-proofing
