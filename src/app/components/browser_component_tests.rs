@@ -2,7 +2,7 @@ use super::browser::BrowserComponent;
 use super::browser_narrow::NarrowBrowseExtras;
 use super::component_id::BrowserKind;
 use crate::app::components::browser::{BrowserContent, BrowserIdentity};
-use crate::app::components::inline_search::InlineSearchHost;
+use crate::app::components::inline_search::{InlineSearchHost, SearchPool};
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::render::LibraryListRenderCtx;
@@ -743,6 +743,10 @@ fn emby_browser_search_open_shortcut_letter_becomes_query_text() {
 #[test]
 fn emby_browser_wide_right_rail_paints_inline_search() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    // The Hero pane's own selected-item title ("Focused Movie") is
+    // deliberately distinct from the search result's name below, so a text
+    // match can only come from an actual painted result row in the right
+    // rail, never from the Hero pane sharing a screen row.
     browser.set_content(
         BrowserContent::from_items(vec![make_item("Focused Movie", "Movie")]),
         true,
@@ -751,10 +755,12 @@ fn emby_browser_wide_right_rail_paints_inline_search() {
         code: Key::Char('/'),
         modifiers: KeyModifiers::NONE,
     });
-    browser.handle_tui_key(TuiKeyEvent {
-        code: Key::Char('f'),
-        modifiers: KeyModifiers::NONE,
-    });
+    browser
+        .inline_search_mut()
+        .set_pool(SearchPool::Items(vec![make_item(
+            "Search Result Alpha",
+            "Movie",
+        )]));
 
     let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
     terminal
@@ -776,10 +782,13 @@ fn emby_browser_wide_right_rail_paints_inline_search() {
     let buffer = terminal.backend().buffer();
     let mut found = false;
     for y in list_area.y..list_area.y + list_area.height {
-        let row: String = (0..120)
+        // Scan only the right rail's own x-range: the Hero pane paints its
+        // own title at x=0 on possibly-overlapping rows, so scanning the
+        // full frame width would let that false-positive the assertion.
+        let row: String = (list_area.x..list_area.x + list_area.width)
             .map(|x| buffer.cell((x, y)).unwrap().symbol())
             .collect();
-        if row.contains("Focused Movie") {
+        if row.contains("Search Result Alpha") {
             found = true;
         }
     }
