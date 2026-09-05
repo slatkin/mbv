@@ -720,3 +720,124 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         "focus follows the click back onto the Library destination"
     );
 }
+
+// --- Task 7.3 (breakpoint half): the Movies destination switches its
+// embedded canonical control (`WideMediaList` -> `InlineMediaBrowser`) when a
+// resize crosses the wide/narrow breakpoint. A click must resolve against the
+// `row_geometry` the CURRENT frame painted, never the rect a prior frame left
+// behind. The scroll half of this proof already lives in
+// `media_list::tests::resolve_point::wide_resolves_against_a_scrolled_viewport`.
+
+#[test]
+fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_stale_one() {
+    let mut app = crate::app::render::make_movie_app();
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let library_child = harness
+        .model()
+        .emby_browser_id
+        .clone()
+        .expect("movie browser child mounted");
+
+    let browser_test_layout = |harness: &mut TickHarness| {
+        harness
+            .model_mut()
+            .application
+            .get_component_mut(&library_child)
+            .expect("library child mounted")
+            .as_any_mut()
+            .downcast_mut::<BrowserComponent>()
+            .expect("browser component type")
+            .test_layout()
+            .left_area
+    };
+
+    let click = |column, row| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+
+    // Wide breakpoint: paints via `WideMediaList` into the right-hand list
+    // pane, well clear of column 0.
+    let mut wide_terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    wide_terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    let wide_list_area = browser_test_layout(&mut harness);
+    assert!(
+        wide_list_area.width > 0 && wide_list_area.height > 0,
+        "the wide breakpoint must have painted a non-empty list area"
+    );
+
+    harness.inject(click(wide_list_area.x, wide_list_area.y));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
+        "a click on the wide-painted list row must resolve through the canonical control"
+    );
+    apply_outcome(&mut harness, outcome);
+
+    // Resize below the two-column threshold: the destination switches to
+    // `InlineMediaBrowser`, and its list geometry starts far to the left of
+    // where the wide list used to live.
+    let mut narrow_terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    narrow_terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    let narrow_list_area = browser_test_layout(&mut harness);
+    assert!(
+        narrow_list_area.width > 0 && narrow_list_area.height > 0,
+        "the narrow breakpoint must have painted a non-empty list area"
+    );
+    assert_ne!(
+        wide_list_area, narrow_list_area,
+        "the breakpoint change must have actually repainted different list geometry"
+    );
+
+    // A click at the OLD wide list's rightmost column, now past the right
+    // edge of the narrow-painted list area, must not resolve to a row: if
+    // resolution consulted stale wide geometry instead of the freshly
+    // painted narrow layout, this click would incorrectly still land on a
+    // list row.
+    let past_narrow_right_edge = narrow_list_area.x + narrow_list_area.width;
+    assert!(
+        wide_list_area.x + wide_list_area.width > past_narrow_right_edge,
+        "the wide list's old right edge must genuinely extend past the narrow list's new one \
+         for this click to be a meaningful stale-geometry probe"
+    );
+    harness.inject(click(past_narrow_right_edge, wide_list_area.y));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
+        "a click at the old wide-list position must not resolve through stale wide geometry \
+         after the narrow repaint"
+    );
+    apply_outcome(&mut harness, outcome);
+
+    // A click inside the NEW narrow list area must resolve through the
+    // now-mounted `InlineMediaBrowser`, proving the current geometry (not
+    // memory of the old control) is what actually governs resolution.
+    harness.inject(click(narrow_list_area.x, narrow_list_area.y));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
+        "a click on the narrow-painted list row must resolve through the canonical control"
+    );
+    apply_outcome(&mut harness, outcome);
+}
