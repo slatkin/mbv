@@ -32,7 +32,7 @@ impl App {
         if item.item_type != "Series" || item.id.is_empty() {
             return false;
         }
-        if self.layout.main.is_wide_tv_active() {
+        if self.wide_tv_library_area(0).is_some() {
             self.enter_series_selection(0, item);
         } else {
             self.open_series_selection_modal(item);

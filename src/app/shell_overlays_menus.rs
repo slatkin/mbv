@@ -111,7 +111,11 @@ impl Model {
                     // Home is not a wide-TV destination; when it is active the
                     // pointer panel is the component's own list-area claim rect.
                     PanelFocus::Library if home.is_some() => home.unwrap().0,
-                    PanelFocus::Library if layout.main.is_wide_tv_active() => {
+                    PanelFocus::Library
+                        if self.app.tab.emby_library_index().is_some_and(|lib_idx| {
+                            self.app.wide_tv_library_area(lib_idx).is_some()
+                        }) =>
+                    {
                         let pos = match &anchor {
                             ContextMenuAnchor::Pointer { x, y } => (*x, *y).into(),
                             ContextMenuAnchor::SelectedItem(_) => unreachable!(),

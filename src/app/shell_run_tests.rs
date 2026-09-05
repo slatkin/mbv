@@ -15,6 +15,10 @@ fn mounted_wide_tv_model() -> Model {
         item.item_type = "Series".into();
     }
     app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
+    // Wide breakpoint is now driven synchronously by terminal size
+    // (`wide_tv_library_area`), not this previous-frame paint rect.
+    app.terminal_width = 160;
+    app.terminal_height = 40;
     let mut model = Model::new(app);
     model.sync_tv_workspace();
     model

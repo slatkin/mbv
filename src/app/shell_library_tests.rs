@@ -69,19 +69,24 @@ fn mouse_eligibility_rung2_topmost_panel_overlay_is_exclusive() {
 /// derived off `library_child_id()`, never a second "did I paint" ledger.
 #[test]
 fn mouse_eligibility_follows_breakpoint_and_overlay_lifecycle() {
-    use ratatui::layout::Rect;
-
     let tv_child = |wide: bool| {
         let mut app = make_movie_app();
         app.libs[0].library.collection_type = "tvshows".into();
+        for item in &mut app.libs[0].nav_stack[0].items {
+            item.item_type = "Series".into();
+        }
         app.tab = TabSelection::EmbyLibrary(0);
         app.panel_focus = PanelFocus::Library;
         app.panel_mode = PanelMode::Both;
-        app.layout.main.tv_wide_right_area = if wide {
-            Rect::new(40, 0, 60, 20)
+        // Wide breakpoint is now driven synchronously by terminal size
+        // (`wide_tv_library_area`), not this previous-frame paint rect.
+        if wide {
+            app.terminal_width = 160;
+            app.terminal_height = 40;
         } else {
-            Rect::default()
-        };
+            app.terminal_width = 80;
+            app.terminal_height = 24;
+        }
         let mut model = Model::new(app);
         model.sync_tv_workspace();
         model.sync_emby_browser();
@@ -252,19 +257,25 @@ fn shell_routes_focus_to_the_active_destination_child() {
 #[test]
 fn narrow_tv_library_routes_to_browser_component_wide_to_tv_workspace() {
     use crate::app::components::TvWorkspaceComponent;
-    use ratatui::layout::Rect;
 
     let build = |wide: bool| {
         let mut app = make_movie_app();
         app.libs[0].library.collection_type = "tvshows".into();
+        for item in &mut app.libs[0].nav_stack[0].items {
+            item.item_type = "Series".into();
+        }
         app.tab = TabSelection::EmbyLibrary(0);
         app.panel_focus = PanelFocus::Library;
         app.panel_mode = PanelMode::Both;
-        app.layout.main.tv_wide_right_area = if wide {
-            Rect::new(40, 0, 60, 20)
+        // Wide breakpoint is now driven synchronously by terminal size
+        // (`wide_tv_library_area`), not this previous-frame paint rect.
+        if wide {
+            app.terminal_width = 160;
+            app.terminal_height = 40;
         } else {
-            Rect::default()
-        };
+            app.terminal_width = 80;
+            app.terminal_height = 24;
+        }
         let mut model = Model::new(app);
         model.sync_tv_workspace();
         model.sync_emby_browser();

@@ -21,6 +21,10 @@ fn mounted_tv_model() -> Model {
         item.item_type = "Series".into();
     }
     app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
+    // Wide breakpoint is now driven synchronously by terminal size
+    // (`wide_tv_library_area`), not this previous-frame paint rect.
+    app.terminal_width = 160;
+    app.terminal_height = 40;
     let mut model = Model::new(app);
     model.sync_tv_workspace();
     model
@@ -330,9 +334,10 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
         "Enter must put the component in the Episodes pane for its selected series"
     );
 
-    // Narrow: the mount gate (is_wide_tv_active) returns None, so the
+    // Narrow: the mount gate (wide_tv_library_area) returns None, so the
     // pointer is cleared but the component stays mounted (keep-mounted).
-    model.app.layout.main.tv_wide_right_area = Rect::default();
+    model.app.terminal_width = 80;
+    model.app.terminal_height = 24;
     model.sync_tv_workspace();
     assert_eq!(model.tv_workspace_id, None);
     assert!(
@@ -341,7 +346,8 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     );
 
     // Wide again: the same component is re-pointed, not remounted.
-    model.app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
+    model.app.terminal_width = 160;
+    model.app.terminal_height = 40;
     model.sync_tv_workspace();
     assert_eq!(
         model.tv_workspace_id.as_ref(),
@@ -706,7 +712,8 @@ fn wide_tv_handoff_does_not_fetch_empty_series_id() {
 #[test]
 fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     let mut model = mounted_tv_model();
-    model.app.layout.main.tv_wide_right_area = Rect::default();
+    model.app.terminal_width = 80;
+    model.app.terminal_height = 24;
     model.sync_tv_workspace();
     model.sync_emby_browser();
 
@@ -755,7 +762,8 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
 
     // Narrow layout => open_series_selection_modal targets the same
     // Series, proven by the modal's Series source id.
-    model.app.layout.main.tv_wide_right_area = ratatui::layout::Rect::default();
+    model.app.terminal_width = 80;
+    model.app.terminal_height = 24;
     model.app.libs[0].nav_stack[0].set_resting_cursor(0);
     model.app.activate_selected_series(0);
     match model.app.pending_overlay.as_ref() {

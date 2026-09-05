@@ -83,7 +83,8 @@ impl Model {
             return None;
         };
         let library = self.app.libs.get(index)?;
-        if library.library.collection_type != "tvshows" || !self.app.layout.main.is_wide_tv_active()
+        if library.library.collection_type != "tvshows"
+            || !self.app.wide_tv_library_area(index).is_some()
         {
             return None;
         }
@@ -178,7 +179,7 @@ impl Model {
         if library.library.collection_type != "tvshows" {
             return;
         }
-        let wide = self.app.layout.main.is_wide_tv_active();
+        let wide = self.app.wide_tv_library_area(lib_idx).is_some();
         match (
             wide,
             self.tv_workspace_id.clone(),
@@ -227,7 +228,8 @@ impl Model {
         let Some(library) = self.app.libs.get(index) else {
             return;
         };
-        if library.library.collection_type != "tvshows" || !self.app.layout.main.is_wide_tv_active()
+        if library.library.collection_type != "tvshows"
+            || !self.app.wide_tv_library_area(index).is_some()
         {
             return;
         }
