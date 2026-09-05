@@ -15,7 +15,7 @@ use tuirealm::state::State;
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 
 use super::inline_search::{InlineSearch, InlineSearchHost};
-use super::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
+use super::media_list::{MediaKind, MediaListRow, MediaSemanticState, WideMediaList};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use super::msg::{Msg, ShellRequest, TvHit};
@@ -96,6 +96,7 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
                 primary: format!("{number}. {}", episode.name),
                 trailing: None,
                 duration: Some(duration),
+                kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
             }
         })
@@ -168,6 +169,7 @@ impl TvWorkspaceComponent {
                     primary: item.display_name(),
                     trailing: (item.production_year > 0).then(|| item.production_year.to_string()),
                     duration: None,
+                    kind: MediaKind::Collection,
                     // TV series rows are never dimmed on watched/played state
                     // (legacy rail parity): the canonical row colour follows
                     // panel focus only.

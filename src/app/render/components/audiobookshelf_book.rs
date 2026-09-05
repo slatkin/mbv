@@ -1,5 +1,5 @@
 use crate::app::components::media_list::{
-    InlineMediaBrowser, MediaListRow, MediaSemanticState, RowGeometry, ViewportAnchor,
+    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, RowGeometry, ViewportAnchor,
     WideMediaList,
 };
 use crate::app::palette;
@@ -85,6 +85,7 @@ fn book_rows(
             primary: book.title.clone(),
             trailing: None,
             duration: None,
+            kind: MediaKind::Collection,
             semantic_state: MediaSemanticState::Ordinary,
         })
         .collect()
@@ -503,6 +504,7 @@ fn render_book_rows(
                 primary,
                 trailing: None,
                 duration: show_length.then_some(duration.unwrap()),
+                kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
             }
         })

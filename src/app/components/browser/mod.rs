@@ -19,7 +19,7 @@ use super::browser_narrow::NarrowBrowseExtras;
 use super::component_id::BrowserKind;
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::media_list::{
-    InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
@@ -264,6 +264,7 @@ impl BrowserComponent {
                 primary,
                 trailing,
                 duration: None,
+                kind: MediaKind::Collection,
                 semantic_state,
             });
         }
@@ -299,6 +300,7 @@ impl BrowserComponent {
                 trailing: (!item.is_folder && item.production_year > 0)
                     .then(|| item.production_year.to_string()),
                 duration: None,
+                kind: MediaKind::Collection,
                 semantic_state,
             }
         };

@@ -19,7 +19,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
-    InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
@@ -179,6 +179,7 @@ impl HomeComponent {
                 duration: item
                     .duration()
                     .map(|ticks| fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64)),
+                kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
             })
             .collect();

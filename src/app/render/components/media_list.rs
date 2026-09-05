@@ -4,7 +4,8 @@ use super::list_rows::{
     InlineReplacementPlan, ListRenderCtx, MarkerEdge,
 };
 use crate::app::components::media_list::{
-    InlineLayout, InlineMediaBrowser, MediaListRow, MediaSemanticState, RowGeometry, WideMediaList,
+    InlineLayout, InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, RowGeometry,
+    WideMediaList,
 };
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
@@ -492,6 +493,7 @@ fn wide_media_row<Target>(
             primary,
             trailing,
             duration,
+            kind,
             semantic_state,
             ..
         } => {
@@ -521,7 +523,12 @@ fn wide_media_row<Target>(
                 (None, Some(pct)) => pct,
                 (None, None) => String::new(),
             };
-            let duration = duration.as_deref().filter(|dur| !dur.is_empty());
+            // `Collection` rows never show a duration, even if one is
+            // projected — one enforcement point so parents can't re-diverge.
+            let duration = duration
+                .as_deref()
+                .filter(|dur| !dur.is_empty())
+                .filter(|_| !matches!(kind, MediaKind::Collection));
 
             let content_w = inner_width.saturating_sub(RIGHT_INSET);
             let trailing_w = if trailing.is_empty() {
@@ -583,16 +590,28 @@ fn wide_media_row<Target>(
 #[cfg(test)]
 mod wide_row_regression_tests {
     use super::*;
-    use crate::app::components::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
+    use crate::app::components::media_list::{
+        MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
+    };
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
 
     fn item(target: &str, primary: &str, duration: Option<String>) -> MediaListRow<String> {
+        row_of(target, primary, duration, MediaKind::Media)
+    }
+
+    fn row_of(
+        target: &str,
+        primary: &str,
+        duration: Option<String>,
+        kind: MediaKind,
+    ) -> MediaListRow<String> {
         MediaListRow::Item {
             target: target.into(),
             primary: primary.into(),
             trailing: None,
             duration,
+            kind,
             semantic_state: MediaSemanticState::Ordinary,
         }
     }
@@ -710,5 +729,55 @@ mod wide_row_regression_tests {
         let second = paint(&mut list, rect, selected_bg);
         assert_eq!(second.row_geometry.offset(), resolved);
         assert_eq!(list.scroll(), resolved);
+    }
+
+    /// canonical-list-duration-kind 1.2: the painter suppresses the duration
+    /// slot for `Collection` rows even when one is projected, and paints a
+    /// `Media` row's duration right-aligned in `STATUS_AVAILABLE` green.
+    #[test]
+    fn collection_row_suppresses_projected_duration_media_row_paints_it() {
+        let rect = Rect::new(0, 0, 40, 4);
+        let selected_bg = palette::SURFACE_RESTING;
+        let dur = crate::app::ui_util::list_duration_secs(272); // 4:32
+        assert_eq!(dur.as_deref(), Some("4:32"));
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            row_of("coll", "Some Album", dur.clone(), MediaKind::Collection),
+            row_of("leaf", "Some Track", dur, MediaKind::Media),
+        ]);
+
+        let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, selected_bg);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+
+        let row_text = |y: u16| {
+            (0..rect.width)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+        };
+        assert!(
+            !row_text(0).contains("4:32"),
+            "Collection row must not paint a projected duration: {:?}",
+            row_text(0)
+        );
+        let media = row_text(1);
+        assert!(
+            media.contains("4:32"),
+            "Media row paints its duration: {media:?}"
+        );
+        assert!(
+            media.trim_end().ends_with("4:32"),
+            "Media duration is right-aligned: {media:?}"
+        );
+        let dur_x = rect.width - 4;
+        assert_eq!(
+            buf[(dur_x, 1)].fg,
+            palette::STATUS_AVAILABLE,
+            "Media duration is painted green"
+        );
     }
 }

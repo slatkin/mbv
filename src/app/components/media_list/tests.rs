@@ -1,4 +1,4 @@
-use super::{MediaListRow, MediaSemanticState, WideMediaList};
+use super::{MediaKind, MediaListRow, MediaSemanticState, WideMediaList};
 
 #[test]
 fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
@@ -10,6 +10,7 @@ fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
             primary: "Ordinary".into(),
             trailing: None,
             duration: None,
+            kind: MediaKind::Media,
             semantic_state: MediaSemanticState::Ordinary,
         },
         MediaListRow::Spacer,
@@ -18,6 +19,7 @@ fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
             primary: "Active".into(),
             trailing: None,
             duration: None,
+            kind: MediaKind::Media,
             semantic_state: MediaSemanticState::active(Some(125)),
         },
         MediaListRow::Item {
@@ -25,6 +27,7 @@ fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
             primary: "Played".into(),
             trailing: None,
             duration: None,
+            kind: MediaKind::Media,
             semantic_state: MediaSemanticState::Played,
         },
         MediaListRow::Item {
@@ -32,6 +35,7 @@ fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
             primary: "Disabled".into(),
             trailing: None,
             duration: None,
+            kind: MediaKind::Media,
             semantic_state: MediaSemanticState::Disabled,
         },
     ]);
@@ -71,7 +75,9 @@ fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
 }
 
 mod resolve_point {
-    use super::super::{InlineMediaBrowser, MediaListRow, MediaSemanticState, WideMediaList};
+    use super::super::{
+        InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
+    };
     use ratatui::layout::{Position, Rect};
 
     fn item(target: &str) -> MediaListRow<String> {
@@ -80,6 +86,7 @@ mod resolve_point {
             primary: target.into(),
             trailing: None,
             duration: None,
+            kind: MediaKind::Media,
             semantic_state: MediaSemanticState::Ordinary,
         }
     }

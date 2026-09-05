@@ -153,6 +153,18 @@ impl ActiveProgress {
     }
 }
 
+/// Whether a canonical media-list item drills into a container or plays a leaf.
+///
+/// `Collection` rows are navigable containers (movie/series folder, album,
+/// podcast show, book title); `Media` rows are playable leaves (queue entries,
+/// episodes, tracks, chapters, feed items). The painter suppresses the duration
+/// slot for `Collection` rows even when one is projected.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MediaKind {
+    Collection,
+    Media,
+}
+
 /// Provider-neutral semantic state used by canonical media-list rows.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaSemanticState {
@@ -182,6 +194,8 @@ pub enum MediaListRow<Target> {
         /// A duration/time string. Rendered as a distinct right-aligned
         /// green (`STATUS_AVAILABLE`) element, never as FOAM `trailing`.
         duration: Option<String>,
+        /// Drill-in container vs. playable leaf; gates the duration slot.
+        kind: MediaKind,
         semantic_state: MediaSemanticState,
     },
     Heading {

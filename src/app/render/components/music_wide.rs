@@ -2,7 +2,7 @@
 
 use crate::app::components::inline_search::InlineSearch;
 use crate::app::components::media_list::{
-    InlineMediaBrowser, MediaListRow, MediaSemanticState, WideMediaList,
+    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
 };
 use crate::app::layout::LayoutMain;
 use crate::app::layout::LibraryRowTarget;
@@ -153,6 +153,7 @@ pub(in crate::app) fn grouped_album_rows(
                 primary: name.clone(),
                 trailing: (!year.is_empty()).then(|| year.clone()),
                 duration: None,
+                kind: MediaKind::Collection,
                 semantic_state: MediaSemanticState::Ordinary,
             });
         }

@@ -1,5 +1,5 @@
 use crate::app::components::media_list::{
-    InlineMediaBrowser, MediaListRow, MediaSemanticState, RowGeometry, ViewportAnchor,
+    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, RowGeometry, ViewportAnchor,
     WideMediaList,
 };
 use crate::app::render::arrangements::hero_left::{
@@ -138,6 +138,7 @@ fn podcast_show_rows(shows: &[AudiobookshelfShow]) -> Vec<MediaListRow<String>> 
             primary: show.title.clone(),
             trailing: None,
             duration: None,
+            kind: MediaKind::Collection,
             semantic_state: MediaSemanticState::Ordinary,
         })
         .collect()
@@ -513,6 +514,7 @@ fn render_podcast_hero(
                 primary: episode.title.clone(),
                 trailing: None,
                 duration: None,
+                kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
             })
             .collect();

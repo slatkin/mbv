@@ -8,7 +8,7 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
+use super::media_list::{MediaKind, MediaListRow, MediaSemanticState, WideMediaList};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use super::msg::{Msg, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ShellRequest};
@@ -527,6 +527,7 @@ pub(in crate::app) fn queue_media_rows(
                 trailing,
                 // Duration/elapsed is a right-aligned green element, not FOAM.
                 duration: (!time_text.is_empty()).then_some(time_text),
+                kind: MediaKind::Media,
                 semantic_state,
             }
         })

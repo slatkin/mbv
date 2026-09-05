@@ -121,6 +121,12 @@ pub fn fmt_duration_short(s: i64) -> String {
     }
 }
 
+/// Canonical media-list duration text: `fmt_duration_short` of `s` seconds,
+/// or `None` when `s` is not positive (no duration to show).
+pub fn list_duration_secs(s: i64) -> Option<String> {
+    (s > 0).then(|| fmt_duration_short(s))
+}
+
 /// Format duration without seconds — for video items in the queue and the
 /// hero meta row.
 /// Examples: "<1m", "37m", "1h12m", "2h15m".

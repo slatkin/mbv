@@ -18,7 +18,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
-    InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{Msg, ShellRequest};
@@ -209,6 +209,7 @@ impl FeedsComponent {
                         primary: entry.title.clone(),
                         trailing: None,
                         duration: (!duration.is_empty()).then_some(duration),
+                        kind: MediaKind::Media,
                         semantic_state: if entry.played {
                             MediaSemanticState::Played
                         } else {

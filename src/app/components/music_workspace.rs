@@ -13,7 +13,7 @@ use tuirealm::state::State;
 
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::media_list::{
-    InlineMediaBrowser, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
@@ -44,6 +44,7 @@ fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
                 primary: format!("{number}. {}", track.name),
                 trailing: None,
                 duration,
+                kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
             }
         })
