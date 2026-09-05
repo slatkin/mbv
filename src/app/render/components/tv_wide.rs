@@ -19,10 +19,12 @@ use ratatui::text::Span;
 use ratatui::widgets::{Block, Paragraph, Wrap};
 use ratatui::Frame;
 
-/// Fixed visible-row budget for the embedded episode `WideMediaList` box
-/// (task 4.2d): a season pill row plus this many episode rows, inset by the
-/// same recessed-box padding the overview box uses. Overflow scrolls through
-/// the canonical control rather than growing the box to fit every episode.
+/// Minimum visible-row floor for the embedded episode `WideMediaList` box
+/// (task 4.2d): a season pill row plus at least this many episode rows, inset
+/// by the same recessed-box padding the overview box uses. The box grows past
+/// this to fit every episode; `place_media_list_below` then clamps it to the
+/// pane's bottom edge, and the canonical control scrolls whatever still
+/// overflows.
 const EPISODE_LIST_VISIBLE_ROWS: u16 = 6;
 
 /// Blank rows between the overview box and the episode media-list box below
@@ -376,7 +378,11 @@ fn render_tv_series_selection(
     } else {
         0
     };
-    let media_list_height = EPISODE_LIST_VISIBLE_ROWS
+    // Size the box to every episode row, floored at the visible-row minimum;
+    // `place_media_list_below` clamps this to the pane bottom and the
+    // canonical list scrolls any remainder.
+    let media_list_height = (episodes.rows().len() as u16)
+        .max(EPISODE_LIST_VISIBLE_ROWS)
         .saturating_add(1) // season pill row
         .saturating_add(PANE_PAD_Y * 2);
     let slots = hero_left::hero_left_slots(area, artwork_height, images_enabled, None);
