@@ -80,7 +80,7 @@ two-column Browser painters. Queue calls neither; they do not call Queue.
 
 ## 4. One-painter and child-rect trace (4.2, direct source trace)
 
-`QueueComponent::view()` (`src/app/components/queue.rs:397-458`) is linear and
+`QueueComponent::view()` (`src/app/components/queue.rs:398-457`) is linear and
 executes at most one body painter per frame:
 
 1. `self.area = area; self.geometry = QueueRenderGeometry::default()` — never
