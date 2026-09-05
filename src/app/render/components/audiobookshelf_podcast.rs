@@ -451,7 +451,7 @@ fn render_podcast_hero(
     };
     // HeroImage is right-aligned by the painter; use the fixed cover width so
     // the full-width overview retains room for title and metadata.
-    let image = (wide && images_enabled).then_some(HeroImage {
+    let image = images_enabled.then_some(HeroImage {
         actual_w: SERIES_IMAGE_COLS,
         height: SERIES_IMAGE_ROWS,
     });

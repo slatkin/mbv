@@ -367,7 +367,7 @@ fn render_book_hero(
     focused: bool,
     show_title: bool,
     plan: &BookHeroPlan,
-    wide: bool,
+    _wide: bool,
 ) -> Option<super::home_hero::HomeImagePaint> {
     let book = state.selected_book()?;
     let mut meta = Vec::new();
@@ -410,7 +410,7 @@ fn render_book_hero(
     // HeroImage is right-aligned by the painter; keep its fixed cover width
     // separate from the full-width text area. The old slot calculation passed
     // the whole pane as the artwork width, leaving no room for text.
-    let (image_width, image_height) = if wide && plan.image_key.is_some() {
+    let (image_width, image_height) = if plan.image_key.is_some() {
         (plan.image_width, plan.image_height)
     } else {
         (0, 0)
