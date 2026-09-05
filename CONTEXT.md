@@ -284,8 +284,12 @@ A provider-neutral, one-column fixed-row TuiRealm Component embedded by a parent
 _Avoid_: generic list, two-column list, Inline Search
 
 **InlineMediaBrowser**:
-A provider-neutral, one-column TuiRealm Component that supports selected-row replacement while its parent owns content authority. Normal/Narrow hero-bearing browse surfaces use it for their one-column list. It is distinct from **Inline Search**, which is the global search surface and not a media-list control.
+A provider-neutral, one-column TuiRealm Component that supports selected-row replacement while its parent owns content authority. Normal/Narrow hero-bearing browse surfaces use it for their one-column list. It is distinct from **Inline Search**, which is a library-scoped search capability embedded in a searchable destination and not a media-list control.
 _Avoid_: Inline Search, detail panel, generic list
+
+**Inline Search**:
+A library-scoped search capability embedded in the selected searchable Emby destination. The destination owns the local search control, session, query, result selection, painting, and keyboard/mouse interpretation; the shell owns full-library fetches, recursive album indexing, stale-completion guards, navigation effects, and activation effects. Browser, MusicWorkspace, or TvWorkspace is the sole owner and painter for the current presentation; TV transfers one snapshot between Normal and Wide, while an ordinary tab change dismisses search. It is distinct from the cross-library **Search sidebar**.
+_Avoid_: global search, Search sidebar, search overlay
 
 **Emby podcast channel list**:
 The Emby-side list for browsing podcast channels. It is distinct from the Feeds Service tab and from the Emby homevideos feed view.
