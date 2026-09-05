@@ -277,27 +277,6 @@ fn wide_series_with_no_seasons_keeps_the_child_region_blank() {
 }
 
 #[test]
-fn wide_tv_selected_series_follows_inline_search_cursor() {
-    let mut second = make_item("Search Series", "Series");
-    second.id = "search-series".into();
-    let mut component = crate::app::components::InlineSearchComponent::new();
-    component.set_content(
-        crate::app::components::SearchPool::Items(vec![second.clone()]),
-        false,
-        true,
-    );
-    for key in "search".chars() {
-        component.on(&tuirealm::event::Event::Keyboard(
-            tuirealm::event::KeyEvent {
-                code: tuirealm::event::Key::Char(key),
-                modifiers: tuirealm::event::KeyModifiers::NONE,
-            },
-        ));
-    }
-    assert_eq!(component.selected_item().unwrap().id, second.id);
-}
-
-#[test]
 fn wide_tv_episode_list_uses_soft_accent_when_focused() {
     // A second episode (task 4.2d) so there is an unselected row: the
     // canonical episode `WideMediaList` paints its own selected-row

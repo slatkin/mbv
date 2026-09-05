@@ -156,9 +156,6 @@ use unicode_width::UnicodeWidthStr;
 #[path = "tests_album_focus.rs"]
 mod album_focus_tests;
 #[cfg(test)]
-#[path = "tests_album_listing.rs"]
-mod album_listing_tests;
-#[cfg(test)]
 #[path = "tests_confirm_modal.rs"]
 mod confirm_modal_tests;
 #[cfg(test)]

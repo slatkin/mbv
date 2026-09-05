@@ -189,9 +189,6 @@ impl Model {
                 ShellRequest::OpenInlineSearch => {
                     self.open_inline_search();
                 }
-                ShellRequest::InlineSearchDismiss => {
-                    self.dismiss_inline_search();
-                }
                 ShellRequest::InlineSearchActivate { id, item_type } => {
                     self.activate_inline_search_item(id, item_type);
                 }

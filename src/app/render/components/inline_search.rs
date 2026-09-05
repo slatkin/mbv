@@ -1,6 +1,6 @@
 //! Shared Inline Search painter (design.md D3): one bordered input box and
 //! the flat column-aware result list, placed by
-//! [`inline_search_areas`](crate::app::render::arrangements::inline_search::inline_search_areas)
+//! [`search_areas`](crate::app::render::arrangements::inline_search::search_areas)
 //! from the exact library-list area the destination owns. There is no Wide
 //! flag; the three-row input is admitted purely from available height.
 
@@ -11,7 +11,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 use crate::app::layout::LayoutMain;
-use crate::app::render::arrangements::inline_search::inline_search_areas;
+use crate::app::render::arrangements::inline_search::search_areas;
 use crate::app::render::palette;
 use crate::app::render::{render_generic_movies_home_video_rows_with_ctx, LibraryListRenderCtx};
 
@@ -62,7 +62,7 @@ pub(in crate::app) fn render_inline_search(
     columns: usize,
     layout: &mut LayoutMain,
 ) -> usize {
-    let areas = inline_search_areas(area);
+    let areas = search_areas(area);
     if let Some(input_area) = areas.input_area {
         render_inline_search_input(f, input_area, query, loading);
     }

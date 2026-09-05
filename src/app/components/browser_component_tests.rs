@@ -242,7 +242,7 @@ fn browser_control_transition_preserves_the_selected_viewport_offset() {
 fn browser_local_navigation_strides_one_column_for_wide_movies() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
     browser.set_content(BrowserContent::from_items(make_items(12)), true);
-    browser.set_wide_movies(false, false);
+    browser.configure_wide_movies(false, false);
     let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
     terminal
         .draw(|frame| browser.view(frame, frame.area()))

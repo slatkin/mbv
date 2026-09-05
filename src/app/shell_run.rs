@@ -5,18 +5,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 impl Model {
-    /// Project inline-search visibility from mounted component state.
-    /// Mount state is the only source of truth.
-    fn project_inline_search_active(&mut self) {
-        self.app.inline_search_active = matches!(
-            self.app.tab,
-            crate::app::TabSelection::EmbyLibrary(index)
-                if self.inline_search_component_id(index).is_some()
-        );
-    }
-
     pub(crate) fn sync_mounted_surfaces(&mut self) {
-        self.project_inline_search_active();
         // Apply App-owned effect handoffs to their mounted components.
         // `sync_home` was deleted (task 5.3d, sync_home mirror deletion):
         // Home content/focus is projected event-driven by
@@ -68,13 +57,6 @@ impl Model {
         // mount state, so the shell computes it once per frame (the deleted
         // App-level `blocking_overlay_active` adapter, task 5.3d).
         self.app.dim_backdrop_active = self.blocking_overlay_active();
-        // Same projection for the inline search: while a mounted
-        // `InlineSearchComponent` overlays `left_area`, the legacy
-        // `render_list` must not underpaint the ordinary browse list there.
-        // Mount state is the only source of truth (the `App` library-search
-        // state was removed), so compute it once per frame. Startup draws can
-        // reach this method before the first surface-sync pass.
-        self.project_inline_search_active();
         let cursor_scroll = self.app.tab.emby_library_index().and_then(|_| {
             self.emby_browser_component_id()
                 .and_then(|id| self.application.get_component(&id))

@@ -26,7 +26,6 @@ pub enum ComponentId {
     /// component type shadowing the other under a shared id.
     TvWorkspace(BrowserKey),
     Feeds,
-    InlineSearch(BrowserKey),
     Overlay(OverlayId),
     Modal(ModalId),
     Popup(PopupId),

@@ -1,6 +1,4 @@
-use super::components::{
-    BrowserComponent, BrowserKey, BrowserKind, ComponentId, InlineSearchComponent, ShellRequest,
-};
+use super::components::{BrowserComponent, BrowserKey, BrowserKind, ComponentId, ShellRequest};
 use super::shell::Model;
 use super::{ConfirmAction, ConfirmModal, PanelFocus, TabSelection};
 use crate::app::components::browser::{BrowserContent, BrowserIdentity};
@@ -274,7 +272,7 @@ impl Model {
     /// content every loop pass. This mirror applies the current library
     /// `render_ctx`, cursor and panel-focus flag idempotently, and is called
     /// at every writer seam that can change the active Emby library (the same
-    /// seams that re-project Home). `set_wide_movies` is NOT here — the wide
+    /// seams that re-project Home). `configure_wide_movies` is NOT here — the wide
     /// Movies rail stride is a per-draw layout fact pushed in
     /// `render_emby_browser_component` (D18 step 1).
     pub(super) fn push_emby_browser_content(&mut self) {
@@ -331,16 +329,6 @@ impl Model {
                 scroll,
             )
         };
-        // The mounted search owns the query/loading state; project it onto the
-        // browser context so its existing search-box seam is live.
-        if let Some(search_id) = self.inline_search_component_id(index) {
-            if let Some(comp) = self.application.get_component(&search_id) {
-                if let Some(search) = comp.as_any().downcast_ref::<InlineSearchComponent>() {
-                    let (query, loading) = search.search_state();
-                    context = context.with_search(query.to_owned(), loading);
-                }
-            }
-        }
         let content = BrowserContent::from_render_ctx(context);
         let identity = self.browse_identity(index);
         let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
@@ -435,7 +423,7 @@ impl Model {
             .map(|lib_idx| self.app.narrow_browse_extras(lib_idx, browser_cursor));
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {
-                browser.set_wide_movies(home_video, letter_pills);
+                browser.configure_wide_movies(home_video, letter_pills);
                 browser.set_use_nerd_fonts(self.app.use_nerd_fonts);
                 browser.set_images_enabled(self.app.images_enabled());
                 if let Some(extras) = narrow_extras {

@@ -1,12 +1,9 @@
 use super::components::inline_search::InlineSearchHost;
 use super::components::{
-    BrowserComponent, BrowserKey, BrowserKind, ComponentId, InlineSearchComponent,
-    MusicWorkspaceComponent, SearchPool, TvWorkspaceComponent,
+    BrowserComponent, ComponentId, MusicWorkspaceComponent, SearchPool, TvWorkspaceComponent,
 };
 use super::shell::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
-use mbv_core::config::ServiceKind;
-use ratatui::layout::Rect;
 
 impl Model {
     pub(crate) fn active_inline_search_is_open(&self) -> bool {
@@ -70,74 +67,6 @@ impl Model {
         false
     }
 
-    fn inline_search_expected_id(&self, index: usize) -> Option<ComponentId> {
-        let library = self.app.libs.get(index)?;
-        Some(ComponentId::InlineSearch(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: library.library.id.clone(),
-            kind: BrowserKind::from_collection_type(&library.library.collection_type),
-        }))
-    }
-
-    pub(super) fn inline_search_component_id(&self, index: usize) -> Option<ComponentId> {
-        let expected = self.inline_search_expected_id(index)?;
-        // `Some` exactly when the search for this library is mounted.
-        self.application.mounted(&expected).then_some(expected)
-    }
-
-    /// Remove searches left mounted for a library that is no longer active.
-    /// TuiRealm has no component enumeration, so derive every possible inline
-    /// search id from the current library list and use `mounted()` as the
-    /// registry source of truth.
-    fn unmount_stale_inline_searches(&mut self, keep: Option<&ComponentId>) {
-        let stale_ids: Vec<_> = self
-            .app
-            .libs
-            .iter()
-            .map(|library| {
-                ComponentId::InlineSearch(BrowserKey {
-                    service: ServiceKind::Emby,
-                    library_id: library.library.id.clone(),
-                    kind: BrowserKind::from_collection_type(&library.library.collection_type),
-                })
-            })
-            .filter(|id| keep != Some(id) && self.application.mounted(id))
-            .collect();
-        for id in stale_ids {
-            let _ = self.application.umount(&id);
-            self.unregister_destination(&id);
-        }
-    }
-
-    fn inline_search_area(&self) -> Rect {
-        let main = &self.app.layout.main;
-        if main.tv_wide_right_area.width > 0 {
-            main.tv_wide_right_area
-        } else if main.left_area.width > 0 && main.left_area.height > 0 {
-            main.left_area
-        } else {
-            main.wide_music_browser_area
-        }
-    }
-
-    /// Event-scoped projection replacing the deleted per-frame
-    /// `sync_inline_search`. Runs only where the search's inputs actually
-    /// change: `open_inline_search`, `activate_inline_search_item`, the
-    /// `SearchItemsLoaded` whole-library fetch completion (re-homed from the
-    /// deleted direct flat-result projector), async library completions in
-    /// the shell's `lib_rx` drain, and terminal resize. The projection is
-    /// deterministic in `App` state, so pushing the same value again is
-    /// idempotent; because the mounted search swallows keyboard and mouse
-    /// (D16), panel-focus, panel-mode and tab transitions are unreachable
-    /// while it is open except at those boundaries.
-    ///
-    /// Whether the flat (non-recursive) inline search needs its
-    /// whole-library fetch: `all_items` -- the full unfiltered pool backing
-    /// fuzzy search -- is missing from the current nav level, and the level
-    /// is not already fully materialized in `items`. The identical predicate
-    /// arms the load at `open_inline_search` and drives the component's
-    /// loading flag on every push: pending until the `SearchItemsLoaded`
-    /// completion writes `all_items`, then cleared (5.3d.20c).
     fn inline_search_needs_full_load(&self, index: usize) -> bool {
         self.app.libs[index].nav_stack.last().is_some_and(|level| {
             level.all_items.is_none()
@@ -305,10 +234,6 @@ impl Model {
         }
     }
 
-    pub(super) fn dismiss_inline_search(&mut self) {
-        let _ = self.with_active_inline_search_host(|host| host.close_inline_search());
-    }
-
     pub(super) fn activate_inline_search_item(&mut self, id: String, item_type: String) {
         let TabSelection::EmbyLibrary(lib_idx) = self.app.tab else {
             return;
@@ -390,166 +315,5 @@ impl Model {
         if pushes_inline_search {
             self.push_inline_search_content();
         }
-    }
-
-    pub(super) fn render_inline_search_component(&mut self, frame: &mut ratatui::Frame) {
-        let Some(id) = self.inline_search_component_id(match self.app.tab {
-            TabSelection::EmbyLibrary(index) => index,
-            _ => return,
-        }) else {
-            return;
-        };
-        let area = self.inline_search_area();
-        if area.width == 0 || area.height == 0 {
-            return;
-        }
-        let wide = self.app.layout.main.left_area.width > 0;
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(search) = comp.as_any_mut().downcast_mut::<InlineSearchComponent>() {
-                search.set_wide(wide);
-            }
-        }
-        self.application.view(&id, frame, area);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::render::make_movie_app;
-    use crate::app::tests::make_item;
-    use crate::app::{LibEvent, LibraryTab};
-    use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
-
-    #[test]
-    fn inline_library_search_shell_mounts_and_routes() {
-        let mut model = Model::new(make_movie_app());
-        model.open_inline_search();
-        let id = model
-            .inline_search_component_id(0)
-            .expect("inline Search component mounted");
-        assert!(model.application.mounted(&id));
-        let message = model
-            .application
-            .get_component_mut(&id)
-            .unwrap()
-            .on(&Event::Keyboard(KeyEvent {
-                code: Key::Down,
-                modifiers: KeyModifiers::NONE,
-            }));
-        assert_eq!(message, None);
-        assert!(model
-            .application
-            .get_component(&id)
-            .unwrap()
-            .as_any()
-            .downcast_ref::<InlineSearchComponent>()
-            .is_some());
-    }
-
-    #[test]
-    fn inline_search_tab_switch_unmounts_stale_component_before_open() {
-        let mut app = make_movie_app();
-        let mut stale_library = LibraryTab::new(app.libs[0].library.clone());
-        stale_library.library.id = "lib-stale".into();
-        app.libs.push(stale_library);
-        app.tab = TabSelection::EmbyLibrary(1);
-
-        let mut model = Model::new(app);
-        model.open_inline_search();
-        let stale_id = model
-            .inline_search_component_id(1)
-            .expect("stale inline Search component mounted");
-
-        model.handle_inline_search_lib_event(LibEvent::NavigateTo {
-            lib_idx: 0,
-            nav_stack: Vec::new(),
-            switch_tab: true,
-        });
-        assert!(!model.application.mounted(&stale_id));
-
-        model.open_inline_search();
-        let current_id = model
-            .inline_search_component_id(0)
-            .expect("current inline Search component mounted");
-        assert!(model.application.mounted(&current_id));
-    }
-
-    fn search_component<'a>(model: &'a Model, id: &ComponentId) -> &'a InlineSearchComponent {
-        model
-            .application
-            .get_component(id)
-            .unwrap()
-            .as_any()
-            .downcast_ref::<InlineSearchComponent>()
-            .unwrap()
-    }
-
-    #[test]
-    fn inline_search_items_loaded_rehomes_all_items_and_clears_loading() {
-        // Flat search that needs a whole-library fetch: the stub level is
-        // fully loaded (2/2), so under-cut its `total_count` to arm the
-        // `SearchItemsLoaded` load at open.
-        let mut app = make_movie_app();
-        app.libs[0]
-            .nav_stack
-            .last_mut()
-            .expect("stub browse level")
-            .total_count = 10;
-        let mut model = Model::new(app);
-        model.open_inline_search();
-        let id = model
-            .inline_search_component_id(0)
-            .expect("inline Search component mounted");
-        assert!(
-            search_component(&model, &id).test_loading(),
-            "load armed at open"
-        );
-
-        // Stale completion (nav level moved on): `all_items` untouched and
-        // the spinner stays up -- a stale write or early clear would wedge
-        // or corrupt the pool.
-        model.handle_inline_search_lib_event(LibEvent::SearchItemsLoaded {
-            lib_idx: 0,
-            parent_id: "stale-parent".into(),
-            items: vec![make_item("Stale", "Movie")],
-        });
-        assert!(
-            model.app.libs[0]
-                .nav_stack
-                .last()
-                .expect("browse level")
-                .all_items
-                .is_none(),
-            "stale completion must not write all_items"
-        );
-        assert!(
-            search_component(&model, &id).test_loading(),
-            "stale completion keeps loading"
-        );
-
-        // Correct completion: full items land in `all_items`, the component
-        // projects them, and loading clears (no wedge).
-        let fresh = vec![make_item("Alpha", "Movie"), make_item("Beta", "Movie")];
-        model.handle_inline_search_lib_event(LibEvent::SearchItemsLoaded {
-            lib_idx: 0,
-            parent_id: "lib-movies".into(),
-            items: fresh.clone(),
-        });
-        let level = model.app.libs[0].nav_stack.last().expect("browse level");
-        assert_eq!(
-            level.all_items.as_deref(),
-            Some(fresh.as_slice()),
-            "correct completion writes all_items"
-        );
-        assert!(
-            !search_component(&model, &id).test_loading(),
-            "correct completion must clear loading"
-        );
-        assert_eq!(
-            search_component(&model, &id).test_pool_item_ids(),
-            fresh.iter().map(|item| item.id.clone()).collect::<Vec<_>>(),
-            "full items projected into the component"
-        );
     }
 }

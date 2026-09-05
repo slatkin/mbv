@@ -125,7 +125,7 @@ fn mouse_eligibility_follows_breakpoint_and_overlay_lifecycle() {
 // one is ineligible while a blocking overlay covers it.
 #[test]
 fn phase4_surfaces_are_eligible_alone_and_ineligible_under_a_blocking_overlay() {
-    use crate::app::components::{ConfirmComponent, InlineSearchComponent, ModalId};
+    use crate::app::components::{ConfirmComponent, ModalId};
     use crate::app::SidebarId;
 
     let confirm_id = ComponentId::Modal(ModalId::Confirm);
@@ -178,29 +178,6 @@ fn phase4_surfaces_are_eligible_alone_and_ineligible_under_a_blocking_overlay() 
     mount_confirm(&mut model);
     model.sync_mouse_subscriptions();
     assert!(!model.mouse_subscribed.contains(&help_id));
-
-    // Inline search is a mounted destination child (rung 3), not an
-    // overlay — same eligibility, same blocking-overlay exclusion.
-    let mut model = eligibility_model();
-    let library = &model.app.libs[0].library;
-    let inline_id = ComponentId::InlineSearch(BrowserKey {
-        service: ServiceKind::Emby,
-        library_id: library.id.clone(),
-        kind: BrowserKind::from_collection_type(&library.collection_type),
-    });
-    model
-        .application
-        .mount(
-            inline_id.clone(),
-            Box::new(InlineSearchComponent::new()),
-            vec![],
-        )
-        .unwrap();
-    model.sync_mouse_subscriptions();
-    assert!(model.mouse_subscribed.contains(&inline_id));
-    mount_confirm(&mut model);
-    model.sync_mouse_subscriptions();
-    assert!(!model.mouse_subscribed.contains(&inline_id));
 }
 
 #[test]

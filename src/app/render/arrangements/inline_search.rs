@@ -12,7 +12,7 @@ pub(in crate::app) struct InlineSearchAreas {
 
 const INPUT_HEIGHT: u16 = 3;
 
-pub(in crate::app) fn inline_search_areas(area: Rect) -> InlineSearchAreas {
+pub(in crate::app) fn search_areas(area: Rect) -> InlineSearchAreas {
     if area.height < INPUT_HEIGHT {
         return InlineSearchAreas {
             input_area: None,
@@ -44,7 +44,7 @@ mod tests {
             width: 40,
             height: 10,
         };
-        let areas = inline_search_areas(area);
+        let areas = search_areas(area);
         assert_eq!(
             areas.input_area,
             Some(Rect {
@@ -73,7 +73,7 @@ mod tests {
             width: 40,
             height: 2,
         };
-        let areas = inline_search_areas(area);
+        let areas = search_areas(area);
         assert_eq!(areas.input_area, None);
         assert_eq!(areas.result_area, area);
     }

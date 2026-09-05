@@ -32,63 +32,6 @@ fn mounted_tv_model() -> Model {
 }
 
 #[test]
-fn sync_projects_inline_search_visibility_before_tv_content() {
-    let mut app = make_movie_app();
-    app.libs[0].library.collection_type = "tvshows".into();
-    app.libs[0].library_total = Some(1000);
-    for item in &mut app.libs[0].nav_stack[0].items {
-        item.item_type = "Series".into();
-    }
-    let mut second_app = make_movie_app();
-    let mut second = second_app.libs.remove(0);
-    second.library.collection_type = "tvshows".into();
-    second.library.id = "tv-library-b".into();
-    second.library_total = Some(1000);
-    for item in &mut second.nav_stack[0].items {
-        item.item_type = "Series".into();
-    }
-    app.libs.push(second);
-    // Wide breakpoint is now driven synchronously by terminal size
-    // (`prime_wide_tv_geometry`), not a previous-frame paint rect.
-    app.terminal_width = 160;
-    app.terminal_height = 40;
-    let mut model = Model::new(app);
-
-    // Simulate the stale projection left by a previous tick while A was active.
-    let search_id =
-        crate::app::components::ComponentId::InlineSearch(crate::app::components::BrowserKey {
-            service: mbv_core::config::ServiceKind::Emby,
-            library_id: model.app.libs[0].library.id.clone(),
-            kind: crate::app::components::BrowserKind::TvShows,
-        });
-    model
-        .application
-        .mount(
-            search_id,
-            Box::new(crate::app::components::InlineSearchComponent::new()),
-            vec![],
-        )
-        .unwrap();
-    model.app.inline_search_active = true;
-    model.app.tab = TabSelection::EmbyLibrary(1);
-    model.sync_mounted_surfaces();
-
-    let id = model
-        .tv_workspace_id
-        .as_ref()
-        .expect("TV workspace mounted");
-    let component = model
-        .application
-        .get_component(id)
-        .expect("TV workspace component mounted")
-        .as_any()
-        .downcast_ref::<TvWorkspaceComponent>()
-        .expect("TV workspace component type");
-    assert!(component.show_letter_pills());
-    assert!(!model.app.inline_search_active);
-}
-
-#[test]
 fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
     let mut model = mounted_tv_model();
     model.app.image_protocol_enabled = true;

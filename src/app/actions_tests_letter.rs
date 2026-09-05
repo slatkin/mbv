@@ -117,36 +117,6 @@ fn should_show_letter_pills_true_for_any_captured_total() {
 }
 
 #[test]
-fn should_show_letter_pills_false_while_inline_search_active() {
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("movies"));
-    push_top_level(&mut app.libs[0], 10);
-    app.libs[0].library_total = Some(1000);
-
-    assert!(app.should_show_letter_pills(0));
-    app.inline_search_active = true;
-    assert!(!app.should_show_letter_pills(0));
-}
-
-#[test]
-fn select_letter_pill_is_noop_while_inline_search_active() {
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("movies"));
-    push_top_level(&mut app.libs[0], 10);
-    app.libs[0].library_total = Some(1000);
-    app.inline_search_active = true;
-
-    app.select_letter_pill(0, 0);
-
-    assert!(app.libs[0]
-        .nav_stack
-        .last()
-        .unwrap()
-        .letter_filter
-        .is_none());
-}
-
-#[test]
 fn should_show_letter_pills_excludes_music_and_drilldowns() {
     let mut app = make_app_stub();
     app.libs.push(lib_tab("music"));

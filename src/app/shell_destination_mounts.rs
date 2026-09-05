@@ -19,7 +19,7 @@ impl Model {
     /// Every Service library id currently in the catalog (`App::libs` plus
     /// `App::audiobookshelf_libraries`), independent of the active tab or
     /// view mode. `reconcile_destination_mounts` retires any mounted
-    /// `Browser` / `InlineSearch` component whose `BrowserKey::library_id`
+    /// `Browser` component whose `BrowserKey::library_id`
     /// is not in this set.
     pub(super) fn live_library_ids(&self) -> HashSet<&str> {
         self.app
@@ -38,10 +38,8 @@ impl Model {
     /// Retire destination components whose Service library left the catalog.
     /// Iterates the maintained `mounted_destinations` registry (TuiRealm's
     /// `Application` has no component enumeration), so stale discovery is
-    /// complete: it finds a retired library's mounted `InlineSearch` with no
-    /// `Model` pointer, and a retired `Browser` whose pointer was already
+    /// complete: it finds a retired `Browser` whose pointer was already
     /// cleared by a narrow/drill transition. Each mounted `Browser(key)` /
-    /// `InlineSearch(key)` whose `key.library_id` has no live library is
     /// `umount`ed, its registry entry removed, and any active-destination
     /// pointer still equal to it cleared to `None`.
     ///
@@ -54,9 +52,7 @@ impl Model {
             .mounted_destinations
             .iter()
             .filter_map(|id| match id {
-                ComponentId::Browser(key)
-                | ComponentId::TvWorkspace(key)
-                | ComponentId::InlineSearch(key)
+                ComponentId::Browser(key) | ComponentId::TvWorkspace(key)
                     if !live.contains(key.library_id.as_str()) =>
                 {
                     Some(id.clone())
@@ -73,17 +69,10 @@ impl Model {
 
     /// Record a destination component as mounted in the maintained registry.
     /// Called at every destination `mount` site (Emby browser, TV, Music, ABS
-    /// podcast, ABS book, inline search) so the registry is the shell's
+    /// podcast, and ABS book) so the registry is the shell's
     /// source of truth for stale-discovery.
     pub(super) fn register_destination(&mut self, id: &ComponentId) {
         self.mounted_destinations.insert(id.clone());
-    }
-
-    /// Forget a destination component from the maintained registry. Called at
-    /// every destination `umount` site (including `dismiss_inline_search`)
-    /// alongside the `application.umount`.
-    pub(super) fn unregister_destination(&mut self, id: &ComponentId) {
-        self.mounted_destinations.remove(id);
     }
 
     /// Clear any active-destination pointer still equal to `id` (the shell's
@@ -219,68 +208,6 @@ mod tests {
     }
 
     #[test]
-    fn reconcile_keeps_inline_search_of_live_library() {
-        let mut model = two_browser_model(1); // keep lib-series, drop lib-movies
-        let inline_id = ComponentId::InlineSearch(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: "lib-series".into(),
-            kind: BrowserKind::TvShows,
-        });
-        model
-            .application
-            .mount(
-                inline_id.clone(),
-                Box::new(crate::app::components::InlineSearchComponent::new()),
-                vec![],
-            )
-            .expect("mount inline search");
-        model.register_destination(&inline_id);
-        let retired = browser_id("lib-movies", BrowserKind::Generic);
-
-        model.reconcile_destination_mounts();
-
-        assert!(model.application.mounted(&inline_id));
-        assert!(!model.application.mounted(&retired));
-        assert_eq!(model.emby_browser_id, None);
-    }
-
-    /// Reviewer block regression: a stale mounted `InlineSearch` whose
-    /// library left the catalog is retired even when no `Model` pointer names
-    /// it (inline searches have no `*_id` field).
-    #[test]
-    fn reconcile_retires_unpointed_stale_inline_search() {
-        let mut model = two_browser_model(0); // keep lib-movies, drop lib-series
-                                              // No Model pointer: mount an inline search for the retired library.
-        let stale_inline = ComponentId::InlineSearch(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: "lib-series".into(),
-            kind: BrowserKind::TvShows,
-        });
-        model
-            .application
-            .mount(
-                stale_inline.clone(),
-                Box::new(crate::app::components::InlineSearchComponent::new()),
-                vec![],
-            )
-            .expect("mount stale inline search");
-        model.register_destination(&stale_inline);
-        // No pointer references the stale inline search (it has none).
-
-        model.reconcile_destination_mounts();
-
-        assert!(
-            !model.application.mounted(&stale_inline),
-            "unpointed stale InlineSearch must be retired"
-        );
-        assert!(!model.mounted_destinations.contains(&stale_inline));
-    }
-
-    /// Reviewer block regression: a stale mounted `Browser` whose library
-    /// left the catalog is retired even when its `*_id` pointer was already
-    /// cleared by a narrow/drill transition (the pointer is `None`, so the
-    /// registry is the only discovery source).
-    #[test]
     fn reconcile_retires_unpointed_stale_browser() {
         let mut model = two_browser_model(0); // keep lib-movies, drop lib-series
         let stale_browser = browser_id("lib-series", BrowserKind::TvShows);
@@ -380,7 +307,7 @@ mod tests {
 
         // Generic view: the Emby browser gate excludes the Music kind, so no
         // second destination mounts for the same library — at most one
-        // non-InlineSearch destination per library_id at a time (D1
+        // non-search destination per library_id at a time (D1
         // mutual-exclusion mitigation).
         model.sync_emby_browser();
         assert_eq!(model.emby_browser_id, None);
@@ -432,9 +359,7 @@ mod tests {
 
     fn library_id_of(id: &ComponentId) -> &str {
         match id {
-            ComponentId::Browser(key)
-            | ComponentId::TvWorkspace(key)
-            | ComponentId::InlineSearch(key) => &key.library_id,
+            ComponentId::Browser(key) | ComponentId::TvWorkspace(key) => &key.library_id,
             _ => panic!("expected a destination id"),
         }
     }

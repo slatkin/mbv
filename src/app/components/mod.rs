@@ -52,7 +52,7 @@ pub use self::feeds::FeedsComponent;
 pub use self::feeds_manage::FeedsManageComponent;
 pub use self::help::HelpComponent;
 pub use self::home::HomeComponent;
-pub(in crate::app) use self::inline_search::{InlineSearchComponent, SearchPool};
+pub(in crate::app) use self::inline_search::{InlineSearchHost, SearchPool};
 pub use self::library_routes::LibraryRoutesComponent;
 pub use self::mouse::{mouse_event_clause, mouse_sub};
 pub use self::msg::{

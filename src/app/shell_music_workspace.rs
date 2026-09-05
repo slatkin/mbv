@@ -1,4 +1,6 @@
-use super::components::{BrowserKey, BrowserKind, ComponentId, MusicWorkspaceComponent};
+use super::components::{
+    BrowserKey, BrowserKind, ComponentId, InlineSearchHost, MusicWorkspaceComponent,
+};
 use super::render::{shared_hero_presentation, MusicWideRenderCtx};
 use super::shell::Model;
 use super::TabSelection;
@@ -201,7 +203,11 @@ impl Model {
                     })
                 });
             let context = self.app.wide_music_render_ctx(lib_idx, cursor_scroll);
-            search_active = self.inline_search_component_id(lib_idx).is_some();
+            search_active = self
+                .application
+                .get_component(id)
+                .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
+                .is_some_and(|music| music.inline_search().is_active());
             context.publish_geometry(area, &mut self.app.layout.main);
         }
         self.application.view(id, frame, area);

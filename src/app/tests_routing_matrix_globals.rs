@@ -167,19 +167,6 @@ fn library_tab_jump_does_not_fire_in_search_sidebar() {
     );
 }
 #[test]
-fn quit_global_does_not_fire_in_inline_search() {
-    let focused = ComponentId::InlineSearch(browser_key());
-    assert_eq!(
-        resolve_router_outcome_with_focused(
-            key(KeyCode::Char('q')),
-            &text_entry_snapshot(),
-            Some(&focused),
-        ),
-        RouterOutcome::FallThrough,
-        "`q` is character input in inline library search, not Quit"
-    );
-}
-#[test]
 fn library_tab_jump_with_modifiers_is_swallowed() {
     let focused = ComponentId::Browser(browser_key());
     assert_eq!(

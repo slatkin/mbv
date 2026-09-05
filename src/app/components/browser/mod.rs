@@ -100,7 +100,6 @@ pub struct BrowserComponent {
     /// is its sole event boundary: it gets keyboard/mouse first refusal while
     /// active and is painted at the existing list composition point instead
     /// of the ordinary rows. Section 2 embeds this alongside the still-live
-    /// mounted `InlineSearchComponent` overlay; Section 3 rewires the shell
     /// to talk to this control instead and Section 4 deletes the overlay.
     inline_search: InlineSearch,
 }
@@ -378,7 +377,7 @@ impl BrowserComponent {
 
     /// Records the wide layout's pill-row presentation from validated shell
     /// content; whether the layout is wide is derived locally in `view()`.
-    pub(in crate::app) fn set_wide_movies(&mut self, home_video: bool, letter_pills: bool) {
+    pub(in crate::app) fn configure_wide_movies(&mut self, home_video: bool, letter_pills: bool) {
         self.wide_movies_home_video = home_video;
         self.wide_movies_letter_pills = letter_pills;
     }
