@@ -145,12 +145,6 @@ pub struct App {
     pub(super) layout: layout::AppLayout,
     pub(super) terminal_width: u16,
     pub(super) terminal_height: u16,
-    // TODO(task 6.3): remove once no mouse surface uses the shell double-click clock
-    #[allow(dead_code)]
-    pub(super) last_click_time: Instant,
-    // TODO(task 6.3): remove once no mouse surface uses the shell double-click clock
-    #[allow(dead_code)]
-    pub(super) last_click_pos: (u16, u16),
     pub(super) last_space_press: Option<Instant>,
     pub(super) last_esc_press: Option<Instant>,
     /// Shell handoff for a modal raised by App-owned effects. The mounted
@@ -326,7 +320,6 @@ pub struct App {
     /// (mini-view "On Now", standard title row, idle feed title).
     pub(super) marquee_text: String,
     pub(super) marquee_started_at: std::time::Instant,
-    pub(super) last_scroll_at: Instant,
     pub(super) last_nav_at: Instant,
     pub(super) last_library_nav_at: Instant,
     /// Set by an authoritative `queue_cursor` write (follow-the-playhead,

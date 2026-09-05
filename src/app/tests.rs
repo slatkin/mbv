@@ -205,10 +205,8 @@ pub(crate) fn make_app_stub() -> App {
         terminal_width: 80,
         terminal_height: 24,
 
-        last_click_time: std::time::Instant::now(),
         last_space_press: None,
         last_esc_press: None,
-        last_click_pos: (u16::MAX, u16::MAX),
         pending_overlay: None,
         pending_exit_message: None,
         pending_delete_slot: None,
@@ -314,7 +312,6 @@ pub(crate) fn make_app_stub() -> App {
         suspended_local: None,
         active_route: None,
         library_route_cache: std::collections::HashMap::new(),
-        last_scroll_at: Instant::now() - Duration::from_secs(1),
         last_nav_at: Instant::now() - Duration::from_secs(1),
         last_library_nav_at: Instant::now() - Duration::from_secs(1),
         queue_cursor_pushed: false,

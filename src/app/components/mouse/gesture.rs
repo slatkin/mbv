@@ -19,13 +19,8 @@
 //!
 //! ## Chosen intervals
 //!
-//! * **Double-click window: 400 ms**, exact-position match. This matches the
-//!   existing shell precedent `App::note_browse_double_click`
-//!   (`src/app/mouse_gestures.rs`, `Duration::from_millis(400)` +
-//!   `last_click_pos == (col, row)`), so migrated surfaces keep identical
-//!   behaviour until task 6.3 deletes that glue.
-//! * **Wheel throttle: 30 ms**, matching `App::note_browse_scroll`
-//!   (`Duration::from_millis(30)`). The run loop ticks with
+//! * **Double-click window: 400 ms**, exact-position match (legacy standard).
+//! * **Wheel throttle: 30 ms** (legacy standard). The run loop ticks with
 //!   `PollStrategy::Once(poll_timeout)` where `poll_timeout` is 50 ms normally
 //!   and 8 ms while the visualizer runs (`src/app/shell_run.rs:497`). At the
 //!   50 ms cadence a terminal wheel burst (crossterm coalesces several

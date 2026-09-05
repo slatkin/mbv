@@ -52,28 +52,6 @@ impl App {
         }
     }
 
-    // TODO(task 6.3): remove once no mouse surface uses the shell double-click clock
-    #[allow(dead_code)]
-    pub(super) fn note_browse_double_click(&mut self, col: u16, row: u16) -> bool {
-        let now = Instant::now();
-        let is_double = now.duration_since(self.last_click_time) < Duration::from_millis(400)
-            && self.last_click_pos == (col, row);
-        self.last_click_time = now;
-        self.last_click_pos = (col, row);
-        is_double
-    }
-
-    // TODO(task 6.3): remove with the remaining shell-side mouse clock.
-    #[allow(dead_code)]
-    pub(super) fn note_browse_scroll(&mut self) -> bool {
-        let now = Instant::now();
-        let allow = now.duration_since(self.last_scroll_at) >= Duration::from_millis(30);
-        if allow {
-            self.last_scroll_at = now;
-        }
-        allow
-    }
-
     pub(super) fn handle_mouse_scroll_queue(&mut self, delta: i64) {
         let n = self.displayed_queue().total_queue_len();
         if n > 0 {
