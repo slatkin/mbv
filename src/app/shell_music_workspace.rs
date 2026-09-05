@@ -187,6 +187,7 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
+        let mut search_active = false;
         if let Some(lib_idx) = self.app.tab.emby_library_index() {
             let cursor_scroll = self
                 .application
@@ -200,14 +201,8 @@ impl Model {
                     })
                 });
             let context = self.app.wide_music_render_ctx(lib_idx, cursor_scroll);
+            search_active = context.list.is_search_active();
             context.publish_geometry(area, &mut self.app.layout.main);
-            if !wide && self.app.images_enabled() {
-                self.app.prewarm_grouped_music_album_images(
-                    &context.list.items,
-                    context.list.cursor(),
-                    &context.album_order,
-                );
-            }
         }
         self.application.view(id, frame, area);
         let projection = self
@@ -217,13 +212,28 @@ impl Model {
             .map(|music| {
                 let image_paint = music.take_image_paint();
                 let layout = music.layout();
+                let (album_cursor, album_order) = music.painted_album_cursor_and_order();
                 (
                     image_paint,
                     layout.wide_music_track_hitmap.clone(),
                     layout.selected_item_rect,
+                    album_cursor,
+                    album_order.to_vec(),
                 )
             });
-        if let Some((image_paint, track_hitmap, selected_item_rect)) = projection {
+        if let Some((image_paint, track_hitmap, selected_item_rect, album_cursor, album_order)) =
+            projection
+        {
+            if self.app.images_enabled() && !search_active {
+                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                    let context = self.app.wide_music_render_ctx(lib_idx, None);
+                    self.app.prewarm_grouped_music_album_images(
+                        &context.list.items,
+                        album_cursor,
+                        &album_order,
+                    );
+                }
+            }
             self.app.paint_music_image(frame, image_paint);
             if wide {
                 self.app.layout.main.wide_music_track_hitmap = track_hitmap;

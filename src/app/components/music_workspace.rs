@@ -296,6 +296,10 @@ impl MusicWorkspaceComponent {
         self.album_scroll
     }
 
+    pub(in crate::app) fn painted_album_cursor_and_order(&self) -> (usize, &[usize]) {
+        (self.album_cursor, &self.context.album_order)
+    }
+
     /// The album item under the component's own album cursor, cloned out of
     /// the cached render context. Mirrors `TvWorkspaceComponent::selected_item()`
     /// for outcome 3 readers (R16/R18): the shell supplies this instead of
