@@ -655,7 +655,7 @@ impl Component for BrowserComponent {
         // for the shared split), paint the full hero + pills + list layout
         // itself instead of just the inner list rows; otherwise keep the
         // narrow list-row behavior.
-        self.scroll = if wide {
+        let rendered_scroll = if wide {
             self.render_wide_movies(frame, area, &context)
         } else if self.inline_search.is_active() {
             // Normal/non-Hero catalogs pass their whole list area to the
@@ -669,11 +669,7 @@ impl Component for BrowserComponent {
             let list_area = if self.narrow_extras.show_letter_pills
                 || self.narrow_extras.feed_items.is_some()
             {
-                ratatui::layout::Rect {
-                    y: area.y.saturating_add(1),
-                    height: area.height.saturating_sub(1),
-                    ..area
-                }
+                crate::app::render::arrangements::hero_left::pill_bar_areas(area).content_area
             } else {
                 area
             };
@@ -717,6 +713,9 @@ impl Component for BrowserComponent {
             }
             scroll
         };
+        if !self.inline_search.is_active() {
+            self.scroll = rendered_scroll;
+        }
 
         // Adopt the selector-pill rects the composer just painted into the
         // irregular-chrome registry (design.md D6). `selector_tabs` is the

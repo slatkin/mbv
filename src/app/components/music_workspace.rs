@@ -607,7 +607,9 @@ impl Component for MusicWorkspaceComponent {
                 &mut self.track_list,
                 &mut self.inline_search,
             );
-            self.album_scroll = output.final_scroll;
+            if !self.inline_search.is_active() {
+                self.album_scroll = output.final_scroll;
+            }
             self.image_paint = output.image_paint;
             self.wide_viewport_height = self.layout.wide_music_browser_area.height as usize;
             self.wide_selected_row_offset = self

@@ -184,7 +184,7 @@ pub(in crate::app) struct HeroOnLeftRightPane {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app::render) struct PillBarAreas {
+pub(in crate::app) struct PillBarAreas {
     pub pills_area: Rect,
     pub spacer_area: Rect,
     pub content_area: Rect,
@@ -192,7 +192,7 @@ pub(in crate::app::render) struct PillBarAreas {
 
 /// Places the shared one-row pill bar, its one-row parent-background spacer,
 /// and the content below them.
-pub(in crate::app::render) fn pill_bar_areas(area: Rect) -> PillBarAreas {
+pub(in crate::app) fn pill_bar_areas(area: Rect) -> PillBarAreas {
     let reserved = HERO_ON_LEFT_PILLS_ROW_HEIGHT + HERO_ON_LEFT_PILLS_GAP_ROWS;
     PillBarAreas {
         pills_area: Rect {

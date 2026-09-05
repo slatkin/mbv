@@ -542,7 +542,9 @@ impl Component for TvWorkspaceComponent {
             &mut self.episodes,
             &mut self.inline_search,
         );
-        self.list.set_scroll(scroll);
+        if !self.inline_search.is_active() {
+            self.list.set_scroll(scroll);
+        }
         self.cursor = self.list.cursor();
         self.image_paint = image_paint;
 
