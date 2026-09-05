@@ -173,7 +173,9 @@
   #638's own gate to clear, not standardize-hero-on-left-pane's. fmt/clippy/nextest/file-lines all
   pass clean; clippy's one new-looking `if_same_then_else` in `home_hero_emby.rs:220` was traced to
   pre-existing code at `d2b5add8`, moved verbatim by 4.8's file split — not introduced here.
-- [ ] 6.4 SHRUNK FROM SCOPE (2026-09-05, user decision): one manual pass, not a full
+- [x] 6.4 SHRUNK FROM SCOPE (2026-09-05, user decision): one manual pass, not a full
   selection-state matrix. Run the app, view all seven destinations once at Wide geometry with an
   artwork-less item and images off — confirm each shows a filled pane and no right-column
-  backdrop bleed, and that Feeds' new image region and main content box look intended.
+  backdrop bleed, and that Feeds' new image region and main content box look intended. **Result:**
+  user's live pass caught the Music track-list recessed-box regression (fixed in 36b71b28 +
+  debf0180); remaining six destinations pass.
