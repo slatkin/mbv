@@ -54,7 +54,7 @@ impl App {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        let narrow_with_hero = !self.layout.main.is_wide_book_active()
+        let narrow_with_hero = !self.is_right_panel_wide()
             && self.layout.main.hero_area.width > 0
             && self.layout.main.hero_area.height > 0;
         if narrow_with_hero {

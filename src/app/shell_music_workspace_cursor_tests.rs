@@ -110,9 +110,9 @@ fn wide_music_workspace_allows_enter_for_inline_track_focus() {
         .app
         .album_tracks_cache
         .insert("album-1".into(), vec![track]);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
-    assert!(model.app.layout.main.is_wide_music_active());
+    model.app.terminal_width = 160;
+    model.app.terminal_height = 40;
+    assert!(model.app.is_right_panel_wide());
     model.sync_music_workspace();
     let id = model
         .music_workspace_id
@@ -171,8 +171,8 @@ fn recursive_album_activation_enters_track_focus_only_in_wide() {
         "narrow keeps inline track focus explicitly off"
     );
 
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.app.terminal_width = 160;
+    model.app.terminal_height = 40;
     model.music_track_focus_request = Some(true);
     model.push_music_workspace_content();
     let component = model

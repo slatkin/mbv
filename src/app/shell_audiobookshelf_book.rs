@@ -38,7 +38,7 @@ impl Model {
                     }
                 }
                 AudiobookshelfBookIntent::Activate => {
-                    if self.app.layout.main.is_wide_book_active() {
+                    if self.app.is_right_panel_wide() {
                         if let Some(index) = self.app.tab.audiobookshelf_index() {
                             self.app.play_selected_audiobookshelf_book(index);
                         }

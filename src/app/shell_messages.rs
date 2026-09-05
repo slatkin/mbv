@@ -29,7 +29,7 @@ impl Model {
                             })
                             .and_then(|comp| comp.selected_item());
                         if let Some(album) = album {
-                            if !self.app.layout.main.is_wide_music_active() {
+                            if !self.app.is_right_panel_wide() {
                                 self.app.open_album_selection_modal(&album);
                             }
                         }

@@ -140,7 +140,7 @@ impl Model {
             }
         }
         let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index, cursor_scroll);
-        let wide = self.app.layout.main.is_wide_music_active();
+        let wide = self.app.is_right_panel_wide();
         // Grouped Music paints one full-width album row at a time in both
         // presentations, so navigation uses the same one-dimensional geometry.
         let columns = 1;

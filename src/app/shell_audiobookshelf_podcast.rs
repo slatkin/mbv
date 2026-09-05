@@ -46,7 +46,7 @@ impl Model {
                 if let Some(episode_index) = episode {
                     self.app
                         .play_selected_audiobookshelf_episode(index, episode_index, filter);
-                } else if self.app.layout.main.is_wide_podcast_active() {
+                } else if self.app.is_right_panel_wide() {
                     if let Some(component) = self.abs_podcast_component_mut(index) {
                         // Re-homed onto the mounted component (task 5.3d.11 U2),
                         // same as FocusOrPlay.

@@ -202,7 +202,7 @@ impl App {
     pub(super) fn activate_album_folder_row(&mut self, album: Option<EmbyItem>) {
         // Outcome 3 reader: the caller resolves the selected album (from the
         // mounted component's cursor, or the clicked row index for mouse).
-        if self.layout.main.is_wide_music_active() {
+        if self.is_right_panel_wide() {
             return;
         }
         if let Some(album) = album {
