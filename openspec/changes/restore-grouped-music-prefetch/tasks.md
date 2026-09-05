@@ -1,7 +1,7 @@
 ## 1. Component read-back
 
-- [ ] 1.1 Expose the painted album cursor and display order from `MusicWorkspaceComponent` via a read-only accessor, and verify the existing music workspace tests pass (`cargo nextest run -p mbv -- music_workspace`)
-- [ ] 1.2 Rewire `render_music_workspace_component` to prewarm from the post-`view` painted cursor/order for both breakpoints with the search-active skip, and verify the existing narrow prefetch test still passes
+- [x] 1.1 Expose the painted album cursor and display order from `MusicWorkspaceComponent` via a read-only accessor, and verify the existing music workspace tests pass (`cargo nextest run -p mbv -- music_workspace`)
+- [x] 1.2 Rewire `render_music_workspace_component` to prewarm from the post-`view` painted cursor/order for both breakpoints with the search-active skip, and verify the existing narrow prefetch test still passes
 
 ## 2. Prefetch coverage tests
 
