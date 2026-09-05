@@ -1,3 +1,4 @@
+use super::inline_search::{InlineSearchHost, SearchPool};
 use super::msg::{Msg, ShellRequest, TvHit};
 use super::tv_workspace::TvWorkspaceComponent;
 use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
@@ -388,6 +389,73 @@ fn slash_emits_open_inline_search() {
             modifiers: KeyModifiers::NONE
         })),
         Some(Msg::Shell(ShellRequest::OpenInlineSearch))
+    );
+}
+
+/// Hero-on-left Wide paints Inline Search in the right rail (design.md D3):
+/// the shared bordered input/result painter lands in the series rail, not
+/// the episode/Hero pane to its left, which remains visible.
+#[test]
+fn wide_tv_search_paints_in_right_rail_not_left_pane() {
+    let mut component = TvWorkspaceComponent::new();
+    let mut series = make_item("Series", "Series");
+    series.id = "series-id".into();
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series], 0, 0),
+        None,
+        None,
+        0,
+        None,
+        true,
+        false,
+    ));
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(component.inline_search().is_active());
+    component
+        .inline_search_mut()
+        .set_pool(SearchPool::Items(vec![make_item(
+            "Search Result Alpha",
+            "Series",
+        )]));
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+
+    let list_area = component.inline_search().layout().left_area;
+    let left_pane = component.test_layout().tv_wide_left_area;
+    assert!(list_area.width > 0 && list_area.height > 0);
+    assert!(
+        list_area.x >= left_pane.x + left_pane.width,
+        "search paints in the right rail, after the episode/Hero pane: \
+         list_area={list_area:?} left_pane={left_pane:?}"
+    );
+
+    let buffer = terminal.backend().buffer();
+    let mut found_in_rail = false;
+    let mut found_in_left_pane = false;
+    for y in list_area.y..list_area.y + list_area.height {
+        let rail_row: String = (list_area.x..list_area.x + list_area.width)
+            .map(|x| buffer.cell((x, y)).unwrap().symbol())
+            .collect();
+        if rail_row.contains("Search Result Alpha") {
+            found_in_rail = true;
+        }
+        let left_row: String = (left_pane.x..left_pane.x + left_pane.width)
+            .map(|x| buffer.cell((x, y)).unwrap().symbol())
+            .collect();
+        if left_row.contains("Search Result Alpha") {
+            found_in_left_pane = true;
+        }
+    }
+    assert!(found_in_rail, "search result row painted in the right rail");
+    assert!(
+        !found_in_left_pane,
+        "search result must not paint in the episode/Hero pane"
     );
 }
 

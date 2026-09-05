@@ -1,9 +1,30 @@
 use tuirealm::event::Key;
 
+use super::super::inline_search::InlineSearchAction;
 use super::{Msg, Pane, ShellRequest, TvWorkspaceComponent};
 
 impl TvWorkspaceComponent {
     pub(super) fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
+        // Inline Search gets first refusal while active (design.md D4): the
+        // component returns immediately after delegating, even when search
+        // consumes the key without producing a message.
+        if self.inline_search.is_active() {
+            return match self.inline_search.handle_key(key) {
+                Some(InlineSearchAction::Activate { id, item_type }) => {
+                    Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+                        id,
+                        item_type,
+                    }))
+                }
+                Some(InlineSearchAction::Dismiss) => {
+                    // Escape/empty-query Backspace dismiss locally
+                    // (design.md D4); no shell effect.
+                    self.inline_search.close();
+                    None
+                }
+                None => None,
+            };
+        }
         if !self.context.focused {
             return None;
         }
@@ -146,7 +167,10 @@ impl TvWorkspaceComponent {
             Key::Char('.') => Some(ShellRequest::EmbyLibraryContextMenu {
                 item: self.selected_item()?,
             }),
-            Key::Char('/') => Some(ShellRequest::OpenInlineSearch),
+            Key::Char('/') => {
+                self.inline_search.open();
+                Some(ShellRequest::OpenInlineSearch)
+            }
             Key::Char(c @ ('[' | ']'))
                 if !key
                     .modifiers

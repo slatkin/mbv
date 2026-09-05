@@ -14,6 +14,7 @@ use tuirealm::state::State;
 
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 
+use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::media_list::{MediaListRow, MediaSemanticState, WideMediaList};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
@@ -66,6 +67,9 @@ pub struct TvWorkspaceComponent {
     /// blank Episodes-pane fallback is resolved directly against
     /// `tv_wide_left_area` in `resolve_hit`.
     tv_chrome: HitRegions<TvHit>,
+    /// The embedded Inline Search control (design.md D1). See
+    /// `BrowserComponent::inline_search` for the migration-phase notes.
+    inline_search: InlineSearch,
 }
 
 /// Build the embedded episode `WideMediaList`'s rows from a season's
@@ -124,6 +128,7 @@ impl TvWorkspaceComponent {
             viewport_height: 1,
             mouse_gestures: MouseGestureState::new(),
             tv_chrome: HitRegions::new(),
+            inline_search: InlineSearch::new(),
         }
     }
 
@@ -379,6 +384,13 @@ impl TvWorkspaceComponent {
     /// — except the context-menu anchor (design.md D4). A left click moves
     /// the component's local pane + pane cursor; a right click never does.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        // Inline Search gets first refusal while active (design.md D6): it
+        // is painted over the same area the series rail would occupy, so
+        // the rail never mutates for points there.
+        if self.inline_search.is_active() {
+            self.inline_search.handle_mouse(mouse);
+            return None;
+        }
         // TV does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
@@ -492,6 +504,16 @@ impl Default for TvWorkspaceComponent {
     }
 }
 
+impl InlineSearchHost for TvWorkspaceComponent {
+    fn inline_search(&self) -> &InlineSearch {
+        &self.inline_search
+    }
+
+    fn inline_search_mut(&mut self) -> &mut InlineSearch {
+        &mut self.inline_search
+    }
+}
+
 impl Component for TvWorkspaceComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.viewport_height = area.height as usize;
@@ -518,6 +540,7 @@ impl Component for TvWorkspaceComponent {
             &mut self.layout,
             &mut self.list,
             &mut self.episodes,
+            &mut self.inline_search,
         );
         self.list.set_scroll(scroll);
         self.cursor = self.list.cursor();

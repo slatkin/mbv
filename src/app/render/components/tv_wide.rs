@@ -1,3 +1,4 @@
+use crate::app::components::inline_search::InlineSearch;
 use crate::app::components::media_list::WideMediaList;
 use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::hero_left::{
@@ -211,6 +212,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     layout: &mut LayoutMain,
     media_list: &mut WideMediaList<String>,
     episodes: &mut WideMediaList<String>,
+    inline_search: &mut InlineSearch,
 ) -> (usize, Option<HomeImagePaint>) {
     layout.tv_wide_episode_list_area = Rect::default();
     layout.tv_wide_season_tabs.clear();
@@ -298,28 +300,55 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         ..list_area
     };
     hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
-    // Legacy rail parity (`item_cell_spans`): the selected row takes the
-    // resting surface so it reads against the focused green panel body.
-    let paint = super::media_list::render_wide_media_list(
-        f,
-        paint_area,
-        list_area,
-        media_list,
-        right_focused,
-        palette::list_selected_row_bg(),
-    );
-    layout.left_item_rows = paint.left_item_rows;
-    layout.left_row_map = paint.left_row_map;
-    let final_scroll = paint.row_geometry.offset();
-    // Same key the component sorts the rail rows by, so `left_sorted_indices`
-    // matches the painted order; `sort_by_cached_key` computes each key once.
-    let mut order: Vec<usize> = (0..ctx.list.items.len()).collect();
-    order.sort_by_cached_key(|&index| {
-        crate::app::ui_util::natural_sort_key(crate::app::render::effective_sort_str(
-            &ctx.list.items[index],
-        ))
-    });
-    layout.left_sorted_indices = order;
+    let final_scroll = if inline_search.is_active() {
+        // Hero-on-left Wide passes only the right-rail library-list area
+        // (design.md D3); the episode/Hero pane painted above remains
+        // visible and the ordinary series rail does not also paint
+        // `list_area`.
+        let items = inline_search.ordered_items();
+        let query = inline_search.query().to_string();
+        let loading = inline_search.loading();
+        let cursor = inline_search.cursor();
+        let scroll_in = inline_search.scroll();
+        let new_scroll = crate::app::render::render_inline_search(
+            f,
+            list_area,
+            &query,
+            loading,
+            items,
+            cursor,
+            scroll_in,
+            right_focused,
+            1,
+            inline_search.layout_mut(),
+        );
+        inline_search.set_scroll(new_scroll);
+        new_scroll
+    } else {
+        // Legacy rail parity (`item_cell_spans`): the selected row takes the
+        // resting surface so it reads against the focused green panel body.
+        let paint = super::media_list::render_wide_media_list(
+            f,
+            paint_area,
+            list_area,
+            media_list,
+            right_focused,
+            palette::list_selected_row_bg(),
+        );
+        layout.left_item_rows = paint.left_item_rows;
+        layout.left_row_map = paint.left_row_map;
+        // Same key the component sorts the rail rows by, so
+        // `left_sorted_indices` matches the painted order;
+        // `sort_by_cached_key` computes each key once.
+        let mut order: Vec<usize> = (0..ctx.list.items.len()).collect();
+        order.sort_by_cached_key(|&index| {
+            crate::app::ui_util::natural_sort_key(crate::app::render::effective_sort_str(
+                &ctx.list.items[index],
+            ))
+        });
+        layout.left_sorted_indices = order;
+        paint.row_geometry.offset()
+    };
     (final_scroll, image_paint)
 }
 
