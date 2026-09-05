@@ -10,4 +10,4 @@
 
 ## 3. Gates
 
-- [ ] 3.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets`, `ast-grep scan`, and the music workspace test set, and verify all are clean
+- [x] 3.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets`, `ast-grep scan`, and the music workspace test set, and verify all are clean
