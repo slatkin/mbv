@@ -130,7 +130,7 @@
   returns `Placeholder`, on all seven destinations, so no hero renders an empty image region while
   images are on — verify a test renders an artwork-less item on Feeds and on Home's non-Emby
   Latest path and asserts the artwork region is filled.
-- [ ] 4.6 Confirm the no-artwork placeholder is distinct from the existing loading placeholder
+- [x] 4.6 Confirm the no-artwork placeholder is distinct from the existing loading placeholder
   (`album_art.rs:191-195` `BORDER_UNFOCUSED`) at the call-site level — verify no call site uses one
   to mean the other, so "still loading" stays distinguishable from "has none".
 - [ ] 4.7 Delete the `HeroData::Generic` variant (`home_hero.rs:97`) and collapse `HeroData` to the
