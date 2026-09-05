@@ -201,7 +201,7 @@ impl Model {
                     })
                 });
             let context = self.app.wide_music_render_ctx(lib_idx, cursor_scroll);
-            search_active = context.list.is_search_active();
+            search_active = self.inline_search_component_id(lib_idx).is_some();
             context.publish_geometry(area, &mut self.app.layout.main);
         }
         self.application.view(id, frame, area);
