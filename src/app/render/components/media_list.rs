@@ -324,6 +324,7 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
                 focused,
                 selected_bg,
                 inner_width,
+                scrollbar,
             )
         })
         .collect();
@@ -399,6 +400,7 @@ pub(in crate::app) fn render_inline_media_browser<Target: Clone>(
                         focused,
                         selected_bg,
                         inner_width,
+                        focused && overflows,
                     )
                 })
                 .unwrap_or_else(|| ListItem::new(Line::default()))
@@ -454,6 +456,7 @@ fn wide_media_row<Target>(
     focused: bool,
     selected_bg: Color,
     inner_width: usize,
+    has_scrollbar: bool,
 ) -> ListItem<'static> {
     match row {
         MediaListRow::Spacer => ListItem::new(Line::default()),
@@ -508,7 +511,10 @@ fn wide_media_row<Target>(
                 .filter(|dur| !dur.is_empty())
                 .filter(|_| !matches!(kind, MediaKind::Collection));
 
-            let content_w = inner_width.saturating_sub(RIGHT_INSET);
+            // Right-align the duration to the panel edge minus RIGHT_INSET,
+            // independent of focus: the scrollbar column (when the focused
+            // list overflows) must not shift it another column inwards.
+            let content_w = (inner_width + usize::from(has_scrollbar)).saturating_sub(RIGHT_INSET);
             let trailing_w = if trailing.is_empty() {
                 0
             } else {
@@ -757,5 +763,47 @@ mod wide_row_regression_tests {
             palette::STATUS_AVAILABLE,
             "Media duration is painted green"
         );
+    }
+
+    /// The duration right-aligns to 2 columns from the panel edge whether or
+    /// not the focused list overflows and reserves a scrollbar column — the
+    /// scrollbar must not shift it another column inwards.
+    #[test]
+    fn duration_right_inset_is_two_columns_with_and_without_scrollbar() {
+        let selected_bg = palette::SURFACE_RESTING;
+        for (rows_count, focused) in [(3usize, false), (3, true), (12, true)] {
+            let rect = Rect::new(0, 0, 40, 4);
+            let mut list: WideMediaList<String> = WideMediaList::new();
+            list.set_content(
+                (0..rows_count)
+                    .map(|i| item(&format!("t{i}"), &format!("Entry {i}"), Some("4:32".into())))
+                    .collect(),
+            );
+
+            let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
+            terminal
+                .draw(|f| {
+                    render_wide_media_list(f, rect, rect, &mut list, focused, selected_bg);
+                })
+                .unwrap();
+            let buf = terminal.backend().buffer();
+
+            // "4:32" ends 2 columns before the panel's right edge; the two
+            // cells before it are the quiet gap.
+            let dur_start = rect.width - 2 - 4;
+            for (i, ch) in "4:32".chars().enumerate() {
+                assert_eq!(
+                    buf[(dur_start + i as u16, 0)].symbol(),
+                    ch.to_string(),
+                    "duration at fixed inset (rows={rows_count}, focused={focused}, i={i})"
+                );
+            }
+            let gap_x = rect.width - 2 - 4 - 1;
+            assert_eq!(
+                buf[(gap_x, 0)].symbol(),
+                " ",
+                "quiet gap before duration (rows={rows_count}, focused={focused})"
+            );
+        }
     }
 }
