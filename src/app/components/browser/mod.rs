@@ -666,10 +666,21 @@ impl Component for BrowserComponent {
             let loading = self.inline_search.loading();
             let cursor = self.inline_search.cursor();
             let scroll_in = self.inline_search.scroll();
-            let columns = crate::app::library_column_width::library_column_count(area.width);
+            let list_area = if self.narrow_extras.show_letter_pills
+                || self.narrow_extras.feed_items.is_some()
+            {
+                ratatui::layout::Rect {
+                    y: area.y.saturating_add(1),
+                    height: area.height.saturating_sub(1),
+                    ..area
+                }
+            } else {
+                area
+            };
+            let columns = crate::app::library_column_width::library_column_count(list_area.width);
             let new_scroll = crate::app::render::render_inline_search(
                 frame,
-                area,
+                list_area,
                 &query,
                 loading,
                 items,
@@ -681,7 +692,7 @@ impl Component for BrowserComponent {
             );
             self.inline_search.set_scroll(new_scroll);
             self.image_paint = None;
-            new_scroll
+            self.scroll
         } else {
             // Narrow generic/Movies/home-video: the component owns the full
             // surface via the `browser_narrow` composer (task 3.3). It returns

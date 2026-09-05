@@ -105,7 +105,6 @@ impl Model {
         self.render_emby_browser_component(f);
         self.render_tv_workspace_component(f);
         self.render_music_workspace_component(f);
-        self.render_inline_search_component(f);
         self.render_queue_component(f);
         self.render_overlay_stack(f);
     }

@@ -561,10 +561,15 @@ impl Component for MusicWorkspaceComponent {
             let loading = self.inline_search.loading();
             let cursor = self.inline_search.cursor();
             let scroll_in = self.inline_search.scroll();
-            let columns = crate::app::library_column_width::library_column_count(area.width);
+            let list_area = ratatui::layout::Rect {
+                y: area.y.saturating_add(1),
+                height: area.height.saturating_sub(1),
+                ..area
+            };
+            let columns = crate::app::library_column_width::library_column_count(list_area.width);
             let new_scroll = crate::app::render::render_inline_search(
                 frame,
-                area,
+                list_area,
                 &query,
                 loading,
                 items,
@@ -575,7 +580,6 @@ impl Component for MusicWorkspaceComponent {
                 self.inline_search.layout_mut(),
             );
             self.inline_search.set_scroll(new_scroll);
-            self.album_scroll = new_scroll;
             self.narrow_list_area = Rect::default();
             self.image_paint = None;
         } else if !wide {
