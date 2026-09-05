@@ -309,8 +309,8 @@ in the loop body.
 - **WHEN** any surface is converted
 - **THEN** existing keyboard precedence, responsive behaviour, images-disabled
   behaviour, and render characterization coverage remain satisfied
-- **AND** mouse parity is required only for the alpha-supported mouse paths named
-  by this capability
+- **AND** full mouse parity for the surface is required as defined by the
+  `mouse-input` capability, not deferred to a later pass
 
 #### Scenario: A terminal event is delivered through a live tick
 
@@ -320,6 +320,17 @@ in the loop body.
   first
 - **AND** the permanently subscribed `UiRoot` observer's message appears second
 - **AND** neither message is produced twice for a single injected event
+
+#### Scenario: A mouse event is delivered to subscribed non-focused components
+
+- **WHEN** a mouse event is injected into a mounted `Application` through its
+  event listener and `tick()` is called
+- **THEN** every mounted component subscribed to mouse events is given the event,
+  regardless of which component holds focus
+- **AND** a mounted component that the shell has not made mouse-eligible for the
+  current frame is not given the event at all, so its handler cannot mutate it
+- **AND** the shell applies at most one component's resulting message
+- **AND** no component's message for that event is produced twice
 
 #### Scenario: Focus after the synchronisation pass is asserted in its real order
 
@@ -337,6 +348,8 @@ in the loop body.
 - **AND** a key injected through the listener is delivered to the overlay, not
   to Queue or the active destination
 - **AND** a global chord resolves to a swallow rather than reaching a surface
+  beneath the overlay
+- **AND** a mouse event on obscured content produces no message from a surface
   beneath the overlay
 
 #### Scenario: An injected user event reaches its mounted component
@@ -467,9 +480,11 @@ interaction state, and exactly one painter, at every reachable breakpoint.
 Every typed request a component emits across its authority boundary — each
 `ShellRequest` variant and each intent sub-enum variant reaching the shell —
 SHALL resolve in the shell's dispatch to either a real handler or an explicit
-arm whose comment names why it is deliberately inert (mouse-only under D16, the
-component owns the effect, consumed synchronously elsewhere, or the issue that
-owns the missing wiring).
+arm whose comment names why it is deliberately inert (the component owns the
+effect, consumed synchronously elsewhere, or the issue that owns the missing
+wiring). A request reaching the shell from a mouse gesture is not a standing
+reason to be inert: it SHALL have a real handler unless one of the other reasons
+applies.
 
 The shell's top-level request dispatch (`Model::handle_terminal_message`,
 destructuring `Msg::Shell(request)`) SHALL be an exhaustive `match` over
@@ -494,12 +509,20 @@ coverage — the top-level exhaustive match is.
 
 #### Scenario: A deliberately inert request is an explicit arm
 
-- **WHEN** a request variant is emitted only from a mouse path, is fully handled
-  by the emitting component, or is consumed by a synchronous handler before
-  `handle_terminal_message`
+- **WHEN** a request variant is fully handled by the emitting component, or is
+  consumed by a synchronous handler before `handle_terminal_message`
 - **THEN** its arm in the dispatch is an explicit no-op whose comment states
   that reason and the issue or precedent that owns it
 - **AND** it is not folded into a catch-all arm
+
+#### Scenario: A mouse-emitted request is handled, not inert by default
+
+- **WHEN** a `ShellRequest` variant is emitted from a mouse gesture and crosses
+  the shell boundary for a navigation, playback, persistence, focus, or Service
+  effect
+- **THEN** its dispatch arm runs a real handler
+- **AND** an inert arm for it is permitted only when the emitting component fully
+  owns the effect
 
 #### Scenario: An inner sub-dispatcher wildcard matches a proven closed set
 
@@ -510,3 +533,52 @@ coverage — the top-level exhaustive match is.
   the arm is unreachable
 - **AND** removing or reordering the top-level OR-group that feeds it is what
   would change its reachability, not an unnoticed new variant
+
+### Requirement: Mounted parents recognize mouse gestures and embedded controls resolve targets
+
+A mounted destination `AppComponent` SHALL own its TuiRealm mouse subscription
+and its `MouseGestureState`. An embedded media-list control SHALL resolve a point
+within the list rectangle its parent painted to a stable target, using the same
+row flow it exports to that parent's painter. After the parent recognizes a
+mouse gesture, it SHALL delegate point resolution to the embedded control and
+translate the returned stable target into the destination request.
+
+An embedded control SHALL NOT subscribe independently, own a second gesture
+recognizer, store a per-row rectangle list duplicating its exported row flow, or
+publish row rectangles into a parent-owned hit map. Parent-owned controls outside
+the list rectangle, such as pills or Queue scope buttons, MAY retain separate
+parent hit regions, populated where those rectangles are painted. When a
+recognized point falls within the embedded list rectangle, the embedded control's
+explicit list targets SHALL be resolved before any parent workspace target. This
+change owns adding point resolution to the already-landed `WideMediaList` and
+`InlineMediaBrowser`, migrating every per-surface canonical row-hit `*HitRegion`
+enum onto it, and deleting those enums; no `compose-canonical-media-lists` slice
+performs any part of that migration.
+
+#### Scenario: A pointer gesture targets a list row
+
+- **WHEN** the mounted parent recognizes a click, double click, context click, or
+  scroll gesture over its embedded list rectangle
+- **THEN** the parent passes the list rectangle it painted and the point to the
+  embedded control, which resolves it from the row flow it exported to that same
+  paint
+- **AND** it returns the stable target or list-local scroll result to the parent
+- **AND** neither the parent nor shell recomputes the row from coordinates
+
+#### Scenario: A pointer gesture targets a parent control
+
+- **WHEN** the mounted parent recognizes a gesture over a pill, Queue scope
+  button, or another region outside the embedded list rectangle
+- **THEN** the parent resolves that separately owned region
+- **AND** the embedded control's hit regions remain limited to its own painted
+  rectangle
+
+#### Scenario: Queue migrates mouse hit ownership
+
+- **WHEN** Queue composes the canonical fixed-row control
+- **THEN** Queue's parent keeps the subscription, gesture state, and scope-button
+  geometry
+- **AND** the embedded control resolves a point in the painted row area to a
+  `QueueSlotId`
+- **AND** Queue's `QueueHitRegion` enum is deleted once its row hits resolve
+  through the embedded control

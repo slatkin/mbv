@@ -18,11 +18,11 @@ Screens SHALL provide semantic content and approved variants; arrangements SHALL
 shared geometry; components SHALL own their painting and styling. Screen modules
 SHALL NOT call Ratatui or construct layout rectangles.
 
-For mouse paths supported by the alpha migration, hit-target ownership belongs to
-the interactive component that paints the region, as defined by the
-`interactive-component-framework` capability. Screens SHALL NOT compute or own hit
-geometry, and no screen-local or arrangement-local hit map is introduced. The former
-global completed-frame mouse hit map and router are removed by that capability;
+For every mouse path, hit-target ownership belongs to the interactive component
+that paints the region, as defined by the `interactive-component-framework` and
+`mouse-input` capabilities. Screens SHALL NOT compute or own hit geometry, and no
+screen-local or arrangement-local hit map is introduced. The former global
+completed-frame mouse hit map and router are removed by those capabilities;
 render-only layout state MAY remain, but this capability no longer treats it as hit
 resolution authority.
 
@@ -37,15 +37,14 @@ breakpoints is an arrangement.
 - **AND** it does not copy the arrangement's geometry or painter
 
 #### Scenario: Existing hit-target resolution is preserved
-- **WHEN** a mouse event is resolved for an alpha-supported surface
-- **THEN** the click resolves to the same target it does today, now computed by the
-  interactive component that painted the region from the same geometry it painted
-  with
-- **AND** it is no longer resolved by a global completed-frame hit map or by any
+- **WHEN** a mouse event is resolved for any surface
+- **THEN** the click resolves to a target computed by the interactive component
+  that painted the region, from the same geometry it painted with
+- **AND** it is not resolved by a global completed-frame hit map or by any
   screen-local or arrangement-local hit map
 
 #### Scenario: Deferred mouse support is restored later
-- **WHEN** mouse interaction is later restored for a deferred surface
+- **WHEN** mouse interaction is restored for a surface that had it deferred
 - **THEN** its interactive component computes targets from the geometry it painted
 - **AND** the implementation does not restore a global mouse router, global hit map,
   or duplicated coordinate path
