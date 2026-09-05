@@ -7,7 +7,7 @@ Provide reusable embedded TuiRealm list controls with one owner for list interac
 ## Requirements
 
 ### Requirement: Shared rows are provider-neutral and bounded
-The controls SHALL accept selectable item rows with stable opaque targets, primary text, optional trailing text, and semantic state (ordinary, played, active with optional bounded integer progress `0..=100`, or disabled), plus non-selectable Heading and Spacer rows. Heading and Spacer SHALL be excluded from selectable-target indexing. The model SHALL contain no provider client, `App`, source/header, raw style, callback, breakpoint, or effect.
+The controls SHALL accept selectable item rows with stable opaque targets, primary text, optional trailing text, a media kind (`Collection` for navigable containers, `Media` for playable leaves), an optional duration string, and semantic state (ordinary, played, active with optional bounded integer progress `0..=100`, or disabled), plus non-selectable Heading and Spacer rows. Heading and Spacer SHALL be excluded from selectable-target indexing. When a duration is shown it SHALL use the precise `M:SS`/`H:MM:SS` form (queue format, e.g. `4:32`, `1:02:03`); `Collection` rows SHALL NOT carry a duration. The model SHALL contain no provider client, `App`, source/header, raw style, callback, breakpoint, or effect.
 
 #### Scenario: Queue-like progress is presented safely
 - **WHEN** a parent supplies active progress
@@ -18,6 +18,16 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 - **WHEN** a Heading or Spacer is rendered
 - **THEN** it occupies display geometry
 - **AND** it cannot be selected or activated
+
+#### Scenario: Durations share one precise format
+- **WHEN** any media list shows a duration (queue, home, feeds, TV episode, music track, book chapter)
+- **THEN** every row uses the same `M:SS`/`H:MM:SS` format
+- **AND** imprecise forms (`4m`, `1h12m`, unbounded `62:03`) never appear in list rows
+
+#### Scenario: Collections stay duration-free
+- **WHEN** a row is a navigable container (movie/series folder, album, show, book title)
+- **THEN** it carries no duration string
+- **AND** the painter suppresses the duration slot even if one is projected
 
 ### Requirement: WideMediaList owns fixed-row mechanics
 `WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm `Component` that owns cursor, scroll, viewport, fixed-height one-column row placement, semantic painting delegation, scrollbar, movement, clamping, and internal row geometry for painting and scrolling. It SHALL support Hero-on-left rails and later Queue fixed rows, but SHALL NOT implement Inline replacement or a non-hero two-column policy. It SHALL express letter grouping through `MediaListRow::Heading`/`Spacer` rows. An applicable Wide Browser path SHALL delegate to this control and SHALL NOT reach `render_generic_movies_home_video_rows_with_ctx` or either painter it routes to (`render_letter_grouped_rows`, `render_plain_rows`); the absence of a `render_plain_rows` call alone SHALL NOT be accepted as compliance. It SHALL expose no mouse hit-resolution API; `restore-mouse-support` (#638) adds `HitRegions<Target>` later.
