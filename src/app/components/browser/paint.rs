@@ -145,7 +145,7 @@ impl BrowserComponent {
                 scroll_in,
                 self.focused,
                 1,
-                &mut self.layout,
+                self.inline_search.layout_mut(),
             );
             self.inline_search.set_scroll(new_scroll);
             new_scroll

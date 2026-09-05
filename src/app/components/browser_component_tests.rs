@@ -761,7 +761,9 @@ fn emby_browser_wide_right_rail_paints_inline_search() {
         .draw(|frame| browser.view(frame, frame.area()))
         .unwrap();
 
-    let list_area = browser.test_layout().left_area;
+    // The embedded control's own painted geometry (not the parent's `layout`)
+    // is what its own mouse/page-size math reads.
+    let list_area = browser.inline_search().layout().left_area;
     assert!(
         list_area.width > 0 && list_area.height > 0,
         "search result geometry must be published"
@@ -782,4 +784,16 @@ fn emby_browser_wide_right_rail_paints_inline_search() {
         }
     }
     assert!(found, "matching result row painted in the right rail");
+
+    // A click on the painted result row resolves through the embedded
+    // control's own geometry (design.md D6), proving it (not the parent's
+    // `layout`) is what mouse handling actually reads.
+    let message = browser.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: list_area.x,
+        row: list_area.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(message, None, "search mouse handling never emits a Msg");
+    assert_eq!(browser.inline_search().cursor(), 0);
 }
