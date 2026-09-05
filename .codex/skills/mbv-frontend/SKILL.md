@@ -68,6 +68,21 @@ helpers that project validated snapshots. A `sync_*` that reads component-local
 interaction state back into `App` reintroduces exactly the mirror that was
 removed — if you find yourself needing one, the state is on the wrong side.
 
+## Canonical media-list composition
+
+Use `WideMediaList` for fixed-row, one-column Wide rails and Queue. Use
+`InlineMediaBrowser` for one-column Normal/Narrow selected-row replacement. These
+controls are embedded and painted by their destination parent; `Inline Search`
+is the separate `InlineSearchComponent`, not a media-list variant. Non-hero
+catalogs retain the existing two-column policy.
+
+The primary destination owners and painters are Home (`HomeComponent`), generic
+Emby/Movies/homevideos and Emby podcast (`BrowserComponent`), TV Series
+(`TvWorkspaceComponent` in Wide, `BrowserComponent` in Normal), grouped Music
+(`MusicWorkspaceComponent`), Audiobookshelf Podcast (`AudiobookshelfPodcastComponent`),
+Audiobookshelf Books (`AudiobookshelfBookComponent`), Feeds (`FeedsComponent`),
+and Queue (`QueueComponent`). The ledger is the detailed breakpoint record.
+
 ## Keyboard routing (ADR 0023)
 
 There is exactly one keyboard resolution site: `src/app/router.rs`, with its
@@ -90,30 +105,36 @@ Two approaches that look reasonable and are not:
   mirror state the migration deleted. That gap is the whole reason the router
   exists.
 
-Legacy-endpoint removal is in flight
-(`openspec/changes/remove-legacy-keyboard-endpoint`): `GlobalViewKey`, the raw
-`*Key` shell request variants, `CONTEXT_STACK`, `Model::handle_legacy_key`, and
-`src/app/components/typed_key.rs` still exist and are scheduled for deletion.
-They are not an escape hatch — add no new callers.
+Legacy-endpoint removal is complete (archived at
+`openspec/changes/archive/2026-08-29-remove-legacy-keyboard-endpoint/`):
+`GlobalViewKey`, the raw `*Key` shell request variants, `CONTEXT_STACK`,
+`Model::handle_legacy_key`, and `src/app/components/typed_key.rs` are deleted.
+Do not reintroduce them — three scan gates enforce this:
+`no-crossterm-key-payloads`, `no-raw-fallback-variants`, and
+`no-second-router-site` (fixtures in
+`rules/interactive-component-boundary-tests/`).
 
-## Mouse is accepted-broken (D16)
+## Mouse delivery (ADR 0024)
 
-Per **D16** in `openspec/changes/migrate-tui-to-tuirealm/design.md`, the legacy
-mouse framework was deleted rather than migrated, and mouse behaviour is not part
-of any ledger row's verification record for the alpha. The old
-`src/app/input_mouse*.rs` coordinate arithmetic no longer exists; the surfaces
-that do handle mouse (`browser`, `home`, `queue`, `tv_workspace`, partially
-`music_workspace`, `playlists`) own their hit geometry inside their component. A
-broken mouse path is a known state, not a regression you just found — repair it
-only when the work is actually asked for.
+D16 (in `openspec/changes/archive/2026-08-29-migrate-tui-to-tuirealm/design.md`)
+deleted the legacy mouse framework rather than migrating it; `restore-mouse-support`
+(#638, archived `2026-09-05`) reversed that and rebuilt mouse delivery on TuiRealm
+subscriptions. The contract is `openspec/specs/mouse-input/spec.md`.
+
+Subscriptions decide eligibility pre-delivery, following surfaces painted in the
+latest frame (or topmost overlay). The mounted parent owns gesture state and
+resolves only geometry it painted; embedded lists resolve their own rows. No
+separate mouse loop, no global hit map/router, and never discard a losing message
+after its component mutated — the framework mutates a component before it returns
+a message, so a discarded message does not undo the mutation.
 
 ## Version scope
 
-`main` still depends only on `ratatui = "0.30"`; `tuirealm = "4.1"` is pinned in
-the `migrate-tui-to-tuirealm` worktree and is **not merged to main yet**. The
-`src/app/render/` module boundary exists on both. Confirm the locked version and
-API in `Cargo.toml` before relying on a specific TuiRealm call — APIs drift
-between major versions, and the `find-docs` skill can pull current references.
+`tuirealm = "4.1"` is pinned in `Cargo.toml` alongside `ratatui = "0.30"`.
+Confirm the locked version and API in `Cargo.toml` before relying on a specific
+TuiRealm call — APIs drift between major versions, and the `find-docs` skill can
+pull current references. Re-verify ADR 0024's subscription assumption before any
+TuiRealm bump.
 
 ## Reuse workflow
 
@@ -122,7 +143,10 @@ Before writing rendering code for a screen:
 1. **Look for an existing component or arrangement first.** Check
    `src/app/render/components/mod.rs` and `src/app/render/arrangements/mod.rs`
    for something that already paints this shape (a row, a card, a modal
-   frame, a hero pane). Reuse it before writing a new painter.
+   frame, a hero pane). Reuse it before writing a new painter — for a
+   hero-bearing surface this means `hero_on_left_pane`/`LeftPaneFocus`
+   (`arrangements/hero_left.rs`) for the pane itself and the `Hero` trait
+   (`components/hero_model.rs`) for its content, not a bespoke layout.
 2. **If it almost fits, check for a policy or variant** (see the decision
    table below) before reaching for a screen-local branch.
 3. **If nothing fits, add centrally** — a new component/arrangement function,
@@ -192,7 +216,7 @@ pub(in crate::app::render) fn render_some_row(f: &mut Frame, area: Rect, model: 
 let [left, right] = Layout::horizontal([Constraint::Percentage(60), Constraint::Percentage(40)]).areas(area);
 
 // Right: an arrangement owns the split, screen calls it.
-let (left, right) = hero_on_left_panes(area); // arrangements/hero_left.rs
+let hero = hero_on_left_pane(f, area, LeftPaneFocus::ReadOnly); // arrangements/hero_left.rs
 ```
 
 ```rust
@@ -253,9 +277,9 @@ Before reporting a TUI change complete:
 - [ ] **Narrow-width behaviour** — the change was checked at the narrow/mini
   breakpoint, not only the default width.
 - [ ] **Interaction targets** — if painted geometry moved or resized, the
-  component's own hit-geometry arithmetic still matches it. (Mouse is
-  accepted-broken per D16; this is about not widening the gap in a surface that
-  does own its geometry.)
+  component's own hit-geometry arithmetic still matches it. (Delivery follows the
+  latest painted frame per `mouse-input/spec.md` — keep hit arithmetic matched
+  to painting.)
 - [ ] **Component boundary** — no `App`, Service client, `PlayerProxy`, `Config`, or mpsc
   reached a component; anything crossing the boundary went out as a typed `Msg`.
 - [ ] **One router** — no chord is resolved outside `router.rs`/`key_policy.rs`,
