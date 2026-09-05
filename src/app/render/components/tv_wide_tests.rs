@@ -97,6 +97,18 @@ fn tv_app() -> App {
 }
 
 #[test]
+fn is_right_panel_wide_reflects_terminal_size_paint_free() {
+    let mut app = make_app_stub();
+    app.terminal_width = 150;
+    app.terminal_height = 24;
+    assert!(app.is_right_panel_wide());
+
+    app.terminal_width = 60;
+    app.terminal_height = 24;
+    assert!(!app.is_right_panel_wide());
+}
+
+#[test]
 fn wide_tv_requests_selected_series_primary_image_with_budget_and_placeholder() {
     let app = tv_app();
     let mut component = TvWorkspaceComponent::new();

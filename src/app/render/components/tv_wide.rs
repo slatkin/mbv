@@ -120,18 +120,11 @@ impl App {
         })
     }
 
-    /// The finalized library content rect when the wide hero-on-left TV
-    /// workspace owns `lib_idx`, computed paint-free from the current
-    /// terminal size — `None` when the library is not a wide-TV series list
-    /// or the breakpoint is narrow. Mirrors the exact gate `render_library`
-    /// applies (`is_wide_tv_library` + `shared_hero_presentation` on the
-    /// finalized area), so component mount/focus can be routed a frame
-    /// earlier than `LayoutMain::is_wide_tv_active` (a previous-frame paint
-    /// signal that flashes the narrow browser on entry).
-    pub(in crate::app) fn wide_tv_library_area(&self, lib_idx: usize) -> Option<Rect> {
-        if !self.is_wide_tv_library(lib_idx) {
-            return None;
-        }
+    /// The right panel's content area for the current terminal size and
+    /// panel state, paint-free — `None` when the right panel is not visible
+    /// (e.g. Queue-only panel mode). Factored out of `wide_tv_library_area`
+    /// so every paint-free breakpoint consumer shares one pipeline.
+    fn right_panel_lib_area(&self) -> Option<Rect> {
         let chrome = crate::app::render::arrangements::chrome::chrome_geometry(
             crate::app::render::arrangements::chrome::ChromeGeometryInput {
                 area: Rect::new(0, 0, self.terminal_width, self.terminal_height),
@@ -144,10 +137,37 @@ impl App {
         if !chrome.right_visible {
             return None;
         }
-        let lib_area = crate::app::render::components::widgets::right_panel_content_area(
-            chrome.right_area,
-            self.effective_panel_mode() != PanelMode::Both,
-        );
+        Some(
+            crate::app::render::components::widgets::right_panel_content_area(
+                chrome.right_area,
+                self.effective_panel_mode() != PanelMode::Both,
+            ),
+        )
+    }
+
+    /// Whether the right panel is in the wide hero-on-left breakpoint right
+    /// now, derived paint-free from the current terminal size. Replaces the
+    /// four `LayoutMain::is_wide_*_active()` paint-inference predicates: the
+    /// breakpoint (`shared_hero_presentation`) is the same for every
+    /// hero-on-left destination, so one predicate serves all of them.
+    pub(in crate::app) fn is_right_panel_wide(&self) -> bool {
+        self.right_panel_lib_area()
+            .is_some_and(|area| hero_left::shared_hero_presentation(area).is_some())
+    }
+
+    /// The finalized library content rect when the wide hero-on-left TV
+    /// workspace owns `lib_idx`, computed paint-free from the current
+    /// terminal size — `None` when the library is not a wide-TV series list
+    /// or the breakpoint is narrow. Mirrors the exact gate `render_library`
+    /// applies (`is_wide_tv_library` + `shared_hero_presentation` on the
+    /// finalized area), so component mount/focus can be routed a frame
+    /// earlier than `LayoutMain::is_wide_tv_active` (a previous-frame paint
+    /// signal that flashes the narrow browser on entry).
+    pub(in crate::app) fn wide_tv_library_area(&self, lib_idx: usize) -> Option<Rect> {
+        if !self.is_wide_tv_library(lib_idx) {
+            return None;
+        }
+        let lib_area = self.right_panel_lib_area()?;
         hero_left::shared_hero_presentation(lib_area).map(|_| lib_area)
     }
 
