@@ -454,7 +454,11 @@ pub(in crate::app::render) fn hero_left_slots(
         },
         images_enabled,
     );
-    let reserved_artwork_height = artwork.map_or(0, |area| area.height);
+    // One blank row between the artwork and the title below it, matching the
+    // wide hero-on-left card (`prepare_wide_emby_hero_card`, which starts its
+    // metadata at `img_area.bottom() + 1`) and every other tab's hero.
+    let reserved_artwork_height = artwork.map_or(0, |area| area.height + 1);
+    let reserved_artwork_height = reserved_artwork_height.min(content.height);
     let overview = Rect {
         y: content.y.saturating_add(reserved_artwork_height),
         height: content.height.saturating_sub(reserved_artwork_height),
@@ -518,7 +522,7 @@ mod hero_left_slots_tests {
         let artwork = slots.artwork.expect("artwork slot present");
         assert_eq!(artwork.y, content().y);
         assert_eq!(artwork.height, 5);
-        assert_eq!(slots.overview.y, artwork.bottom());
+        assert_eq!(slots.overview.y, artwork.bottom() + 1);
         assert_eq!(slots.overview.bottom(), content().bottom());
     }
 
