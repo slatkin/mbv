@@ -350,6 +350,28 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
     }
 }
 
+/// [`render_wide_media_list`] composed with the hero pane's recessed main
+/// content box (`hero_on_left_main_content_box`), so an embedded `WideMediaList`
+/// inside a hero pane cannot be painted straight onto the raw area — a caller
+/// physically cannot forget the box, unlike calling the two steps separately.
+/// Returns the box's content rect alongside the paint output for callers that
+/// need it for hitmap geometry. Use this instead of `render_wide_media_list`
+/// for every such list; call `render_wide_media_list` directly only for a
+/// canonical right-rail list, which uses its own panel/border styling instead
+/// of the main content box.
+pub(in crate::app) fn render_wide_media_list_in_box<Target: Clone>(
+    f: &mut Frame,
+    area: Rect,
+    list: &mut WideMediaList<Target>,
+    focused: bool,
+    selected_bg: Color,
+) -> (MediaListPaint<Target>, Rect) {
+    let (_, content_area) =
+        crate::app::render::arrangements::hero_left::hero_on_left_main_content_box(f, area);
+    let paint = render_wide_media_list(f, content_area, content_area, list, focused, selected_bg);
+    (paint, content_area)
+}
+
 /// Resolved paint output for [`render_inline_media_browser`]: the exact flow
 /// geometry used for painting and compatibility hit maps, plus the screen rect
 /// of the admitted detail block (the caller paints the hero into it), or `None`
