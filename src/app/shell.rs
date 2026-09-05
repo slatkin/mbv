@@ -37,6 +37,15 @@ const TERMINAL_LISTENER_INTERVAL: Duration = Duration::from_millis(8);
 /// `PollStrategy::Once`, matching the legacy one-event-per-iteration loop.
 const TERMINAL_LISTENER_MAX_POLL: usize = 60;
 
+/// One-shot transfer used only when TV changes its active destination at a breakpoint.
+#[derive(Clone, Debug)]
+pub(super) struct InlineSearchTransfer {
+    pub query: String,
+    pub selected_id: Option<String>,
+    pub selected_type: Option<String>,
+    pub row_offset: usize,
+}
+
 /// Shell model holding the legacy `App` and the TuiRealm `Application`.
 pub struct Model {
     pub app: App,
@@ -87,6 +96,7 @@ pub struct Model {
     /// resting position the narrow browser left behind instead of its stale
     /// local cursor.
     pub(super) tv_viewport_anchor: Option<ViewportAnchor<String>>,
+    pub(super) inline_search_transfer: Option<InlineSearchTransfer>,
     /// Shell-owned mirror of the feeds-management popup's interaction state
     /// plus its background add-feed channel (task 5.3c). The
     /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
@@ -354,6 +364,7 @@ impl Model {
             music_track_focus_request: None,
             music_workspace_reanchor: false,
             tv_viewport_anchor: None,
+            inline_search_transfer: None,
             feeds_manage: None,
             home_content: HomeContent::new(),
             home_section_pref_semantic: home_section.clone(),

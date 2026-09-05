@@ -160,6 +160,12 @@ impl InlineSearch {
         &self.query
     }
 
+    pub(in crate::app) fn restore_query(&mut self, query: String) {
+        self.query = query;
+        self.recompute_order();
+        self.cursor = self.cursor.min(self.order.len().saturating_sub(1));
+    }
+
     pub(in crate::app) fn loading(&self) -> bool {
         self.loading
     }
@@ -347,6 +353,12 @@ impl Default for InlineSearch {
 pub(in crate::app) trait InlineSearchHost {
     fn inline_search(&self) -> &InlineSearch;
     fn inline_search_mut(&mut self) -> &mut InlineSearch;
+    fn selected_inline_search_item(&self) -> Option<mbv_core::api::EmbyItem> {
+        self.inline_search().selected_item()
+    }
+    fn restore_inline_search_query(&mut self, query: String) {
+        self.inline_search_mut().restore_query(query);
+    }
 
     fn open_inline_search(&mut self) {
         self.inline_search_mut().open();

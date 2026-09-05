@@ -5,7 +5,6 @@ use super::components::{
 };
 use super::shell::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
-use crate::app::render::shared_hero_presentation;
 use mbv_core::config::ServiceKind;
 use ratatui::layout::Rect;
 
@@ -154,25 +153,26 @@ impl Model {
     }
 
     pub(super) fn push_inline_search_content(&mut self) {
-        let expected = match self.app.tab {
-            TabSelection::EmbyLibrary(index) => self.inline_search_expected_id(index),
-            _ => None,
-        };
-        let Some(id) = expected.as_ref().filter(|id| self.application.mounted(id)) else {
-            self.unmount_stale_inline_searches(expected.as_ref());
-            return;
-        };
-        let id = id.clone();
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
+        if self.active_inline_search_host().is_none() {
+            return;
+        }
         // Flat path: this push only projects the flat `Items` pool. Loading
         // is exactly while the whole-library fetch backing `all_items` is
         // outstanding (see `inline_search_needs_full_load`). Intermediate
         // pushes -- resize, browse completion, activation -- keep the spinner
         // up; the completion push (all_items now present) clears it.
         let loading = self.inline_search_needs_full_load(index);
-        let pool = {
+        let recursive = self.app.recursive_album_search_enabled(index);
+        let pool = if recursive {
+            let library_id = self.app.libs[index].library.id.clone();
+            match self.app.album_indexes.get(&library_id) {
+                Some(AlbumIndexState::Ready(entries)) => SearchPool::Albums(entries.clone()),
+                _ => SearchPool::Albums(Vec::new()),
+            }
+        } else {
             let items = self.app.libs[index]
                 .nav_stack
                 .last()
@@ -186,43 +186,32 @@ impl Model {
             SearchPool::Items(items)
         };
         let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Library);
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(search_component) =
-                comp.as_any_mut().downcast_mut::<InlineSearchComponent>()
-            {
-                search_component.set_content(pool, loading, focused);
-                // Drive loading from the projection on every push: the
-                // completion push (flat `all_items` landed) is what clears
-                // it (`set_content` only ever turns it on, so an intermediate
-                // push never wedges or clears early).
-                search_component.set_loading(loading);
-            }
-        }
+        self.with_active_inline_search_host(|host| {
+            host.set_inline_search_content(pool, loading, focused);
+        });
     }
 
     pub(super) fn open_inline_search(&mut self) {
-        if self.with_active_inline_search_host(|host| host.open_inline_search()) {
-            self.push_inline_search_content();
-            return;
-        }
+        let host_active = self.with_active_inline_search_host(|host| host.open_inline_search());
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             self.unmount_stale_inline_searches(None);
             return;
         };
-        let Some(id) = self.inline_search_expected_id(index) else {
-            return;
-        };
-        if self.application.mounted(&id) {
-            return;
+        if !host_active {
+            let Some(id) = self.inline_search_expected_id(index) else {
+                return;
+            };
+            if !self.application.mounted(&id) {
+                self.unmount_stale_inline_searches(Some(&id));
+                self.application
+                    .mount(id.clone(), Box::new(InlineSearchComponent::new()), vec![])
+                    .expect("mount inline library Search");
+                self.register_destination(&id);
+                self.application
+                    .active(&id)
+                    .expect("activate inline library Search");
+            }
         }
-        self.unmount_stale_inline_searches(Some(&id));
-        self.application
-            .mount(id.clone(), Box::new(InlineSearchComponent::new()), vec![])
-            .expect("mount inline library Search");
-        self.register_destination(&id);
-        self.application
-            .active(&id)
-            .expect("activate inline library Search");
         let recursive = self.app.recursive_album_search_enabled(index);
         let mut needs_full_load = false;
         if recursive {
@@ -248,6 +237,9 @@ impl Model {
     }
 
     pub(super) fn dismiss_inline_search(&mut self) {
+        if self.with_active_inline_search_host(|host| host.close_inline_search()) {
+            return;
+        }
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
@@ -261,14 +253,27 @@ impl Model {
         let TabSelection::EmbyLibrary(lib_idx) = self.app.tab else {
             return;
         };
-        let Some(component_id) = self.inline_search_component_id(lib_idx) else {
-            return;
-        };
         let selected = self
-            .application
-            .get_component(&component_id)
-            .and_then(|component| component.as_any().downcast_ref::<InlineSearchComponent>())
-            .and_then(InlineSearchComponent::selected_item);
+            .active_inline_search_host()
+            .and_then(|id| self.application.get_component(&id))
+            .and_then(|component| {
+                component
+                    .as_any()
+                    .downcast_ref::<BrowserComponent>()
+                    .and_then(|h| h.selected_inline_search_item())
+                    .or_else(|| {
+                        component
+                            .as_any()
+                            .downcast_ref::<MusicWorkspaceComponent>()
+                            .and_then(|h| h.selected_inline_search_item())
+                    })
+                    .or_else(|| {
+                        component
+                            .as_any()
+                            .downcast_ref::<TvWorkspaceComponent>()
+                            .and_then(|h| h.selected_inline_search_item())
+                    })
+            });
         if self.app.recursive_album_search_enabled(lib_idx) {
             let library_id = self.app.libs[lib_idx].library.id.clone();
             let entry = match self.app.album_indexes.get(&library_id) {
@@ -293,20 +298,9 @@ impl Model {
     }
 
     fn set_inline_search_loading(&mut self, loading: bool) {
-        let Some(id) = self.inline_search_component_id(match self.app.tab {
-            TabSelection::EmbyLibrary(index) => index,
-            _ => return,
-        }) else {
-            return;
-        };
-        if let Some(component) = self.application.get_component_mut(&id) {
-            if let Some(search) = component
-                .as_any_mut()
-                .downcast_mut::<InlineSearchComponent>()
-            {
-                search.set_loading(loading);
-            }
-        }
+        self.with_active_inline_search_host(|host| {
+            host.inline_search_mut().set_loading(loading);
+        });
     }
 
     /// Drain tail for the inline search (called from the shell's `lib_rx`
@@ -340,7 +334,7 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
-        let wide = shared_hero_presentation(self.app.layout.main.left_area).is_some();
+        let wide = self.app.layout.main.left_area.width > 0;
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(search) = comp.as_any_mut().downcast_mut::<InlineSearchComponent>() {
                 search.set_wide(wide);
