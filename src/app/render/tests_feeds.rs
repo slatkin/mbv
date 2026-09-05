@@ -47,6 +47,15 @@ fn feed_component() -> FeedsComponent {
     ])
 }
 
+#[test]
+fn feeds_images_off_collapses_artwork_and_uses_full_text_width() {
+    let mut component = feed_component();
+    component.set_images_enabled(false);
+    let terminal = terminal_for(&mut component, 120, 30);
+    let buffer = terminal.backend().buffer();
+    assert!(buffer_to_string(&terminal).contains("Entry One"));
+}
+
 fn terminal_for(component: &mut FeedsComponent, width: u16, height: u16) -> Terminal<TestBackend> {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();

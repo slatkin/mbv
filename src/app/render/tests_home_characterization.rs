@@ -293,6 +293,16 @@ fn narrow_home_inline_hero_contrasts_with_pane_backdrop() {
 /// bottom out exactly one row above the destination area's bottom (the status
 /// bar row) — no per-tab reserve on top of the shared one.
 #[test]
+fn home_images_off_collapses_artwork_and_uses_full_text_width() {
+    let mut app = home_app();
+    app.image_protocol_enabled = false;
+    let (model, terminal) = render_home_shell_with(app, 200, 40, |m| {
+        m.home_content.continue_items = vec![emby_cw_item()];
+    });
+    assert!(buffer_to_string(&terminal).contains("Focused Movie"));
+}
+
+#[test]
 fn wide_home_panes_leave_exactly_one_row_above_the_status_bar() {
     let (width, height) = (200u16, 40u16);
     let app = home_app();

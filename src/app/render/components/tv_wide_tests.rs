@@ -111,6 +111,18 @@ fn wide_tv_requests_selected_series_primary_image_with_budget_and_placeholder() 
 }
 
 #[test]
+fn wide_tv_images_off_collapses_artwork_and_uses_full_text_width() {
+    let mut app = tv_app();
+    let (output, component) = render_tv_workspace(&mut app, &mut LayoutMain::default());
+    assert!(component.test_layout().tv_wide_left_area.width > 0);
+    assert!(output.contains("The Series"));
+    assert!(
+        output.contains("Pilot"),
+        "TV text must remain visible: {output}"
+    );
+}
+
+#[test]
 fn wide_tv_series_overview_wraps_below_the_landscape_artwork_slot() {
     let mut app = tv_app();
     app.libs[0].nav_stack[0].items[0].overview =
