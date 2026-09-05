@@ -355,6 +355,14 @@ pub(in crate::app) trait InlineSearchHost {
 pub struct InlineSearchComponent {
     control: InlineSearch,
     focused: bool,
+    /// ponytail: temporary shim for the still-live two-painter overlay path.
+    /// Wide destinations (browser/paint.rs, music_wide.rs, tv_wide.rs) paint
+    /// their own 1-row `render_search_box` in the pill-bar row; this wrapper
+    /// must not also paint the new 3-row bordered box there, or Wide gets two
+    /// overlapping input boxes and the list loses extra rows. Remove this
+    /// field and always use the shared box once destination embedding
+    /// (group 2) and overlay deletion (group 4) replace this whole path.
+    wide: bool,
 }
 
 impl InlineSearchComponent {
@@ -364,14 +372,13 @@ impl InlineSearchComponent {
         Self {
             control,
             focused: false,
+            wide: false,
         }
     }
 
-    /// No-op: the shared arrangement admits the input purely from available
-    /// height (design.md D3), so the control no longer needs a Wide flag.
-    /// Retained until the shell's overlay protocol that calls it is deleted
-    /// (group 4).
-    pub(in crate::app) fn set_wide(&mut self, _wide: bool) {}
+    pub(in crate::app) fn set_wide(&mut self, wide: bool) {
+        self.wide = wide;
+    }
 
     pub(in crate::app) fn set_content(&mut self, pool: SearchPool, loading: bool, focused: bool) {
         self.control.set_pool(pool);
@@ -434,18 +441,40 @@ impl Component for InlineSearchComponent {
         let cursor = self.control.cursor();
         let scroll_in = self.control.scroll();
         let columns = crate::app::library_column_width::library_column_count(area.width);
-        let scroll = crate::app::render::render_inline_search(
-            frame,
-            area,
-            &query,
-            loading,
-            items,
-            cursor,
-            scroll_in,
-            self.focused,
-            columns,
-            self.control.layout_mut(),
-        );
+        let scroll = if self.wide {
+            // ponytail shim (see `wide` field doc): the destination already
+            // painted its own 1-row search box; reserve only that one row
+            // and paint no second input here.
+            let list_area = Rect {
+                y: area.y.saturating_add(1),
+                height: area.height.saturating_sub(1),
+                ..area
+            };
+            let ctx =
+                crate::app::render::LibraryListRenderCtx::from_items(items, cursor, scroll_in)
+                    .with_search(query, loading);
+            crate::app::render::render_generic_movies_home_video_rows_with_ctx(
+                frame,
+                list_area,
+                &ctx,
+                self.focused,
+                columns,
+                self.control.layout_mut(),
+            )
+        } else {
+            crate::app::render::render_inline_search(
+                frame,
+                area,
+                &query,
+                loading,
+                items,
+                cursor,
+                scroll_in,
+                self.focused,
+                columns,
+                self.control.layout_mut(),
+            )
+        };
         self.control.set_scroll(scroll);
     }
 
@@ -654,6 +683,50 @@ mod tests {
         }));
 
         assert_eq!(message, Some(Msg::Shell(ShellRequest::InlineSearchDismiss)));
+    }
+
+    #[test]
+    fn wide_mode_view_skips_the_shared_input_box_and_reserves_one_row() {
+        // ponytail shim regression guard: Wide destinations already paint
+        // their own 1-row search box; `view()` must not also paint the new
+        // 3-row bordered box, and must reserve exactly the old 1 row.
+        let mut component = InlineSearchComponent::new();
+        component.set_wide(true);
+        component.set_content(
+            SearchPool::Items(vec![make_item("One", "Movie")]),
+            false,
+            true,
+        );
+        let mut terminal = Terminal::new(TestBackend::new(30, 5)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+
+        for x in 0..30 {
+            assert_ne!(
+                buffer.cell((x, 0)).unwrap().symbol(),
+                "┌",
+                "wide mode must not paint the shared bordered input box"
+            );
+        }
+        let row1: String = (0..30)
+            .map(|x| buffer.cell((x, 1)).unwrap().symbol())
+            .collect();
+        assert!(
+            row1.contains("One"),
+            "wide mode reserves exactly one row before results: {row1}"
+        );
+        assert_eq!(
+            component.test_layout().left_area,
+            Rect {
+                x: 0,
+                y: 1,
+                width: 30,
+                height: 4
+            },
+            "list area is the old 1-row offset, not the new 3-row admission"
+        );
     }
 
     #[test]
