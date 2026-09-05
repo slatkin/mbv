@@ -1,7 +1,7 @@
 # feeds-service-wide-list Specification
 
 ## Purpose
-TBD - created by archiving change restore-feeds-service-wide-list. Update Purpose after archive.
+Defines the Feeds Service's one-column Wide layout, semantic rail framing, and state-bearing row geometry.
 
 ## Requirements
 

@@ -1,7 +1,7 @@
 # queue-canonical-list Specification
 
 ## Purpose
-TBD - created by archiving change migrate-queue-to-canonical-list. Update Purpose after archive.
+Defines Queue's canonical fixed-row presentation, bounded progress projection, and parent-owned playback and scope authority.
 
 ## Requirements
 
