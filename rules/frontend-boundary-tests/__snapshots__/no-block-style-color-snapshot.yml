@@ -1,0 +1,38 @@
+id: no-block-style-color
+snapshots:
+  ? |
+    use ratatui::widgets::Block;
+
+    fn render_wrong_scoped_palette(f: &mut Frame) {
+      f.render_widget(Block::default().style(crate::app::palette::TEXT_MUTED), area);
+    }
+  : labels:
+    - source: Block::default().style(crate::app::palette::TEXT_MUTED)
+      style: primary
+      start: 96
+      end: 151
+  ? |
+    use ratatui::widgets::Block;
+    use crate::app::palette;
+
+    fn render_wrong_color_const(f: &mut Frame) {
+      f.render_widget(Block::default().style(palette::SURFACE_BACKDROP), area);
+    }
+  : labels:
+    - source: Block::default().style(palette::SURFACE_BACKDROP)
+      style: primary
+      start: 118
+      end: 167
+  ? |
+    use ratatui::widgets::Block;
+    use crate::app::palette;
+
+    fn render_wrong_resolve_function(f: &mut Frame) {
+      let focused = true;
+      f.render_widget(Block::default().style(resolve_surface_focus(focused)), area);
+    }
+  : labels:
+    - source: Block::default().style(resolve_surface_focus(focused))
+      style: primary
+      start: 145
+      end: 199

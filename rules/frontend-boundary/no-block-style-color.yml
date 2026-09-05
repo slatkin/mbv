@@ -1,0 +1,19 @@
+id: no-block-style-color
+language: rust
+severity: error
+message: >-
+  Block::default().style() must receive a Style, not a bare Color. Setting
+  Color directly uses the `impl From<Color> for Style` conversion which sets
+  foreground only, leaving background unset (a silent bug). Use
+  `.bg()`/`.fg()` to explicitly set color mode: e.g.,
+  `Block::default().style(Style::default().bg(palette::SURFACE))`
+  or `Block::default().style(my_style)` where `my_style: Style`.
+files:
+  - "src/app/render/**"
+ignores:
+  - "src/app/render/**/*tests*.rs"
+rule:
+  any:
+    - pattern: "Block::default().style(palette::$_)"
+    - pattern: "Block::default().style(resolve_surface_focus($$$))"
+    - pattern: "Block::default().style(crate::app::palette::$_)"
