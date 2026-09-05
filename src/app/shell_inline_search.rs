@@ -32,17 +32,14 @@ impl Model {
     }
 
     fn active_inline_search_host(&self) -> Option<ComponentId> {
-        if let Some(id) = self.tv_workspace_component_id() {
-            if self.application.mounted(&id) {
-                return Some(id);
-            }
-        }
-        if let Some(id) = self.music_workspace_component_id() {
-            if self.application.mounted(&id) {
-                return Some(id);
-            }
-        }
-        self.emby_browser_component_id()
+        // The pointer fields are the active-destination ownership boundary.
+        // Do not rediscover a mounted sibling: TV keeps both owners mounted
+        // across its breakpoint transition, but only one may receive search
+        // state and events.
+        self.tv_workspace_id
+            .clone()
+            .or_else(|| self.music_workspace_id.clone())
+            .or_else(|| self.emby_browser_id.clone())
             .filter(|id| self.application.mounted(id))
     }
 

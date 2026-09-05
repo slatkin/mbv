@@ -137,8 +137,20 @@ impl Model {
                             .expect("mount TV workspace");
                         self.register_destination(&id);
                     }
-                    self.tv_workspace_id = Some(id);
+                    self.tv_workspace_id = Some(id.clone());
                     self.push_tv_workspace_content();
+                    // On a narrow→wide flip the receiving workspace is
+                    // mounted during this sync, so the one-shot transfer
+                    // could not be applied by hand_off_tv_breakpoint.
+                    if let Some(transfer) = self.inline_search_transfer.take() {
+                        self.push_inline_search_content();
+                        self.apply_inline_search_transfer(&id, transfer);
+                        // Re-publish after restoring the query: restore_query
+                        // recomputes against the receiving host's pool, so the
+                        // pool must be present before the one-shot target
+                        // restoration and remains authoritative afterwards.
+                        self.push_inline_search_content();
+                    }
                 }
                 None => {
                     self.tv_workspace_id = None;
@@ -181,7 +193,15 @@ impl Model {
             return;
         }
         let wide = self.app.wide_tv_library_area(lib_idx).is_some();
-        // Capture the outgoing host before any viewport-anchor guard can return;
+        // The pointers describe the presentation used by the previous sync.
+        // Only capture/apply state when that owner actually changes; both TV
+        // destinations remain mounted between transitions.
+        let switching =
+            (wide && self.tv_workspace_id.is_none()) || (!wide && self.tv_workspace_id.is_some());
+        if !switching {
+            return;
+        }
+        // Capture the outgoing host before the destination sync repoints it;
         // this is a discrete owner handoff, never a per-frame mirror.
         let outgoing = if wide {
             self.emby_browser_id.as_ref()
@@ -228,10 +248,11 @@ impl Model {
                     return;
                 };
                 self.tv_viewport_anchor = Some(anchor);
-                if let Some(transfer) = self.inline_search_transfer.take() {
-                    if let Some(tv_id) = self.tv_workspace_id.clone() {
-                        self.apply_inline_search_transfer(&tv_id, transfer);
-                    }
+                if let (Some(transfer), Some(tv_id)) = (
+                    self.inline_search_transfer.take(),
+                    self.tv_workspace_id.clone(),
+                ) {
+                    self.apply_inline_search_transfer(&tv_id, transfer);
                 }
             }
             _ => {
