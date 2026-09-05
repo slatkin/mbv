@@ -1,6 +1,8 @@
 use super::components::{
     BrowserComponent, BrowserKey, BrowserKind, ComponentId, ShellRequest, TvWorkspaceComponent,
 };
+use super::images::series_image_cache_key;
+use super::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use super::render::TvWideRenderCtx;
 use super::shell::Model;
 use super::{PanelFocus, TabSelection};
@@ -279,10 +281,10 @@ impl Model {
             .filter(|_| self.app.images_enabled())
         {
             self.app.fetch_card_image(
-                format!("{}:ser_primary", item.id),
+                series_image_cache_key(&item.id, SERIES_LANDSCAPE_IMAGE_TYPES),
                 item.id.clone(),
                 String::new(),
-                &["Primary"],
+                SERIES_LANDSCAPE_IMAGE_TYPES,
             );
         }
         let image_loading = selected_series.as_ref().is_some_and(|item| {
@@ -290,7 +292,10 @@ impl Model {
                 && !self
                     .app
                     .card_image_states
-                    .contains_key(&format!("{}:ser_primary", item.id))
+                    .contains_key(&series_image_cache_key(
+                        &item.id,
+                        SERIES_LANDSCAPE_IMAGE_TYPES,
+                    ))
         });
         let context = TvWideRenderCtx::new(
             list,

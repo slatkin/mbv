@@ -131,6 +131,13 @@ impl Hero for QueueItem {
     }
 }
 
+/// Canonical TV Wide Series image-type candidate chain: the `Thumb`-first
+/// landscape mapping `artwork_for(HeroArtworkAspect::Landscape)` declares.
+/// The shell prefetch requests this same item (not a copy) so it warms the
+/// identical key the painter fetches under `series_image_cache_key`.
+pub(in crate::app) const SERIES_LANDSCAPE_IMAGE_TYPES: &[&str] =
+    &["Thumb", "Primary", "Backdrop", "Logo"];
+
 impl Hero for EmbyItem {
     fn title(&self) -> &str {
         &self.name
@@ -212,9 +219,7 @@ impl Hero for EmbyItem {
             return HeroArtwork::Placeholder;
         }
         let image_types = match (aspect, self.item_type.as_str()) {
-            (HeroArtworkAspect::Landscape, "Series") => {
-                &["Thumb", "Primary", "Backdrop", "Logo"][..]
-            }
+            (HeroArtworkAspect::Landscape, "Series") => SERIES_LANDSCAPE_IMAGE_TYPES,
             _ => &["Primary", "Backdrop", "Logo"][..],
         };
         HeroArtwork::Image {

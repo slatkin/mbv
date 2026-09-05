@@ -107,7 +107,10 @@ fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
     ));
 
     model.app.card_image_states.insert(
-        "movie-focused:ser_primary".into(),
+        crate::app::images::series_image_cache_key(
+            "movie-focused",
+            crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES,
+        ),
         crate::app::images::CachedImage::empty(),
     );
     model.push_tv_workspace_content();
@@ -126,6 +129,67 @@ fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
             ..
         })
     ));
+}
+
+/// Task 2.1: the Wide push prefetches the identical canonical key the
+/// painter requests, so `paint_home_image` on the consumed `HomeImagePaint`
+/// starts no additional fetch and the reservation survives the paint.
+#[test]
+fn push_tv_workspace_prefetch_warms_the_painted_series_key() {
+    use crate::app::images::series_image_cache_key;
+    use crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
+
+    let mut model = mounted_tv_model();
+    model.app.image_protocol_enabled = true;
+    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+    model.push_tv_workspace_content();
+
+    let expected_key = series_image_cache_key("movie-focused", SERIES_LANDSCAPE_IMAGE_TYPES);
+    assert!(
+        model.app.card_image_loading.contains(&expected_key),
+        "prefetch must reserve the painted key: {expected_key}"
+    );
+    let active = model.app.image_fetches_active;
+    let pending = model.app.pending_image_fetches.len();
+
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(100, 30)).unwrap();
+    let paint = {
+        let component = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<TvWorkspaceComponent>()
+            .unwrap();
+        terminal.draw(|f| component.view(f, f.area())).unwrap();
+        component.take_image_paint()
+    };
+    let Some(crate::app::render::HomeImagePaint::Series { image_types, .. }) = &paint else {
+        panic!("expected a Series image request");
+    };
+    assert_eq!(
+        *image_types, SERIES_LANDSCAPE_IMAGE_TYPES,
+        "painter must declare the canonical chain"
+    );
+
+    terminal
+        .draw(|f| model.app.paint_home_image(f, paint))
+        .unwrap();
+
+    assert!(
+        model.app.card_image_loading.contains(&expected_key)
+            || model.app.card_image_states.contains_key(&expected_key),
+        "paint must keep the prefetched key reserved: {expected_key}"
+    );
+    assert_eq!(
+        model.app.image_fetches_active, active,
+        "paint must start no additional fetch"
+    );
+    assert_eq!(
+        model.app.pending_image_fetches.len(),
+        pending,
+        "paint must queue no additional fetch"
+    );
 }
 
 #[test]
