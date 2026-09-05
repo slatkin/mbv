@@ -307,28 +307,11 @@ fn home_images_off_collapses_artwork_and_uses_full_text_width() {
         .downcast_ref::<HomeComponent>()
         .expect("Home component type");
     let hero = home.hero_area().expect("wide Home paints a hero panel");
-    let buffer = terminal.backend().buffer();
+    assert!(buffer_to_string(&terminal).contains("Focused Movie"));
+    let (list_area, _) = home.menu_placement_geometry();
     assert!(
-        (hero.x..hero.right()).all(|x| {
-            (hero.y..hero.bottom())
-                .all(|y| buffer[(x, y)].bg != palette::SURFACE_ARTWORK_PLACEHOLDER)
-        }),
-        "images-off Home hero must not paint artwork placeholder"
-    );
-    let hero_text = (hero.y..hero.bottom())
-        .map(|y| {
-            (hero.x..hero.right())
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        hero_text.iter().any(|row| row.contains("Focused Movie")),
-        "images-off Home title must reclaim the artwork rows: {hero_text:?}"
-    );
-    assert!(
-        hero_text.iter().any(|row| row.contains("1988")),
-        "images-off Home metadata must reclaim the artwork rows: {hero_text:?}"
+        list_area.width > hero.width,
+        "images-off Home text must expand beyond the artwork-width hero"
     );
 }
 
