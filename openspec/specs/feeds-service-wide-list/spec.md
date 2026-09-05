@@ -1,4 +1,9 @@
-## MODIFIED Requirements
+# feeds-service-wide-list Specification
+
+## Purpose
+TBD - created by archiving change restore-feeds-service-wide-list. Update Purpose after archive.
+
+## Requirements
 
 ### Requirement: Wide Feeds Service uses one column
 The Feeds Service/tab Wide panel MUST render one full-width selectable row per FeedEntry at and above the Wide breakpoint, including exactly at 82 columns. It MUST NOT use `library_column_count` to create a second column.
