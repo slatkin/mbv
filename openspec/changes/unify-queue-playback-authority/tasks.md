@@ -2,8 +2,8 @@ Standing verification for each Rust task: run `cargo check -p mbv-core` for core
 
 ## 1. Establish owner state and snapshot contracts
 
-- [ ] 1.1 Extend the owner snapshot type from the existing unified queue state so one value carries queue revision, ordered slots, observed active slot, playback status, queue source, and pending transition summaries; verify serialization round-trips every field and retains existing QueueItem capability gating.
-- [ ] 1.2 Define the minimal transition state using existing `PlaybackRequestId` and `PlaybackGeneration`: one `in_flight` transition and one `queued_latest` transition, each targeting `QueueSlotId`; verify an A-to-B-to-A sequence retains distinct request identities.
+- [x] 1.1 Extend the owner snapshot type from the existing unified queue state so one value carries queue revision, ordered slots, observed active slot, playback status, queue source, and pending transition summaries; verify serialization round-trips every field and retains existing QueueItem capability gating.
+- [x] 1.2 Define the minimal transition state using existing `PlaybackRequestId` and `PlaybackGeneration`: one `in_flight` transition and one `queued_latest` transition, each targeting `QueueSlotId`; verify an A-to-B-to-A sequence retains distinct request identities.
 - [ ] 1.3 Change queue-addressing `PlayerCommand` variants and transition-bearing commands at their source-of-truth definitions to carry owner `QueueSlotId` and request identity instead of `usize`; verify compile errors enumerate all callers before updating them.
 - [ ] 1.4 Change `PlayerEvent::TrackChanged`, `TrackCompleted`, and `Stopped` at their source-of-truth definitions to report owner `QueueSlotId`, with transition observations carrying the dispatched request identity; verify no queue-addressing event field remains a bare `usize`.
 - [ ] 1.5 Remove unused queue-addressing `WireCommand` variants and their conversions while preserving transport commands and `CTRL_PROTOCOL_VERSION`; verify `rg -n 'WireCommand::(JumpTo|QueueAppend|QueueRemove|QueueMove|ReplaceQueue|LoadNew)' crates/ src/` has no non-test sender.
