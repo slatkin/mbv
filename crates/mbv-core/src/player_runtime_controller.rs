@@ -401,6 +401,13 @@ impl Player {
         self.stop();
         self.join();
 
+        // The fresh run's PlaybackQueue allocates slot ids 1..=items.len()
+        // from its own allocator (new_from_queue_items -> from_queue_items).
+        // Seed this owner counter past them so a later append fast-path never
+        // re-hands an id that is already a slot in the run's queue.
+        self.next_slot_id
+            .store(items.len() as u64 + 1, Ordering::Relaxed);
+
         let (audio_pipe_path, audio_pipe_samplerate, audio_pipe_bitdepth, always_skip_intro) =
             if let Some(ref c) = client {
                 (

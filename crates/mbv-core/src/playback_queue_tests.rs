@@ -135,6 +135,21 @@ fn owner_assigned_dup_items_keep_distinct_slot_ids_through_submit_and_append() {
 }
 
 #[test]
+fn from_queue_items_next_local_allocation_is_len_plus_one() {
+    // The bare Player owner seeds its slot-id counter to `items.len() + 1`
+    // after a cold start; this locks the assumption that a cold-started
+    // run's queue allocates exactly ids 1..=len.
+    let mut queue = PlaybackQueue::from_queue_items(
+        vec![item("a"), item("b"), item("c")]
+            .into_iter()
+            .map(|i| QueueItem::Emby(Box::new(i)))
+            .collect(),
+        Some(0),
+    );
+    assert_eq!(queue.append(QueueItem::Emby(Box::new(item("d")))).raw(), 4);
+}
+
+#[test]
 fn removing_before_active_slot_preserves_active_identity() {
     let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(2));
     let active = queue.active_slot_id().unwrap();
