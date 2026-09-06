@@ -94,6 +94,8 @@ fn unified_queue_state_for_peer(
         active_slot,
         revision: queue.revision().raw(),
         source: source.clone(),
+        in_flight_transition: None,
+        queued_latest_transition: None,
     })
 }
 

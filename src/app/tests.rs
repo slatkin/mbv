@@ -92,6 +92,8 @@ pub(crate) fn run_stub_daemon_handshake(stream: std::net::TcpStream) -> std::net
             active_slot: None,
             revision: 0,
             source: crate::config::QueueSource::Unknown,
+            in_flight_transition: None,
+            queued_latest_transition: None,
         },
     ))
     .unwrap();
@@ -664,5 +666,7 @@ pub(crate) fn emby_unified_state(
         slots,
         revision: 1,
         source: crate::config::QueueSource::Remote,
+        in_flight_transition: None,
+        queued_latest_transition: None,
     }
 }

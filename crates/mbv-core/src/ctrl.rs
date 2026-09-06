@@ -223,6 +223,16 @@ pub struct UnifiedQueueSlot {
     pub item: QueueItem,
 }
 
+/// Summary of a pending playback transition carried in the owner snapshot
+/// (design D5). Kept independent of internal queue types — the target slot is
+/// a raw u64, matching `UnifiedQueueSlot::slot_id`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TransitionSummary {
+    pub request_id: PlaybackRequestId,
+    pub generation: PlaybackGeneration,
+    pub target_slot: u64,
+}
+
 /// Full queue state exchanged between unified-queue-capable peers.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct UnifiedQueueStateData {
@@ -233,6 +243,14 @@ pub struct UnifiedQueueStateData {
     pub revision: u64,
     #[serde(default)]
     pub source: QueueSource,
+    /// Transition dispatched to the Playback run and awaiting observation
+    /// (design D5). `None` when no transition is in flight.
+    #[serde(default)]
+    pub in_flight_transition: Option<TransitionSummary>,
+    /// Newest queued transition held back behind the in-flight one (design
+    /// D4/D5). `None` when nothing is queued.
+    #[serde(default)]
+    pub queued_latest_transition: Option<TransitionSummary>,
 }
 
 /// Build an `UnifiedQueueSlot` from a `QueueSlotId`.  Callers in

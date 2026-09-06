@@ -94,6 +94,8 @@ fn disconnect_causes_the_reader_thread_to_observe_the_shutdown_and_exit() {
                 active_slot: None,
                 revision: 0,
                 source: crate::config::QueueSource::Unknown,
+                in_flight_transition: None,
+                queued_latest_transition: None,
             },
         ))
         .unwrap();
@@ -155,6 +157,8 @@ fn spawn_test_daemon_up_to_state(
                 active_slot: None,
                 revision: 0,
                 source: crate::config::QueueSource::Unknown,
+                in_flight_transition: None,
+                queued_latest_transition: None,
             },
         ))
         .unwrap();
@@ -330,6 +334,8 @@ fn connect_endpoint_propagates_active_remote_playback_status() {
                 active_slot: None,
                 revision: 0,
                 source: crate::config::QueueSource::Unknown,
+                in_flight_transition: None,
+                queued_latest_transition: None,
             },
         ))
         .unwrap();
@@ -460,6 +466,8 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
                 active_slot: None,
                 revision: 0,
                 source: crate::config::QueueSource::Unknown,
+                in_flight_transition: None,
+                queued_latest_transition: None,
             },
         ))
         .unwrap();

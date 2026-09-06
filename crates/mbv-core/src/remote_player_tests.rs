@@ -251,6 +251,8 @@ fn unified_queue_state_preserves_canonical_coordinates_and_source() {
             id: Some("pl-1".into()),
             name: "My Playlist".into(),
         },
+        in_flight_transition: None,
+        queued_latest_transition: None,
     };
 
     apply_ctrl_event(

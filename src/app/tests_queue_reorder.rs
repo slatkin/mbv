@@ -662,6 +662,8 @@ fn unified_queue_event_preserves_owner_slot_ids_and_source() {
         active_slot: Some(97),
         revision: 12,
         source: crate::config::QueueSource::Remote,
+        in_flight_transition: None,
+        queued_latest_transition: None,
     };
 
     app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(state)));

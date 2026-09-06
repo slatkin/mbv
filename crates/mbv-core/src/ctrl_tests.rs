@@ -399,12 +399,36 @@ fn unified_queue_state_data_round_trips() {
         active_slot: Some(1),
         revision: 5,
         source: QueueSource::Unknown,
+        in_flight_transition: Some(crate::ctrl::TransitionSummary {
+            request_id: 7,
+            generation: 3,
+            target_slot: 2,
+        }),
+        queued_latest_transition: Some(crate::ctrl::TransitionSummary {
+            request_id: 8,
+            generation: 3,
+            target_slot: 1,
+        }),
     };
     let json = serde_json::to_string(&state).unwrap();
     let decoded: UnifiedQueueStateData = serde_json::from_str(&json).unwrap();
     assert_eq!(decoded.slots.len(), 2);
     assert_eq!(decoded.active_slot, Some(1));
     assert_eq!(decoded.revision, 5);
+    assert_eq!(decoded.in_flight_transition, state.in_flight_transition);
+    assert_eq!(
+        decoded.queued_latest_transition,
+        state.queued_latest_transition
+    );
+
+    // Older payloads omit the transition fields entirely.
+    let mut legacy: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let obj = legacy.as_object_mut().unwrap();
+    obj.remove("in_flight_transition");
+    obj.remove("queued_latest_transition");
+    let decoded_legacy: UnifiedQueueStateData = serde_json::from_value(legacy).unwrap();
+    assert_eq!(decoded_legacy.in_flight_transition, None);
+    assert_eq!(decoded_legacy.queued_latest_transition, None);
 }
 
 #[test]
@@ -523,6 +547,8 @@ fn unified_queue_state_event_round_trips() {
         active_slot: None,
         revision: 0,
         source: QueueSource::Unknown,
+        in_flight_transition: None,
+        queued_latest_transition: None,
     });
     let json = serde_json::to_string(&event).unwrap();
     let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();
