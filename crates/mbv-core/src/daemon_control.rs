@@ -173,45 +173,6 @@ fn handle_ctrl(
             *source = new_source;
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
         }
-        // Legacy index-addressed queue mutations: resolve the ordinal against
-        // the canonical queue here (where it is held) and forward a
-        // slot-addressed command. Modern peers use `CtrlCmd::UnifiedQueue*`.
-        CtrlCmd::PlayerCmd(WireCommand::QueueMove(from, to)) => {
-            if from >= queue.len() || to >= queue.len() {
-                reject_command(
-                    request.reply_tx,
-                    ctrl_clients,
-                    client_id,
-                    player,
-                    queue,
-                    source,
-                    "remote queue changed; move skipped".to_string(),
-                );
-            } else if from != to {
-                let slot_id = queue.slots()[from].slot_id;
-                queue.move_slot(slot_id, to);
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                player.send_command(PlayerCommand::QueueMove(slot_id, to));
-            }
-        }
-        CtrlCmd::PlayerCmd(WireCommand::QueueRemove(index)) => {
-            if index >= queue.len() {
-                reject_command(
-                    request.reply_tx,
-                    ctrl_clients,
-                    client_id,
-                    player,
-                    queue,
-                    source,
-                    "remote queue changed; remove skipped".to_string(),
-                );
-            } else {
-                let slot_id = queue.slots()[index].slot_id;
-                queue.consume_slot(slot_id);
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                player.send_command(PlayerCommand::QueueRemove(slot_id));
-            }
-        }
         CtrlCmd::PlayerCmd(pc) => match PlayerCommand::from(pc) {
             PlayerCommand::ReplaceQueue {
                 items: new_items,
@@ -233,18 +194,6 @@ fn handle_ctrl(
                     items: queue.slots().iter().map(|s| s.item.clone()).collect(),
                     start_idx: next_cursor,
                 });
-            }
-            PlayerCommand::QueueAppend { items: new_items } => {
-                if !new_items.is_empty() {
-                    for item in new_items {
-                        queue.append(item);
-                    }
-                    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                    player.send_command(PlayerCommand::SubmitQueue {
-                        items: queue.slots().iter().map(|s| s.item.clone()).collect(),
-                        start_idx: queue.active_index().unwrap_or(0),
-                    });
-                }
             }
             other => {
                 player.send_command(other);

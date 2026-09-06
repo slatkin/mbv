@@ -97,18 +97,6 @@ fn wire_command_tags_are_pinned() {
         "{\"JumpTo\":3}"
     );
     assert_eq!(
-        serde_json::to_string(&WireCommand::QueueAppend { items: vec![] }).unwrap(),
-        "{\"QueueAppend\":{\"items\":[]}}"
-    );
-    assert_eq!(
-        serde_json::to_string(&WireCommand::QueueRemove(2)).unwrap(),
-        "{\"PlaylistRemove\":2}"
-    );
-    assert_eq!(
-        serde_json::to_string(&WireCommand::QueueMove(2, 3)).unwrap(),
-        "{\"PlaylistMove\":[2,3]}"
-    );
-    assert_eq!(
         serde_json::to_string(&WireCommand::SetVolume(50)).unwrap(),
         "{\"SetVolume\":50}"
     );
@@ -157,17 +145,9 @@ fn wire_command_tags_are_pinned() {
         .unwrap(),
         "{\"ReplacePlaylist\":{\"items\":[],\"start_idx\":0}}"
     );
-    // LoadNew and NextUpShow carry a EmbyItem / free-form strings, so
-    // asserting the full JSON body would just restate EmbyItem's field
-    // list; instead check the pinned tag key only.
-    assert_eq!(
-        wire_tag(&WireCommand::LoadNew {
-            url: "http://emby.local/stream".into(),
-            start_pos: 0.0,
-            item: Box::new(stub_media_item()),
-        }),
-        "LoadNew"
-    );
+    // NextUpShow carries free-form strings, so asserting the full JSON body
+    // would just restate the field list; instead check the pinned tag key
+    // only.
     assert_eq!(
         wire_tag(&WireCommand::NextUpShow {
             item_id: "item1".into(),

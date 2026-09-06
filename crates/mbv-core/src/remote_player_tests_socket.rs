@@ -1,5 +1,3 @@
-use crate::ctrl::WireCommand;
-use crate::player::PlayerCommand;
 
 #[test]
 fn adopt_queue_returns_false_when_ctrl_socket_is_dead() {
@@ -592,27 +590,4 @@ fn request_shutdown_is_unsupported_and_sends_nothing_when_daemon_lacks_capabilit
         cmd_rx.try_recv(),
         Err(mpsc::TryRecvError::Disconnected)
     ));
-}
-
-#[test]
-fn v3_peer_sends_queue_append_wire_command() {
-    let existing = vec![make_media_item("1")];
-    let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(existing, 0);
-
-    assert!(remote.send_command(PlayerCommand::QueueAppend {
-        items: vec![QueueItem::Emby(Box::new(make_media_item("2")))]
-    }));
-
-    match cmd_rx.recv().unwrap() {
-        CtrlCmd::PlayerCmd(WireCommand::QueueAppend { items }) => {
-            assert_eq!(
-                items
-                    .iter()
-                    .map(|item| item.id.as_str())
-                    .collect::<Vec<_>>(),
-                ["2"]
-            );
-        }
-        _ => panic!("expected QueueAppend"),
-    }
 }
