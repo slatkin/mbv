@@ -191,7 +191,11 @@ fn handle_ctrl(
                 *queue = PlaybackQueue::from_queue_items(queue_items, Some(next_cursor));
                 broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
                 player.send_command(PlayerCommand::SubmitQueue {
-                    items: queue.slots().iter().map(|s| s.item.clone()).collect(),
+                    items: queue
+                        .slots()
+                        .iter()
+                        .map(|s| (s.slot_id, s.item.clone()))
+                        .collect(),
                     start_idx: next_cursor,
                 });
             }
@@ -390,10 +394,15 @@ fn handle_ctrl(
                 );
                 return;
             }
-            let items_for_player = items.clone();
-            for item in items {
-                queue.append(item);
-            }
+            // Allocate the owner slot ids once, in the daemon's canonical
+            // queue, and hand the same ids to the Playback run.
+            let items_for_player: Vec<(QueueSlotId, QueueItem)> = items
+                .into_iter()
+                .map(|item| {
+                    let slot_id = queue.append(item.clone());
+                    (slot_id, item)
+                })
+                .collect();
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
             // Append to the player's queue rather than replacing the whole queue.
             player.send_command(PlayerCommand::QueueAppend {

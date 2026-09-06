@@ -64,7 +64,7 @@ fn failed_eager_transition_preserves_canonical_queue_and_mode() {
     let old_active = run.active_slot_id();
     let mpv = test_mpv();
 
-    run.cmd_append_queue(vec![abs_item()], &mpv);
+    run.cmd_append_queue(owner_paired(vec![abs_item()]), &mpv);
 
     assert_eq!(
         run.queue
@@ -94,7 +94,7 @@ fn replacement_prepare_failure_accepts_new_stopped_queue_and_clears_mpv() {
     assert_eq!(mpv.get_property::<i64>("playlist-count").unwrap(), 1);
     let mut progress = noop_progress();
 
-    run.replace_with_queue_items(vec![replacement], 0, &mpv, &mut progress);
+    run.replace_with_queue_items(owner_paired(vec![replacement]), 0, &mpv, &mut progress);
 
     assert_eq!(run.queue_len(), 1);
     assert_eq!(run.active_item().unwrap().title(), "Replacement");
@@ -139,7 +139,7 @@ fn active_file_replacement_uses_canonical_item_generic_path_and_one_mpv_entry() 
         QueueItem::Emby(Box::new(make_media_item("replacement-b"))),
     ];
 
-    run.replace_with_queue_items(items, 1, &mpv, &mut progress);
+    run.replace_with_queue_items(owner_paired(items), 1, &mpv, &mut progress);
 
     assert!(run.active_file);
     assert_eq!(run.queue_len(), 2);

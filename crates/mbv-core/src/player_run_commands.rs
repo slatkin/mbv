@@ -220,15 +220,11 @@ impl PlaybackRun {
         progress: &mut ProgressGuard,
     ) {
         if self.active_file {
-            self.replace_with_queue_items(
-                new_items
-                    .into_iter()
-                    .map(|item| QueueItem::Emby(Box::new(item)))
-                    .collect(),
-                start_idx,
-                mpv,
-                progress,
-            );
+            let paired = new_items
+                .into_iter()
+                .map(|item| (self.queue.mint_slot_id(), QueueItem::Emby(Box::new(item))))
+                .collect();
+            self.replace_with_queue_items(paired, start_idx, mpv, progress);
             return;
         }
         self.cancel_pending_quit();
@@ -311,14 +307,14 @@ impl PlaybackRun {
         *progress = spawn_progress_reporter(self.reporter.clone());
     }
 
-    fn append_items_to_queue(&mut self, items: Vec<QueueItem>) {
-        for item in items {
-            self.queue.append(item);
+    fn append_items_to_queue(&mut self, items: Vec<(QueueSlotId, QueueItem)>) {
+        for (slot_id, item) in items {
+            self.queue.append_with_id(slot_id, item);
         }
         self.status.lock().unwrap().queue_len = self.queue_len();
     }
 
-    fn cmd_append_queue(&mut self, new_items: Vec<QueueItem>, mpv: &Mpv) {
+    fn cmd_append_queue(&mut self, new_items: Vec<(QueueSlotId, QueueItem)>, mpv: &Mpv) {
         if new_items.is_empty() {
             return;
         }
@@ -327,7 +323,7 @@ impl PlaybackRun {
             self.append_items_to_queue(new_items);
             return;
         }
-        if new_items.iter().any(QueueItem::is_audiobookshelf_any) {
+        if new_items.iter().any(|(_, i)| i.is_audiobookshelf_any()) {
             let Some(active_item) = self.active_item().cloned() else {
                 return;
             };
@@ -346,7 +342,7 @@ impl PlaybackRun {
             self.active_file = true;
             return;
         }
-        for item in &new_items {
+        for (_, item) in &new_items {
             let url = mpv_url_for_queue_item(item, &self.server_url, &self.token);
             let opts = mpv_load_opts(item);
             if let Err(e) = mpv.command(
@@ -429,12 +425,12 @@ impl PlaybackRun {
     /// Single-item sets `PlaybackOrigin::Standalone`; multi-item sets `Queue`.
     fn cmd_submit_queue(
         &mut self,
-        items: Vec<QueueItem>,
+        items: Vec<(QueueSlotId, QueueItem)>,
         start_idx: usize,
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
-        if self.active_file || items.iter().any(QueueItem::is_audiobookshelf_any) {
+        if self.active_file || items.iter().any(|(_, i)| i.is_audiobookshelf_any()) {
             self.replace_with_queue_items(items, start_idx, mpv, progress);
             return;
         }
@@ -476,7 +472,7 @@ impl PlaybackRun {
         // Load every item into mpv — source URL resolution branches on
         // QueueItem variant; everything else is shared.
         for i in queue_load_indices(items.len(), start_idx) {
-            let item = &items[i];
+            let item = &items[i].1;
             let url = mpv_url_for_queue_item(item, &self.server_url, &self.token);
             let (mode, index) = queue_load_location(i, start_idx);
             let opts = mpv_load_opts(item);
@@ -488,7 +484,7 @@ impl PlaybackRun {
             }
         }
 
-        let active_item = &items[start_idx];
+        let active_item = &items[start_idx].1;
 
         // send_ep_info only for Emby items.
         if let Some(emby) = active_item.as_emby() {
@@ -506,7 +502,9 @@ impl PlaybackRun {
         let active_as_emby = active_item.as_emby().cloned();
         let active_guid = active_item.id().to_string();
         let active_title = active_item.title().to_string();
-        self.queue = PlaybackQueue::from_queue_items(items, Some(start_idx));
+        let active_slot_id = items.get(start_idx).map(|(id, _)| *id);
+        self.queue =
+            PlaybackQueue::from_slot_items(items, active_slot_id, QueueRevision::default());
         self.current_idx = start_idx;
         self.load_active_item_state();
         self.begin_item_lifecycle();
@@ -552,7 +550,7 @@ impl PlaybackRun {
 
     fn replace_with_queue_items(
         &mut self,
-        items: Vec<QueueItem>,
+        items: Vec<(QueueSlotId, QueueItem)>,
         start_idx: usize,
         mpv: &Mpv,
         progress: &mut ProgressGuard,
@@ -567,7 +565,7 @@ impl PlaybackRun {
             return;
         }
         let start_idx = start_idx.min(items.len() - 1);
-        let active_item = items[start_idx].clone();
+        let active_item = items[start_idx].1.clone();
         let prepared = match self.prepare_item(&active_item) {
             Ok(prepared) => prepared,
             Err(error) => {
@@ -586,7 +584,9 @@ impl PlaybackRun {
 
         self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
         progress.stop_and_join(self.progress_join_budget());
-        self.queue = PlaybackQueue::from_queue_items(items, Some(start_idx));
+        let active_slot_id = items.get(start_idx).map(|(id, _)| *id);
+        self.queue =
+            PlaybackQueue::from_slot_items(items, active_slot_id, QueueRevision::default());
         self.current_idx = start_idx;
         self.active_file = true;
         if let Err(error) = self.install_active_projection(mpv, prepared, &active_item) {
@@ -629,7 +629,7 @@ impl PlaybackRun {
 
     fn accept_stopped_replacement(
         &mut self,
-        items: Vec<QueueItem>,
+        items: Vec<(QueueSlotId, QueueItem)>,
         start_idx: usize,
         active_item: &QueueItem,
         mpv: &Mpv,
@@ -646,7 +646,9 @@ impl PlaybackRun {
         let _ = mpv.command("playlist-clear", &[]);
 
         if !items.is_empty() {
-            self.queue = PlaybackQueue::from_queue_items(items, Some(start_idx));
+            let active_slot_id = items.get(start_idx).map(|(id, _)| *id);
+            self.queue =
+                PlaybackQueue::from_slot_items(items, active_slot_id, QueueRevision::default());
         }
         self.current_idx = start_idx;
         self.active_file = true;

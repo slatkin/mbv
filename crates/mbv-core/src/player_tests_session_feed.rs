@@ -400,15 +400,19 @@ fn append_items_to_queue_keeps_feed_items() {
     let (mut session, _status) = make_queue_session_for_pos_tests(1);
     let entry = make_feed_entry("feed-1", "Podcast Episode 1");
 
-    session.append_items_to_queue(vec![QueueItem::Feed(entry.clone())]);
+    session.append_items_to_queue(vec![(
+        QueueSlotId::from_raw(4_242),
+        QueueItem::Feed(entry.clone()),
+    )]);
 
     assert_eq!(session.queue_len(), 4);
     assert_eq!(
-        session
-            .queue
-            .slots()
-            .last()
-            .map(|slot| slot.item.id().to_string()),
+        session.queue.slots().last().map(|slot| slot.item.id().to_string()),
         Some(entry.guid.clone())
+    );
+    // The owner-assigned slot id is retained through the append helper.
+    assert_eq!(
+        session.queue.slots().last().map(|slot| slot.slot_id),
+        Some(QueueSlotId::from_raw(4_242))
     );
 }

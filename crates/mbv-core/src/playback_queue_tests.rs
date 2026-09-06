@@ -86,6 +86,55 @@ fn duplicate_item_ids_receive_distinct_queue_slot_ids() {
 }
 
 #[test]
+fn owner_assigned_dup_items_keep_distinct_slot_ids_through_submit_and_append() {
+    // Submission hands the run owner-assigned (id, item) pairs; two copies of
+    // the same content must land in two independently addressable slots.
+    let submitted = vec![
+        (
+            QueueSlotId::from_raw(10),
+            QueueItem::Emby(Box::new(item("dup"))),
+        ),
+        (
+            QueueSlotId::from_raw(11),
+            QueueItem::Emby(Box::new(item("dup"))),
+        ),
+    ];
+    let mut queue = PlaybackQueue::from_slot_items(
+        submitted,
+        Some(QueueSlotId::from_raw(10)),
+        QueueRevision::default(),
+    );
+
+    // Then append the same content twice more with fresh owner ids.
+    queue.append_with_id(
+        QueueSlotId::from_raw(12),
+        QueueItem::Emby(Box::new(item("dup"))),
+    );
+    queue.append_with_id(
+        QueueSlotId::from_raw(13),
+        QueueItem::Emby(Box::new(item("dup"))),
+    );
+
+    let ids = slot_ids(&queue);
+    assert_eq!(
+        ids,
+        vec![
+            QueueSlotId::from_raw(10),
+            QueueSlotId::from_raw(11),
+            QueueSlotId::from_raw(12),
+            QueueSlotId::from_raw(13),
+        ]
+    );
+    let unique: std::collections::HashSet<_> = ids.iter().collect();
+    assert_eq!(unique.len(), 4, "every occurrence keeps a distinct slot id");
+    assert!(queue.slots().iter().all(|s| s.item.id() == "dup"));
+
+    // A subsequent local allocation must not reuse an adopted id.
+    let minted = queue.append(QueueItem::Emby(Box::new(item("dup"))));
+    assert!(minted.raw() > 13);
+}
+
+#[test]
 fn removing_before_active_slot_preserves_active_identity() {
     let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(2));
     let active = queue.active_slot_id().unwrap();

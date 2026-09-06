@@ -330,6 +330,22 @@ impl PlaybackQueue {
         self.insert(self.slots.len(), item)
     }
 
+    /// Mint a fresh monotonic slot id without inserting a slot. Owner paths
+    /// that assign identity before handing items to the Playback run use this
+    /// so the run receives the id rather than allocating its own.
+    pub fn mint_slot_id(&mut self) -> QueueSlotId {
+        self.allocate_slot_id()
+    }
+
+    /// Append a slot that already carries an owner-assigned identity. Keeps
+    /// `next_slot_id` ahead of any adopted id so later local allocations do
+    /// not collide.
+    pub fn append_with_id(&mut self, slot_id: QueueSlotId, item: QueueItem) {
+        self.slots.push(QueueSlot::new(slot_id, item));
+        self.next_slot_id = self.next_slot_id.max(slot_id.raw().saturating_add(1));
+        self.revision.bump();
+    }
+
     pub fn insert(&mut self, index: usize, item: QueueItem) -> QueueSlotId {
         let slot_id = self.allocate_slot_id();
         let index = index.min(self.slots.len());

@@ -80,6 +80,10 @@ pub struct Player {
     pub status: Arc<Mutex<PlayerStatus>>,
     thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
     ws_tx: Arc<Mutex<Option<crate::ws::WsSender>>>,
+    // ponytail: bare-mode owner has no canonical PlaybackQueue yet, so this
+    // monotonic counter is the smallest slot-id source until task 3.1 folds
+    // owner queue state into shell-owned state.
+    next_slot_id: Arc<AtomicU64>,
 }
 
 impl Player {
@@ -116,7 +120,21 @@ impl Player {
             status: Arc::new(Mutex::new(PlayerStatus::default())),
             thread_handle: Mutex::new(None),
             ws_tx: Arc::new(Mutex::new(ws_tx)),
+            next_slot_id: Arc::new(AtomicU64::new(1)),
         }
+    }
+
+    /// Assign owner slot identity to each item immediately before a queue
+    /// command is sent to the Playback run, so the run adopts these ids
+    /// instead of minting its own.
+    fn assign_slot_ids(&self, items: Vec<QueueItem>) -> Vec<(QueueSlotId, QueueItem)> {
+        items
+            .into_iter()
+            .map(|item| {
+                let raw = self.next_slot_id.fetch_add(1, Ordering::Relaxed);
+                (QueueSlotId::from_raw(raw), item)
+            })
+            .collect()
     }
 
     /// Sets the fixed ALSA device identifier packaged-daemon clocked output
@@ -373,7 +391,10 @@ impl Player {
                 let mut st = self.status.lock().unwrap();
                 st.seed_from_item(start_item, start_idx, items.len());
             }
-            return self.send_command(PlayerCommand::SubmitQueue { items, start_idx });
+            return self.send_command(PlayerCommand::SubmitQueue {
+                items: self.assign_slot_ids(items),
+                start_idx,
+            });
         }
 
         // Cold start: stop, join, spawn fresh player thread.
@@ -640,7 +661,9 @@ impl Player {
         {
             return false;
         }
-        self.send_command(PlayerCommand::QueueAppend { items })
+        self.send_command(PlayerCommand::QueueAppend {
+            items: self.assign_slot_ids(items),
+        })
     }
 
     pub fn stop(&self) {

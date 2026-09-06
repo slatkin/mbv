@@ -79,7 +79,7 @@ fn append_items_to_queue_extends_queue_without_moving_current_idx() {
     let (mut session, status) = make_queue_session_for_pos_tests(1);
     let appended = make_media_item("ep4");
 
-    session.append_items_to_queue(vec![QueueItem::Emby(Box::new(appended.clone()))]);
+    session.append_items_to_queue(owner_paired(vec![QueueItem::Emby(Box::new(appended.clone()))]));
 
     assert_eq!(session.queue_len(), 4);
     assert_eq!(session.current_idx, 1);

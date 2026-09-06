@@ -297,7 +297,7 @@ pub enum PlayerCommand {
     TogglePause,
     JumpTo(usize),
     QueueAppend {
-        items: Vec<QueueItem>,
+        items: Vec<(QueueSlotId, QueueItem)>,
     },
     /// Remove an existing queue occurrence by its owner-assigned slot
     /// identity (never an ordinal — the occurrence may have moved since the
@@ -341,7 +341,7 @@ pub enum PlayerCommand {
     /// the same lifecycle path — source URL and reporting branch on `QueueItem`
     /// variant; everything else is shared.
     SubmitQueue {
-        items: Vec<QueueItem>,
+        items: Vec<(QueueSlotId, QueueItem)>,
         start_idx: usize,
     },
 }

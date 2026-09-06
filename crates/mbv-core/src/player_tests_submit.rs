@@ -36,7 +36,7 @@ fn submit_queue_fast_path_sends_command_for_feed_entry() {
         PlayerCommand::SubmitQueue { items, start_idx } => {
             assert_eq!(items.len(), 1);
             assert_eq!(start_idx, 0);
-            assert!(matches!(&items[0], QueueItem::Feed(e) if e.guid == "feed-1"));
+            assert!(matches!(&items[0].1, QueueItem::Feed(e) if e.guid == "feed-1"));
         }
         _ => panic!("expected SubmitQueue command"),
     }
@@ -241,7 +241,7 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
     assert!(matches!(
         commands.try_recv().unwrap(),
         PlayerCommand::SubmitQueue { items, start_idx }
-            if start_idx == 0 && items.len() == 1 && items[0].is_audiobookshelf()
+            if start_idx == 0 && items.len() == 1 && items[0].1.is_audiobookshelf()
     ));
 }
 
