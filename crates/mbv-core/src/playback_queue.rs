@@ -9,7 +9,12 @@ const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
 // Split out to keep this file under the repo's line cap.
 include!("playback_queue_items.rs");
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+// serde derives so the owner-assigned slot identity can travel on
+// `PlayerEvent` / `PlayerCommand` across the ctrl seam; a newtype over `u64`
+// serializes as its inner value.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct QueueSlotId(u64);
 
 impl QueueSlotId {

@@ -173,7 +173,7 @@ fn queue_move_succeeds_unconditionally() {
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueMove(0, 1))),
+        CtrlCmd::PlayerCmd(WireCommand::QueueMove(0, 1)),
         sender_id,
         CtrlRequest {
             reply_tx: &reply_tx,

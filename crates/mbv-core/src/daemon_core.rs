@@ -9,7 +9,7 @@ use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
 use crate::ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent, CtrlHello,
     DisconnectReason, PlaybackGeneration, PlaybackIntent, PlaybackIntentAction,
-    PlaybackIntentEvent, PlaybackIntentOutcome, PlaybackRequestId,
+    PlaybackIntentEvent, PlaybackIntentOutcome, PlaybackRequestId, WireCommand,
 };
 use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};

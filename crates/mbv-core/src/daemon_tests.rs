@@ -402,7 +402,7 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueMove(1, 2))),
+        CtrlCmd::PlayerCmd(WireCommand::QueueMove(1, 2)),
         1,
         CtrlRequest {
             reply_tx: &reply_tx,
@@ -422,7 +422,7 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
 
     assert!(matches!(
         player_cmd_rx.try_recv(),
-        Ok(PlayerCommand::QueueMove(1, 2))
+        Ok(PlayerCommand::QueueMove(_, 2))
     ));
     assert_eq!(
         queue
@@ -539,7 +539,7 @@ fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueRemove(1))),
+        CtrlCmd::PlayerCmd(WireCommand::QueueRemove(1)),
         1,
         CtrlRequest {
             reply_tx: &reply_tx,
@@ -559,7 +559,7 @@ fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
 
     assert!(matches!(
         player_cmd_rx.try_recv(),
-        Ok(PlayerCommand::QueueRemove(1))
+        Ok(PlayerCommand::QueueRemove(_))
     ));
     assert_eq!(
         queue
@@ -604,7 +604,7 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueMove(1, 2))),
+        CtrlCmd::PlayerCmd(WireCommand::QueueMove(1, 2)),
         1,
         CtrlRequest {
             reply_tx: &reply_tx,

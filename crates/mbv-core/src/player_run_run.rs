@@ -44,7 +44,6 @@ impl PlaybackRun {
         wakeup_write_fd: RawFd,
     ) {
         let event_tx_panic = self.event_tx.clone();
-        let current_idx_panic = self.current_idx;
 
         // Ordered progress-report worker: pause/unpause events are sent here
         // instead of each spawning its own thread, so two quick toggles can't
@@ -106,7 +105,7 @@ impl PlaybackRun {
                     );
                     self.status.lock().unwrap().active = false;
                     let _ = self.event_tx.send(PlayerEvent::Stopped {
-                        idx: self.current_idx,
+                        slot_id: self.stopped_slot_id(self.current_idx),
                         position_ticks: self.last_valid_pos,
                         played,
                         consume,
@@ -308,7 +307,9 @@ impl PlaybackRun {
                 .unwrap_or_else(|| "unknown panic".to_string());
             log::error!(target: "player", "PlaybackRun panicked: {msg}");
             let _ = event_tx_panic.send(PlayerEvent::Stopped {
-                idx: current_idx_panic,
+                // Panic teardown: the run's queue is gone with the unwound
+                // stack, so no slot identity can be resolved.
+                slot_id: None,
                 position_ticks: 0,
                 played: false,
                 consume: false,

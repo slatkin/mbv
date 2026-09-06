@@ -327,22 +327,25 @@ pub fn run_with_options(
         };
 
         match ev {
-            DaemonEvent::Player(PlayerEvent::TrackChanged(idx)) => {
-                // The player's internal queue may lag behind the canonical
-                // queue when a mutation was sent but not yet processed.
-                // Clamp the reported index to the current queue length.
-                let clamped_idx = if queue.is_empty() {
-                    0
-                } else {
-                    idx.min(queue.len() - 1)
-                };
+            DaemonEvent::Player(PlayerEvent::TrackChanged { slot_id, transition }) => {
+                // Resolve the reported slot against the canonical queue. A
+                // slot the daemon no longer holds falls back to the current
+                // active position (D6's clamp removal is task 3.5).
+                let clamped_idx = queue
+                    .slot_index(slot_id)
+                    .or_else(|| queue.active_index())
+                    .unwrap_or(0);
                 // Update active slot in the canonical queue.
-                if let Some(slot_id) = queue.slots().get(clamped_idx).map(|s| s.slot_id) {
-                    queue.set_active_slot(slot_id);
+                let resolved_slot_id = queue.slots().get(clamped_idx).map(|s| s.slot_id);
+                if let Some(resolved_slot_id) = resolved_slot_id {
+                    queue.set_active_slot(resolved_slot_id);
                 }
                 broadcast(
                     &ctrl_clients,
-                    &CtrlEvent::Player(PlayerEvent::TrackChanged(clamped_idx)),
+                    &CtrlEvent::Player(PlayerEvent::TrackChanged {
+                        slot_id: resolved_slot_id.unwrap_or(slot_id),
+                        transition,
+                    }),
                 );
                 // Broadcast full state so peers see the authoritative playback position.
                 let status = player.status.lock().unwrap().clone();

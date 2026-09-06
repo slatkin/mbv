@@ -74,14 +74,16 @@ impl App {
         let sent_queue_remove = controls_playback_queue
             && (active || scope == QueueScope::Remote || self.player.is_remote());
         if sent_queue_remove {
-            // Prefer slot-based removal for unified-capable remote peers
-            // to avoid TOCTOU races on positional indices.
-            let sent_unified = slot_id.is_some_and(|sid| {
-                self.player
+            // Slot identity was captured before the local removal above.
+            // Prefer the unified remote path; the in-process command is now
+            // slot-addressed too.
+            if let Some(sid) = slot_id {
+                if !self
+                    .player
                     .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(sid))
-            });
-            if !sent_unified {
-                self.player.send_command(PlayerCommand::QueueRemove(pos));
+                {
+                    self.player.send_command(PlayerCommand::QueueRemove(sid));
+                }
             }
             // Player thread adjusts current_idx when it processes the command.
             // No eager adjustment here — doing so races with the player thread
@@ -212,13 +214,14 @@ impl App {
         if controls_playback_queue
             && (active || scope == QueueScope::Remote || self.player.is_remote())
         {
-            // Prefer slot-based move for unified-capable remote peers
-            // to avoid TOCTOU races on positional indices.
+            // Prefer the unified remote path; the in-process command is now
+            // slot-addressed (source) with an ordinal destination.
             let sent_unified = self
                 .player
                 .queue_move_slot(mbv_core::ctrl::slot_id_to_u64(slot_id), to);
             if !sent_unified {
-                self.player.send_command(PlayerCommand::QueueMove(from, to));
+                self.player
+                    .send_command(PlayerCommand::QueueMove(slot_id, to));
             }
         }
         true

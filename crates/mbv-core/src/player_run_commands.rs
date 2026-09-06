@@ -52,8 +52,10 @@ impl PlaybackRun {
             PlayerCommand::QueueAppend { items } => {
                 self.cmd_append_queue(items, mpv);
             }
-            PlayerCommand::QueueRemove(idx) => {
-                if let Some(slot_id) = self.slot_id_at(idx) {
+            PlayerCommand::QueueRemove(slot_id) => {
+                // Resolve the owner-assigned slot to this run's mpv-local
+                // ordinal; a stale slot (already gone here) is discarded.
+                if let Some(idx) = self.queue.slot_index(slot_id) {
                     let active_slot_id = self.active_slot_id();
                     if self.active_file {
                         let active = active_slot_id == Some(slot_id);
@@ -101,7 +103,11 @@ impl PlaybackRun {
                     }
                 }
             }
-            PlayerCommand::QueueMove(from, to) => {
+            PlayerCommand::QueueMove(slot_id, to) => {
+                let from = match self.queue.slot_index(slot_id) {
+                    Some(from) => from,
+                    None => return cancel_stop,
+                };
                 if from < self.queue_len() && to < self.queue_len() && from != to {
                     // mpv's playlist-move index2 names the *pre-move* slot the
                     // entry should end up next to, not its post-move index: for
@@ -115,15 +121,13 @@ impl PlaybackRun {
                         let _ =
                             mpv.command("playlist-move", &[&from.to_string(), &mpv_to.to_string()]);
                     }
-                    if let Some(slot_id) = self.slot_id_at(from) {
-                        let had_active_slot = self.active_slot_id().is_some();
-                        let _ = self.queue.move_slot(slot_id, to);
-                        if had_active_slot {
-                            self.refresh_current_idx_from_queue();
-                        } else {
-                            self.current_idx = shift_index_for_move(self.current_idx, from, to);
-                            self.sync_status_position();
-                        }
+                    let had_active_slot = self.active_slot_id().is_some();
+                    let _ = self.queue.move_slot(slot_id, to);
+                    if had_active_slot {
+                        self.refresh_current_idx_from_queue();
+                    } else {
+                        self.current_idx = shift_index_for_move(self.current_idx, from, to);
+                        self.sync_status_position();
                     }
                 }
             }
@@ -677,7 +681,7 @@ impl PlaybackRun {
         drop(status);
 
         let _ = self.event_tx.send(PlayerEvent::Stopped {
-            idx: start_idx,
+            slot_id: self.stopped_slot_id(start_idx),
             position_ticks,
             played: false,
             consume: false,

@@ -168,7 +168,10 @@ mod tests {
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_failed = true;
 
-        app.handle_player_event(mbv_core::player::PlayerEvent::TrackChanged(0));
+        app.handle_player_event(mbv_core::player::PlayerEvent::TrackChanged {
+            slot_id: mbv_core::playback_queue::QueueSlotId::from_raw(1),
+            transition: None,
+        });
 
         assert!(!app.visualizer_failed);
     }

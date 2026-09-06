@@ -173,6 +173,45 @@ fn handle_ctrl(
             *source = new_source;
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
         }
+        // Legacy index-addressed queue mutations: resolve the ordinal against
+        // the canonical queue here (where it is held) and forward a
+        // slot-addressed command. Modern peers use `CtrlCmd::UnifiedQueue*`.
+        CtrlCmd::PlayerCmd(WireCommand::QueueMove(from, to)) => {
+            if from >= queue.len() || to >= queue.len() {
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    "remote queue changed; move skipped".to_string(),
+                );
+            } else if from != to {
+                let slot_id = queue.slots()[from].slot_id;
+                queue.move_slot(slot_id, to);
+                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+                player.send_command(PlayerCommand::QueueMove(slot_id, to));
+            }
+        }
+        CtrlCmd::PlayerCmd(WireCommand::QueueRemove(index)) => {
+            if index >= queue.len() {
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    "remote queue changed; remove skipped".to_string(),
+                );
+            } else {
+                let slot_id = queue.slots()[index].slot_id;
+                queue.consume_slot(slot_id);
+                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+                player.send_command(PlayerCommand::QueueRemove(slot_id));
+            }
+        }
         CtrlCmd::PlayerCmd(pc) => match PlayerCommand::from(pc) {
             PlayerCommand::ReplaceQueue {
                 items: new_items,
@@ -205,42 +244,6 @@ fn handle_ctrl(
                         items: queue.slots().iter().map(|s| s.item.clone()).collect(),
                         start_idx: queue.active_index().unwrap_or(0),
                     });
-                }
-            }
-            PlayerCommand::QueueMove(from, to) => {
-                if from >= queue.len() || to >= queue.len() {
-                    reject_command(
-                        request.reply_tx,
-                        ctrl_clients,
-                        client_id,
-                        player,
-                        queue,
-                        source,
-                        "remote queue changed; move skipped".to_string(),
-                    );
-                } else if from != to {
-                    let slot_id = queue.slots()[from].slot_id;
-                    queue.move_slot(slot_id, to);
-                    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                    player.send_command(PlayerCommand::QueueMove(from, to));
-                }
-            }
-            PlayerCommand::QueueRemove(index) => {
-                if index >= queue.len() {
-                    reject_command(
-                        request.reply_tx,
-                        ctrl_clients,
-                        client_id,
-                        player,
-                        queue,
-                        source,
-                        "remote queue changed; remove skipped".to_string(),
-                    );
-                } else {
-                    let slot_id = queue.slots()[index].slot_id;
-                    queue.consume_slot(slot_id);
-                    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                    player.send_command(PlayerCommand::QueueRemove(index));
                 }
             }
             other => {
@@ -461,7 +464,6 @@ fn handle_ctrl(
                     "slot not found; remove skipped".to_string(),
                 );
             } else if queue.active_slot_id() == Some(sid) {
-                let idx = queue.slot_index(sid).unwrap_or(0);
                 queue.remove_active_slot_confirmed(sid);
                 broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
                 if queue.is_empty() {
@@ -472,13 +474,12 @@ fn handle_ctrl(
                     });
                     player.stop();
                 } else {
-                    player.send_command(PlayerCommand::QueueRemove(idx));
+                    player.send_command(PlayerCommand::QueueRemove(sid));
                 }
             } else {
-                let idx = queue.slot_index(sid).unwrap_or(0);
                 queue.remove_slot(sid);
                 broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                player.send_command(PlayerCommand::QueueRemove(idx));
+                player.send_command(PlayerCommand::QueueRemove(sid));
             }
         }
         CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index } => {
@@ -494,10 +495,9 @@ fn handle_ctrl(
                     "slot not found; move skipped".to_string(),
                 );
             } else {
-                let from_idx = queue.slot_index(sid).unwrap_or(0);
                 queue.move_slot(sid, to_index);
                 broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                player.send_command(PlayerCommand::QueueMove(from_idx, to_index));
+                player.send_command(PlayerCommand::QueueMove(sid, to_index));
             }
         }
         CtrlCmd::UnifiedQueuePlaySlot { slot_id } => {

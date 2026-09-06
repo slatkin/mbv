@@ -133,7 +133,11 @@ fn status_only_preserves_current_idx_and_queue_len() {
 }
 
 #[test]
-fn track_changed_updates_current_idx_but_not_queue_len() {
+fn track_changed_leaves_status_mirror_for_app_to_rederive() {
+    // `TrackChanged` now carries a `QueueSlotId`; the RemotePlayer read loop
+    // has no queue to resolve it against and no longer mutates the status
+    // mirror. `App::handle_player_event` re-derives `current_idx` from its
+    // canonical queue instead (client-side mirror removal is Section 4).
     let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 5)));
     let items = Arc::new(Mutex::new(Vec::new()));
     let unified_queue = Arc::new(Mutex::new(None));
@@ -141,7 +145,10 @@ fn track_changed_updates_current_idx_but_not_queue_len() {
     let (tx, _rx) = mpsc::channel();
 
     apply_ctrl_event(
-        CtrlEvent::Player(PlayerEvent::TrackChanged(2)),
+        CtrlEvent::Player(PlayerEvent::TrackChanged {
+            slot_id: crate::playback_queue::QueueSlotId::from_raw(2),
+            transition: None,
+        }),
         &status,
         &items,
         &unified_queue,
@@ -152,7 +159,7 @@ fn track_changed_updates_current_idx_but_not_queue_len() {
     );
 
     let s = status.lock().unwrap();
-    assert_eq!(s.current_idx, 2);
+    assert_eq!(s.current_idx, 0);
     assert_eq!(s.queue_len, 5);
 }
 

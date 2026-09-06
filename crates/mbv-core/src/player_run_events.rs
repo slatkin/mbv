@@ -272,7 +272,7 @@ impl PlaybackRun {
         self.close_prepared_source_at(self.last_valid_pos);
         self.status.lock().unwrap().active = false;
         let _ = self.event_tx.send(PlayerEvent::Stopped {
-            idx: self.current_idx,
+            slot_id: self.stopped_slot_id(self.current_idx),
             position_ticks: 0,
             played: false,
             consume: false,
@@ -310,7 +310,7 @@ impl PlaybackRun {
             self.close_prepared_source_at(self.last_valid_pos);
             self.status.lock().unwrap().active = false;
             let _ = self.event_tx.send(PlayerEvent::Stopped {
-                idx: self.current_idx,
+                slot_id: self.stopped_slot_id(self.current_idx),
                 position_ticks: 0,
                 played: false,
                 consume: false,
@@ -383,7 +383,7 @@ impl PlaybackRun {
             }
             if !self.stopped_event_sent {
                 let _ = self.event_tx.send(PlayerEvent::Stopped {
-                    idx: 0,
+                    slot_id: self.stopped_slot_id(self.current_idx),
                     position_ticks: 0,
                     played: natural_end && !completed_is_audio && self.reporter.has_session(),
                     consume: false,
@@ -395,10 +395,9 @@ impl PlaybackRun {
             return false;
         }
 
-        // QueueSlotId is authoritative inside the Player owner. PlayerEvent
-        // indices remain local UI snapshots: carrying slot identity farther
-        // would change the serializable event/ctrl boundary, while the owner
-        // can resolve the completed occurrence before emitting that snapshot.
+        // The completed occurrence's owner-assigned identity: `Stopped`,
+        // `TrackCompleted`, and `TrackChanged` now carry `QueueSlotId`
+        // directly, resolved here from mpv-local position (design D2).
         let completed_slot_id = self.active_slot_id();
         let completed_idx = completed_slot_id
             .and_then(|slot_id| self.queue.slot_index(slot_id))
@@ -418,7 +417,7 @@ impl PlaybackRun {
             self.stop_report =
                 StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
             let _ = self.event_tx.send(PlayerEvent::Stopped {
-                idx: completed_idx.min(self.queue_len().saturating_sub(1)),
+                slot_id: completed_slot_id,
                 position_ticks: self.last_valid_pos,
                 played: false,
                 consume: false,
@@ -483,7 +482,7 @@ impl PlaybackRun {
                 }
             }
             let _ = self.event_tx.send(PlayerEvent::Stopped {
-                idx: completed_idx,
+                slot_id: completed_slot_id,
                 position_ticks: completed_pos,
                 played: played_out,
                 consume: consume_track,
@@ -523,7 +522,7 @@ impl PlaybackRun {
             progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
             let _ = self.event_tx.send(PlayerEvent::Stopped {
-                idx: self.current_idx,
+                slot_id: self.stopped_slot_id(self.current_idx),
                 position_ticks: 0,
                 played: false,
                 consume: false,
@@ -584,16 +583,21 @@ impl PlaybackRun {
 
         log::info!(target: "player", "playlist track-transition idx={}", self.current_idx);
 
-        let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
-            idx: completed_idx,
-            position_ticks: completed_pos,
-            played: played_out,
-            consume: consume_track,
-            progress_report_accepted: stop_report_accepted,
-        });
-        let _ = self
-            .event_tx
-            .send(PlayerEvent::TrackChanged(self.current_idx));
+        if let Some(completed_slot_id) = completed_slot_id {
+            let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
+                slot_id: completed_slot_id,
+                position_ticks: completed_pos,
+                played: played_out,
+                consume: consume_track,
+                progress_report_accepted: stop_report_accepted,
+            });
+        }
+        if let Some(next_slot_id) = self.active_slot_id() {
+            let _ = self.event_tx.send(PlayerEvent::TrackChanged {
+                slot_id: next_slot_id,
+                transition: None,
+            });
+        }
         false
     }
 
@@ -621,7 +625,7 @@ impl PlaybackRun {
             self.status.lock().unwrap().active = false;
             if !self.stopped_event_sent {
                 let _ = self.event_tx.send(PlayerEvent::Stopped {
-                    idx: 0,
+                    slot_id: self.stopped_slot_id(self.current_idx),
                     position_ticks: self.last_valid_pos,
                     played: near_end,
                     consume: false,
@@ -644,7 +648,7 @@ impl PlaybackRun {
         // near the end of an audio item never sets either — consistent with on_end_file's
         // normal advance path, where only natural/next-up (not near-end) triggers audio consume.
         let _ = self.event_tx.send(PlayerEvent::Stopped {
-            idx: self.current_idx,
+            slot_id: self.stopped_slot_id(self.current_idx),
             position_ticks: self.last_valid_pos,
             played: self.stopped_near_end,
             consume: self.stopped_near_end,

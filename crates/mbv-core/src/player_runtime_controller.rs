@@ -457,7 +457,7 @@ impl Player {
                         log::error!(target: "player", "{}", e);
                         status.lock().unwrap().active = false;
                         let _ = event_tx.send(PlayerEvent::Stopped {
-                            idx: 0,
+                            slot_id: None,
                             position_ticks: 0,
                             played: false,
                             consume: false,
@@ -489,7 +489,7 @@ impl Player {
                     Err(error) => {
                         status.lock().unwrap().active = false;
                         let _ = event_tx.send(PlayerEvent::Stopped {
-                            idx: start_idx,
+                            slot_id: None,
                             position_ticks: 0,
                             played: false,
                             consume: false,
@@ -513,7 +513,7 @@ impl Player {
                         prepared.close(0.0);
                         status.lock().unwrap().active = false;
                         let _ = event_tx.send(PlayerEvent::Stopped {
-                            idx: 0,
+                            slot_id: None,
                             position_ticks: 0,
                             played: false,
                             consume: false,

@@ -198,7 +198,7 @@ fn old_stopped_player_event_defaults_progress_report_accepted() {
 #[test]
 fn old_track_completed_player_event_defaults_progress_report_accepted() {
     let event: CtrlEvent = serde_json::from_str(
-        r#"{"Player":{"TrackCompleted":{"idx":1,"position_ticks":456,"played":true,"consume":true}}}"#,
+        r#"{"Player":{"TrackCompleted":{"slot_id":1,"position_ticks":456,"played":true,"consume":true}}}"#,
     )
     .unwrap();
 

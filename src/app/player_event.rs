@@ -37,14 +37,14 @@ impl App {
     pub(super) fn handle_player_event(&mut self, ev: PlayerEvent) -> bool {
         match ev {
             PlayerEvent::Stopped {
-                idx,
+                slot_id,
                 position_ticks,
                 played,
                 consume,
                 progress_report_accepted,
                 error,
             } => {
-                log::info!(target: "player", "Stopped event: idx={idx} position_ticks={}s played={played} error={error:?}",
+                log::info!(target: "player", "Stopped event: slot_id={slot_id:?} position_ticks={}s played={played} error={error:?}",
                     position_ticks / mbv_core::api::TICKS_PER_SECOND);
                 if self.player.is_remote_disconnected() {
                     self.next_up_item = None;
@@ -73,10 +73,9 @@ impl App {
                     self.refresh_after_stop();
                     return true;
                 }
-                let is_delete = self.pending_delete_slot.take().is_some();
+                let deleted_slot = self.pending_delete_slot.take();
+                let is_delete = deleted_slot.is_some();
                 let preserve_local_state = !self.has_direct_remote_queue();
-                // Resolve the raw mpv index to a slot right away.
-                let slot_id = self.playback_queue().resolve_slot_at(idx);
                 match slot_id {
                     Some(slot_id) => {
                         if !is_delete {
@@ -128,7 +127,7 @@ impl App {
                         }
                     }
                     None => {
-                        log::warn!(target: "player", "Stopped: idx={idx} maps to no live slot; \
+                        log::warn!(target: "player", "Stopped: no live slot reported; \
                             skipping progress update");
                     }
                 }
@@ -142,7 +141,10 @@ impl App {
                     // drop the slot from its own internal queue mirror and
                     // mpv's playlist — that still depends on this event, since
                     // nothing told it about the removal until now.
-                    self.player.send_command(PlayerCommand::QueueRemove(idx));
+                    if let Some(deleted_slot) = deleted_slot {
+                        self.player
+                            .send_command(PlayerCommand::QueueRemove(deleted_slot));
+                    }
                 } else {
                     let (should_consume, is_audio) = match slot_id {
                         Some(slot_id) => self.should_consume_slot(slot_id, consume),
@@ -172,17 +174,16 @@ impl App {
                 }
             }
             PlayerEvent::TrackCompleted {
-                idx,
+                slot_id,
                 position_ticks,
                 played,
                 consume,
                 progress_report_accepted,
             } => {
-                // Resolve the raw mpv index to a slot right away.
-                let Some(slot_id) = self.playback_queue().resolve_slot_at(idx) else {
-                    log::warn!(target: "consume", "TrackCompleted: idx={idx} maps to no live slot; dropping");
+                if self.playback_queue().queue.slot(slot_id).is_none() {
+                    log::warn!(target: "consume", "TrackCompleted: slot_id={slot_id:?} maps to no live slot; dropping");
                     return false;
-                };
+                }
                 let position = if played {
                     0
                 } else if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
@@ -218,25 +219,22 @@ impl App {
                     self.pending_queue_removal = Some((slot_id, is_audio));
                 }
             }
-            PlayerEvent::TrackChanged(idx) => {
+            PlayerEvent::TrackChanged {
+                slot_id: target_slot_id,
+                transition: _,
+            } => {
                 self.visualizer_failed = false;
                 self.next_up_item = None;
                 if self.status.starts_with("Next up:") {
                     self.status.clear();
                 }
-                // Resolve the incoming index to a slot *before* draining any
-                // deferred consume: `idx` is the player's report from
-                // before it was told (via the QueueRemove sent below) that
-                // the completed slot was removed, so it still lines up with
-                // the queue's current, pre-removal shape.
-                let target_slot_id = self.playback_queue().resolve_slot_at(idx);
 
                 if let Some((slot_id, was_audio)) = self.pending_queue_removal.take() {
                     let len_before = self.playback_queue().total_queue_len();
                     let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
                     let len_after = len_before - removed_id.is_some() as usize;
                     log::info!(target: "consume", "TrackChanged: consuming pending removal slot_id={slot_id:?} \
-                        new_idx={idx} len_before={len_before} len_after={len_after} removed_id={removed_id:?}");
+                        target={target_slot_id:?} len_before={len_before} len_after={len_after} removed_id={removed_id:?}");
                     if removed_id.is_none() {
                         log::warn!(target: "consume", "TrackChanged: slot_id={slot_id:?} not found, \
                             removal SKIPPED");
@@ -248,24 +246,22 @@ impl App {
                     }
                 }
 
-                // Activate the resolved slot by identity (order-independent,
-                // unlike raw index arithmetic) and derive the display
-                // cursor from its post-removal position — this stays
-                // correct regardless of where the just-consumed slot sat
-                // relative to `idx`.
-                let adjusted = match target_slot_id {
-                    Some(slot_id) => {
-                        let _ = self.playback_queue_mut().queue.set_active_slot(slot_id);
-                        self.playback_queue()
-                            .queue
-                            .slot_index(slot_id)
-                            .unwrap_or(idx)
-                    }
-                    None => {
-                        log::warn!(target: "player", "TrackChanged: idx={idx} maps to no live \
-                            slot; skipping activation");
-                        idx
-                    }
+                // Activate by owner-assigned identity. Slot identity is stable
+                // across the pending-removal consume above, so resolving it to
+                // a display position afterward is order-independent.
+                let adjusted = if self.playback_queue().queue.slot(target_slot_id).is_some() {
+                    let _ = self
+                        .playback_queue_mut()
+                        .queue
+                        .set_active_slot(target_slot_id);
+                    self.playback_queue()
+                        .queue
+                        .slot_index(target_slot_id)
+                        .unwrap_or(0)
+                } else {
+                    log::warn!(target: "player", "TrackChanged: slot_id={target_slot_id:?} maps to \
+                        no live slot; skipping activation");
+                    self.playback_queue().queue.active_index().unwrap_or(0)
                 };
                 self.player.status.lock().unwrap().current_idx = adjusted;
                 if !self.queue_cursor_held_by_user() {

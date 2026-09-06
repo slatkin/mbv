@@ -180,7 +180,14 @@ impl Default for PlayerStatus {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum PlayerEvent {
     Stopped {
-        idx: usize,
+        /// Owner-assigned identity of the occurrence that stopped, or `None`
+        /// for teardown/error synthetics raised with no live queue slot
+        /// (spawn failure, panic, daemon disconnect). Resolved from the
+        /// Playback run's mpv-local position before the event leaves the run
+        /// (design D2). `#[serde(default)]` so a pre-change peer's
+        /// index-shaped `Stopped` still decodes (to `None`).
+        #[serde(default)]
+        slot_id: Option<QueueSlotId>,
         position_ticks: i64,
         played: bool,
         consume: bool,
@@ -188,14 +195,25 @@ pub enum PlayerEvent {
         progress_report_accepted: bool,
         error: Option<String>,
     },
-    TrackChanged(usize),
+    /// mpv advanced to (or was jumped to) an occurrence. Names the
+    /// owner-assigned slot identity, never an ordinal.
+    TrackChanged {
+        slot_id: QueueSlotId,
+        /// Present only when this observation settles a dispatched `JumpTo`
+        /// transition (design D4): `(request_id, generation)` of that
+        /// request. `None` for natural advancement. Bare-mode dispatch
+        /// populates this in Section 3; today it is always `None`.
+        #[serde(default)]
+        transition: Option<(crate::ctrl::PlaybackRequestId, crate::ctrl::PlaybackGeneration)>,
+    },
     /// Emitted after the player confirms its paused property transition.
     PausedChanged(bool),
     /// mpv's `PlaybackRestart` event. This confirms mbv's player output
     /// boundary, not sound at a downstream pipe consumer.
     OutputStarted,
     TrackCompleted {
-        idx: usize,
+        /// Owner-assigned identity of the completed occurrence (design D7).
+        slot_id: QueueSlotId,
         position_ticks: i64,
         played: bool,
         consume: bool,
@@ -213,6 +231,11 @@ pub enum PlayerEvent {
     /// versions during an upgrade still speak the same JSON tag. `PlayerEvent`
     /// has no `WireCommand`-style adapter (unlike `PlayerCommand`, see #81),
     /// so this pin lives directly on the variant.
+    /// Look-ahead hint for the *next* occurrence, not an address of an
+    /// existing one: `next_idx` stays ordinal (it is only ever read to peek
+    /// the upcoming item for the Next-Up card, never to mutate or activate a
+    /// slot), per the presentation-coordinate carve-out in the stable-slot
+    /// spec rule.
     #[serde(rename = "PlaylistNextUp")]
     QueueNextUp {
         next_idx: usize,
@@ -276,8 +299,15 @@ pub enum PlayerCommand {
     QueueAppend {
         items: Vec<QueueItem>,
     },
-    QueueRemove(usize),
-    QueueMove(usize, usize),
+    /// Remove an existing queue occurrence by its owner-assigned slot
+    /// identity (never an ordinal — the occurrence may have moved since the
+    /// caller resolved it).
+    QueueRemove(QueueSlotId),
+    /// Move an existing occurrence, identified by slot identity, to an
+    /// ordinal destination position. The destination stays ordinal: it names
+    /// a gap in the post-move sequence, resolved immediately by the receiver,
+    /// and never crosses back out.
+    QueueMove(QueueSlotId, usize),
     SetVolume(i64),
     Seek(f64),
     SeekAbsolute(f64),

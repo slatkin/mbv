@@ -179,6 +179,16 @@ impl RemotePlayer {
                 );
                 return false;
             }
+            // Slot-addressed queue mutations go over ctrl exclusively as
+            // `CtrlCmd::UnifiedQueue*`; they have no legacy index-addressed
+            // wire form. Callers fall back to the unified path (task 3.5).
+            PlayerCommand::QueueRemove(_) | PlayerCommand::QueueMove(..) => {
+                log::warn!(
+                    target: "remote",
+                    "slot-addressed queue mutation not sendable over legacy ctrl; caller must use a unified queue command"
+                );
+                return false;
+            }
             cmd => cmd.into(),
         };
         self.cmd_tx.send(CtrlCmd::PlayerCmd(wire_cmd)).is_ok()

@@ -201,7 +201,7 @@ fn queue_enriched_prunes_live_playback_slots_and_resyncs_player_queue() {
     assert!(
         matches!(
             cmd_rx.try_recv(),
-            Ok(crate::player::PlayerCommand::QueueRemove(1))
+            Ok(crate::player::PlayerCommand::QueueRemove(_))
         ),
         "pruning a live playback queue slot must also remove it from the player's private queue copy"
     );
@@ -275,14 +275,17 @@ fn queue_enriched_preserves_pending_sync_until_server_confirms_it() {
         crate::app::tests::make_items(1),
         app.player_tab.queue_cursor,
     );
-    app.handle_player_event(mbv_core::player::PlayerEvent::TrackChanged(0));
+    app.handle_player_event(mbv_core::player::PlayerEvent::TrackChanged {
+        slot_id: app.playback_queue().resolve_slot_at(0).unwrap(),
+        transition: None,
+    });
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
     }
     app.handle_player_event(mbv_core::player::PlayerEvent::Stopped {
-        idx: 0,
+        slot_id: app.playback_queue().resolve_slot_at(0),
         position_ticks: 6 * mbv_core::api::TICKS_PER_SECOND,
         played: false,
         consume: false,

@@ -292,9 +292,13 @@ fn apply_ctrl_event(
                 PlayerEvent::Stopped { .. } => {
                     status.lock().unwrap().active = false;
                 }
-                PlayerEvent::TrackChanged(idx) => {
-                    status.lock().unwrap().current_idx = *idx;
-                }
+                // `TrackChanged` now names a `QueueSlotId`, not an ordinal;
+                // this read loop has no queue to resolve it against. The
+                // forwarded event reaches `App::handle_player_event`, which
+                // re-derives `current_idx` from its own canonical queue, and
+                // the next `StatusOnly`/`UnifiedQueueUpdated` refreshes the
+                // mirror regardless. (Client-side `current_idx` removal is
+                // Section 4.)
                 PlayerEvent::PausedChanged(paused) => {
                     status.lock().unwrap().paused = *paused;
                 }
@@ -558,7 +562,7 @@ pub(crate) fn connect_endpoint(
         log::info!(target: "remote", "daemon disconnected");
         if !expected_disconnect {
             let _ = event_tx_r.send(PlayerEvent::Stopped {
-                idx: 0,
+                slot_id: None,
                 position_ticks: 0,
                 played: false,
                 consume: false,

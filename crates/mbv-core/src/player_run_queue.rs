@@ -7,6 +7,15 @@ impl PlaybackRun {
         self.queue.slots().get(idx).map(|slot| slot.slot_id)
     }
 
+    /// Owner-assigned identity to attach to a `Stopped` event: the slot at
+    /// this run's mpv-local ordinal if it still names a live slot, else the
+    /// active slot. `None` only when the queue holds no slots. The ordinal is
+    /// an mpv-adapter coordinate being resolved back to owner identity before
+    /// the event leaves the run (design D2).
+    fn stopped_slot_id(&self, idx: usize) -> Option<QueueSlotId> {
+        self.slot_id_at(idx).or_else(|| self.active_slot_id())
+    }
+
     fn item_at(&self, idx: usize) -> Option<&QueueItem> {
         self.queue.slots().get(idx).map(|slot| &slot.item)
     }

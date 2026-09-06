@@ -113,7 +113,6 @@ fn replacement_prepare_failure_accepts_new_stopped_queue_and_clears_mpv() {
     drop(status);
     let event = events.recv().unwrap();
     let PlayerEvent::Stopped {
-        idx,
         position_ticks,
         error,
         ..
@@ -121,7 +120,6 @@ fn replacement_prepare_failure_accepts_new_stopped_queue_and_clears_mpv() {
     else {
         panic!("expected replacement failure stop event");
     };
-    assert_eq!(idx, 0);
     assert_eq!(position_ticks, 123);
     assert_eq!(
         error.as_deref(),

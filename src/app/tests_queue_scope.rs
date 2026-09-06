@@ -149,7 +149,7 @@ fn direct_remote_track_changes_do_not_clobber_local_last_played() {
     app.last_played_item_id = Some(local_items[1].id.clone());
     app.last_played_completed = true;
 
-    app.handle_player_event(PlayerEvent::TrackChanged(2));
+    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(2).unwrap(), transition: None });
 
     assert_eq!(
         app.last_played_item_id.as_deref(),

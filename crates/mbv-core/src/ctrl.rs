@@ -414,8 +414,16 @@ impl From<PlayerCommand> for WireCommand {
                     .filter_map(|qi| qi.as_emby().cloned())
                     .collect(),
             },
-            PlayerCommand::QueueRemove(idx) => WireCommand::QueueRemove(idx),
-            PlayerCommand::QueueMove(from, to) => WireCommand::QueueMove(from, to),
+            // Slot-addressed since the unified-queue authority change: the
+            // legacy index-addressed wire variants can only be produced with
+            // a queue in hand to resolve the slot. Modern peers mutate a
+            // Bound queue exclusively through `CtrlCmd::UnifiedQueue*`
+            // (slot-addressed); `RemotePlayer::send_command` rejects these two
+            // before conversion, so this arm is unreachable. Legacy wire
+            // translation is folded into task 3.5.
+            PlayerCommand::QueueRemove(_) | PlayerCommand::QueueMove(..) => {
+                unreachable!("slot-addressed queue mutation is never sent over legacy ctrl; use UnifiedQueue* (task 3.5)")
+            }
             PlayerCommand::SetVolume(v) => WireCommand::SetVolume(v),
             PlayerCommand::Seek(s) => WireCommand::Seek(s),
             PlayerCommand::SeekAbsolute(s) => WireCommand::SeekAbsolute(s),
@@ -475,8 +483,14 @@ impl From<WireCommand> for PlayerCommand {
                     .map(|e| QueueItem::Emby(Box::new(e)))
                     .collect(),
             },
-            WireCommand::QueueRemove(idx) => PlayerCommand::QueueRemove(idx),
-            WireCommand::QueueMove(from, to) => PlayerCommand::QueueMove(from, to),
+            // Inbound legacy index-addressed queue mutations are intercepted
+            // in `daemon_control` (which holds the canonical queue and can
+            // resolve the ordinal to a slot) before this conversion runs, so
+            // these arms are unreachable. Boundary rejection of a genuinely
+            // stale ordinal is task 3.5.
+            WireCommand::QueueRemove(_) | WireCommand::QueueMove(..) => {
+                unreachable!("legacy index-addressed QueueRemove/QueueMove is resolved in daemon_control before conversion (task 3.5)")
+            }
             WireCommand::SetVolume(v) => PlayerCommand::SetVolume(v),
             WireCommand::Seek(s) => PlayerCommand::Seek(s),
             WireCommand::SeekAbsolute(s) => PlayerCommand::SeekAbsolute(s),

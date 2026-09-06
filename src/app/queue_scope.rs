@@ -199,29 +199,17 @@ impl App {
         } else {
             None
         };
-        let (result, pre_refresh_indices) = {
+        let result = {
             let queue = self.queue_for_scope_mut(scope);
             queue.sync_active_slot(active_index);
-            let pre_refresh_indices = sync_player_prunes.then(|| {
-                queue
-                    .queue
-                    .slots()
-                    .iter()
-                    .enumerate()
-                    .map(|(index, slot)| (slot.slot_id, index))
-                    .collect::<std::collections::HashMap<_, _>>()
-            });
-            (queue.merge_refresh(fetched_items), pre_refresh_indices)
+            queue.merge_refresh(fetched_items)
         };
-        if let Some(pre_refresh_indices) = pre_refresh_indices {
-            let mut pruned_indices: Vec<_> = result
-                .pruned_slots
-                .iter()
-                .filter_map(|slot_id| pre_refresh_indices.get(slot_id).copied())
-                .collect();
-            pruned_indices.sort_unstable_by(|left, right| right.cmp(left));
-            for index in pruned_indices {
-                self.player.send_command(PlayerCommand::QueueRemove(index));
+        if sync_player_prunes {
+            // Slot-addressed removal: order-independent, so no descending
+            // index sort is needed.
+            for slot_id in &result.pruned_slots {
+                self.player
+                    .send_command(PlayerCommand::QueueRemove(*slot_id));
             }
         }
         result
@@ -281,7 +269,6 @@ impl App {
         &mut self,
         slot_id: QueueSlotId,
     ) -> Option<String> {
-        let idx = self.playback_queue().queue.slot_index(slot_id)?;
         let removed = match self.playback_queue_mut().queue.consume_slot(slot_id) {
             QueueMutationResult::Applied(slot) => slot,
             QueueMutationResult::NotFound => return None,
@@ -292,7 +279,8 @@ impl App {
             .player
             .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(slot_id));
         if !sent_unified {
-            self.player.send_command(PlayerCommand::QueueRemove(idx));
+            self.player
+                .send_command(PlayerCommand::QueueRemove(slot_id));
         }
         Some(removed.item.id().to_string())
     }

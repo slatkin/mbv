@@ -487,7 +487,6 @@ mod mouse_fold_tests {
             vec![leaf, key]
         );
     }
-
 }
 
 #[cfg(test)]
