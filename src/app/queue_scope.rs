@@ -206,10 +206,16 @@ impl App {
         };
         if sync_player_prunes {
             // Slot-addressed removal: order-independent, so no descending
-            // index sort is needed.
+            // index sort is needed. Remote owners take the unified path;
+            // the raw command is the local-player fallback only.
             for slot_id in &result.pruned_slots {
-                self.player
-                    .send_command(PlayerCommand::QueueRemove(*slot_id));
+                if !self
+                    .player
+                    .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(*slot_id))
+                {
+                    self.player
+                        .send_command(PlayerCommand::QueueRemove(*slot_id));
+                }
             }
         }
         result

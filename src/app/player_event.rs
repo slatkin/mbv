@@ -142,8 +142,13 @@ impl App {
                     // mpv's playlist — that still depends on this event, since
                     // nothing told it about the removal until now.
                     if let Some(deleted_slot) = deleted_slot {
-                        self.player
-                            .send_command(PlayerCommand::QueueRemove(deleted_slot));
+                        if !self
+                            .player
+                            .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(deleted_slot))
+                        {
+                            self.player
+                                .send_command(PlayerCommand::QueueRemove(deleted_slot));
+                        }
                     }
                 } else {
                     let (should_consume, is_audio) = match slot_id {
