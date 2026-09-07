@@ -114,7 +114,13 @@ pub(in crate::app) fn wide_media_row<Target>(
             spans.push(Span::styled(
                 title,
                 Style::default().fg(
-                    if selected && !matches!(semantic_state, MediaSemanticState::Active { .. }) {
+                    if selected
+                        && !matches!(
+                            semantic_state,
+                            MediaSemanticState::Active { .. }
+                                | MediaSemanticState::NowPlaying { .. }
+                        )
+                    {
                         palette::TEXT_EMPHASIS
                     } else {
                         fg
