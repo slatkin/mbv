@@ -105,6 +105,7 @@ pub(super) fn idle_feed_command_for_key(
     chord: KeyChord,
     player_active: bool,
     has_connected_session: bool,
+    queue_only_idle: bool,
     link_available: bool,
 ) -> Option<Command> {
     match chord.code {
@@ -112,6 +113,7 @@ pub(super) fn idle_feed_command_for_key(
             if chord.mods.is_empty()
                 && !player_active
                 && !has_connected_session
+                && !queue_only_idle
                 && link_available =>
         {
             Some(Command::OpenIdleFeedLink)

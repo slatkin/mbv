@@ -1,0 +1,23 @@
+## 1. Idle collapse in the queue-only render path
+
+- [x] 1.1 In `render_main` (`src/app/shell_draw.rs`), inside the `is_queue_only` branch, compute one `idle_collapse = effective_panel_mode() == QueueOnly && !effective_playback_state().active` and skip the `self.render_card(...)` call when it is set, publishing `CardGeometry { height: 0, width: 0 }` for the frame. Do NOT add a mode check inside `render_card` (`src/app/render/components/card.rs`) — its only production caller is this branch, and its direct-call tests cannot enter queue-only idle at the stub's 80-column width. Verify no fetch fires while idle with `cargo nextest run -p mbv render::components::card` (all existing card tests must pass untouched).
+- [x] 1.2 Skip both in-queue `render_player_panel` calls in the same branch when `idle_collapse`, and pass `QueuePanelInputs { card_height: 0, narrow_player_height: 0 }` so the list takes the freed rows. Zero geometry alone is not enough: `render_player_panel` sizes its rows from the `player_h` constant, not from the area it receives, so leaving the calls in place would paint four panel rows over the top of the queue list. Verify with a queue-only buffer test at a narrow width (< 100) and a wide width (>= 100) asserting no panel glyphs (`→`, seekbar, `On Now:`) above the first queue row.
+- [x] 1.3 Confirm the collapse does not touch `show_controls`, `player_h`, or `compose_base_frame`'s connected/cast branches: a connected-but-not-playing session must keep today's panel with a collapsed card. Verify with a queue-only remote-connected buffer test asserting the panel rows still render and the card rows do not.
+- [x] 1.4 Confirm paused playback still renders card and panel in queue-only (`active == true` with `paused == true`), at both the stored-mode and narrow mini-view routes. Verify with a paused-case buffer test.
+
+## 2. Visualizer and idle-feed fallout
+
+- [x] 2.1 Confirm no code change is needed for the visualizer capture path: `visualizer_should_run` (`src/app/visualizer.rs`) already requires local `active`, so pressing `v` while collapsed must not start the PipeWire worker or drop `render_interval` to its 16 ms visualizer cadence. Add the test that pins this rather than editing the predicate, and verify with `cargo nextest run -p mbv visualizer`.
+- [x] 2.2 Gate `idle_feed_command_for_key` (`src/app/action.rs:105`) on the same queue-only-idle signal so `o` stops opening a browser for a hidden title, threading the value through `RouterSnapshot` (`src/app/key_policy.rs`) alongside the existing `player_active` / `has_remote_session` fields. Leave `idle_feed_link_area` alone (written only inside `render_player_panel`, read by nothing). Verify by extending `action_tests.rs::o_opens_an_idle_feed_link_only_when_available` and the routing-matrix snapshot test.
+- [x] 2.3 Confirm the `Both` layout is byte-identical for card, panel, and idle feed at every breakpoint, and that the collapse covers the narrow mini-view route (below `MINI_VIEW_THRESHOLD`, driven by `mini_view_focus`) as well as `x` at 80+ columns.
+
+## 3. Docs and specs
+
+- [x] 3.1 Update `docs/architecture/interactive-surface-ledger.md`: the Queue row (line 105) and the Root playback-chrome row (line 104) both describe who owns the queue-only visual slot; record the shell's queue-only idle collapse so the row still names one painter per surface per breakpoint.
+- [x] 3.2 Update `CONTEXT.md`: amend the **Idle feed** term (it asserts the feed is displayed in the playback panel when idle, now conditional on the panel rendering) and add **Idle collapse** for the queue-only card + panel removal, since design and tasks now name it. Use *queue visual slot* and *playback panel*; "idle ticker" and "RSS ticker" are listed as Avoid terms for Idle feed.
+
+## 4. Tests and gates
+
+- [x] 4.1 Add an idle-gains-rows queue-only test asserting `layout.queue_area` starts one row below `left_content.y` (the existing `+ 1` separator in `queue_panel_geometry` is unchanged, so this is NOT `area.y`) and gains the card + panel rows versus the active layout; then start playback and assert the card and panel return. Verify with `cargo nextest run -p mbv render::tests_queue`.
+- [x] 4.2 Read the archived `panel-mode` requirement that says the queue list, playback card, and visualizer are not rendered in library-only, and confirm this change leaves it true rather than assuming it.
+- [x] 4.3 Run the full gates and verify green: `cargo check -p mbv`, `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`, `cargo fmt --all -- --check`, `ast-grep scan`, `make check-code-file-lines`.

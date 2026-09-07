@@ -66,6 +66,17 @@ impl App {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn idle_playback_does_not_start_pipewire() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.visualizer_enabled = true;
+
+        app.sync_visualizer();
+
+        assert!(!app.visualizer_should_run());
+        assert!(app.visualizer.is_none());
+    }
+
+    #[test]
     fn audio_pipe_playback_does_not_start_pipewire() {
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = true;

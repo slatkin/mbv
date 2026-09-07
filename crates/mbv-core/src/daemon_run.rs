@@ -11,7 +11,6 @@ pub fn run_with_options(
         .expect("mbv daemon: failed to write PID file");
 
     let (shutdown_signal_tx, shutdown_signal_rx) = setup_shutdown_signal();
-
     let client = emby_runtime
         .as_ref()
         .map(|runtime| runtime.client.clone())
@@ -56,7 +55,6 @@ pub fn run_with_options(
         ws_send_tx.clone(),
     )
     .with_audio_device(audio_device);
-
     player.pre_warm(
         client_locked.config.audio_pipe_target(),
         client_locked.config.audio_pipe_samplerate,
@@ -70,7 +68,6 @@ pub fn run_with_options(
     });
 
     let _tray = (hooks.on_tray_ready)(shutdown_signal_tx.clone());
-
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
 
     let tx = merged_tx.clone();
@@ -174,7 +171,6 @@ pub fn run_with_options(
             }
         }
     }
-
     // --- From here on: network/Emby-session-visibility setup (protocol
     // negotiation metadata, capability registration). Local control is
     // already up and serving connections above. ---

@@ -346,9 +346,18 @@ Restored across restarts; sticky across launches.
 _Avoid_: browse position, library state, saved position
 
 **Idle feed**:
-An optional RSS feed URL displayed in the playback panel when idle. Rotates
-through items on a configurable interval.
-_Avoid_: idle ticker, background feed, screensaver feed
+An optional RSS feed URL whose current item title is displayed in the playback
+panel when idle and that panel is rendered. In queue-only idle, the playback
+panel is hidden, so the title is not displayed. Rotates through items on a
+configurable interval.
+_Avoid_: idle ticker, RSS ticker, background feed, screensaver feed
+
+**Idle collapse**:
+The shell's queue-only behavior when fully idle: it removes the card and
+playback panel from the queue visual slot so the queue list occupies those rows.
+Paused playback remains visible, and a connected-but-not-playing remote session
+or cast keeps its playback panel.
+_Avoid_: idle hide, collapsed queue, empty player
 
 **Playback target**:
 Where explicit playback actions are sent: local in-process Player, directly

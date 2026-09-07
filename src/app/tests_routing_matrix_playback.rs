@@ -121,6 +121,16 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
         RouterOutcome::Command(Command::OpenIdleFeedLink)
     );
 
+    let queue_only_idle = RouterSnapshot {
+        panel_mode: crate::app::types_settings::PanelMode::QueueOnly,
+        queue_only_idle: true,
+        ..snapshot
+    };
+    assert_eq!(
+        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &queue_only_idle, None),
+        RouterOutcome::FallThrough
+    );
+
     let connected = RouterSnapshot {
         connected_session_id_present: true,
         ..snapshot

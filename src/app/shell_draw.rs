@@ -241,10 +241,18 @@ impl App {
             // the rows below it. Short terminals keep that same structure.
             let is_queue_only = self.effective_panel_mode() == PanelMode::QueueOnly;
             let is_wide = is_queue_only && left_area.width >= 100;
+            let idle_collapse = self.effective_panel_mode() == PanelMode::QueueOnly
+                && !self.effective_playback_state().active;
             // The card's cache/size/fetch operation is authoritative for its
-            // dimensions. Publish its unchanged tuple result into the fresh
-            // frame draft before deriving the downstream queue area.
-            let (card_h, card_w, _) = self.render_card(f, left_content, is_wide);
+            // dimensions. In an idle queue-only frame there is no card to
+            // paint, so publish zero geometry without entering the renderer
+            // (and therefore without fetching artwork).
+            let (card_h, card_w) = if idle_collapse {
+                (0, 0)
+            } else {
+                let (height, width, _) = self.render_card(f, left_content, is_wide);
+                (height, width)
+            };
             layout.card = CardGeometry {
                 height: card_h,
                 width: card_w,
@@ -253,14 +261,20 @@ impl App {
             // Queue-only mode has no right column, so the playback panel
             // (seekbar + title + controls) renders here instead: stacked
             // below the card on narrow terminals, or beside it on wide ones.
-            let mut narrow_player_h = 0;
-            if is_queue_only {
+            // A connected transport keeps its panel even when it is not
+            // currently active; only a genuinely idle queue-only frame hides
+            // both surfaces and returns its rows to the queue list. Narrow
+            // stacks the panel below the card; wide paints it beside the
+            // card, so the queue starts below whichever is taller.
+            let mut top_rows = layout.card.height;
+            let mut stacked_rows = 0;
+            if is_queue_only && (!idle_collapse || show_controls) {
                 if is_wide {
                     let panel_area = Rect {
                         x: left_content.x + layout.card.width + 2,
                         y: left_content.y,
                         width: left_content.width.saturating_sub(layout.card.width + 2),
-                        height: layout.card.height,
+                        height: layout.card.height.max(player_h),
                     };
                     f.render_widget(
                         Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
@@ -277,6 +291,7 @@ impl App {
                             palette::SURFACE_CHROME,
                         ),
                     );
+                    top_rows = layout.card.height.max(player_h);
                 } else {
                     let panel_area = Rect {
                         x: left_content.x,
@@ -295,14 +310,24 @@ impl App {
                             palette::SURFACE_CHROME,
                         ),
                     );
-                    narrow_player_h = player_h;
+                    stacked_rows = player_h;
                 }
             }
 
+            // Both mode keeps the panel in the right column, so the left
+            // queue only ever sits below the card there.
+            let (queue_card_rows, queue_narrow_rows) = if is_queue_only && is_wide {
+                (top_rows, 0)
+            } else if is_queue_only {
+                (layout.card.height, stacked_rows)
+            } else {
+                (layout.card.height, 0)
+            };
+
             let queue_geometry = queue_panel_geometry(QueuePanelInputs {
                 left_content,
-                card_height: layout.card.height,
-                narrow_player_height: narrow_player_h,
+                card_height: queue_card_rows,
+                narrow_player_height: queue_narrow_rows,
             });
             (right_area, queue_geometry)
         };

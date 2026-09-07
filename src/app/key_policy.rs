@@ -15,6 +15,7 @@ pub(super) struct RouterSnapshot {
     pub player_active: bool,
     pub has_remote_session: bool,
     pub connected_session_id_present: bool,
+    pub queue_only_idle: bool,
     pub panel_mode: PanelMode,
     pub panel_focus: PanelFocus,
     pub blocking_overlay_open: bool,
@@ -181,6 +182,7 @@ impl KeyPolicyGate {
                     chord,
                     snapshot.player_active,
                     snapshot.connected_session_id_present,
+                    snapshot.queue_only_idle,
                     snapshot.idle_feed_link_available,
                 )
                 .is_some()
@@ -401,6 +403,7 @@ pub(super) fn command_for_policy(
                 key,
                 snapshot.player_active,
                 snapshot.connected_session_id_present,
+                snapshot.queue_only_idle,
                 snapshot.idle_feed_link_available,
             )
             .or_else(|| {
