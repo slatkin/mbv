@@ -71,7 +71,16 @@ jobs:
           echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"
 
       - name: Build and test
-        run: cargo test --release && cargo build --release
+        # Bounded test threads: the suite runs many tests in one process and a
+        # third of them stand up a real libmpv handle or a loopback HTTP/ctrl
+        # fixture per test. At full parallelism (== cores) the process blows its
+        # fd/thread budget in the CI container, a fixture helper thread's
+        # accept()/connect() unwrap dies, and unrelated assertions fail with
+        # misleading messages (`perform_handshake_*`,
+        # `active_file_preparation_finalizes_*`, `lifecycle_close_loopback_*`).
+        # Reproduced locally with `ulimit -n 512`: 4/20 runs fail unthrottled,
+        # 0/15 fail at 4 threads even at `ulimit -n 384`. Costs ~2s.
+        run: cargo test --release -- --test-threads=4 && cargo build --release
 
       - name: Bundle release tarball
         run: |
