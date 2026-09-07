@@ -283,9 +283,7 @@ impl App {
                 if !autostart {
                     // Playlist Enter populates the queue; Space/Enter starts it.
                     let loaded = items.get(start_idx).map(|i| i.playback_label());
-                    if direct_remote {
-                        self.replace_direct_remote_queue(items, start_idx);
-                    } else {
+                    if !direct_remote {
                         self.replace_playback_queue(items, start_idx);
                     }
                     self.set_queue_scope(self.playing_queue_scope());
