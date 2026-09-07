@@ -15,7 +15,7 @@ fn render_help(width: u16, height: u16, scroll: u16) -> String {
                 Some(Rect::new(0, 0, width, height)),
                 &mut scroll,
                 HelpDestination::EmbyLibrary,
-            )
+            );
         })
         .unwrap();
     buffer_to_string(&terminal)

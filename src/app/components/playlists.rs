@@ -8,7 +8,7 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::render::{render_playlists_content, PlaylistsRenderGeometry, PlaylistsViewState};
 use mbv_core::api::EmbyItem;
@@ -87,20 +87,28 @@ impl PlaylistsComponent {
             open_loading,
             loaded_id,
         } = content;
+        let playlists_changed = self.playlists != playlists;
+        let open_changed = self.open != open || self.open_items != open_items;
         self.playlists = playlists;
-        self.cursor = self
-            .cursor
-            .max(cursor)
-            .min(self.playlists.len().saturating_sub(1));
-        self.scroll = self.scroll.max(scroll).min(self.cursor);
+        if playlists_changed {
+            self.cursor = cursor.min(self.playlists.len().saturating_sub(1));
+            self.scroll = scroll.min(self.cursor);
+        } else {
+            self.cursor = self.cursor.min(self.playlists.len().saturating_sub(1));
+            self.scroll = self.scroll.min(self.cursor);
+        }
         self.loading = loading;
         self.open = open;
         self.open_items = open_items;
-        self.open_cursor = self
-            .open_cursor
-            .max(open_cursor)
-            .min(self.open_items.len().saturating_sub(1));
-        self.open_scroll = self.open_scroll.max(open_scroll).min(self.open_cursor);
+        if open_changed {
+            self.open_cursor = open_cursor.min(self.open_items.len().saturating_sub(1));
+            self.open_scroll = open_scroll.min(self.open_cursor);
+        } else {
+            self.open_cursor = self
+                .open_cursor
+                .min(self.open_items.len().saturating_sub(1));
+            self.open_scroll = self.open_scroll.min(self.open_cursor);
+        }
         self.open_loading = open_loading;
         self.loaded_id = loaded_id;
     }
@@ -219,12 +227,26 @@ impl PlaylistsComponent {
     /// right-click on an open playlist goes back, an outside click
     /// dismisses, a row click selects, and a double click activates (the
     /// Enter equivalent).
+    #[cfg(test)]
+    pub(crate) fn first_open_row(&self) -> Rect {
+        self.geometry.open_rows[0].0
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
+        self.mouse_gestures.reset_for_test();
+    }
+
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { delta, .. } => {
+                let at = ratatui::layout::Position::new(mouse.column, mouse.row);
+                if !self.geometry.content_area.contains(at) {
+                    return None;
+                }
                 if self.open.is_some() {
                     self.open_cursor = if delta < 0 {
                         self.open_cursor.saturating_sub(1)
@@ -238,7 +260,7 @@ impl PlaylistsComponent {
                         (self.cursor + 1).min(self.playlists.len().saturating_sub(1))
                     };
                 }
-                None
+                Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
             }
             MouseGesture::RightClick(_) if self.open.is_some() => {
                 self.open = None;

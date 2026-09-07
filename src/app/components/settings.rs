@@ -1,4 +1,4 @@
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
@@ -8,7 +8,7 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, ServiceRequest, SettingsIntent, ShellRequest};
+use super::msg::{Msg, ServiceRequest, SettingsIntent, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
 use crate::app::types_settings::SettingsDestination;
@@ -322,7 +322,7 @@ impl SettingsComponent {
     /// `HitRegions` (D6). Behaviour unchanged from the ad-hoc handler: a
     /// click outside the panel dismisses, a click on a cursor-activatable
     /// row selects and activates it (the Enter/Space equivalent), and the
-    /// wheel scrolls by 3 per throttled step.
+    /// wheel scrolls by one document line per throttled step inside the painted content.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
@@ -343,8 +343,23 @@ impl SettingsComponent {
                 )))
             }
             MouseGesture::Scroll { delta, .. } => {
-                self.scroll = self.scroll.saturating_add_signed((delta * 3) as isize);
-                None
+                let at = Position::new(mouse.column, mouse.row);
+                if !self.geometry.content_area.contains(at) {
+                    return None;
+                }
+                let max_scroll = self
+                    .geometry
+                    .cursor_lines
+                    .iter()
+                    .copied()
+                    .max()
+                    .unwrap_or(0)
+                    .saturating_sub((self.geometry.content_area.height as usize).saturating_sub(1));
+                self.scroll = self
+                    .scroll
+                    .saturating_add_signed(delta as isize)
+                    .min(max_scroll);
+                Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
             }
             _ => None,
         }
@@ -538,15 +553,30 @@ mod tests {
     }
 
     #[test]
-    fn settings_mouse_wheel_scrolls_by_three() {
+    fn settings_mouse_wheel_moves_one_line_inside_content() {
         let mut component = painted_settings(SettingsDestination::Main);
+        component.geometry.content_area = Rect::new(0, 0, 40, 12);
+        component.geometry.cursor_lines = vec![0, 20];
         component.on(&Event::Mouse(MouseEvent {
             kind: MouseEventKind::ScrollDown,
             column: 1,
             row: 1,
             modifiers: KeyModifiers::NONE,
         }));
-        assert_eq!(component.scroll, 3);
+        assert_eq!(component.scroll, 1);
+    }
+
+    #[test]
+    fn settings_mouse_wheel_outside_content_is_ignored() {
+        let mut component = painted_settings(SettingsDestination::Main);
+        component.scroll = 2;
+        component.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 1,
+            row: 1,
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert_eq!(component.scroll, 2);
     }
 
     #[test]

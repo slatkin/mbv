@@ -14,7 +14,7 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::panel_targets::PanelTarget;
 
@@ -121,12 +121,16 @@ impl SessionsComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { delta, .. } => {
+                let at = ratatui::layout::Position::new(mouse.column, mouse.row);
+                if self.hit_rows.resolve(at).is_none() {
+                    return None;
+                }
                 if delta < 0 {
                     self.cursor = self.cursor.saturating_sub(1);
                 } else if !self.targets.is_empty() {
                     self.cursor = (self.cursor + 1).min(self.targets.len() - 1);
                 }
-                None
+                Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
             }
             MouseGesture::Click(at) | MouseGesture::DoubleClick(at) => {
                 if !self
@@ -344,30 +348,42 @@ mod tests {
     }
 
     #[test]
-    fn sessions_mouse_wheel_steps_the_cursor() {
+    fn sessions_mouse_wheel_steps_only_on_painted_rows() {
         let mut component = painted_component();
+        let (row, _) = component.test_rows().regions()[0];
         component.handle_mouse(&MouseEvent {
             kind: MouseEventKind::ScrollDown,
-            column: 1,
-            row: 1,
+            column: row.x,
+            row: row.y,
             modifiers: KeyModifiers::NONE,
         });
         assert_eq!(component.cursor, 1);
         // A back-to-back scroll inside the throttle window is coalesced.
         component.handle_mouse(&MouseEvent {
             kind: MouseEventKind::ScrollUp,
-            column: 1,
-            row: 1,
+            column: row.x,
+            row: row.y,
             modifiers: KeyModifiers::NONE,
         });
         assert_eq!(component.cursor, 1);
         component.reset_mouse_gestures_for_test();
         component.handle_mouse(&MouseEvent {
             kind: MouseEventKind::ScrollUp,
+            column: row.x,
+            row: row.y,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(component.cursor, 0);
+        component.reset_mouse_gestures_for_test();
+        component.handle_mouse(&MouseEvent {
+            kind: MouseEventKind::ScrollDown,
             column: 1,
             row: 1,
             modifiers: KeyModifiers::NONE,
         });
-        assert_eq!(component.cursor, 0);
+        assert_eq!(
+            component.cursor, 0,
+            "wheel outside a painted row is ignored"
+        );
     }
 }

@@ -31,7 +31,9 @@ pub(in crate::app) use components::feeds::{render_feeds_content, FeedsRenderMode
 pub(in crate::app) use components::feeds_manage::{
     render_feeds_manage_content, FeedsManageRenderModel,
 };
-pub(in crate::app) use components::help::{help_destination, render_help_panel, HelpDestination};
+pub(in crate::app) use components::help::{
+    help_destination, render_help_panel, HelpDestination, HelpRenderGeometry,
+};
 pub(in crate::app) use components::home::render_home_content;
 pub(in crate::app) use components::home_hero::HomeImagePaint;
 pub(in crate::app) use components::inline_search::render_inline_search;

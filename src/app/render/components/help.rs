@@ -261,12 +261,17 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
 /// clamps scroll to the visible content and mutates the caller's `scroll`.
 //
 // `pub(in crate::app)` so the Interactive Component can call it.
+pub(in crate::app) struct HelpRenderGeometry {
+    pub content_area: ratatui::layout::Rect,
+    pub max_scroll: u16,
+}
+
 pub(in crate::app) fn render_help_panel(
     f: &mut Frame,
     area: Option<ratatui::layout::Rect>,
     scroll: &mut u16,
     dest: HelpDestination,
-) {
+) -> HelpRenderGeometry {
     let content = match area {
         Some(area) => chrome::render_panel_shell_at(
             f,
@@ -300,9 +305,14 @@ pub(in crate::app) fn render_help_panel(
 
     let total = lines.len();
     let visible = content.height as usize;
-    *scroll = (*scroll).min(total.saturating_sub(visible) as u16);
+    let max_scroll = total.saturating_sub(visible) as u16;
+    *scroll = (*scroll).min(max_scroll);
     f.render_widget(Paragraph::new(lines).scroll((*scroll, 0)), content);
     chrome::render_sidebar_scrollbar(f, content, total, *scroll as usize);
+    HelpRenderGeometry {
+        content_area: content,
+        max_scroll,
+    }
 }
 
 #[cfg(test)]
