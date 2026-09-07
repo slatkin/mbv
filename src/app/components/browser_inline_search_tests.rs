@@ -133,6 +133,21 @@ fn emby_browser_wide_right_rail_paints_inline_search() {
     }));
     assert_eq!(message, None, "search mouse handling never emits a Msg");
     assert_eq!(browser.inline_search().cursor(), 0);
+    let host_cursor = browser.cursor();
+    browser.reset_mouse_gestures_for_test();
+    let message = browser.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: list_area.x,
+        row: list_area.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(message, Some(Msg::TerminalEvent(_))));
+    assert_eq!(browser.inline_search().cursor(), 1);
+    assert_eq!(
+        browser.cursor(),
+        host_cursor,
+        "search wheel must not move host list"
+    );
 
     // A press that begins in the Inline Search bar (above the result list)
     // and releases on the second result row still lands on that row, so its

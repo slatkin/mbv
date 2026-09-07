@@ -125,6 +125,33 @@ fn music_workspace_vertical_move_follows_album_display_order() {
 }
 
 #[test]
+fn music_workspace_wheel_moves_one_painted_album_row_and_reuses_cursor_request() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_focused(true);
+    component.set_content(grouped_context(1, vec![2, 0, 3, 1], None));
+    component.re_anchor(1, 0);
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let area = component.layout().wide_music_browser_area;
+    let message = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: area.x,
+        row: area.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.album_cursor(), 0);
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+            target: 0,
+            kind: AlbumCursorKind::Move,
+        }))
+    ));
+}
+
+#[test]
 fn music_workspace_narrow_enter_requests_album_activation() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);

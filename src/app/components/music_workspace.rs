@@ -17,7 +17,7 @@ use super::media_list::{
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{AlbumCursorKind, Msg, ShellRequest};
+use super::msg::{AlbumCursorKind, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{
@@ -393,6 +393,9 @@ impl MusicWorkspaceComponent {
                     .inline_search
                     .selected_item()
                     .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item })),
+                Some(InlineSearchMouse::Consumed) => {
+                    Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                }
                 None => None,
             };
         }
@@ -402,6 +405,40 @@ impl MusicWorkspaceComponent {
         }
         let wide = self.last_wide.unwrap_or(false);
         match self.mouse_gestures.recognize(mouse)? {
+            MouseGesture::Scroll { at, delta } => {
+                let claimed = if wide {
+                    self.wide_list
+                        .claims_point(self.layout.wide_music_browser_area, at)
+                } else {
+                    self.narrow_list.claims_point(self.narrow_list_area, at)
+                };
+                if !claimed {
+                    return None;
+                }
+                if wide {
+                    self.wide_list.move_selection(delta);
+                } else {
+                    self.narrow_list.move_selection(delta);
+                }
+                let target = if wide {
+                    self.wide_list.selected_target().cloned()
+                } else {
+                    self.narrow_list.selected_target().cloned()
+                };
+                let target = target.and_then(|id| {
+                    self.context
+                        .list
+                        .items
+                        .iter()
+                        .position(|item| item.id == id)
+                })?;
+                self.album_cursor = target;
+                self.sync_narrow_selection();
+                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                    target,
+                    kind: AlbumCursorKind::Move,
+                }))
+            }
             // Wide right-rail / track table: unchanged from task 3.6.
             MouseGesture::Click(at) | MouseGesture::DoubleClick(at) if wide => {
                 if let Some(track) = self.layout.wide_music_track_at(at) {

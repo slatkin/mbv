@@ -398,6 +398,9 @@ impl TvWorkspaceComponent {
                     .inline_search
                     .selected_item()
                     .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item })),
+                Some(InlineSearchMouse::Consumed) => {
+                    Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                }
                 None => None,
             };
         }

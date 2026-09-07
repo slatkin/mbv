@@ -23,7 +23,7 @@ use super::media_list::{
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
@@ -435,6 +435,9 @@ impl BrowserComponent {
                     .inline_search
                     .selected_item()
                     .map(|item| Msg::Shell(ShellRequest::BrowserContextMenu { item })),
+                Some(InlineSearchMouse::Consumed) => {
+                    Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                }
                 None => None,
             };
         }

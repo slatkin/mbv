@@ -374,7 +374,7 @@ impl AudiobookshelfPodcastComponent {
                     return None;
                 }
                 let columns = self.geometry.columns.max(1) as i64;
-                self.move_cursor(delta * 3 * columns);
+                self.move_cursor(delta * columns);
                 Some(self.show_move_request())
             }
             MouseGesture::Click(at) => {

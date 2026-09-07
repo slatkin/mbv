@@ -320,7 +320,7 @@ fn abs_podcast_narrow_one_column_navigation_uses_page_rows() {
 }
 
 #[test]
-fn abs_podcast_wheel_moves_three_rows_and_ignores_outside_list() {
+fn abs_podcast_wheel_moves_one_visual_row_and_ignores_outside_list() {
     let state = narrow_grid_component_state();
     let mut component = AudiobookshelfPodcastComponent::new();
     component.set_content(&state, false);
@@ -336,23 +336,27 @@ fn abs_podcast_wheel_moves_three_rows_and_ignores_outside_list() {
     assert!(matches!(
         component.on(&Event::Mouse(inside)),
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 5
+            index: 3
         }))
     ));
     // The wheel throttle lives in the private gesture state (ADR 0024, D3);
     // reset it so the synchronous test loop's second wheel step is recognized.
     component.reset_mouse_gestures_for_test();
-    assert!(matches!(
-        component.on(&Event::Mouse(MouseEvent {
-            kind: MouseEventKind::ScrollUp,
-            column: list.x,
-            row: list.y,
-            modifiers: KeyModifiers::NONE,
-        })),
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 2
-        }))
-    ));
+    let up = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollUp,
+        column: list.x,
+        row: list.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(
+        matches!(
+            up,
+            Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+                index: 2
+            }))
+        ),
+        "unexpected upward wheel message: {up:?}"
+    );
     assert_eq!(component.cursor(), 2);
     assert_eq!(
         component.on(&Event::Mouse(MouseEvent {
