@@ -38,3 +38,28 @@ Every scrollable interactive surface recorded in the interactive-surface ledger 
 - **WHEN** a component can apply an accepted wheel gesture entirely within its own local interaction state
 - **THEN** it does not emit a shell request solely to relay that movement
 - **AND** verification confirms the local state changes without a shell-side wheel handler
+
+### Verification record: affected surfaces
+The implementation and interactive-surface ledger record the following affected
+scrollable surfaces. Each uses the normalized signed gesture directly, claims
+the listed painted region, and retains only the stated semantic boundary:
+
+| Surface | Local owner and painted claim | Breakpoint evidence | Semantic boundary |
+| --- | --- | --- | --- |
+| Browser, including narrow TV | `BrowserComponent`; `WideMediaList` in Wide or `InlineMediaBrowser` in Normal/Narrow | Wide and Normal/Narrow component paths; narrow mounted-owner tick coverage | resolved `BrowserCursorIndex` for persistence only |
+| Wide TV | `TvWorkspaceComponent`; painted series rail claimed by its embedded list | Wide workspace tests; narrow ownership is Browser | none for wheel; no relay |
+| Home | `HomeComponent`; canonical list or inline-hero claim | Wide and Normal/Narrow | resolved Continue Watching cursor effect only |
+| Queue | `QueueComponent`; painted `WideMediaList` queue region | Wide and narrow | none for wheel |
+| Music | `MusicWorkspaceComponent`; Wide rail or Normal/Narrow inline list | Wide and Normal/Narrow | resolved album cursor request |
+| Feeds | `FeedsComponent`; active canonical list region | Wide and Normal/Narrow | none for wheel |
+| Audiobookshelf podcast | `AudiobookshelfPodcastComponent`; painted show-row geometry | Wide and Normal/Narrow | resolved show selection |
+| Audiobookshelf books | `AudiobookshelfBookComponent`; painted book- or chapter-row geometry | Wide and Normal/Narrow | resolved book/chapter selection or focus |
+| Inline Search | active host component; painted results `left_area`, first refusal | Browser, Music, and TV host paths | local result selection only |
+| Settings | `SettingsComponent`; painter-published `content_area` | fixed overlay geometry (breakpoint-invariant) | none for wheel |
+| Help | `HelpComponent`; painter-published `content_area` | fixed overlay geometry (breakpoint-invariant) | none for wheel |
+| Sessions | `SessionsComponent`; painter-published session-row hit regions | fixed overlay geometry (breakpoint-invariant) | selection/connect action remains semantic |
+| Playlists | `PlaylistsComponent`; painter-published wrapped-row hit regions | fixed overlay geometry (breakpoint-invariant) | playlist/open-item actions remain semantic |
+
+Focused verification names and geometry evidence are maintained with the rows in
+`docs/architecture/interactive-surface-ledger.md`; this record does not add a
+second interaction policy or require a shell wheel handler.
