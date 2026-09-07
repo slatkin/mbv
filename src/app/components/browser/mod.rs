@@ -444,19 +444,22 @@ impl BrowserComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                if !self.layout.left_area.contains(at) {
+                let claimed = if self.wide_movies {
+                    self.wide_list.claims_point(self.layout.left_area, at)
+                } else if self.uses_inline_control() {
+                    self.inline_browser.claims_point(self.layout.left_area, at)
+                        || self.layout.inline_hero_area.contains(at)
+                } else {
+                    self.layout.left_area.contains(at)
+                };
+                if !claimed {
                     return None;
                 }
-                let rows = self.layout.left_item_rows.len();
-                let viewport = self.layout.left_area.height as usize;
-                let max_offset = rows.saturating_sub(viewport);
-                self.scroll = self
-                    .scroll
-                    .saturating_add_signed(delta as isize)
-                    .min(max_offset);
-                Some(Msg::Shell(ShellRequest::BrowserScroll {
-                    offset: self.scroll,
-                }))
+                // The normalized gesture delta is one selectable row. The
+                // existing cursor request preserves library-position writes;
+                // the control itself owns the resulting viewport.
+                let index = self.move_cursor_delta(delta);
+                Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }))
             }
             MouseGesture::Click(at) => {
                 if let Some(&pill) = self.pill_regions.resolve(at) {

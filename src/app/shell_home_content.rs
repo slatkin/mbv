@@ -9,7 +9,6 @@ use super::components::{ComponentId, HomeComponent};
 use super::notify_actions::ToastSeverity;
 use super::shell::Model;
 use super::types_playback::HomeContent;
-use super::ui_util::move_cursor;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use std::time::Instant;
@@ -124,20 +123,6 @@ impl Model {
             .continue_items
             .get(self.home_content.continue_cursor)
             .cloned()
-    }
-
-    /// Move the Continue Watching column cursor — the preserved legacy wheel
-    /// quirk (task 5.3d): identical clamp/`ui_util::move_cursor` semantics to
-    /// the deleted `App::cw_move_cursor`, operating on Model-owned
-    /// `home_content.continue_cursor`. The mounted component's section-local
-    /// cursor is moved separately in `handle_home_scroll`.
-    pub(super) fn cw_move_cursor(&mut self, delta: i64) {
-        let n = self.home_content.continue_items.len();
-        if n == 0 {
-            return;
-        }
-        let cur = self.home_content.continue_cursor.min(n - 1);
-        self.home_content.continue_cursor = move_cursor(cur, delta, n);
     }
 
     /// Synchronous startup/commit fetch drain for `fetch_home` (task 5.3d):

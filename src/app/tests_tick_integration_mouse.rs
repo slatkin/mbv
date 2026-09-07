@@ -279,11 +279,11 @@ fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
     harness.inject(wheel(5, 5));
     let outcome = harness.step();
     assert!(
-        outcome
+        !outcome
             .raw_messages
             .iter()
-            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::QueueScroll { .. }))),
-        "the queue responds to the wheel while it is mouse-eligible"
+            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::QueueIntent(_)))),
+        "the queue handles an eligible wheel locally without a shell relay"
     );
 
     let menu_id = ComponentId::Overlay(OverlayId::ContextMenu);

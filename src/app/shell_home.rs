@@ -52,23 +52,6 @@ impl Model {
         }
     }
 
-    /// Route the Home wheel scroll (task 4.3) at the Model boundary. The
-    /// mounted `HomeComponent` recognizes and throttles the event before it
-    /// reaches this handler; this preserves the Continue Watching column's
-    /// independent cursor quirk while the component owns its local cursor.
-    pub(super) fn handle_home_scroll(&mut self, delta: i64) {
-        if let Some(comp) = self.application.get_component_mut(&ComponentId::Home) {
-            if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
-                home.move_local_cursor(delta);
-            }
-        }
-        // Preserve the Continue Watching column quirk: the legacy wheel
-        // scroll also moved its independent cursor. Refresh the component's
-        // target snapshot so keyboard '.' follows that Model-owned cursor.
-        self.cw_move_cursor(delta);
-        self.push_home_content();
-    }
-
     /// Mount `HomeComponent` for the session. Called once from `Model::new`;
     /// never unmounted (Home is always available, matching `App.tab`
     /// defaulting to `TabSelection::Home`).
@@ -676,43 +659,6 @@ mod tests {
                     .is_some_and(|action| matches!(action, crate::app::ContextAction::Play))
             }),
             "Home context-menu request must use its explicit item target"
-        );
-    }
-
-    fn home_component_cursor(model: &Model) -> usize {
-        model
-            .application
-            .get_component(&ComponentId::Home)
-            .expect("Home component mounted")
-            .as_any()
-            .downcast_ref::<HomeComponent>()
-            .expect("Home component type")
-            .cursor()
-    }
-
-    /// Task 4.3, Home wheel-scroll ownership: an accepted `HomeScroll`
-    /// moves the mounted component's section-local cursor *and* the
-    /// independent Continue Watching column cursor (`continue_cursor`, the
-    /// preserved legacy quirk). The component-level gesture tests cover its
-    /// 30ms throttle before this Model effect runs.
-    #[test]
-    fn shell_home_wheel_moves_component_and_continue_cursor() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let mut model = Model::new(make_app_stub());
-        model.home_content.continue_items = make_items(3);
-        model.push_home_content();
-
-        // The component has already recognized and throttled this accepted
-        // HomeScroll before the Model applies its effect.
-        model.handle_home_scroll(1);
-        assert_eq!(
-            model.home_content.continue_cursor, 1,
-            "accepted wheel must move the Continue Watching column cursor"
-        );
-        assert_eq!(
-            home_component_cursor(&model),
-            1,
-            "accepted wheel must move the component-local cursor"
         );
     }
 }

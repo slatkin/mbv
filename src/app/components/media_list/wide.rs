@@ -112,8 +112,14 @@ impl<Target: Clone> WideMediaList<Target> {
     /// painter consumes, so the hit flow can never drift from the painted one.
     /// Returns `None` for a point outside `list_area` (horizontally too), a
     /// heading/spacer row, or a point past the last row.
+    /// Claim the painted list region, including blank and non-selectable rows.
+    /// Parents use this to distinguish an in-region no-op from outside input.
+    pub fn claims_point(&self, list_area: Rect, point: Position) -> bool {
+        list_area.contains(point)
+    }
+
     pub fn resolve_point(&self, list_area: Rect, point: Position) -> Option<&Target> {
-        if !list_area.contains(point) {
+        if !self.claims_point(list_area, point) {
             return None;
         }
         let row_in_view = (point.y - list_area.y) as usize;

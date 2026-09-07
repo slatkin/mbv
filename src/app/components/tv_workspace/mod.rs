@@ -407,15 +407,13 @@ impl TvWorkspaceComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                // Wheel scroll over the series list (`left_area` is the
-                // right-pane list area this renderer publishes — the exact
-                // region the legacy scroll arm hit-tested). The Episodes
-                // pane has no wheel behaviour.
-                if !self.layout.left_area.contains(at) {
+                // The series rail is the only scrollable TV surface. Its
+                // canonical control claims the painted region.
+                if !self.list.claims_point(self.layout.left_area, at) {
                     return None;
                 }
                 self.move_rows(delta);
-                Some(Msg::Shell(ShellRequest::TvScroll { delta }))
+                None
             }
             MouseGesture::Click(at) => {
                 let hit = self.resolve_hit(at)?;

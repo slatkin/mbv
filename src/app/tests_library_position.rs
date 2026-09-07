@@ -514,12 +514,11 @@ fn trigger_lib_rescan_clears_only_active_scope() {
 
 #[test]
 fn home_navigation_does_not_persist_library_position_state() {
-    // Home content is Model-owned (task 5.3d): seed `home_content` and move
-    // the Continue Watching column cursor through the Model method.
+    // Home content is Model-owned: moving its Continue Watching cursor does
+    // not write library-position state.
     let mut model = crate::app::shell::Model::new(make_app_stub());
     model.home_content.continue_items = make_items(3);
-
-    model.cw_move_cursor(1);
+    model.home_content.continue_cursor = 1;
 
     assert!(model.app.library_position_state.libraries.is_empty());
 }

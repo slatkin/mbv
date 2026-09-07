@@ -163,12 +163,10 @@ pub enum ShellRequest {
     /// preference, resolved via the mounted component's `source_for_section`
     /// at the Model boundary (task 5.3d, numeric Home section deletion).
     HomeSectionSelected(usize),
-    /// A Home-surface wheel step recognized by `HomeComponent`'s private
-    /// `MouseGestureState` (ADR 0024, design.md D3): the component owns the
-    /// wheel throttle. The shell runs `handle_home_scroll` only for the
-    /// Continue Watching `cw_move_cursor` quirk and context-menu refresh.
-    HomeScroll {
-        delta: i64,
+    /// The resolved Continue Watching cursor after local Home movement. The
+    /// Model remains authoritative for this independently persisted cursor.
+    HomeContinueCursor {
+        index: usize,
     },
     /// A row the user single-clicked in the Home list or inline hero. The
     /// component has already moved its own selection to the resolved row; the
@@ -250,12 +248,6 @@ pub enum ShellRequest {
     /// Semantic settings navigation/action intent; local cursor state stays
     /// in the Settings component.
     SettingsIntent(SettingsIntent),
-    /// A Queue-surface wheel step recognized by `QueueComponent`'s private
-    /// `MouseGestureState` (ADR 0024, design.md D3): the component owns the
-    /// wheel throttle. The shell only applies the scroll effect.
-    QueueScroll {
-        delta: i64,
-    },
     /// A Queue row the user single-clicked; the component has already pinned
     /// its selection to `slot_id` (design.md D4/D5).
     QueueRowClick {
@@ -282,12 +274,6 @@ pub enum ShellRequest {
     /// its own scope and reset its scroll (design.md D3).
     QueueScopeClick {
         scope: QueueScope,
-    },
-    /// A TV-workspace wheel step recognized by `TvWorkspaceComponent`'s
-    /// private `MouseGestureState` (ADR 0024, design.md D3): the component
-    /// owns the wheel throttle. The shell only applies the scroll effect.
-    TvScroll {
-        delta: i64,
     },
     /// A TV-workspace row the user single-clicked. `TvWorkspaceComponent`
     /// painted the two panes and resolved which pane + hit the click landed
@@ -353,13 +339,6 @@ pub enum ShellRequest {
     /// later typed-key slice.
     TvSeasonMove {
         delta: i64,
-    },
-    /// Browse-surface wheel step over the browser list, recognized by
-    /// `BrowserComponent`'s private `MouseGestureState` (ADR 0024, design.md
-    /// D3). The component owns the wheel throttle and updates its own scroll;
-    /// `offset` is the clamped scroll it landed on.
-    BrowserScroll {
-        offset: usize,
     },
     /// A row the user single-clicked in the browser list or inline hero,
     /// resolved to an item index by the embedded control's `resolve_point`

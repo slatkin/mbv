@@ -100,8 +100,7 @@ impl App {
     // Model-owned `home_content` and passes it into the item-targeted
     // effect helper, instead of the App re-reading a (now deleted)
     // `home.continue_items`/`continue_cursor`. `continue_cursor` stays the
-    // sole, unchanged authoritative target. (`App::cw_move_cursor` was
-    // re-homed as `Model::cw_move_cursor` in `shell_home_content.rs`.)
+    // sole, unchanged authoritative target.
     pub(super) fn cw_play(&mut self, item: EmbyItem) {
         if item.is_folder {
             return;

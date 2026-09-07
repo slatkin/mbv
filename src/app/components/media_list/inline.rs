@@ -186,6 +186,12 @@ impl<Target> InlineMediaBrowser<Target> {
     /// Returns `None` for a point outside `list_area` (horizontally too), a
     /// heading/spacer row, an inline detail-block continuation row, or a point
     /// past the last row.
+    /// Claim the painted list region, including blank, heading, and detail rows.
+    /// Parents use this to distinguish an in-region no-op from outside input.
+    pub fn claims_point(&self, list_area: Rect, point: Position) -> bool {
+        list_area.contains(point)
+    }
+
     pub fn resolve_point(
         &self,
         list_area: Rect,
@@ -195,7 +201,7 @@ impl<Target> InlineMediaBrowser<Target> {
     where
         Target: Clone,
     {
-        if !list_area.contains(point) {
+        if !self.claims_point(list_area, point) {
             return None;
         }
         let layout = self.resolve_inline_layout(list_area.height as usize, detail_rows);

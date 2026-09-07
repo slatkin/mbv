@@ -85,9 +85,8 @@ pub struct HomeComponent {
     /// The list area (`render_home_content`'s `left_area`) `view()` painted
     /// the rows into. Rebuilt every `view` like `pill_targets`; this
     /// is Home's whole claim rect, so a click or wheel anywhere inside it is
-    /// recognized by the private `MouseGestureState` and emitted as a semantic
-    /// `Msg::Shell` (the shell applies the cross-boundary effect). The
-    /// double-click window and wheel throttle live in `mouse_gestures`.
+    /// recognized by the private `MouseGestureState`. The double-click window
+    /// and wheel throttle live in `mouse_gestures`.
     list_area: Rect,
     /// The selected row's painted rect (`render_home_content`'s
     /// `selected_item_rect`), retained for the shell to anchor the Home
@@ -461,9 +460,9 @@ impl HomeComponent {
     /// identity comes from the embedded control's `resolve_point`
     /// (design.md D6); section pills from `pill_regions`. The component emits
     /// a semantic `Msg` with a resolved target — never raw coordinates —
-    /// except the context-menu anchor (design.md D4). The wheel step is
-    /// finished by `Model::handle_home_scroll`, which preserves the Continue
-    /// Watching `cw_move_cursor` quirk and refreshes the target snapshot.
+    /// except the context-menu anchor (design.md D4). Wheel movement mutates
+    /// the active canonical control locally; only the Continue Watching cursor
+    /// authority crosses the boundary.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         // Home does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
@@ -471,10 +470,19 @@ impl HomeComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                if !self.list_area.contains(at) {
+                let claimed = if self.wide {
+                    self.canonical_list.claims_point(self.list_area, at)
+                } else {
+                    self.inline_list.claims_point(self.list_area, at)
+                        || self.hero_area.is_some_and(|hero| hero.contains(at))
+                };
+                if !claimed {
                     return None;
                 }
-                Some(Msg::Shell(ShellRequest::HomeScroll { delta }))
+                self.move_local_cursor(delta);
+                (self.section == 0).then_some(Msg::Shell(ShellRequest::HomeContinueCursor {
+                    index: self.cursor(),
+                }))
             }
             MouseGesture::Click(at) => {
                 if let Some(&section_idx) = self.pill_regions.resolve(at) {

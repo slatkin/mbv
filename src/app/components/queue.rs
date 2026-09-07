@@ -336,10 +336,11 @@ impl QueueComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                if !self.area.contains(at) {
+                if !self.list.claims_point(self.area, at) {
                     return None;
                 }
-                Some(Msg::Shell(ShellRequest::QueueScroll { delta }))
+                self.list.move_selection(delta);
+                None
             }
             MouseGesture::Click(at) => {
                 if let Some(scope) = self.claim_scope_pill(at) {
