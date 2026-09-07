@@ -8,7 +8,7 @@
 ## 2. Visualizer and idle-feed fallout
 
 - [x] 2.1 Confirm no code change is needed for the visualizer capture path: `visualizer_should_run` (`src/app/visualizer.rs`) already requires local `active`, so pressing `v` while collapsed must not start the PipeWire worker or drop `render_interval` to its 16 ms visualizer cadence. Add the test that pins this rather than editing the predicate, and verify with `cargo nextest run -p mbv visualizer`.
-- [ ] 2.2 Gate `idle_feed_command_for_key` (`src/app/action.rs:105`) on the same queue-only-idle signal so `o` stops opening a browser for a hidden title, threading the value through `RouterSnapshot` (`src/app/key_policy.rs`) alongside the existing `player_active` / `has_remote_session` fields. Leave `idle_feed_link_area` alone (written only inside `render_player_panel`, read by nothing). Verify by extending `action_tests.rs::o_opens_an_idle_feed_link_only_when_available` and the routing-matrix snapshot test.
+- [x] 2.2 Gate `idle_feed_command_for_key` (`src/app/action.rs:105`) on the same queue-only-idle signal so `o` stops opening a browser for a hidden title, threading the value through `RouterSnapshot` (`src/app/key_policy.rs`) alongside the existing `player_active` / `has_remote_session` fields. Leave `idle_feed_link_area` alone (written only inside `render_player_panel`, read by nothing). Verify by extending `action_tests.rs::o_opens_an_idle_feed_link_only_when_available` and the routing-matrix snapshot test.
 - [x] 2.3 Confirm the `Both` layout is byte-identical for card, panel, and idle feed at every breakpoint, and that the collapse covers the narrow mini-view route (below `MINI_VIEW_THRESHOLD`, driven by `mini_view_focus`) as well as `x` at 80+ columns.
 
 ## 3. Docs and specs
