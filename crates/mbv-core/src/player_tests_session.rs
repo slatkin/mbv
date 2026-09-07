@@ -54,13 +54,23 @@ fn playlist_pos_does_not_clobber_pending_replace_queue_load() {
 fn playlist_pos_does_not_clobber_in_flight_jump_to() {
     let (mut session, status) = make_queue_session_for_pos_tests(0);
     session.pending_initial_playlist_layout = false;
-    session.forced_slot_id = session.slot_id_at(1);
+    let target = session.slot_id_at(1).unwrap();
+    session.forced_slot_id = Some(target);
+    // Rapid Enter on two rows: the in-flight jump also carries its request
+    // identity; an intermediate playlist-pos event must not clobber either.
+    session.forced_transition =
+        Some(crate::playback_transition::Transition::new(42, 1, target));
 
     session.on_playlist_pos_changed(1);
 
     assert_eq!(session.current_idx, 0);
     assert_eq!(status.lock().unwrap().current_idx, 0);
-    assert_eq!(session.forced_slot_id, session.slot_id_at(1));
+    assert_eq!(session.forced_slot_id, Some(target));
+    assert_eq!(
+        session.forced_transition.map(|t| (t.request_id, t.target)),
+        Some((42, target)),
+        "the in-flight jump's request identity survives an intermediate playlist-pos event"
+    );
 }
 
 #[test]

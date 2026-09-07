@@ -395,7 +395,6 @@ impl From<PlayerCommand> for WireCommand {
     fn from(cmd: PlayerCommand) -> Self {
         match cmd {
             PlayerCommand::TogglePause => WireCommand::TogglePause,
-            PlayerCommand::JumpTo(idx) => WireCommand::JumpTo(idx),
             PlayerCommand::SetVolume(v) => WireCommand::SetVolume(v),
             PlayerCommand::Seek(s) => WireCommand::Seek(s),
             PlayerCommand::SeekAbsolute(s) => WireCommand::SeekAbsolute(s),
@@ -434,6 +433,7 @@ impl From<PlayerCommand> for WireCommand {
             PlayerCommand::QueueAppend { .. }
             | PlayerCommand::QueueRemove(_)
             | PlayerCommand::QueueMove(..)
+            | PlayerCommand::JumpTo { .. }
             | PlayerCommand::LoadNew { .. }
             | PlayerCommand::Next
             | PlayerCommand::Previous
@@ -448,7 +448,9 @@ impl From<WireCommand> for PlayerCommand {
     fn from(cmd: WireCommand) -> Self {
         match cmd {
             WireCommand::TogglePause => PlayerCommand::TogglePause,
-            WireCommand::JumpTo(idx) => PlayerCommand::JumpTo(idx),
+            WireCommand::JumpTo(_) => unreachable!(
+                "inbound legacy WireCommand::JumpTo is rejected pre-conversion at the daemon boundary; task 3.5"
+            ),
             WireCommand::SetVolume(v) => PlayerCommand::SetVolume(v),
             WireCommand::Seek(s) => PlayerCommand::Seek(s),
             WireCommand::SeekAbsolute(s) => PlayerCommand::SeekAbsolute(s),

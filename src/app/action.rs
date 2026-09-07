@@ -523,7 +523,15 @@ impl App {
                                 );
                             }
                         } else {
-                            self.player.send_command(PlayerCommand::JumpTo(t));
+                            let Some(slot_id) = slot_id else {
+                                return false;
+                            };
+                            // task 4.3: Bare owner mints real transition identity
+                            self.player.send_command(PlayerCommand::JumpTo {
+                                slot_id,
+                                request_id: 0,
+                                generation: 0,
+                            });
                         }
                     }
                 } else {

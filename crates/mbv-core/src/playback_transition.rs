@@ -151,6 +151,15 @@ mod tests {
             state.in_flight().unwrap().request_id,
             state.queued_latest().unwrap().request_id
         );
+
+        // Both A-transitions target the same slot: a settling observation must
+        // correlate by `request_id`, never by `target`. An observation still
+        // tagged with first-A's `request_id` (10) cannot be accepted as
+        // settling a transition minted for second-A (12), even though both
+        // point at `slot_a`.
+        assert_eq!(state.in_flight().unwrap().target, slot_a);
+        assert_eq!(state.queued_latest().unwrap().target, slot_a);
+        assert_ne!(first_a.request_id, second_a.request_id);
     }
 
     // Three rapid requests: only the first is dispatched to the Playback run;

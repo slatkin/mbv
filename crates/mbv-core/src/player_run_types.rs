@@ -23,6 +23,11 @@ struct PlaybackRun {
     // loop state
     current_idx: usize,
     forced_slot_id: Option<QueueSlotId>,
+    /// Request identity of the in-flight explicit jump that set
+    /// `forced_slot_id`, so the settling `TrackChanged` observation can be
+    /// tagged with the `(request_id, generation)` it satisfies (design D4).
+    /// Cleared in lockstep with `forced_slot_id`.
+    forced_transition: Option<crate::playback_transition::Transition>,
     /// Slot identity captured at the moment a stop/quit is first observed, so a
     /// `QueueMove`/`QueueRemove` applied before the deferred `Stopped` emit
     /// (shutdown / quit-timeout paths) cannot change which occurrence the event

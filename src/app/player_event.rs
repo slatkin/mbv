@@ -320,7 +320,13 @@ impl App {
                         .iter()
                         .position(|s| matches!(&s.item, mbv_core::playback_queue::QueueItem::Emby(e) if e.id == item.id))
                     {
-                        self.player.send_command(PlayerCommand::JumpTo(idx));
+                        let slot_id = self.playback_queue().slots()[idx].slot_id;
+                        // task 4.3: Bare owner mints real transition identity
+                        self.player.send_command(PlayerCommand::JumpTo {
+                            slot_id,
+                            request_id: 0,
+                            generation: 0,
+                        });
                         self.playback_queue_mut().queue_cursor = idx;
                         // Auto-advance to the next-up item: a follow-the-playhead
                         // move for the playback-target scope.

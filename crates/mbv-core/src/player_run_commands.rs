@@ -24,29 +24,41 @@ impl PlaybackRun {
                 let p = self.status.lock().unwrap().paused;
                 let _ = mpv.set_property("pause", !p);
             }
-            PlayerCommand::JumpTo(idx) => {
-                if let Some(slot_id) = self.slot_id_at(idx) {
-                    if self.active_file {
-                        if let Err(error) = self.select_active_slot(slot_id, mpv) {
-                            log::warn!(target: "player", "active-file selection failed: {error}");
-                        } else {
-                            let _ = mpv.set_property("pause", false);
-                        }
-                        return cancel_stop;
-                    }
-                    // mpv playlist indices are adapter coordinates; pin the
-                    // target slot identity before asking mpv to move.
-                    self.forced_slot_id = Some(slot_id);
-                    if let Err(e) = mpv.set_property("playlist-pos", idx as i64) {
-                        self.forced_slot_id = None;
-                        log::warn!(target: "player", "jump-to idx={idx} failed: {}", mpv_err_str(&e));
+            PlayerCommand::JumpTo {
+                slot_id,
+                request_id,
+                generation,
+            } => {
+                // Resolve the owner-assigned slot to this run's mpv-local
+                // ordinal; a stale slot (gone here) is rejected, never
+                // repaired by position (design D6).
+                let Some(idx) = self.queue.slot_index(slot_id) else {
+                    log::debug!(target: "player", "jump-to: stale slot {slot_id:?} absent; discarded");
+                    return cancel_stop;
+                };
+                self.forced_transition =
+                    Some(crate::playback_transition::Transition::new(request_id, generation, slot_id));
+                if self.active_file {
+                    if let Err(error) = self.select_active_slot(slot_id, mpv) {
+                        log::warn!(target: "player", "active-file selection failed: {error}");
                     } else {
-                        // Selecting a track should always start it playing, even if
-                        // mpv was paused on the previous track — otherwise the new
-                        // track loads silently "stuck" paused (see issue: Enter on a
-                        // queue item, or a remote Next/Previous command, while paused).
                         let _ = mpv.set_property("pause", false);
                     }
+                    return cancel_stop;
+                }
+                // mpv playlist indices are adapter coordinates; pin the
+                // target slot identity before asking mpv to move.
+                self.forced_slot_id = Some(slot_id);
+                if let Err(e) = mpv.set_property("playlist-pos", idx as i64) {
+                    self.forced_slot_id = None;
+                    self.forced_transition = None;
+                    log::warn!(target: "player", "jump-to idx={idx} failed: {}", mpv_err_str(&e));
+                } else {
+                    // Selecting a track should always start it playing, even if
+                    // mpv was paused on the previous track — otherwise the new
+                    // track loads silently "stuck" paused (see issue: Enter on a
+                    // queue item, or a remote Next/Previous command, while paused).
+                    let _ = mpv.set_property("pause", false);
                 }
             }
             PlayerCommand::Next => {
@@ -113,6 +125,7 @@ impl PlaybackRun {
                     self.sync_status_position();
                     if self.forced_slot_id == Some(slot_id) {
                         self.forced_slot_id = None;
+                        self.forced_transition = None;
                     }
                     if active_slot_id == Some(slot_id) {
                         // Currently playing track removed — clear reporter item_id to prevent

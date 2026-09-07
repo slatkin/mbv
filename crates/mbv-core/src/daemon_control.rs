@@ -268,14 +268,26 @@ fn handle_ctrl(
                 }
                 crate::ctrl::PlaybackIntentAction::Next => {
                     if let Some(idx) = player.status.lock().unwrap().next_idx() {
-                        playback_intents.set_target_idx(intent.request_id, idx);
-                        player.send_command(PlayerCommand::JumpTo(idx));
+                        if let Some(slot_id) = queue.slots().get(idx).map(|s| s.slot_id) {
+                            playback_intents.set_target_idx(intent.request_id, idx);
+                            player.send_command(PlayerCommand::JumpTo {
+                                slot_id,
+                                request_id: intent.request_id,
+                                generation: intent.generation,
+                            });
+                        }
                     }
                 }
                 crate::ctrl::PlaybackIntentAction::Previous => {
                     if let Some(idx) = player.status.lock().unwrap().previous_idx() {
-                        playback_intents.set_target_idx(intent.request_id, idx);
-                        player.send_command(PlayerCommand::JumpTo(idx));
+                        if let Some(slot_id) = queue.slots().get(idx).map(|s| s.slot_id) {
+                            playback_intents.set_target_idx(intent.request_id, idx);
+                            player.send_command(PlayerCommand::JumpTo {
+                                slot_id,
+                                request_id: intent.request_id,
+                                generation: intent.generation,
+                            });
+                        }
                     }
                 }
             }
@@ -466,9 +478,12 @@ fn handle_ctrl(
             match queue.set_active_slot(sid) {
                 crate::playback_queue::QueueMutationResult::Applied(()) => {
                     broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
-                    if let Some(idx) = queue.active_index() {
-                        player.send_command(PlayerCommand::JumpTo(idx));
-                    }
+                    // task 3.1-daemon: real identity when UnifiedQueuePlaySlot routes through core.transitions
+                    player.send_command(PlayerCommand::JumpTo {
+                        slot_id: sid,
+                        request_id: 0,
+                        generation: 0,
+                    });
                 }
                 crate::playback_queue::QueueMutationResult::NotFound => {
                     reject_command(

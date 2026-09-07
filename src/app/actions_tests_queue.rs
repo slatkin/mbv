@@ -142,8 +142,8 @@ fn queue_menu_play_carries_clicked_index_not_follow_cursor() {
     app.execute_context_action(Some(crate::app::ContextAction::PlayQueue(play_index)), None);
 
     assert!(
-        matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))),
-        "menu Play must jump to the retained clicked index 1, not follow cursor 0"
+        matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo { slot_id, .. }) if slot_id == slot_b),
+        "menu Play must jump to the retained clicked row B, not follow cursor 0"
     );
 }
 
@@ -174,8 +174,8 @@ fn queue_double_click_plays_clicked_index_not_follow_cursor() {
     app.handle_mouse_double_click_queue(Some(slot_b));
 
     assert!(
-        matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))),
-        "double-click must jump to the clicked index 1, not follow cursor 0"
+        matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo { slot_id, .. }) if slot_id == slot_b),
+        "double-click must jump to the clicked row B, not follow cursor 0"
     );
 }
 
@@ -242,10 +242,14 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
 
     app.panel_focus = PanelFocus::Queue;
     app.player_tab.queue_cursor = 1;
+    let want_slot = app.player_tab.queue.slots()[1].slot_id;
 
     app.dispatch(Command::QueuePlayCursor(1));
 
-    assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))));
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(PlayerCommand::JumpTo { slot_id, .. }) if slot_id == want_slot
+    ));
 }
 
 // ── next_subtitle_entry: shared cycling math (remote/local parity, #86) ─

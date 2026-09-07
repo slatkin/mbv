@@ -295,7 +295,16 @@ pub enum PlayerEvent {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum PlayerCommand {
     TogglePause,
-    JumpTo(usize),
+    /// Jump to an existing queue occurrence by its owner-assigned slot
+    /// identity, carrying the request identity of the dispatched explicit
+    /// jump (design D4). In-process only — never crosses the ctrl wire: a
+    /// stale ordinal cannot be repaired remotely, so the daemon boundary
+    /// rejects any inbound legacy `WireCommand::JumpTo` before conversion.
+    JumpTo {
+        slot_id: QueueSlotId,
+        request_id: crate::ctrl::PlaybackRequestId,
+        generation: crate::ctrl::PlaybackGeneration,
+    },
     /// Relative single-step forward nav; carries no request identity (design D4:
     /// relative nav correlates like natural advancement, not a repeated target).
     Next,

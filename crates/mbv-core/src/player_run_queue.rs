@@ -276,6 +276,7 @@ impl PlaybackRun {
     fn begin_item_lifecycle(&mut self) {
         self.tracks_initialized = false;
         self.forced_slot_id = None;
+        self.forced_transition = None;
         self.reset_next_up_state();
         self.stopped_event_sent = false;
         self.mark_played_id = None;
@@ -519,6 +520,7 @@ impl PlaybackRun {
             ext_sub_urls,
             current_idx: start_idx,
             forced_slot_id: None,
+            forced_transition: None,
             stop_slot: None,
             quit_at: None,
             last_seek_at: None,

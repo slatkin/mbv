@@ -466,6 +466,10 @@ impl PlaybackRun {
         let completed_pos =
             queue_completed_pos(completed_is_audio, natural, near_end, self.last_valid_pos);
 
+        // Consume the in-flight jump's identity alongside `forced_slot_id`
+        // (same lifetime, design D4); it tags the `TrackChanged` emit below
+        // only if this observation actually lands on its target slot.
+        let settling_transition = self.forced_transition.take();
         let next_idx = self
             .forced_slot_id
             .take()
@@ -603,9 +607,12 @@ impl PlaybackRun {
             });
         }
         if let Some(next_slot_id) = self.active_slot_id() {
+            let transition = settling_transition
+                .filter(|t| t.target == next_slot_id)
+                .map(|t| (t.request_id, t.generation));
             let _ = self.event_tx.send(PlayerEvent::TrackChanged {
                 slot_id: next_slot_id,
-                transition: None,
+                transition,
             });
         }
         false
