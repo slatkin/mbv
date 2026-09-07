@@ -1,7 +1,7 @@
 ## 1. Red-before-green now-playing buffer test
 
-- [ ] 1.1 Add a failing buffer test for the queue now-playing row asserting the new geometry (title with no inline `%`, no elapsed, right-aligned `glyph pct` with the aqua throbber role) alongside an unchanged resume-progress row (inline `%`, duration intact), and verify it fails against the current painter before any production edit.
-- [ ] 1.2 Pin the browser resume path as the regression net: confirm existing tests covering `emby_semantic_state` / `Active` rendering pass untouched throughout, and verify with `cargo nextest run -p mbv browser`.
+- [x] 1.1 Add a failing buffer test for the queue now-playing row asserting the new geometry (title with no inline `%`, no elapsed, right-aligned `glyph pct` with the aqua throbber role) alongside an unchanged resume-progress row (inline `%`, duration intact), and verify it fails against the current painter before any production edit.
+- [x] 1.2 Pin the browser resume path as the regression net: confirm existing tests covering `emby_semantic_state` / `Active` rendering pass untouched throughout, and verify with `cargo nextest run -p mbv browser`.
 
 ## 2. `NowPlaying` row vocabulary
 
