@@ -264,8 +264,11 @@ impl App {
             // below the card on narrow terminals, or beside it on wide ones.
             // A connected transport keeps its panel even when it is not
             // currently active; only a genuinely idle queue-only frame hides
-            // both surfaces.
-            let mut narrow_player_h = 0;
+            // both surfaces and returns its rows to the queue list. Narrow
+            // stacks the panel below the card; wide paints it beside the
+            // card, so the queue starts below whichever is taller.
+            let mut top_rows = layout.card.height;
+            let mut stacked_rows = 0;
             if is_queue_only && (!idle_collapse || show_controls) {
                 if is_wide {
                     let panel_area = Rect {
@@ -289,6 +292,7 @@ impl App {
                             palette::SURFACE_CHROME,
                         ),
                     );
+                    top_rows = layout.card.height.max(player_h);
                 } else {
                     let panel_area = Rect {
                         x: left_content.x,
@@ -307,14 +311,24 @@ impl App {
                             palette::SURFACE_CHROME,
                         ),
                     );
-                    narrow_player_h = player_h;
+                    stacked_rows = player_h;
                 }
             }
 
+            // Both mode keeps the panel in the right column, so the left
+            // queue only ever sits below the card there.
+            let (queue_card_rows, queue_narrow_rows) = if is_queue_only && is_wide {
+                (top_rows, 0)
+            } else if is_queue_only {
+                (layout.card.height, stacked_rows)
+            } else {
+                (layout.card.height, 0)
+            };
+
             let queue_geometry = queue_panel_geometry(QueuePanelInputs {
                 left_content,
-                card_height: layout.card.height,
-                narrow_player_height: narrow_player_h,
+                card_height: queue_card_rows,
+                narrow_player_height: queue_narrow_rows,
             });
             (right_area, queue_geometry)
         };

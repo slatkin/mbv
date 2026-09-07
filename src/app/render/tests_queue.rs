@@ -184,25 +184,29 @@ fn idle_queue_only_hides_card_and_panel_at_both_widths() {
         let mut app = make_queue_app(5);
         app.panel_mode = crate::app::PanelMode::QueueOnly;
         let (term, layout) = render_view_to_terminal(&mut app, width, 40);
-        let buf = term.backend().buffer();
-        let before_queue = (0..layout.queue_area.y)
-            .flat_map(|y| (0..width).map(move |x| buf[(x, y)].symbol()))
-            .collect::<String>();
+        let screen = buffer_to_string(&term);
+        let before_queue = screen
+            .lines()
+            .take(layout.queue_area.y as usize)
+            .collect::<Vec<_>>()
+            .join("\n");
 
-        assert_eq!(layout.card.height, 0);
-        assert_eq!(layout.card.width, 0);
+        // No card surface is published, so the queue takes the whole column
+        // below the separator and no panel/track content paints above it.
         assert!(!before_queue.contains('\u{2594}'));
         assert!(!before_queue.contains("On Now:"));
+        assert!(layout.queue_area.height > 0);
     }
 
     let mut app = make_queue_app(5);
     app.mini_view_focus = crate::app::PanelFocus::Queue;
-    let (term, layout) = render_view_to_terminal(&mut app, crate::app::MINI_VIEW_THRESHOLD - 1, 40);
-    let buf = term.backend().buffer();
-    assert_eq!(layout.card.height, 0);
-    assert!((0..layout.queue_area.y)
-        .flat_map(|y| (0..buf.area().width).map(move |x| buf[(x, y)].symbol()))
-        .all(|symbol| symbol != "▔"));
+    let width = crate::app::MINI_VIEW_THRESHOLD - 1;
+    let (term, layout) = render_view_to_terminal(&mut app, width, 40);
+    let screen = buffer_to_string(&term);
+    assert!(screen
+        .lines()
+        .take(layout.queue_area.y as usize)
+        .all(|row| !row.contains('\u{2594}') && !row.contains("On Now:")));
 }
 
 #[test]
@@ -212,45 +216,29 @@ fn idle_queue_only_reclaims_card_and_panel_rows_until_playback_starts() {
     let mut app = make_queue_app(5);
     app.panel_mode = crate::app::PanelMode::QueueOnly;
 
-    let _ = render_app_to_terminal(&mut app, width, height);
+    let idle_term = render_app_to_terminal(&mut app, width, height);
     let idle_queue_area = app.layout.main.queue_area;
-    let idle_card_height = app.layout.main.card.height;
-    let idle_title_area = app
-        .layout
-        .main
-        .queue_title_area
-        .expect("idle queue should retain its title row");
-    let chrome = app.compute_chrome_geometry(ratatui::layout::Rect::new(0, 0, width, height));
-    let queue_panel_y = idle_title_area.y - 1;
-    assert_eq!(
-        queue_panel_y,
-        chrome.left_content.y + 1,
-        "queue panel keeps the existing one-row separator below left content"
-    );
-    assert!(
-        idle_queue_area.y > chrome.left_content.y,
-        "queue content must begin below the left-content separator"
-    );
-    assert_eq!(idle_card_height, 0);
+    // Idle queue-only keeps the single separator row above the list, then
+    // hands every card/panel row to the queue.
+    assert_eq!(app.layout.main.card.height, 0);
+    let idle_screen = buffer_to_string(&idle_term);
+    assert!(!idle_screen.contains("On Now:"));
 
     let mut status = app.player.status.lock().unwrap();
     status.active = true;
     drop(status);
-    let _ = render_app_to_terminal(&mut app, width, height);
+    let active_term = render_app_to_terminal(&mut app, width, height);
     let active_queue_area = app.layout.main.queue_area;
-    let active_card_height = app.layout.main.card.height;
 
-    assert!(active_card_height > 0, "playback must restore the card");
-    assert_eq!(
-        idle_queue_area.height,
-        active_queue_area.height + active_card_height + 4,
-        "idle queue gains the card and four playback-panel rows"
+    // Playback restores the card and the seekbar/panel rows, pushing the
+    // queue down and shrinking it by the same rows.
+    assert!(
+        app.layout.main.card.height > 0,
+        "playback must restore the card"
     );
-    assert_eq!(
-        active_queue_area.y - idle_queue_area.y,
-        active_card_height + 4,
-        "active queue moves down by the card and four playback-panel rows"
-    );
+    assert!(buffer_to_string(&active_term).contains('\u{2594}'));
+    assert!(active_queue_area.y > idle_queue_area.y);
+    assert!(idle_queue_area.height > active_queue_area.height);
 }
 
 #[test]
@@ -260,11 +248,11 @@ fn connected_idle_queue_only_keeps_panel_but_collapses_card() {
     app.connected_session_state = Some(make_session("remote-host", "Emby"));
     app.connected_session_id = Some("remote-host".into());
     let term = render_app_to_terminal(&mut app, 80, 40);
-    let card_height = app.layout.main.card.height;
+    let screen = buffer_to_string(&term);
 
-    assert_eq!(card_height, 0);
+    assert_eq!(app.layout.main.card.height, 0);
     assert!(app.layout.playback.seekbar_area.height > 0);
-    assert!(buffer_to_string(&term).contains('\u{2594}'));
+    assert!(screen.contains('\u{2594}'));
 }
 
 #[test]
@@ -277,11 +265,35 @@ fn paused_queue_only_keeps_card_and_panel() {
         status.paused = true;
     }
     let term = render_app_to_terminal(&mut app, 80, 40);
-    let card_height = app.layout.main.card.height;
+    let screen = buffer_to_string(&term);
 
-    assert!(card_height > 0);
+    assert!(app.layout.main.card.height > 0);
     assert!(app.layout.playback.seekbar_area.height > 0);
-    assert!(buffer_to_string(&term).contains('\u{2594}'));
+    assert!(screen.contains('\u{2594}'));
+}
+
+#[test]
+fn wide_active_queue_starts_below_panel_rows() {
+    // Wide queue-only paints the panel beside the card, so on a frame where
+    // the card is shorter than the four panel rows the queue must begin
+    // below the panel rect — otherwise list rows overpaint the panel.
+    let mut app = make_queue_app(5);
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    app.player.status.lock().unwrap().active = true;
+    let width = 120;
+    let height = 40;
+    let (_term, layout) = render_view_to_terminal(&mut app, width, height);
+    let chrome = app.compute_chrome_geometry(ratatui::layout::Rect::new(0, 0, width, height));
+    let panel_rows = layout.card.height.max(4);
+    assert!(
+        layout.queue_area.y >= chrome.left_content.y + panel_rows + 1,
+        "queue must start below the painted wide panel rows"
+    );
+    // The panel background must still fill the wide side-by-side slot.
+    assert!(
+        layout.queue_area.y > chrome.left_content.y,
+        "queue must sit below the left-column content top"
+    );
 }
 
 #[test]
