@@ -97,6 +97,33 @@ fn append_items_to_queue_extends_queue_without_moving_current_idx() {
 }
 
 #[test]
+fn deferred_stop_keeps_the_slot_observed_at_end_file_not_the_one_now_at_that_index() {
+    // Task 2.3 / design D2: the Queue+Quit end-file defers its Stopped emit
+    // until the mpv Shutdown event. A QueueMove drained in between must not
+    // change which occurrence the event names. `stop_slot` is the identity
+    // captured when the stop was first observed; here it points at ep2 while
+    // the ordinal it used to occupy now holds ep3's slot.
+    let (mut session, _status, events) = make_queue_session_for_pos_tests_with_events(1);
+    let observed = session.active_slot_id().expect("active slot at end-file");
+    let displaced = session.slot_id_at(2).expect("slot at index 2");
+    session.stop_slot = Some(observed); // captured in on_end_file's Queue+Quit path
+    session.stop_report = StopReport::Sent; // skip the reporter side effects
+    let mut progress = noop_progress();
+
+    // QueueMove drained between the end-file and the Shutdown event.
+    assert!(session.queue.move_slot(observed, 2));
+    assert_eq!(session.slot_id_at(1), Some(displaced));
+
+    session.on_shutdown(&mut progress);
+
+    let event = events.recv().unwrap();
+    let PlayerEvent::Stopped { slot_id, .. } = event else {
+        panic!("expected Stopped event");
+    };
+    assert_eq!(slot_id, Some(observed));
+}
+
+#[test]
 fn load_new_serde_roundtrip() {
     let cmd = PlayerCommand::LoadNew {
         url: "http://emby.local/Videos/ep1/stream".into(),

@@ -77,10 +77,10 @@ impl PlaybackRun {
                                 self.queue.remove_active_slot_confirmed(slot_id);
                                 let _ = mpv.command("playlist-clear", &[]);
                             }
-                            self.refresh_current_idx_from_queue();
+                            self.sync_status_position();
                         } else {
                             self.queue.remove_slot(slot_id);
-                            self.refresh_current_idx_from_queue();
+                            self.sync_status_position();
                         }
                         return cancel_stop;
                     }
@@ -91,7 +91,7 @@ impl PlaybackRun {
                     } else {
                         self.queue.remove_slot(slot_id);
                     }
-                    self.refresh_current_idx_from_queue();
+                    self.sync_status_position();
                     if self.forced_slot_id == Some(slot_id) {
                         self.forced_slot_id = None;
                     }
@@ -121,14 +121,12 @@ impl PlaybackRun {
                         let _ =
                             mpv.command("playlist-move", &[&from.to_string(), &mpv_to.to_string()]);
                     }
-                    let had_active_slot = self.active_slot_id().is_some();
                     let _ = self.queue.move_slot(slot_id, to);
-                    if had_active_slot {
-                        self.refresh_current_idx_from_queue();
-                    } else {
-                        self.current_idx = shift_index_for_move(self.current_idx, from, to);
-                        self.sync_status_position();
-                    }
+                    // `current_idx` is this run's mpv-local coordinate; adjust it
+                    // for the move directly (design D2) rather than recomputing
+                    // it from the observed active slot.
+                    self.current_idx = shift_index_for_move(self.current_idx, from, to);
+                    self.sync_status_position();
                 }
             }
             PlayerCommand::NextUpDismiss => {
@@ -220,6 +218,9 @@ impl PlaybackRun {
         progress: &mut ProgressGuard,
     ) {
         if self.active_file {
+            // ponytail: run-side slot-id minting (1..=len). Still reachable via
+            // the in-process PlayerCommand::ReplaceQueue callers in src/app/;
+            // removed with the ReplaceQueue variant itself in task 5.1.
             let paired = new_items
                 .into_iter()
                 .enumerate()
@@ -286,7 +287,8 @@ impl PlaybackRun {
         self.pending_initial_playlist_layout = false;
 
         self.origin = PlaybackOrigin::Queue;
-        // Caller-side identity for the replacement sequence: ids 1..=len.
+        // ponytail: run-side slot-id minting (1..=len); removed with the
+        // PlayerCommand::ReplaceQueue variant in task 5.1.
         let paired: Vec<(QueueSlotId, QueueItem)> = new_items
             .into_iter()
             .enumerate()
@@ -400,6 +402,9 @@ impl PlaybackRun {
         }
         *progress = spawn_progress_reporter(self.reporter.clone());
 
+        // ponytail: run-side slot-id minting. PlayerCommand::LoadNew has had no
+        // in-process constructor since task 1.5 dropped its wire command; the
+        // variant and this dead path go together in task 5.1.
         let slot_id = QueueSlotId::from_raw(1);
         self.queue = ExecutionSequence::from_slot_items(
             vec![(slot_id, QueueItem::Emby(Box::new(item.as_ref().clone())))],
@@ -702,7 +707,7 @@ impl PlaybackRun {
         drop(status);
 
         let _ = self.event_tx.send(PlayerEvent::Stopped {
-            slot_id: self.stopped_slot_id(start_idx),
+            slot_id: self.active_slot_id(),
             position_ticks,
             played: false,
             consume: false,

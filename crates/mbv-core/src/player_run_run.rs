@@ -85,6 +85,10 @@ impl PlaybackRun {
                         let _ = mpv.command("quit", &[]);
                     }
                     self.quit_at = Some(Instant::now());
+                    // Pin the slot identity now, while it is still the observed
+                    // active slot, so a QueueMove/QueueRemove drained before the
+                    // deferred Stopped emit cannot rename the occurrence (D2).
+                    self.stop_slot = self.active_slot_id();
                 }
 
                 if self
@@ -105,7 +109,7 @@ impl PlaybackRun {
                     );
                     self.status.lock().unwrap().active = false;
                     let _ = self.event_tx.send(PlayerEvent::Stopped {
-                        slot_id: self.stopped_slot_id(self.current_idx),
+                        slot_id: self.stop_slot.or_else(|| self.active_slot_id()),
                         position_ticks: self.last_valid_pos,
                         played,
                         consume,

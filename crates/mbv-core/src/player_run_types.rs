@@ -23,6 +23,11 @@ struct PlaybackRun {
     // loop state
     current_idx: usize,
     forced_slot_id: Option<QueueSlotId>,
+    /// Slot identity captured at the moment a stop/quit is first observed, so a
+    /// `QueueMove`/`QueueRemove` applied before the deferred `Stopped` emit
+    /// (shutdown / quit-timeout paths) cannot change which occurrence the event
+    /// names (design D2). `None` once taken or when no stop is pending.
+    stop_slot: Option<QueueSlotId>,
     quit_at: Option<Instant>,
     last_seek_at: Option<Instant>,
     last_valid_pos: i64,

@@ -168,7 +168,7 @@ impl PlaybackRun {
                     self.queue.remove_slot(slot_id);
                 }
             }
-            self.refresh_current_idx_from_queue();
+            self.sync_status_position();
             let _ = self.event_tx.send(PlayerEvent::QueueDesynced(format!(
                 "Queue desynced: {removed} item(s) removed externally"
             )));
@@ -270,9 +270,10 @@ impl PlaybackRun {
         self.close_prepared_source();
         progress.stop_and_join(self.progress_join_budget());
         self.close_prepared_source_at(self.last_valid_pos);
+        let stopped_slot = self.active_slot_id();
         self.status.lock().unwrap().active = false;
         let _ = self.event_tx.send(PlayerEvent::Stopped {
-            slot_id: self.stopped_slot_id(self.current_idx),
+            slot_id: stopped_slot,
             position_ticks: 0,
             played: false,
             consume: false,
@@ -303,6 +304,11 @@ impl PlaybackRun {
             }
             return true;
         }
+        // The completed occurrence's owner-assigned identity, resolved from the
+        // observed active slot at the moment the end-file is seen and carried to
+        // every emit/defer site below — never re-resolved against a sequence a
+        // later QueueMove/QueueRemove may have mutated (design D2).
+        let completed_slot_id = self.active_slot_id();
         if self.active_file && self.active_file_starting && reason == mpv_end_file_reason::Error {
             self.active_file_starting = false;
             self.close_prepared_source();
@@ -310,7 +316,7 @@ impl PlaybackRun {
             self.close_prepared_source_at(self.last_valid_pos);
             self.status.lock().unwrap().active = false;
             let _ = self.event_tx.send(PlayerEvent::Stopped {
-                slot_id: self.stopped_slot_id(self.current_idx),
+                slot_id: completed_slot_id,
                 position_ticks: 0,
                 played: false,
                 consume: false,
@@ -349,6 +355,7 @@ impl PlaybackRun {
                 }
             }
             self.stopped_near_end = near_end;
+            self.stop_slot = completed_slot_id;
             return true; // wait for Shutdown to fire PlayerEvent::Stopped
         }
 
@@ -383,7 +390,7 @@ impl PlaybackRun {
             }
             if !self.stopped_event_sent {
                 let _ = self.event_tx.send(PlayerEvent::Stopped {
-                    slot_id: self.stopped_slot_id(self.current_idx),
+                    slot_id: completed_slot_id,
                     position_ticks: 0,
                     played: natural_end && !completed_is_audio && self.reporter.has_session(),
                     consume: false,
@@ -395,13 +402,7 @@ impl PlaybackRun {
             return false;
         }
 
-        // The completed occurrence's owner-assigned identity: `Stopped`,
-        // `TrackCompleted`, and `TrackChanged` now carry `QueueSlotId`
-        // directly, resolved here from mpv-local position (design D2).
-        let completed_slot_id = self.active_slot_id();
-        let completed_idx = completed_slot_id
-            .and_then(|slot_id| self.queue.slot_index(slot_id))
-            .unwrap_or(self.current_idx);
+        let completed_idx = completed_slot_id.and_then(|slot_id| self.queue.slot_index(slot_id));
         log::warn!(target: "player", "advance path: reason={reason:?} last_valid_pos={} runtime={}",
             self.last_valid_pos, self.status.lock().unwrap().runtime_ticks);
         // H11: bounds-check completed_idx — QueueRemove can shrink the list
@@ -410,7 +411,7 @@ impl PlaybackRun {
             .and_then(|slot_id| self.queue.slot(slot_id))
             .map(|slot| slot.item.clone())
         else {
-            log::warn!(target: "player", "on_end_file: completed_idx={completed_idx} out of bounds (len={}), stopping",
+            log::warn!(target: "player", "on_end_file: completed_idx={completed_idx:?} out of bounds (len={}), stopping",
                 self.queue_len());
             progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
@@ -448,7 +449,7 @@ impl PlaybackRun {
         // gates it per-type against consume_videos/consume_audio.
         let played_out = track_finished && !completed_is_audio;
         let consume_track = track_finished;
-        log::info!(target: "consume", "on_end_file decision: idx={completed_idx} reason={reason:?} \
+        log::info!(target: "consume", "on_end_file decision: idx={completed_idx:?} reason={reason:?} \
             natural={natural} near_end={near_end} was_next_up={was_next_up} \
             completed_is_audio={completed_is_audio} last_valid_pos={} runtime={} \
             => played_out={played_out} consume_track={consume_track}",
@@ -522,7 +523,7 @@ impl PlaybackRun {
             progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
             let _ = self.event_tx.send(PlayerEvent::Stopped {
-                slot_id: self.stopped_slot_id(self.current_idx),
+                slot_id: completed_slot_id,
                 position_ticks: 0,
                 played: false,
                 consume: false,
@@ -602,6 +603,11 @@ impl PlaybackRun {
     }
 
     fn on_shutdown(&mut self, progress: &mut ProgressGuard) {
+        // Prefer the slot captured when the stop/quit was first observed
+        // (design D2); fall back to the currently observed active slot only
+        // when mpv shut down with no prior end-file to capture from. This is
+        // the observed active slot, not an mpv-index fallback.
+        let stopped_slot = self.stop_slot.take().or_else(|| self.active_slot_id());
         self.close_prepared_source();
         log::warn!(target: "player", "shutdown: last_valid_pos={} stop_report={:?}",
             self.last_valid_pos, self.stop_report);
@@ -625,7 +631,7 @@ impl PlaybackRun {
             self.status.lock().unwrap().active = false;
             if !self.stopped_event_sent {
                 let _ = self.event_tx.send(PlayerEvent::Stopped {
-                    slot_id: self.stopped_slot_id(self.current_idx),
+                    slot_id: stopped_slot,
                     position_ticks: self.last_valid_pos,
                     played: near_end,
                     consume: false,
@@ -648,7 +654,7 @@ impl PlaybackRun {
         // near the end of an audio item never sets either — consistent with on_end_file's
         // normal advance path, where only natural/next-up (not near-end) triggers audio consume.
         let _ = self.event_tx.send(PlayerEvent::Stopped {
-            slot_id: self.stopped_slot_id(self.current_idx),
+            slot_id: stopped_slot,
             position_ticks: self.last_valid_pos,
             played: self.stopped_near_end,
             consume: self.stopped_near_end,

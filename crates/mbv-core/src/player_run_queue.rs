@@ -7,15 +7,6 @@ impl PlaybackRun {
         self.queue.slots().get(idx).map(|slot| slot.slot_id)
     }
 
-    /// Owner-assigned identity to attach to a `Stopped` event: the slot at
-    /// this run's mpv-local ordinal if it still names a live slot, else the
-    /// active slot. `None` only when the queue holds no slots. The ordinal is
-    /// an mpv-adapter coordinate being resolved back to owner identity before
-    /// the event leaves the run (design D2).
-    fn stopped_slot_id(&self, idx: usize) -> Option<QueueSlotId> {
-        self.slot_id_at(idx).or_else(|| self.active_slot_id())
-    }
-
     fn item_at(&self, idx: usize) -> Option<&QueueItem> {
         self.queue.slots().get(idx).map(|slot| &slot.item)
     }
@@ -119,6 +110,7 @@ impl PlaybackRun {
     /// reliability for the rest of the session.
     fn cancel_pending_quit(&mut self) {
         self.quit_at = None;
+        self.stop_slot = None;
         *self.shutdown_report_timeout.lock().unwrap() = None;
     }
 
@@ -136,19 +128,6 @@ impl PlaybackRun {
         let now = Instant::now();
         self.active_lifecycle.observe(now, active && !paused);
         self.active_lifecycle.sync(position_ticks, now, force_sync);
-    }
-
-    fn refresh_current_idx_from_queue(&mut self) {
-        if let Some(slot_id) = self.active_slot_id() {
-            if let Some(idx) = self.queue.slot_index(slot_id) {
-                self.current_idx = idx;
-            }
-        } else if self.queue_len() == 0 {
-            self.current_idx = 0;
-        } else {
-            self.current_idx = self.current_idx.min(self.queue_len() - 1);
-        }
-        self.sync_status_position();
     }
 
     fn set_active_index(&mut self, idx: usize) -> bool {
@@ -263,7 +242,11 @@ impl PlaybackRun {
         let prepared = self.prepare_item(&item)?;
         self.install_active_projection(mpv, prepared, &item)?;
         let _ = self.queue.set_active_slot(slot_id);
-        self.refresh_current_idx_from_queue();
+        // Resolve the just-selected slot to this run's mpv-local coordinate
+        // (command target -> ordinal is the permitted direction, design D2);
+        // never recompute the coordinate from the observed active slot.
+        self.current_idx = self.queue.slot_index(slot_id).unwrap_or(self.current_idx);
+        self.sync_status_position();
         self.load_active_item_state();
         Ok(())
     }
@@ -536,6 +519,7 @@ impl PlaybackRun {
             ext_sub_urls,
             current_idx: start_idx,
             forced_slot_id: None,
+            stop_slot: None,
             quit_at: None,
             last_seek_at: None,
             last_valid_pos: initial_pos,

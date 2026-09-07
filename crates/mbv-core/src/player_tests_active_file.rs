@@ -60,7 +60,7 @@ fn failed_eager_transition_preserves_canonical_queue_and_mode() {
     let active_abs = QueueSlotId::from_raw(1_000);
     run.queue.append_with_id(active_abs, abs_item());
     let _ = run.queue.set_active_slot(active_abs);
-    run.refresh_current_idx_from_queue();
+    run.current_idx = run.queue.slot_index(active_abs).unwrap();
     let old_slots: Vec<_> = run.queue.slots().iter().map(|slot| slot.slot_id).collect();
     let old_active = run.active_slot_id();
     let mpv = test_mpv();
