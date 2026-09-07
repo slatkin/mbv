@@ -498,6 +498,56 @@ fn settle_and_redispatch(
     }
 }
 
+/// Bounded in-flight failure handling (task 3.4): if the Playback run has not
+/// confirmed the in-flight transition before its deadline, abandon it, report a
+/// timeout to its origin ctrl client, and dispatch whatever was queued behind
+/// it — rebuilding the execution projection from `owner.core.queue` exactly as
+/// [`settle_and_redispatch`] does.
+fn expire_and_redispatch(
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    ctrl_clients: &ClientRegistry,
+    now: Instant,
+) {
+    let crate::playback_transition::ExpireOutcome::Expired {
+        expired,
+        dispatch_next,
+    } = owner.core.transitions.expire(now)
+    else {
+        return;
+    };
+    owner.queued_transition_origin = None;
+    // Emit a timeout to the abandoned request's origin when it is the current
+    // guarded intent (Next/Previous). Owner-minted jumps carry no ctrl origin
+    // and need no event.
+    if let Some((connection_id, request_id, generation)) = owner
+        .intents
+        .current
+        .as_ref()
+        .filter(|current| current.request_id == expired.request_id)
+        .map(|current| (current.connection_id, current.request_id, current.generation))
+    {
+        if let Some(event) = owner.intents.rejected_if_current(
+            connection_id,
+            request_id,
+            generation,
+            crate::ctrl::PlaybackIntentRejection::Unavailable,
+        ) {
+            ctrl_clients
+                .lock()
+                .unwrap()
+                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
+        }
+    }
+    if let Some(next) = dispatch_next {
+        player.send_command(PlayerCommand::JumpTo {
+            slot_id: next.target,
+            request_id: next.request_id,
+            generation: next.generation,
+        });
+    }
+}
+
 /// Snapshot of the daemon's canonical queue used to seed newly-connecting
 /// ctrl-socket clients.  The queue itself is the single source of truth;
 /// `UnifiedQueueState` is derived from it at the broadcast boundary.

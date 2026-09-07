@@ -5,8 +5,17 @@
 //! it (`queued_latest`). This module only defines that state; the dispatch
 //! and settlement logic that consumes it lands in Section 3.
 
+use std::time::{Duration, Instant};
+
 use crate::ctrl::{PlaybackGeneration, PlaybackRequestId};
 use crate::playback_queue::QueueSlotId;
+
+/// Deadline for the Playback run to confirm an in-flight transition (via
+/// `TrackChanged`) before the owner abandons it. Design D4's risk row: "keep
+/// the in-flight timeout bounded; on timeout reject that transition [...] then
+/// dispatch the latest queued request." Mirrors the buffering-deadline
+/// magnitude (`audio_pipe_playout_delay_ms`, sub-second to a few seconds).
+const IN_FLIGHT_TRANSITION_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// A desired playback transition: the correlated request identity plus the
 /// canonical slot it targets.
@@ -55,6 +64,21 @@ pub enum SettleOutcome {
     Ignored,
 }
 
+/// Outcome of [`OwnerTransitionState::expire`] (design D4 risk row).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExpireOutcome {
+    /// Nothing in flight, the deadline is not yet armed, or it has not passed.
+    Pending,
+    /// The in-flight transition's deadline passed before the Playback run
+    /// confirmed it. The caller emits a timeout for `expired` and, if
+    /// `dispatch_next` is set (a transition was queued behind it), dispatches
+    /// that one now.
+    Expired {
+        expired: Transition,
+        dispatch_next: Option<Transition>,
+    },
+}
+
 /// Owner holder for desired-transition state. At most one transition is in
 /// flight to the Playback run; at most one newer transition is queued behind
 /// it (design D4).
@@ -62,6 +86,10 @@ pub enum SettleOutcome {
 pub struct OwnerTransitionState {
     in_flight: Option<Transition>,
     queued_latest: Option<Transition>,
+    /// Bound on how long `in_flight` may wait for confirmation. Armed on the
+    /// first [`expire`](Self::expire) call after a transition goes in flight;
+    /// cleared whenever `in_flight` changes.
+    in_flight_deadline: Option<Instant>,
     next_local_id: u64,
 }
 
@@ -76,6 +104,7 @@ impl OwnerTransitionState {
 
     pub fn set_in_flight(&mut self, transition: Option<Transition>) {
         self.in_flight = transition;
+        self.in_flight_deadline = None;
     }
 
     /// One-in-flight dispatch (design D4). With nothing in flight, the accepted
@@ -86,6 +115,7 @@ impl OwnerTransitionState {
     pub fn accept(&mut self, transition: Transition) -> DispatchDecision {
         if self.in_flight.is_none() {
             self.in_flight = Some(transition);
+            self.in_flight_deadline = None;
             DispatchDecision::DispatchNow(transition)
         } else {
             let superseded = self.queued_latest.replace(transition);
@@ -111,6 +141,7 @@ impl OwnerTransitionState {
         match self.in_flight {
             Some(t) if t.request_id == observed_request_id && t.target == observed_slot => {
                 self.in_flight = self.queued_latest.take();
+                self.in_flight_deadline = None;
                 SettleOutcome::Settled {
                     dispatch_next: self.in_flight,
                 }
@@ -124,6 +155,34 @@ impl OwnerTransitionState {
     pub fn reset(&mut self) {
         self.in_flight = None;
         self.queued_latest = None;
+        self.in_flight_deadline = None;
+    }
+
+    /// Bounded in-flight failure handling (design D4 risk row). The owner event
+    /// loop calls this on its timer tick. On the first call after a transition
+    /// goes in flight the deadline is armed; once `now` reaches it the stalled
+    /// in-flight transition is abandoned, `queued_latest` (if any) is promoted
+    /// into `in_flight`, and [`ExpireOutcome::Expired`] tells the caller to emit
+    /// a timeout for the abandoned request and dispatch the promoted one.
+    pub fn expire(&mut self, now: Instant) -> ExpireOutcome {
+        let Some(expired) = self.in_flight else {
+            return ExpireOutcome::Pending;
+        };
+        match self.in_flight_deadline {
+            None => {
+                self.in_flight_deadline = Some(now + IN_FLIGHT_TRANSITION_TIMEOUT);
+                ExpireOutcome::Pending
+            }
+            Some(deadline) if now >= deadline => {
+                self.in_flight = self.queued_latest.take();
+                self.in_flight_deadline = None;
+                ExpireOutcome::Expired {
+                    expired,
+                    dispatch_next: self.in_flight,
+                }
+            }
+            Some(_) => ExpireOutcome::Pending,
+        }
     }
 
     /// Replace the queued-latest transition, returning the displaced one (its
@@ -258,5 +317,35 @@ mod tests {
             SettleOutcome::Ignored
         );
         assert_eq!(state.in_flight(), Some(current));
+    }
+
+    // A stalled in-flight transition (mpv never confirms via TrackChanged) must
+    // not block the transition state permanently (task 3.4): once its deadline
+    // passes, `expire` abandons it, promotes the queued-latest request, and
+    // reports a timeout for the abandoned one.
+    #[test]
+    fn expire_abandons_stalled_in_flight_and_dispatches_queued_latest() {
+        let mut state = OwnerTransitionState::default();
+        let a = Transition::new(1, 1, QueueSlotId::from_raw(1));
+        let b = Transition::new(2, 1, QueueSlotId::from_raw(2));
+        state.accept(a);
+        state.accept(b);
+
+        let start = Instant::now();
+        // First tick arms the deadline; nothing is due yet.
+        assert_eq!(state.expire(start), ExpireOutcome::Pending);
+        assert_eq!(state.in_flight(), Some(a));
+
+        // Advance past the deadline.
+        let outcome = state.expire(start + IN_FLIGHT_TRANSITION_TIMEOUT + Duration::from_millis(1));
+        assert_eq!(
+            outcome,
+            ExpireOutcome::Expired {
+                expired: a,
+                dispatch_next: Some(b),
+            }
+        );
+        assert_eq!(state.in_flight(), Some(b));
+        assert_eq!(state.queued_latest(), None);
     }
 }

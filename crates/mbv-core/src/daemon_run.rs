@@ -317,6 +317,7 @@ pub fn run_with_options(
                         owner.intents.invalidate_connection(connection_id);
                     }
                 }
+                expire_and_redispatch(&mut owner, &player, &ctrl_clients, Instant::now());
                 continue;
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
