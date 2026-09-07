@@ -471,6 +471,18 @@ pub fn run_with_options(
                     &ctrl_clients,
                     &CtrlEvent::Player(PlayerEvent::OutputStarted),
                 );
+                // A cold-started queue plays its first track with no
+                // track-to-track transition, so clients never get a snapshot
+                // reflecting `status.active` and the started slot. Push one
+                // here so their now-playing highlight lands on the right row.
+                broadcast_queue_state(
+                    &ctrl_clients,
+                    &player,
+                    &shared_queue,
+                    &owner.core.queue,
+                    &owner.core.source,
+                    &owner.core.transitions,
+                );
             }
             DaemonEvent::Player(pe @ PlayerEvent::TrackCompleted {
                 slot_id,

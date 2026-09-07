@@ -72,6 +72,41 @@ fn unified_projection_uses_observed_slot_not_desired_queue_slot() {
     assert_eq!(data.active_slot, Some(observed.raw()));
 }
 
+// A cold-started queue plays its first track with no track-to-track
+// transition, so `observed_active_slot` is never set. While the daemon is
+// playing, the projection falls back to the canonical queue's active slot so
+// a peer's now-playing highlight doesn't strand on a stale row.
+#[test]
+fn unified_projection_falls_back_to_canonical_active_slot_while_playing() {
+    let queue = PlaybackQueue::from_queue_items(
+        vec![emby_qi("a", "Video", "Movie"), emby_qi("b", "Video", "Movie")],
+        Some(0),
+    );
+    let start_slot = queue.slots()[0].slot_id;
+    let source = crate::config::QueueSource::Unknown;
+
+    // Not playing: no observation and no fallback -> no active slot.
+    let idle = crate::player::PlayerStatus::default();
+    let CtrlEvent::UnifiedQueueState(idle_data) =
+        super::unified_queue_state_for_peer(&idle, &queue, &source, None, None, None, true, true)
+    else {
+        panic!("expected UnifiedQueueState");
+    };
+    assert_eq!(idle_data.active_slot, None);
+
+    // Playing with no observation: fall back to the canonical active slot.
+    let playing = crate::player::PlayerStatus {
+        active: true,
+        ..Default::default()
+    };
+    let CtrlEvent::UnifiedQueueState(playing_data) =
+        super::unified_queue_state_for_peer(&playing, &queue, &source, None, None, None, true, true)
+    else {
+        panic!("expected UnifiedQueueState");
+    };
+    assert_eq!(playing_data.active_slot, Some(start_slot.raw()));
+}
+
 #[test]
 fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let abs = abs_qi("li_1", "ep_1");

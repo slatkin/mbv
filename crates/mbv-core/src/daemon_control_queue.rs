@@ -87,7 +87,14 @@ fn unified_queue_state_for_peer(
             item: s.item.clone(),
         })
         .collect();
+    // A Playback-run observation is the authority for the active slot (design
+    // D3), but a cold-started queue (`submit_queue` at an index) plays its
+    // first track without any track-to-track transition, so no observation is
+    // ever emitted and `observed_active_slot` stays `None`. Fall back to the
+    // canonical queue's own active slot when the daemon is actually playing,
+    // so peers don't strand their now-playing highlight on a stale row.
     let active_slot = observed_active_slot
+        .or_else(|| status.active.then(|| queue.active_slot_id()).flatten())
         .map(crate::ctrl::slot_id_to_u64)
         .filter(|active_id| slots.iter().any(|s| s.slot_id == *active_id));
     CtrlEvent::UnifiedQueueState(crate::ctrl::UnifiedQueueStateData {
