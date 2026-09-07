@@ -206,6 +206,54 @@ fn idle_queue_only_hides_card_and_panel_at_both_widths() {
 }
 
 #[test]
+fn idle_queue_only_reclaims_card_and_panel_rows_until_playback_starts() {
+    let width = 80;
+    let height = 60;
+    let mut app = make_queue_app(5);
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+
+    let _ = render_app_to_terminal(&mut app, width, height);
+    let idle_queue_area = app.layout.main.queue_area;
+    let idle_card_height = app.layout.main.card.height;
+    let idle_title_area = app
+        .layout
+        .main
+        .queue_title_area
+        .expect("idle queue should retain its title row");
+    let chrome = app.compute_chrome_geometry(ratatui::layout::Rect::new(0, 0, width, height));
+    let queue_panel_y = idle_title_area.y - 1;
+    assert_eq!(
+        queue_panel_y,
+        chrome.left_content.y + 1,
+        "queue panel keeps the existing one-row separator below left content"
+    );
+    assert!(
+        idle_queue_area.y > chrome.left_content.y,
+        "queue content must begin below the left-content separator"
+    );
+    assert_eq!(idle_card_height, 0);
+
+    let mut status = app.player.status.lock().unwrap();
+    status.active = true;
+    drop(status);
+    let _ = render_app_to_terminal(&mut app, width, height);
+    let active_queue_area = app.layout.main.queue_area;
+    let active_card_height = app.layout.main.card.height;
+
+    assert!(active_card_height > 0, "playback must restore the card");
+    assert_eq!(
+        idle_queue_area.height,
+        active_queue_area.height + active_card_height + 4,
+        "idle queue gains the card and four playback-panel rows"
+    );
+    assert_eq!(
+        active_queue_area.y - idle_queue_area.y,
+        active_card_height + 4,
+        "active queue moves down by the card and four playback-panel rows"
+    );
+}
+
+#[test]
 fn connected_idle_queue_only_keeps_panel_but_collapses_card() {
     let mut app = make_queue_app(5);
     app.panel_mode = crate::app::PanelMode::QueueOnly;
