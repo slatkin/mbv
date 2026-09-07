@@ -449,7 +449,7 @@ impl From<WireCommand> for PlayerCommand {
         match cmd {
             WireCommand::TogglePause => PlayerCommand::TogglePause,
             WireCommand::JumpTo(_) => unreachable!(
-                "inbound legacy WireCommand::JumpTo is rejected pre-conversion at the daemon boundary; task 3.5"
+                "inbound WireCommand::JumpTo is rejected via CommandRejected in daemon_control before conversion (design D6)"
             ),
             WireCommand::SetVolume(v) => PlayerCommand::SetVolume(v),
             WireCommand::Seek(s) => PlayerCommand::Seek(s),

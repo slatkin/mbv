@@ -38,6 +38,24 @@ impl PlayerOwnerState {
         }
     }
 
+    /// Resolve a Playback-run `TrackChanged` observation against the canonical
+    /// queue. `Some((index, slot_id))` when the reported slot is still present,
+    /// and the observed active slot is advanced to it. `None` means the report
+    /// is stale — the caller discards it and leaves the canonical queue and
+    /// observed active slot unchanged; a stale slot is never repaired by
+    /// position (design D6).
+    pub fn observe_track_change(&mut self, slot_id: QueueSlotId) -> Option<(usize, QueueSlotId)> {
+        let index = self.queue.slot_index(slot_id)?;
+        let resolved = self.queue.slots().get(index)?.slot_id;
+        self.note_observed_active_slot(Some(resolved));
+        Some((index, resolved))
+    }
+
+    /// The last Playback-run-observed active slot (design D3).
+    pub fn observed_active_slot(&self) -> Option<QueueSlotId> {
+        self.observed_active_slot
+    }
+
     /// In-flight / queued-latest transition summaries for the owner snapshot
     /// (design D5).
     pub fn transition_summaries(

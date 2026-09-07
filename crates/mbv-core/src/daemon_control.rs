@@ -178,6 +178,19 @@ fn handle_ctrl(
             *source = new_source;
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
         }
+        // Stale index-addressed jump from a cross-version peer. Slot-id +
+        // request-identity JumpTo is now the only jump path, so an ordinal
+        // index carries no evidence about which slot was intended: reject it
+        // visibly via the existing command-rejection path (design D6).
+        CtrlCmd::PlayerCmd(crate::ctrl::WireCommand::JumpTo(_)) => {
+            send_to(
+                request.reply_tx,
+                &CtrlEvent::CommandRejected(
+                    "index-addressed queue jump is no longer supported; use unified queue commands"
+                        .to_string(),
+                ),
+            );
+        }
         CtrlCmd::PlayerCmd(pc) => match PlayerCommand::from(pc) {
             PlayerCommand::ReplaceQueue {
                 items: new_items,
@@ -276,7 +289,6 @@ fn handle_ctrl(
                 crate::ctrl::PlaybackIntentAction::Next => {
                     if let Some(idx) = player.status.lock().unwrap().next_idx() {
                         if let Some(slot_id) = queue.slots().get(idx).map(|s| s.slot_id) {
-                            playback_intents.set_target_idx(intent.request_id, idx);
                             dispatch_slot_jump(
                                 transitions,
                                 queued_transition_origin,
@@ -295,7 +307,6 @@ fn handle_ctrl(
                 crate::ctrl::PlaybackIntentAction::Previous => {
                     if let Some(idx) = player.status.lock().unwrap().previous_idx() {
                         if let Some(slot_id) = queue.slots().get(idx).map(|s| s.slot_id) {
-                            playback_intents.set_target_idx(intent.request_id, idx);
                             dispatch_slot_jump(
                                 transitions,
                                 queued_transition_origin,

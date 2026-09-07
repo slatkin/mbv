@@ -409,6 +409,76 @@ fn cold_websocket_noop_does_not_evict_ctrl_driver() {
     assert!(driver_rx.try_recv().is_err());
 }
 
+// ── design D6: stale identity is rejected, never repaired by position ────
+
+#[test]
+fn stale_client_jump_to_index_is_rejected_visibly() {
+    let player = cold_player();
+    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let queue = queue_from_items(
+        &[item("a", "Video", "Movie"), item("b", "Video", "Movie")],
+        0,
+    );
+    let mut owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(queue, QueueSource::Remote),
+        ..Default::default()
+    };
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
+
+    handle_ctrl(
+        CtrlCmd::PlayerCmd(WireCommand::JumpTo(1)),
+        1,
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue_state(),
+        &registry,
+        false,
+        &dummy_merged_tx,
+        false,
+    );
+
+    match recv_event(&reply_rx) {
+        CtrlEvent::CommandRejected(reason) => assert!(reason.contains("index-addressed")),
+        _ => panic!("expected a visible CommandRejected for an index-addressed jump"),
+    }
+    // The stale command is never repaired by position.
+    assert_eq!(owner.core.queue.active_index(), Some(0));
+    assert_eq!(owner.core.observed_active_slot(), None);
+}
+
+#[test]
+fn stale_track_changed_report_leaves_queue_and_observed_slot_unchanged() {
+    let queue = queue_from_items(
+        &[item("a", "Video", "Movie"), item("b", "Video", "Movie")],
+        1,
+    );
+    let mut owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(queue, QueueSource::Remote),
+        ..Default::default()
+    };
+
+    // A genuine observation advances the observed active slot.
+    let real = owner.core.queue.slots()[1].slot_id;
+    assert_eq!(owner.core.observe_track_change(real), Some((1, real)));
+    assert_eq!(owner.core.observed_active_slot(), Some(real));
+
+    // A report naming a slot the owner no longer holds is discarded: the
+    // caller (daemon_run's TrackChanged arm) emits nothing and canonical
+    // queue + observed active slot are untouched (design D6, no clamp, no
+    // neighbour fallback).
+    let stale = crate::playback_queue::QueueSlotId::from_raw(9_999_999);
+    assert!(owner.core.observe_track_change(stale).is_none());
+    assert_eq!(owner.core.queue.active_slot_id(), Some(real));
+    assert_eq!(owner.core.observed_active_slot(), Some(real));
+}
+
 #[test]
 fn websocket_takeover_helper_records_emby_remote_authority() {
     let registry = Arc::new(Mutex::new(CtrlClients::default()));

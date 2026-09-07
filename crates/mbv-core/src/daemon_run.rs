@@ -328,21 +328,23 @@ pub fn run_with_options(
         match ev {
             DaemonEvent::Player(PlayerEvent::TrackChanged { slot_id, transition }) => {
                 // Resolve the reported slot against the canonical queue. A
-                // slot the daemon no longer holds falls back to the current
-                // active position (D6's clamp removal is task 3.5).
-                let clamped_idx = owner
-                    .core.queue
-                    .slot_index(slot_id)
-                    .or_else(|| owner.core.queue.active_index())
-                    .unwrap_or(0);
-                // A Playback-run observation is the only thing that moves the
-                // owner's observed active slot (design D3).
-                let resolved_slot_id = owner.core.queue.slots().get(clamped_idx).map(|s| s.slot_id);
-                owner.core.note_observed_active_slot(resolved_slot_id);
+                // report naming a slot the daemon no longer holds carries no
+                // evidence about which surviving slot was intended, so it is
+                // discarded and logged without touching canonical queue or
+                // observed slot (design D6).
+                let Some((observed_idx, resolved_slot_id)) =
+                    owner.core.observe_track_change(slot_id)
+                else {
+                    log::warn!(
+                        target: "queue",
+                        "discarding TrackChanged for unknown slot {slot_id:?}"
+                    );
+                    continue;
+                };
                 broadcast(
                     &ctrl_clients,
                     &CtrlEvent::Player(PlayerEvent::TrackChanged {
-                        slot_id: resolved_slot_id.unwrap_or(slot_id),
+                        slot_id: resolved_slot_id,
                         transition,
                     }),
                 );
@@ -387,10 +389,13 @@ pub fn run_with_options(
                 *shared_queue.source.lock().unwrap() = owner.core.source.clone();
                 // Settle the desired transition and release anything queued
                 // behind it (task 3.3).
-                if let (Some((observed_request_id, _)), Some(observed_slot)) =
-                    (transition, resolved_slot_id)
-                {
-                    settle_and_redispatch(&mut owner, &player, observed_request_id, observed_slot);
+                if let Some((observed_request_id, _)) = transition {
+                    settle_and_redispatch(
+                        &mut owner,
+                        &player,
+                        observed_request_id,
+                        resolved_slot_id,
+                    );
                 }
                 // Settle playback intent if the reported index matches.
                 if let Some((connection_id, request_id, generation)) = owner.intents
@@ -399,11 +404,8 @@ pub fn run_with_options(
                     .filter(|current| match &current.action {
                         PlaybackIntentAction::Play { item_ids, .. } => owner.core.queue
                             .slots()
-                            .get(clamped_idx)
+                            .get(observed_idx)
                             .is_some_and(|slot| item_ids.iter().any(|id| id == slot.item.id())),
-                        PlaybackIntentAction::Next | PlaybackIntentAction::Previous => current
-                            .target_idx
-                            .is_some_and(|target| target == clamped_idx),
                         _ => false,
                     })
                     .map(|current| {
@@ -414,17 +416,13 @@ pub fn run_with_options(
                         )
                     })
                 {
-                    if owner.core.queue.slots().get(clamped_idx).is_some() {
-                        if let Some(event) = owner.intents.applied_if_current(
-                            connection_id,
-                            request_id,
-                            generation,
-                        ) {
-                            ctrl_clients
-                                .lock()
-                                .unwrap()
-                                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
-                        }
+                    if let Some(event) =
+                        owner.intents.applied_if_current(connection_id, request_id, generation)
+                    {
+                        ctrl_clients
+                            .lock()
+                            .unwrap()
+                            .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
                     }
                 }
             }

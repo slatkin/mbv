@@ -143,12 +143,6 @@ struct CurrentPlaybackIntent {
     generation: PlaybackGeneration,
     action: PlaybackIntentAction,
     phase: PlaybackIntentPhase,
-    /// The index this intent is expected to land on, set when the action is
-    /// executed (e.g. the `next_idx()` computed at command time for `Next`).
-    /// `None` until the command is actually dispatched; used by the
-    /// `TrackChanged` handler to avoid crediting natural track transitions
-    /// (end-of-file auto-advance) to a pending Next/Previous intent.
-    target_idx: Option<usize>,
     accepted_at: Instant,
     pipe_output: bool,
     buffering_deadline: Option<Instant>,
@@ -236,7 +230,6 @@ impl PlaybackIntentState {
             generation: intent.generation,
             action: intent.action,
             phase: PlaybackIntentPhase::Accepted,
-            target_idx: None,
             accepted_at: Instant::now(),
             pipe_output,
             buffering_deadline: None,
@@ -341,14 +334,6 @@ impl PlaybackIntentState {
                 outcome: PlaybackIntentOutcome::Applied,
             },
         ))
-    }
-
-    fn set_target_idx(&mut self, request_id: PlaybackRequestId, idx: usize) {
-        if let Some(current) = &mut self.current {
-            if current.request_id == request_id {
-                current.target_idx = Some(idx);
-            }
-        }
     }
 
     fn applied_if_current(
