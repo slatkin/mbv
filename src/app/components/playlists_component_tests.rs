@@ -74,7 +74,21 @@ fn playlists_component_wheel_moves_one_row_and_rejects_blank_content_space() {
         })
     };
     component.on(&wheel(MouseEventKind::ScrollDown));
-    assert_eq!(component.open_cursor(), 1);
+    assert_eq!(
+        component.open_cursor(),
+        1,
+        "one wheel notch selects one row"
+    );
+    component.reset_mouse_gestures_for_test();
+    component.on(&wheel(MouseEventKind::ScrollUp));
+    assert_eq!(
+        component.open_cursor(),
+        0,
+        "wheel up selects the preceding row"
+    );
+    component.reset_mouse_gestures_for_test();
+    component.on(&wheel(MouseEventKind::ScrollUp));
+    assert_eq!(component.open_cursor(), 0, "the start boundary clamps");
     component.reset_mouse_gestures_for_test();
     // The painter's content area extends below these two one-line rows, but
     // that blank space is not a scroll target.
@@ -84,7 +98,11 @@ fn playlists_component_wheel_moves_one_row_and_rejects_blank_content_space() {
         kind: MouseEventKind::ScrollUp,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.open_cursor(), 1);
+    assert_eq!(
+        component.open_cursor(),
+        0,
+        "blank content does not claim the wheel"
+    );
 }
 
 #[test]

@@ -55,11 +55,16 @@ the listed painted region, and retains only the stated semantic boundary:
 | Audiobookshelf podcast | `AudiobookshelfPodcastComponent`; painted show-row geometry | Wide and Normal/Narrow | resolved show selection |
 | Audiobookshelf books | `AudiobookshelfBookComponent`; painted book- or chapter-row geometry | Wide and Normal/Narrow | resolved book/chapter selection or focus |
 | Inline Search | active host component; painted results `left_area`, first refusal | Browser, Music, and TV host paths | local result selection only |
+| Global Search sidebar | `SearchSidebarComponent`; painter-published result-row hit regions | fixed overlay geometry (breakpoint-invariant) | local result selection only |
 | Settings | `SettingsComponent`; painter-published `content_area` | fixed overlay geometry (breakpoint-invariant) | none for wheel |
 | Help | `HelpComponent`; painter-published `content_area` | fixed overlay geometry (breakpoint-invariant) | none for wheel |
 | Sessions | `SessionsComponent`; painter-published session-row hit regions | fixed overlay geometry (breakpoint-invariant) | selection/connect action remains semantic |
 | Playlists | `PlaylistsComponent`; painter-published wrapped-row hit regions | fixed overlay geometry (breakpoint-invariant) | playlist/open-item actions remain semantic |
 
 Focused verification names and geometry evidence are maintained with the rows in
-`docs/architecture/interactive-surface-ledger.md`; this record does not add a
-second interaction policy or require a shell wheel handler.
+`docs/architecture/interactive-surface-ledger.md`; the Global Search sidebar's
+focused proof is `search_sidebar_wheel_moves_one_result_and_rejects_non_result_regions`,
+covering down/up direction, the start boundary, and a non-result painted region.
+The Playlists proof is `playlists_component_wheel_moves_one_row_and_rejects_blank_content_space`,
+covering down/up direction, the start boundary, and blank painted content. These
+records do not add a second interaction policy or require a shell wheel handler.

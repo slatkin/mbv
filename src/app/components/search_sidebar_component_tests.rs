@@ -57,6 +57,15 @@ fn click_event(x: u16, y: u16) -> Event<super::user_event::UserEvent> {
     })
 }
 
+fn wheel_event(x: u16, y: u16, kind: MouseEventKind) -> Event<super::user_event::UserEvent> {
+    Event::Mouse(MouseEvent {
+        kind,
+        column: x,
+        row: y,
+        modifiers: KeyModifiers::NONE,
+    })
+}
+
 #[test]
 fn search_sidebar_result_click_selects_like_the_arrow_keys() {
     let mut comp = sidebar_component();
@@ -70,6 +79,43 @@ fn search_sidebar_result_click_selects_like_the_arrow_keys() {
     let msg = comp.on(&click_event(rect.x, rect.y));
     assert_eq!(msg, None, "selection is a local cursor move, no Msg");
     assert_eq!(comp.sidebar.cursor, index);
+}
+
+#[test]
+fn search_sidebar_wheel_moves_one_result_and_rejects_non_result_regions() {
+    let mut comp = sidebar_component();
+    draw(&mut comp);
+    let rows = comp.test_results().regions().to_vec();
+    let (first, _) = rows[0];
+
+    comp.reset_mouse_gestures_for_test();
+    assert_eq!(
+        comp.on(&wheel_event(first.x, first.y, MouseEventKind::ScrollDown)),
+        None
+    );
+    assert_eq!(comp.sidebar.cursor, 1, "one wheel notch selects one result");
+
+    comp.reset_mouse_gestures_for_test();
+    assert_eq!(
+        comp.on(&wheel_event(first.x, first.y, MouseEventKind::ScrollUp)),
+        None
+    );
+    assert_eq!(
+        comp.sidebar.cursor, 0,
+        "wheel up selects the preceding result"
+    );
+
+    comp.reset_mouse_gestures_for_test();
+    comp.on(&wheel_event(first.x, first.y, MouseEventKind::ScrollUp));
+    assert_eq!(comp.sidebar.cursor, 0, "the start boundary clamps");
+
+    comp.reset_mouse_gestures_for_test();
+    let blank_y = rows[2].0.y + 2;
+    comp.on(&wheel_event(first.x, blank_y, MouseEventKind::ScrollDown));
+    assert_eq!(
+        comp.sidebar.cursor, 0,
+        "blank painted content is not a result claim"
+    );
 }
 
 #[test]
