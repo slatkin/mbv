@@ -379,6 +379,7 @@ fn queue_projection_clamps_active_progress_to_presentation_bounds() {
                 runtime_ticks: 100,
                 paused: false,
             },
+            None,
         );
         let Some(MediaListRow::Item { semantic_state, .. }) = rows.first() else {
             panic!("queue projection must produce an item row")

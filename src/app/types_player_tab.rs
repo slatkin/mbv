@@ -8,6 +8,8 @@ use mbv_core::playback_queue::{
 pub(super) struct PlayerTab {
     pub(super) queue_cursor: usize,
     pub(super) queue: PlaybackQueue,
+    /// The newest desired playback slot from the owner snapshot, if any.
+    pub(super) pending_playback_slot: Option<QueueSlotId>,
 }
 
 impl PlayerTab {
@@ -20,6 +22,7 @@ impl PlayerTab {
         Self {
             queue_cursor,
             queue,
+            pending_playback_slot: None,
         }
     }
 
@@ -40,6 +43,11 @@ impl PlayerTab {
         Self {
             queue_cursor: active_index.unwrap_or(0),
             queue,
+            pending_playback_slot: state
+                .queued_latest_transition
+                .as_ref()
+                .or(state.in_flight_transition.as_ref())
+                .map(|transition| QueueSlotId::from_raw(transition.target_slot)),
         }
     }
 

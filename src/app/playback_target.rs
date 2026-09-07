@@ -176,6 +176,11 @@ impl App {
         }
     }
 
+    pub(super) fn pending_playback_slot(&self) -> Option<mbv_core::playback_queue::QueueSlotId> {
+        self.queue_for_scope(self.playing_queue_scope())
+            .pending_playback_slot
+    }
+
     pub(super) fn displayed_queue_playback_state(&self) -> super::PlaybackState {
         if self.queue_scope_is_playback(self.viewed_queue_scope()) {
             self.effective_playback_state()

@@ -44,6 +44,7 @@ pub struct QueueComponent {
     title_area: Option<Rect>,
     area: Rect,
     geometry: QueueRenderGeometry,
+    pending_slot: Option<QueueSlotId>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle.
     mouse_gestures: MouseGestureState,
@@ -72,6 +73,7 @@ impl QueueComponent {
             title_area: None,
             area: Rect::default(),
             geometry: QueueRenderGeometry::default(),
+            pending_slot: None,
             mouse_gestures: MouseGestureState::new(),
             scope_regions: HitRegions::new(),
         }
@@ -99,7 +101,8 @@ impl QueueComponent {
         }
         // The canonical child re-pins its cursor to the selected `QueueSlotId`
         // and locally clamps when the target is gone (D3 / D2); no App mirror.
-        self.list.set_content(queue_media_rows(&slots, playback));
+        self.list
+            .set_content(queue_media_rows(&slots, playback, self.pending_slot));
         if let QueueCursorUpdate::Set(idx) = cursor {
             // An authoritative move (follow-the-playhead, jump-to-now-playing,
             // wheel scroll, scope switch): skip identity reconciliation.
@@ -116,6 +119,10 @@ impl QueueComponent {
             "  Remote queue is empty".into()
         };
         self.title = Some(title);
+    }
+
+    pub(in crate::app) fn set_pending_slot(&mut self, slot: Option<QueueSlotId>) {
+        self.pending_slot = slot;
     }
 
     pub(in crate::app) fn set_area(&mut self, area: Rect) {
@@ -504,16 +511,20 @@ impl AppComponent<Msg, UserEvent> for QueueComponent {
 pub(in crate::app) fn queue_media_rows(
     slots: &[QueueSlot],
     playback: PlaybackState,
+    pending_slot: Option<QueueSlotId>,
 ) -> Vec<MediaListRow<QueueSlotId>> {
     slots
         .iter()
         .enumerate()
         .map(|(index, slot)| {
             let is_active = playback.active && playback.active_idx == index;
+            let is_pending = pending_slot == Some(slot.slot_id) && !is_active;
             let (title, pos_ticks, duration_ticks) =
                 queue_row_fields(&slot.item, playback, is_active);
             let time_text = queue_row_time_text(pos_ticks, duration_ticks, is_active);
-            let (semantic_state, trailing) = if is_active {
+            let (semantic_state, trailing) = if is_pending {
+                (MediaSemanticState::Starting, None)
+            } else if is_active {
                 let progress = (pos_ticks > 0 && duration_ticks > 0)
                     .then(|| (pos_ticks * 100 / duration_ticks).clamp(0, 100) as u16);
                 // The active-row `%` comes from the Active progress path.

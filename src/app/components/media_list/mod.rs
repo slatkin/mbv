@@ -171,6 +171,7 @@ pub enum MediaSemanticState {
     Ordinary,
     Played,
     Active { progress: Option<ActiveProgress> },
+    Starting,
     Disabled,
 }
 
