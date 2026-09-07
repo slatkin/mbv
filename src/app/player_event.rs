@@ -4,6 +4,31 @@ use mbv_core::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
 
 impl App {
+    pub(super) fn expire_bare_transition(&mut self, now: std::time::Instant) -> bool {
+        if self.player.is_remote() {
+            return false;
+        }
+        let mbv_core::playback_transition::ExpireOutcome::Expired {
+            dispatch_next: Some(next),
+            ..
+        } = self.bare_owner.expire_local_transition(now)
+        else {
+            return false;
+        };
+        self.player.send_command(PlayerCommand::JumpTo {
+            slot_id: next.target,
+            request_id: next.request_id,
+            generation: next.generation,
+        });
+        true
+    }
+
+    pub(super) fn reset_bare_transitions(&mut self) {
+        if !self.player.is_remote() {
+            self.bare_owner.reset_local_transitions();
+        }
+    }
+
     /// Mirror mpv's actual volume into `ui_volume` and persist it, so volume
     /// changes made inside the mpv window (not just via mbv's keys) are kept and
     /// restored on the next launch. Skipped while controlling a remote session

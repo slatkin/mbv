@@ -80,6 +80,7 @@ impl App {
                 self.save_queue_state();
             }
             WsEvent::Stop => {
+                self.reset_bare_transitions();
                 self.player.stop();
             }
             WsEvent::Pause => {

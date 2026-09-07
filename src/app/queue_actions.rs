@@ -261,6 +261,7 @@ impl App {
     }
 
     pub(super) fn on_queue_replace_silent(&mut self) {
+        self.reset_bare_transitions();
         self.queue_source = crate::config::QueueSource::Unknown;
         self.queue_dirty = false;
     }
@@ -343,6 +344,7 @@ impl App {
                 if scope == QueueScope::Remote && had_items {
                     self.replace_direct_remote_queue(Vec::new(), 0);
                 } else if self.queue_scope_is_playback(scope) {
+                    self.reset_bare_transitions();
                     self.player.stop();
                     if self.is_local_daemon() {
                         self.player.send_command(PlayerCommand::ReplaceQueue {

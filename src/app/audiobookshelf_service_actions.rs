@@ -35,13 +35,14 @@ impl App {
         mbv_core::config::clear_service_secret_result(mbv_core::config::ServiceKind::Audiobookshelf)
     }
 
-    fn stop_active_audiobookshelf_playback(&self) {
+    fn stop_active_audiobookshelf_playback(&mut self) {
         let active_is_audiobookshelf = self
             .playback_queue()
             .queue
             .active_slot()
             .is_some_and(|slot| slot.item.is_audiobookshelf_any());
         if active_is_audiobookshelf {
+            self.reset_bare_transitions();
             self.player.stop();
         }
     }

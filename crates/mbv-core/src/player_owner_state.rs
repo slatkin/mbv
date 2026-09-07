@@ -99,6 +99,17 @@ impl PlayerOwnerState {
         self.transitions.settle(request_id, slot_id)
     }
 
+    pub fn expire_local_transition(
+        &mut self,
+        now: std::time::Instant,
+    ) -> crate::playback_transition::ExpireOutcome {
+        self.transitions.expire(now)
+    }
+
+    pub fn reset_local_transitions(&mut self) {
+        self.transitions.reset();
+    }
+
     pub fn transition_summaries(
         &self,
     ) -> (
@@ -106,5 +117,39 @@ impl PlayerOwnerState {
         Option<crate::ctrl::TransitionSummary>,
     ) {
         self.transitions.summaries()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::playback_transition::{DispatchDecision, ExpireOutcome, Transition};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn bare_transition_expiry_promotes_queued_jump() {
+        let mut owner = PlayerOwnerState::default();
+        let slot_a = QueueSlotId::from_raw(1);
+        let slot_b = QueueSlotId::from_raw(2);
+        let first = Transition::new(1, 1, slot_a);
+        let queued = Transition::new(2, 2, slot_b);
+
+        assert_eq!(
+            owner.accept_local_transition(first),
+            DispatchDecision::DispatchNow(first)
+        );
+        assert_eq!(
+            owner.accept_local_transition(queued),
+            DispatchDecision::Queued { superseded: None }
+        );
+        let start = Instant::now();
+        assert_eq!(owner.expire_local_transition(start), ExpireOutcome::Pending);
+        assert_eq!(
+            owner.expire_local_transition(start + Duration::from_secs(6)),
+            ExpireOutcome::Expired {
+                expired: first,
+                dispatch_next: Some(queued),
+            }
+        );
     }
 }

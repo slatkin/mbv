@@ -388,6 +388,8 @@ impl Model {
 
             had_events |= self.app.drain_session_events();
 
+            had_events |= self.app.expire_bare_transition(Instant::now());
+
             had_events |= self.app.drain_cast_events();
 
             had_events |= self.app.drain_shared_events();

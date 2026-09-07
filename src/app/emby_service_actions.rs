@@ -42,6 +42,7 @@ impl App {
             .active_slot()
             .is_some_and(|slot| matches!(slot.item, QueueItem::Feed(_)));
         if !active_is_feed {
+            self.reset_bare_transitions();
             self.player.stop();
         }
         let mut queues = vec![&mut self.player_tab];

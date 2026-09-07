@@ -29,6 +29,7 @@ impl App {
         let mpris_remote = remote.clone();
 
         if !self.player.is_remote() {
+            self.reset_bare_transitions();
             self.player.stop();
             self.player.join_or_timeout(Duration::from_secs(5));
             let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
@@ -135,6 +136,7 @@ impl App {
         let mpris_remote = remote.clone();
 
         if !self.player.is_remote() {
+            self.reset_bare_transitions();
             self.player.stop();
             self.player.join_or_timeout(Duration::from_secs(5));
             let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
@@ -210,6 +212,7 @@ impl App {
         let previous_route = self.active_route.clone();
         log::info!(target: "library_route", "restoring local playback previous_route={previous_route:?} reason={status:?}");
         if !self.player.is_remote() {
+            self.reset_bare_transitions();
             self.player.stop();
         }
         self.player.join();
