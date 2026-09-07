@@ -175,6 +175,47 @@ fn validated_visualizer_glyph(value: Option<&str>) -> String {
 mod ui_config_tests {
     use super::{parse_ui_config, validated_visualizer_glyph, DEFAULT_VISUALIZER_GLYPH};
 
+    /// Reads refresh a stale entry's mtime so the 30-day mtime eviction
+    /// measures last use, not first write. Without this a warm cache
+    /// wipes itself on restart (reads never update mtime on their own).
+    #[test]
+    fn image_disk_cache_use_refreshes_stale_mtime() {
+        let _g = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
+        std::env::remove_var("MBV_SYSTEM");
+        let scratch = std::env::temp_dir().join(format!("mbv-imgcache-{}", uuid::Uuid::new_v4()));
+        std::env::set_var("XDG_CACHE_HOME", &scratch);
+        let age_secs = |key: &str| {
+            super::image_disk_cache_dir()
+                .join(key)
+                .metadata()
+                .unwrap()
+                .modified()
+                .unwrap()
+                .elapsed()
+                .map(|age| age.as_secs())
+        };
+        super::write_image_disk_cache("mtime-probe", b"bytes");
+        super::write_image_disk_cache("mtime-probe-path", b"bytes");
+        let stale = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 24 * 3600);
+        for key in ["mtime-probe", "mtime-probe-path"] {
+            let path = super::image_disk_cache_dir().join(key);
+            std::fs::File::open(&path)
+                .unwrap()
+                .set_modified(stale)
+                .unwrap();
+        }
+        let read_bytes = super::read_image_disk_cache("mtime-probe");
+        let read_age = age_secs("mtime-probe");
+        let path_hit = super::image_disk_cache_path("mtime-probe-path");
+        let path_age = age_secs("mtime-probe-path");
+        std::env::remove_var("XDG_CACHE_HOME");
+        let _ = std::fs::remove_dir_all(&scratch);
+        assert_eq!(read_bytes, Some(b"bytes".to_vec()));
+        assert!(path_hit.is_some());
+        assert!(read_age.is_ok_and(|age| age < 120));
+        assert!(path_age.is_ok_and(|age| age < 120));
+    }
+
     #[test]
     fn visualizer_glyph_round_trips_and_invalid_values_fall_back() {
         let config = parse_ui_config("[display]\nvisualizer_glyph = \"x\"\n").unwrap();
@@ -206,7 +247,9 @@ pub fn image_disk_cache_dir() -> PathBuf {
 
 pub fn read_image_disk_cache(key: &str) -> Option<Vec<u8>> {
     let path = image_disk_cache_dir().join(safe_cache_filename(key));
-    std::fs::read(path).ok()
+    let bytes = std::fs::read(&path).ok()?;
+    touch_image_disk_cache(&path);
+    Some(bytes)
 }
 
 /// Path to the on-disk cached image file for `key`, if one is already
@@ -215,7 +258,11 @@ pub fn read_image_disk_cache(key: &str) -> Option<Vec<u8>> {
 /// path itself, not the decoded image data.
 pub fn image_disk_cache_path(key: &str) -> Option<PathBuf> {
     let path = image_disk_cache_dir().join(safe_cache_filename(key));
-    path.is_file().then_some(path)
+    if !path.is_file() {
+        return None;
+    }
+    touch_image_disk_cache(&path);
+    Some(path)
 }
 
 /// Cache-key suffix for a card's primary image (see `src/app/render/card.rs`).
@@ -260,6 +307,28 @@ pub fn evict_old_image_cache() {
             }
         }
     });
+}
+
+/// Best-effort mtime refresh marking a cache file as recently used, so the
+/// 30-day mtime eviction (`evict_old_image_cache`) measures last use rather
+/// than first write. Reads never update mtime on their own, so without this
+/// every regularly-viewed image still ages out and the cache wipes itself.
+/// Throttled to one write per file per day; all failures ignored.
+fn touch_image_disk_cache(path: &std::path::Path) {
+    let stale = std::fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .map(|modified| {
+            std::time::SystemTime::now()
+                .duration_since(modified)
+                .is_ok_and(|age| age.as_secs() >= 24 * 3600)
+        })
+        .unwrap_or(false);
+    if stale {
+        // Read-only open: refreshing mtime needs no write access to the file.
+        if let Ok(file) = std::fs::File::open(path) {
+            let _ = file.set_modified(std::time::SystemTime::now());
+        }
+    }
 }
 
 fn safe_cache_filename(key: &str) -> String {
