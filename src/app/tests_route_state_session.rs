@@ -295,9 +295,8 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
     });
     {
         let mut status = app.player.status.lock().unwrap();
-        // Network direct-remote path receives the same raw pre-removal
-        // TrackChanged index from the daemon as the same thin-client
-        // control path covered above.
+        // The owner consumes its canonical queue; the Client keeps its mirror
+        // until the next owner snapshot.
         status.current_idx = 2;
     }
     app.handle_player_event(PlayerEvent::TrackChanged { slot_id: next_slot_id, transition: None });
@@ -310,18 +309,13 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
     assert_eq!(app.player_tab.queue_cursor, 0);
     assert_eq!(
         item_ids(&app.remote_player_tab.as_ref().unwrap().emby_items()),
-        vec![
-            remote_items[0].id.clone(),
-            remote_items[2].id.clone(),
-            remote_items[3].id.clone(),
-        ]
+        remote_items.iter().map(|item| item.id.clone()).collect::<Vec<_>>()
     );
-    assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
+    assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);
     assert_eq!(
         app.displayed_queue_playback_state().active_idx,
-        1,
-        "after removing the completed remote item, the active index must \
-             shift to the now-playing item's new remote-queue slot"
+        2,
+        "the Client keeps its prior queue until the owner snapshot arrives"
     );
 }
 

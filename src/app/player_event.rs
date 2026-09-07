@@ -246,19 +246,25 @@ impl App {
                 }
                 let (should_consume, is_audio) = self.should_consume_slot(slot_id, consume);
                 if should_consume {
-                    // The owner has already consumed its canonical queue for
-                    // remote playback. Mirror that accepted owner mutation in
-                    // the replaceable Client view without sending another
-                    // out-of-process removal command.
-                    let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
-                    log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?} removed_id={removed_id:?}");
-                    if is_audio {
-                        self.on_audio_consumed();
+                    if self.has_direct_remote_queue() {
+                        // The Player owner has already consumed its canonical
+                        // queue. The Client keeps only the service reaction.
+                        if is_audio {
+                            self.on_audio_consumed();
+                        } else {
+                            self.on_video_consumed();
+                        }
                     } else {
-                        self.on_video_consumed();
-                    }
-                    if removed_id.is_some() && !self.has_direct_remote_queue() {
-                        self.save_queue_state();
+                        let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
+                        log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?} removed_id={removed_id:?}");
+                        if is_audio {
+                            self.on_audio_consumed();
+                        } else {
+                            self.on_video_consumed();
+                        }
+                        if removed_id.is_some() && !self.has_direct_remote_queue() {
+                            self.save_queue_state();
+                        }
                     }
                 }
             }
