@@ -218,7 +218,7 @@ mod wide_row_regression_tests {
                     &mut list,
                     true,
                     palette::SURFACE_RESTING,
-                    Some('⠋'),
+                    Some('▌'),
                 );
             })
             .unwrap();
@@ -231,12 +231,12 @@ mod wide_row_regression_tests {
 
         let playing = row_text(0);
         assert!(playing.contains("Playing title"));
-        assert!(playing.contains("⠋ 47%"));
+        assert!(playing.contains("▌ 47%"));
         assert_eq!(playing.matches("47%").count(), 1);
         assert!(!playing.contains("FOAM"));
         assert!(!playing.contains("2:00"));
         let glyph_x = (0..rect.width)
-            .find(|&x| buf[(x, 0)].symbol() == "⠋")
+            .find(|&x| buf[(x, 0)].symbol() == "▌")
             .expect("now-playing glyph is painted");
         assert_eq!(buf[(glyph_x, 0)].fg, palette::PLAYBACK_THROBBER_FG);
         let percent_x = (0..rect.width)
@@ -253,12 +253,12 @@ mod wide_row_regression_tests {
     }
 
     #[test]
-    fn now_playing_braille_and_narrow_reserves_are_safe() {
+    fn now_playing_throbber_and_narrow_reserves_are_safe() {
         use crate::app::components::media_list::{
             ActiveProgress, MediaListRow, MediaSemanticState,
         };
 
-        let glyphs = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
+        let glyphs = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
         for glyph in glyphs {
             assert_eq!(glyph.width(), Some(1));
             let mut list: WideMediaList<String> = WideMediaList::new();
@@ -311,7 +311,7 @@ mod wide_row_regression_tests {
                     &mut list,
                     true,
                     palette::SURFACE_RESTING,
-                    Some('⠋'),
+                    Some(' '),
                 );
             })
             .unwrap();

@@ -17,7 +17,7 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 #### Scenario: Now-playing renders right with throbber
 - **WHEN** a row carries the now-playing state
 - **THEN** no inline progress appears next to the title
-- **AND** the right-aligned slot shows the paint-time braille throbber glyph followed by the progress percentage, replacing any duration
+- **AND** the right-aligned slot shows the paint-time block-ramp throbber glyph followed by the progress percentage, replacing any duration
 - **AND** the glyph uses the aqua liveness theme role and the percentage uses `TEXT_METADATA` (FOAM); neither uses the green duration role (`STATUS_AVAILABLE`)
 
 #### Scenario: Now-playing with unknown runtime

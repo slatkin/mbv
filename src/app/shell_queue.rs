@@ -18,8 +18,15 @@ pub(in crate::app) struct QueueProjectionFingerprint {
     progress_bucket: u16,
 }
 
+/// Now-playing liveness frames, shared by the queue row and the playback
+/// panel (`App::now_playing_throbber_span`) so both stay in lockstep: the
+/// horizontal block ramp (plus blank) with progress to its right. Each
+/// surface keeps its own style (queue: aqua liveness role; panel: accent);
+/// only the glyph set is shared. The advance cadence lives in `shell_run`.
+pub(in crate::app) const NOW_PLAYING_THROBBER_FRAMES: [char; 9] =
+    [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
+
 /// The active row's progress bucket: whole-percent, so animation frames and
-/// sub-percent tick drift never invalidate the projection.
 fn progress_bucket(playback: PlaybackState) -> u16 {
     if playback.active && playback.position_ticks > 0 && playback.runtime_ticks > 0 {
         (playback.position_ticks * 100 / playback.runtime_ticks).clamp(0, 100) as u16
@@ -139,8 +146,8 @@ impl Model {
             self.last_queue_projection = Some(fingerprint);
         }
         let throbber = playback.active.then(|| {
-            const FRAMES: [char; 8] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
-            FRAMES[self.app.now_playing_throbber_index % FRAMES.len()]
+            NOW_PLAYING_THROBBER_FRAMES
+                [self.app.now_playing_throbber_index % NOW_PLAYING_THROBBER_FRAMES.len()]
         });
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
