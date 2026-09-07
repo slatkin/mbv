@@ -1,5 +1,6 @@
 use super::test_helpers::*;
 use crate::app::palette;
+use crate::app::tests::make_session;
 
 #[test]
 fn short_window_keeps_queue_in_left_column() {
@@ -178,10 +179,69 @@ fn queue_keeps_rows_formerly_reserved_for_separate_visualizer() {
 }
 
 #[test]
+fn idle_queue_only_hides_card_and_panel_at_both_widths() {
+    for width in [80, 120] {
+        let mut app = make_queue_app(5);
+        app.panel_mode = crate::app::PanelMode::QueueOnly;
+        let (term, layout) = render_view_to_terminal(&mut app, width, 40);
+        let buf = term.backend().buffer();
+        let before_queue = (0..layout.queue_area.y)
+            .flat_map(|y| (0..width).map(move |x| buf[(x, y)].symbol()))
+            .collect::<String>();
+
+        assert_eq!(layout.card.height, 0);
+        assert_eq!(layout.card.width, 0);
+        assert!(!before_queue.contains('\u{2594}'));
+        assert!(!before_queue.contains("On Now:"));
+    }
+
+    let mut app = make_queue_app(5);
+    app.mini_view_focus = crate::app::PanelFocus::Queue;
+    let (term, layout) = render_view_to_terminal(&mut app, crate::app::MINI_VIEW_THRESHOLD - 1, 40);
+    let buf = term.backend().buffer();
+    assert_eq!(layout.card.height, 0);
+    assert!((0..layout.queue_area.y)
+        .flat_map(|y| (0..buf.area().width).map(move |x| buf[(x, y)].symbol()))
+        .all(|symbol| symbol != "▔"));
+}
+
+#[test]
+fn connected_idle_queue_only_keeps_panel_but_collapses_card() {
+    let mut app = make_queue_app(5);
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    app.connected_session_state = Some(make_session("remote-host", "Emby"));
+    app.connected_session_id = Some("remote-host".into());
+    let term = render_app_to_terminal(&mut app, 80, 40);
+    let card_height = app.layout.main.card.height;
+
+    assert_eq!(card_height, 0);
+    assert!(app.layout.playback.seekbar_area.height > 0);
+    assert!(buffer_to_string(&term).contains('\u{2594}'));
+}
+
+#[test]
+fn paused_queue_only_keeps_card_and_panel() {
+    let mut app = make_queue_app(5);
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.paused = true;
+    }
+    let term = render_app_to_terminal(&mut app, 80, 40);
+    let card_height = app.layout.main.card.height;
+
+    assert!(card_height > 0);
+    assert!(app.layout.playback.seekbar_area.height > 0);
+    assert!(buffer_to_string(&term).contains('\u{2594}'));
+}
+
+#[test]
 fn wide_queue_only_leftover_rows_stay_dark_bg_without_duplicate_visualizer() {
     let mut app = make_queue_app(5);
     app.panel_mode = crate::app::PanelMode::QueueOnly;
     app.visualizer_enabled = true;
+    app.player.status.lock().unwrap().active = true;
     app.visualizer_window.samples = vec![crate::app::visualizer_worker::StereoSample {
         left: 1.0,
         right: 1.0,
