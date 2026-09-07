@@ -49,6 +49,17 @@ impl PlaybackRun {
                     }
                 }
             }
+            PlayerCommand::Next => {
+                let target = self.current_idx + 1;
+                if target < self.queue_len() {
+                    self.step_to_index(target, mpv);
+                }
+            }
+            PlayerCommand::Previous => {
+                if let Some(target) = self.current_idx.checked_sub(1) {
+                    self.step_to_index(target, mpv);
+                }
+            }
             PlayerCommand::QueueAppend { items } => {
                 self.cmd_append_queue(items, mpv);
             }
@@ -216,6 +227,32 @@ impl PlaybackRun {
             }
         }
         cancel_stop
+    }
+
+    /// Relative single-step nav (`PlayerCommand::Next`/`Previous`) for an
+    /// already-bounds-checked target ordinal. Mirrors the `JumpTo` move minus
+    /// request identity: no `forced_transition` (design D4 — relative nav
+    /// correlates like natural advancement). Still pins `forced_slot_id` so the
+    /// resulting mpv observation is attributed to the right slot.
+    fn step_to_index(&mut self, idx: usize, mpv: &Mpv) {
+        let Some(slot_id) = self.slot_id_at(idx) else {
+            return;
+        };
+        if self.active_file {
+            if let Err(error) = self.select_active_slot(slot_id, mpv) {
+                log::warn!(target: "player", "active-file step to idx={idx} failed: {error}");
+            } else {
+                let _ = mpv.set_property("pause", false);
+            }
+            return;
+        }
+        self.forced_slot_id = Some(slot_id);
+        if let Err(e) = mpv.set_property("playlist-pos", idx as i64) {
+            self.forced_slot_id = None;
+            log::warn!(target: "player", "step to idx={idx} failed: {}", mpv_err_str(&e));
+        } else {
+            let _ = mpv.set_property("pause", false);
+        }
     }
 
     fn cmd_replace_queue(

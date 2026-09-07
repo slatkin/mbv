@@ -267,17 +267,11 @@ impl Player {
     }
 
     pub fn next(&self) -> bool {
-        match self.status.lock().unwrap().next_idx() {
-            Some(idx) => self.send_command(PlayerCommand::JumpTo(idx)),
-            None => false,
-        }
+        self.send_command(PlayerCommand::Next)
     }
 
     pub fn previous(&self) -> bool {
-        match self.status.lock().unwrap().previous_idx() {
-            Some(idx) => self.send_command(PlayerCommand::JumpTo(idx)),
-            None => false,
-        }
+        self.send_command(PlayerCommand::Previous)
     }
 
     pub fn set_paused(&self, paused: bool) -> bool {

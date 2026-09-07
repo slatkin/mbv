@@ -224,17 +224,11 @@ impl MediaPlayer2Player {
     }
 
     fn next(&self) {
-        let (status, send) = self.status_and_sender();
-        if let Some(idx) = status.lock().unwrap().next_idx() {
-            send(PlayerCommand::JumpTo(idx));
-        };
+        (self.status_and_sender().1)(PlayerCommand::Next);
     }
 
     fn previous(&self) {
-        let (status, send) = self.status_and_sender();
-        if let Some(idx) = status.lock().unwrap().previous_idx() {
-            send(PlayerCommand::JumpTo(idx));
-        };
+        (self.status_and_sender().1)(PlayerCommand::Previous);
     }
 
     fn seek(&self, offset_us: i64) {

@@ -53,18 +53,12 @@ impl MbvTray {
 
     #[cfg(test)]
     fn next(&self) {
-        let idx = self.status.lock().unwrap().next_idx();
-        if let Some(idx) = idx {
-            self.send_command(PlayerCommand::JumpTo(idx));
-        }
+        self.send_command(PlayerCommand::Next);
     }
 
     #[cfg(test)]
     fn previous(&self) {
-        let idx = self.status.lock().unwrap().previous_idx();
-        if let Some(idx) = idx {
-            self.send_command(PlayerCommand::JumpTo(idx));
-        }
+        self.send_command(PlayerCommand::Previous);
     }
 }
 
@@ -104,22 +98,14 @@ impl ksni::Tray for MbvTray {
             StandardItem {
                 label: "Next".into(),
                 icon_name: "media-skip-forward".into(),
-                activate: Box::new(|tray: &mut Self| {
-                    if let Some(idx) = tray.status.lock().unwrap().next_idx() {
-                        tray.send_command(PlayerCommand::JumpTo(idx));
-                    }
-                }),
+                activate: Box::new(|tray: &mut Self| tray.send_command(PlayerCommand::Next)),
                 ..Default::default()
             }
             .into(),
             StandardItem {
                 label: "Previous".into(),
                 icon_name: "media-skip-backward".into(),
-                activate: Box::new(|tray: &mut Self| {
-                    if let Some(idx) = tray.status.lock().unwrap().previous_idx() {
-                        tray.send_command(PlayerCommand::JumpTo(idx));
-                    }
-                }),
+                activate: Box::new(|tray: &mut Self| tray.send_command(PlayerCommand::Previous)),
                 ..Default::default()
             }
             .into(),
@@ -255,42 +241,16 @@ mod tests {
     }
 
     #[test]
-    fn next_sends_jump_to_when_room() {
-        let mut st = status(true, false, "A Song");
-        st.current_idx = 0;
-        st.queue_len = 2;
-        let (tray, rx) = spy_tray(st);
+    fn next_emits_relative_next_command() {
+        let (tray, rx) = spy_tray(status(true, false, "A Song"));
         tray.next();
-        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))));
+        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::Next)));
     }
 
     #[test]
-    fn next_is_a_clean_noop_at_end_of_queue() {
-        let mut st = status(true, false, "A Song");
-        st.current_idx = 1;
-        st.queue_len = 2;
-        let (tray, rx) = spy_tray(st);
-        tray.next();
-        assert!(rx.try_recv().is_err());
-    }
-
-    #[test]
-    fn previous_sends_jump_to_when_available() {
-        let mut st = status(true, false, "A Song");
-        st.current_idx = 1;
-        st.queue_len = 2;
-        let (tray, rx) = spy_tray(st);
+    fn previous_emits_relative_previous_command() {
+        let (tray, rx) = spy_tray(status(true, false, "A Song"));
         tray.previous();
-        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(0))));
-    }
-
-    #[test]
-    fn previous_is_a_clean_noop_at_start_of_queue() {
-        let mut st = status(true, false, "A Song");
-        st.current_idx = 0;
-        st.queue_len = 2;
-        let (tray, rx) = spy_tray(st);
-        tray.previous();
-        assert!(rx.try_recv().is_err());
+        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::Previous)));
     }
 }

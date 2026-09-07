@@ -435,6 +435,8 @@ impl From<PlayerCommand> for WireCommand {
             | PlayerCommand::QueueRemove(_)
             | PlayerCommand::QueueMove(..)
             | PlayerCommand::LoadNew { .. }
+            | PlayerCommand::Next
+            | PlayerCommand::Previous
             | PlayerCommand::SubmitQueue { .. } => {
                 unreachable!("local-only PlayerCommand never crosses ctrl")
             }

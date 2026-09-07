@@ -344,8 +344,8 @@ impl PlayerProxy {
 
     pub fn next(&self) -> bool {
         match self.status.lock().unwrap().next_idx() {
-            Some(idx) => match &self.inner {
-                PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::JumpTo(idx)),
+            Some(_) => match &self.inner {
+                PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::Next),
                 PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
                     remote.new_playback_intent(crate::ctrl::PlaybackIntentAction::Next),
                 ),
@@ -356,8 +356,8 @@ impl PlayerProxy {
 
     pub fn previous(&self) -> bool {
         match self.status.lock().unwrap().previous_idx() {
-            Some(idx) => match &self.inner {
-                PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::JumpTo(idx)),
+            Some(_) => match &self.inner {
+                PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::Previous),
                 PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
                     remote.new_playback_intent(crate::ctrl::PlaybackIntentAction::Previous),
                 ),
