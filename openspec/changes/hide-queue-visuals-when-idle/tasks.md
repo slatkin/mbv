@@ -13,8 +13,8 @@
 
 ## 3. Docs and specs
 
-- [ ] 3.1 Update `docs/architecture/interactive-surface-ledger.md`: the Queue row (line 105) and the Root playback-chrome row (line 104) both describe who owns the queue-only visual slot; record the shell's queue-only idle collapse so the row still names one painter per surface per breakpoint.
-- [ ] 3.2 Update `CONTEXT.md`: amend the **Idle feed** term (it asserts the feed is displayed in the playback panel when idle, now conditional on the panel rendering) and add **Idle collapse** for the queue-only card + panel removal, since design and tasks now name it. Use *queue visual slot* and *playback panel*; "idle ticker" and "RSS ticker" are listed as Avoid terms for Idle feed.
+- [x] 3.1 Update `docs/architecture/interactive-surface-ledger.md`: the Queue row (line 105) and the Root playback-chrome row (line 104) both describe who owns the queue-only visual slot; record the shell's queue-only idle collapse so the row still names one painter per surface per breakpoint.
+- [x] 3.2 Update `CONTEXT.md`: amend the **Idle feed** term (it asserts the feed is displayed in the playback panel when idle, now conditional on the panel rendering) and add **Idle collapse** for the queue-only card + panel removal, since design and tasks now name it. Use *queue visual slot* and *playback panel*; "idle ticker" and "RSS ticker" are listed as Avoid terms for Idle feed.
 
 ## 4. Tests and gates
 
