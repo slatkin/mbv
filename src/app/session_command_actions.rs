@@ -133,9 +133,18 @@ impl App {
     }
 
     pub(super) fn retire_remote_tracking(&mut self, invalidate_lineage: bool) {
+        // The reanchor modal is only ever raised off an active tracker, so
+        // only emit its dismiss when there was tracking to retire. An
+        // unconditional dismiss writes DismissRemoteReanchor into the
+        // single-slot `pending_overlay` on every queue replace, clobbering
+        // the slot the playlist-Enter paths check before dismissing the
+        // sidebar and focusing Queue (sidebar stays open, focus stays put).
+        let had_tracking = self.remote_tracker.is_some() || self.remote_queue_projection.is_some();
         self.remote_tracker = None;
         self.remote_queue_projection = None;
-        self.dismiss_remote_reanchor();
+        if had_tracking {
+            self.dismiss_remote_reanchor();
+        }
         if invalidate_lineage {
             self.remote_queue_lineage = self.remote_queue_lineage.saturating_add(1);
         }
