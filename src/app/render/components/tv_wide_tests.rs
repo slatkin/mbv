@@ -170,11 +170,10 @@ fn wide_tv_persists_series_workspace_and_separate_targets() {
     assert!(output.contains("1:00:00"));
 }
 
-/// The TV Episodes pane uses the same overflowing season-pill bar as the
-/// other selectors. Moving backward must keep the newly selected season in
-/// the visible window instead of leaving the old trailing window in place.
+/// TV season selection must wrap at both ends, and the rendered pill window
+/// must follow the wrapped selection.
 #[test]
-fn wide_tv_season_pills_keep_a_backward_selection_visible() {
+fn wide_tv_season_pills_wrap_and_scroll_with_selection() {
     let mut app = tv_app();
     let seasons: Vec<_> = (0..8)
         .map(|index| {
@@ -206,7 +205,7 @@ fn wide_tv_season_pills_keep_a_backward_selection_visible() {
             modifiers: tuirealm::event::KeyModifiers::NONE,
         },
     ));
-    for _ in 0..4 {
+    for _ in 0..7 {
         component.on(&tuirealm::event::Event::Keyboard(
             tuirealm::event::KeyEvent {
                 code: tuirealm::event::Key::Char(']'),
@@ -218,9 +217,10 @@ fn wide_tv_season_pills_keep_a_backward_selection_visible() {
                 .with_image_state(false, false),
         );
     }
+    // The next right move wraps from the last season to the first.
     component.on(&tuirealm::event::Event::Keyboard(
         tuirealm::event::KeyEvent {
-            code: tuirealm::event::Key::Char('['),
+            code: tuirealm::event::Key::Char(']'),
             modifiers: tuirealm::event::KeyModifiers::NONE,
         },
     ));
@@ -233,20 +233,36 @@ fn wide_tv_season_pills_keep_a_backward_selection_visible() {
     assert!(terminal
         .draw(|frame| component.view(frame, frame.area()))
         .is_ok());
-
-    let tabs = &component.test_layout().tv_wide_season_tabs;
-    let Some(selected) = tabs.iter().position(|(_, id)| *id == 3) else {
-        panic!("selected season must remain visible after moving backward");
-    };
-    assert_eq!(
-        selected, 0,
-        "moving left should advance the pill window left: {tabs:?}"
+    let first_tabs = component.test_layout().tv_wide_season_tabs.clone();
+    assert!(
+        first_tabs.iter().any(|(_, id)| *id == 0),
+        "wrapped first season must be visible: {first_tabs:?}"
     );
     assert!(
-        selected + 1 < tabs.len(),
-        "selected season should not be pinned to the trailing edge: {tabs:?}"
+        first_tabs.len() < 8,
+        "the season row must actually overflow"
     );
-    assert!(tabs.len() < 8, "the season row must actually overflow");
+
+    // Moving left from the first season wraps to the last and scrolls the
+    // visible window to the end.
+    component.on(&tuirealm::event::Event::Keyboard(
+        tuirealm::event::KeyEvent {
+            code: tuirealm::event::Key::Char('['),
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        },
+    ));
+    component.set_content(
+        app.wide_tv_render_ctx(0, None)
+            .with_image_state(false, false),
+    );
+    assert!(terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .is_ok());
+    let last_tabs = &component.test_layout().tv_wide_season_tabs;
+    assert!(
+        last_tabs.iter().any(|(_, id)| *id == 7),
+        "wrapped last season must be visible: {last_tabs:?}"
+    );
 }
 
 /// `remove-migrated-surface-underpaint` 3.3 (D4): at the wide Wide hero
