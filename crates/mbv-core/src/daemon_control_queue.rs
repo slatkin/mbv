@@ -68,6 +68,8 @@ fn unified_queue_state_for_peer(
     status: &crate::player::PlayerStatus,
     queue: &PlaybackQueue,
     source: &crate::config::QueueSource,
+    in_flight_transition: Option<crate::ctrl::TransitionSummary>,
+    queued_latest_transition: Option<crate::ctrl::TransitionSummary>,
     supports_abs_queue: bool,
     supports_abs_book_queue: bool,
 ) -> CtrlEvent {
@@ -94,8 +96,8 @@ fn unified_queue_state_for_peer(
         active_slot,
         revision: queue.revision().raw(),
         source: source.clone(),
-        in_flight_transition: None,
-        queued_latest_transition: None,
+        in_flight_transition,
+        queued_latest_transition,
     })
 }
 
@@ -106,21 +108,23 @@ fn broadcast_queue_state(
     shared_queue: &SharedQueueState,
     queue: &PlaybackQueue,
     source: &crate::config::QueueSource,
+    transitions: &crate::playback_transition::OwnerTransitionState,
 ) {
     let status = player.status.lock().unwrap().clone();
+    let (in_flight, queued_latest) = transition_summaries(transitions);
 
     // ── Unified-queue peers, gate ABS episodes and books independently ──
     let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, true, true,
+        &status, queue, source, in_flight.clone(), queued_latest.clone(), true, true,
     ));
     let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, true, false,
+        &status, queue, source, in_flight.clone(), queued_latest.clone(), true, false,
     ));
     let unified_book_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, false, true,
+        &status, queue, source, in_flight.clone(), queued_latest.clone(), false, true,
     ));
     let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, false, false,
+        &status, queue, source, in_flight, queued_latest, false, false,
     ));
 
     if let (
@@ -231,6 +235,8 @@ fn reject_command(
             &status,
             queue,
             source,
+            None,
+            None,
             supports_abs_queue,
             supports_abs_book_queue,
         ),

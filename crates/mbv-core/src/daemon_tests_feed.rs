@@ -43,7 +43,7 @@ fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
         crate::playback_queue::QueueMutationResult::Applied(_) => {}
         other => panic!("expected slot consumed, got {other:?}"),
     }
-    super::broadcast_queue_state(&registry, &player, &shared_queue, &queue, &source);
+    super::broadcast_queue_state(&registry, &player, &shared_queue, &queue, &source, &crate::playback_transition::OwnerTransitionState::default());
 
     // Only the matching slot was removed.
     assert_eq!(queue.len(), 1);
@@ -75,11 +75,12 @@ fn replace_queue_succeeds_unconditionally() {
         connect_client(&mut clients)
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
-    let mut queue =
+    let queue =
         PlaybackQueue::from_queue_items(vec![QueueItem::Feed(feed_entry("feed-1"))], Some(0));
-    let mut source = QueueSource::Remote;
+    let source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
+    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::ReplaceQueue {
             items: vec![item("replacement", "Video", "Movie")],
@@ -92,15 +93,14 @@ fn replace_queue_succeeds_unconditionally() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
         false,
     );
+    let queue = owner.queue;
 
     // Queue was replaced — Feed slot is gone, Emby item is present.
     assert_eq!(queue.len(), 1);

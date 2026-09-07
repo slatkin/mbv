@@ -405,6 +405,64 @@ impl PlaybackIntentState {
     }
 }
 
+/// The Player owner's single authority for the Bound queue (design D1/D3).
+/// The daemon event loop owns exactly one of these. Queue mutations go through
+/// the canonical `PlaybackQueue` held here; `observed_active_slot` changes only
+/// from a Playback-run observation, never from accepting a command.
+#[derive(Default)]
+struct PlayerOwnerState {
+    queue: PlaybackQueue,
+    source: crate::config::QueueSource,
+    observed_active_slot: Option<QueueSlotId>,
+    transitions: crate::playback_transition::OwnerTransitionState,
+    /// Guarded direct-playback lifecycle coordinator. Retained functionally
+    /// as-is (task 3.2 folds its single `current` into `transitions`); kept
+    /// here so the event loop owns one struct.
+    intents: PlaybackIntentState,
+}
+
+impl PlayerOwnerState {
+    /// Record a Playback-run observation of the active file. The only path
+    /// permitted to change the observed active slot (design D3).
+    fn note_observed_active_slot(&mut self, slot_id: Option<QueueSlotId>) {
+        self.observed_active_slot = slot_id;
+        if let Some(slot_id) = slot_id {
+            self.queue.set_active_slot(slot_id);
+        }
+    }
+
+    /// In-flight / queued-latest transition summaries for the owner snapshot
+    /// (design D5). Both are `None` until task 3.2 wires dispatch discipline.
+    fn transition_summaries(
+        &self,
+    ) -> (
+        Option<crate::ctrl::TransitionSummary>,
+        Option<crate::ctrl::TransitionSummary>,
+    ) {
+        transition_summaries(&self.transitions)
+    }
+}
+
+fn transition_summaries(
+    transitions: &crate::playback_transition::OwnerTransitionState,
+) -> (
+    Option<crate::ctrl::TransitionSummary>,
+    Option<crate::ctrl::TransitionSummary>,
+) {
+    (
+        transitions.in_flight().map(transition_summary),
+        transitions.queued_latest().map(transition_summary),
+    )
+}
+
+fn transition_summary(t: crate::playback_transition::Transition) -> crate::ctrl::TransitionSummary {
+    crate::ctrl::TransitionSummary {
+        request_id: t.request_id,
+        generation: t.generation,
+        target_slot: t.target.raw(),
+    }
+}
+
 /// Snapshot of the daemon's canonical queue used to seed newly-connecting
 /// ctrl-socket clients.  The queue itself is the single source of truth;
 /// `UnifiedQueueState` is derived from it at the broadcast boundary.

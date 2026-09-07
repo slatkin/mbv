@@ -103,7 +103,7 @@ fn reconcile_packaged_emby(
         };
         *shared_queue.queue.lock().unwrap() = queue.clone();
         *shared_queue.source.lock().unwrap() = source.clone();
-        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, &crate::playback_transition::OwnerTransitionState::default());
         *client.lock().unwrap() = next.client.lock().unwrap().clone();
         update_player_queue(player, items, active_index, client);
     } else {
@@ -179,7 +179,7 @@ fn reconcile_packaged_audiobookshelf(
         };
         *shared_queue.queue.lock().unwrap() = queue.clone();
         *shared_queue.source.lock().unwrap() = source.clone();
-        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, &crate::playback_transition::OwnerTransitionState::default());
         update_player_queue(player, items, active_index, client);
         *current = None;
         return Ok(());
@@ -205,7 +205,7 @@ fn reconcile_packaged_audiobookshelf(
         };
         *shared_queue.queue.lock().unwrap() = queue.clone();
         *shared_queue.source.lock().unwrap() = source.clone();
-        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, &crate::playback_transition::OwnerTransitionState::default());
         update_player_queue(player, items, active_index, client);
     }
     let generation = current

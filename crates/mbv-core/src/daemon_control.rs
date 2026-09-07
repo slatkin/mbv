@@ -16,6 +16,7 @@ fn play_resolved_items(
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
+    transitions: &crate::playback_transition::OwnerTransitionState,
 ) {
     let queue_items: Vec<QueueItem> = fetched
         .iter()
@@ -25,7 +26,7 @@ fn play_resolved_items(
     let start_idx = start_idx.min(queue_items.len().saturating_sub(1));
     *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
     *source = new_source;
-    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
     if fetched.len() == 1 {
         let mut play_item = fetched[0].clone();
         if start_ticks > 0 {
@@ -51,15 +52,20 @@ fn handle_ctrl(
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
     audio_only: bool,
-    queue: &mut PlaybackQueue,
-    source: &mut crate::config::QueueSource,
+    owner: &mut PlayerOwnerState,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
-    playback_intents: &mut PlaybackIntentState,
     has_audiobookshelf: bool,
     merged_tx: &mpsc::Sender<DaemonEvent>,
     stay_alive: bool,
 ) {
+    let PlayerOwnerState {
+        queue,
+        source,
+        intents: playback_intents,
+        transitions,
+        observed_active_slot: _,
+    } = &mut *owner;
     let has_emby = !client.lock().unwrap().token.is_empty();
     if matches!(cmd, CtrlCmd::RequestShutdown) {
         log::info!(target: "daemon", "RequestShutdown received from ctrl client {client_id}");
@@ -171,7 +177,7 @@ fn handle_ctrl(
             player.set_initial_queue(&items, next_cursor);
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             *source = new_source;
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
         }
         CtrlCmd::PlayerCmd(pc) => match PlayerCommand::from(pc) {
             PlayerCommand::ReplaceQueue {
@@ -189,7 +195,7 @@ fn handle_ctrl(
                     start_idx.min(queue_items.len().saturating_sub(1))
                 };
                 *queue = PlaybackQueue::from_queue_items(queue_items, Some(next_cursor));
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
                 player.send_command(PlayerCommand::SubmitQueue {
                     items: queue
                         .slots()
@@ -332,7 +338,7 @@ fn handle_ctrl(
                 return;
             }
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
             // `send_command` alone only reaches an already-running mpv
             // thread; on a freshly started daemon no thread exists yet, so
             // route through `submit_queue`, which cold-starts one when
@@ -403,7 +409,7 @@ fn handle_ctrl(
                     (slot_id, item)
                 })
                 .collect();
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
             // Append to the player's queue rather than replacing the whole queue.
             player.send_command(PlayerCommand::QueueAppend {
                 items: items_for_player,
@@ -423,7 +429,7 @@ fn handle_ctrl(
                 );
             } else if queue.active_slot_id() == Some(sid) {
                 queue.remove_active_slot_confirmed(sid);
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
                 if queue.is_empty() {
                     // Clear the player's queue and stop.
                     player.send_command(PlayerCommand::SubmitQueue {
@@ -436,7 +442,7 @@ fn handle_ctrl(
                 }
             } else {
                 queue.remove_slot(sid);
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
                 player.send_command(PlayerCommand::QueueRemove(sid));
             }
         }
@@ -454,7 +460,7 @@ fn handle_ctrl(
                 );
             } else {
                 queue.move_slot(sid, to_index);
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
                 player.send_command(PlayerCommand::QueueMove(sid, to_index));
             }
         }
@@ -462,7 +468,7 @@ fn handle_ctrl(
             let sid = QueueSlotId::from_raw(slot_id);
             match queue.set_active_slot(sid) {
                 crate::playback_queue::QueueMutationResult::Applied(()) => {
-                    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+                    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
                     if let Some(idx) = queue.active_index() {
                         player.send_command(PlayerCommand::JumpTo(idx));
                     }
@@ -487,7 +493,7 @@ fn handle_ctrl(
                 start_idx: 0,
             });
             player.stop();
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
         }
     }
 }

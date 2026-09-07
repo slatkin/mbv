@@ -1,7 +1,8 @@
 use super::{
     all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws,
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
-    CtrlRequest, CtrlTransport, DaemonEvent, PlaybackIntentState, SharedQueueState,
+    CtrlRequest, CtrlTransport, DaemonEvent, PlaybackIntentState, PlayerOwnerState,
+    SharedQueueState,
 };
 use crate::api::EmbyItem;
 use crate::config::{Config, QueueSource};
@@ -252,10 +253,11 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         connect_client(&mut clients)
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
-    let mut queue = PlaybackQueue::default();
-    let mut source = QueueSource::Unknown;
+    let queue = PlaybackQueue::default();
+    let source = QueueSource::Unknown;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
+    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::TogglePause)),
         1,
@@ -265,15 +267,14 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
         false,
     );
+    let _queue = owner.queue;
 
     assert!(registry.lock().unwrap().has_driver());
     assert!(sender_rx.try_recv().is_err());
@@ -288,10 +289,11 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
     let client = Arc::new(Mutex::new(client));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (reply_tx, _reply_rx) = mpsc::channel();
-    let mut queue = PlaybackQueue::default();
-    let mut source = QueueSource::Unknown;
+    let queue = PlaybackQueue::default();
+    let source = QueueSource::Unknown;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
+    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![emby_qi("adopted", "Video", "Movie")],
@@ -305,15 +307,14 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
         false,
     );
+    let queue = owner.queue;
 
     assert_eq!(queue.len(), 1);
     assert_eq!(queue.slots()[0].item.id(), "adopted");
@@ -331,10 +332,11 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         connect_client(&mut clients)
     };
     let (reply_tx, reply_rx) = mpsc::channel();
-    let mut queue = queue_from_items(&[item("existing", "Video", "Movie")], 0);
-    let mut source = QueueSource::Remote;
+    let queue = queue_from_items(&[item("existing", "Video", "Movie")], 0);
+    let source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
+    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![emby_qi("stale", "Video", "Movie")],
@@ -348,15 +350,14 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
         false,
     );
+    let queue = owner.queue;
 
     assert_eq!(queue.len(), 1);
     assert_eq!(queue.slots()[0].item.id(), "existing");

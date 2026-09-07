@@ -284,9 +284,7 @@ pub fn run_with_options(
     }
 
     // ── Canonical queue authority — single source of truth ──────────────
-    let mut queue = PlaybackQueue::default();
-    let mut source = crate::config::QueueSource::Unknown;
-    let mut playback_intents = PlaybackIntentState::default();
+    let mut owner = PlayerOwnerState::default();
     let mut last_keepalive = Instant::now();
     let mut last_capabilities = Instant::now();
 
@@ -309,14 +307,14 @@ pub fn run_with_options(
         let ev = match merged_rx.recv_timeout(Duration::from_millis(25)) {
             Ok(ev) => ev,
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                if let Some((connection_id, event)) = playback_intents.settle_buffering_if_due() {
+                if let Some((connection_id, event)) = owner.intents.settle_buffering_if_due() {
                     log::info!(target: "pipe_latency", "request={} generation={} outcome=settled", event.request_id, event.generation);
                     let clients = ctrl_clients.lock().unwrap();
                     if clients.has_client(connection_id) {
                         clients.send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
                     } else {
                         drop(clients);
-                        playback_intents.invalidate_connection(connection_id);
+                        owner.intents.invalidate_connection(connection_id);
                     }
                 }
                 continue;
@@ -331,15 +329,15 @@ pub fn run_with_options(
                 // Resolve the reported slot against the canonical queue. A
                 // slot the daemon no longer holds falls back to the current
                 // active position (D6's clamp removal is task 3.5).
-                let clamped_idx = queue
+                let clamped_idx = owner
+                    .queue
                     .slot_index(slot_id)
-                    .or_else(|| queue.active_index())
+                    .or_else(|| owner.queue.active_index())
                     .unwrap_or(0);
-                // Update active slot in the canonical queue.
-                let resolved_slot_id = queue.slots().get(clamped_idx).map(|s| s.slot_id);
-                if let Some(resolved_slot_id) = resolved_slot_id {
-                    queue.set_active_slot(resolved_slot_id);
-                }
+                // A Playback-run observation is the only thing that moves the
+                // owner's observed active slot (design D3).
+                let resolved_slot_id = owner.queue.slots().get(clamped_idx).map(|s| s.slot_id);
+                owner.note_observed_active_slot(resolved_slot_id);
                 broadcast(
                     &ctrl_clients,
                     &CtrlEvent::Player(PlayerEvent::TrackChanged {
@@ -349,17 +347,21 @@ pub fn run_with_options(
                 );
                 // Broadcast full state so peers see the authoritative playback position.
                 let status = player.status.lock().unwrap().clone();
+                let (in_flight_tx, queued_tx) = owner.transition_summaries();
                 let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &queue, &source, true, true,
+                    &status, &owner.queue, &owner.source, in_flight_tx.clone(), queued_tx.clone(),
+                    true, true,
                 ));
                 let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &queue, &source, true, false,
+                    &status, &owner.queue, &owner.source, in_flight_tx.clone(), queued_tx.clone(),
+                    true, false,
                 ));
                 let unified_book_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &queue, &source, false, true,
+                    &status, &owner.queue, &owner.source, in_flight_tx.clone(), queued_tx.clone(),
+                    false, true,
                 ));
                 let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &queue, &source, false, false,
+                    &status, &owner.queue, &owner.source, in_flight_tx, queued_tx, false, false,
                 ));
                 if let (
                     Some(unified_full_json),
@@ -380,14 +382,14 @@ pub fn run_with_options(
                     );
                 }
                 // Update reconnect snapshot.
-                *shared_queue.queue.lock().unwrap() = queue.clone();
-                *shared_queue.source.lock().unwrap() = source.clone();
+                *shared_queue.queue.lock().unwrap() = owner.queue.clone();
+                *shared_queue.source.lock().unwrap() = owner.source.clone();
                 // Settle playback intent if the reported index matches.
-                if let Some((connection_id, request_id, generation)) = playback_intents
+                if let Some((connection_id, request_id, generation)) = owner.intents
                     .current
                     .as_ref()
                     .filter(|current| match &current.action {
-                        PlaybackIntentAction::Play { item_ids, .. } => queue
+                        PlaybackIntentAction::Play { item_ids, .. } => owner.queue
                             .slots()
                             .get(clamped_idx)
                             .is_some_and(|slot| item_ids.iter().any(|id| id == slot.item.id())),
@@ -404,8 +406,8 @@ pub fn run_with_options(
                         )
                     })
                 {
-                    if queue.slots().get(clamped_idx).is_some() {
-                        if let Some(event) = playback_intents.applied_if_current(
+                    if owner.queue.slots().get(clamped_idx).is_some() {
+                        if let Some(event) = owner.intents.applied_if_current(
                             connection_id,
                             request_id,
                             generation,
@@ -423,8 +425,8 @@ pub fn run_with_options(
                 season,
                 episode,
             }) => {
-                let active_idx = queue.active_index().unwrap_or(0);
-                if let Some(slot) = queue.slots().get(active_idx + 1) {
+                let active_idx = owner.queue.active_index().unwrap_or(0);
+                if let Some(slot) = owner.queue.slots().get(active_idx + 1) {
                     if let Some(emby) = slot.item.as_emby() {
                         player.send_command(PlayerCommand::NextUpShow {
                             item_id: emby.id.clone(),
@@ -444,7 +446,7 @@ pub fn run_with_options(
                 );
             }
             DaemonEvent::Player(PlayerEvent::QueueNextUp { next_idx }) => {
-                if let Some(slot) = queue.slots().get(next_idx) {
+                if let Some(slot) = owner.queue.slots().get(next_idx) {
                     if let Some(emby) = slot.item.as_emby() {
                         player.send_command(PlayerCommand::NextUpShow {
                             item_id: emby.id.clone(),
@@ -467,15 +469,15 @@ pub fn run_with_options(
                     .audio_pipe_playout_delay_ms
                     .map(Duration::from_millis);
                 if let Some((connection_id, status)) =
-                    playback_intents.output_started_if_current(delay)
+                    owner.intents.output_started_if_current(delay)
                 {
-                    log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, playback_intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
+                    log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, owner.intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
                     ctrl_clients
                         .lock()
                         .unwrap()
                         .send_to_client(connection_id, &CtrlEvent::PipePlaybackStatus(status));
                     if delay.is_none() {
-                        if let Some(current) = playback_intents.current.as_ref() {
+                        if let Some(current) = owner.intents.current.as_ref() {
                             ctrl_clients.lock().unwrap().send_to_client(
                                 current.connection_id,
                                 &CtrlEvent::PlaybackIntent(PlaybackIntentEvent {
@@ -494,7 +496,7 @@ pub fn run_with_options(
             }
             DaemonEvent::Player(pe) => {
                 if let PlayerEvent::PausedChanged(paused) = &pe {
-                    if let Some((connection_id, request_id, generation)) = playback_intents
+                    if let Some((connection_id, request_id, generation)) = owner.intents
                         .current
                         .as_ref()
                         .and_then(|current| match &current.action {
@@ -510,7 +512,7 @@ pub fn run_with_options(
                             _ => None,
                         })
                     {
-                        if let Some(event) = playback_intents.applied_if_current(
+                        if let Some(event) = owner.intents.applied_if_current(
                             connection_id,
                             request_id,
                             generation,
@@ -523,7 +525,7 @@ pub fn run_with_options(
                     }
                 }
                 if matches!(pe, PlayerEvent::Stopped { .. }) {
-                    if let Some((connection_id, request_id, generation)) = playback_intents
+                    if let Some((connection_id, request_id, generation)) = owner.intents
                         .current
                         .as_ref()
                         .filter(|current| matches!(current.action, PlaybackIntentAction::Stop))
@@ -535,7 +537,7 @@ pub fn run_with_options(
                             )
                         })
                     {
-                        if let Some(event) = playback_intents.applied_if_current(
+                        if let Some(event) = owner.intents.applied_if_current(
                             connection_id,
                             request_id,
                             generation,
@@ -559,8 +561,8 @@ pub fn run_with_options(
                         Some(&client),
                         &player,
                         audio_only,
-                        &mut queue,
-                        &mut source,
+                        &mut owner.queue,
+                        &mut owner.source,
                         &shared_queue,
                         &ctrl_clients,
                     );
@@ -572,7 +574,7 @@ pub fn run_with_options(
                     audiobookshelf_runtime
                         .as_ref()
                         .map(|runtime| runtime.generation),
-                    &mut queue,
+                    &mut owner.queue,
                     &ctrl_clients,
                 );
             }
@@ -582,7 +584,7 @@ pub fn run_with_options(
                     audiobookshelf_runtime
                         .as_ref()
                         .map(|runtime| runtime.generation),
-                    &mut queue,
+                    &mut owner.queue,
                     &ctrl_clients,
                 );
             }
@@ -603,8 +605,8 @@ pub fn run_with_options(
                                 &mut ws_send_tx,
                                 &client,
                                 &player,
-                                &mut queue,
-                                &mut source,
+                                &mut owner.queue,
+                                &mut owner.source,
                                 &shared_queue,
                                 &ctrl_clients,
                                 &merged_tx,
@@ -616,8 +618,8 @@ pub fn run_with_options(
                                     revision,
                                     &mut audiobookshelf_runtime,
                                     &player,
-                                    &mut queue,
-                                    &mut source,
+                                    &mut owner.queue,
+                                    &mut owner.source,
                                     &shared_queue,
                                     &ctrl_clients,
                                     &client,
@@ -657,11 +659,9 @@ pub fn run_with_options(
                     &client,
                     &player,
                     audio_only,
-                    &mut queue,
-                    &mut source,
+                    &mut owner,
                     &shared_queue,
                     &ctrl_clients,
-                    &mut playback_intents,
                     audiobookshelf_runtime.is_some(),
                     &merged_tx,
                     config.stay_alive,
@@ -677,14 +677,14 @@ pub fn run_with_options(
                 fetched,
             } => {
                 if !ctrl_clients.lock().unwrap().has_client(client_id) {
-                    playback_intents.invalidate_connection(client_id);
+                    owner.intents.invalidate_connection(client_id);
                     continue;
                 }
-                if !playback_intents.is_current(client_id, request_id, generation) {
+                if !owner.intents.is_current(client_id, request_id, generation) {
                     continue;
                 }
                 if let Err(error) = &fetched {
-                    if let Some(event) = playback_intents.rejected_if_current(
+                    if let Some(event) = owner.intents.rejected_if_current(
                         client_id,
                         request_id,
                         generation,
@@ -716,7 +716,7 @@ pub fn run_with_options(
                         None
                     };
                     if let Some(reason) = rejection {
-                        if let Some(event) = playback_intents
+                        if let Some(event) = owner.intents
                             .rejected_if_current(client_id, request_id, generation, reason)
                         {
                             ctrl_clients
@@ -727,9 +727,9 @@ pub fn run_with_options(
                         continue;
                     }
                 }
-                playback_intents.mark_starting(request_id);
-                if let Some(status) = playback_intents.pipe_status() {
-                    log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, playback_intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
+                owner.intents.mark_starting(request_id);
+                if let Some(status) = owner.intents.pipe_status() {
+                    log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, owner.intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
                     ctrl_clients
                         .lock()
                         .unwrap()
@@ -743,16 +743,17 @@ pub fn run_with_options(
                         new_source,
                         &client,
                         &player,
-                        &mut queue,
-                        &mut source,
+                        &mut owner.queue,
+                        &mut owner.source,
                         &shared_queue,
                         &ctrl_clients,
+                        &owner.transitions,
                     );
                 }
             }
             DaemonEvent::CtrlDisconnected(client_id) => {
                 ctrl_clients.lock().unwrap().remove(client_id);
-                playback_intents.invalidate_connection(client_id);
+                owner.intents.invalidate_connection(client_id);
             }
             DaemonEvent::Shutdown => {
                 log::info!(target: "daemon", "graceful shutdown: stopping player");

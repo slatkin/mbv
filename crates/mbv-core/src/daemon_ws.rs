@@ -47,7 +47,7 @@ fn handle_ws(
             *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
             *source = crate::config::QueueSource::Remote;
             take_authority_for_emby_remote(ctrl_clients);
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, &crate::playback_transition::OwnerTransitionState::default());
             if fetched.len() == 1 {
                 let mut play_item = fetched[0].clone();
                 if start_position_ticks > 0 {
