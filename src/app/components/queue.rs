@@ -93,25 +93,40 @@ impl QueueComponent {
         playback: PlaybackState,
         title: QueueTitleModel,
     ) {
-        // Scroll is component-owned (split-queue-cursor-ownership D3): a new
-        // scope's content starts at the top. Reset before the canonical child
-        // reconciles so its viewport never reuses an old offset.
+        self.set_rows(slots, playback);
+        self.set_cursor(cursor);
+        self.set_scope_chrome(scope, title);
+    }
+
+    /// Replace projected rows while preserving the canonical list's selection.
+    pub(in crate::app) fn set_rows(&mut self, slots: Vec<QueueSlot>, playback: PlaybackState) {
+        self.list
+            .set_content(queue_media_rows(&slots, playback, self.pending_slot));
+    }
+
+    /// Patch one projected row by stable target without rebuilding the list.
+    pub(in crate::app) fn set_row_patch(
+        &mut self,
+        target: &QueueSlotId,
+        row: MediaListRow<QueueSlotId>,
+    ) -> bool {
+        self.list.patch_row(target, row)
+    }
+
+    /// Deliver an authoritative cursor command independently of row delivery.
+    pub(in crate::app) fn set_cursor(&mut self, cursor: QueueCursorUpdate) {
+        if let QueueCursorUpdate::Set(idx) = cursor {
+            self.list.select_index(idx);
+        }
+        self.list
+            .set_scroll(self.list.scroll().min(self.list.cursor()));
+    }
+
+    /// Deliver the current scope and title/chrome independently of row delivery.
+    pub(in crate::app) fn set_scope_chrome(&mut self, scope: QueueScope, title: QueueTitleModel) {
         if scope != self.scope {
             self.list.set_scroll(0);
         }
-        // The canonical child re-pins its cursor to the selected `QueueSlotId`
-        // and locally clamps when the target is gone (D3 / D2); no App mirror.
-        self.list
-            .set_content(queue_media_rows(&slots, playback, self.pending_slot));
-        if let QueueCursorUpdate::Set(idx) = cursor {
-            // An authoritative move (follow-the-playhead, jump-to-now-playing,
-            // wheel scroll, scope switch): skip identity reconciliation.
-            self.list.select_index(idx);
-        }
-        // Keep the resting offset from running ahead of the cursor row; the
-        // painter's height-aware clamp finishes the job every frame.
-        self.list
-            .set_scroll(self.list.scroll().min(self.list.cursor()));
         self.scope = scope;
         self.empty_text = if scope == QueueScope::Local {
             "  Add items with p from Home or library tabs".into()
@@ -522,14 +537,18 @@ pub(in crate::app) fn queue_media_rows(
             let is_pending = pending_slot == Some(slot.slot_id) && !is_active;
             let (title, pos_ticks, duration_ticks) =
                 queue_row_fields(&slot.item, playback, is_active);
-            let time_text = queue_row_time_text(pos_ticks, duration_ticks, is_active);
             let (semantic_state, trailing) = if is_pending {
-                (MediaSemanticState::Starting, None)
+                (MediaSemanticState::NowPlaying { progress: None }, None)
             } else if is_active {
                 let progress = (pos_ticks > 0 && duration_ticks > 0)
                     .then(|| (pos_ticks * 100 / duration_ticks).clamp(0, 100) as u16);
-                // The active-row `%` comes from the Active progress path.
-                (MediaSemanticState::active(progress), None)
+                (
+                    MediaSemanticState::NowPlaying {
+                        progress: progress
+                            .map(crate::app::components::media_list::ActiveProgress::new),
+                    },
+                    None,
+                )
             } else {
                 // Non-active video rows carry a watch-% badge as FOAM metadata
                 // (legacy queue painter); audio/feed/audiobookshelf rows do not.
@@ -547,8 +566,14 @@ pub(in crate::app) fn queue_media_rows(
                 target: slot.slot_id,
                 primary: title,
                 trailing,
-                // Duration/elapsed is a right-aligned green element, not FOAM.
-                duration: (!time_text.is_empty()).then_some(time_text),
+                // Duration is a right-aligned green element, not FOAM. The
+                // now-playing row intentionally has no elapsed/duration text.
+                duration: if is_active || is_pending {
+                    None
+                } else {
+                    let time_text = queue_row_time_text(pos_ticks, duration_ticks, false);
+                    (!time_text.is_empty()).then_some(time_text)
+                },
                 kind: MediaKind::Media,
                 semantic_state,
             }

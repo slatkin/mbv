@@ -384,8 +384,8 @@ fn queue_projection_clamps_active_progress_to_presentation_bounds() {
         let Some(MediaListRow::Item { semantic_state, .. }) = rows.first() else {
             panic!("queue projection must produce an item row")
         };
-        let MediaSemanticState::Active { progress } = semantic_state else {
-            panic!("active queue row must use active semantic state")
+        let MediaSemanticState::NowPlaying { progress } = semantic_state else {
+            panic!("active queue row must use now-playing semantic state")
         };
         assert_eq!(
             progress.as_ref().map(|value| value.percent()),
@@ -451,7 +451,7 @@ fn queue_movement_uses_single_row_stride_and_follows_focus() {
 }
 
 #[test]
-fn now_playing_queue_row_shows_elapsed_next_to_duration() {
+fn now_playing_queue_row_drops_elapsed_and_keeps_progress() {
     let mut item = crate::app::tests::make_item("playing", "Audio");
     item.runtime_ticks = 120 * mbv_core::api::TICKS_PER_SECOND;
     let slot = PlaybackQueue::from_queue_items(vec![QueueItem::Emby(Box::new(item))], None)
@@ -480,7 +480,7 @@ fn now_playing_queue_row_shows_elapsed_next_to_duration() {
     let output: String = (0..buffer.area().height)
         .flat_map(|y| (0..buffer.area().width).map(move |x| buffer[(x, y)].symbol().to_owned()))
         .collect();
-    assert!(output.contains("0:30 / 2:00"));
+    assert!(!output.contains("0:30 / 2:00"));
 }
 
 #[test]

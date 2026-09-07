@@ -378,6 +378,20 @@ impl<Target: PartialEq> ListCore<Target> {
 }
 
 impl<Target: Clone + PartialEq> ListCore<Target> {
+    /// Replace one existing row by stable target without rebuilding indexes or
+    /// disturbing selection/scroll. This is for live presentation patches.
+    fn patch_row(&mut self, target: &Target, row: MediaListRow<Target>) -> bool {
+        let Some(index) = self
+            .rows
+            .iter()
+            .position(|existing| existing.selectable_target() == Some(target))
+        else {
+            return false;
+        };
+        self.rows[index] = row;
+        true
+    }
+
     /// Replace the display rows. The selected target is preserved when it is
     /// still present; otherwise the cursor and scroll are locally clamped
     /// (design.md D3). Structural rows are filtered out of the selectable

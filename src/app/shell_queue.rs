@@ -92,26 +92,29 @@ impl Model {
         // depends on changed and no authoritative cursor re-anchor is armed,
         // rebuilding the row vec (slot clone + per-row `format!`) would only
         // reproduce the current content -- skip it (#675).
-        if self.app.pending_queue_cursor_reanchor.is_none()
-            && self.last_queue_projection.as_ref() == Some(&fingerprint)
-        {
-            return;
-        }
+        let rows_changed = self.last_queue_projection.as_ref() != Some(&fingerprint);
 
-        let slots = self.app.queue_for_scope(scope).slots().to_vec();
         // Re-anchor only for authoritative content changes; routine updates preserve
-        // the component-owned cursor.
+        // the component-owned cursor. Cursor and chrome delivery is intentionally
+        // independent of the row fingerprint.
         let cursor = match self.app.pending_queue_cursor_reanchor.take() {
             Some(reanchor) if reanchor == scope => {
                 QueueCursorUpdate::Set(self.app.queue_for_scope(scope).queue_cursor)
             }
             _ => QueueCursorUpdate::Preserve,
         };
-        self.last_queue_projection = Some(fingerprint);
+        let slots = rows_changed.then(|| self.app.queue_for_scope(scope).slots().to_vec());
+        if rows_changed {
+            self.last_queue_projection = Some(fingerprint);
+        }
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
                 queue.set_pending_slot(pending_slot);
-                queue.set_content(slots, cursor, scope, playback, title);
+                if let Some(slots) = slots {
+                    queue.set_rows(slots, playback);
+                }
+                queue.set_cursor(cursor);
+                queue.set_scope_chrome(scope, title);
                 queue.set_area(self.app.layout.main.queue_area);
                 queue.set_title_area(title_area);
             }

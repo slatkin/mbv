@@ -155,6 +155,11 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
         self.core.set_content(rows);
     }
 
+    /// Replace one existing row by stable target, preserving selection and scroll.
+    pub fn patch_row(&mut self, target: &Target, row: MediaListRow<Target>) -> bool {
+        self.core.patch_row(target, row)
+    }
+
     /// Replace the display rows from a letter-grouped projection: sort the
     /// `(sort_str, Item)` pairs by natural key and inject `Heading`/`Spacer`
     /// rows per bucket, matching `render_letter_grouped_rows`. `total_count`
