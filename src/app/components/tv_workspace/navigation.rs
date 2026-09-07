@@ -1,5 +1,4 @@
 use super::TvWorkspaceComponent;
-use crate::app::ui_util::move_cursor;
 
 impl TvWorkspaceComponent {
     pub(super) fn move_episode(&mut self, delta: i64) {
@@ -13,7 +12,8 @@ impl TvWorkspaceComponent {
             .as_ref()
             .map_or(0, |detail| detail.seasons.len());
         if count > 0 {
-            self.season_cursor = move_cursor(self.season_cursor, delta, count);
+            self.season_cursor =
+                (self.season_cursor as i64 + delta).rem_euclid(count as i64) as usize;
             self.refresh_episode_rows();
             self.episodes.select_first();
         }

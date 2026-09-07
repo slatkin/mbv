@@ -362,7 +362,10 @@ pub(in crate::app) fn render_pill_bar(
                 start,
             ))
         })
-        .max_by_key(|(edge_distance, start)| (*edge_distance, std::cmp::Reverse(*start)))
+        // Prefer the later window on a tie: with only two pills visible,
+        // moving left must put the selection at the leading edge rather than
+        // leaving it pinned to the trailing edge.
+        .max_by_key(|(edge_distance, start)| (*edge_distance, *start))
         .map(|(_, start)| start)
         .unwrap_or(0);
 

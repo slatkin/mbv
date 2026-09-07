@@ -45,6 +45,7 @@ pub struct QueueComponent {
     area: Rect,
     geometry: QueueRenderGeometry,
     pending_slot: Option<QueueSlotId>,
+    throbber: Option<char>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle.
     mouse_gestures: MouseGestureState,
@@ -74,6 +75,7 @@ impl QueueComponent {
             area: Rect::default(),
             geometry: QueueRenderGeometry::default(),
             pending_slot: None,
+            throbber: None,
             mouse_gestures: MouseGestureState::new(),
             scope_regions: HitRegions::new(),
         }
@@ -93,25 +95,40 @@ impl QueueComponent {
         playback: PlaybackState,
         title: QueueTitleModel,
     ) {
-        // Scroll is component-owned (split-queue-cursor-ownership D3): a new
-        // scope's content starts at the top. Reset before the canonical child
-        // reconciles so its viewport never reuses an old offset.
+        self.set_rows(slots, playback);
+        self.set_cursor(cursor);
+        self.set_scope_chrome(scope, title);
+    }
+
+    /// Replace projected rows while preserving the canonical list's selection.
+    pub(in crate::app) fn set_rows(&mut self, slots: Vec<QueueSlot>, playback: PlaybackState) {
+        self.list
+            .set_content(queue_media_rows(&slots, playback, self.pending_slot));
+    }
+
+    /// Patch one projected row by stable target without rebuilding the list.
+    pub(in crate::app) fn set_row_patch(
+        &mut self,
+        target: &QueueSlotId,
+        row: MediaListRow<QueueSlotId>,
+    ) -> bool {
+        self.list.patch_row(target, row)
+    }
+
+    /// Deliver an authoritative cursor command independently of row delivery.
+    pub(in crate::app) fn set_cursor(&mut self, cursor: QueueCursorUpdate) {
+        if let QueueCursorUpdate::Set(idx) = cursor {
+            self.list.select_index(idx);
+        }
+        self.list
+            .set_scroll(self.list.scroll().min(self.list.cursor()));
+    }
+
+    /// Deliver the current scope and title/chrome independently of row delivery.
+    pub(in crate::app) fn set_scope_chrome(&mut self, scope: QueueScope, title: QueueTitleModel) {
         if scope != self.scope {
             self.list.set_scroll(0);
         }
-        // The canonical child re-pins its cursor to the selected `QueueSlotId`
-        // and locally clamps when the target is gone (D3 / D2); no App mirror.
-        self.list
-            .set_content(queue_media_rows(&slots, playback, self.pending_slot));
-        if let QueueCursorUpdate::Set(idx) = cursor {
-            // An authoritative move (follow-the-playhead, jump-to-now-playing,
-            // wheel scroll, scope switch): skip identity reconciliation.
-            self.list.select_index(idx);
-        }
-        // Keep the resting offset from running ahead of the cursor row; the
-        // painter's height-aware clamp finishes the job every frame.
-        self.list
-            .set_scroll(self.list.scroll().min(self.list.cursor()));
         self.scope = scope;
         self.empty_text = if scope == QueueScope::Local {
             "  Add items with p from Home or library tabs".into()
@@ -123,6 +140,10 @@ impl QueueComponent {
 
     pub(in crate::app) fn set_pending_slot(&mut self, slot: Option<QueueSlotId>) {
         self.pending_slot = slot;
+    }
+
+    pub(in crate::app) fn set_throbber(&mut self, throbber: Option<char>) {
+        self.throbber = throbber;
     }
 
     pub(in crate::app) fn set_area(&mut self, area: Rect) {
@@ -459,6 +480,7 @@ impl Component for QueueComponent {
             &mut self.list,
             self.focused,
             palette::SURFACE_FOCUSED,
+            self.throbber,
         );
         let viewport = self.list.resolve_viewport(area.height as usize);
         self.geometry.rows = (viewport.offset..viewport.total_rows)
@@ -516,43 +538,62 @@ pub(in crate::app) fn queue_media_rows(
     slots
         .iter()
         .enumerate()
-        .map(|(index, slot)| {
-            let is_active = playback.active && playback.active_idx == index;
-            let is_pending = pending_slot == Some(slot.slot_id) && !is_active;
-            let (title, pos_ticks, duration_ticks) =
-                queue_row_fields(&slot.item, playback, is_active);
-            let time_text = queue_row_time_text(pos_ticks, duration_ticks, is_active);
-            let (semantic_state, trailing) = if is_pending {
-                (MediaSemanticState::Starting, None)
-            } else if is_active {
-                let progress = (pos_ticks > 0 && duration_ticks > 0)
-                    .then(|| (pos_ticks * 100 / duration_ticks).clamp(0, 100) as u16);
-                // The active-row `%` comes from the Active progress path.
-                (MediaSemanticState::active(progress), None)
-            } else {
-                // Non-active video rows carry a watch-% badge as FOAM metadata
-                // (legacy queue painter); audio/feed/audiobookshelf rows do not.
-                let pct = match &slot.item {
-                    QueueItem::Emby(item) if !item.is_audio() => {
-                        let pct =
-                            fmt_playback_pct(item.playback_position_ticks, item.runtime_ticks);
-                        (!pct.is_empty()).then_some(pct)
-                    }
-                    _ => None,
-                };
-                (MediaSemanticState::Ordinary, pct)
-            };
-            MediaListRow::Item {
-                target: slot.slot_id,
-                primary: title,
-                trailing,
-                // Duration/elapsed is a right-aligned green element, not FOAM.
-                duration: (!time_text.is_empty()).then_some(time_text),
-                kind: MediaKind::Media,
-                semantic_state,
-            }
-        })
+        .map(|(index, slot)| queue_media_row_at(slot, index, playback, pending_slot))
         .collect()
+}
+
+pub(in crate::app) fn queue_media_row(
+    slot: &QueueSlot,
+    index: usize,
+    playback: PlaybackState,
+    pending_slot: Option<QueueSlotId>,
+) -> MediaListRow<QueueSlotId> {
+    queue_media_row_at(slot, index, playback, pending_slot)
+}
+
+fn queue_media_row_at(
+    slot: &QueueSlot,
+    index: usize,
+    playback: PlaybackState,
+    pending_slot: Option<QueueSlotId>,
+) -> MediaListRow<QueueSlotId> {
+    let is_active = playback.active && playback.active_idx == index;
+    let is_pending = pending_slot == Some(slot.slot_id) && !is_active;
+    let (title, pos_ticks, duration_ticks) = queue_row_fields(&slot.item, playback, is_active);
+    let (semantic_state, trailing) = if is_pending {
+        (MediaSemanticState::NowPlaying { progress: None }, None)
+    } else if is_active {
+        let progress = (pos_ticks > 0 && duration_ticks > 0)
+            .then(|| (pos_ticks * 100 / duration_ticks).clamp(0, 100) as u16);
+        (
+            MediaSemanticState::NowPlaying {
+                progress: progress.map(crate::app::components::media_list::ActiveProgress::new),
+            },
+            None,
+        )
+    } else {
+        let pct = match &slot.item {
+            QueueItem::Emby(item) if !item.is_audio() => {
+                let pct = fmt_playback_pct(item.playback_position_ticks, item.runtime_ticks);
+                (!pct.is_empty()).then_some(pct)
+            }
+            _ => None,
+        };
+        (MediaSemanticState::Ordinary, pct)
+    };
+    MediaListRow::Item {
+        target: slot.slot_id,
+        primary: title,
+        trailing,
+        duration: if is_active || is_pending {
+            None
+        } else {
+            let time_text = queue_row_time_text(pos_ticks, duration_ticks, false);
+            (!time_text.is_empty()).then_some(time_text)
+        },
+        kind: MediaKind::Media,
+        semantic_state,
+    }
 }
 
 /// The title and (position, duration) ticks a Queue row paints, resolved per

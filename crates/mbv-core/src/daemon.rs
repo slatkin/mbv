@@ -1,5 +1,6 @@
 include!("daemon_context.rs");
 include!("daemon_core.rs");
+include!("daemon_run_shutdown.rs");
 include!("daemon_run.rs");
 include!("daemon_audiobookshelf.rs");
 include!("daemon_control.rs");
@@ -15,5 +16,6 @@ mod tests {
     include!("daemon_tests_feed.rs");
     include!("daemon_tests_service_independent.rs");
     include!("daemon_tests_abs_queue.rs");
+    include!("daemon_tests_abs_queue_progress.rs");
     include!("daemon_tests_queue_ops.rs");
 }

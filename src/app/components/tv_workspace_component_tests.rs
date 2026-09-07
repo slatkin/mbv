@@ -255,6 +255,59 @@ fn tv_episode_brackets_with_modifiers_are_unclaimed() {
 }
 
 #[test]
+fn tv_episode_brackets_wrap_season_selection() {
+    let mut series = make_item("Series", "Series");
+    series.id = "series-id".into();
+    let seasons = (0..3)
+        .map(|index| {
+            let mut season = make_item(&format!("Season {index}"), "Season");
+            season.id = format!("season-{index}");
+            season
+        })
+        .collect();
+    let detail = crate::app::SeriesDetail {
+        seasons,
+        episodes: Default::default(),
+    };
+    let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        Some(series),
+        Some(detail),
+        0,
+        None,
+        false,
+    ));
+
+    let key = |code| {
+        Event::Keyboard(KeyEvent {
+            code,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+    component.on(&key(Key::Right));
+
+    assert!(matches!(
+        component.on(&key(Key::Char('['))),
+        Some(Msg::Shell(ShellRequest::TvSeasonMove { delta: -1 }))
+    ));
+    assert_eq!(
+        component.selected_season(),
+        Some(("series-id".into(), "season-2".into()))
+    );
+
+    assert!(matches!(
+        component.on(&key(Key::Char(']'))),
+        Some(Msg::Shell(ShellRequest::TvSeasonMove { delta: 1 }))
+    ));
+    assert_eq!(
+        component.selected_season(),
+        Some(("series-id".into(), "season-0".into()))
+    );
+}
+
+#[test]
 fn tv_grouped_cursor_mirrors_rendered_sorted_rows() {
     let mut items = vec![
         make_item("Zulu", "Series"),

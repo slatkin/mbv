@@ -1,3 +1,4 @@
+use super::shell_queue::NOW_PLAYING_THROBBER_FRAMES;
 use crate::app::layout::{
     AppLayout, CardGeometry, FrameChromeGeometry, LayoutMain, LayoutPlayback,
 };
@@ -17,11 +18,9 @@ use std::time::Instant;
 
 impl App {
     pub(in crate::app) fn now_playing_throbber_span(&self) -> Span<'static> {
-        const FRAMES: [&str; 9] = [" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"];
-        Span::styled(
-            FRAMES[self.now_playing_throbber_index % FRAMES.len()],
-            Style::default().fg(palette::ACCENT),
-        )
+        let frame = NOW_PLAYING_THROBBER_FRAMES
+            [self.now_playing_throbber_index % NOW_PLAYING_THROBBER_FRAMES.len()];
+        Span::styled(frame.to_string(), Style::default().fg(palette::ACCENT))
     }
 
     /// Paint-free geometry seam entry (D2). Returns `None` on a zero-dimension

@@ -286,7 +286,7 @@ fn wide_active_queue_starts_below_panel_rows() {
     let chrome = app.compute_chrome_geometry(ratatui::layout::Rect::new(0, 0, width, height));
     let panel_rows = layout.card.height.max(4);
     assert!(
-        layout.queue_area.y >= chrome.left_content.y + panel_rows + 1,
+        layout.queue_area.y > chrome.left_content.y + panel_rows,
         "queue must start below the painted wide panel rows"
     );
     // The panel background must still fill the wide side-by-side slot.

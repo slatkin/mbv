@@ -243,6 +243,7 @@ pub(in crate::app) fn render_feeds_content(
             canonical_list,
             focused,
             palette::list_selected_row_bg(),
+            None,
         );
         layout.selected_item_rect = paint.selected_row_rect;
         rebuild_selectable_maps(layout, &paint.row_geometry, list_area);

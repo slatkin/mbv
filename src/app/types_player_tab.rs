@@ -63,7 +63,11 @@ impl PlayerTab {
     }
 
     pub(super) fn set_items(&mut self, items: Vec<EmbyItem>, queue_cursor: usize) {
-        *self = Self::from_emby_items(items, queue_cursor);
+        let queue_items = items
+            .into_iter()
+            .map(|item| QueueItem::Emby(Box::new(item)))
+            .collect();
+        self.set_queue_items(queue_items, queue_cursor);
     }
 
     /// Replaces the canonical queue with arbitrary `QueueItem`s (Emby, Feed,
@@ -71,7 +75,12 @@ impl PlayerTab {
     /// persisted queue that may contain Feed entries — `set_items` would
     /// silently drop them.
     pub(super) fn set_queue_items(&mut self, items: Vec<QueueItem>, queue_cursor: usize) {
-        *self = Self::new(items, queue_cursor);
+        let revision = self.queue.revision();
+        self.queue = PlaybackQueue::from_queue_items_with_revision(Vec::new(), None, revision);
+        self.queue.replace(items);
+        self.queue_cursor = queue_cursor;
+        self.pending_playback_slot = None;
+        self.clamp_cursor();
     }
 
     pub(super) fn set_unified_state(
@@ -235,8 +244,8 @@ impl PlayerTab {
     /// that need to modify queue items after construction.
     #[cfg(test)]
     pub(super) fn set_item_at(&mut self, index: usize, item: QueueItem) {
-        if let Some(slot) = self.queue.slots_mut().get_mut(index) {
-            slot.item = item;
+        if let Some(slot_id) = self.queue.slots().get(index).map(|slot| slot.slot_id) {
+            let _ = self.queue.update_slot_item(slot_id, item);
         }
     }
 }
