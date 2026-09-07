@@ -86,14 +86,18 @@ pub(in crate::app) fn wide_media_row<Target>(
                 MediaSemanticState::Disabled => (palette::TEXT_MUTED, None),
             };
             let now_playing = matches!(semantic_state, MediaSemanticState::NowPlaying { .. });
-            let trailing = match (
-                trailing.as_deref().filter(|text| !text.is_empty()),
-                progress,
-            ) {
-                (Some(text), Some(pct)) => format!("{text} {pct}"),
-                (Some(text), None) => text.to_owned(),
-                (None, Some(pct)) => pct,
-                (None, None) => String::new(),
+            let trailing = if now_playing {
+                String::new()
+            } else {
+                match (
+                    trailing.as_deref().filter(|text| !text.is_empty()),
+                    progress,
+                ) {
+                    (Some(text), Some(pct)) => format!("{text} {pct}"),
+                    (Some(text), None) => text.to_owned(),
+                    (None, Some(pct)) => pct,
+                    (None, None) => String::new(),
+                }
             };
             // `Collection` rows never show a duration, even if one is
             // projected — one enforcement point so parents can't re-diverge.

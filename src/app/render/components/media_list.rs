@@ -189,7 +189,7 @@ mod wide_row_regression_tests {
             MediaListRow::Item {
                 target: "playing".into(),
                 primary: "Playing title".into(),
-                trailing: None,
+                trailing: Some("FOAM".into()),
                 duration: Some("2:00".into()),
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::NowPlaying {
@@ -233,6 +233,7 @@ mod wide_row_regression_tests {
         assert!(playing.contains("Playing title"));
         assert!(playing.contains("⠋ 47%"));
         assert_eq!(playing.matches("47%").count(), 1);
+        assert!(!playing.contains("FOAM"));
         assert!(!playing.contains("2:00"));
         let glyph_x = (0..rect.width)
             .find(|&x| buf[(x, 0)].symbol() == "⠋")
