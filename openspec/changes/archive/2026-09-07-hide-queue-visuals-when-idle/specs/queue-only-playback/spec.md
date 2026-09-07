@@ -1,10 +1,10 @@
-# queue-only-playback Specification
+## REMOVED Requirements
 
-## Purpose
+### Requirement: Playback panel appears in queue-only mode
+**Reason**: The requirement mandates the panel unconditionally, including an "Playback panel visible when idle" scenario that directly contradicts the idle collapse. A MODIFIED block replaces the whole requirement, so it is removed rather than edited.
+**Migration**: `Playback panel renders in queue-only only when playback is active` (added below) carries the visible-when-active scenario forward and inverts the idle case.
 
-Renders the playback panel (seekbar, title, controls) inside the queue-only view, using a narrow stacked layout or a wide side-by-side layout depending on terminal width.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Playback panel renders in queue-only only when playback is active
 
@@ -48,6 +48,8 @@ When playback is active and the terminal width is 100 columns or more, the queue
 - **WHEN** the wide two-column layout is active
 - **THEN** the playback panel width SHALL equal the total column width minus the rendered visual-slot width minus the 2-cell gap
 
+## ADDED Requirements
+
 ### Requirement: Idle queue-only collapses card and panel into the queue list
 
 When the layout is in queue-only state and no playback is active on any transport, the queue visual slot (artwork, placeholder, loading reservation, empty visualizer box) SHALL NOT be rendered and SHALL reserve zero rows, the playback panel SHALL NOT be rendered and SHALL reserve zero rows, and the queue panel SHALL occupy the rows both would have taken. The queue panel SHALL keep the single separator row it already places above itself; this requirement does not move the queue panel to the first row of the left column. Paused playback counts as active and SHALL keep both visuals. The artwork/visualizer selection SHALL persist while idle and take effect on the next playback; pressing `v` while idle SHALL NOT create a card rectangle.
@@ -71,26 +73,3 @@ When the layout is in queue-only state and no playback is active on any transpor
 
 - **WHEN** the layout is in queue-only state and playback is paused
 - **THEN** the queue visual slot and playback panel SHALL remain rendered
-
-### Requirement: Wide layout playback panel height matches image height
-
-In the wide two-column layout, the playback panel area SHALL have the same height as the queue visual slot. Playback content SHALL be top-aligned within that area, and any remaining vertical space below the content SHALL use `DARK_BG`.
-
-#### Scenario: Panel height matches image
-
-- **WHEN** the wide two-column layout is active and the queue visual slot renders at N rows
-- **THEN** the playback panel area SHALL also be N rows tall
-
-#### Scenario: Content top-aligned with dark fill
-
-- **WHEN** the playback panel area is taller than the playback content
-- **THEN** the playback content SHALL start at the top of the area and `DARK_BG` SHALL fill the rows below it
-
-### Requirement: Hero image left-aligned in wide layout
-
-In the wide two-column layout, the queue visual slot SHALL be left-aligned within its column whether it contains artwork or the visualizer.
-
-#### Scenario: Image left-aligned
-
-- **WHEN** the wide two-column layout is active
-- **THEN** the queue visual slot SHALL be positioned at the left edge of its column area
