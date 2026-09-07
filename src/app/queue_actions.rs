@@ -138,6 +138,11 @@ impl App {
             }
             t
         };
+        self.move_queue_item_to(from, to);
+    }
+
+    pub(super) fn move_queue_item_to(&mut self, from: usize, to: usize) {
+        let scope = self.viewed_queue_scope();
         let Some(slot_id) = self.queue_for_scope_mut(scope).slot_id_at(from) else {
             return;
         };
