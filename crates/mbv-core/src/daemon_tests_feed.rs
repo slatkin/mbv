@@ -80,7 +80,7 @@ fn replace_queue_succeeds_unconditionally() {
     let source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
-    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::ReplaceQueue {
             items: vec![item("replacement", "Video", "Movie")],
@@ -100,7 +100,7 @@ fn replace_queue_succeeds_unconditionally() {
         &dummy_merged_tx,
         false,
     );
-    let queue = owner.queue;
+    let queue = owner.core.queue;
 
     // Queue was replaced — Feed slot is gone, Emby item is present.
     assert_eq!(queue.len(), 1);

@@ -130,7 +130,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
     // Trigger broadcast via UnifiedQueuePlaySlot on the Emby slot (index 1).
     let emby_slot_id = crate::ctrl::slot_id_to_u64(queue.slots()[1].slot_id);
 
-    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
             slot_id: emby_slot_id,
@@ -149,7 +149,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
         &dummy_merged_tx,
         false,
     );
-    let _queue = owner.queue;
+    let _queue = owner.core.queue;
 
     let capable_data = recv_unified_queue(&capable_rx);
     let old_data = recv_unified_queue(&old_rx);
@@ -180,7 +180,7 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
     let queue = PlaybackQueue::default();
     let source = QueueSource::Unknown;
 
-    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1")],
@@ -201,7 +201,7 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
         &dummy_merged_tx,
         false,
     );
-    let queue = owner.queue;
+    let queue = owner.core.queue;
 
     assert!(
         queue.is_empty(),
@@ -241,7 +241,7 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
     let queue = PlaybackQueue::default();
     let source = QueueSource::Unknown;
 
-    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
@@ -262,7 +262,7 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
         &dummy_merged_tx,
         false,
     );
-    let queue = owner.queue;
+    let queue = owner.core.queue;
 
     // Transport gate passed (peer is capable), but the canonical queue must
     // never hold the ABS item — admission is a separate, always-active gate.
@@ -294,7 +294,7 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
     let queue = PlaybackQueue::default();
     let source = QueueSource::Unknown;
 
-    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1")],
@@ -315,7 +315,7 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
         &dummy_merged_tx,
         false,
     );
-    let _queue = owner.queue;
+    let _queue = owner.core.queue;
 
     // Transport gate passed. If a CommandRejected arrives, it must not name
     // the abs-queue transport capability — that would mean the capable peer
@@ -348,7 +348,7 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
     let queue = PlaybackQueue::default();
     let source = QueueSource::Unknown;
 
-    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
@@ -369,7 +369,7 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
         &dummy_merged_tx,
         false,
     );
-    let queue = owner.queue;
+    let queue = owner.core.queue;
 
     assert_eq!(
         queue.len(),

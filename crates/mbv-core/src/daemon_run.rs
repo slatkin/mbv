@@ -284,7 +284,7 @@ pub fn run_with_options(
     }
 
     // ── Canonical queue authority — single source of truth ──────────────
-    let mut owner = PlayerOwnerState::default();
+    let mut owner = DaemonPlayerOwner::default();
     let mut last_keepalive = Instant::now();
     let mut last_capabilities = Instant::now();
 
@@ -330,14 +330,14 @@ pub fn run_with_options(
                 // slot the daemon no longer holds falls back to the current
                 // active position (D6's clamp removal is task 3.5).
                 let clamped_idx = owner
-                    .queue
+                    .core.queue
                     .slot_index(slot_id)
-                    .or_else(|| owner.queue.active_index())
+                    .or_else(|| owner.core.queue.active_index())
                     .unwrap_or(0);
                 // A Playback-run observation is the only thing that moves the
                 // owner's observed active slot (design D3).
-                let resolved_slot_id = owner.queue.slots().get(clamped_idx).map(|s| s.slot_id);
-                owner.note_observed_active_slot(resolved_slot_id);
+                let resolved_slot_id = owner.core.queue.slots().get(clamped_idx).map(|s| s.slot_id);
+                owner.core.note_observed_active_slot(resolved_slot_id);
                 broadcast(
                     &ctrl_clients,
                     &CtrlEvent::Player(PlayerEvent::TrackChanged {
@@ -347,21 +347,21 @@ pub fn run_with_options(
                 );
                 // Broadcast full state so peers see the authoritative playback position.
                 let status = player.status.lock().unwrap().clone();
-                let (in_flight_tx, queued_tx) = owner.transition_summaries();
+                let (in_flight_tx, queued_tx) = owner.core.transition_summaries();
                 let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &owner.queue, &owner.source, in_flight_tx.clone(), queued_tx.clone(),
+                    &status, &owner.core.queue, &owner.core.source, in_flight_tx.clone(), queued_tx.clone(),
                     true, true,
                 ));
                 let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &owner.queue, &owner.source, in_flight_tx.clone(), queued_tx.clone(),
+                    &status, &owner.core.queue, &owner.core.source, in_flight_tx.clone(), queued_tx.clone(),
                     true, false,
                 ));
                 let unified_book_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &owner.queue, &owner.source, in_flight_tx.clone(), queued_tx.clone(),
+                    &status, &owner.core.queue, &owner.core.source, in_flight_tx.clone(), queued_tx.clone(),
                     false, true,
                 ));
                 let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &owner.queue, &owner.source, in_flight_tx, queued_tx, false, false,
+                    &status, &owner.core.queue, &owner.core.source, in_flight_tx, queued_tx, false, false,
                 ));
                 if let (
                     Some(unified_full_json),
@@ -382,14 +382,14 @@ pub fn run_with_options(
                     );
                 }
                 // Update reconnect snapshot.
-                *shared_queue.queue.lock().unwrap() = owner.queue.clone();
-                *shared_queue.source.lock().unwrap() = owner.source.clone();
+                *shared_queue.queue.lock().unwrap() = owner.core.queue.clone();
+                *shared_queue.source.lock().unwrap() = owner.core.source.clone();
                 // Settle playback intent if the reported index matches.
                 if let Some((connection_id, request_id, generation)) = owner.intents
                     .current
                     .as_ref()
                     .filter(|current| match &current.action {
-                        PlaybackIntentAction::Play { item_ids, .. } => owner.queue
+                        PlaybackIntentAction::Play { item_ids, .. } => owner.core.queue
                             .slots()
                             .get(clamped_idx)
                             .is_some_and(|slot| item_ids.iter().any(|id| id == slot.item.id())),
@@ -406,7 +406,7 @@ pub fn run_with_options(
                         )
                     })
                 {
-                    if owner.queue.slots().get(clamped_idx).is_some() {
+                    if owner.core.queue.slots().get(clamped_idx).is_some() {
                         if let Some(event) = owner.intents.applied_if_current(
                             connection_id,
                             request_id,
@@ -425,8 +425,8 @@ pub fn run_with_options(
                 season,
                 episode,
             }) => {
-                let active_idx = owner.queue.active_index().unwrap_or(0);
-                if let Some(slot) = owner.queue.slots().get(active_idx + 1) {
+                let active_idx = owner.core.queue.active_index().unwrap_or(0);
+                if let Some(slot) = owner.core.queue.slots().get(active_idx + 1) {
                     if let Some(emby) = slot.item.as_emby() {
                         player.send_command(PlayerCommand::NextUpShow {
                             item_id: emby.id.clone(),
@@ -446,7 +446,7 @@ pub fn run_with_options(
                 );
             }
             DaemonEvent::Player(PlayerEvent::QueueNextUp { next_idx }) => {
-                if let Some(slot) = owner.queue.slots().get(next_idx) {
+                if let Some(slot) = owner.core.queue.slots().get(next_idx) {
                     if let Some(emby) = slot.item.as_emby() {
                         player.send_command(PlayerCommand::NextUpShow {
                             item_id: emby.id.clone(),
@@ -561,8 +561,8 @@ pub fn run_with_options(
                         Some(&client),
                         &player,
                         audio_only,
-                        &mut owner.queue,
-                        &mut owner.source,
+                        &mut owner.core.queue,
+                        &mut owner.core.source,
                         &shared_queue,
                         &ctrl_clients,
                     );
@@ -574,7 +574,7 @@ pub fn run_with_options(
                     audiobookshelf_runtime
                         .as_ref()
                         .map(|runtime| runtime.generation),
-                    &mut owner.queue,
+                    &mut owner.core.queue,
                     &ctrl_clients,
                 );
             }
@@ -584,7 +584,7 @@ pub fn run_with_options(
                     audiobookshelf_runtime
                         .as_ref()
                         .map(|runtime| runtime.generation),
-                    &mut owner.queue,
+                    &mut owner.core.queue,
                     &ctrl_clients,
                 );
             }
@@ -605,8 +605,8 @@ pub fn run_with_options(
                                 &mut ws_send_tx,
                                 &client,
                                 &player,
-                                &mut owner.queue,
-                                &mut owner.source,
+                                &mut owner.core.queue,
+                                &mut owner.core.source,
                                 &shared_queue,
                                 &ctrl_clients,
                                 &merged_tx,
@@ -618,8 +618,8 @@ pub fn run_with_options(
                                     revision,
                                     &mut audiobookshelf_runtime,
                                     &player,
-                                    &mut owner.queue,
-                                    &mut owner.source,
+                                    &mut owner.core.queue,
+                                    &mut owner.core.source,
                                     &shared_queue,
                                     &ctrl_clients,
                                     &client,
@@ -743,11 +743,11 @@ pub fn run_with_options(
                         new_source,
                         &client,
                         &player,
-                        &mut owner.queue,
-                        &mut owner.source,
+                        &mut owner.core.queue,
+                        &mut owner.core.source,
                         &shared_queue,
                         &ctrl_clients,
-                        &owner.transitions,
+                        &owner.core.transitions,
                     );
                 }
             }

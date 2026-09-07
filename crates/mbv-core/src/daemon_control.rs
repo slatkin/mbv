@@ -52,19 +52,16 @@ fn handle_ctrl(
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
     audio_only: bool,
-    owner: &mut PlayerOwnerState,
+    owner: &mut DaemonPlayerOwner,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
     has_audiobookshelf: bool,
     merged_tx: &mpsc::Sender<DaemonEvent>,
     stay_alive: bool,
 ) {
-    let PlayerOwnerState {
-        queue,
-        source,
+    let DaemonPlayerOwner {
+        core: PlayerOwnerState { queue, source, transitions, .. },
         intents: playback_intents,
-        transitions,
-        observed_active_slot: _,
     } = &mut *owner;
     let has_emby = !client.lock().unwrap().token.is_empty();
     if matches!(cmd, CtrlCmd::RequestShutdown) {

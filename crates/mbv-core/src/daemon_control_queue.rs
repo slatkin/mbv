@@ -111,7 +111,7 @@ fn broadcast_queue_state(
     transitions: &crate::playback_transition::OwnerTransitionState,
 ) {
     let status = player.status.lock().unwrap().clone();
-    let (in_flight, queued_latest) = transition_summaries(transitions);
+    let (in_flight, queued_latest) = transitions.summaries();
 
     // ── Unified-queue peers, gate ABS episodes and books independently ──
     let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(

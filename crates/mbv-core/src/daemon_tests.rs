@@ -1,7 +1,8 @@
 use super::{
     all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws,
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
-    CtrlRequest, CtrlTransport, DaemonEvent, PlaybackIntentState, PlayerOwnerState,
+    CtrlRequest, CtrlTransport, DaemonEvent, DaemonPlayerOwner, PlaybackIntentState,
+    PlayerOwnerState,
     SharedQueueState,
 };
 use crate::api::EmbyItem;
@@ -257,7 +258,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
     let source = QueueSource::Unknown;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
-    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::TogglePause)),
         1,
@@ -274,7 +275,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         &dummy_merged_tx,
         false,
     );
-    let _queue = owner.queue;
+    let _queue = owner.core.queue;
 
     assert!(registry.lock().unwrap().has_driver());
     assert!(sender_rx.try_recv().is_err());
@@ -293,7 +294,7 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
     let source = QueueSource::Unknown;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
-    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![emby_qi("adopted", "Video", "Movie")],
@@ -314,7 +315,7 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
         &dummy_merged_tx,
         false,
     );
-    let queue = owner.queue;
+    let queue = owner.core.queue;
 
     assert_eq!(queue.len(), 1);
     assert_eq!(queue.slots()[0].item.id(), "adopted");
@@ -336,7 +337,7 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
     let source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
-    let mut owner = PlayerOwnerState { queue, source, ..Default::default() };
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![emby_qi("stale", "Video", "Movie")],
@@ -357,7 +358,7 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         &dummy_merged_tx,
         false,
     );
-    let queue = owner.queue;
+    let queue = owner.core.queue;
 
     assert_eq!(queue.len(), 1);
     assert_eq!(queue.slots()[0].item.id(), "existing");

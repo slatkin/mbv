@@ -58,6 +58,28 @@ impl OwnerTransitionState {
     pub fn replace_queued_latest(&mut self, transition: Transition) -> Option<Transition> {
         self.queued_latest.replace(transition)
     }
+
+    /// In-flight / queued-latest transition summaries for the owner snapshot
+    /// (design D5).
+    pub fn summaries(
+        &self,
+    ) -> (
+        Option<crate::ctrl::TransitionSummary>,
+        Option<crate::ctrl::TransitionSummary>,
+    ) {
+        (
+            self.in_flight.map(transition_summary),
+            self.queued_latest.map(transition_summary),
+        )
+    }
+}
+
+fn transition_summary(t: Transition) -> crate::ctrl::TransitionSummary {
+    crate::ctrl::TransitionSummary {
+        request_id: t.request_id,
+        generation: t.generation,
+        target_slot: t.target.raw(),
+    }
 }
 
 #[cfg(test)]
