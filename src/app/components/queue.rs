@@ -45,6 +45,7 @@ pub struct QueueComponent {
     area: Rect,
     geometry: QueueRenderGeometry,
     pending_slot: Option<QueueSlotId>,
+    drag_grab: Option<QueueSlotId>,
     throbber: Option<char>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle.
@@ -75,6 +76,7 @@ impl QueueComponent {
             area: Rect::default(),
             geometry: QueueRenderGeometry::default(),
             pending_slot: None,
+            drag_grab: None,
             throbber: None,
             mouse_gestures: MouseGestureState::new(),
             scope_regions: HitRegions::new(),
@@ -348,7 +350,7 @@ impl QueueComponent {
                 if !self.area.contains(at) {
                     return None;
                 }
-                self.claim_slot(at);
+                self.drag_grab = self.claim_slot(at);
                 Some(Msg::Shell(ShellRequest::QueueRowClick {
                     slot_id: self.list.selected_target().copied(),
                 }))
@@ -378,7 +380,23 @@ impl QueueComponent {
                     anchor: (mouse.column, mouse.row),
                 }))
             }
-            MouseGesture::Drag { .. } | MouseGesture::DragEnd => None,
+            MouseGesture::Drag { to, .. } => {
+                let grabbed = self.drag_grab?;
+                let resolved = self.list.resolve_point(self.area, to).copied()?;
+                if resolved == grabbed {
+                    return None;
+                }
+                self.list.select_target(&grabbed);
+                Some(Msg::Queue(QueueRequest::MoveTo {
+                    scope: self.scope,
+                    slot_id: grabbed,
+                    onto: resolved,
+                }))
+            }
+            MouseGesture::DragEnd => {
+                self.drag_grab = None;
+                None
+            }
         }
     }
 

@@ -112,6 +112,9 @@ mod playlists_component_tests;
 #[path = "queue_component_tests.rs"]
 mod queue_component_tests;
 #[cfg(test)]
+#[path = "queue_drag_component_tests.rs"]
+mod queue_drag_component_tests;
+#[cfg(test)]
 #[path = "save_playlist_component_tests.rs"]
 mod save_playlist_component_tests;
 #[cfg(test)]
