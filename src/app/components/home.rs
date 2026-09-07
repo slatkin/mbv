@@ -23,7 +23,7 @@ use super::media_list::{
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::render::HomeImagePaint;
 use crate::app::types_playback::HomeLatestSource;
@@ -480,9 +480,16 @@ impl HomeComponent {
                     return None;
                 }
                 self.move_local_cursor(delta);
-                (self.section == 0).then_some(Msg::Shell(ShellRequest::HomeContinueCursor {
-                    index: self.cursor(),
-                }))
+                if self.section == 0 {
+                    Some(Msg::Shell(ShellRequest::HomeContinueCursor {
+                        index: self.cursor(),
+                    }))
+                } else {
+                    // Return a framework-visible claim after mutating local
+                    // state; dropping the message would let the framework's
+                    // mutation be discarded by the mouse fold.
+                    Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                }
             }
             MouseGesture::Click(at) => {
                 if let Some(&section_idx) = self.pill_regions.resolve(at) {

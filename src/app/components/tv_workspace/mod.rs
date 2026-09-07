@@ -18,7 +18,7 @@ use super::inline_search::{InlineSearch, InlineSearchHost, InlineSearchMouse};
 use super::media_list::{MediaKind, MediaListRow, MediaSemanticState, WideMediaList};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, ShellRequest, TvHit};
+use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use super::user_event::UserEvent;
 #[cfg(test)]
 use crate::app::layout::LayoutMain;
@@ -413,7 +413,10 @@ impl TvWorkspaceComponent {
                     return None;
                 }
                 self.move_rows(delta);
-                None
+                // Return a framework-visible claim after mutating local state;
+                // dropping the message would let the framework's mutation be
+                // discarded by the mouse fold.
+                Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
             }
             MouseGesture::Click(at) => {
                 let hit = self.resolve_hit(at)?;
