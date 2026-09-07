@@ -48,29 +48,29 @@ When playback is active and the terminal width is 100 columns or more, the queue
 - **WHEN** the wide two-column layout is active
 - **THEN** the playback panel width SHALL equal the total column width minus the rendered visual-slot width minus the 2-cell gap
 
-### Requirement: Idle queue-only collapses card and panel into the queue list
+### Requirement: Idle queue-visible layouts collapse the card into the queue list
 
-When the layout is in queue-only state and no playback is active on any transport, the queue visual slot (artwork, placeholder, loading reservation, empty visualizer box) SHALL NOT be rendered and SHALL reserve zero rows, the playback panel SHALL NOT be rendered and SHALL reserve zero rows, and the queue panel SHALL occupy the rows both would have taken. The queue panel SHALL keep the single separator row it already places above itself; this requirement does not move the queue panel to the first row of the left column. Paused playback counts as active and SHALL keep both visuals. The artwork/visualizer selection SHALL persist while idle and take effect on the next playback; pressing `v` while idle SHALL NOT create a card rectangle.
+When the Queue panel is visible (in Both or queue-only state) and no playback is active on any transport, the queue visual slot (artwork, placeholder, loading reservation, or empty visualizer box) SHALL NOT be rendered and SHALL reserve zero rows. The Queue panel SHALL occupy the rows the card would have taken and SHALL keep the single separator row it already places above itself. In queue-only state, the playback panel SHALL also remain hidden and reserve zero rows; the existing two-panel playback panel remains governed by its normal layout. Paused playback counts as active and SHALL keep the card. The artwork/visualizer selection SHALL persist while idle and take effect on the next playback; pressing `v` while idle SHALL NOT create a card rectangle.
 
-#### Scenario: Idle queue-only reclaims the card and panel rows
+#### Scenario: Idle Queue panel reclaims card rows
 
-- **WHEN** the layout is in queue-only state with a non-empty queue and no playback is active
-- **THEN** no card rectangle and no playback panel SHALL be rendered above the queue, and the queue panel SHALL begin one row below the left column's content area, at the position the card occupied
+- **WHEN** the layout shows a non-empty Queue panel in Both or queue-only state and no playback is active
+- **THEN** no card rectangle SHALL be rendered above the Queue panel, and the Queue panel SHALL begin one row below the left column's content area, at the position the card occupied
 
-#### Scenario: Idle collapse holds at both widths
+#### Scenario: Idle collapse holds at every supported width
 
-- **WHEN** the layout is in queue-only state with no playback active, at a terminal width below 100 columns and at a width of 100 columns or more
-- **THEN** neither the stacked narrow panel nor the wide side-by-side panel SHALL render, at both the stored-mode route and the narrow mini-view route
+- **WHEN** the Queue panel is visible with no playback active, at a terminal width below 100 columns or at a width of 100 columns or more
+- **THEN** the queue card SHALL not render at either width, including the stored-mode Both route, the stored-mode queue-only route, and the narrow mini-view route
 
-#### Scenario: Playback start restores card and panel
+#### Scenario: Playback start restores the card
 
-- **WHEN** playback starts from the idle queue-only state
-- **THEN** the queue visual slot and playback panel SHALL render again in the active narrow or wide arrangement and the queue list SHALL move below them
+- **WHEN** playback starts from an idle layout that shows the Queue panel
+- **THEN** the queue visual slot SHALL render again in the applicable layout and the Queue panel SHALL move below it
 
-#### Scenario: Paused playback keeps visuals
+#### Scenario: Paused playback keeps the card
 
-- **WHEN** the layout is in queue-only state and playback is paused
-- **THEN** the queue visual slot and playback panel SHALL remain rendered
+- **WHEN** the Queue panel is visible and playback is paused
+- **THEN** the queue visual slot SHALL remain rendered
 
 ### Requirement: Wide layout playback panel height matches image height
 

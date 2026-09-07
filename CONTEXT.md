@@ -353,10 +353,10 @@ configurable interval.
 _Avoid_: idle ticker, RSS ticker, background feed, screensaver feed
 
 **Idle collapse**:
-The shell's queue-only behavior when fully idle: it removes the card and
-playback panel from the queue visual slot so the queue list occupies those rows.
-Paused playback remains visible, and a connected-but-not-playing remote session
-or cast keeps its playback panel.
+The shell's Queue-visible behavior when fully idle: it removes the card from the
+queue visual slot so the Queue list occupies those rows. In queue-only mode it
+also removes the in-queue playback panel. Paused playback remains visible, and
+a connected-but-not-playing remote session or cast keeps its playback panel.
 _Avoid_: idle hide, collapsed queue, empty player
 
 **Playback target**:

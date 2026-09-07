@@ -210,6 +210,34 @@ fn idle_queue_only_hides_card_and_panel_at_both_widths() {
 }
 
 #[test]
+fn idle_both_hides_card_and_reclaims_queue_rows() {
+    let width = 80;
+    let height = 60;
+    let mut idle = make_queue_app(5);
+    let idle_term = render_app_to_terminal(&mut idle, width, height);
+    let idle_layout = idle.layout.main;
+
+    assert_eq!(idle_layout.card.height, 0);
+    assert!(idle_layout.queue_area.height > 0);
+    let before_queue = buffer_to_string(&idle_term)
+        .lines()
+        .take(idle_layout.queue_area.y as usize)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(!before_queue.contains("On Now:"));
+
+    let mut active = make_queue_app(5);
+    active.player.status.lock().unwrap().active = true;
+    let _ = render_app_to_terminal(&mut active, width, height);
+
+    assert!(active.layout.main.card.height > 0);
+    assert!(
+        idle_layout.queue_area.height > active.layout.main.queue_area.height,
+        "idle queue must reclaim the card rows in Both mode"
+    );
+}
+
+#[test]
 fn idle_queue_only_reclaims_card_and_panel_rows_until_playback_starts() {
     let width = 80;
     let height = 60;

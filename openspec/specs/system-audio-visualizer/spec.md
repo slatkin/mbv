@@ -22,7 +22,7 @@ When the visualizer is selected during supported local playback, mbv SHALL captu
 
 ### Requirement: Queue card selects artwork or visualization
 
-mbv SHALL keep the artwork/visualizer queue-card selection session-local: every launch SHALL display artwork when available, and pressing unmodified `v` SHALL switch between those two contents without changing the queue card's reserved rectangle. When the layout is in queue-only state and no playback is active, the queue card SHALL NOT be rendered and SHALL reserve zero rows instead; the selection persists and takes effect on the next playback, and pressing `v` while idle SHALL NOT create a card rectangle.
+mbv SHALL keep the artwork/visualizer queue-card selection session-local: every launch SHALL display artwork when available, and pressing unmodified `v` SHALL switch between those two contents without changing the queue card's reserved rectangle. When the Queue panel is visible and no playback is active, the queue card SHALL NOT be rendered and SHALL reserve zero rows instead; the selection persists and takes effect on the next playback, and pressing `v` while idle SHALL NOT create a card rectangle.
 
 #### Scenario: Launch after selecting the visualizer
 
@@ -39,19 +39,14 @@ mbv SHALL keep the artwork/visualizer queue-card selection session-local: every 
 - **WHEN** the queue card is rendered, displays the visualizer, and the user presses unmodified `v`
 - **THEN** the same queue card rectangle displays the current queue artwork
 
-#### Scenario: No playback can supply samples
+#### Scenario: Idle queue-visible layout collapses the card
 
-- **WHEN** the visualizer is selected and no supported playback is active and the layout is not in queue-only state
-- **THEN** the queue card rectangle remains present with an empty visualizer
-
-#### Scenario: No playback in queue-only collapses the card
-
-- **WHEN** the visualizer is selected and the layout is in queue-only state and no playback is active
-- **THEN** no queue card rectangle SHALL be rendered and the queue list SHALL occupy those rows
+- **WHEN** the visualizer is selected, the Queue panel is visible, and no playback is active
+- **THEN** no queue card rectangle SHALL be rendered and the Queue panel SHALL occupy those rows
 
 #### Scenario: Idle visualizer selection captures no audio
 
-- **WHEN** the user presses `v` while the layout is in queue-only state with no playback active
+- **WHEN** the user presses `v` with no playback active
 - **THEN** mbv SHALL NOT start system-audio capture and SHALL NOT repaint on the visualizer's frame cadence
 
 #### Scenario: Selected item has no usable artwork
@@ -69,18 +64,18 @@ mbv SHALL keep the artwork/visualizer queue-card selection session-local: every 
 - **WHEN** terminal images are disabled and the user switches between artwork and the visualizer while the queue card is rendered
 - **THEN** the queue card keeps the same fallback rectangle, artwork selection renders no terminal image, the visualizer remains available, and mbv does not fetch artwork
 
-### Requirement: Idle queue-only issues no card image fetches
+### Requirement: Idle queue-visible layouts issue no card image fetches
 
-When the layout is in queue-only state and no playback is active, mbv SHALL NOT fetch the card artwork for the cursor-selected item and SHALL NOT prefetch neighbour artwork for the card, because no card is rendered. Fetching SHALL resume when playback starts or the layout leaves queue-only state.
+When the Queue panel is visible and no playback is active, mbv SHALL NOT fetch the card artwork for the cursor-selected item and SHALL NOT prefetch neighbour artwork for the card, because no card is rendered. Fetching SHALL resume when playback starts or the layout no longer shows the Queue panel.
 
 #### Scenario: Idle cursor movement fetches nothing
 
-- **WHEN** the layout is in queue-only state with no playback active and the queue cursor moves
+- **WHEN** the Queue panel is visible with no playback active and the queue cursor moves
 - **THEN** no card image fetch SHALL be issued for the newly selected item
 
 #### Scenario: First playing frame after cold idle reserves the full slot
 
-- **WHEN** playback starts in queue-only state before any card image has rendered this session
+- **WHEN** playback starts before any card image has rendered this session
 - **THEN** the queue card SHALL reserve its full uncached slot height while the first fetch is in flight and shrink to the image when it resolves
 
 ### Requirement: Visualizer has one embedded placement
