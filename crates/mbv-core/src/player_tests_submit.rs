@@ -176,6 +176,13 @@ fn submit_queue_cold_start_sets_active_before_spawning_thread() {
     assert_eq!(st.queue_len, 1);
     assert_eq!(st.current_idx, 0);
     assert_eq!(st.title, "Cold Feed");
+    drop(st);
+    // The cold path spawned a real player thread, which builds a live libmpv
+    // handle off the env lock and tries to load a remote URL. Without this it
+    // outlives the test: its fds and mpv config-dir reset land on whichever
+    // test runs next. Bounded join, never an unbounded one.
+    player.stop();
+    player.join_or_timeout(std::time::Duration::from_secs(5));
 }
 
 fn audiobookshelf_item() -> QueueItem {
