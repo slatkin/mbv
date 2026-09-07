@@ -3,8 +3,45 @@ use super::components::{
     QueueRequest,
 };
 use super::shell::Model;
-use super::{PanelFocus, QueueScope};
+use super::{PanelFocus, PlaybackState, QueueScope};
 use crate::app::notify_actions::ToastSeverity;
+use crate::app::render::QueueTitleModel;
+use mbv_core::playback_queue::QueueSlotId;
+
+/// The inputs `sync_queue` projects into the mounted `QueueComponent`. Equal
+/// fingerprints on consecutive ticks mean the row vec would rebuild to exactly
+/// the same content, so the rebuild is skipped (#675). The active row overlays
+/// live player ticks that never bump `QueueRevision`, so the active slot, a
+/// progress-% bucket, and paused ride alongside the revision.
+///
+// ponytail: a non-active row's watch-% badge is driven by `update_slot_item` /
+// `apply_progress`, which don't bump `QueueRevision`, so an idle badge change
+// can lag one structural mutation. Bump the revision in those mutators if that
+// staleness is ever visible.
+#[derive(PartialEq)]
+pub(in crate::app) struct QueueProjectionFingerprint {
+    revision: u64,
+    slot_count: usize,
+    scope: QueueScope,
+    active: bool,
+    active_idx: usize,
+    /// `pos * 100 / runtime`, clamped 0..=100; `u16::MAX` when no active row.
+    /// Changes at most ~100x per track, never per animation frame.
+    progress_bucket: u16,
+    paused: bool,
+    pending_slot: Option<QueueSlotId>,
+    title: QueueTitleModel,
+}
+
+/// The active row's progress bucket: whole-percent, so animation frames and
+/// sub-percent tick drift never invalidate the projection.
+fn progress_bucket(playback: PlaybackState) -> u16 {
+    if playback.active && playback.position_ticks > 0 && playback.runtime_ticks > 0 {
+        (playback.position_ticks * 100 / playback.runtime_ticks).clamp(0, 100) as u16
+    } else {
+        u16::MAX
+    }
+}
 
 impl Model {
     pub(super) fn sync_queue(&mut self) {
@@ -32,6 +69,39 @@ impl Model {
         }
 
         let scope = self.app.viewed_queue_scope();
+        let playback = self.app.displayed_queue_playback_state();
+        let pending_slot = self
+            .app
+            .queue_scope_is_playback(scope)
+            .then(|| self.app.pending_playback_slot())
+            .flatten();
+        let title = self.app.queue_title_model();
+        let title_area = self.app.layout.main.queue_title_area;
+
+        let fingerprint = {
+            let queue = self.app.queue_for_scope(scope);
+            QueueProjectionFingerprint {
+                revision: queue.revision().raw(),
+                slot_count: queue.slots().len(),
+                scope,
+                active: playback.active,
+                active_idx: playback.active_idx,
+                progress_bucket: progress_bucket(playback),
+                paused: playback.paused,
+                pending_slot,
+                title: title.clone(),
+            }
+        };
+        // `sync_queue` runs on every run-loop tick. When nothing the projection
+        // depends on changed and no authoritative cursor re-anchor is armed,
+        // rebuilding the row vec (slot clone + per-row `format!`) would only
+        // reproduce the current content -- skip it (#675).
+        if self.app.pending_queue_cursor_reanchor.is_none()
+            && self.last_queue_projection.as_ref() == Some(&fingerprint)
+        {
+            return;
+        }
+
         let slots = self.app.queue_for_scope(scope).slots().to_vec();
         // Re-anchor only for authoritative content changes; routine updates preserve
         // the component-owned cursor.
@@ -41,14 +111,7 @@ impl Model {
             }
             _ => QueueCursorUpdate::Preserve,
         };
-        let playback = self.app.displayed_queue_playback_state();
-        let pending_slot = self
-            .app
-            .queue_scope_is_playback(scope)
-            .then(|| self.app.pending_playback_slot())
-            .flatten();
-        let title = self.app.queue_title_model();
-        let title_area = self.app.layout.main.queue_title_area;
+        self.last_queue_projection = Some(fingerprint);
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
                 queue.set_pending_slot(pending_slot);
@@ -346,6 +409,34 @@ mod tests {
         model.sync_queue();
         assert_eq!(queue_cursor(&model), 1);
         assert!(model.app.pending_queue_cursor_reanchor.is_none());
+    }
+
+    #[test]
+    fn projection_gate_still_sees_a_queue_mutation() {
+        // The #675 fingerprint gate must not starve real content changes:
+        // a structural mutation bumps QueueRevision, so the next sync_queue
+        // rebuilds the rows even though the gate skipped the idle ticks before.
+        let mut app = make_app_stub();
+        app.player_tab.set_queue_items(emby_items(3), 0);
+        app.panel_focus = PanelFocus::Queue;
+        let mut model = Model::new(app);
+        model.sync_queue();
+        model.sync_queue(); // idle tick: gated
+        assert_eq!(queue_cursor(&model), 0);
+
+        // Select row 1, then reorder that slot to the end in place. This bumps
+        // QueueRevision but leaves slot count, scope, playback scalars and the
+        // title untouched -- so only `revision` in the fingerprint can catch it.
+        press_down(&mut model);
+        assert_eq!(queue_cursor(&model), 1);
+        let slot = model.app.player_tab.slot_id_at(1).unwrap();
+        model.app.player_tab.move_slot(slot, 2);
+        model.sync_queue();
+        assert_eq!(
+            queue_cursor(&model),
+            2,
+            "the gate rebuilt rows on a revision-only change"
+        );
     }
 
     #[test]

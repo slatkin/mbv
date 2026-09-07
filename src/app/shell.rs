@@ -120,6 +120,13 @@ pub struct Model {
     /// Shell-owned semantic Home section preference and one-time restore marker.
     pub(super) home_section_pref_semantic: Option<HomeLatestSource>,
     pub(super) home_section_pending: Option<HomeLatestSource>,
+    /// Fingerprint of the inputs `sync_queue` last projected into the mounted
+    /// `QueueComponent`. `sync_queue` runs every run-loop tick; rebuilding the
+    /// row vec (slot clone + per-row `format!`) on a tick where nothing the
+    /// projection depends on changed is pure waste (#675). The fingerprint
+    /// gates the rebuild: queue revision + viewed scope + active slot + a
+    /// progress-% bucket + paused + the title model.
+    pub(super) last_queue_projection: Option<super::shell_queue::QueueProjectionFingerprint>,
 }
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
@@ -380,6 +387,7 @@ impl Model {
             home_content: HomeContent::new(),
             home_section_pref_semantic: home_section.clone(),
             home_section_pending: home_section,
+            last_queue_projection: None,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other

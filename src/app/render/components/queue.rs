@@ -14,7 +14,7 @@ pub(in crate::app) struct QueueRenderGeometry {
     pub scope_remote_area: Rect,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 pub(in crate::app) struct QueueTitleModel {
     pub local_icon: String,
     pub local_label: String,

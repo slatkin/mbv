@@ -180,6 +180,11 @@ impl PlayerTab {
         self.queue.slots()
     }
 
+    /// Canonical queue revision, bumped on every structural queue mutation.
+    pub(super) fn revision(&self) -> mbv_core::playback_queue::QueueRevision {
+        self.queue.revision()
+    }
+
     /// Extract the `QueueItem` at the given slot index, if any.
     pub(super) fn item_at(&self, index: usize) -> Option<&QueueItem> {
         self.queue.slots().get(index).map(|slot| &slot.item)
