@@ -373,8 +373,7 @@ impl AudiobookshelfPodcastComponent {
                 if self.episode_selection.is_some() || !self.geometry.list_area.contains(at) {
                     return None;
                 }
-                let columns = self.geometry.columns.max(1) as i64;
-                self.move_cursor(delta * columns);
+                self.move_cursor(delta);
                 Some(self.show_move_request())
             }
             MouseGesture::Click(at) => {
