@@ -230,17 +230,11 @@ impl Model {
                 let Some(from) = self.select_queue_slot(scope, slot_id) else {
                     return;
                 };
-                let Some(to) = self
-                    .app
-                    .queue_for_scope(scope)
-                    .slots()
-                    .iter()
-                    .position(|slot| slot.slot_id == onto)
-                else {
+                let Some(to) = self.slot_index(scope, onto) else {
                     return;
                 };
                 if from != to {
-                    self.app.move_queue_item_to(from, to);
+                    self.app.move_queue_item_to(scope, from, to);
                 }
             }
             QueueRequest::Undo { scope } => {
@@ -353,16 +347,25 @@ impl Model {
         if scope == QueueScope::Remote && !self.app.has_direct_remote_queue() {
             return None;
         }
-        let index = self
-            .app
-            .queue_for_scope(scope)
-            .slots()
-            .iter()
-            .position(|slot| slot.slot_id == slot_id)?;
+        let index = self.slot_index(scope, slot_id)?;
         self.app.set_queue_scope(scope);
         self.app.set_panel_focus(PanelFocus::Queue);
         self.app.mark_queue_cursor_user_active();
         Some(index)
+    }
+
+    /// Position of `slot_id` in `scope`'s queue, if present. Pure lookup with
+    /// none of `select_queue_slot`'s scope/focus/hold-window side effects.
+    fn slot_index(
+        &self,
+        scope: QueueScope,
+        slot_id: mbv_core::playback_queue::QueueSlotId,
+    ) -> Option<usize> {
+        self.app
+            .queue_for_scope(scope)
+            .slots()
+            .iter()
+            .position(|slot| slot.slot_id == slot_id)
     }
 }
 
