@@ -43,6 +43,18 @@ pub enum DispatchDecision {
     Queued { superseded: Option<Transition> },
 }
 
+/// Outcome of [`OwnerTransitionState::settle`] (design D4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettleOutcome {
+    /// The observation settled the in-flight transition. If a transition was
+    /// queued behind it, it is now in-flight and the caller dispatches it.
+    Settled { dispatch_next: Option<Transition> },
+    /// The observation did not match the in-flight request identity + target
+    /// slot. Transition state is unchanged; observed playback still updates
+    /// elsewhere (design D3/D4).
+    Ignored,
+}
+
 /// Owner holder for desired-transition state. At most one transition is in
 /// flight to the Playback run; at most one newer transition is queued behind
 /// it (design D4).
@@ -50,6 +62,7 @@ pub enum DispatchDecision {
 pub struct OwnerTransitionState {
     in_flight: Option<Transition>,
     queued_latest: Option<Transition>,
+    next_local_id: u64,
 }
 
 impl OwnerTransitionState {
@@ -80,15 +93,37 @@ impl OwnerTransitionState {
         }
     }
 
-    /// Clear the settled in-flight transition and promote `queued_latest` into
-    /// its place, returning the promoted transition for the caller to dispatch.
-    ///
-    // task 3.3: real settlement must first confirm a Playback-run observation
-    // matching the in-flight request identity AND its target slot; this stub
-    // clears unconditionally and does not yet re-dispatch the promoted value.
-    pub fn settle_in_flight(&mut self) -> Option<Transition> {
-        self.in_flight = self.queued_latest.take();
-        self.in_flight
+    /// Mint a request identity for an owner-originated transition (one that
+    /// carries no client request id, e.g. `UnifiedQueuePlaySlot`).
+    pub fn mint_local_id(&mut self) -> (PlaybackRequestId, PlaybackGeneration) {
+        self.next_local_id += 1;
+        (self.next_local_id, self.next_local_id)
+    }
+
+    /// Settle only when BOTH the observed request identity and the observed
+    /// slot match the in-flight transition (design D4). On match, clear
+    /// in-flight, promote `queued_latest` into it, and return it for dispatch.
+    pub fn settle(
+        &mut self,
+        observed_request_id: PlaybackRequestId,
+        observed_slot: QueueSlotId,
+    ) -> SettleOutcome {
+        match self.in_flight {
+            Some(t) if t.request_id == observed_request_id && t.target == observed_slot => {
+                self.in_flight = self.queued_latest.take();
+                SettleOutcome::Settled {
+                    dispatch_next: self.in_flight,
+                }
+            }
+            _ => SettleOutcome::Ignored,
+        }
+    }
+
+    /// Drop both transitions: a queue-replacing command deliberately
+    /// interrupts anything in flight or queued behind it.
+    pub fn reset(&mut self) {
+        self.in_flight = None;
+        self.queued_latest = None;
     }
 
     /// Replace the queued-latest transition, returning the displaced one (its
@@ -196,8 +231,32 @@ mod tests {
         state.accept(a);
         state.accept(b);
 
-        assert_eq!(state.settle_in_flight(), Some(b));
+        assert_eq!(
+            state.settle(a.request_id, a.target),
+            SettleOutcome::Settled {
+                dispatch_next: Some(b)
+            }
+        );
         assert_eq!(state.in_flight(), Some(b));
         assert_eq!(state.queued_latest(), None);
+    }
+
+    // An older observation may still update observed playback, but it must not
+    // settle or overwrite the newer in-flight request (task 3.3).
+    #[test]
+    fn settle_ignores_observation_with_a_stale_identity() {
+        let mut state = OwnerTransitionState::default();
+        let slot = QueueSlotId::from_raw(1);
+        let current = Transition::new(7, 7, slot);
+        state.accept(current);
+
+        // Same target slot, older request id.
+        assert_eq!(state.settle(6, slot), SettleOutcome::Ignored);
+        // Right request id, wrong slot.
+        assert_eq!(
+            state.settle(7, QueueSlotId::from_raw(2)),
+            SettleOutcome::Ignored
+        );
+        assert_eq!(state.in_flight(), Some(current));
     }
 }

@@ -418,6 +418,84 @@ struct DaemonPlayerOwner {
     /// kept here so the event loop owns one struct. Meaningless in Bare mode,
     /// so it stays daemon-side.
     intents: PlaybackIntentState,
+    /// Origin client of the transition currently in `core.transitions
+    /// .queued_latest` (there is only ever one). Routes the `Superseded` event
+    /// when it is displaced. task 3.5 folds transition/intent identity tracking
+    /// together.
+    queued_transition_origin: Option<(PlaybackRequestId, CtrlClientId)>,
+}
+
+/// Route one slot-jump transition through the owner's one-in-flight dispatch
+/// gate (design D4): dispatch it now, or hold it behind the in-flight one and
+/// report `Superseded` for whatever queued transition it displaced.
+fn dispatch_slot_jump(
+    transitions: &mut crate::playback_transition::OwnerTransitionState,
+    queued_origin: &mut Option<(PlaybackRequestId, CtrlClientId)>,
+    ctrl_clients: &ClientRegistry,
+    player: &Player,
+    client_id: CtrlClientId,
+    transition: crate::playback_transition::Transition,
+) {
+    match transitions.accept(transition) {
+        crate::playback_transition::DispatchDecision::DispatchNow(t) => {
+            player.send_command(PlayerCommand::JumpTo {
+                slot_id: t.target,
+                request_id: t.request_id,
+                generation: t.generation,
+            });
+        }
+        crate::playback_transition::DispatchDecision::Queued { superseded } => {
+            if let (Some(s), Some((origin_request_id, origin_client))) = (superseded, *queued_origin)
+            {
+                if origin_request_id == s.request_id {
+                    ctrl_clients.lock().unwrap().send_to_client(
+                        origin_client,
+                        &CtrlEvent::PlaybackIntent(PlaybackIntentEvent {
+                            request_id: s.request_id,
+                            generation: s.generation,
+                            outcome: PlaybackIntentOutcome::Superseded,
+                        }),
+                    );
+                }
+            }
+            *queued_origin = Some((transition.request_id, client_id));
+        }
+    }
+}
+
+/// Drop any in-flight/queued transition: the caller is issuing a
+/// queue-replacing playback command, which deliberately interrupts them.
+fn reset_slot_jumps(
+    transitions: &mut crate::playback_transition::OwnerTransitionState,
+    queued_origin: &mut Option<(PlaybackRequestId, CtrlClientId)>,
+) {
+    transitions.reset();
+    *queued_origin = None;
+}
+
+/// Settle the in-flight transition against a Playback-run observation and, if
+/// a newer transition was queued behind it, dispatch that one now (task 3.3).
+fn settle_and_redispatch(
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    observed_request_id: PlaybackRequestId,
+    observed_slot: QueueSlotId,
+) {
+    let crate::playback_transition::SettleOutcome::Settled { dispatch_next } = owner
+        .core
+        .transitions
+        .settle(observed_request_id, observed_slot)
+    else {
+        return;
+    };
+    owner.queued_transition_origin = None;
+    if let Some(next) = dispatch_next {
+        player.send_command(PlayerCommand::JumpTo {
+            slot_id: next.target,
+            request_id: next.request_id,
+            generation: next.generation,
+        });
+    }
 }
 
 /// Snapshot of the daemon's canonical queue used to seed newly-connecting

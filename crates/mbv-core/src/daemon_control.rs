@@ -62,6 +62,7 @@ fn handle_ctrl(
     let DaemonPlayerOwner {
         core: PlayerOwnerState { queue, source, transitions, .. },
         intents: playback_intents,
+        queued_transition_origin,
     } = &mut *owner;
     let has_emby = !client.lock().unwrap().token.is_empty();
     if matches!(cmd, CtrlCmd::RequestShutdown) {
@@ -172,6 +173,7 @@ fn handle_ctrl(
                 has_audiobookshelf,
             );
             player.set_initial_queue(&items, next_cursor);
+            reset_slot_jumps(transitions, queued_transition_origin);
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             *source = new_source;
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
@@ -192,6 +194,7 @@ fn handle_ctrl(
                     start_idx.min(queue_items.len().saturating_sub(1))
                 };
                 *queue = PlaybackQueue::from_queue_items(queue_items, Some(next_cursor));
+                reset_slot_jumps(transitions, queued_transition_origin);
                 broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
                 player.send_command(PlayerCommand::SubmitQueue {
                     items: queue
@@ -208,6 +211,7 @@ fn handle_ctrl(
         },
         CtrlCmd::Stop => {
             player.stop();
+            reset_slot_jumps(transitions, queued_transition_origin);
         }
         CtrlCmd::PlaybackIntent(intent) => {
             let pipe_output = client.lock().unwrap().config.audio_pipe_enabled;
@@ -260,7 +264,10 @@ fn handle_ctrl(
                         });
                     });
                 }
-                crate::ctrl::PlaybackIntentAction::Stop => player.stop(),
+                crate::ctrl::PlaybackIntentAction::Stop => {
+                    player.stop();
+                    reset_slot_jumps(transitions, queued_transition_origin);
+                }
                 crate::ctrl::PlaybackIntentAction::SetPaused { paused } => {
                     if player.status.lock().unwrap().paused != paused {
                         player.send_command(PlayerCommand::TogglePause);
@@ -270,11 +277,18 @@ fn handle_ctrl(
                     if let Some(idx) = player.status.lock().unwrap().next_idx() {
                         if let Some(slot_id) = queue.slots().get(idx).map(|s| s.slot_id) {
                             playback_intents.set_target_idx(intent.request_id, idx);
-                            player.send_command(PlayerCommand::JumpTo {
-                                slot_id,
-                                request_id: intent.request_id,
-                                generation: intent.generation,
-                            });
+                            dispatch_slot_jump(
+                                transitions,
+                                queued_transition_origin,
+                                ctrl_clients,
+                                player,
+                                client_id,
+                                crate::playback_transition::Transition::new(
+                                    intent.request_id,
+                                    intent.generation,
+                                    slot_id,
+                                ),
+                            );
                         }
                     }
                 }
@@ -282,11 +296,18 @@ fn handle_ctrl(
                     if let Some(idx) = player.status.lock().unwrap().previous_idx() {
                         if let Some(slot_id) = queue.slots().get(idx).map(|s| s.slot_id) {
                             playback_intents.set_target_idx(intent.request_id, idx);
-                            player.send_command(PlayerCommand::JumpTo {
-                                slot_id,
-                                request_id: intent.request_id,
-                                generation: intent.generation,
-                            });
+                            dispatch_slot_jump(
+                                transitions,
+                                queued_transition_origin,
+                                ctrl_clients,
+                                player,
+                                client_id,
+                                crate::playback_transition::Transition::new(
+                                    intent.request_id,
+                                    intent.generation,
+                                    slot_id,
+                                ),
+                            );
                         }
                     }
                 }
@@ -347,6 +368,7 @@ fn handle_ctrl(
                 return;
             }
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
+            reset_slot_jumps(transitions, queued_transition_origin);
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
             // `send_command` alone only reaches an already-running mpv
             // thread; on a freshly started daemon no thread exists yet, so
@@ -446,7 +468,12 @@ fn handle_ctrl(
                         start_idx: 0,
                     });
                     player.stop();
+                    reset_slot_jumps(transitions, queued_transition_origin);
                 } else {
+                    // Removing the playing slot forces a track change that
+                    // carries no awaited transition identity, so anything in
+                    // flight can never settle: interrupt it deliberately.
+                    reset_slot_jumps(transitions, queued_transition_origin);
                     player.send_command(PlayerCommand::QueueRemove(sid));
                 }
             } else {
@@ -478,12 +505,17 @@ fn handle_ctrl(
             match queue.set_active_slot(sid) {
                 crate::playback_queue::QueueMutationResult::Applied(()) => {
                     broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
-                    // task 3.1-daemon: real identity when UnifiedQueuePlaySlot routes through core.transitions
-                    player.send_command(PlayerCommand::JumpTo {
-                        slot_id: sid,
-                        request_id: 0,
-                        generation: 0,
-                    });
+                    // No client request id on this command, so the owner mints
+                    // one to correlate the settling observation.
+                    let (request_id, generation) = transitions.mint_local_id();
+                    dispatch_slot_jump(
+                        transitions,
+                        queued_transition_origin,
+                        ctrl_clients,
+                        player,
+                        client_id,
+                        crate::playback_transition::Transition::new(request_id, generation, sid),
+                    );
                 }
                 crate::playback_queue::QueueMutationResult::NotFound => {
                     reject_command(
@@ -505,6 +537,7 @@ fn handle_ctrl(
                 start_idx: 0,
             });
             player.stop();
+            reset_slot_jumps(transitions, queued_transition_origin);
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
         }
     }

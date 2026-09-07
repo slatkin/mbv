@@ -384,6 +384,13 @@ pub fn run_with_options(
                 // Update reconnect snapshot.
                 *shared_queue.queue.lock().unwrap() = owner.core.queue.clone();
                 *shared_queue.source.lock().unwrap() = owner.core.source.clone();
+                // Settle the desired transition and release anything queued
+                // behind it (task 3.3).
+                if let (Some((observed_request_id, _)), Some(observed_slot)) =
+                    (transition, resolved_slot_id)
+                {
+                    settle_and_redispatch(&mut owner, &player, observed_request_id, observed_slot);
+                }
                 // Settle playback intent if the reported index matches.
                 if let Some((connection_id, request_id, generation)) = owner.intents
                     .current
@@ -736,6 +743,12 @@ pub fn run_with_options(
                         .send_to_client(client_id, &CtrlEvent::PipePlaybackStatus(status));
                 }
                 if let Ok(fetched_items) = fetched {
+                    // A resolved Play replaces the queue: it deliberately
+                    // interrupts any in-flight or queued slot jump.
+                    reset_slot_jumps(
+                        &mut owner.core.transitions,
+                        &mut owner.queued_transition_origin,
+                    );
                     play_resolved_items(
                         fetched_items,
                         start_idx,
