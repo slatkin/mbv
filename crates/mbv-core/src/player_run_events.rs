@@ -163,9 +163,9 @@ impl PlaybackRun {
                 .collect();
             for slot_id in removed_slot_ids {
                 if self.active_slot_id() == Some(slot_id) {
-                    let _ = self.queue.remove_active_slot_confirmed(slot_id);
+                    self.queue.remove_active_slot_confirmed(slot_id);
                 } else {
-                    let _ = self.queue.remove_slot(slot_id);
+                    self.queue.remove_slot(slot_id);
                 }
             }
             self.refresh_current_idx_from_queue();

@@ -11,6 +11,7 @@ pub mod ctrl;
 pub mod daemon;
 pub mod id_types;
 pub use id_types::{EmbySessionId, ItemId, MediaSourceId};
+pub mod playback_execution_sequence;
 pub mod playback_queue;
 pub mod playback_transition;
 pub mod player;

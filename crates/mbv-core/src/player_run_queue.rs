@@ -155,10 +155,7 @@ impl PlaybackRun {
         let Some(slot_id) = self.slot_id_at(idx) else {
             return false;
         };
-        if !matches!(
-            self.queue.set_active_slot(slot_id),
-            crate::playback_queue::QueueMutationResult::Applied(())
-        ) {
+        if !self.queue.set_active_slot(slot_id) {
             return false;
         }
         self.current_idx = idx;
@@ -400,7 +397,15 @@ impl PlaybackRun {
         audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
         prepared_source: Option<PreparedSource>,
     ) -> Self {
-        let queue = PlaybackQueue::from_queue_items(items, Some(start_idx));
+        // Owner identity for the initial sequence is assigned here, caller-side:
+        // ids 1..=items.len() in order. The execution sequence never mints.
+        let paired: Vec<(QueueSlotId, QueueItem)> = items
+            .into_iter()
+            .enumerate()
+            .map(|(i, item)| (QueueSlotId::from_raw(i as u64 + 1), item))
+            .collect();
+        let active_slot_id = paired.get(start_idx).map(|(id, _)| *id);
+        let queue = ExecutionSequence::from_slot_items(paired, active_slot_id);
         Self::init_from_queue(
             queue,
             start_idx,
@@ -422,7 +427,7 @@ impl PlaybackRun {
 
     #[allow(clippy::too_many_arguments)]
     fn init_from_queue(
-        queue: PlaybackQueue,
+        queue: ExecutionSequence,
         start_idx: usize,
         origin: PlaybackOrigin,
         reporter: SessionReporter,

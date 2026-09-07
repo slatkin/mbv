@@ -71,15 +71,15 @@ impl PlaybackRun {
                                 if self.select_active_slot(next, mpv).is_err() {
                                     return cancel_stop;
                                 }
-                                let _ = self.queue.remove_slot(slot_id);
+                                self.queue.remove_slot(slot_id);
                             } else {
                                 self.close_prepared_source();
-                                let _ = self.queue.remove_active_slot_confirmed(slot_id);
+                                self.queue.remove_active_slot_confirmed(slot_id);
                                 let _ = mpv.command("playlist-clear", &[]);
                             }
                             self.refresh_current_idx_from_queue();
                         } else {
-                            let _ = self.queue.remove_slot(slot_id);
+                            self.queue.remove_slot(slot_id);
                             self.refresh_current_idx_from_queue();
                         }
                         return cancel_stop;
@@ -87,9 +87,9 @@ impl PlaybackRun {
                     let _ = mpv.command("playlist-remove", &[&idx.to_string()]);
                     if active_slot_id == Some(slot_id) {
                         self.close_prepared_source();
-                        let _ = self.queue.remove_active_slot_confirmed(slot_id);
+                        self.queue.remove_active_slot_confirmed(slot_id);
                     } else {
-                        let _ = self.queue.remove_slot(slot_id);
+                        self.queue.remove_slot(slot_id);
                     }
                     self.refresh_current_idx_from_queue();
                     if self.forced_slot_id == Some(slot_id) {
@@ -222,7 +222,13 @@ impl PlaybackRun {
         if self.active_file {
             let paired = new_items
                 .into_iter()
-                .map(|item| (self.queue.mint_slot_id(), QueueItem::Emby(Box::new(item))))
+                .enumerate()
+                .map(|(i, item)| {
+                    (
+                        QueueSlotId::from_raw(i as u64 + 1),
+                        QueueItem::Emby(Box::new(item)),
+                    )
+                })
                 .collect();
             self.replace_with_queue_items(paired, start_idx, mpv, progress);
             return;
@@ -235,7 +241,7 @@ impl PlaybackRun {
             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
             let _ = mpv.command("playlist-clear", &[]);
             self.origin = PlaybackOrigin::Queue;
-            self.queue = PlaybackQueue::default();
+            self.queue = ExecutionSequence::empty();
             self.current_idx = 0;
             self.sync_status_position();
             self.last_valid_pos = 0;
@@ -280,7 +286,19 @@ impl PlaybackRun {
         self.pending_initial_playlist_layout = false;
 
         self.origin = PlaybackOrigin::Queue;
-        self.queue = PlaybackQueue::from_items(new_items, Some(start_idx));
+        // Caller-side identity for the replacement sequence: ids 1..=len.
+        let paired: Vec<(QueueSlotId, QueueItem)> = new_items
+            .into_iter()
+            .enumerate()
+            .map(|(i, item)| {
+                (
+                    QueueSlotId::from_raw(i as u64 + 1),
+                    QueueItem::Emby(Box::new(item)),
+                )
+            })
+            .collect();
+        let active_slot_id = paired.get(start_idx).map(|(id, _)| *id);
+        self.queue = ExecutionSequence::from_slot_items(paired, active_slot_id);
         self.current_idx = start_idx;
         self.load_active_item_state();
         // stop_report stays Sent until load_state drains to Ready in on_end_file,
@@ -382,7 +400,11 @@ impl PlaybackRun {
         }
         *progress = spawn_progress_reporter(self.reporter.clone());
 
-        self.queue = PlaybackQueue::from_items(vec![item.as_ref().clone()], Some(0));
+        let slot_id = QueueSlotId::from_raw(1);
+        self.queue = ExecutionSequence::from_slot_items(
+            vec![(slot_id, QueueItem::Emby(Box::new(item.as_ref().clone())))],
+            Some(slot_id),
+        );
         self.current_idx = 0;
         self.load_active_item_state();
         self.stop_report = StopReport::NotSent;
@@ -503,8 +525,7 @@ impl PlaybackRun {
         let active_guid = active_item.id().to_string();
         let active_title = active_item.title().to_string();
         let active_slot_id = items.get(start_idx).map(|(id, _)| *id);
-        self.queue =
-            PlaybackQueue::from_slot_items(items, active_slot_id, QueueRevision::default());
+        self.queue = ExecutionSequence::from_slot_items(items, active_slot_id);
         self.current_idx = start_idx;
         self.load_active_item_state();
         self.begin_item_lifecycle();
@@ -585,8 +606,7 @@ impl PlaybackRun {
         self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
         progress.stop_and_join(self.progress_join_budget());
         let active_slot_id = items.get(start_idx).map(|(id, _)| *id);
-        self.queue =
-            PlaybackQueue::from_slot_items(items, active_slot_id, QueueRevision::default());
+        self.queue = ExecutionSequence::from_slot_items(items, active_slot_id);
         self.current_idx = start_idx;
         self.active_file = true;
         if let Err(error) = self.install_active_projection(mpv, prepared, &active_item) {
@@ -647,8 +667,7 @@ impl PlaybackRun {
 
         if !items.is_empty() {
             let active_slot_id = items.get(start_idx).map(|(id, _)| *id);
-            self.queue =
-                PlaybackQueue::from_slot_items(items, active_slot_id, QueueRevision::default());
+            self.queue = ExecutionSequence::from_slot_items(items, active_slot_id);
         }
         self.current_idx = start_idx;
         self.active_file = true;

@@ -425,7 +425,10 @@ fn standalone_fresh_start_preserves_saved_position() {
 
     session.origin = PlaybackOrigin::Standalone;
     let position_ticks = item.playback_position_ticks;
-    session.queue = PlaybackQueue::from_items(vec![item], Some(0));
+    session.queue = ExecutionSequence::from_slot_items(
+        vec![(QueueSlotId::from_raw(1), QueueItem::Emby(Box::new(item)))],
+        Some(QueueSlotId::from_raw(1)),
+    );
     session.current_idx = 0;
 
     session.load_active_item_state();
@@ -443,7 +446,10 @@ fn queue_slot_activation_preserves_saved_position() {
     let position_ticks = item.playback_position_ticks;
 
     session.origin = PlaybackOrigin::Queue;
-    session.queue = PlaybackQueue::from_items(vec![item], Some(0));
+    session.queue = ExecutionSequence::from_slot_items(
+        vec![(QueueSlotId::from_raw(1), QueueItem::Emby(Box::new(item)))],
+        Some(QueueSlotId::from_raw(1)),
+    );
     session.current_idx = 0;
 
     session.load_active_item_state();

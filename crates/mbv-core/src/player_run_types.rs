@@ -13,7 +13,7 @@ struct PlaybackRun {
     subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     server_url: String,
     token: String,
-    queue: PlaybackQueue,
+    queue: ExecutionSequence,
     audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
     active_lifecycle: ActiveItemLifecycle,
     active_file: bool,

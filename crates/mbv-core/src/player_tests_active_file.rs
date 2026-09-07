@@ -57,7 +57,8 @@ fn abs_book_item() -> QueueItem {
 #[test]
 fn failed_eager_transition_preserves_canonical_queue_and_mode() {
     let (mut run, _) = make_queue_session_for_pos_tests(1);
-    let active_abs = run.queue.append(abs_item());
+    let active_abs = QueueSlotId::from_raw(1_000);
+    run.queue.append_with_id(active_abs, abs_item());
     let _ = run.queue.set_active_slot(active_abs);
     run.refresh_current_idx_from_queue();
     let old_slots: Vec<_> = run.queue.slots().iter().map(|slot| slot.slot_id).collect();
