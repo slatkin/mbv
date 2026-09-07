@@ -525,15 +525,10 @@ impl App {
                             let transition = mbv_core::playback_transition::Transition::new(
                                 request_id, generation, slot_id,
                             );
-                            if matches!(
-                                self.bare_owner.accept_local_transition(transition),
-                                mbv_core::playback_transition::DispatchDecision::DispatchNow(_)
-                            ) {
-                                self.player.send_command(PlayerCommand::JumpTo {
-                                    slot_id,
-                                    request_id,
-                                    generation,
-                                });
+                            if let mbv_core::playback_transition::DispatchDecision::DispatchNow(t) =
+                                self.bare_owner.accept_local_transition(transition)
+                            {
+                                self.player.send_command(t.into_jump());
                             }
                         }
                     }

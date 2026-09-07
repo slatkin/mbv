@@ -482,8 +482,6 @@ impl PlaybackRun {
         if initialize_load_state {
             self.load_state = LoadState::begin_single();
             self.pending_initial_playlist_layout = false;
-        }
-        if initialize_load_state {
             progress.stop_and_join(self.progress_join_budget());
         }
         if let Some(emby) = active_as_emby {

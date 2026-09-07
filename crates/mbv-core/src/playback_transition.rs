@@ -38,6 +38,16 @@ impl Transition {
             target,
         }
     }
+
+    /// The in-process `JumpTo` command that dispatches this transition to the
+    /// Playback run, carrying its correlated request identity (design D4).
+    pub fn into_jump(self) -> crate::player::PlayerCommand {
+        crate::player::PlayerCommand::JumpTo {
+            slot_id: self.target,
+            request_id: self.request_id,
+            generation: self.generation,
+        }
+    }
 }
 
 /// Outcome of [`OwnerTransitionState::accept`] (design D4).

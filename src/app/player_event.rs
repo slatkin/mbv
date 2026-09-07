@@ -15,11 +15,7 @@ impl App {
         else {
             return false;
         };
-        self.player.send_command(PlayerCommand::JumpTo {
-            slot_id: next.target,
-            request_id: next.request_id,
-            generation: next.generation,
-        });
+        self.player.send_command(next.into_jump());
         true
     }
 
@@ -289,11 +285,7 @@ impl App {
                             .bare_owner
                             .settle_local_transition(request_id, target_slot_id)
                         {
-                            self.player.send_command(PlayerCommand::JumpTo {
-                                slot_id: next.target,
-                                request_id: next.request_id,
-                                generation: next.generation,
-                            });
+                            self.player.send_command(next.into_jump());
                         }
                     }
                 }
@@ -373,15 +365,10 @@ impl App {
                             generation,
                             slot_id,
                         );
-                        if matches!(
-                            self.bare_owner.accept_local_transition(transition),
-                            mbv_core::playback_transition::DispatchDecision::DispatchNow(_)
-                        ) {
-                            self.player.send_command(PlayerCommand::JumpTo {
-                                slot_id,
-                                request_id,
-                                generation,
-                            });
+                        if let mbv_core::playback_transition::DispatchDecision::DispatchNow(t) =
+                            self.bare_owner.accept_local_transition(transition)
+                        {
+                            self.player.send_command(t.into_jump());
                         }
                         self.playback_queue_mut().queue_cursor = idx;
                         self.flash(label, ToastSeverity::Neutral);

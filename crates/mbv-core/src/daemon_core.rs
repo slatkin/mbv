@@ -374,11 +374,7 @@ fn dispatch_slot_jump(
 ) {
     match transitions.accept(transition) {
         crate::playback_transition::DispatchDecision::DispatchNow(t) => {
-            player.send_command(PlayerCommand::JumpTo {
-                slot_id: t.target,
-                request_id: t.request_id,
-                generation: t.generation,
-            });
+            player.send_command(t.into_jump());
         }
         crate::playback_transition::DispatchDecision::Queued { superseded } => {
             if let (Some(s), Some((origin_request_id, origin_client))) = (superseded, *queued_origin)
@@ -430,11 +426,7 @@ fn settle_and_redispatch(
     };
     owner.queued_transition_origin = None;
     if let Some(next) = dispatch_next {
-        player.send_command(PlayerCommand::JumpTo {
-            slot_id: next.target,
-            request_id: next.request_id,
-            generation: next.generation,
-        });
+        player.send_command(next.into_jump());
     }
 }
 
@@ -480,11 +472,7 @@ fn expire_and_redispatch(
         }
     }
     if let Some(next) = dispatch_next {
-        player.send_command(PlayerCommand::JumpTo {
-            slot_id: next.target,
-            request_id: next.request_id,
-            generation: next.generation,
-        });
+        player.send_command(next.into_jump());
     }
     // Abandoning / promoting a transition changed desired state; republish.
     broadcast_queue_state(

@@ -95,8 +95,6 @@ impl PlayerOwnerState {
         self.observed_active_slot
     }
 
-    /// In-flight / queued-latest transition summaries for the owner snapshot
-    /// (design D5).
     /// Mint an owner-local transition identity for Bare-mode playback.
     pub fn mint_local_transition(
         &mut self,
@@ -131,15 +129,6 @@ impl PlayerOwnerState {
 
     pub fn reset_local_transitions(&mut self) {
         self.transitions.reset();
-    }
-
-    pub fn transition_summaries(
-        &self,
-    ) -> (
-        Option<crate::ctrl::TransitionSummary>,
-        Option<crate::ctrl::TransitionSummary>,
-    ) {
-        self.transitions.summaries()
     }
 }
 

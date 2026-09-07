@@ -258,46 +258,33 @@ fn handle_ctrl(
                         player.send_command(PlayerCommand::TogglePause);
                     }
                 }
-                crate::ctrl::PlaybackIntentAction::Next => {
-                    if let Some(idx) = player.status.lock().unwrap().next_idx() {
-                        if let Some(slot_id) = queue.slots().get(idx).map(|s| s.slot_id) {
-                            dispatch_slot_jump(
-                                transitions,
-                                queued_transition_origin,
-                                ctrl_clients,
-                                player,
-                                shared_queue,
-                                queue,
-                                source,
-                                client_id,
-                                crate::playback_transition::Transition::new(
-                                    intent.request_id,
-                                    intent.generation,
-                                    slot_id,
-                                ),
-                            );
+                action @ (crate::ctrl::PlaybackIntentAction::Next
+                | crate::ctrl::PlaybackIntentAction::Previous) => {
+                    let idx = {
+                        let status = player.status.lock().unwrap();
+                        match action {
+                            crate::ctrl::PlaybackIntentAction::Previous => status.previous_idx(),
+                            _ => status.next_idx(),
                         }
-                    }
-                }
-                crate::ctrl::PlaybackIntentAction::Previous => {
-                    if let Some(idx) = player.status.lock().unwrap().previous_idx() {
-                        if let Some(slot_id) = queue.slots().get(idx).map(|s| s.slot_id) {
-                            dispatch_slot_jump(
-                                transitions,
-                                queued_transition_origin,
-                                ctrl_clients,
-                                player,
-                                shared_queue,
-                                queue,
-                                source,
-                                client_id,
-                                crate::playback_transition::Transition::new(
-                                    intent.request_id,
-                                    intent.generation,
-                                    slot_id,
-                                ),
-                            );
-                        }
+                    };
+                    if let Some(slot_id) =
+                        idx.and_then(|idx| queue.slots().get(idx).map(|s| s.slot_id))
+                    {
+                        dispatch_slot_jump(
+                            transitions,
+                            queued_transition_origin,
+                            ctrl_clients,
+                            player,
+                            shared_queue,
+                            queue,
+                            source,
+                            client_id,
+                            crate::playback_transition::Transition::new(
+                                intent.request_id,
+                                intent.generation,
+                                slot_id,
+                            ),
+                        );
                     }
                 }
             }
