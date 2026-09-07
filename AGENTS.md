@@ -139,6 +139,7 @@ coverage.
 * architecture: `ast-grep scan`
 * size: `make check-code-file-lines`
 * format: `cargo fmt`
+* anything web related: `ketch` not curl
 
 Rustfmt: stock edition-2021, max-width-100; run per Rust change, accept all
 reflow, never revert fmt output; `cargo fmt --all -- --check` = read-only
