@@ -242,7 +242,7 @@ impl App {
             self.flash("No playable items in playlist".into(), ToastSeverity::Error);
             return;
         }
-        let action = PendingQueueAction::PlayItems {
+        let action = PendingQueueAction::LoadItems {
             items: playable,
             start_idx: 0,
             source: crate::config::QueueSource::Playlist {

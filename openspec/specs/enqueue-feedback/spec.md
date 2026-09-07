@@ -4,7 +4,7 @@
 Defines user-visible feedback for queue enqueue actions so successful additions stay quiet while failures remain actionable.
 ## Requirements
 ### Requirement: Successful enqueue is silent
-The system SHALL NOT display an in-app success toast or emit a desktop success notification when an enqueue action successfully adds one or more items to the visible queue. The updated queue SHALL provide the visible confirmation of the action.
+The system SHALL NOT display an in-app success toast or emit a desktop success notification when an enqueue (append) action successfully appends one or more items to the existing visible queue. The updated queue SHALL provide the visible confirmation of the action. Queue replace/load actions are out of scope for this requirement and MAY display confirmation feedback.
 
 #### Scenario: Library item is enqueued
 - **WHEN** a user successfully enqueues a playable library item

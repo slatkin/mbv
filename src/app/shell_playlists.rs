@@ -89,7 +89,7 @@ impl Model {
                         .position(|item| item.id == selected_id)
                         .unwrap_or(0);
                     self.app.replace_queue_or_prompt(
-                        super::types_playback::PendingQueueAction::PlayItems {
+                        super::types_playback::PendingQueueAction::LoadItems {
                             items,
                             start_idx,
                             source: crate::config::QueueSource::Playlist {

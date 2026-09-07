@@ -57,7 +57,9 @@ impl App {
 
     fn action_queue_scope(&self, action: &PendingQueueAction) -> QueueScope {
         match action {
-            PendingQueueAction::PlayItems { .. } => self.playing_queue_scope(),
+            PendingQueueAction::PlayItems { .. } | PendingQueueAction::LoadItems { .. } => {
+                self.playing_queue_scope()
+            }
             PendingQueueAction::ClearQueue => self.viewed_queue_scope(),
         }
     }

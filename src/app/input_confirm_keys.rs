@@ -134,9 +134,10 @@ impl App {
                 }
             }
             ConfirmAction::DiscardOrSaveDirtyPlaylist => {
-                let play_after = matches!(
+                let load_after = matches!(
                     self.pending_queue_action,
                     Some(PendingQueueAction::PlayItems { .. })
+                        | Some(PendingQueueAction::LoadItems { .. })
                 );
                 match key.code {
                     KeyCode::Char('s') | KeyCode::Char('S') => {
@@ -146,7 +147,7 @@ impl App {
                         if let Some(action) = self.pending_queue_action.take() {
                             self.execute_pending_queue_action(action);
                         }
-                        if play_after {
+                        if load_after {
                             self.request_sidebar_dismiss(SidebarId::Playlists);
                             self.set_panel_focus(PanelFocus::Queue);
                         }

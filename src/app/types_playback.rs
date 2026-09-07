@@ -299,6 +299,14 @@ pub(super) enum PendingQueueAction {
         start_idx: usize,
         source: crate::config::QueueSource,
     },
+    /// Replace the queue without starting playback. Playlist Enter populates
+    /// the queue and focuses it; the user presses Space/Enter on the queue
+    /// to start.
+    LoadItems {
+        items: Vec<EmbyItem>,
+        start_idx: usize,
+        source: crate::config::QueueSource,
+    },
     ClearQueue,
 }
 
