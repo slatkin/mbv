@@ -1,4 +1,25 @@
-fn test_mpv() -> Mpv {
+/// A live test mpv handle together with the `SYS_ENV_LOCK` guard it was
+/// initialised under.
+///
+/// The guard has to outlive the handle, not just `init_mpv`: every `init_mpv`
+/// resets the process-wide private mpv config dir and re-points the shared
+/// `input-ipc-server` path (`player_runtime.rs::prepare_mpv_config_dir`), so a
+/// handle left alive while another test initialises has its config pulled out
+/// from under it. Field order is the guarantee -- `mpv` drops first, then the
+/// guard.
+struct TestMpv {
+    mpv: Mpv,
+    _env_lock: std::sync::MutexGuard<'static, ()>,
+}
+
+impl std::ops::Deref for TestMpv {
+    type Target = Mpv;
+    fn deref(&self) -> &Mpv {
+        &self.mpv
+    }
+}
+
+fn test_mpv() -> TestMpv {
     let env_lock = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
     let result = init_mpv(&MpvRunConfig {
         headless: true,
@@ -12,8 +33,10 @@ fn test_mpv() -> Mpv {
     });
     let mpv = result.unwrap().0;
     mpv.set_property("ao", "null").unwrap();
-    drop(env_lock);
-    mpv
+    TestMpv {
+        mpv,
+        _env_lock: env_lock,
+    }
 }
 
 fn noop_progress() -> ProgressGuard {
