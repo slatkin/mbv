@@ -63,6 +63,7 @@ pub(in crate::app) fn render_wide_right_album_browser_with_ctx(
         media,
         right_focused,
         palette::list_selected_row_bg(),
+        None,
     );
 
     layout.selected_item_rect = paint.selected_row_rect;

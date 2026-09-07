@@ -315,6 +315,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         &mut media,
         focused,
         palette::list_selected_row_bg(),
+        None,
     );
     *scroll = media.scroll();
     geometry.selected_row_offset = paint
@@ -534,6 +535,7 @@ fn render_podcast_hero(
             wide_episode_list,
             focused,
             palette::list_selected_row_bg(),
+            None,
         );
         geometry.episode_rows = paint
             .row_geometry

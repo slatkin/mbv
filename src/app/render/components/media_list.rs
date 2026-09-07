@@ -27,6 +27,7 @@ mod wide_row_regression_tests {
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
+    use unicode_width::UnicodeWidthChar;
 
     /// migrate-home-feeds 4.6: the selected row's highlight bar must span the
     /// whole panel width (never just the row text, with or without a duration
@@ -56,6 +57,7 @@ mod wide_row_regression_tests {
                         &mut list,
                         true,
                         selected_bg,
+                        None,
                     );
                 })
                 .unwrap();
@@ -139,7 +141,7 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(f, rect, rect, &mut list, true, selected_bg);
+                render_wide_media_list(f, rect, rect, &mut list, true, selected_bg, None);
             })
             .unwrap();
         let buf = terminal.backend().buffer();
@@ -171,6 +173,150 @@ mod wide_row_regression_tests {
         );
     }
 
+    /// Queue now-playing rows move live progress into the right slot while
+    /// resume rows retain their inline badge and duration. Keep both cases in
+    /// one buffer regression so a painter match cannot silently change the
+    /// browser resume presentation while adding the queue presentation.
+    #[test]
+    fn now_playing_row_uses_right_slot_and_resume_row_stays_inline() {
+        use crate::app::components::media_list::{
+            ActiveProgress, MediaListRow, MediaSemanticState,
+        };
+
+        let rect = Rect::new(0, 0, 52, 3);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            MediaListRow::Item {
+                target: "playing".into(),
+                primary: "Playing title".into(),
+                trailing: Some("FOAM".into()),
+                duration: Some("2:00".into()),
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::NowPlaying {
+                    progress: Some(ActiveProgress::new(47)),
+                },
+            },
+            MediaListRow::Item {
+                target: "resume".into(),
+                primary: "Resume title".into(),
+                trailing: None,
+                duration: Some("2:00".into()),
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Active {
+                    progress: Some(ActiveProgress::new(12)),
+                },
+            },
+        ]);
+
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(
+                    f,
+                    rect,
+                    rect,
+                    &mut list,
+                    true,
+                    palette::SURFACE_RESTING,
+                    Some('▌'),
+                );
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row_text = |y: u16| {
+            (0..rect.width)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+        };
+
+        let playing = row_text(0);
+        assert!(playing.contains("Playing title"));
+        assert!(playing.contains("▌ 47%"));
+        assert_eq!(playing.matches("47%").count(), 1);
+        assert!(!playing.contains("FOAM"));
+        assert!(!playing.contains("2:00"));
+        let glyph_x = (0..rect.width)
+            .find(|&x| buf[(x, 0)].symbol() == "▌")
+            .expect("now-playing glyph is painted");
+        assert_eq!(buf[(glyph_x, 0)].fg, palette::PLAYBACK_THROBBER_FG);
+        let percent_x = (0..rect.width)
+            .find(|&x| buf[(x, 0)].symbol() == "4")
+            .expect("now-playing percent is painted");
+        assert_eq!(buf[(percent_x, 0)].fg, palette::TEXT_METADATA);
+
+        let resume = row_text(1);
+        assert!(resume.contains("Resume title 12%"));
+        assert!(resume.contains("2:00"));
+        let duration_x = rect.width - 2 - 4;
+        assert_eq!(buf[(duration_x, 1)].symbol(), "2");
+        assert_eq!(buf[(duration_x, 1)].fg, palette::STATUS_AVAILABLE);
+    }
+
+    #[test]
+    fn now_playing_throbber_and_narrow_reserves_are_safe() {
+        use crate::app::components::media_list::{
+            ActiveProgress, MediaListRow, MediaSemanticState,
+        };
+
+        let glyphs = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
+        for glyph in glyphs {
+            assert_eq!(glyph.width(), Some(1));
+            let mut list: WideMediaList<String> = WideMediaList::new();
+            list.set_content(vec![MediaListRow::Item {
+                target: "playing".into(),
+                primary: "A very long title that must be truncated".into(),
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::NowPlaying {
+                    progress: Some(ActiveProgress::new(100)),
+                },
+            }]);
+            let mut terminal = Terminal::new(TestBackend::new(8, 1)).unwrap();
+            terminal
+                .draw(|f| {
+                    render_wide_media_list(
+                        f,
+                        Rect::new(0, 0, 8, 1),
+                        Rect::new(0, 0, 8, 1),
+                        &mut list,
+                        true,
+                        palette::SURFACE_RESTING,
+                        Some(glyph),
+                    );
+                })
+                .unwrap();
+            let text = (0..8)
+                .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
+                .collect::<String>();
+            assert!(text.contains("100%") || text.contains(glyph));
+        }
+
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![MediaListRow::Item {
+            target: "playing".into(),
+            primary: "Focused".into(),
+            trailing: None,
+            duration: None,
+            kind: MediaKind::Media,
+            semantic_state: MediaSemanticState::NowPlaying { progress: None },
+        }]);
+        let mut terminal = Terminal::new(TestBackend::new(1, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(
+                    f,
+                    Rect::new(0, 0, 1, 1),
+                    Rect::new(0, 0, 1, 1),
+                    &mut list,
+                    true,
+                    palette::SURFACE_RESTING,
+                    Some(' '),
+                );
+            })
+            .unwrap();
+    }
+
     /// The duration right-aligns to 2 columns from the panel edge whether or
     /// not the focused list overflows and reserves a scrollbar column — the
     /// scrollbar must not shift it another column inwards.
@@ -189,7 +335,7 @@ mod wide_row_regression_tests {
             let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
             terminal
                 .draw(|f| {
-                    render_wide_media_list(f, rect, rect, &mut list, focused, selected_bg);
+                    render_wide_media_list(f, rect, rect, &mut list, focused, selected_bg, None);
                 })
                 .unwrap();
             let buf = terminal.backend().buffer();
@@ -265,6 +411,7 @@ mod wide_row_regression_tests_helpers {
                     list,
                     true,
                     selected_bg,
+                    None,
                 ));
             })
             .unwrap();

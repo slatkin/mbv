@@ -328,6 +328,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
             media_list,
             right_focused,
             palette::list_selected_row_bg(),
+            None,
         );
         layout.left_item_rows = paint.left_item_rows;
         layout.left_row_map = paint.left_row_map;
@@ -550,6 +551,7 @@ fn render_tv_series_selection(
         episodes,
         focused,
         palette::list_selected_row_bg(),
+        None,
     );
     (true, image_paint)
 }

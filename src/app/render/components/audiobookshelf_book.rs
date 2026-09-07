@@ -242,6 +242,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             &mut media,
             rail_focused,
             palette::list_selected_row_bg(),
+            None,
         );
         *browser_offset = media.scroll();
         geometry.selected_row_offset = paint
@@ -515,6 +516,7 @@ fn render_book_rows(
         &mut *chapter_list,
         focused,
         palette::list_selected_row_bg(),
+        None,
     );
     geometry.chapter_rows = paint
         .row_geometry
