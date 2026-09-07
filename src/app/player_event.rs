@@ -312,7 +312,9 @@ impl App {
                         no live slot; skipping activation");
                     self.playback_queue().queue.active_index().unwrap_or(0)
                 };
-                self.player.status.lock().unwrap().current_idx = adjusted;
+                if !self.player.is_remote() {
+                    self.player.status.lock().unwrap().current_idx = adjusted;
+                }
                 if !self.queue_cursor_held_by_user() {
                     self.playback_queue_mut().queue_cursor = adjusted;
                     // Local mpv advance: a follow-the-playhead move for the
@@ -398,6 +400,9 @@ impl App {
                 }
             }
             PlayerEvent::UnifiedQueueUpdated(unified) => {
+                // Adopt the owner snapshot as one value. Do not combine its
+                // queue with a separately delivered PlayerStatus coordinate.
+                *self.player.status.lock().unwrap() = unified.status.clone();
                 let total = unified.slots.len();
 
                 // Derive the presentation cursor from the active slot index.

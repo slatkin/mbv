@@ -300,7 +300,7 @@ fn connect_endpoint_propagates_active_remote_playback_status() {
     // `RemotePlayer.status` -- that's the shared `Arc<Mutex<PlayerStatus>>`
     // MPRIS polls directly (see `src/mpris.rs::start`). This drives the
     // *real* TCP protocol path (hello exchange, initial `State`, then a
-    // `StatusOnly` push) end-to-end, rather than calling
+    // unified snapshot push) end-to-end, rather than calling
     // `apply_ctrl_event` directly, so it catches propagation bugs in the
     // reader thread / connect handshake that a unit-level test of
     // `apply_ctrl_event` alone would miss.
@@ -339,16 +339,26 @@ fn connect_endpoint_propagates_active_remote_playback_status() {
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
 
-        // Now the daemon reports active playback, exactly like the #175
-        // repro: an active `StatusOnly` push after the initial handshake.
-        let active_status = serde_json::to_string(&CtrlEvent::StatusOnly(PlayerStatus {
-            active: true,
-            paused: false,
-            title: "Song".to_string(),
-            position_ticks: 5_000_000,
-            runtime_ticks: 100_000_000,
-            ..PlayerStatus::default()
-        }))
+        // Now the daemon reports active playback in the same unified
+        // snapshot used for reconnect and normal updates.
+        let active_status = serde_json::to_string(&CtrlEvent::UnifiedQueueState(
+            crate::ctrl::UnifiedQueueStateData {
+                status: PlayerStatus {
+                    active: true,
+                    paused: false,
+                    title: "Song".to_string(),
+                    position_ticks: 5_000_000,
+                    runtime_ticks: 100_000_000,
+                    ..PlayerStatus::default()
+                },
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 1,
+                source: crate::config::QueueSource::Unknown,
+                in_flight_transition: None,
+                queued_latest_transition: None,
+            },
+        ))
         .unwrap();
         writeln!(writer, "{active_status}").unwrap();
 

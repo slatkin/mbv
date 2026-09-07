@@ -191,6 +191,68 @@ fn command_rejected_forwards_reason_as_player_event() {
 }
 
 #[test]
+fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
+    use crate::ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
+
+    let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 0)));
+    let items = Arc::new(Mutex::new(Vec::<EmbyItem>::new()));
+    let unified_queue = Arc::new(Mutex::new(None));
+    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
+    let (tx, rx) = mpsc::channel();
+    let pending_playback = Arc::new(Mutex::new(std::collections::HashMap::new()));
+
+    let reconnect_snapshot = UnifiedQueueStateData {
+        status: status_with_idx_and_len(0, 2),
+        slots: vec![
+            UnifiedQueueSlot {
+                slot_id: 11,
+                item: QueueItem::Emby(Box::new(make_media_item("a"))),
+            },
+            UnifiedQueueSlot {
+                slot_id: 22,
+                item: QueueItem::Emby(Box::new(make_media_item("b"))),
+            },
+        ],
+        active_slot: Some(22),
+        revision: 9,
+        source: QueueSource::Remote,
+        in_flight_transition: None,
+        queued_latest_transition: None,
+    };
+
+    apply_ctrl_event(
+        CtrlEvent::UnifiedQueueState(reconnect_snapshot),
+        &status,
+        &items,
+        &unified_queue,
+        &queue_source,
+        &tx,
+        &pending_playback,
+        true,
+    );
+
+    let stored = unified_queue.lock().unwrap().clone().unwrap();
+    let status = status.lock().unwrap().clone();
+    let event = rx.recv().unwrap();
+    let PlayerEvent::UnifiedQueueUpdated(event_snapshot) = event else {
+        panic!("expected unified queue snapshot");
+    };
+
+    assert_eq!(stored.revision, 9);
+    assert_eq!(stored.slots.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(), vec![11, 22]);
+    assert_eq!(stored.active_slot, Some(22));
+    assert_eq!(stored.status.current_idx, 1);
+    assert_eq!(stored.status.queue_len, 2);
+    assert_eq!(status.current_idx, stored.status.current_idx);
+    assert_eq!(status.queue_len, stored.status.queue_len);
+    assert_eq!(status.active, stored.status.active);
+    assert_eq!(event_snapshot.revision, stored.revision);
+    assert_eq!(event_snapshot.slots.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(), vec![11, 22]);
+    assert_eq!(event_snapshot.active_slot, stored.active_slot);
+    assert_eq!(event_snapshot.status.current_idx, status.current_idx);
+}
+
+#[test]
 fn unified_queue_state_preserves_canonical_coordinates_and_source() {
     use crate::ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
 

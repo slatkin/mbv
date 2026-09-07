@@ -279,14 +279,10 @@ fn apply_ctrl_event(
         CtrlEvent::Hello(_) => {
             log::warn!(target: "remote", "unexpected daemon protocol hello after negotiation");
         }
-        CtrlEvent::StatusOnly(s) => {
-            let mut current = status.lock().unwrap();
-            let current_idx = current.current_idx;
-            let queue_len = current.queue_len;
-            *current = s;
-            current.current_idx = current_idx;
-            current.queue_len = queue_len;
-        }
+        // Bound queue coordinates and playback status arrive together in the
+        // unified snapshot. Ignore the legacy status-only projection rather
+        // than pairing it with a queue from another owner revision.
+        CtrlEvent::StatusOnly(_) => {}
         CtrlEvent::Player(pe) => {
             match &pe {
                 PlayerEvent::Stopped { .. } => {
@@ -294,11 +290,9 @@ fn apply_ctrl_event(
                 }
                 // `TrackChanged` now names a `QueueSlotId`, not an ordinal;
                 // this read loop has no queue to resolve it against. The
-                // forwarded event reaches `App::handle_player_event`, which
-                // re-derives `current_idx` from its own canonical queue, and
-                // the next `StatusOnly`/`UnifiedQueueUpdated` refreshes the
-                // mirror regardless. (Client-side `current_idx` removal is
-                // Section 4.)
+                // forwarded event reaches the Client, whose queue coordinates
+                // are replaced by the next unified snapshot rather than
+                // merged from this event.
                 PlayerEvent::PausedChanged(paused) => {
                     status.lock().unwrap().paused = *paused;
                 }
@@ -392,7 +386,7 @@ fn disconnect_reason_message(reason: &DisconnectReason) -> &'static str {
 /// reconstruct the canonical queue without decomposing it into Emby-only
 /// shapes.
 fn apply_unified_queue_state(
-    unified: UnifiedQueueStateData,
+    mut unified: UnifiedQueueStateData,
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<EmbyItem>>>,
     unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
@@ -400,15 +394,17 @@ fn apply_unified_queue_state(
     event_tx: &mpsc::Sender<PlayerEvent>,
     notify: bool,
 ) {
-    let mut next_status = unified.status.clone();
-    next_status.queue_len = unified.slots.len();
+    // Normalize the compatibility coordinates on the snapshot itself. Every
+    // projection below, including the event sent to the Client, then observes
+    // the same revision, slots, observed slot, and status.
+    unified.status.queue_len = unified.slots.len();
     if let Some(active_index) = unified.active_slot.and_then(|slot_id| {
         unified
             .slots
             .iter()
             .position(|slot| slot.slot_id == slot_id)
     }) {
-        next_status.current_idx = active_index;
+        unified.status.current_idx = active_index;
     }
 
     // Project Emby-only items for consumers that need them; the status
@@ -418,6 +414,7 @@ fn apply_unified_queue_state(
         .iter()
         .filter_map(|slot| slot.item.as_emby().cloned())
         .collect();
+    let next_status = unified.status.clone();
 
     *status.lock().unwrap() = next_status;
     *items.lock().unwrap() = emby_items;
