@@ -222,6 +222,27 @@ impl Model {
                     }
                 }
             }
+            QueueRequest::MoveTo {
+                scope,
+                slot_id,
+                onto,
+            } => {
+                let Some(from) = self.select_queue_slot(scope, slot_id) else {
+                    return;
+                };
+                let Some(to) = self
+                    .app
+                    .queue_for_scope(scope)
+                    .slots()
+                    .iter()
+                    .position(|slot| slot.slot_id == onto)
+                else {
+                    return;
+                };
+                if from != to {
+                    self.app.move_queue_item_to(from, to);
+                }
+            }
             QueueRequest::Undo { scope } => {
                 // The component can still be showing (and emit for) `Remote`
                 // for a frame after a remote disconnect, before the projection
