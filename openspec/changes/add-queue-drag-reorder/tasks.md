@@ -12,9 +12,9 @@
 
 ## 3. Request type and shell dispatch
 
-- [ ] 3.1 In `src/app/components/msg/queue.rs` add `QueueRequest::MoveTo { scope, slot_id, onto }` where `onto` is a `QueueSlotId` (design D4). Leave the existing `Move { .. }` variant and `QueueMove` enum untouched. Verify `cargo check -p mbv`.
-- [ ] 3.2 In `src/app/shell_queue.rs` add the dispatch arm for `MoveTo`: resolve `slot_id` through the existing `select_queue_slot(scope, slot_id)` to get `from`, resolve `onto` to its index in the same scope's queue, and call `move_queue_item_to(from, to)`. Do nothing when either identity no longer resolves, or when `from == to`. Verify `cargo check -p mbv`.
-- [ ] 3.3 Add a shell test alongside `src/app/tests_queue_reorder.rs` asserting that a `MoveTo` from index 0 onto index 2 produces the same item order as two `move_queue_item_down` calls, and pushes undo entries on the same stack. Verify `cargo nextest run -p mbv tests_queue_reorder`.
+- [x] 3.1 In `src/app/components/msg/queue.rs` add `QueueRequest::MoveTo { scope, slot_id, onto }` where `onto` is a `QueueSlotId` (design D4). Leave the existing `Move { .. }` variant and `QueueMove` enum untouched. Verify `cargo check -p mbv`.
+- [x] 3.2 In `src/app/shell_queue.rs` add the dispatch arm for `MoveTo`: resolve `slot_id` through the existing `select_queue_slot(scope, slot_id)` to get `from`, resolve `onto` to its index in the same scope's queue, and call `move_queue_item_to(from, to)`. Do nothing when either identity no longer resolves, or when `from == to`. Verify `cargo check -p mbv`.
+- [x] 3.3 Add a shell test alongside `src/app/tests_queue_reorder.rs` asserting that a `MoveTo` from index 0 onto index 2 produces the same item order as two `move_queue_item_down` calls, and pushes undo entries on the same stack. Verify `cargo nextest run -p mbv tests_queue_reorder`.
 
 ## 4. Queue component drag interpretation
 
