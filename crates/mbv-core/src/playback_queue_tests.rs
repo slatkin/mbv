@@ -501,6 +501,69 @@ fn confirmed_active_slot_removal_clears_active_identity() {
 }
 
 #[test]
+fn projected_row_mutation_matrix_tracks_revision_without_noop_bumps() {
+    let mut queue = PlaybackQueue::from_queue_items_with_revision(
+        vec![
+            QueueItem::Emby(Box::new(item("a"))),
+            QueueItem::Emby(Box::new(item("b"))),
+        ],
+        Some(0),
+        QueueRevision::from_raw(40),
+    );
+    let first = queue.slots()[0].slot_id;
+    let second = queue.slots()[1].slot_id;
+
+    let before = queue.revision();
+    assert!(matches!(
+        queue.apply_progress(first, 0, false),
+        QueueMutationResult::Applied(())
+    ));
+    assert_eq!(queue.revision(), before);
+
+    assert!(matches!(
+        queue.apply_progress(first, TICKS_PER_SECOND, false),
+        QueueMutationResult::Applied(())
+    ));
+    let after_progress = queue.revision();
+    assert!(after_progress > before);
+
+    assert!(matches!(
+        queue.update_slot_item(
+            first,
+            QueueItem::Emby(Box::new(item_with_progress("a", 1, false,)))
+        ),
+        QueueMutationResult::Applied(())
+    ));
+    assert_eq!(queue.revision(), after_progress);
+
+    assert!(matches!(
+        queue.set_active_slot(second),
+        QueueMutationResult::Applied(())
+    ));
+    let after_active = queue.revision();
+    assert!(after_active > after_progress);
+    assert!(matches!(
+        queue.set_active_slot(second),
+        QueueMutationResult::Applied(())
+    ));
+    assert_eq!(queue.revision(), after_active);
+
+    assert!(matches!(
+        queue.mark_progress_sync_pending(first),
+        QueueMutationResult::Applied(_)
+    ));
+    assert_eq!(queue.revision(), after_active);
+
+    let before_refresh = queue.revision();
+    let result = queue.merge_refresh(vec![item_with_progress("a", 1, false), item("b")]);
+    assert!(result.pruned_slots.is_empty());
+    assert_eq!(queue.revision(), before_refresh);
+
+    queue.clear_active_slot();
+    assert!(queue.revision() > before_refresh);
+}
+
+#[test]
 fn structural_mutations_bump_revision() {
     let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b")], Some(0));
     let initial = queue.revision();

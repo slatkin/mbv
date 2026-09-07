@@ -14,10 +14,6 @@ use mbv_core::playback_queue::QueueSlotId;
 /// live player ticks that never bump `QueueRevision`, so the active slot, a
 /// progress-% bucket, and paused ride alongside the revision.
 ///
-// ponytail: a non-active row's watch-% badge is driven by `update_slot_item` /
-// `apply_progress`, which don't bump `QueueRevision`, so an idle badge change
-// can lag one structural mutation. Bump the revision in those mutators if that
-// staleness is ever visible.
 #[derive(PartialEq)]
 pub(in crate::app) struct QueueProjectionFingerprint {
     revision: u64,

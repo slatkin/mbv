@@ -215,10 +215,18 @@ impl PlaybackQueue {
     }
 
     pub fn from_queue_items(items: Vec<QueueItem>, active_index: Option<usize>) -> Self {
+        Self::from_queue_items_with_revision(items, active_index, QueueRevision::default())
+    }
+
+    pub fn from_queue_items_with_revision(
+        items: Vec<QueueItem>,
+        active_index: Option<usize>,
+        revision: QueueRevision,
+    ) -> Self {
         let mut queue = Self {
             slots: Vec::with_capacity(items.len()),
             active_slot_id: None,
-            revision: QueueRevision::default(),
+            revision,
             next_slot_id: 1,
         };
 
@@ -268,13 +276,6 @@ impl PlaybackQueue {
         &self.slots
     }
 
-    /// Mutable access to slots. Intended for test helpers and internal
-    /// mutation paths; callers should prefer the explicit mutation methods
-    /// (`insert`, `remove_slot`, `move_slot`, etc.) for production code.
-    pub fn slots_mut(&mut self) -> &mut [QueueSlot] {
-        &mut self.slots
-    }
-
     /// Consume the queue and return its slots. Used by tests and callers
     /// that need owned slot data.
     pub fn into_slots(self) -> Vec<QueueSlot> {
@@ -315,7 +316,9 @@ impl PlaybackQueue {
     }
 
     pub fn clear_active_slot(&mut self) {
-        self.active_slot_id = None;
+        if self.active_slot_id.take().is_some() {
+            self.revision.bump();
+        }
     }
 
     pub fn slot(&self, slot_id: QueueSlotId) -> Option<&QueueSlot> {
@@ -399,17 +402,23 @@ impl PlaybackQueue {
         if self.slot_index(slot_id).is_none() {
             return QueueMutationResult::NotFound;
         }
-        self.active_slot_id = Some(slot_id);
+        if self.active_slot_id != Some(slot_id) {
+            self.active_slot_id = Some(slot_id);
+            self.revision.bump();
+        }
         QueueMutationResult::Applied(())
     }
 
     /// Set the local progress state on a slot by index. Intended for test
     /// helpers; production code should use player events to drive progress.
-    /// Only affects Emby slots; Feed slots are a no-op.
+    /// Applies to whichever queue item kind occupies the indexed slot.
     pub fn set_slot_progress_by_index(&mut self, index: usize, position_ticks: i64) {
-        if let Some(slot) = self.slots.get_mut(index) {
-            slot.progress_state.local.position_ticks = position_ticks;
-            slot.progress_state.apply_to_item(&mut slot.item);
+        if let Some((slot_id, played)) = self
+            .slots
+            .get(index)
+            .map(|slot| (slot.slot_id, slot.progress_state.local.played))
+        {
+            let _ = self.apply_progress(slot_id, position_ticks, played);
         }
     }
 
@@ -463,8 +472,12 @@ impl PlaybackQueue {
         let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) else {
             return QueueMutationResult::NotFound;
         };
+        let old_item = slot.item.clone();
         slot.item = item;
         slot.progress_state.local = SlotProgress::from_queue_item(&slot.item);
+        if !queue_items_equal(&slot.item, &old_item) {
+            self.revision.bump();
+        }
         QueueMutationResult::Applied(())
     }
 
@@ -477,11 +490,16 @@ impl PlaybackQueue {
         let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) else {
             return QueueMutationResult::NotFound;
         };
+        let old_item = slot.item.clone();
+        let old_progress = slot.progress_state.local;
         slot.progress_state.local = SlotProgress {
             position_ticks,
             played,
         };
         slot.progress_state.apply_to_item(&mut slot.item);
+        if slot.progress_state.local != old_progress || !queue_items_equal(&slot.item, &old_item) {
+            self.revision.bump();
+        }
         QueueMutationResult::Applied(())
     }
 
@@ -503,6 +521,7 @@ impl PlaybackQueue {
         let mut result = RefreshMergeResult::default();
         let mut merged_slots = Vec::with_capacity(old_slots.len());
         let active_slot_id = self.active_slot_id;
+        let mut changed = false;
 
         for mut slot in old_slots {
             // Feed and Audiobookshelf slots (both episode and book shapes)
@@ -520,7 +539,9 @@ impl PlaybackQueue {
                 .map(FetchedItemMatches::next_match);
             match fetched {
                 Some(fetched_item) => {
+                    let old_item = slot.item.clone();
                     self.merge_fetched_slot(&mut slot, fetched_item, active_slot_id, &mut result);
+                    changed |= !queue_items_equal(&slot.item, &old_item);
                     merged_slots.push(slot);
                 }
                 None if should_protect_missing_slot(&slot, active_slot_id) => {
@@ -529,7 +550,7 @@ impl PlaybackQueue {
                 }
                 None => {
                     result.pruned_slots.push(slot.slot_id);
-                    self.revision.bump();
+                    changed = true;
                 }
             }
         }
@@ -539,6 +560,9 @@ impl PlaybackQueue {
             if self.slot_index(active_slot_id).is_none() {
                 self.active_slot_id = None;
             }
+        }
+        if changed {
+            self.revision.bump();
         }
         result
     }
@@ -635,6 +659,10 @@ impl FetchedItemMatches {
         self.next_index = self.next_index.saturating_add(1);
         self.items[index].clone()
     }
+}
+
+fn queue_items_equal(left: &QueueItem, right: &QueueItem) -> bool {
+    serde_json::to_vec(left).ok() == serde_json::to_vec(right).ok()
 }
 
 fn group_fetched_items_by_item_id(
