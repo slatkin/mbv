@@ -171,6 +171,80 @@ mod wide_row_regression_tests {
         );
     }
 
+    /// Queue now-playing rows move live progress into the right slot while
+    /// resume rows retain their inline badge and duration. Keep both cases in
+    /// one buffer regression so a painter match cannot silently change the
+    /// browser resume presentation while adding the queue presentation.
+    #[test]
+    fn now_playing_row_uses_right_slot_and_resume_row_stays_inline() {
+        use crate::app::components::media_list::{
+            ActiveProgress, MediaListRow, MediaSemanticState,
+        };
+
+        let rect = Rect::new(0, 0, 52, 3);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            MediaListRow::Item {
+                target: "playing".into(),
+                primary: "Playing title".into(),
+                trailing: None,
+                duration: Some("2:00".into()),
+                kind: MediaKind::Media,
+                // This uses the current Active vocabulary as the red-before-green
+                // stand-in for the queue's live row. The production change will
+                // switch it to NowPlaying without changing this assertion.
+                semantic_state: MediaSemanticState::Active {
+                    progress: Some(ActiveProgress::new(47)),
+                },
+            },
+            MediaListRow::Item {
+                target: "resume".into(),
+                primary: "Resume title".into(),
+                trailing: None,
+                duration: Some("2:00".into()),
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Active {
+                    progress: Some(ActiveProgress::new(12)),
+                },
+            },
+        ]);
+
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row_text = |y: u16| {
+            (0..rect.width)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+        };
+
+        let playing = row_text(0);
+        assert!(playing.contains("Playing title"));
+        assert!(playing.contains("⠋ 47%"));
+        assert_eq!(playing.matches("47%").count(), 1);
+        assert!(!playing.contains("2:00"));
+        let glyph_x = (0..rect.width)
+            .find(|&x| buf[(x, 0)].symbol() == "⠋")
+            .expect("now-playing glyph is painted");
+        assert_eq!(buf[(glyph_x, 0)].fg, palette::ACCENT);
+        let percent_x = (0..rect.width)
+            .find(|&x| buf[(x, 0)].symbol() == "4")
+            .expect("now-playing percent is painted");
+        assert_eq!(buf[(percent_x, 0)].fg, palette::TEXT_METADATA);
+
+        let resume = row_text(1);
+        assert!(resume.contains("Resume title 12%"));
+        assert!(resume.contains("2:00"));
+        let duration_x = (0..rect.width)
+            .find(|&x| buf[(x, 1)].symbol() == "2")
+            .expect("resume duration is painted");
+        assert_eq!(buf[(duration_x, 1)].fg, palette::STATUS_AVAILABLE);
+    }
+
     /// The duration right-aligns to 2 columns from the panel edge whether or
     /// not the focused list overflows and reserves a scrollbar column — the
     /// scrollbar must not shift it another column inwards.
