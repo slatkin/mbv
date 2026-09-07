@@ -26,4 +26,6 @@
 
 - [x] 5.1 Update the Queue row of `docs/architecture/interactive-surface-ledger.md` to record drag-to-reorder among its verified mouse gestures, citing the tests from 4.3. Verify by reading the row back.
 - [x] 5.2 Run `cargo fmt`, then `cargo clippy --workspace --all-targets`, `cargo nextest run -p mbv`, `ast-grep scan`, and `make check-code-file-lines`; all must be clean. If `queue.rs` or `gesture.rs` crosses the 800-line cap, split it before finishing (project rule: never open a PR with a governed file over cap).
-- [ ] 5.3 Manually verify in a real terminal at the Normal and Wide breakpoints: drag a queue entry up and down, drag the currently playing entry and confirm playback continues on it, and confirm `Ctrl+Z` walks the drag back. Record the result in the change before archiving.
+- [x] 5.3 Manually verify in a real terminal at the Normal and Wide breakpoints: drag a queue entry up and down, drag the currently playing entry and confirm playback continues on it, and confirm `Ctrl+Z` walks the drag back. Record the result in the change before archiving.
+
+  **Live:** user reported PASS in Normal and Wide on 2026-09-07: drag up/down, playing-entry continuity, and `Ctrl+Z` reversal.
