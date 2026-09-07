@@ -111,6 +111,7 @@ impl PlaybackRun {
     fn cancel_pending_quit(&mut self) {
         self.quit_at = None;
         self.stop_slot = None;
+        self.stop_runtime = None;
         *self.shutdown_report_timeout.lock().unwrap() = None;
     }
 
@@ -522,6 +523,7 @@ impl PlaybackRun {
             forced_slot_id: None,
             forced_transition: None,
             stop_slot: None,
+            stop_runtime: None,
             quit_at: None,
             last_seek_at: None,
             last_valid_pos: initial_pos,

@@ -343,6 +343,7 @@ impl PlaybackRun {
 
         if self.origin == PlaybackOrigin::Queue && reason == mpv_end_file_reason::Quit {
             let completed_runtime = self.active_item().map_or(0, |item| item.runtime_ticks());
+            self.stop_runtime = Some(completed_runtime);
             let near_end = is_near_end(
                 completed_is_audio,
                 false,
@@ -369,6 +370,9 @@ impl PlaybackRun {
         }
 
         if self.origin == PlaybackOrigin::Standalone {
+            if reason == mpv_end_file_reason::Quit {
+                self.stop_runtime = Some(self.active_item().map_or(0, |item| item.runtime_ticks()));
+            }
             let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
 
             if reason == mpv_end_file_reason::Quit {
@@ -636,7 +640,10 @@ impl PlaybackRun {
             if let Some(mid) = self.mark_played_id.take() {
                 retry_mark_played(client.clone(), mid);
             }
-            let completed_runtime = self.active_item().map_or(0, |item| item.runtime_ticks());
+            let completed_runtime = self
+                .stop_runtime
+                .or_else(|| self.active_item().map(|item| item.runtime_ticks()))
+                .unwrap_or(0);
             let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
             let near_end = self.reporter.has_session()
                 && is_near_end(is_audio, false, self.last_valid_pos, completed_runtime);

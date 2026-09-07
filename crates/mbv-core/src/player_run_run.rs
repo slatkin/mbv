@@ -89,6 +89,7 @@ impl PlaybackRun {
                     // active slot, so a QueueMove/QueueRemove drained before the
                     // deferred Stopped emit cannot rename the occurrence (D2).
                     self.stop_slot = self.active_slot_id();
+                    self.stop_runtime = self.active_item().map(|item| item.runtime_ticks());
                 }
 
                 if self
@@ -98,7 +99,10 @@ impl PlaybackRun {
                     if !self.stop_report.is_sent() {
                         self.report_stop_now_or_background(&mut progress);
                     }
-                    let runtime = self.status.lock().unwrap().runtime_ticks;
+                    let runtime = self
+                        .stop_runtime
+                        .or_else(|| self.active_item().map(|item| item.runtime_ticks()))
+                        .unwrap_or(0);
                     let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
                     let (played, consume) = quit_timeout_stop_flags(
                         self.origin,

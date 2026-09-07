@@ -33,6 +33,9 @@ struct PlaybackRun {
     /// (shutdown / quit-timeout paths) cannot change which occurrence the event
     /// names (design D2). `None` once taken or when no stop is pending.
     stop_slot: Option<QueueSlotId>,
+    /// Runtime captured with `stop_slot`, so deferred quit/shutdown decisions
+    /// use the completed occurrence rather than a later status update.
+    stop_runtime: Option<i64>,
     quit_at: Option<Instant>,
     last_seek_at: Option<Instant>,
     last_valid_pos: i64,
