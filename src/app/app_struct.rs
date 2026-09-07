@@ -12,8 +12,8 @@ use super::types_feed::SavePlaylistDialog;
 use super::types_feed_tab::FeedTabState;
 use super::types_library_tab::LibraryTab;
 use super::types_playback::{
-    PendingQueueAction, PlayheadProjection, PlaylistMutationState, QueueScope,
-    RemoteQueueProjection, SuspendedLocalSession, UndoEntry,
+    PendingQueueAction, PlaylistMutationState, QueueScope, RemoteQueueProjection,
+    SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode, SettingsDestination};
@@ -169,11 +169,8 @@ pub struct App {
     /// state tracks *playback* position, not the UI selection — see
     /// `remove_from_queue` and `PlayerEvent::UnifiedQueueUpdated`.
     pub(super) pending_queue_edit_cursor: Option<usize>,
-    /// Single source of truth for the playback playhead: active scope/slot,
-    /// position/runtime, `Confirmed | Predicted(reason)` confidence, and the
-    /// one-shot scoped `queue_cursor` push for the next `sync_queue`. Folds in
-    /// the former `pending_active_idx` and `queue_cursor_pushed`.
-    pub(super) playhead: PlayheadProjection,
+    /// One-shot cursor re-anchor for the next queue sync.
+    pub(super) pending_queue_cursor_reanchor: Option<QueueScope>,
     pub(super) next_up_item: Option<EmbyItem>,
     // Main UI scalars.
     // reuses shared self.libs.

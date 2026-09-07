@@ -1,8 +1,5 @@
 use super::notify_actions::ToastSeverity;
-use super::{
-    App, PendingQueueAction, PlayerTab, QueueCursorPush, QueueScope, QueueScopeResolution,
-    UndoEntry,
-};
+use super::{App, PendingQueueAction, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueMutationResult, QueueSlotId, RefreshMergeResult};
 use mbv_core::player::PlayerCommand;
@@ -92,7 +89,7 @@ impl App {
         // A full replacement regenerates slot ids, so a preserved prior
         // selection could collide with a new slot; force a re-anchor to the
         // replacement's start index.
-        self.playhead.pending_push = Some(QueueCursorPush::Reanchor(QueueScope::Remote));
+        self.pending_queue_cursor_reanchor = Some(QueueScope::Remote);
     }
 
     pub(super) fn sync_playback_queue_after_append(
@@ -163,7 +160,7 @@ impl App {
         // A full replacement regenerates slot ids: a preserved prior selection
         // could collide with an unrelated new slot, so force a re-anchor to
         // the replacement's start index rather than relying on `Preserve`.
-        self.playhead.pending_push = Some(QueueCursorPush::Reanchor(self.playing_queue_scope()));
+        self.pending_queue_cursor_reanchor = Some(self.playing_queue_scope());
     }
 
     pub(super) fn viewed_queue_scope(&self) -> QueueScope {
@@ -305,7 +302,7 @@ impl App {
             // queues hand out colliding `QueueSlotId`s (each is a
             // per-`PlaybackQueue` counter starting at 1), so identity
             // reconciliation can park the cursor on an unrelated slot.
-            self.playhead.pending_push = Some(QueueCursorPush::Reanchor(resolved));
+            self.pending_queue_cursor_reanchor = Some(resolved);
         }
         self.queue_scope = resolved;
     }

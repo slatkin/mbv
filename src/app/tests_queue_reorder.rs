@@ -1,6 +1,5 @@
 use super::*;
 use crate::app::tests::*;
-use crate::app::types_playback::{PlayheadConfidence, PredictionReason};
 
 #[test]
 fn move_queue_item_up_swaps_items_and_cursor_follows() {
@@ -221,11 +220,10 @@ fn undo_of_move_is_refused_when_duplicate_id_masks_changed_queue() {
 }
 
 #[test]
-fn active_index_prediction_survives_same_length_move_until_player_ack() {
+fn queue_move_preserves_observed_playback_until_owner_observes_change() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(5), app.player_tab.queue_cursor);
+    app.player_tab.set_items(make_items(5), app.player_tab.queue_cursor);
     {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;
@@ -233,101 +231,53 @@ fn active_index_prediction_survives_same_length_move_until_player_ack() {
         status.queue_len = 5;
     }
 
-    // Move the item immediately before the active one past it. The queue
-    // length is unchanged, but the active row's predicted index is now 1.
     assert!(app.apply_queue_move(QueueScope::Local, 1, 2));
-    assert_eq!(app.effective_playback_state().active_idx, 1);
-    assert_eq!(
-        app.playhead.confidence,
-        PlayheadConfidence::Predicted(PredictionReason::Relocated)
-    );
-    assert_eq!(app.playhead.slot, 1);
-
-    // Once the player status catches up, retain the same displayed index and
-    // consume the prediction.
-    app.player.status.lock().unwrap().current_idx = 1;
-    app.reconcile_playhead();
-    assert_eq!(app.effective_playback_state().active_idx, 1);
-    assert_eq!(app.playhead.confidence, PlayheadConfidence::Confirmed);
+    assert_eq!(app.effective_playback_state().active_idx, 2);
+    assert_eq!(app.player.status.lock().unwrap().current_idx, 2);
 }
 
 #[test]
-fn reconcile_clears_matching_prediction_but_a_paint_read_does_not() {
+fn playback_state_reads_observed_status_without_projection() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(5), app.player_tab.queue_cursor);
+    app.player_tab.set_items(make_items(5), app.player_tab.queue_cursor);
     {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;
         status.current_idx = 2;
         status.queue_len = 5;
+        status.position_ticks = 18_000_000_000;
+        status.runtime_ticks = 24_000_000_000;
     }
-    app.playhead.scope = QueueScope::Local;
-    app.playhead.slot = 2;
-    app.playhead.confidence = PlayheadConfidence::Predicted(PredictionReason::Relocated);
-
-    // A paint read (no reconcile step) must not consume the prediction.
-    let _ = app.effective_playback_state();
-    assert_eq!(
-        app.playhead.confidence,
-        PlayheadConfidence::Predicted(PredictionReason::Relocated),
-        "reading playback state to paint a frame leaves the prediction intact"
-    );
-
-    // The single reconcile step, run on the event tick, clears it.
-    app.reconcile_playhead();
-    assert_eq!(app.playhead.confidence, PlayheadConfidence::Confirmed);
+    let playback = app.effective_playback_state();
+    assert_eq!(playback.active_idx, 2);
+    assert_eq!(playback.position_ticks, 18_000_000_000);
+    assert_eq!(playback.runtime_ticks, 24_000_000_000);
 }
 
 #[test]
-fn queue_play_cursor_suppresses_stale_progress_until_player_ack() {
+fn queue_play_cursor_keeps_observed_progress_until_player_ack() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(5), app.player_tab.queue_cursor);
+    app.player_tab.set_items(make_items(5), app.player_tab.queue_cursor);
     {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;
         status.current_idx = 0;
         status.queue_len = 5;
-        status.position_ticks = 18_000_000_000; // 30:00
-        status.runtime_ticks = 24_000_000_000; // 40:00
+        status.position_ticks = 18_000_000_000;
+        status.runtime_ticks = 24_000_000_000;
     }
-
     app.panel_focus = super::types_settings::PanelFocus::Queue;
     app.player_tab.queue_cursor = 2;
     app.dispatch(crate::app::action::Command::QueuePlayCursor(2));
-
-    assert_eq!(
-        app.playhead.confidence,
-        PlayheadConfidence::Predicted(PredictionReason::ItemSelected)
-    );
-    assert_eq!(app.playhead.slot, 2);
-    let predicted = app.effective_playback_state();
-    assert_eq!(predicted.active_idx, 2);
-    assert_eq!(predicted.position_ticks, 0);
-    assert_eq!(predicted.runtime_ticks, 0);
-
-    // Player thread acks the jump: progress for the new item flows through and
-    // the prediction is consumed.
-    {
-        let mut status = app.player.status.lock().unwrap();
-        status.current_idx = 2;
-        status.queue_len = 5;
-        status.position_ticks = 500_000_000;
-        status.runtime_ticks = 12_000_000_000;
-    }
-    app.reconcile_playhead();
-    let reconciled = app.effective_playback_state();
-    assert_eq!(reconciled.active_idx, 2);
-    assert_eq!(reconciled.position_ticks, 500_000_000);
-    assert_eq!(reconciled.runtime_ticks, 12_000_000_000);
-    assert_eq!(app.playhead.confidence, PlayheadConfidence::Confirmed);
+    let observed = app.effective_playback_state();
+    assert_eq!(observed.active_idx, 0);
+    assert_eq!(observed.position_ticks, 18_000_000_000);
 }
 
 #[test]
-fn rejected_remote_queue_selection_restores_confirmed_playhead() {
+fn rejected_remote_queue_selection_keeps_observed_playhead() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_remote_app_stub(Vec::new(), make_items(3));
     app.set_queue_scope(QueueScope::Remote);
@@ -339,16 +289,10 @@ fn rejected_remote_queue_selection_restores_confirmed_playhead() {
         status.position_ticks = 18_000_000_000;
         status.runtime_ticks = 24_000_000_000;
     }
-
-    // The stub's ctrl receiver is dropped, so the Player owner rejects this
-    // selection instead of acknowledging the predicted playhead.
     app.dispatch(crate::app::action::Command::QueuePlayCursor(2));
-
-    assert_eq!(app.playhead.confidence, PlayheadConfidence::Confirmed);
     let playback = app.effective_playback_state();
     assert_eq!(playback.active_idx, 0);
     assert_eq!(playback.position_ticks, 18_000_000_000);
-    assert_eq!(playback.runtime_ticks, 24_000_000_000);
     assert_eq!(app.status, "Playback owner rejected the queue selection");
 }
 

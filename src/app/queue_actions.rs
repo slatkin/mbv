@@ -1,5 +1,5 @@
 use super::notify_actions::ToastSeverity;
-use super::types_playback::{PlayheadConfidence, PlaylistMutation, PredictionReason};
+use super::types_playback::PlaylistMutation;
 use super::ui_util::is_playable;
 use super::{
     App, ConfirmAction, ConfirmModal, LibEvent, PendingQueueAction, QueueScope, SessionEvent,
@@ -66,11 +66,6 @@ impl App {
         self.undo_stack_for_scope_mut(scope)
             .push(UndoEntry::Remove(pos, item));
         self.persist_local_queue_state_if_needed(scope);
-        if controls_playback_queue && active && pos < current_idx {
-            self.playhead.confidence = PlayheadConfidence::Predicted(PredictionReason::Relocated);
-            self.playhead.slot = current_idx - 1;
-            self.playhead.scope = scope;
-        }
         let sent_queue_remove = controls_playback_queue
             && (active || scope == QueueScope::Remote || self.player.is_remote());
         if sent_queue_remove {
@@ -181,10 +176,7 @@ impl App {
             return false;
         }
         let controls_playback_queue = self.queue_scope_is_playback(scope);
-        let (active, active_idx) = {
-            let s = self.player.status.lock().unwrap();
-            (s.active, s.current_idx)
-        };
+        let active = self.player.status.lock().unwrap().active;
         if !self.queue_for_scope_mut(scope).move_slot(slot_id, to) {
             return false;
         }
@@ -192,25 +184,6 @@ impl App {
             self.queue_dirty = true;
         }
         self.persist_local_queue_state_if_needed(scope);
-        if controls_playback_queue && active {
-            let new_active_idx = if active_idx == from {
-                Some(to)
-            } else if from < active_idx && active_idx <= to {
-                Some(active_idx - 1)
-            } else if to <= active_idx && active_idx < from {
-                Some(active_idx + 1)
-            } else {
-                None
-            };
-            if let Some(new_active_idx) = new_active_idx {
-                if new_active_idx != active_idx {
-                    self.playhead.confidence =
-                        PlayheadConfidence::Predicted(PredictionReason::Relocated);
-                    self.playhead.slot = new_active_idx;
-                    self.playhead.scope = scope;
-                }
-            }
-        }
         if controls_playback_queue
             && (active || scope == QueueScope::Remote || self.player.is_remote())
         {

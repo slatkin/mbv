@@ -1,5 +1,5 @@
 use super::notify_actions::ToastSeverity;
-use super::{App, DaemonLostModal, QueueCursorPush, QUIT_REQUESTED};
+use super::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_core::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
 
@@ -317,10 +317,6 @@ impl App {
                 }
                 if !self.queue_cursor_held_by_user() {
                     self.playback_queue_mut().queue_cursor = adjusted;
-                    // Local mpv advance: a follow-the-playhead move for the
-                    // playback-target scope (yields to an active user nav).
-                    self.playhead.pending_push =
-                        Some(QueueCursorPush::Follow(self.playing_queue_scope()));
                 }
                 if !self.has_direct_remote_queue() {
                     if let Some(item) = self.playback_queue().emby_item_at(adjusted) {
@@ -386,11 +382,6 @@ impl App {
                             });
                         }
                         self.playback_queue_mut().queue_cursor = idx;
-                        // Auto-advance to the next-up item: a follow-the-playhead
-                        // move for the playback-target scope.
-                        self.playhead.pending_push = Some(QueueCursorPush::Follow(
-                            self.playing_queue_scope(),
-                        ));
                         self.flash(label, ToastSeverity::Neutral);
                     } else {
                         log::warn!(target: "app", "next-up: item not in queue, cannot jump");
@@ -437,14 +428,6 @@ impl App {
                 let queue = self.playback_queue_mut();
                 queue.set_unified_state(&unified, cursor);
                 self.queue_source = source;
-                if !user_holding_local {
-                    // Unified/direct-remote reconciliation: a follow-the-playhead
-                    // move scoped to the playback target. Consumed only if the
-                    // user is currently viewing that scope (a remote daemon
-                    // update must not snap a Local-scope view).
-                    self.playhead.pending_push =
-                        Some(QueueCursorPush::Follow(self.playing_queue_scope()));
-                }
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 // mbvd never auto-seeks on this event itself — it always
