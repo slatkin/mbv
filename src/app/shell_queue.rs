@@ -5,28 +5,17 @@ use super::components::{
 use super::shell::Model;
 use super::{PanelFocus, PlaybackState, QueueScope};
 use crate::app::notify_actions::ToastSeverity;
-use crate::app::render::QueueTitleModel;
 use mbv_core::playback_queue::QueueSlotId;
 
-/// The inputs `sync_queue` projects into the mounted `QueueComponent`. Equal
-/// fingerprints on consecutive ticks mean the row vec would rebuild to exactly
-/// the same content, so the rebuild is skipped (#675). The active row overlays
-/// live player ticks that never bump `QueueRevision`, so the active slot, a
-/// progress-% bucket, and paused ride alongside the revision.
-///
-#[derive(PartialEq)]
+/// The row projection inputs that can change queue rows. Chrome and pause state
+/// are delivered independently; pause only affects the paint-time throbber.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::app) struct QueueProjectionFingerprint {
     revision: u64,
-    slot_count: usize,
     scope: QueueScope,
     active: bool,
-    active_idx: usize,
-    /// `pos * 100 / runtime`, clamped 0..=100; `u16::MAX` when no active row.
-    /// Changes at most ~100x per track, never per animation frame.
+    active_target: Option<QueueSlotId>,
     progress_bucket: u16,
-    paused: bool,
-    pending_slot: Option<QueueSlotId>,
-    title: QueueTitleModel,
 }
 
 /// The active row's progress bucket: whole-percent, so animation frames and
@@ -36,6 +25,21 @@ fn progress_bucket(playback: PlaybackState) -> u16 {
         (playback.position_ticks * 100 / playback.runtime_ticks).clamp(0, 100) as u16
     } else {
         u16::MAX
+    }
+}
+
+fn projected_active_target(
+    queue: &super::PlayerTab,
+    playback: PlaybackState,
+    pending_slot: Option<QueueSlotId>,
+) -> Option<QueueSlotId> {
+    if playback.active {
+        queue
+            .slots()
+            .get(playback.active_idx)
+            .map(|slot| slot.slot_id)
+    } else {
+        pending_slot.filter(|target| queue.slots().iter().any(|slot| slot.slot_id == *target))
     }
 }
 
@@ -71,28 +75,31 @@ impl Model {
             .queue_scope_is_playback(scope)
             .then(|| self.app.pending_playback_slot())
             .flatten();
-        let title = self.app.queue_title_model();
-        let title_area = self.app.layout.main.queue_title_area;
-
         let fingerprint = {
             let queue = self.app.queue_for_scope(scope);
             QueueProjectionFingerprint {
                 revision: queue.revision().raw(),
-                slot_count: queue.slots().len(),
                 scope,
                 active: playback.active,
-                active_idx: playback.active_idx,
+                active_target: projected_active_target(queue, playback, pending_slot),
                 progress_bucket: progress_bucket(playback),
-                paused: playback.paused,
-                pending_slot,
-                title: title.clone(),
             }
         };
+        let title = self.app.queue_title_model();
+        let title_area = self.app.layout.main.queue_title_area;
         // `sync_queue` runs on every run-loop tick. When nothing the projection
         // depends on changed and no authoritative cursor re-anchor is armed,
         // rebuilding the row vec (slot clone + per-row `format!`) would only
         // reproduce the current content -- skip it (#675).
-        let rows_changed = self.last_queue_projection.as_ref() != Some(&fingerprint);
+        let previous = self.last_queue_projection.as_ref();
+        let rows_changed = previous != Some(&fingerprint);
+        let bucket_only = previous.is_some_and(|old| {
+            old.revision == fingerprint.revision
+                && old.scope == fingerprint.scope
+                && old.active == fingerprint.active
+                && old.active_target == fingerprint.active_target
+                && old.progress_bucket != fingerprint.progress_bucket
+        });
 
         // Re-anchor only for authoritative content changes; routine updates preserve
         // the component-owned cursor. Cursor and chrome delivery is intentionally
@@ -103,16 +110,47 @@ impl Model {
             }
             _ => QueueCursorUpdate::Preserve,
         };
-        let slots = rows_changed.then(|| self.app.queue_for_scope(scope).slots().to_vec());
+        let slots = (!bucket_only && rows_changed)
+            .then(|| self.app.queue_for_scope(scope).slots().to_vec());
+        let patch = bucket_only
+            .then(|| {
+                let queue = self.app.queue_for_scope(scope);
+                fingerprint.active_target.and_then(|target| {
+                    queue
+                        .slots()
+                        .iter()
+                        .enumerate()
+                        .find(|(_, slot)| slot.slot_id == target)
+                        .map(|(index, slot)| {
+                            (
+                                target,
+                                crate::app::components::queue::queue_media_row(
+                                    slot,
+                                    index,
+                                    playback,
+                                    pending_slot,
+                                ),
+                            )
+                        })
+                })
+            })
+            .flatten();
         if rows_changed {
             self.last_queue_projection = Some(fingerprint);
         }
+        let throbber = playback.active.then(|| {
+            const FRAMES: [char; 8] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
+            FRAMES[self.app.now_playing_throbber_index % FRAMES.len()]
+        });
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
                 queue.set_pending_slot(pending_slot);
                 if let Some(slots) = slots {
                     queue.set_rows(slots, playback);
+                } else if let Some((target, row)) = patch {
+                    queue.set_row_patch(&target, row);
                 }
+                queue.set_throbber(throbber);
                 queue.set_cursor(cursor);
                 queue.set_scope_chrome(scope, title);
                 queue.set_area(self.app.layout.main.queue_area);
