@@ -20,7 +20,7 @@
 
 - [x] 4.1 In `src/app/components/queue.rs` add a private `drag_grab: Option<QueueSlotId>` field, armed in the existing `MouseGesture::Click` arm from the value `claim_slot(at)` already returns (design D6). Verify `cargo check -p mbv`.
 - [x] 4.2 Add the `MouseGesture::Drag { from: _, to }` arm to `handle_mouse`: return `None` unless `drag_grab` is set; resolve `to` via `self.list.resolve_point(self.area, to)`; return `None` when it resolves to nothing or to the grabbed slot itself (design R5); otherwise emit `Msg::Queue(QueueRequest::MoveTo { scope: self.scope, slot_id: grabbed, onto: resolved })` and select the grabbed slot so it stays highlighted. Add a `MouseGesture::DragEnd` arm that clears `drag_grab` and returns `None`. Verify `cargo check -p mbv`.
-- [x] 4.3 Add component tests in `src/app/components/queue_component_tests.rs` modelled on the existing click tests: press on row 0 then drag to row 2 emits `MoveTo` with the two slot ids; a drag onto blank space past the last row emits nothing and a subsequent drag back onto a row still emits; a drag with no preceding press emits nothing; `DragEnd` then a drag emits nothing. Verify `cargo nextest run -p mbv queue_component`.
+- [x] 4.3 Add component tests in `src/app/components/queue_drag_component_tests.rs` modelled on the existing click tests: press on row 0 then drag to row 2 emits `MoveTo` with the two slot ids; a drag onto blank space past the last row emits nothing and a subsequent drag back onto a row still emits; a drag with no preceding press emits nothing; `DragEnd` then a drag emits nothing. Verify `cargo nextest run -p mbv queue_drag`.
 
 ## 5. Documentation and gates
 
