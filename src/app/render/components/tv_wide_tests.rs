@@ -178,7 +178,7 @@ fn wide_tv_season_pills_keep_a_backward_selection_visible() {
     let mut app = tv_app();
     let seasons: Vec<_> = (0..8)
         .map(|index| {
-            let mut season = make_item(&format!("S{index}"), "Season");
+            let mut season = make_item(&format!("Season {index}"), "Season");
             season.id = format!("season-{index}");
             season
         })
@@ -213,7 +213,21 @@ fn wide_tv_season_pills_keep_a_backward_selection_visible() {
                 modifiers: tuirealm::event::KeyModifiers::NONE,
             },
         ));
+        component.set_content(
+            app.wide_tv_render_ctx(0, None)
+                .with_image_state(false, false),
+        );
     }
+    component.on(&tuirealm::event::Event::Keyboard(
+        tuirealm::event::KeyEvent {
+            code: tuirealm::event::Key::Char('['),
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        },
+    ));
+    component.set_content(
+        app.wide_tv_render_ctx(0, None)
+            .with_image_state(false, false),
+    );
 
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     assert!(terminal
@@ -221,16 +235,16 @@ fn wide_tv_season_pills_keep_a_backward_selection_visible() {
         .is_ok());
 
     let tabs = &component.test_layout().tv_wide_season_tabs;
-    let Some(selected) = tabs.iter().position(|(_, id)| *id == 4) else {
+    let Some(selected) = tabs.iter().position(|(_, id)| *id == 3) else {
         panic!("selected season must remain visible after moving backward");
     };
-    assert!(
-        selected > 0,
-        "selected season should not be pinned to the left edge"
+    assert_eq!(
+        selected, 0,
+        "moving left should advance the pill window left: {tabs:?}"
     );
     assert!(
         selected + 1 < tabs.len(),
-        "selected season should retain a visible successor"
+        "selected season should not be pinned to the trailing edge: {tabs:?}"
     );
     assert!(tabs.len() < 8, "the season row must actually overflow");
 }
