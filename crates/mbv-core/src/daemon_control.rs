@@ -513,8 +513,8 @@ fn handle_ctrl(
         }
         CtrlCmd::UnifiedQueuePlaySlot { slot_id } => {
             let sid = QueueSlotId::from_raw(slot_id);
-            match queue.set_active_slot(sid) {
-                crate::playback_queue::QueueMutationResult::Applied(()) => {
+            match queue.slot(sid) {
+                Some(_) => {
                     broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
                     // No client request id on this command, so the owner mints
                     // one to correlate the settling observation.
@@ -528,7 +528,7 @@ fn handle_ctrl(
                         crate::playback_transition::Transition::new(request_id, generation, sid),
                     );
                 }
-                crate::playback_queue::QueueMutationResult::NotFound => {
+                None => {
                     reject_command(
                         request.reply_tx,
                         ctrl_clients,

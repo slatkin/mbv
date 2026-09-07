@@ -68,6 +68,7 @@ fn unified_queue_state_for_peer(
     status: &crate::player::PlayerStatus,
     queue: &PlaybackQueue,
     source: &crate::config::QueueSource,
+    observed_active_slot: Option<crate::playback_queue::QueueSlotId>,
     in_flight_transition: Option<crate::ctrl::TransitionSummary>,
     queued_latest_transition: Option<crate::ctrl::TransitionSummary>,
     supports_abs_queue: bool,
@@ -86,8 +87,7 @@ fn unified_queue_state_for_peer(
             item: s.item.clone(),
         })
         .collect();
-    let active_slot = queue
-        .active_slot_id()
+    let active_slot = observed_active_slot
         .map(crate::ctrl::slot_id_to_u64)
         .filter(|active_id| slots.iter().any(|s| s.slot_id == *active_id));
     CtrlEvent::UnifiedQueueState(crate::ctrl::UnifiedQueueStateData {
@@ -112,19 +112,20 @@ fn broadcast_queue_state(
 ) {
     let status = player.status.lock().unwrap().clone();
     let (in_flight, queued_latest) = transitions.summaries();
+    let observed_active_slot = *shared_queue.observed_active_slot.lock().unwrap();
 
     // ── Unified-queue peers, gate ABS episodes and books independently ──
     let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, in_flight.clone(), queued_latest.clone(), true, true,
+        &status, queue, source, observed_active_slot, in_flight.clone(), queued_latest.clone(), true, true,
     ));
     let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, in_flight.clone(), queued_latest.clone(), true, false,
+        &status, queue, source, observed_active_slot, in_flight.clone(), queued_latest.clone(), true, false,
     ));
     let unified_book_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, in_flight.clone(), queued_latest.clone(), false, true,
+        &status, queue, source, observed_active_slot, in_flight.clone(), queued_latest.clone(), false, true,
     ));
     let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, in_flight, queued_latest, false, false,
+        &status, queue, source, observed_active_slot, in_flight, queued_latest, false, false,
     ));
 
     if let (
@@ -235,6 +236,7 @@ fn reject_command(
             &status,
             queue,
             source,
+            queue.active_slot_id(),
             None,
             None,
             supports_abs_queue,

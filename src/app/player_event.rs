@@ -226,7 +226,7 @@ impl App {
             }
             PlayerEvent::TrackChanged {
                 slot_id: target_slot_id,
-                transition: _,
+                transition,
             } => {
                 self.visualizer_failed = false;
                 self.next_up_item = None;
@@ -251,6 +251,25 @@ impl App {
                     }
                 }
 
+                if !self.player.is_remote() {
+                    self.bare_owner
+                        .sync_canonical_queue(self.playback_queue().queue.clone());
+                    let _ = self.bare_owner.observe_track_change(target_slot_id);
+                    if let Some((request_id, _generation)) = transition {
+                        if let mbv_core::playback_transition::SettleOutcome::Settled {
+                            dispatch_next: Some(next),
+                        } = self
+                            .bare_owner
+                            .settle_local_transition(request_id, target_slot_id)
+                        {
+                            self.player.send_command(PlayerCommand::JumpTo {
+                                slot_id: next.target,
+                                request_id: next.request_id,
+                                generation: next.generation,
+                            });
+                        }
+                    }
+                }
                 // Activate by owner-assigned identity. Slot identity is stable
                 // across the pending-removal consume above, so resolving it to
                 // a display position afterward is order-independent.
@@ -321,12 +340,24 @@ impl App {
                         .position(|s| matches!(&s.item, mbv_core::playback_queue::QueueItem::Emby(e) if e.id == item.id))
                     {
                         let slot_id = self.playback_queue().slots()[idx].slot_id;
-                        // task 4.3: Bare owner mints real transition identity
-                        self.player.send_command(PlayerCommand::JumpTo {
+                        self.bare_owner
+                            .sync_canonical_queue(self.playback_queue().queue.clone());
+                        let (request_id, generation) = self.bare_owner.mint_local_transition();
+                        let transition = mbv_core::playback_transition::Transition::new(
+                            request_id,
+                            generation,
                             slot_id,
-                            request_id: 0,
-                            generation: 0,
-                        });
+                        );
+                        if matches!(
+                            self.bare_owner.accept_local_transition(transition),
+                            mbv_core::playback_transition::DispatchDecision::DispatchNow(_)
+                        ) {
+                            self.player.send_command(PlayerCommand::JumpTo {
+                                slot_id,
+                                request_id,
+                                generation,
+                            });
+                        }
                         self.playback_queue_mut().queue_cursor = idx;
                         // Auto-advance to the next-up item: a follow-the-playhead
                         // move for the playback-target scope.

@@ -58,6 +58,21 @@ fn recv_unified_queue(rx: &mpsc::Receiver<CtrlOutbound>) -> crate::ctrl::Unified
 // the function handle_ws calls for both. Tested directly here to avoid the
 // socket plumbing that integration tests cover.
 #[test]
+fn unified_projection_uses_observed_slot_not_desired_queue_slot() {
+    let queue = PlaybackQueue::from_queue_items(vec![emby_qi("a", "Video", "Movie"), emby_qi("b", "Video", "Movie")], Some(0));
+    let observed = queue.slots()[1].slot_id;
+    let status = crate::player::PlayerStatus::default();
+    let source = crate::config::QueueSource::Unknown;
+    let event = super::unified_queue_state_for_peer(
+        &status, &queue, &source, Some(observed), None, None, true, true,
+    );
+    let CtrlEvent::UnifiedQueueState(data) = event else {
+        panic!("expected UnifiedQueueState");
+    };
+    assert_eq!(data.active_slot, Some(observed.raw()));
+}
+
+#[test]
 fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let abs = abs_qi("li_1", "ep_1");
     let emby = emby_qi("movie1", "Video", "Movie");
@@ -66,11 +81,11 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let source = crate::config::QueueSource::Unknown;
 
     let capable_data =
-        match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, true, false) {
+        match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, None, true, false) {
             CtrlEvent::UnifiedQueueState(d) => d,
             _ => panic!("expected UnifiedQueueState"),
         };
-    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, false, false)
+    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, None, false, false)
     {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),
@@ -95,7 +110,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
     let status = crate::player::PlayerStatus::default();
     let source = crate::config::QueueSource::Unknown;
 
-    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, false, false)
+    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, None, false, false)
     {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),

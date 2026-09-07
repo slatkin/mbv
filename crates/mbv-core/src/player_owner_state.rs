@@ -29,6 +29,22 @@ impl PlayerOwnerState {
         }
     }
 
+    /// Replace the Bare owner's canonical queue after a local queue mutation.
+    /// Daemon owners mutate this state directly; Bare keeps the existing shell
+    /// queue API and synchronizes the same canonical value at the boundary.
+    pub fn sync_canonical_queue(&mut self, queue: PlaybackQueue) {
+        let observed = self
+            .observed_active_slot
+            .filter(|slot_id| queue.slot(*slot_id).is_some());
+        self.queue = queue;
+        self.observed_active_slot = observed;
+        if let Some(slot_id) = observed {
+            let _ = self.queue.set_active_slot(slot_id);
+        } else {
+            self.queue.clear_active_slot();
+        }
+    }
+
     /// Record a Playback-run observation of the active file. The only path
     /// permitted to change the observed active slot (design D3).
     pub fn note_observed_active_slot(&mut self, slot_id: Option<QueueSlotId>) {
@@ -58,6 +74,31 @@ impl PlayerOwnerState {
 
     /// In-flight / queued-latest transition summaries for the owner snapshot
     /// (design D5).
+    /// Mint an owner-local transition identity for Bare-mode playback.
+    pub fn mint_local_transition(
+        &mut self,
+    ) -> (
+        crate::ctrl::PlaybackRequestId,
+        crate::ctrl::PlaybackGeneration,
+    ) {
+        self.transitions.mint_local_id()
+    }
+
+    pub fn accept_local_transition(
+        &mut self,
+        transition: crate::playback_transition::Transition,
+    ) -> crate::playback_transition::DispatchDecision {
+        self.transitions.accept(transition)
+    }
+
+    pub fn settle_local_transition(
+        &mut self,
+        request_id: crate::ctrl::PlaybackRequestId,
+        slot_id: QueueSlotId,
+    ) -> crate::playback_transition::SettleOutcome {
+        self.transitions.settle(request_id, slot_id)
+    }
+
     pub fn transition_summaries(
         &self,
     ) -> (

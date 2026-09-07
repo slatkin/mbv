@@ -526,12 +526,22 @@ impl App {
                             let Some(slot_id) = slot_id else {
                                 return false;
                             };
-                            // task 4.3: Bare owner mints real transition identity
-                            self.player.send_command(PlayerCommand::JumpTo {
-                                slot_id,
-                                request_id: 0,
-                                generation: 0,
-                            });
+                            self.bare_owner
+                                .sync_canonical_queue(self.playback_queue().queue.clone());
+                            let (request_id, generation) = self.bare_owner.mint_local_transition();
+                            let transition = mbv_core::playback_transition::Transition::new(
+                                request_id, generation, slot_id,
+                            );
+                            if matches!(
+                                self.bare_owner.accept_local_transition(transition),
+                                mbv_core::playback_transition::DispatchDecision::DispatchNow(_)
+                            ) {
+                                self.player.send_command(PlayerCommand::JumpTo {
+                                    slot_id,
+                                    request_id,
+                                    generation,
+                                });
+                            }
                         }
                     }
                 } else {

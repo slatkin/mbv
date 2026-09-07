@@ -183,6 +183,7 @@ pub(crate) fn make_app_stub() -> App {
         shared_client: None,
         shared_reconnect_rx: None,
         player,
+        bare_owner: mbv_core::player_owner_state::PlayerOwnerState::default(),
         mpris: None,
         launched_as_remote: false,
         player_rx,

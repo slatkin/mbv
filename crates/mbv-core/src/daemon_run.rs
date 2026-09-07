@@ -133,6 +133,7 @@ pub fn run_with_options(
     let shared_queue = SharedQueueState {
         queue: Arc::new(Mutex::new(PlaybackQueue::default())),
         source: Arc::new(Mutex::new(crate::config::QueueSource::Unknown)),
+        observed_active_slot: Arc::new(Mutex::new(None)),
     };
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
 
@@ -348,47 +349,8 @@ pub fn run_with_options(
                         transition,
                     }),
                 );
-                // Broadcast full state so peers see the authoritative playback position.
-                let status = player.status.lock().unwrap().clone();
-                let (in_flight_tx, queued_tx) = owner.core.transition_summaries();
-                let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &owner.core.queue, &owner.core.source, in_flight_tx.clone(), queued_tx.clone(),
-                    true, true,
-                ));
-                let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &owner.core.queue, &owner.core.source, in_flight_tx.clone(), queued_tx.clone(),
-                    true, false,
-                ));
-                let unified_book_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &owner.core.queue, &owner.core.source, in_flight_tx.clone(), queued_tx.clone(),
-                    false, true,
-                ));
-                let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &owner.core.queue, &owner.core.source, in_flight_tx, queued_tx, false, false,
-                ));
-                if let (
-                    Some(unified_full_json),
-                    Some(unified_abs_json),
-                    Some(unified_book_json),
-                    Some(unified_json),
-                ) = (
-                    unified_full_json,
-                    unified_abs_json,
-                    unified_book_json,
-                    unified_json,
-                ) {
-                    ctrl_clients.lock().unwrap().broadcast_state_gated(
-                        unified_full_json,
-                        unified_abs_json,
-                        unified_book_json,
-                        unified_json,
-                    );
-                }
-                // Update reconnect snapshot.
-                *shared_queue.queue.lock().unwrap() = owner.core.queue.clone();
-                *shared_queue.source.lock().unwrap() = owner.core.source.clone();
-                // Settle the desired transition and release anything queued
-                // behind it (task 3.3).
+                // Settle the desired transition before publishing so the
+                // snapshot contains every owner change from this turn.
                 if let Some((observed_request_id, _)) = transition {
                     settle_and_redispatch(
                         &mut owner,
@@ -397,7 +359,17 @@ pub fn run_with_options(
                         resolved_slot_id,
                     );
                 }
-                // Settle playback intent if the reported index matches.
+                *shared_queue.observed_active_slot.lock().unwrap() =
+                    owner.core.observed_active_slot();
+                broadcast_queue_state(
+                    &ctrl_clients,
+                    &player,
+                    &shared_queue,
+                    &owner.core.queue,
+                    &owner.core.source,
+                    &owner.core.transitions,
+                );
+                // Settle playback intent if the reported slot matches.
                 if let Some((connection_id, request_id, generation)) = owner.intents
                     .current
                     .as_ref()

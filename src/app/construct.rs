@@ -24,6 +24,10 @@ impl App {
         #[cfg(test)]
         let _test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
+        let bare_owner = mbv_core::player_owner_state::PlayerOwnerState::new(
+            init.player_tab.queue.clone(),
+            crate::config::QueueSource::Unknown,
+        );
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let (cast_tx, cast_rx) = mpsc::channel();
         let mut app = App {
@@ -51,6 +55,7 @@ impl App {
             shared_client: None,
             shared_reconnect_rx: None,
             player: init.player,
+            bare_owner,
             mpris: None,
             player_rx: init.player_rx,
             ws_rx: init.ws_rx,

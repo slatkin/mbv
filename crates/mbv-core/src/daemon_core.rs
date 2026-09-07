@@ -540,6 +540,7 @@ fn expire_and_redispatch(
 struct SharedQueueState {
     queue: Arc<Mutex<PlaybackQueue>>,
     source: Arc<Mutex<crate::config::QueueSource>>,
+    observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
 }
 
 pub struct DaemonPlayerHandle {
