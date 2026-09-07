@@ -168,6 +168,15 @@ impl PlaybackRun {
                     self.queue.remove_slot(slot_id);
                 }
             }
+            // Re-derive this run's mpv-local ordinal from the still-active
+            // slot's identity after an external shrink (identity -> ordinal is
+            // permitted, design D2); the else-branch clamp below only covers a
+            // shrink past the end, not an earlier removal shifting the active
+            // slot down.
+            self.current_idx = self
+                .active_slot_id()
+                .and_then(|s| self.queue.slot_index(s))
+                .unwrap_or(self.current_idx);
             self.sync_status_position();
             let _ = self.event_tx.send(PlayerEvent::QueueDesynced(format!(
                 "Queue desynced: {removed} item(s) removed externally"

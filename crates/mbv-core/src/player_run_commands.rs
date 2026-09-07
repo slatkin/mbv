@@ -80,6 +80,14 @@ impl PlaybackRun {
                             self.sync_status_position();
                         } else {
                             self.queue.remove_slot(slot_id);
+                            // active_file mode gets no mpv playlist-pos event to
+                            // self-correct the coordinate, so re-derive the
+                            // ordinal from the still-active slot's identity
+                            // (identity -> ordinal is permitted, design D2).
+                            self.current_idx = self
+                                .active_slot_id()
+                                .and_then(|s| self.queue.slot_index(s))
+                                .unwrap_or(self.current_idx);
                             self.sync_status_position();
                         }
                         return cancel_stop;

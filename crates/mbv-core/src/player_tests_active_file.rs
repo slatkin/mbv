@@ -80,6 +80,27 @@ fn failed_eager_transition_preserves_canonical_queue_and_mode() {
 }
 
 #[test]
+fn active_file_remove_of_earlier_slot_keeps_current_idx_on_the_playing_slot() {
+    // Regression (reviewer P2): active_file mode has no mpv playlist-pos event
+    // to self-correct current_idx. Removing a slot before the playing one must
+    // shift current_idx down so the next natural advance (current_idx + 1)
+    // still names the following slot, not the one after it.
+    let (mut run, _status) = make_queue_session_for_pos_tests(1); // [ep1, ep2, ep3], playing ep2
+    run.active_file = true;
+    let playing = run.active_slot_id().unwrap();
+    let earlier = run.slot_id_at(0).unwrap();
+    let following = run.slot_id_at(2).unwrap();
+    let mpv = test_mpv();
+    let mut progress = noop_progress();
+
+    run.handle_command(PlayerCommand::QueueRemove(earlier), &mpv, &mut progress);
+
+    assert_eq!(run.active_slot_id(), Some(playing));
+    assert_eq!(run.current_idx, 0);
+    assert_eq!(run.slot_id_at(run.current_idx + 1), Some(following));
+}
+
+#[test]
 fn replacement_prepare_failure_accepts_new_stopped_queue_and_clears_mpv() {
     let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(0);
     let mut replacement = abs_item();
