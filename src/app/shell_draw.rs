@@ -241,10 +241,12 @@ impl App {
             // the rows below it. Short terminals keep that same structure.
             let is_queue_only = self.effective_panel_mode() == PanelMode::QueueOnly;
             let is_wide = is_queue_only && left_area.width >= 100;
-            let idle_collapse = self.effective_panel_mode() == PanelMode::QueueOnly
-                && !self.effective_playback_state().active;
+            // The queue card is a now-playing visual, not a selected-item
+            // preview. Collapse it whenever playback is idle in every layout
+            // that shows the queue, including Both and narrow mini view.
+            let idle_collapse = !self.effective_playback_state().active;
             // The card's cache/size/fetch operation is authoritative for its
-            // dimensions. In an idle queue-only frame there is no card to
+            // dimensions. In an idle queue-visible frame there is no card to
             // paint, so publish zero geometry without entering the renderer
             // (and therefore without fetching artwork).
             let (card_h, card_w) = if idle_collapse {
@@ -263,9 +265,9 @@ impl App {
             // below the card on narrow terminals, or beside it on wide ones.
             // A connected transport keeps its panel even when it is not
             // currently active; only a genuinely idle queue-only frame hides
-            // both surfaces and returns its rows to the queue list. Narrow
-            // stacks the panel below the card; wide paints it beside the
-            // card, so the queue starts below whichever is taller.
+            // both queue-only surfaces and returns their rows to the queue
+            // list. Narrow stacks the panel below the card; wide paints it
+            // beside the card, so the queue starts below whichever is taller.
             let mut top_rows = layout.card.height;
             let mut stacked_rows = 0;
             if is_queue_only && (!idle_collapse || show_controls) {

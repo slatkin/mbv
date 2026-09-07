@@ -46,7 +46,7 @@ In library-only state the library panel SHALL occupy the full window width and t
 
 ### Requirement: Queue-only hides the library column
 
-In queue-only state the queue panel SHALL render across the full window width. The tab bar, library list, and status bar SHALL NOT be rendered. The playback panel SHALL be rendered within the left column (see `queue-only-playback` capability for layout details).
+In queue-only state the queue panel SHALL render across the full window width. The tab bar, library list, and status bar SHALL NOT be rendered. When playback is active or a transport is connected, the playback panel SHALL be rendered within the left column (see `queue-only-playback` capability for layout details); fully idle queue-only state SHALL omit it so its rows belong to the Queue.
 
 #### Scenario: Full-width queue
 
@@ -60,7 +60,7 @@ In queue-only state the queue panel SHALL render across the full window width. T
 
 #### Scenario: Playback panel rendered in left column
 
-- **WHEN** the layout is in queue-only state
+- **WHEN** the layout is in queue-only state and playback is active or a transport is connected
 - **THEN** the playback panel SHALL be rendered within the queue-only left column layout
 
 ### Requirement: Focus follows the mode
