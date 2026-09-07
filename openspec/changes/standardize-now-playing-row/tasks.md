@@ -5,8 +5,8 @@
 
 ## 2. `NowPlaying` row vocabulary
 
-- [ ] 2.1 Add `MediaSemanticState::NowPlaying { progress }` in `src/app/components/media_list/mod.rs` reusing the bounded `ActiveProgress`, leaving the `Active` variant and its constructor semantics unchanged, and update every exhaustive `match` on the enum (compiler-guided; resume/music/ABS/feeds/grouping sites keep current behavior). Verify with `cargo check -p mbv`.
-- [ ] 2.2 Add the aqua throbber theme role over the AQUA primitive in `src/app/render/theme/mod.rs` (raw primitive stays private to `theme/`), and verify no other theme role value changes with `cargo check -p mbv`.
+- [x] 2.1 Add `MediaSemanticState::NowPlaying { progress }` in `src/app/components/media_list/mod.rs` reusing the bounded `ActiveProgress`, leaving the `Active` variant and its constructor semantics unchanged, and update every exhaustive `match` on the enum (compiler-guided; resume/music/ABS/feeds/grouping sites keep current behavior). Verify with `cargo check -p mbv`.
+- [x] 2.2 Add the aqua throbber theme role over the AQUA primitive in `src/app/render/theme/mod.rs` (raw primitive stays private to `theme/`), and verify no other theme role value changes with `cargo check -p mbv`.
 
 ## 3. Painter: now-playing geometry with paint-time throbber
 
