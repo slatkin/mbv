@@ -11,7 +11,7 @@ Standing verification for each Rust task: run `cargo check -p mbv-core` for core
 ## 2. Make the Playback run an execution projection
 
 - [x] 2.1 Change queue submission and append paths to pass owner-assigned `(QueueSlotId, QueueItem)` pairs into the Playback run; verify duplicate QueueItems retain distinct owner ids through submission and append.
-- [ ] 2.2 Replace `PlaybackRun`'s canonical `PlaybackQueue` storage with the smallest slot-bearing execution sequence needed for mpv projection, retaining current eager-playlist and active-file loading behavior; verify existing playback-session and playlist tests pass unchanged.
+- [x] 2.2 Replace `PlaybackRun`'s canonical `PlaybackQueue` storage with the smallest slot-bearing execution sequence needed for mpv projection, retaining current eager-playlist and active-file loading behavior; verify existing playback-session and playlist tests pass unchanged.
 - [ ] 2.3 Resolve mpv playlist positions to `QueueSlotId` inside the Playback run immediately before emitting events, and resolve incoming slot commands to mpv-local positions immediately before commands; verify moving a slot while an event is pending never changes the event's slot identity.
 - [ ] 2.4 Remove Playback-run slot allocation, queue revision ownership, `refresh_current_idx_from_queue`, and fallbacks from missing slot identity to `current_idx`; verify no Playback-run path can create a canonical Queue slot.
 - [ ] 2.5 Emit transition observations with the sole dispatched request identity and emit natural advancement without one; extend the existing rapid-jump regression test to prove A-to-B-to-A cannot confirm the final A from the first A observation.
