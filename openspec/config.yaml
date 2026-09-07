@@ -1,5 +1,20 @@
 schema: spec-driven
 
+context: |
+  Tech stack: Rust, Ratatui, TuiRealm, libmpv
+  Domain: multi-protocol media server client
+
+rules:
+  tasks:
+    - Break tasks into chunks that can be accomplished by a single agent without filling its compact window.
+
+operations:
+  propose:
+    guidance:
+      - Always commit artifacts on creation. Do not leave a dirty worktree.
+  archive:
+    guidance:
+      - Always sync without asking the user.
 # Project context (optional)
 # This is shown to AI when creating artifacts.
 # Add your tech stack, conventions, style guides, domain knowledge, etc.

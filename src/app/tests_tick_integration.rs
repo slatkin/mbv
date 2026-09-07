@@ -680,6 +680,75 @@ fn blocking_overlay_focus_loss_and_restoration_through_live_tick() {
 }
 
 
+/// Playlist-Enter regression probe (Path A: Enter on an open playlist's item).
+/// Drives a real `Application::tick()`: the Playlists sidebar is mounted via
+/// the production overlay request, Enter is injected, the surviving messages
+/// are dispatched through `handle_terminal_message`, and the production sync
+/// pass runs. Asserts the sidebar unmounts, the queue populates, and panel
+/// focus moves to Queue.
+#[test]
+fn playlist_enter_replaces_queue_dismisses_sidebar_and_focuses_queue() {
+    use crate::app::tests::make_item;
+    let mut app = make_app_stub();
+    let playlist = make_item("P1", "Playlist");
+    let mut song = make_item("Song", "Audio");
+    song.id = "item-1".into();
+    app.playlists = vec![playlist.clone()];
+    app.playlists_cursor = 0;
+    app.playlists_open = Some(playlist);
+    app.playlists_open_items = vec![song];
+    app.playlists_open_cursor = 0;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().app.pending_overlay =
+        Some(OverlayRequest::OpenSidebar(crate::app::SidebarId::Playlists));
+    harness.model_mut().sync_mounted_surfaces();
+    let playlists_id = ComponentId::Overlay(OverlayId::Playlists);
+    assert!(harness.model().application.mounted(&playlists_id));
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&playlists_id),
+        "Playlists sidebar owns focus while mounted"
+    );
+
+    harness.inject(key(Key::Enter));
+    let outcome = harness.step();
+    assert_eq!(outcome.pre_fold_focus, Some(playlists_id.clone()));
+    assert!(matches!(outcome.router, RouterOutcome::FallThrough));
+    assert!(
+        outcome.messages.iter().any(|m| matches!(
+            m,
+            Msg::Shell(ShellRequest::PlaylistsActivate { open: true, index: 0 })
+        )),
+        "Enter on the open playlist item emits PlaylistsActivate"
+    );
+
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness.model_mut().handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert_eq!(
+        harness.model().app.playback_queue().total_queue_len(),
+        1,
+        "the queue populates with the playlist item"
+    );
+    assert!(
+        !harness.model().application.mounted(&playlists_id),
+        "the Playlists sidebar closes after Enter"
+    );
+    assert_eq!(
+        harness.model().app.effective_panel_focus(),
+        PanelFocus::Queue,
+        "panel focus moves to Queue after Enter"
+    );
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&ComponentId::Queue),
+        "TuiRealm focus lands on the Queue component"
+    );
+}
+
 /// Finding 1: `.` is a selection-dependent chord, so the central router falls
 /// it through to the focused `QueueComponent`; the emitted `QueueContextMenu`
 /// request is dispatched by the shell into a pending context-menu overlay.
