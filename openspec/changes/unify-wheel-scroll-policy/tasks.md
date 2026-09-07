@@ -5,9 +5,9 @@
 
 ## 2. Convert destination workspaces
 
-- [ ] 2.1 Convert Music and Feeds to direct one-step local movement through their painted canonical-list claims; verify their existing mouse tests cover both directions and a boundary without page/column multiplication.
-- [ ] 2.2 Convert Audiobookshelf podcast and book surfaces to one-step movement using their painter-published irregular-row geometry; verify focused component tests cover their show/book/chapter focus behavior at the applicable narrow and wide arrangements.
-- [ ] 2.3 Make Inline Search move its own result viewport by one step after it takes first refusal from its host; verify a focused search-host test proves the host list remains unchanged.
+- [x] 2.1 Convert Music and Feeds to direct one-step local movement through their painted canonical-list claims; verify their existing mouse tests cover both directions and a boundary without page/column multiplication.
+- [x] 2.2 Convert Audiobookshelf podcast and book surfaces to one-step movement using their painter-published irregular-row geometry; verify focused component tests cover their show/book/chapter focus behavior at the applicable narrow and wide arrangements.
+- [x] 2.3 Make Inline Search move its own result viewport by one step after it takes first refusal from its host; verify a focused search-host test proves the host list remains unchanged.
 
 ## 3. Convert sidebar and viewport surfaces
 
