@@ -8,11 +8,10 @@
 //! nor the position-keyed cross-surface clock that D16 forbade (design.md D3,
 //! "Reconciling with D16").
 //!
-//! Recognition covers `Click`/`DoubleClick`/`RightClick` and wheel `Scroll`.
-//! `Moved` and `Drag` events are accepted and ignored here; hover-move spam
-//! is dropped by the consuming component's first `on()` arm
-//! (`MouseEventKind::Moved => return None`), never by this module (design.md
-//! D7).
+//! Recognition covers `Click`/`DoubleClick`/`RightClick`, wheel `Scroll`, and
+//! left-button drag gestures. Hover-move spam is dropped by the consuming
+//! component's first `on()` arm (`MouseEventKind::Moved => return None`),
+//! never by this module (design.md D7).
 //!
 //! ## Chosen intervals
 //!
@@ -48,6 +47,11 @@ pub enum MouseGesture {
         at: Position,
         delta: i64,
     },
+    Drag {
+        from: Position,
+        to: Position,
+    },
+    DragEnd,
 }
 
 /// Per-parent gesture recognition state. One per mounted parent.
@@ -55,6 +59,7 @@ pub enum MouseGesture {
 pub struct MouseGestureState {
     last_click: Option<(Instant, Position)>,
     last_scroll: Option<Instant>,
+    drag_anchor: Option<Position>,
 }
 
 impl MouseGestureState {
@@ -64,8 +69,9 @@ impl MouseGestureState {
 
     /// Feed one raw mouse event; return the gesture it completes, if any.
     ///
-    /// `Moved`, `Drag(_)`, `Up(_)` and horizontal wheel events are accepted
-    /// and produce `None` (they must not panic — design.md D7).
+    /// `Moved` and horizontal wheel events are accepted and produce `None`
+    /// (they must not panic — design.md D7). A left-button drag reports motion
+    /// from its press anchor and ends on release.
     pub fn recognize(&mut self, event: &MouseEvent) -> Option<MouseGesture> {
         self.recognize_at(event, Instant::now())
     }
@@ -81,6 +87,7 @@ impl MouseGestureState {
                     .last_click
                     .is_some_and(|(t, p)| now.duration_since(t) < DOUBLE_CLICK_WINDOW && p == at);
                 self.last_click = Some((now, at));
+                self.drag_anchor = Some(at);
                 Some(if is_double {
                     MouseGesture::DoubleClick(at)
                 } else {
@@ -88,6 +95,12 @@ impl MouseGestureState {
                 })
             }
             MouseEventKind::Down(MouseButton::Right) => Some(MouseGesture::RightClick(at)),
+            MouseEventKind::Drag(MouseButton::Left) => self
+                .drag_anchor
+                .map(|from| MouseGesture::Drag { from, to: at }),
+            MouseEventKind::Up(MouseButton::Left) => {
+                self.drag_anchor.take().map(|_| MouseGesture::DragEnd)
+            }
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                 let allow = self
                     .last_scroll
@@ -215,13 +228,54 @@ mod tests {
     }
 
     #[test]
-    fn moved_and_drag_events_are_ignored_without_panic() {
+    fn press_drag_and_release_reports_the_full_gesture() {
         let mut s = MouseGestureState::new();
-        assert_eq!(s.recognize(&ev(MouseEventKind::Moved, 1, 1)), None);
+        assert_eq!(
+            s.recognize(&ev(MouseEventKind::Down(MouseButton::Left), 1, 2)),
+            Some(MouseGesture::Click(Position { x: 1, y: 2 }))
+        );
+        assert_eq!(
+            s.recognize(&ev(MouseEventKind::Drag(MouseButton::Left), 4, 5)),
+            Some(MouseGesture::Drag {
+                from: Position { x: 1, y: 2 },
+                to: Position { x: 4, y: 5 }
+            })
+        );
+        assert_eq!(
+            s.recognize(&ev(MouseEventKind::Up(MouseButton::Left), 4, 5)),
+            Some(MouseGesture::DragEnd)
+        );
+    }
+
+    #[test]
+    fn press_and_release_reports_no_drag() {
+        let mut s = MouseGestureState::new();
+        assert!(matches!(
+            s.recognize(&ev(MouseEventKind::Down(MouseButton::Left), 1, 2)),
+            Some(MouseGesture::Click(_))
+        ));
+        assert_eq!(
+            s.recognize(&ev(MouseEventKind::Up(MouseButton::Left), 1, 2)),
+            Some(MouseGesture::DragEnd)
+        );
+        assert_eq!(
+            s.recognize(&ev(MouseEventKind::Drag(MouseButton::Left), 1, 2)),
+            None
+        );
+    }
+
+    #[test]
+    fn unarmed_and_right_button_drags_are_ignored() {
+        let mut s = MouseGestureState::new();
         assert_eq!(
             s.recognize(&ev(MouseEventKind::Drag(MouseButton::Left), 1, 1)),
             None
         );
+        assert_eq!(
+            s.recognize(&ev(MouseEventKind::Drag(MouseButton::Right), 1, 1)),
+            None
+        );
+        assert_eq!(s.recognize(&ev(MouseEventKind::Moved, 1, 1)), None);
         assert_eq!(
             s.recognize(&ev(MouseEventKind::Up(MouseButton::Left), 1, 1)),
             None

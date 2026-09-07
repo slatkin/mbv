@@ -138,6 +138,13 @@ impl App {
             }
             t
         };
+        self.move_queue_item_to(scope, from, to);
+    }
+
+    /// Moves the item at `from` to `to` within `scope`'s queue and records the
+    /// undo entry. `scope` is passed explicitly (D2) rather than re-read from
+    /// `viewed_queue_scope()` as an ambient channel.
+    pub(super) fn move_queue_item_to(&mut self, scope: QueueScope, from: usize, to: usize) {
         let Some(slot_id) = self.queue_for_scope_mut(scope).slot_id_at(from) else {
             return;
         };
