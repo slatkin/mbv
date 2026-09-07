@@ -12,7 +12,6 @@ pub fn run_with_options(
 
     // Shared shutdown channel — written by SIGTERM thread and tray Quit item.
     let (shutdown_signal_tx, shutdown_signal_rx) = mpsc::sync_channel::<()>(1);
-
     // Block SIGTERM in all threads so sigwait() owns it exclusively.
     unsafe {
         let mut mask = std::mem::zeroed::<libc::sigset_t>();
@@ -20,7 +19,6 @@ pub fn run_with_options(
         libc::sigaddset(&mut mask, libc::SIGTERM);
         libc::pthread_sigmask(libc::SIG_BLOCK, &mask, std::ptr::null_mut());
     }
-
     // Thread that blocks on SIGTERM and forwards it as a graceful shutdown.
     {
         let tx = shutdown_signal_tx.clone();
@@ -36,7 +34,6 @@ pub fn run_with_options(
             let _ = tx.try_send(());
         });
     }
-
     let client = emby_runtime
         .as_ref()
         .map(|runtime| runtime.client.clone())
@@ -81,7 +78,6 @@ pub fn run_with_options(
         ws_send_tx.clone(),
     )
     .with_audio_device(audio_device);
-
     player.pre_warm(
         client_locked.config.audio_pipe_target(),
         client_locked.config.audio_pipe_samplerate,
@@ -95,7 +91,6 @@ pub fn run_with_options(
     });
 
     let _tray = (hooks.on_tray_ready)(shutdown_signal_tx.clone());
-
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
 
     let tx = merged_tx.clone();
@@ -199,7 +194,6 @@ pub fn run_with_options(
             }
         }
     }
-
     // --- From here on: network/Emby-session-visibility setup (protocol
     // negotiation metadata, capability registration). Local control is
     // already up and serving connections above. ---

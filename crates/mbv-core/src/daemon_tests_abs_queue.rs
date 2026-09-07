@@ -766,7 +766,6 @@ fn book_progress_update_does_not_touch_episode_slots() {
     );
     assert!(!episode.is_finished);
 }
-
 // An episode progress update must not match a book queue slot, even on a
 // colliding `library_item_id`.
 #[test]
@@ -777,7 +776,6 @@ fn episode_progress_update_does_not_touch_book_slots() {
         .as_audiobookshelf_book()
         .unwrap()
         .position_ticks;
-
     apply_audiobookshelf_progress(
         AudiobookshelfProgressUpdate {
             generation: SetupGeneration::new(1),
