@@ -1,7 +1,7 @@
 ## 1. Establish the shared wheel boundary
 
-- [ ] 1.1 Characterize the existing signed one-notch gesture behavior and expose the minimum canonical-list claim seam needed by parent components; verify the focused gesture/list tests prove one-step direction and painted-region rejection.
-- [ ] 1.2 Convert Browser (including narrow TV), Home, Queue, and wide TV to local one-step wheel movement; remove `HomeScroll`, `BrowserScroll`, `TvScroll`, the shell Queue wheel mover, and their dead tests; verify focused component tests plus a real `Application::tick()` test prove the correct mounted owner changes locally without a shell relay.
+- [x] 1.1 Characterize the existing signed one-notch gesture behavior and expose the minimum canonical-list claim seam needed by parent components; verify the focused gesture/list tests prove one-step direction and painted-region rejection.
+- [x] 1.2 Convert Browser (including narrow TV), Home, Queue, and wide TV to local one-step wheel movement; remove `HomeScroll`, `BrowserScroll`, `TvScroll`, the shell Queue wheel mover, and their dead tests; verify focused component tests plus a real `Application::tick()` test prove the correct mounted owner changes locally without a shell relay.
 
 ## 2. Convert destination workspaces
 
