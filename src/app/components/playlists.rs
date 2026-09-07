@@ -244,7 +244,10 @@ impl PlaylistsComponent {
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { delta, .. } => {
                 let at = ratatui::layout::Position::new(mouse.column, mouse.row);
-                if !self.geometry.content_area.contains(at) {
+                // Wheel movement is accepted only over a row the painter
+                // published.  The broader content area includes blank space
+                // between/around wrapped rows and must not move selection.
+                if self.hit_rows.resolve(at).is_none() {
                     return None;
                 }
                 if self.open.is_some() {

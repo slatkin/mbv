@@ -1,9 +1,10 @@
 //! `Msg` and its request payloads (design D4).
 //!
-//! `Msg` carries only cross-authority requests; local state changes never
-//! become a `Msg` (they mutate the component in `on`/`update` and return
-//! `None`). Request payloads are placeholder scaffolds filled in as each
-//! surface converts (see per-type TODOs).
+//! `Msg` carries cross-authority requests. Local state changes mutate the
+//! component in `on`/`update`; a component may additionally return the
+//! framework-local `TerminalObserverEvent::NoOp` marker when the event was
+//! consumed after such a mutation. Request payloads are placeholder scaffolds
+//! filled in as each surface converts (see per-type TODOs).
 //!
 //! Task 8.3 split the per-family request/intent enums into submodules so
 //! this file stays below the 800-line cap. Re-exports preserve the
@@ -71,5 +72,7 @@ pub enum TerminalObserverEvent {
         column: u16,
         row: u16,
     },
+    /// Framework-local consumption marker. The shell deliberately ignores
+    /// this variant; it is not a relay for the local mutation that preceded it.
     NoOp,
 }

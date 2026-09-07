@@ -42,7 +42,7 @@ fn playlists_component_hit_test_uses_wrapped_row_geometry() {
 }
 
 #[test]
-fn playlists_component_wheel_moves_one_row_and_rejects_outside_content() {
+fn playlists_component_wheel_moves_one_row_and_rejects_blank_content_space() {
     let mut component = PlaylistsComponent::new();
     component.set_content(PlaylistsContent {
         playlists: vec![],
@@ -76,9 +76,11 @@ fn playlists_component_wheel_moves_one_row_and_rejects_outside_content() {
     component.on(&wheel(MouseEventKind::ScrollDown));
     assert_eq!(component.open_cursor(), 1);
     component.reset_mouse_gestures_for_test();
+    // The painter's content area extends below these two one-line rows, but
+    // that blank space is not a scroll target.
     component.on(&Event::Mouse(MouseEvent {
-        column: 1,
-        row: 1,
+        column: row.x,
+        row: row.y + 2,
         kind: MouseEventKind::ScrollUp,
         modifiers: KeyModifiers::NONE,
     }));
