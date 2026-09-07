@@ -9,6 +9,7 @@ pub mod cast_dispatch;
 pub mod config;
 pub mod ctrl;
 pub mod daemon;
+pub(crate) mod daemon_ctrl;
 pub mod id_types;
 pub use id_types::{EmbySessionId, ItemId, MediaSourceId};
 pub mod playback_execution_sequence;
