@@ -1,9 +1,0 @@
-{"ts":"2026-09-07T09:31:19.885Z","tool":"ast_grep_search","lang":"rust","pattern":"ReplaceQueue","patternLineCount":1,"pathsCount":2,"outcome":"success","matchCount":4,"truncated":false,"durationMs":85}
-{"ts":"2026-09-07T09:31:19.896Z","tool":"ast_grep_search","lang":"rust","pattern":"stop_report","patternLineCount":1,"pathsCount":2,"outcome":"success","matchCount":5,"truncated":false,"durationMs":85}
-{"ts":"2026-09-07T09:31:19.912Z","tool":"ast_grep_search","lang":"rust","pattern":"Standalone","patternLineCount":1,"pathsCount":2,"outcome":"success","matchCount":20,"truncated":false,"durationMs":101}
-{"ts":"2026-09-07T09:31:29.205Z","tool":"ast_grep_search","lang":"rust","pattern":"submit_queue($$$ARGS)","patternLineCount":1,"pathsCount":1,"outcome":"no_matches","matchCount":0,"truncated":false,"durationMs":44}
-{"ts":"2026-09-07T09:31:29.205Z","tool":"ast_grep_search","lang":"rust","pattern":"replace_queue($$$ARGS)","patternLineCount":1,"pathsCount":1,"outcome":"no_matches","matchCount":0,"truncated":false,"durationMs":44}
-{"ts":"2026-09-07T09:31:29.207Z","tool":"ast_grep_search","lang":"rust","pattern":"start_queue($$$ARGS)","patternLineCount":1,"pathsCount":1,"outcome":"no_matches","matchCount":0,"truncated":false,"durationMs":46}
-{"ts":"2026-09-07T09:31:29.212Z","tool":"ast_grep_search","lang":"rust","pattern":"load_state = $$$VALUE","patternLineCount":1,"pathsCount":1,"outcome":"no_matches","matchCount":0,"truncated":false,"durationMs":51}
-{"ts":"2026-09-07T09:31:29.218Z","tool":"ast_grep_search","lang":"rust","pattern":"status.current_idx = $$$VALUE","patternLineCount":1,"pathsCount":1,"outcome":"success","matchCount":3,"truncated":false,"durationMs":57}
-{"ts":"2026-09-07T10:51:32.611Z","tool":"ast_grep_search","lang":"rust","pattern":"PlayerEvent::TrackCompleted { $$$ } => $BODY","patternLineCount":1,"pathsCount":1,"outcome":"no_matches","matchCount":0,"truncated":false,"durationMs":123}
