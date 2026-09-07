@@ -20,4 +20,4 @@
 
 - [x] 4.1 Add an idle-gains-rows queue-only test asserting `layout.queue_area` starts one row below `left_content.y` (the existing `+ 1` separator in `queue_panel_geometry` is unchanged, so this is NOT `area.y`) and gains the card + panel rows versus the active layout; then start playback and assert the card and panel return. Verify with `cargo nextest run -p mbv render::tests_queue`.
 - [x] 4.2 Read the archived `panel-mode` requirement that says the queue list, playback card, and visualizer are not rendered in library-only, and confirm this change leaves it true rather than assuming it.
-- [ ] 4.3 Run the full gates and verify green: `cargo check -p mbv`, `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`, `cargo fmt --all -- --check`, `ast-grep scan`, `make check-code-file-lines`.
+- [x] 4.3 Run the full gates and verify green: `cargo check -p mbv`, `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`, `cargo fmt --all -- --check`, `ast-grep scan`, `make check-code-file-lines`.
