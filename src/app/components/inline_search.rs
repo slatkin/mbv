@@ -383,6 +383,7 @@ impl InlineSearch {
                 }
             }
             MouseGesture::Scroll { .. } => {}
+            MouseGesture::Drag { .. } | MouseGesture::DragEnd => {}
         }
         None
     }
