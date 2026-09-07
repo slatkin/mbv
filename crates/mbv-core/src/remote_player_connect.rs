@@ -279,10 +279,14 @@ fn apply_ctrl_event(
         CtrlEvent::Hello(_) => {
             log::warn!(target: "remote", "unexpected daemon protocol hello after negotiation");
         }
-        // Bound queue coordinates and playback status arrive together in the
-        // unified snapshot. Ignore the legacy status-only projection rather
-        // than pairing it with a queue from another owner revision.
-        CtrlEvent::StatusOnly(_) => {}
+        CtrlEvent::StatusOnly(s) => {
+            let mut current = status.lock().unwrap();
+            let current_idx = current.current_idx;
+            let queue_len = current.queue_len;
+            *current = s;
+            current.current_idx = current_idx;
+            current.queue_len = queue_len;
+        }
         CtrlEvent::Player(pe) => {
             match &pe {
                 PlayerEvent::Stopped { .. } => {
