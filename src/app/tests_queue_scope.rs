@@ -81,6 +81,7 @@ fn direct_remote_play_items_keeps_local_queue_intact() {
         items: replacement.clone(),
         start_idx: 2,
         source: crate::config::QueueSource::Shuffle,
+        autostart: true,
     });
 
     assert_eq!(

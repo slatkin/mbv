@@ -289,10 +289,26 @@ impl App {
                 items,
                 start_idx,
                 source,
+                autostart,
             } => {
                 let direct_remote = self.has_direct_remote_queue();
                 if self.local_queue_metadata_applies(self.playing_queue_scope()) {
                     self.queue_source = source;
+                }
+                if !autostart {
+                    // Playlist Enter populates the queue; Space/Enter starts it.
+                    let loaded = items.get(start_idx).map(|i| i.playback_label());
+                    if direct_remote {
+                        self.replace_direct_remote_queue(items, start_idx);
+                    } else {
+                        self.replace_playback_queue(items, start_idx);
+                    }
+                    self.set_queue_scope(self.playing_queue_scope());
+                    self.persist_local_queue_state_if_needed(self.playing_queue_scope());
+                    if let Some(label) = loaded {
+                        self.flash(format!("Loaded: {label}"), ToastSeverity::Neutral);
+                    }
+                    return;
                 }
                 if !direct_remote {
                     self.replace_playback_queue(items.clone(), start_idx);
@@ -327,29 +343,6 @@ impl App {
                 }
                 if !direct_remote {
                     self.save_queue_state();
-                }
-            }
-            PendingQueueAction::LoadItems {
-                items,
-                start_idx,
-                source,
-            } => {
-                let direct_remote = self.has_direct_remote_queue();
-                if self.local_queue_metadata_applies(self.playing_queue_scope()) {
-                    self.queue_source = source;
-                }
-                if !direct_remote {
-                    self.replace_playback_queue(items.clone(), start_idx);
-                } else {
-                    self.replace_direct_remote_queue(items.clone(), start_idx);
-                }
-                self.set_queue_scope(self.playing_queue_scope());
-                self.persist_local_queue_state_if_needed(self.playing_queue_scope());
-                if let Some(item) = items.get(start_idx) {
-                    self.flash(
-                        format!("Loaded: {}", item.playback_label()),
-                        ToastSeverity::Neutral,
-                    );
                 }
             }
             PendingQueueAction::ClearQueue => {
