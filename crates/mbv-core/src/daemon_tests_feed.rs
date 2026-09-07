@@ -18,12 +18,8 @@ fn feed_entry(guid: &str) -> FeedEntry {
 fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
     let player = cold_player();
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, sender_rx) = {
-        let mut clients = registry.lock().unwrap();
-        connect_client(&mut clients)
-    };
     let shared_queue = shared_queue_state();
-    let mut queue = PlaybackQueue::from_queue_items(
+    let queue = PlaybackQueue::from_queue_items(
         vec![
             QueueItem::Feed(feed_entry("feed-1")),
             QueueItem::Feed(feed_entry("feed-2")),
@@ -32,27 +28,44 @@ fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
     );
     let source = QueueSource::Unknown;
 
-    // Find and consume the "feed-1" slot.
+    // Complete feed-1 while no Client is attached. The owner, not a Client,
+    // applies the configured consume policy to the canonical queue.
     let slot_id = queue
         .slots()
         .iter()
         .find(|s| s.item.id() == "feed-1")
         .map(|s| s.slot_id)
         .expect("feed-1 slot not found");
-    match queue.consume_slot(slot_id) {
-        crate::playback_queue::QueueMutationResult::Applied(_) => {}
-        other => panic!("expected slot consumed, got {other:?}"),
-    }
-    super::broadcast_queue_state(&registry, &player, &shared_queue, &queue, &source, &crate::playback_transition::OwnerTransitionState::default());
+    let mut owner = PlayerOwnerState::new(queue, source.clone());
+    assert!(matches!(
+        owner.consume_completed_slot(slot_id, true, false, true),
+        crate::playback_queue::QueueMutationResult::Applied(_)
+    ));
+    super::broadcast_queue_state(
+        &registry,
+        &player,
+        &shared_queue,
+        &owner.queue,
+        &owner.source,
+        &crate::playback_transition::OwnerTransitionState::default(),
+    );
 
-    // Only the matching slot was removed.
-    assert_eq!(queue.len(), 1);
-    assert_eq!(queue.slots()[0].item.id(), "feed-2");
-    // Reconnect snapshot updated.
-    {
-        let q = shared_queue.queue.lock().unwrap();
-        assert_eq!(q.len(), 1);
-    }
+    // A later Client receives the shortened owner snapshot.
+    let (_sender_id, sender_rx) = {
+        let mut clients = registry.lock().unwrap();
+        connect_client(&mut clients)
+    };
+    super::broadcast_queue_state(
+        &registry,
+        &player,
+        &shared_queue,
+        &owner.queue,
+        &owner.source,
+        &crate::playback_transition::OwnerTransitionState::default(),
+    );
+    assert_eq!(owner.queue.len(), 1);
+    assert_eq!(owner.queue.slots()[0].item.id(), "feed-2");
+    assert_eq!(shared_queue.queue.lock().unwrap().len(), 1);
     match recv_event(&sender_rx) {
         CtrlEvent::UnifiedQueueState(state) => {
             assert_eq!(state.slots.len(), 1);

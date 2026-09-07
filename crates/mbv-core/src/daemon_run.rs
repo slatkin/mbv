@@ -472,6 +472,36 @@ pub fn run_with_options(
                     &CtrlEvent::Player(PlayerEvent::OutputStarted),
                 );
             }
+            DaemonEvent::Player(pe @ PlayerEvent::TrackCompleted {
+                slot_id,
+                consume,
+                ..
+            }) => {
+                let (consume_videos, consume_audio) = {
+                    let cfg = client.lock().unwrap();
+                    (cfg.config.consume_videos, cfg.config.consume_audio)
+                };
+                let result = owner.core.consume_completed_slot(
+                    slot_id,
+                    consume,
+                    consume_videos,
+                    consume_audio,
+                );
+                if matches!(result, crate::playback_queue::QueueMutationResult::Applied(_)) {
+                    log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?}");
+                }
+                *shared_queue.observed_active_slot.lock().unwrap() =
+                    owner.core.observed_active_slot();
+                broadcast_queue_state(
+                    &ctrl_clients,
+                    &player,
+                    &shared_queue,
+                    &owner.core.queue,
+                    &owner.core.source,
+                    &owner.core.transitions,
+                );
+                broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
+            }
             DaemonEvent::Player(pe) => {
                 if let PlayerEvent::PausedChanged(paused) = &pe {
                     if let Some((connection_id, request_id, generation)) = owner.intents

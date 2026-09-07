@@ -67,6 +67,28 @@ impl PlayerOwnerState {
         Some((index, resolved))
     }
 
+    /// Consume a completed slot in the owner's canonical queue when the
+    /// completion event and the configured per-kind policy both allow it.
+    pub fn consume_completed_slot(
+        &mut self,
+        slot_id: QueueSlotId,
+        consume: bool,
+        consume_videos: bool,
+        consume_audio: bool,
+    ) -> crate::playback_queue::QueueMutationResult<crate::playback_queue::QueueSlot> {
+        let Some(slot) = self.queue.slot(slot_id) else {
+            return crate::playback_queue::QueueMutationResult::NotFound;
+        };
+        let allowed = consume
+            && ((slot.item.is_video() && consume_videos)
+                || (slot.item.is_audio() && consume_audio));
+        if allowed {
+            self.queue.consume_slot(slot_id)
+        } else {
+            crate::playback_queue::QueueMutationResult::NotFound
+        }
+    }
+
     /// The last Playback-run-observed active slot (design D3).
     pub fn observed_active_slot(&self) -> Option<QueueSlotId> {
         self.observed_active_slot
