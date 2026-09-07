@@ -144,14 +144,18 @@ fn unrelated_key_does_not_fire() {
 fn o_opens_an_idle_feed_link_only_when_available() {
     let o = key(KeyCode::Char('o'));
     assert_eq!(
-        idle_feed_command_for_key(o, false, false, true),
+        idle_feed_command_for_key(o, false, false, false, true),
         Some(Command::OpenIdleFeedLink)
     );
-    assert_eq!(idle_feed_command_for_key(o, true, false, true), None);
-    assert_eq!(idle_feed_command_for_key(o, false, true, true), None);
-    assert_eq!(idle_feed_command_for_key(o, false, false, false), None);
+    assert_eq!(idle_feed_command_for_key(o, true, false, false, true), None);
+    assert_eq!(idle_feed_command_for_key(o, false, true, false, true), None);
     assert_eq!(
-        idle_feed_command_for_key(key_ctrl(KeyCode::Char('o')), false, false, true),
+        idle_feed_command_for_key(o, false, false, false, false),
+        None
+    );
+    assert_eq!(idle_feed_command_for_key(o, false, false, true, true), None);
+    assert_eq!(
+        idle_feed_command_for_key(key_ctrl(KeyCode::Char('o')), false, false, false, true),
         None
     );
 }
