@@ -537,25 +537,10 @@ impl PlaybackRun {
             PlaybackOrigin::Queue
         };
 
-        // Report stopped for the current item (is_audio zeroing handled
-        // inside).  For the feed path, clear_session was called earlier so
-        // this becomes a safe no-op.
-        if self.queue_len() > 0 {
-            self.stop_report =
-                StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
-        } else {
-            self.stop_report = StopReport::NotSent;
-        }
-
-        // Dismiss overlays from the previous item.
+        let had_previous_queue = self.queue_len() > 0;
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
         let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
-        // Remove all old playlist entries so the subsequent loadfile
-        // "replace" starts from a clean slate.
         let _ = mpv.command("playlist-clear", &[]);
-
-        // Load every item into mpv — source URL resolution branches on
-        // QueueItem variant; everything else is shared.
         for i in queue_load_indices(items.len(), start_idx) {
             let item = &items[i].1;
             let url = mpv_url_for_queue_item(item, &self.server_url, &self.token);
@@ -570,18 +555,10 @@ impl PlaybackRun {
         }
 
         let active_item = &items[start_idx].1;
-
-        // send_ep_info only for Emby items.
         if let Some(emby) = active_item.as_emby() {
             send_ep_info(mpv, emby);
         }
-
-        // loadfile "replace" displaces the current file (EndFile #1).
-        self.load_state = LoadState::begin_single();
-        self.pending_initial_playlist_layout = false;
-
         self.origin = origin;
-        // Clone the active item metadata before moving `items` into the queue.
         let active_runtime = active_item.runtime_ticks();
         let active_pos = active_item.playback_position_ticks();
         let active_as_emby = active_item.as_emby().cloned();
@@ -592,11 +569,42 @@ impl PlaybackRun {
         self.current_idx = start_idx;
         self.load_active_item_state();
         self.begin_item_lifecycle();
+        self.initialize_queue_start(
+            had_previous_queue,
+            active_as_emby.as_ref(),
+            active_pos,
+            active_runtime,
+            active_title,
+            active_guid,
+            progress,
+        );
 
-        // Set up reporter for the start item — Emby items get full
-        // reporting; Feed items get a cleared session (no-op reports).
+        log::info!(
+            target: "player",
+            "SubmitQueue origin={origin:?} idx={start_idx} items={}",
+            self.queue_len(),
+        );
+    }
+
+    fn initialize_queue_start(
+        &mut self,
+        had_previous_queue: bool,
+        active_as_emby: Option<&EmbyItem>,
+        active_pos: i64,
+        active_runtime: i64,
+        active_title: String,
+        active_guid: String,
+        progress: &mut ProgressGuard,
+    ) {
+        self.stop_report = if had_previous_queue {
+            StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos))
+        } else {
+            StopReport::NotSent
+        };
+        self.load_state = LoadState::begin_single();
+        self.pending_initial_playlist_layout = false;
         progress.stop_and_join(self.progress_join_budget());
-        if let Some(emby) = &active_as_emby {
+        if let Some(emby) = active_as_emby {
             let (urls, ok) = self.reporter.start_item(emby);
             self.ext_sub_urls = urls;
             if !ok {
@@ -611,24 +619,16 @@ impl PlaybackRun {
             self.reporter.clear_session();
         }
         *progress = spawn_progress_reporter(self.reporter.clone());
-
-        log::info!(
-            target: "player",
-            "SubmitQueue origin={origin:?} idx={start_idx} items={}",
-            self.queue_len(),
-        );
-        {
-            let mut s = self.status.lock().unwrap();
-            s.position_ticks = active_pos;
-            s.runtime_ticks = active_runtime;
-            s.current_idx = self.current_idx;
-            s.queue_len = self.queue_len();
-            if let Some(emby) = &active_as_emby {
-                s.set_current_item_metadata(emby);
-            } else {
-                s.title = active_title;
-                s.art_item_id = active_guid;
-            }
+        let mut status = self.status.lock().unwrap();
+        status.position_ticks = active_pos;
+        status.runtime_ticks = active_runtime;
+        status.current_idx = self.current_idx;
+        status.queue_len = self.queue_len();
+        if let Some(emby) = active_as_emby {
+            status.set_current_item_metadata(emby);
+        } else {
+            status.title = active_title;
+            status.art_item_id = active_guid;
         }
     }
 
