@@ -577,6 +577,7 @@ impl PlaybackRun {
             active_title,
             active_guid,
             progress,
+            true,
         );
 
         log::info!(
@@ -595,15 +596,20 @@ impl PlaybackRun {
         active_title: String,
         active_guid: String,
         progress: &mut ProgressGuard,
+        initialize_load_state: bool,
     ) {
         self.stop_report = if had_previous_queue {
             StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos))
         } else {
             StopReport::NotSent
         };
-        self.load_state = LoadState::begin_single();
-        self.pending_initial_playlist_layout = false;
-        progress.stop_and_join(self.progress_join_budget());
+        if initialize_load_state {
+            self.load_state = LoadState::begin_single();
+            self.pending_initial_playlist_layout = false;
+        }
+        if initialize_load_state {
+            progress.stop_and_join(self.progress_join_budget());
+        }
         if let Some(emby) = active_as_emby {
             let (urls, ok) = self.reporter.start_item(emby);
             self.ext_sub_urls = urls;
@@ -666,7 +672,7 @@ impl PlaybackRun {
             }
         };
 
-        self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
+        let had_previous_queue = self.queue_len() > 0;
         progress.stop_and_join(self.progress_join_budget());
         let active_slot_id = items.get(start_idx).map(|(id, _)| *id);
         self.queue = ExecutionSequence::from_slot_items(items, active_slot_id);
@@ -691,23 +697,17 @@ impl PlaybackRun {
         };
         self.load_active_item_state();
         self.begin_item_lifecycle();
-        if let Some(emby) = active_item.as_emby() {
-            let (urls, ok) = self.reporter.start_item(emby);
-            self.ext_sub_urls = urls;
-            if !ok {
-                log::warn!(target: "player", "start_item failed for active-file replacement item={}", emby.id);
-            }
-        } else {
-            self.ext_sub_urls.clear();
-            self.reporter.clear_session();
-        }
-        *progress = spawn_progress_reporter(self.reporter.clone());
-        let mut status = self.status.lock().unwrap();
-        status.active = true;
-        status.position_ticks = active_item.playback_position_ticks();
-        status.runtime_ticks = active_item.runtime_ticks();
-        status.current_idx = start_idx;
-        status.queue_len = self.queue_len();
+        self.initialize_queue_start(
+            had_previous_queue,
+            active_item.as_emby(),
+            active_item.playback_position_ticks(),
+            active_item.runtime_ticks(),
+            active_item.title().to_string(),
+            active_item.id().to_string(),
+            progress,
+            false,
+        );
+        self.status.lock().unwrap().active = true;
     }
 
     fn accept_stopped_replacement(
