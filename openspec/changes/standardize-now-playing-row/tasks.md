@@ -10,8 +10,8 @@
 
 ## 3. Painter: now-playing geometry with paint-time throbber
 
-- [ ] 3.1 In `wide_media_row` (`src/app/render/components/media_list/wide_row.rs`), add the `NowPlaying` arm (no inline progress; right slot renders `glyph pct` as aqua-glyph + FOAM-pct spans replacing the duration, neither span using the green duration role; throbber alone when progress is `None`; `Collection` kind suppresses the slot) plus a trailing `throbber: Option<char>` parameter, leaving the `Active` arm byte-identical, and assert all eight braille glyphs are single-column with narrow/zero-reserve buffer cases (long titles, scrollbar, focused selection, throbber-only, `glyph 100%`). Verify the 1.1 test now passes.
-- [ ] 3.2 Thread the throbber parameter through `render_wide_media_list` and the internal `wide_media_row` call inside `render_inline_media_browser` (queue never uses the inline path — it passes `None`), updating all non-queue callers to pass `None`, and verify with `cargo check -p mbv` plus the wide-row regression suite.
+- [x] 3.1 In `wide_media_row` (`src/app/render/components/media_list/wide_row.rs`), add the `NowPlaying` arm (no inline progress; right slot renders `glyph pct` as aqua-glyph + FOAM-pct spans replacing the duration, neither span using the green duration role; throbber alone when progress is `None`; `Collection` kind suppresses the slot) plus a trailing `throbber: Option<char>` parameter, leaving the `Active` arm byte-identical, and assert all eight braille glyphs are single-column with narrow/zero-reserve buffer cases (long titles, scrollbar, focused selection, throbber-only, `glyph 100%`). Verify the 1.1 test now passes.
+- [x] 3.2 Thread the throbber parameter through `render_wide_media_list` and the internal `wide_media_row` call inside `render_inline_media_browser` (queue never uses the inline path — it passes `None`), updating all non-queue callers to pass `None`, and verify with `cargo check -p mbv` plus the wide-row regression suite.
 
 ## 4. Revision authority in `mbv-core`
 
