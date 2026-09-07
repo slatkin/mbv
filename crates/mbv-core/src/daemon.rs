@@ -17,4 +17,5 @@ mod tests {
     include!("daemon_tests_service_independent.rs");
     include!("daemon_tests_abs_queue.rs");
     include!("daemon_tests_abs_queue_progress.rs");
+    include!("daemon_tests_queue_ops.rs");
 }
