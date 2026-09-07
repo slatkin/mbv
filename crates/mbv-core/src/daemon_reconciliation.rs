@@ -68,6 +68,7 @@ fn reconcile_packaged_emby(
     player: &Player,
     queue: &mut PlaybackQueue,
     source: &mut QueueSource,
+    transitions: &mut crate::playback_transition::OwnerTransitionState,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
     merged_tx: &std::sync::mpsc::Sender<DaemonEvent>,
@@ -103,7 +104,10 @@ fn reconcile_packaged_emby(
         };
         *shared_queue.queue.lock().unwrap() = queue.clone();
         *shared_queue.source.lock().unwrap() = source.clone();
-        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, &crate::playback_transition::OwnerTransitionState::default());
+        // Purging a service's slots interrupts any slot jump; a reset here
+        // cannot strand a queued-transition origin (see daemon_ws).
+        transitions.reset();
+        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
         *client.lock().unwrap() = next.client.lock().unwrap().clone();
         update_player_queue(player, items, active_index, client);
     } else {
@@ -160,6 +164,7 @@ fn reconcile_packaged_audiobookshelf(
     player: &Player,
     queue: &mut PlaybackQueue,
     source: &mut QueueSource,
+    transitions: &mut crate::playback_transition::OwnerTransitionState,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
     client: &Arc<Mutex<crate::api::EmbyClient>>,
@@ -179,7 +184,10 @@ fn reconcile_packaged_audiobookshelf(
         };
         *shared_queue.queue.lock().unwrap() = queue.clone();
         *shared_queue.source.lock().unwrap() = source.clone();
-        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, &crate::playback_transition::OwnerTransitionState::default());
+        // Purging a service's slots interrupts any slot jump; a reset here
+        // cannot strand a queued-transition origin (see daemon_ws).
+        transitions.reset();
+        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
         update_player_queue(player, items, active_index, client);
         *current = None;
         return Ok(());
@@ -205,7 +213,10 @@ fn reconcile_packaged_audiobookshelf(
         };
         *shared_queue.queue.lock().unwrap() = queue.clone();
         *shared_queue.source.lock().unwrap() = source.clone();
-        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, &crate::playback_transition::OwnerTransitionState::default());
+        // Purging a service's slots interrupts any slot jump; a reset here
+        // cannot strand a queued-transition origin (see daemon_ws).
+        transitions.reset();
+        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
         update_player_queue(player, items, active_index, client);
     }
     let generation = current

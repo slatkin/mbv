@@ -180,6 +180,14 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
         "old peer broadcast includes Emby only"
     );
     assert!(old_data.slots[0].item.is_emby());
+
+    // The broadcast follows transition dispatch, so the requested slot is
+    // published as in-flight (not left invisible until it settles).
+    assert_eq!(
+        capable_data.in_flight_transition.map(|t| t.target_slot),
+        Some(emby_slot_id),
+        "PlaySlot broadcast must carry the pending slot as in-flight"
+    );
 }
 
 // Inbound mutation from an old peer containing ABS items is transport-rejected

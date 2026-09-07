@@ -266,6 +266,9 @@ fn handle_ctrl(
                                 queued_transition_origin,
                                 ctrl_clients,
                                 player,
+                                shared_queue,
+                                queue,
+                                source,
                                 client_id,
                                 crate::playback_transition::Transition::new(
                                     intent.request_id,
@@ -284,6 +287,9 @@ fn handle_ctrl(
                                 queued_transition_origin,
                                 ctrl_clients,
                                 player,
+                                shared_queue,
+                                queue,
+                                source,
                                 client_id,
                                 crate::playback_transition::Transition::new(
                                     intent.request_id,
@@ -487,15 +493,19 @@ fn handle_ctrl(
             let sid = QueueSlotId::from_raw(slot_id);
             match queue.slot(sid) {
                 Some(_) => {
-                    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
                     // No client request id on this command, so the owner mints
                     // one to correlate the settling observation.
                     let (request_id, generation) = transitions.mint_local_id();
+                    // `dispatch_slot_jump` publishes the snapshot after
+                    // accepting, so the pending slot reaches Clients.
                     dispatch_slot_jump(
                         transitions,
                         queued_transition_origin,
                         ctrl_clients,
                         player,
+                        shared_queue,
+                        queue,
+                        source,
                         client_id,
                         crate::playback_transition::Transition::new(request_id, generation, sid),
                     );

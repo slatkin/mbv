@@ -392,6 +392,7 @@ fn cold_websocket_noop_does_not_evict_ctrl_driver() {
     };
     let mut queue = PlaybackQueue::default();
     let mut source = QueueSource::Unknown;
+    let mut transitions = crate::playback_transition::OwnerTransitionState::default();
 
     handle_ws(
         WsEvent::TogglePause,
@@ -400,6 +401,7 @@ fn cold_websocket_noop_does_not_evict_ctrl_driver() {
         false,
         &mut queue,
         &mut source,
+        &mut transitions,
         &shared_queue_state(),
         &registry,
     );

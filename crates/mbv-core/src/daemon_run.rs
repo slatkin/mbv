@@ -318,7 +318,7 @@ pub fn run_with_options(
                         owner.intents.invalidate_connection(connection_id);
                     }
                 }
-                expire_and_redispatch(&mut owner, &player, &ctrl_clients, Instant::now());
+                expire_and_redispatch(&mut owner, &player, &ctrl_clients, &shared_queue);
                 continue;
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
@@ -481,13 +481,12 @@ pub fn run_with_options(
                     let cfg = client.lock().unwrap();
                     (cfg.config.consume_videos, cfg.config.consume_audio)
                 };
-                let result = owner.core.consume_completed_slot(
+                if owner.core.consume_completed_slot(
                     slot_id,
                     consume,
                     consume_videos,
                     consume_audio,
-                );
-                if matches!(result, crate::playback_queue::QueueMutationResult::Applied(_)) {
+                ) {
                     log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?}");
                 }
                 *shared_queue.observed_active_slot.lock().unwrap() =
@@ -571,6 +570,7 @@ pub fn run_with_options(
                         audio_only,
                         &mut owner.core.queue,
                         &mut owner.core.source,
+                        &mut owner.core.transitions,
                         &shared_queue,
                         &ctrl_clients,
                     );
@@ -615,6 +615,7 @@ pub fn run_with_options(
                                 &player,
                                 &mut owner.core.queue,
                                 &mut owner.core.source,
+                                &mut owner.core.transitions,
                                 &shared_queue,
                                 &ctrl_clients,
                                 &merged_tx,
@@ -628,6 +629,7 @@ pub fn run_with_options(
                                     &player,
                                     &mut owner.core.queue,
                                     &mut owner.core.source,
+                                    &mut owner.core.transitions,
                                     &shared_queue,
                                     &ctrl_clients,
                                     &client,

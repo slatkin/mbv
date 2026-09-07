@@ -37,10 +37,7 @@ fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
         .map(|s| s.slot_id)
         .expect("feed-1 slot not found");
     let mut owner = PlayerOwnerState::new(queue, source.clone());
-    assert!(matches!(
-        owner.consume_completed_slot(slot_id, true, false, true),
-        crate::playback_queue::QueueMutationResult::Applied(_)
-    ));
+    assert!(owner.consume_completed_slot(slot_id, true, false, true));
     super::broadcast_queue_state(
         &registry,
         &player,

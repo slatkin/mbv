@@ -360,11 +360,15 @@ struct DaemonPlayerOwner {
 /// Route one slot-jump transition through the owner's one-in-flight dispatch
 /// gate (design D4): dispatch it now, or hold it behind the in-flight one and
 /// report `Superseded` for whatever queued transition it displaced.
+#[allow(clippy::too_many_arguments)]
 fn dispatch_slot_jump(
     transitions: &mut crate::playback_transition::OwnerTransitionState,
     queued_origin: &mut Option<(PlaybackRequestId, CtrlClientId)>,
     ctrl_clients: &ClientRegistry,
     player: &Player,
+    shared_queue: &SharedQueueState,
+    queue: &PlaybackQueue,
+    source: &crate::config::QueueSource,
     client_id: CtrlClientId,
     transition: crate::playback_transition::Transition,
 ) {
@@ -393,6 +397,10 @@ fn dispatch_slot_jump(
             *queued_origin = Some((transition.request_id, client_id));
         }
     }
+    // Accepting a transition mutates desired playback state (in_flight /
+    // queued_latest); publish the coherent snapshot so Clients can render the
+    // pending slot before it settles (task 4.1, design D5).
+    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
 }
 
 /// Drop any in-flight/queued transition: the caller is issuing a
@@ -439,12 +447,12 @@ fn expire_and_redispatch(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     ctrl_clients: &ClientRegistry,
-    now: Instant,
+    shared_queue: &SharedQueueState,
 ) {
     let crate::playback_transition::ExpireOutcome::Expired {
         expired,
         dispatch_next,
-    } = owner.core.transitions.expire(now)
+    } = owner.core.transitions.expire(Instant::now())
     else {
         return;
     };
@@ -478,6 +486,15 @@ fn expire_and_redispatch(
             generation: next.generation,
         });
     }
+    // Abandoning / promoting a transition changed desired state; republish.
+    broadcast_queue_state(
+        ctrl_clients,
+        player,
+        shared_queue,
+        &owner.core.queue,
+        &owner.core.source,
+        &owner.core.transitions,
+    );
 }
 
 /// Snapshot of the daemon's canonical queue used to seed newly-connecting
