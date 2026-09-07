@@ -15,7 +15,7 @@
 
 ## 4. Revision authority in `mbv-core`
 
-- [ ] 4.1 Enumerate every production `PlaybackQueue` mutator (`crates/mbv-core/src/playback_queue.rs`) and make `QueueRevision` authoritative: add missing bumps on every row-affecting path (`update_slot_item`, `apply_progress`, refresh merge, any other unbumped mutator found), invalidate on queue replacement, and pin it with a mutation-matrix test asserting each row-affecting mutator advances the generation. Verify with `cargo nextest run -p mbv-core playback_queue`.
+- [x] 4.1 Enumerate every production `PlaybackQueue` mutator (`crates/mbv-core/src/playback_queue.rs`) and make `QueueRevision` authoritative: add missing bumps on every row-affecting path (`update_slot_item`, `apply_progress`, refresh merge, any other unbumped mutator found), invalidate on queue replacement, and pin it with a mutation-matrix test asserting each row-affecting mutator advances the generation. Verify with `cargo nextest run -p mbv-core playback_queue`.
 
 ## 5. Queue projection: no elapsed, `NowPlaying`, fingerprint gate
 
