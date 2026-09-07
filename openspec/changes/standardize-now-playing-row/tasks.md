@@ -27,5 +27,5 @@
 
 ## 6. Gates and docs
 
-- [ ] 6.1 Run the full gates and verify green: `cargo check -p mbv`, `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`, `cargo fmt --all -- --check`, `ast-grep scan`, `make check-code-file-lines`.
-- [ ] 6.2 Record the deferred follow-up (now-playing styling in non-queue lists) and the `render_plain_rows` non-goal in `CONTEXT.md` only if those terms are already defined there; otherwise leave docs untouched and note the follow-up in the change summary.
+- [x] 6.1 Run the full gates and verify green: `cargo check -p mbv`, `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`, `cargo fmt --all -- --check`, `ast-grep scan`, `make check-code-file-lines`.
+- [x] 6.2 Record the deferred follow-up (now-playing styling in non-queue lists) and the `render_plain_rows` non-goal in `CONTEXT.md` only if those terms are already defined there; otherwise leave docs untouched and note the follow-up in the change summary.
