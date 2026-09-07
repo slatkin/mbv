@@ -373,7 +373,9 @@ fn main() {
             if let Err(e) = guard.write_pid() {
                 log::warn!(target: "startup", "failed to write pid into lock file: {e}");
             }
-            if let Err(e) = Model::new(App::new_independent(config)).run() {
+            let mut app = App::new_independent(config);
+            app.init_image_pickers();
+            if let Err(e) = Model::new(app).run() {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }
