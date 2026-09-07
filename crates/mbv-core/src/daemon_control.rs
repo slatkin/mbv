@@ -191,36 +191,8 @@ fn handle_ctrl(
                 ),
             );
         }
-        CtrlCmd::PlayerCmd(pc) => match PlayerCommand::from(pc) {
-            PlayerCommand::ReplaceQueue {
-                items: new_items,
-                start_idx,
-            } => {
-                let queue_items: Vec<QueueItem> = new_items
-                    .iter()
-                    .cloned()
-                    .map(|item| QueueItem::Emby(Box::new(item)))
-                    .collect();
-                let next_cursor = if queue_items.is_empty() {
-                    0
-                } else {
-                    start_idx.min(queue_items.len().saturating_sub(1))
-                };
-                *queue = PlaybackQueue::from_queue_items(queue_items, Some(next_cursor));
-                reset_slot_jumps(transitions, queued_transition_origin);
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
-                player.send_command(PlayerCommand::SubmitQueue {
-                    items: queue
-                        .slots()
-                        .iter()
-                        .map(|s| (s.slot_id, s.item.clone()))
-                        .collect(),
-                    start_idx: next_cursor,
-                });
-            }
-            other => {
-                player.send_command(other);
-            }
+        CtrlCmd::PlayerCmd(pc) => {
+            player.send_command(PlayerCommand::from(pc));
         },
         CtrlCmd::Stop => {
             player.stop();

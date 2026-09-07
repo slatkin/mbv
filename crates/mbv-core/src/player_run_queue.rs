@@ -97,7 +97,7 @@ impl PlaybackRun {
         }
     }
 
-    /// Clears any pending-quit state so a `LoadNew`/`ReplaceQueue` command
+    /// Clears any pending-quit state so a `LoadNew`/`SubmitQueue` command
     /// that arrives while a quit is in flight fully cancels it — not just
     /// `quit_at`, but also the shutdown-scoped report budget set by
     /// `Player::stop_for_shutdown`. Without resetting
@@ -270,7 +270,7 @@ impl PlaybackRun {
     }
 
     /// Reset per-item lifecycle flags shared by all three reset sites in
-    /// `player_run_commands.rs` (`cmd_replace_queue` empty, non-empty,
+    /// `player_run_commands.rs` (`cmd_submit_queue` empty, non-empty,
     /// and `cmd_load_new`). The caller must set `stop_report` and
     /// `load_state` itself because those differ per call site.
     fn begin_item_lifecycle(&mut self) {

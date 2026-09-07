@@ -167,13 +167,6 @@ impl PlaybackRun {
             PlayerCommand::SkipIntroDismiss => {
                 let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
             }
-            PlayerCommand::ReplaceQueue {
-                items: new_items,
-                start_idx,
-            } => {
-                self.cmd_replace_queue(new_items, start_idx, mpv, progress);
-                cancel_stop = true;
-            }
             PlayerCommand::SetVolume(v) => {
                 let vol_max = self.status.lock().unwrap().volume_max;
                 let v = v.clamp(0, vol_max);
@@ -266,123 +259,6 @@ impl PlaybackRun {
         } else {
             let _ = mpv.set_property("pause", false);
         }
-    }
-
-    fn cmd_replace_queue(
-        &mut self,
-        new_items: Vec<EmbyItem>,
-        start_idx: usize,
-        mpv: &Mpv,
-        progress: &mut ProgressGuard,
-    ) {
-        if self.active_file {
-            // ponytail: run-side slot-id minting (1..=len). Still reachable via
-            // the in-process PlayerCommand::ReplaceQueue callers in src/app/;
-            // removed with the ReplaceQueue variant itself in task 5.1.
-            let paired = new_items
-                .into_iter()
-                .enumerate()
-                .map(|(i, item)| {
-                    (
-                        QueueSlotId::from_raw(i as u64 + 1),
-                        QueueItem::Emby(Box::new(item)),
-                    )
-                })
-                .collect();
-            self.replace_with_queue_items(paired, start_idx, mpv, progress);
-            return;
-        }
-        self.cancel_pending_quit();
-        if new_items.is_empty() {
-            self.close_prepared_source();
-            self.stop_report =
-                StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
-            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-            let _ = mpv.command("playlist-clear", &[]);
-            self.origin = PlaybackOrigin::Queue;
-            self.queue = ExecutionSequence::empty();
-            self.current_idx = 0;
-            self.sync_status_position();
-            self.last_valid_pos = 0;
-            self.pending_initial_playlist_layout = false;
-            self.load_state = LoadState::Ready;
-            self.begin_item_lifecycle();
-            self.osd_title.clear();
-            self.series_id.clear();
-            self.season = 0;
-            self.episode = 0;
-            return;
-        }
-        self.close_prepared_source();
-        // report_stopped for current item; is_audio zeroing handled inside.
-        self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
-        // Replacing the playlist should always start playing it, even if mpv
-        // was left paused on the previous item (reused-window fast path).
-        let _ = mpv.set_property("pause", false);
-
-        let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-        // Remove all old playlist entries except the current one so that
-        // the subsequent loadfile "replace" starts from a clean slate.
-        // Without this, old entries remain and playlist-pos = start_idx
-        // lands on a stale file instead of new_items[start_idx].
-        let _ = mpv.command("playlist-clear", &[]);
-
-        let start_idx = start_idx.min(new_items.len() - 1);
-        let active_item = new_items[start_idx].clone();
-        for i in queue_load_indices(new_items.len(), start_idx) {
-            let item = &new_items[i];
-            let queue_item = QueueItem::Emby(Box::new(item.clone()));
-            let url = mpv_url_for_queue_item(&queue_item, &self.server_url, &self.token);
-            let (mode, index) = queue_load_location(i, start_idx);
-            let opts = mpv_load_opts(&queue_item);
-            if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, &index, &opts]) {
-                log::warn!(target: "player", "ReplaceQueue loadfile error: {}", mpv_err_str(&e));
-            }
-        }
-        send_ep_info(mpv, &active_item);
-        // loadfile "replace" displaces the current file (EndFile #1).
-        self.load_state = LoadState::begin_single();
-        self.pending_initial_playlist_layout = false;
-
-        self.origin = PlaybackOrigin::Queue;
-        // ponytail: run-side slot-id minting (1..=len); removed with the
-        // PlayerCommand::ReplaceQueue variant in task 5.1.
-        let paired: Vec<(QueueSlotId, QueueItem)> = new_items
-            .into_iter()
-            .enumerate()
-            .map(|(i, item)| {
-                (
-                    QueueSlotId::from_raw(i as u64 + 1),
-                    QueueItem::Emby(Box::new(item)),
-                )
-            })
-            .collect();
-        let active_slot_id = paired.get(start_idx).map(|(id, _)| *id);
-        self.queue = ExecutionSequence::from_slot_items(paired, active_slot_id);
-        self.current_idx = start_idx;
-        self.load_active_item_state();
-        // stop_report stays Sent until load_state drains to Ready in on_end_file,
-        // preventing a duplicate report_stopped for the displaced file's EndFile(Quit).
-        self.begin_item_lifecycle();
-        log::info!(target: "player", "playlist queue-replace idx={start_idx}");
-        {
-            let mut s = self.status.lock().unwrap();
-            s.position_ticks = active_item.playback_position_ticks;
-            s.runtime_ticks = active_item.runtime_ticks;
-            s.current_idx = self.current_idx;
-            s.queue_len = self.queue_len();
-            s.set_current_item_metadata(&active_item);
-        }
-
-        // Stop progress reporter during transition to prevent stale reports,
-        // then restart for the new item.
-        progress.stop_and_join(self.progress_join_budget());
-        let (urls, ok) = self.reporter.start_item(&active_item);
-        self.ext_sub_urls = urls;
-        if !ok {
-            log::warn!(target: "player", "start_item failed for playlist replace item={}", active_item.id);
-        }
-        *progress = spawn_progress_reporter(self.reporter.clone());
     }
 
     fn append_items_to_queue(&mut self, items: Vec<(QueueSlotId, QueueItem)>) {

@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::tests::*;
-use mbv_core::ctrl::{CtrlCmd, WireCommand};
+use mbv_core::ctrl::CtrlCmd;
 
 #[test]
 fn stale_remote_queue_scope_falls_back_to_local_when_not_in_direct_remote_mode() {
@@ -134,8 +134,7 @@ fn clearing_a_local_daemon_queue_replaces_the_daemon_queue_with_empty() {
     assert!(cmd_rx.try_iter().any(|cmd| {
         matches!(
             cmd,
-            CtrlCmd::PlayerCmd(WireCommand::ReplaceQueue { items, start_idx: 0 })
-                if items.is_empty()
+            CtrlCmd::UnifiedQueueClear
         )
     }));
 }

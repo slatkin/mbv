@@ -69,6 +69,7 @@ fn replace_queue_succeeds_unconditionally() {
     let player = cold_player();
     let _player_cmd_rx = player.spy_on_commands();
     let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    client.lock().unwrap().token = "test-token".into();
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (sender_id, _sender_rx) = {
         let mut clients = registry.lock().unwrap();
@@ -82,10 +83,10 @@ fn replace_queue_succeeds_unconditionally() {
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::ReplaceQueue {
-            items: vec![item("replacement", "Video", "Movie")],
-            start_idx: 0,
-        })),
+        CtrlCmd::UnifiedQueueReplace {
+            items: vec![QueueItem::Emby(Box::new(item("replacement", "Video", "Movie")))],
+            start_idx: Some(0),
+        },
         sender_id,
         CtrlRequest {
             reply_tx: &reply_tx,

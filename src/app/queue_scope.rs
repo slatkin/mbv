@@ -75,23 +75,6 @@ impl App {
         }
     }
 
-    pub(super) fn replace_direct_remote_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
-        self.retire_remote_tracking(true);
-        let cursor = cursor.min(items.len().saturating_sub(1));
-        self.player
-            .send_command(crate::player::PlayerCommand::ReplaceQueue {
-                items: items.clone(),
-                start_idx: cursor,
-            });
-        if let Some(queue) = self.remote_player_tab.as_mut() {
-            queue.set_items(items, cursor);
-        }
-        // A full replacement regenerates slot ids, so a preserved prior
-        // selection could collide with a new slot; force a re-anchor to the
-        // replacement's start index.
-        self.pending_queue_cursor_reanchor = Some(QueueScope::Remote);
-    }
-
     pub(super) fn sync_playback_queue_after_append(
         &mut self,
         scope: QueueScope,

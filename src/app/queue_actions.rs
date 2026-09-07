@@ -257,6 +257,14 @@ impl App {
         }
     }
 
+    fn clear_remote_queue(&mut self) {
+        self.retire_remote_tracking(true);
+        self.player.clear_queue();
+        if let Some(queue) = self.remote_player_tab.as_mut() {
+            queue.clear();
+        }
+    }
+
     pub(super) fn execute_pending_queue_action(&mut self, action: PendingQueueAction) {
         if self.action_touches_local_queue(&action) {
             self.queue_dirty = false;
@@ -315,15 +323,12 @@ impl App {
                     self.remote_queue_undo_stack.clear();
                 }
                 if scope == QueueScope::Remote && had_items {
-                    self.replace_direct_remote_queue(Vec::new(), 0);
+                    self.clear_remote_queue();
                 } else if self.queue_scope_is_playback(scope) {
                     self.reset_bare_transitions();
                     self.player.stop();
                     if self.is_local_daemon() {
-                        self.player.send_command(PlayerCommand::ReplaceQueue {
-                            items: Vec::new(),
-                            start_idx: 0,
-                        });
+                        self.player.clear_queue();
                     }
                 }
                 if scope != QueueScope::Remote {

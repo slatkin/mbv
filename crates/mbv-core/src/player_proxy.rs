@@ -183,7 +183,7 @@ impl PlayerProxy {
     }
 
     /// Item-generic queue submission: replace the current queue with `items`
-    /// and start playback from `start_idx`.  For local players this routes
+    /// and start playback from `start_idx`. For local players this routes
     /// through the unified `Player::submit_queue`; for remote players it
     /// sends `UnifiedQueueReplace`.
     pub fn submit_queue(
@@ -223,6 +223,14 @@ impl PlayerProxy {
                     start_idx: Some(start_idx),
                 })
             }
+        }
+    }
+
+    /// Clear a remote owner's canonical queue without using a queue replacement.
+    pub fn clear_queue(&self) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueClear),
         }
     }
 

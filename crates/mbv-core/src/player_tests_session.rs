@@ -1,16 +1,16 @@
 #[test]
 fn cancel_pending_quit_clears_quit_at_and_shutdown_timeout() {
     // Regression test for a code-review finding: cmd_load_new and
-    // cmd_replace_queue (via the shared cancel_pending_quit helper)
+    // queue submission (via the shared cancel_pending_quit helper)
     // must reset shutdown_report_timeout, not just quit_at, when a
-    // LoadNew/ReplaceQueue command cancels an in-flight quit. Otherwise
+    // LoadNew/SubmitQueue command cancels an in-flight quit. Otherwise
     // App::teardown -> Player::stop_for_shutdown sets
     // shutdown_report_timeout = Some(quit_timeout) before sending the
     // stop signal; if that quit then gets cancelled by an
-    // already-queued LoadNew/ReplaceQueue, shutdown_report_timeout
+    // already-queued LoadNew/SubmitQueue, shutdown_report_timeout
     // would stay Some for the rest of the session, silently degrading
     // every later track transition to the tight shutdown budget/no-retry
-    // path instead of the ordinary one. cmd_load_new/cmd_replace_queue
+    // path instead of the ordinary one. cmd_load_new/cmd_submit_queue
     // themselves aren't unit-tested directly here since they require a
     // real Mpv handle; this exercises the exact reset logic they share.
     let (mut session, _status) = make_queue_session_for_pos_tests(0);

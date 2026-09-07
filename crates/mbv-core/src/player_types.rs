@@ -346,10 +346,6 @@ pub enum PlayerCommand {
     },
     NextUpDismiss,
     SkipIntroDismiss,
-    ReplaceQueue {
-        items: Vec<EmbyItem>,
-        start_idx: usize,
-    },
     /// Item-generic queue submission: replace the current queue with `items` and
     /// start playback from `start_idx`. Handles both Emby and Feed items through
     /// the same lifecycle path — source URL and reporting branch on `QueueItem`

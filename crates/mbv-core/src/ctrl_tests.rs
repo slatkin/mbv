@@ -137,14 +137,6 @@ fn wire_command_tags_are_pinned() {
         .unwrap(),
         "{\"SetSubtitlePrefs\":{\"mode\":\"auto\",\"subtitle_lang\":\"eng\",\"audio_lang\":\"jpn\"}}"
     );
-    assert_eq!(
-        serde_json::to_string(&WireCommand::ReplaceQueue {
-            items: vec![],
-            start_idx: 0,
-        })
-        .unwrap(),
-        "{\"ReplacePlaylist\":{\"items\":[],\"start_idx\":0}}"
-    );
     // NextUpShow carries free-form strings, so asserting the full JSON body
     // would just restate the field list; instead check the pinned tag key
     // only.

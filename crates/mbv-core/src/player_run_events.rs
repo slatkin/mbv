@@ -305,7 +305,7 @@ impl PlaybackRun {
         if !self.load_state.is_ready() {
             match self.load_state.drain() {
                 Drained::HitZero => {
-                    // Once all pending EndFiles from a ReplaceQueue are drained, the new item's
+                    // Once all pending EndFiles from a queue submission are drained, the new item's
                     // lifecycle begins — reset stop_report so on_end_file/on_shutdown can report it.
                     self.stop_report.reset();
                 }

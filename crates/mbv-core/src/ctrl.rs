@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::api::EmbyItem;
 use crate::config::{QueueSource, ServiceKind};
 use crate::playback_queue::{QueueItem, QueueSlotId};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
@@ -384,11 +383,6 @@ pub enum WireCommand {
     NextUpDismiss,
     #[serde(rename = "SkipIntroDismiss")]
     SkipIntroDismiss,
-    #[serde(rename = "ReplacePlaylist")]
-    ReplaceQueue {
-        items: Vec<EmbyItem>,
-        start_idx: usize,
-    },
 }
 
 impl From<PlayerCommand> for WireCommand {
@@ -423,9 +417,6 @@ impl From<PlayerCommand> for WireCommand {
             },
             PlayerCommand::NextUpDismiss => WireCommand::NextUpDismiss,
             PlayerCommand::SkipIntroDismiss => WireCommand::SkipIntroDismiss,
-            PlayerCommand::ReplaceQueue { items, start_idx } => {
-                WireCommand::ReplaceQueue { items, start_idx }
-            }
             // Local-only commands: never serialized across ctrl. Slot-addressed
             // queue mutation crosses exclusively as `CtrlCmd::UnifiedQueue*`;
             // `SubmitQueue` is resolved before send; `QueueAppend` and `LoadNew`
@@ -479,9 +470,6 @@ impl From<WireCommand> for PlayerCommand {
             },
             WireCommand::NextUpDismiss => PlayerCommand::NextUpDismiss,
             WireCommand::SkipIntroDismiss => PlayerCommand::SkipIntroDismiss,
-            WireCommand::ReplaceQueue { items, start_idx } => {
-                PlayerCommand::ReplaceQueue { items, start_idx }
-            }
         }
     }
 }
