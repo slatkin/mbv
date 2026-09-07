@@ -244,6 +244,7 @@ fn local_daemon_consume_adjusts_active_idx_after_removal_shift() {
         status.current_idx = 1;
     }
 
+    let next_slot_id = app.playback_queue().resolve_slot_at(2).unwrap();
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(1).unwrap(),
         position_ticks: 0,
@@ -258,7 +259,7 @@ fn local_daemon_consume_adjusts_active_idx_after_removal_shift() {
         // pending consume removal, so App must correct the shifted index.
         status.current_idx = 2;
     }
-    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(2).unwrap(), transition: None });
+    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: next_slot_id, transition: None });
 
     assert_eq!(app.player_tab.queue_cursor, 1);
     assert_eq!(
@@ -284,6 +285,7 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
         status.current_idx = 1;
     }
 
+    let next_slot_id = app.playback_queue().resolve_slot_at(2).unwrap();
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(1).unwrap(),
         position_ticks: 0,
@@ -298,7 +300,7 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
         // control path covered above.
         status.current_idx = 2;
     }
-    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(2).unwrap(), transition: None });
+    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: next_slot_id, transition: None });
 
     let item_ids = |items: &[EmbyItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
     assert_eq!(
