@@ -7,8 +7,8 @@
 
 ## 2. Arbitrary-destination move path
 
-- [ ] 2.1 In `src/app/queue_actions.rs`, extract the body of `move_queue_item_by` into a new `pub(super) fn move_queue_item_to(&mut self, from: usize, to: usize)` that takes an absolute destination — keeping the slot lookup, the `apply_queue_move_by_slot` call, `retire_remote_tracking`, the `pending_remote_move_cursor` assignment, and the `UndoEntry::Move` push exactly as they are. Note there are two similarly named functions here: `apply_queue_move` (positional, pre-existing, leave it alone) and the new `move_queue_item_to`. Verify `cargo check -p mbv`.
-- [ ] 2.2 Reduce `move_queue_item_by` to the ±1 clamp (its existing bounds checks) delegating to `move_queue_item_to`; `move_queue_item_up`/`move_queue_item_down` keep their current signatures and callers. Verify the pre-existing suite still passes: `cargo nextest run -p mbv tests_queue_reorder`.
+- [x] 2.1 In `src/app/queue_actions.rs`, extract the body of `move_queue_item_by` into a new `pub(super) fn move_queue_item_to(&mut self, from: usize, to: usize)` that takes an absolute destination — keeping the slot lookup, the `apply_queue_move_by_slot` call, `retire_remote_tracking`, the `pending_remote_move_cursor` assignment, and the `UndoEntry::Move` push exactly as they are. Note there are two similarly named functions here: `apply_queue_move` (positional, pre-existing, leave it alone) and the new `move_queue_item_to`. Verify `cargo check -p mbv`.
+- [x] 2.2 Reduce `move_queue_item_by` to the ±1 clamp (its existing bounds checks) delegating to `move_queue_item_to`; `move_queue_item_up`/`move_queue_item_down` keep their current signatures and callers. Verify the pre-existing suite still passes: `cargo nextest run -p mbv tests_queue_reorder`.
 
 ## 3. Request type and shell dispatch
 
