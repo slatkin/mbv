@@ -18,12 +18,8 @@ fn feed_entry(guid: &str) -> FeedEntry {
 fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
     let player = cold_player();
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, sender_rx) = {
-        let mut clients = registry.lock().unwrap();
-        connect_client(&mut clients)
-    };
     let shared_queue = shared_queue_state();
-    let mut queue = PlaybackQueue::from_queue_items(
+    let queue = PlaybackQueue::from_queue_items(
         vec![
             QueueItem::Feed(feed_entry("feed-1")),
             QueueItem::Feed(feed_entry("feed-2")),
@@ -32,27 +28,41 @@ fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
     );
     let source = QueueSource::Unknown;
 
-    // Find and consume the "feed-1" slot.
+    // Complete feed-1 while no Client is attached. The owner, not a Client,
+    // applies the configured consume policy to the canonical queue.
     let slot_id = queue
         .slots()
         .iter()
         .find(|s| s.item.id() == "feed-1")
         .map(|s| s.slot_id)
         .expect("feed-1 slot not found");
-    match queue.consume_slot(slot_id) {
-        crate::playback_queue::QueueMutationResult::Applied(_) => {}
-        other => panic!("expected slot consumed, got {other:?}"),
-    }
-    super::broadcast_queue_state(&registry, &player, &shared_queue, &queue, &source);
+    let mut owner = PlayerOwnerState::new(queue, source.clone());
+    assert!(owner.consume_completed_slot(slot_id, true, false, true));
+    super::broadcast_queue_state(
+        &registry,
+        &player,
+        &shared_queue,
+        &owner.queue,
+        &owner.source,
+        &crate::playback_transition::OwnerTransitionState::default(),
+    );
 
-    // Only the matching slot was removed.
-    assert_eq!(queue.len(), 1);
-    assert_eq!(queue.slots()[0].item.id(), "feed-2");
-    // Reconnect snapshot updated.
-    {
-        let q = shared_queue.queue.lock().unwrap();
-        assert_eq!(q.len(), 1);
-    }
+    // A later Client receives the shortened owner snapshot.
+    let (_sender_id, sender_rx) = {
+        let mut clients = registry.lock().unwrap();
+        connect_client(&mut clients)
+    };
+    super::broadcast_queue_state(
+        &registry,
+        &player,
+        &shared_queue,
+        &owner.queue,
+        &owner.source,
+        &crate::playback_transition::OwnerTransitionState::default(),
+    );
+    assert_eq!(owner.queue.len(), 1);
+    assert_eq!(owner.queue.slots()[0].item.id(), "feed-2");
+    assert_eq!(shared_queue.queue.lock().unwrap().len(), 1);
     match recv_event(&sender_rx) {
         CtrlEvent::UnifiedQueueState(state) => {
             assert_eq!(state.slots.len(), 1);
@@ -69,22 +79,24 @@ fn replace_queue_succeeds_unconditionally() {
     let player = cold_player();
     let _player_cmd_rx = player.spy_on_commands();
     let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    client.lock().unwrap().token = "test-token".into();
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (sender_id, _sender_rx) = {
         let mut clients = registry.lock().unwrap();
         connect_client(&mut clients)
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
-    let mut queue =
+    let queue =
         PlaybackQueue::from_queue_items(vec![QueueItem::Feed(feed_entry("feed-1"))], Some(0));
-    let mut source = QueueSource::Remote;
+    let source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::ReplaceQueue {
-            items: vec![item("replacement", "Video", "Movie")],
-            start_idx: 0,
-        })),
+        CtrlCmd::UnifiedQueueReplace {
+            items: vec![QueueItem::Emby(Box::new(item("replacement", "Video", "Movie")))],
+            start_idx: Some(0),
+        },
         sender_id,
         CtrlRequest {
             reply_tx: &reply_tx,
@@ -92,111 +104,17 @@ fn replace_queue_succeeds_unconditionally() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
         false,
     );
+    let queue = owner.core.queue;
 
     // Queue was replaced — Feed slot is gone, Emby item is present.
     assert_eq!(queue.len(), 1);
     assert_eq!(queue.slots()[0].item.id(), "replacement");
     assert!(matches!(queue.slots()[0].item, QueueItem::Emby(_)));
-}
-
-#[test]
-fn queue_append_succeeds_unconditionally() {
-    let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
-    let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (sender_id, _sender_rx) = {
-        let mut clients = registry.lock().unwrap();
-        connect_client(&mut clients)
-    };
-    let (reply_tx, _reply_rx) = mpsc::channel();
-    let mut queue =
-        PlaybackQueue::from_queue_items(vec![QueueItem::Feed(feed_entry("feed-1"))], Some(0));
-    let mut source = QueueSource::Remote;
-    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-
-    handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueAppend {
-            items: vec![QueueItem::Emby(Box::new(item(
-                "appended", "Video", "Movie",
-            )))],
-        })),
-        sender_id,
-        CtrlRequest {
-            reply_tx: &reply_tx,
-        },
-        &client,
-        &player,
-        false,
-        &mut queue,
-        &mut source,
-        &shared_queue_state(),
-        &registry,
-        &mut PlaybackIntentState::default(),
-        false,
-        &dummy_merged_tx,
-        false,
-    );
-
-    // Feed slot remains, Emby item appended.
-    assert_eq!(queue.len(), 2);
-    assert_eq!(queue.slots()[0].item.id(), "feed-1");
-    assert_eq!(queue.slots()[1].item.id(), "appended");
-}
-
-#[test]
-fn queue_move_succeeds_unconditionally() {
-    let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
-    let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (sender_id, _sender_rx) = {
-        let mut clients = registry.lock().unwrap();
-        connect_client(&mut clients)
-    };
-    let (reply_tx, _reply_rx) = mpsc::channel();
-    let mut queue = PlaybackQueue::from_queue_items(
-        vec![
-            QueueItem::Feed(feed_entry("feed-1")),
-            QueueItem::Feed(feed_entry("feed-2")),
-        ],
-        Some(0),
-    );
-    let mut source = QueueSource::Remote;
-    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-
-    handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueMove(0, 1))),
-        sender_id,
-        CtrlRequest {
-            reply_tx: &reply_tx,
-        },
-        &client,
-        &player,
-        false,
-        &mut queue,
-        &mut source,
-        &shared_queue_state(),
-        &registry,
-        &mut PlaybackIntentState::default(),
-        false,
-        &dummy_merged_tx,
-        false,
-    );
-
-    assert_eq!(
-        queue
-            .slots()
-            .iter()
-            .map(|s| s.item.id())
-            .collect::<Vec<_>>(),
-        vec!["feed-2", "feed-1"]
-    );
 }

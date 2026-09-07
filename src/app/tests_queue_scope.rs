@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::tests::*;
-use mbv_core::ctrl::{CtrlCmd, WireCommand};
+use mbv_core::ctrl::CtrlCmd;
 
 #[test]
 fn stale_remote_queue_scope_falls_back_to_local_when_not_in_direct_remote_mode() {
@@ -135,10 +135,46 @@ fn clearing_a_local_daemon_queue_replaces_the_daemon_queue_with_empty() {
     assert!(cmd_rx.try_iter().any(|cmd| {
         matches!(
             cmd,
-            CtrlCmd::PlayerCmd(WireCommand::ReplaceQueue { items, start_idx: 0 })
-                if items.is_empty()
+            CtrlCmd::UnifiedQueueClear
         )
     }));
+}
+
+#[test]
+fn local_daemon_queue_refresh_prune_reaches_daemon_via_unified_slot_command() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (remote, player_rx, cmd_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(make_items(3), 0);
+    let mut app = App::new_remote(
+        mbv_core::api::EmbyClient::new(crate::config::Config::default()),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Local,
+    );
+    app.player_tab.set_items(make_items(3), 0); // id0, id1, id2
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.current_idx = 0;
+    }
+    while cmd_rx.try_recv().is_ok() {}
+
+    // Background fetch no longer returns id1 -> its slot must be pruned from
+    // the Stay-alive owner's queue. `RemotePlayer::send_command` rejects the
+    // legacy index-addressed QueueRemove, so this must take the unified path.
+    let fresh = vec![
+        app.player_tab.emby_items()[0].clone(),
+        app.player_tab.emby_items()[2].clone(),
+    ];
+    app.handle_lib_event(crate::app::LibEvent::QueueEnriched { items: fresh });
+
+    assert!(
+        cmd_rx
+            .try_iter()
+            .any(|cmd| matches!(cmd, CtrlCmd::UnifiedQueueRemoveSlot { .. })),
+        "a library-refresh prune on a local-daemon owner must reach the daemon \
+         queue via the unified slot command"
+    );
 }
 
 #[test]
@@ -150,7 +186,7 @@ fn direct_remote_track_changes_do_not_clobber_local_last_played() {
     app.last_played_item_id = Some(local_items[1].id.clone());
     app.last_played_completed = true;
 
-    app.handle_player_event(PlayerEvent::TrackChanged(2));
+    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(2).unwrap(), transition: None });
 
     assert_eq!(
         app.last_played_item_id.as_deref(),

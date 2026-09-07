@@ -44,7 +44,6 @@ impl PlaybackRun {
         wakeup_write_fd: RawFd,
     ) {
         let event_tx_panic = self.event_tx.clone();
-        let current_idx_panic = self.current_idx;
 
         // Ordered progress-report worker: pause/unpause events are sent here
         // instead of each spawning its own thread, so two quick toggles can't
@@ -86,6 +85,11 @@ impl PlaybackRun {
                         let _ = mpv.command("quit", &[]);
                     }
                     self.quit_at = Some(Instant::now());
+                    // Pin the slot identity now, while it is still the observed
+                    // active slot, so a QueueMove/QueueRemove drained before the
+                    // deferred Stopped emit cannot rename the occurrence (D2).
+                    self.stop_slot = self.active_slot_id();
+                    self.stop_runtime = self.active_item().map(|item| item.runtime_ticks());
                 }
 
                 if self
@@ -95,7 +99,10 @@ impl PlaybackRun {
                     if !self.stop_report.is_sent() {
                         self.report_stop_now_or_background(&mut progress);
                     }
-                    let runtime = self.status.lock().unwrap().runtime_ticks;
+                    let runtime = self
+                        .stop_runtime
+                        .or_else(|| self.active_item().map(|item| item.runtime_ticks()))
+                        .unwrap_or(0);
                     let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
                     let (played, consume) = quit_timeout_stop_flags(
                         self.origin,
@@ -106,7 +113,7 @@ impl PlaybackRun {
                     );
                     self.status.lock().unwrap().active = false;
                     let _ = self.event_tx.send(PlayerEvent::Stopped {
-                        idx: self.current_idx,
+                        slot_id: self.stop_slot.or_else(|| self.active_slot_id()),
                         position_ticks: self.last_valid_pos,
                         played,
                         consume,
@@ -308,7 +315,9 @@ impl PlaybackRun {
                 .unwrap_or_else(|| "unknown panic".to_string());
             log::error!(target: "player", "PlaybackRun panicked: {msg}");
             let _ = event_tx_panic.send(PlayerEvent::Stopped {
-                idx: current_idx_panic,
+                // Panic teardown: the run's queue is gone with the unwound
+                // stack, so no slot identity can be resolved.
+                slot_id: None,
                 position_ticks: 0,
                 played: false,
                 consume: false,

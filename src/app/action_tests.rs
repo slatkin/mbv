@@ -388,10 +388,14 @@ fn queue_play_cursor_jumps_to_cursor_when_active_and_playback_scope() {
         st.current_idx = 0;
     }
     let rx = app.player.spy_on_commands();
+    let want_slot = app.player_tab.queue.slots()[1].slot_id;
 
     app.dispatch(Command::QueuePlayCursor(1));
 
-    assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))));
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(PlayerCommand::JumpTo { slot_id, .. }) if slot_id == want_slot
+    ));
 }
 
 #[test]

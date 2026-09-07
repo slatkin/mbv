@@ -1,4 +1,4 @@
-use super::types_playback::{PlayheadProjection, QueueScope};
+use super::types_playback::QueueScope;
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode};
 use super::types_tab_selection::TabSelection;
@@ -24,6 +24,10 @@ impl App {
         #[cfg(test)]
         let _test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
+        let bare_owner = mbv_core::player_owner_state::PlayerOwnerState::new(
+            init.player_tab.queue.clone(),
+            crate::config::QueueSource::Unknown,
+        );
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let (cast_tx, cast_rx) = mpsc::channel();
         let mut app = App {
@@ -51,6 +55,7 @@ impl App {
             shared_client: None,
             shared_reconnect_rx: None,
             player: init.player,
+            bare_owner,
             mpris: None,
             player_rx: init.player_rx,
             ws_rx: init.ws_rx,
@@ -97,12 +102,11 @@ impl App {
             pending_overlay: None,
             pending_exit_message: None,
             pending_delete_slot: None,
-            pending_queue_removal: None,
             queue_undo_stack: Vec::new(),
             remote_queue_undo_stack: Vec::new(),
             pending_remote_move_cursor: None,
             pending_queue_edit_cursor: None,
-            playhead: PlayheadProjection::new(),
+            pending_queue_cursor_reanchor: None,
             next_up_item: None,
             // #361: read the new prefs key, falling back to the pre-#361 one
             // for one release. `power_focus`/`power_left_tab`/`power_left_width`

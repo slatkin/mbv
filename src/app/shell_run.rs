@@ -270,9 +270,6 @@ impl Model {
                 // Player events can reconcile ABS book progress; re-project (5.3d).
                 self.push_audiobookshelf_book_content();
                 self.push_music_workspace_content();
-                // Reconcile the playhead against the fresh status now that a
-                // player event drained -- the single non-paint reconcile point.
-                self.app.reconcile_playhead();
                 if restart {
                     continue 'outer;
                 }
@@ -387,6 +384,8 @@ impl Model {
             }
 
             had_events |= self.app.drain_session_events();
+
+            had_events |= self.app.expire_bare_transition(Instant::now());
 
             had_events |= self.app.drain_cast_events();
 

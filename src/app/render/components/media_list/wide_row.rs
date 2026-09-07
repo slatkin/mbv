@@ -69,6 +69,9 @@ pub(in crate::app) fn wide_media_row<Target>(
                     palette::TEXT_FOCUS_ACCENT,
                     (*progress).map(|value| format!("{}%", value.percent())),
                 ),
+                MediaSemanticState::Starting => {
+                    (palette::TEXT_FOCUS_ACCENT, Some("starting".into()))
+                }
                 MediaSemanticState::Disabled => (palette::TEXT_MUTED, None),
             };
             let trailing = match (

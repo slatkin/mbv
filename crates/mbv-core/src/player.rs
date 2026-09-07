@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     mpsc, Arc, Mutex,
 };
 use std::thread;
@@ -12,9 +12,10 @@ use std::{
 
 use crate::api::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
 use crate::id_types::{EmbySessionId, ItemId, MediaSourceId};
+use crate::playback_execution_sequence::ExecutionSequence;
 #[cfg(test)]
-use crate::playback_queue::QueueMutationResult;
-use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use crate::playback_queue::{PlaybackQueue, QueueMutationResult};
+use crate::playback_queue::{QueueItem, QueueSlotId};
 use libmpv2::{
     events::{Event, PropertyData},
     mpv_end_file_reason, EndFileReason, Format, Mpv,

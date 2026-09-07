@@ -12,8 +12,8 @@ use super::types_feed::SavePlaylistDialog;
 use super::types_feed_tab::FeedTabState;
 use super::types_library_tab::LibraryTab;
 use super::types_playback::{
-    PendingQueueAction, PlayheadProjection, PlaylistMutationState, QueueScope,
-    RemoteQueueProjection, SuspendedLocalSession, UndoEntry,
+    PendingQueueAction, PlaylistMutationState, QueueScope, RemoteQueueProjection,
+    SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode, SettingsDestination};
@@ -82,6 +82,10 @@ pub struct App {
         >,
     >,
     pub(super) player: PlayerProxy,
+    /// Bare mode's owner-side transition state. Remote targets use their
+    /// daemon-owned coordinator; this is still hosted here so local jumps
+    /// receive the same request identity semantics.
+    pub(super) bare_owner: mbv_core::player_owner_state::PlayerOwnerState,
     /// Handle to the live MPRIS D-Bus registration, if one was started for
     /// this session (`App::new` / `App::new_remote` both start one; test
     /// construction via `build()` does not). `None` in tests so they never
@@ -156,7 +160,6 @@ pub struct App {
     /// would never be visible. `None` on every other exit path.
     pub(super) pending_exit_message: Option<String>,
     pub(super) pending_delete_slot: Option<QueueSlotId>, // marks a delete that was already applied optimistically, so the Stopped handler doesn't re-derive it
-    pub(super) pending_queue_removal: Option<(QueueSlotId, bool)>, // deferred removal (slot, is_audio) after TrackChanged index-shifts
     pub(super) queue_undo_stack: Vec<UndoEntry>,
     pub(super) remote_queue_undo_stack: Vec<UndoEntry>,
     pub(super) pending_remote_move_cursor: Option<usize>,
@@ -165,11 +168,8 @@ pub struct App {
     /// state tracks *playback* position, not the UI selection — see
     /// `remove_from_queue` and `PlayerEvent::UnifiedQueueUpdated`.
     pub(super) pending_queue_edit_cursor: Option<usize>,
-    /// Single source of truth for the playback playhead: active scope/slot,
-    /// position/runtime, `Confirmed | Predicted(reason)` confidence, and the
-    /// one-shot scoped `queue_cursor` push for the next `sync_queue`. Folds in
-    /// the former `pending_active_idx` and `queue_cursor_pushed`.
-    pub(super) playhead: PlayheadProjection,
+    /// One-shot cursor re-anchor for the next queue sync.
+    pub(super) pending_queue_cursor_reanchor: Option<QueueScope>,
     pub(super) next_up_item: Option<EmbyItem>,
     // Main UI scalars.
     // reuses shared self.libs.

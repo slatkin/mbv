@@ -16,6 +16,7 @@ fn play_resolved_items(
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
+    transitions: &crate::playback_transition::OwnerTransitionState,
 ) {
     let queue_items: Vec<QueueItem> = fetched
         .iter()
@@ -25,7 +26,7 @@ fn play_resolved_items(
     let start_idx = start_idx.min(queue_items.len().saturating_sub(1));
     *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
     *source = new_source;
-    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
     if fetched.len() == 1 {
         let mut play_item = fetched[0].clone();
         if start_ticks > 0 {
@@ -51,15 +52,18 @@ fn handle_ctrl(
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
     audio_only: bool,
-    queue: &mut PlaybackQueue,
-    source: &mut crate::config::QueueSource,
+    owner: &mut DaemonPlayerOwner,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
-    playback_intents: &mut PlaybackIntentState,
     has_audiobookshelf: bool,
     merged_tx: &mpsc::Sender<DaemonEvent>,
     stay_alive: bool,
 ) {
+    let DaemonPlayerOwner {
+        core: PlayerOwnerState { queue, source, transitions, .. },
+        intents: playback_intents,
+        queued_transition_origin,
+    } = &mut *owner;
     let has_emby = !client.lock().unwrap().token.is_empty();
     if matches!(cmd, CtrlCmd::RequestShutdown) {
         log::info!(target: "daemon", "RequestShutdown received from ctrl client {client_id}");
@@ -169,86 +173,30 @@ fn handle_ctrl(
                 has_audiobookshelf,
             );
             player.set_initial_queue(&items, next_cursor);
+            reset_slot_jumps(transitions, queued_transition_origin);
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             *source = new_source;
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
         }
-        CtrlCmd::PlayerCmd(pc) => match PlayerCommand::from(pc) {
-            PlayerCommand::ReplaceQueue {
-                items: new_items,
-                start_idx,
-            } => {
-                let queue_items: Vec<QueueItem> = new_items
-                    .iter()
-                    .cloned()
-                    .map(|item| QueueItem::Emby(Box::new(item)))
-                    .collect();
-                let next_cursor = if queue_items.is_empty() {
-                    0
-                } else {
-                    start_idx.min(queue_items.len().saturating_sub(1))
-                };
-                *queue = PlaybackQueue::from_queue_items(queue_items, Some(next_cursor));
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                player.send_command(PlayerCommand::SubmitQueue {
-                    items: queue.slots().iter().map(|s| s.item.clone()).collect(),
-                    start_idx: next_cursor,
-                });
-            }
-            PlayerCommand::QueueAppend { items: new_items } => {
-                if !new_items.is_empty() {
-                    for item in new_items {
-                        queue.append(item);
-                    }
-                    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                    player.send_command(PlayerCommand::SubmitQueue {
-                        items: queue.slots().iter().map(|s| s.item.clone()).collect(),
-                        start_idx: queue.active_index().unwrap_or(0),
-                    });
-                }
-            }
-            PlayerCommand::QueueMove(from, to) => {
-                if from >= queue.len() || to >= queue.len() {
-                    reject_command(
-                        request.reply_tx,
-                        ctrl_clients,
-                        client_id,
-                        player,
-                        queue,
-                        source,
-                        "remote queue changed; move skipped".to_string(),
-                    );
-                } else if from != to {
-                    let slot_id = queue.slots()[from].slot_id;
-                    queue.move_slot(slot_id, to);
-                    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                    player.send_command(PlayerCommand::QueueMove(from, to));
-                }
-            }
-            PlayerCommand::QueueRemove(index) => {
-                if index >= queue.len() {
-                    reject_command(
-                        request.reply_tx,
-                        ctrl_clients,
-                        client_id,
-                        player,
-                        queue,
-                        source,
-                        "remote queue changed; remove skipped".to_string(),
-                    );
-                } else {
-                    let slot_id = queue.slots()[index].slot_id;
-                    queue.consume_slot(slot_id);
-                    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                    player.send_command(PlayerCommand::QueueRemove(index));
-                }
-            }
-            other => {
-                player.send_command(other);
-            }
+        // Stale index-addressed jump from a cross-version peer. Slot-id +
+        // request-identity JumpTo is now the only jump path, so an ordinal
+        // index carries no evidence about which slot was intended: reject it
+        // visibly via the existing command-rejection path (design D6).
+        CtrlCmd::PlayerCmd(crate::ctrl::WireCommand::JumpTo(_)) => {
+            send_to(
+                request.reply_tx,
+                &CtrlEvent::CommandRejected(
+                    "index-addressed queue jump is no longer supported; use unified queue commands"
+                        .to_string(),
+                ),
+            );
+        }
+        CtrlCmd::PlayerCmd(pc) => {
+            player.send_command(PlayerCommand::from(pc));
         },
         CtrlCmd::Stop => {
             player.stop();
+            reset_slot_jumps(transitions, queued_transition_origin);
         }
         CtrlCmd::PlaybackIntent(intent) => {
             let pipe_output = client.lock().unwrap().config.audio_pipe_enabled;
@@ -301,22 +249,42 @@ fn handle_ctrl(
                         });
                     });
                 }
-                crate::ctrl::PlaybackIntentAction::Stop => player.stop(),
+                crate::ctrl::PlaybackIntentAction::Stop => {
+                    player.stop();
+                    reset_slot_jumps(transitions, queued_transition_origin);
+                }
                 crate::ctrl::PlaybackIntentAction::SetPaused { paused } => {
                     if player.status.lock().unwrap().paused != paused {
                         player.send_command(PlayerCommand::TogglePause);
                     }
                 }
-                crate::ctrl::PlaybackIntentAction::Next => {
-                    if let Some(idx) = player.status.lock().unwrap().next_idx() {
-                        playback_intents.set_target_idx(intent.request_id, idx);
-                        player.send_command(PlayerCommand::JumpTo(idx));
-                    }
-                }
-                crate::ctrl::PlaybackIntentAction::Previous => {
-                    if let Some(idx) = player.status.lock().unwrap().previous_idx() {
-                        playback_intents.set_target_idx(intent.request_id, idx);
-                        player.send_command(PlayerCommand::JumpTo(idx));
+                action @ (crate::ctrl::PlaybackIntentAction::Next
+                | crate::ctrl::PlaybackIntentAction::Previous) => {
+                    let idx = {
+                        let status = player.status.lock().unwrap();
+                        match action {
+                            crate::ctrl::PlaybackIntentAction::Previous => status.previous_idx(),
+                            _ => status.next_idx(),
+                        }
+                    };
+                    if let Some(slot_id) =
+                        idx.and_then(|idx| queue.slots().get(idx).map(|s| s.slot_id))
+                    {
+                        dispatch_slot_jump(
+                            transitions,
+                            queued_transition_origin,
+                            ctrl_clients,
+                            player,
+                            shared_queue,
+                            queue,
+                            source,
+                            client_id,
+                            crate::playback_transition::Transition::new(
+                                intent.request_id,
+                                intent.generation,
+                                slot_id,
+                            ),
+                        );
                     }
                 }
             }
@@ -376,7 +344,8 @@ fn handle_ctrl(
                 return;
             }
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+            reset_slot_jumps(transitions, queued_transition_origin);
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
             // `send_command` alone only reaches an already-running mpv
             // thread; on a freshly started daemon no thread exists yet, so
             // route through `submit_queue`, which cold-starts one when
@@ -438,11 +407,16 @@ fn handle_ctrl(
                 );
                 return;
             }
-            let items_for_player = items.clone();
-            for item in items {
-                queue.append(item);
-            }
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+            // Allocate the owner slot ids once, in the daemon's canonical
+            // queue, and hand the same ids to the Playback run.
+            let items_for_player: Vec<(QueueSlotId, QueueItem)> = items
+                .into_iter()
+                .map(|item| {
+                    let slot_id = queue.append(item.clone());
+                    (slot_id, item)
+                })
+                .collect();
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
             // Append to the player's queue rather than replacing the whole queue.
             player.send_command(PlayerCommand::QueueAppend {
                 items: items_for_player,
@@ -461,9 +435,8 @@ fn handle_ctrl(
                     "slot not found; remove skipped".to_string(),
                 );
             } else if queue.active_slot_id() == Some(sid) {
-                let idx = queue.slot_index(sid).unwrap_or(0);
                 queue.remove_active_slot_confirmed(sid);
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
                 if queue.is_empty() {
                     // Clear the player's queue and stop.
                     player.send_command(PlayerCommand::SubmitQueue {
@@ -471,14 +444,18 @@ fn handle_ctrl(
                         start_idx: 0,
                     });
                     player.stop();
+                    reset_slot_jumps(transitions, queued_transition_origin);
                 } else {
-                    player.send_command(PlayerCommand::QueueRemove(idx));
+                    // Removing the playing slot forces a track change that
+                    // carries no awaited transition identity, so anything in
+                    // flight can never settle: interrupt it deliberately.
+                    reset_slot_jumps(transitions, queued_transition_origin);
+                    player.send_command(PlayerCommand::QueueRemove(sid));
                 }
             } else {
-                let idx = queue.slot_index(sid).unwrap_or(0);
                 queue.remove_slot(sid);
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                player.send_command(PlayerCommand::QueueRemove(idx));
+                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+                player.send_command(PlayerCommand::QueueRemove(sid));
             }
         }
         CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index } => {
@@ -494,22 +471,33 @@ fn handle_ctrl(
                     "slot not found; move skipped".to_string(),
                 );
             } else {
-                let from_idx = queue.slot_index(sid).unwrap_or(0);
                 queue.move_slot(sid, to_index);
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                player.send_command(PlayerCommand::QueueMove(from_idx, to_index));
+                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+                player.send_command(PlayerCommand::QueueMove(sid, to_index));
             }
         }
         CtrlCmd::UnifiedQueuePlaySlot { slot_id } => {
             let sid = QueueSlotId::from_raw(slot_id);
-            match queue.set_active_slot(sid) {
-                crate::playback_queue::QueueMutationResult::Applied(()) => {
-                    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                    if let Some(idx) = queue.active_index() {
-                        player.send_command(PlayerCommand::JumpTo(idx));
-                    }
+            match queue.slot(sid) {
+                Some(_) => {
+                    // No client request id on this command, so the owner mints
+                    // one to correlate the settling observation.
+                    let (request_id, generation) = transitions.mint_local_id();
+                    // `dispatch_slot_jump` publishes the snapshot after
+                    // accepting, so the pending slot reaches Clients.
+                    dispatch_slot_jump(
+                        transitions,
+                        queued_transition_origin,
+                        ctrl_clients,
+                        player,
+                        shared_queue,
+                        queue,
+                        source,
+                        client_id,
+                        crate::playback_transition::Transition::new(request_id, generation, sid),
+                    );
                 }
-                crate::playback_queue::QueueMutationResult::NotFound => {
+                None => {
                     reject_command(
                         request.reply_tx,
                         ctrl_clients,
@@ -529,7 +517,8 @@ fn handle_ctrl(
                 start_idx: 0,
             });
             player.stop();
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+            reset_slot_jumps(transitions, queued_transition_origin);
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
         }
     }
 }

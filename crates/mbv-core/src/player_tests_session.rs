@@ -1,16 +1,16 @@
 #[test]
 fn cancel_pending_quit_clears_quit_at_and_shutdown_timeout() {
     // Regression test for a code-review finding: cmd_load_new and
-    // cmd_replace_queue (via the shared cancel_pending_quit helper)
+    // queue submission (via the shared cancel_pending_quit helper)
     // must reset shutdown_report_timeout, not just quit_at, when a
-    // LoadNew/ReplaceQueue command cancels an in-flight quit. Otherwise
+    // LoadNew/SubmitQueue command cancels an in-flight quit. Otherwise
     // App::teardown -> Player::stop_for_shutdown sets
     // shutdown_report_timeout = Some(quit_timeout) before sending the
     // stop signal; if that quit then gets cancelled by an
-    // already-queued LoadNew/ReplaceQueue, shutdown_report_timeout
+    // already-queued LoadNew/SubmitQueue, shutdown_report_timeout
     // would stay Some for the rest of the session, silently degrading
     // every later track transition to the tight shutdown budget/no-retry
-    // path instead of the ordinary one. cmd_load_new/cmd_replace_queue
+    // path instead of the ordinary one. cmd_load_new/cmd_submit_queue
     // themselves aren't unit-tested directly here since they require a
     // real Mpv handle; this exercises the exact reset logic they share.
     let (mut session, _status) = make_queue_session_for_pos_tests(0);
@@ -54,13 +54,23 @@ fn playlist_pos_does_not_clobber_pending_replace_queue_load() {
 fn playlist_pos_does_not_clobber_in_flight_jump_to() {
     let (mut session, status) = make_queue_session_for_pos_tests(0);
     session.pending_initial_playlist_layout = false;
-    session.forced_slot_id = session.slot_id_at(1);
+    let target = session.slot_id_at(1).unwrap();
+    session.forced_slot_id = Some(target);
+    // Rapid Enter on two rows: the in-flight jump also carries its request
+    // identity; an intermediate playlist-pos event must not clobber either.
+    session.forced_transition =
+        Some(crate::playback_transition::Transition::new(42, 1, target));
 
     session.on_playlist_pos_changed(1);
 
     assert_eq!(session.current_idx, 0);
     assert_eq!(status.lock().unwrap().current_idx, 0);
-    assert_eq!(session.forced_slot_id, session.slot_id_at(1));
+    assert_eq!(session.forced_slot_id, Some(target));
+    assert_eq!(
+        session.forced_transition.map(|t| (t.request_id, t.target)),
+        Some((42, target)),
+        "the in-flight jump's request identity survives an intermediate playlist-pos event"
+    );
 }
 
 #[test]
@@ -79,7 +89,7 @@ fn append_items_to_queue_extends_queue_without_moving_current_idx() {
     let (mut session, status) = make_queue_session_for_pos_tests(1);
     let appended = make_media_item("ep4");
 
-    session.append_items_to_queue(vec![QueueItem::Emby(Box::new(appended.clone()))]);
+    session.append_items_to_queue(owner_paired(vec![QueueItem::Emby(Box::new(appended.clone()))]));
 
     assert_eq!(session.queue_len(), 4);
     assert_eq!(session.current_idx, 1);
@@ -94,6 +104,33 @@ fn append_items_to_queue_extends_queue_without_moving_current_idx() {
             .map(|slot| slot.item.id().to_string()),
         Some(appended.id.clone())
     );
+}
+
+#[test]
+fn deferred_stop_keeps_the_slot_observed_at_end_file_not_the_one_now_at_that_index() {
+    // Task 2.3 / design D2: the Queue+Quit end-file defers its Stopped emit
+    // until the mpv Shutdown event. A QueueMove drained in between must not
+    // change which occurrence the event names. `stop_slot` is the identity
+    // captured when the stop was first observed; here it points at ep2 while
+    // the ordinal it used to occupy now holds ep3's slot.
+    let (mut session, _status, events) = make_queue_session_for_pos_tests_with_events(1);
+    let observed = session.active_slot_id().expect("active slot at end-file");
+    let displaced = session.slot_id_at(2).expect("slot at index 2");
+    session.stop_slot = Some(observed); // captured in on_end_file's Queue+Quit path
+    session.stop_report = StopReport::Sent; // skip the reporter side effects
+    let mut progress = noop_progress();
+
+    // QueueMove drained between the end-file and the Shutdown event.
+    assert!(session.queue.move_slot(observed, 2));
+    assert_eq!(session.slot_id_at(1), Some(displaced));
+
+    session.on_shutdown(&mut progress);
+
+    let event = events.recv().unwrap();
+    let PlayerEvent::Stopped { slot_id, .. } = event else {
+        panic!("expected Stopped event");
+    };
+    assert_eq!(slot_id, Some(observed));
 }
 
 #[test]
@@ -425,7 +462,10 @@ fn standalone_fresh_start_preserves_saved_position() {
 
     session.origin = PlaybackOrigin::Standalone;
     let position_ticks = item.playback_position_ticks;
-    session.queue = PlaybackQueue::from_items(vec![item], Some(0));
+    session.queue = ExecutionSequence::from_slot_items(
+        vec![(QueueSlotId::from_raw(1), QueueItem::Emby(Box::new(item)))],
+        Some(QueueSlotId::from_raw(1)),
+    );
     session.current_idx = 0;
 
     session.load_active_item_state();
@@ -443,7 +483,10 @@ fn queue_slot_activation_preserves_saved_position() {
     let position_ticks = item.playback_position_ticks;
 
     session.origin = PlaybackOrigin::Queue;
-    session.queue = PlaybackQueue::from_items(vec![item], Some(0));
+    session.queue = ExecutionSequence::from_slot_items(
+        vec![(QueueSlotId::from_raw(1), QueueItem::Emby(Box::new(item)))],
+        Some(QueueSlotId::from_raw(1)),
+    );
     session.current_idx = 0;
 
     session.load_active_item_state();

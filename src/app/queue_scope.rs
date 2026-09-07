@@ -1,8 +1,5 @@
 use super::notify_actions::ToastSeverity;
-use super::{
-    App, PendingQueueAction, PlayerTab, QueueCursorPush, QueueScope, QueueScopeResolution,
-    UndoEntry,
-};
+use super::{App, PendingQueueAction, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueMutationResult, QueueSlotId, RefreshMergeResult};
 use mbv_core::player::PlayerCommand;
@@ -78,23 +75,6 @@ impl App {
         }
     }
 
-    pub(super) fn replace_direct_remote_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
-        self.retire_remote_tracking(true);
-        let cursor = cursor.min(items.len().saturating_sub(1));
-        self.player
-            .send_command(crate::player::PlayerCommand::ReplaceQueue {
-                items: items.clone(),
-                start_idx: cursor,
-            });
-        if let Some(queue) = self.remote_player_tab.as_mut() {
-            queue.set_items(items, cursor);
-        }
-        // A full replacement regenerates slot ids, so a preserved prior
-        // selection could collide with a new slot; force a re-anchor to the
-        // replacement's start index.
-        self.playhead.pending_push = Some(QueueCursorPush::Reanchor(QueueScope::Remote));
-    }
-
     pub(super) fn sync_playback_queue_after_append(
         &mut self,
         scope: QueueScope,
@@ -145,6 +125,7 @@ impl App {
     }
 
     pub(super) fn replace_playback_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
+        self.reset_bare_transitions();
         self.retire_remote_tracking(true);
         let cursor = cursor.min(items.len().saturating_sub(1));
         match self.playing_queue_scope() {
@@ -162,7 +143,7 @@ impl App {
         // A full replacement regenerates slot ids: a preserved prior selection
         // could collide with an unrelated new slot, so force a re-anchor to
         // the replacement's start index rather than relying on `Preserve`.
-        self.playhead.pending_push = Some(QueueCursorPush::Reanchor(self.playing_queue_scope()));
+        self.pending_queue_cursor_reanchor = Some(self.playing_queue_scope());
     }
 
     pub(super) fn viewed_queue_scope(&self) -> QueueScope {
@@ -199,29 +180,23 @@ impl App {
         } else {
             None
         };
-        let (result, pre_refresh_indices) = {
+        let result = {
             let queue = self.queue_for_scope_mut(scope);
             queue.sync_active_slot(active_index);
-            let pre_refresh_indices = sync_player_prunes.then(|| {
-                queue
-                    .queue
-                    .slots()
-                    .iter()
-                    .enumerate()
-                    .map(|(index, slot)| (slot.slot_id, index))
-                    .collect::<std::collections::HashMap<_, _>>()
-            });
-            (queue.merge_refresh(fetched_items), pre_refresh_indices)
+            queue.merge_refresh(fetched_items)
         };
-        if let Some(pre_refresh_indices) = pre_refresh_indices {
-            let mut pruned_indices: Vec<_> = result
-                .pruned_slots
-                .iter()
-                .filter_map(|slot_id| pre_refresh_indices.get(slot_id).copied())
-                .collect();
-            pruned_indices.sort_unstable_by(|left, right| right.cmp(left));
-            for index in pruned_indices {
-                self.player.send_command(PlayerCommand::QueueRemove(index));
+        if sync_player_prunes {
+            // Slot-addressed removal: order-independent, so no descending
+            // index sort is needed. Remote owners take the unified path;
+            // the raw command is the local-player fallback only.
+            for slot_id in &result.pruned_slots {
+                if !self
+                    .player
+                    .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(*slot_id))
+                {
+                    self.player
+                        .send_command(PlayerCommand::QueueRemove(*slot_id));
+                }
             }
         }
         result
@@ -269,30 +244,22 @@ impl App {
         (should_consume, is_audio)
     }
 
-    /// Removes the given slot from the currently active playback queue by
-    /// identity and, if something was actually removed, tells the player to
-    /// drop the slot's current index from its own internal queue copy.
+    /// Removes a completed slot from the local playback queue by identity.
     /// Uses `consume_slot` rather than `remove_slot` so a slot that is
-    /// currently marked active in the model (set via `set_active_slot`) can
-    /// still be consumed; the active-confirmation gate on `remove_slot` only
-    /// applies to explicit user-initiated removal. Returns the removed
+    /// currently marked active can still be consumed. Returns the removed
     /// item's id, or `None` if the slot no longer exists.
     pub(super) fn consume_slot_from_active_playback_queue(
         &mut self,
         slot_id: QueueSlotId,
     ) -> Option<String> {
-        let idx = self.playback_queue().queue.slot_index(slot_id)?;
         let removed = match self.playback_queue_mut().queue.consume_slot(slot_id) {
             QueueMutationResult::Applied(slot) => slot,
             QueueMutationResult::NotFound => return None,
         };
         self.playback_queue_mut().clamp_cursor();
-        // Prefer slot-based removal for unified-capable remote peers.
-        let sent_unified = self
-            .player
-            .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(slot_id));
-        if !sent_unified {
-            self.player.send_command(PlayerCommand::QueueRemove(idx));
+        if !self.player.is_remote() {
+            self.player
+                .send_command(PlayerCommand::QueueRemove(slot_id));
         }
         Some(removed.item.id().to_string())
     }
@@ -310,7 +277,7 @@ impl App {
             // queues hand out colliding `QueueSlotId`s (each is a
             // per-`PlaybackQueue` counter starting at 1), so identity
             // reconciliation can park the cursor on an unrelated slot.
-            self.playhead.pending_push = Some(QueueCursorPush::Reanchor(resolved));
+            self.pending_queue_cursor_reanchor = Some(resolved);
         }
         self.queue_scope = resolved;
     }

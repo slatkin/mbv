@@ -2,7 +2,7 @@
 
 use crate::app::action::Command;
 use crate::app::components::msg::TvHit;
-use crate::app::{App, QueueCursorPush, QueueScope};
+use crate::app::{App, QueueScope};
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerCommand;
 use mbv_core::remote_reconciliation::RemoteIntent;
@@ -60,7 +60,7 @@ impl App {
             queue.queue_cursor = super::ui_util::move_cursor(queue.queue_cursor, delta * 3, n);
             // The user's own wheel input: the mounted QueueComponent must adopt
             // this index rather than reconciling by slot identity.
-            self.playhead.pending_push = Some(QueueCursorPush::Reanchor(scope));
+            self.pending_queue_cursor_reanchor = Some(scope);
         }
     }
 

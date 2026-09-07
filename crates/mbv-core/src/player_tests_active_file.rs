@@ -80,14 +80,15 @@ fn abs_book_item() -> QueueItem {
 #[test]
 fn failed_eager_transition_preserves_canonical_queue_and_mode() {
     let (mut run, _) = make_queue_session_for_pos_tests(1);
-    let active_abs = run.queue.append(abs_item());
+    let active_abs = QueueSlotId::from_raw(1_000);
+    run.queue.append_with_id(active_abs, abs_item());
     let _ = run.queue.set_active_slot(active_abs);
-    run.refresh_current_idx_from_queue();
+    run.current_idx = run.queue.slot_index(active_abs).unwrap();
     let old_slots: Vec<_> = run.queue.slots().iter().map(|slot| slot.slot_id).collect();
     let old_active = run.active_slot_id();
     let mpv = test_mpv();
 
-    run.cmd_append_queue(vec![abs_item()], &mpv);
+    run.cmd_append_queue(owner_paired(vec![abs_item()]), &mpv);
 
     assert_eq!(
         run.queue
@@ -99,6 +100,27 @@ fn failed_eager_transition_preserves_canonical_queue_and_mode() {
     );
     assert_eq!(run.active_slot_id(), old_active);
     assert!(!run.active_file);
+}
+
+#[test]
+fn active_file_remove_of_earlier_slot_keeps_current_idx_on_the_playing_slot() {
+    // Regression (reviewer P2): active_file mode has no mpv playlist-pos event
+    // to self-correct current_idx. Removing a slot before the playing one must
+    // shift current_idx down so the next natural advance (current_idx + 1)
+    // still names the following slot, not the one after it.
+    let (mut run, _status) = make_queue_session_for_pos_tests(1); // [ep1, ep2, ep3], playing ep2
+    run.active_file = true;
+    let playing = run.active_slot_id().unwrap();
+    let earlier = run.slot_id_at(0).unwrap();
+    let following = run.slot_id_at(2).unwrap();
+    let mpv = test_mpv();
+    let mut progress = noop_progress();
+
+    run.handle_command(PlayerCommand::QueueRemove(earlier), &mpv, &mut progress);
+
+    assert_eq!(run.active_slot_id(), Some(playing));
+    assert_eq!(run.current_idx, 0);
+    assert_eq!(run.slot_id_at(run.current_idx + 1), Some(following));
 }
 
 #[test]
@@ -117,7 +139,7 @@ fn replacement_prepare_failure_accepts_new_stopped_queue_and_clears_mpv() {
     assert_eq!(mpv.get_property::<i64>("playlist-count").unwrap(), 1);
     let mut progress = noop_progress();
 
-    run.replace_with_queue_items(vec![replacement], 0, &mpv, &mut progress);
+    run.replace_with_queue_items(owner_paired(vec![replacement]), 0, &mpv, &mut progress);
 
     assert_eq!(run.queue_len(), 1);
     assert_eq!(run.active_item().unwrap().title(), "Replacement");
@@ -136,7 +158,6 @@ fn replacement_prepare_failure_accepts_new_stopped_queue_and_clears_mpv() {
     drop(status);
     let event = events.recv().unwrap();
     let PlayerEvent::Stopped {
-        idx,
         position_ticks,
         error,
         ..
@@ -144,7 +165,6 @@ fn replacement_prepare_failure_accepts_new_stopped_queue_and_clears_mpv() {
     else {
         panic!("expected replacement failure stop event");
     };
-    assert_eq!(idx, 0);
     assert_eq!(position_ticks, 123);
     assert_eq!(
         error.as_deref(),
@@ -164,7 +184,7 @@ fn active_file_replacement_uses_canonical_item_generic_path_and_one_mpv_entry() 
         QueueItem::Emby(Box::new(make_media_item("replacement-b"))),
     ];
 
-    run.replace_with_queue_items(items, 1, &mpv, &mut progress);
+    run.replace_with_queue_items(owner_paired(items), 1, &mpv, &mut progress);
 
     assert!(run.active_file);
     assert_eq!(run.queue_len(), 2);

@@ -1,5 +1,5 @@
 use super::notify_actions::ToastSeverity;
-use super::types_playback::{PlayheadConfidence, PlaylistMutation, PredictionReason};
+use super::types_playback::PlaylistMutation;
 use super::ui_util::is_playable;
 use super::{
     App, ConfirmAction, ConfirmModal, LibEvent, PendingQueueAction, QueueScope, SessionEvent,
@@ -66,22 +66,19 @@ impl App {
         self.undo_stack_for_scope_mut(scope)
             .push(UndoEntry::Remove(pos, item));
         self.persist_local_queue_state_if_needed(scope);
-        if controls_playback_queue && active && pos < current_idx {
-            self.playhead.confidence = PlayheadConfidence::Predicted(PredictionReason::Relocated);
-            self.playhead.slot = current_idx - 1;
-            self.playhead.scope = scope;
-        }
         let sent_queue_remove = controls_playback_queue
             && (active || scope == QueueScope::Remote || self.player.is_remote());
         if sent_queue_remove {
-            // Prefer slot-based removal for unified-capable remote peers
-            // to avoid TOCTOU races on positional indices.
-            let sent_unified = slot_id.is_some_and(|sid| {
-                self.player
+            // Slot identity was captured before the local removal above.
+            // Prefer the unified remote path; the in-process command is now
+            // slot-addressed too.
+            if let Some(sid) = slot_id {
+                if !self
+                    .player
                     .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(sid))
-            });
-            if !sent_unified {
-                self.player.send_command(PlayerCommand::QueueRemove(pos));
+                {
+                    self.player.send_command(PlayerCommand::QueueRemove(sid));
+                }
             }
             // Player thread adjusts current_idx when it processes the command.
             // No eager adjustment here — doing so races with the player thread
@@ -179,10 +176,7 @@ impl App {
             return false;
         }
         let controls_playback_queue = self.queue_scope_is_playback(scope);
-        let (active, active_idx) = {
-            let s = self.player.status.lock().unwrap();
-            (s.active, s.current_idx)
-        };
+        let active = self.player.status.lock().unwrap().active;
         if !self.queue_for_scope_mut(scope).move_slot(slot_id, to) {
             return false;
         }
@@ -190,35 +184,17 @@ impl App {
             self.queue_dirty = true;
         }
         self.persist_local_queue_state_if_needed(scope);
-        if controls_playback_queue && active {
-            let new_active_idx = if active_idx == from {
-                Some(to)
-            } else if from < active_idx && active_idx <= to {
-                Some(active_idx - 1)
-            } else if to <= active_idx && active_idx < from {
-                Some(active_idx + 1)
-            } else {
-                None
-            };
-            if let Some(new_active_idx) = new_active_idx {
-                if new_active_idx != active_idx {
-                    self.playhead.confidence =
-                        PlayheadConfidence::Predicted(PredictionReason::Relocated);
-                    self.playhead.slot = new_active_idx;
-                    self.playhead.scope = scope;
-                }
-            }
-        }
         if controls_playback_queue
             && (active || scope == QueueScope::Remote || self.player.is_remote())
         {
-            // Prefer slot-based move for unified-capable remote peers
-            // to avoid TOCTOU races on positional indices.
+            // Prefer the unified remote path; the in-process command is now
+            // slot-addressed (source) with an ordinal destination.
             let sent_unified = self
                 .player
                 .queue_move_slot(mbv_core::ctrl::slot_id_to_u64(slot_id), to);
             if !sent_unified {
-                self.player.send_command(PlayerCommand::QueueMove(from, to));
+                self.player
+                    .send_command(PlayerCommand::QueueMove(slot_id, to));
             }
         }
         true
@@ -258,6 +234,7 @@ impl App {
     }
 
     pub(super) fn on_queue_replace_silent(&mut self) {
+        self.reset_bare_transitions();
         self.queue_source = crate::config::QueueSource::Unknown;
         self.queue_dirty = false;
     }
@@ -277,6 +254,14 @@ impl App {
             });
         } else {
             self.execute_pending_queue_action(action);
+        }
+    }
+
+    fn clear_remote_queue(&mut self) {
+        self.retire_remote_tracking(true);
+        self.player.clear_queue();
+        if let Some(queue) = self.remote_player_tab.as_mut() {
+            queue.clear();
         }
     }
 
@@ -354,14 +339,12 @@ impl App {
                     self.remote_queue_undo_stack.clear();
                 }
                 if scope == QueueScope::Remote && had_items {
-                    self.replace_direct_remote_queue(Vec::new(), 0);
+                    self.clear_remote_queue();
                 } else if self.queue_scope_is_playback(scope) {
+                    self.reset_bare_transitions();
                     self.player.stop();
                     if self.is_local_daemon() {
-                        self.player.send_command(PlayerCommand::ReplaceQueue {
-                            items: Vec::new(),
-                            start_idx: 0,
-                        });
+                        self.player.clear_queue();
                     }
                 }
                 if scope != QueueScope::Remote {

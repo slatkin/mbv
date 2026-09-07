@@ -64,7 +64,7 @@ impl App {
                     // Always hand the whole list to play_queue (not just the clicked
                     // item) so the remote-controlled queue continues past start_idx.
                     // play_queue already handles the "something is already playing"
-                    // case in place via ReplaceQueue.
+                    // case in place via unified queue submission.
                     let mut items_with_pos = items.clone();
                     if start_position_ticks > 0 {
                         items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
@@ -80,6 +80,7 @@ impl App {
                 self.save_queue_state();
             }
             WsEvent::Stop => {
+                self.reset_bare_transitions();
                 self.player.stop();
             }
             WsEvent::Pause => {

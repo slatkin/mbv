@@ -97,18 +97,6 @@ fn wire_command_tags_are_pinned() {
         "{\"JumpTo\":3}"
     );
     assert_eq!(
-        serde_json::to_string(&WireCommand::QueueAppend { items: vec![] }).unwrap(),
-        "{\"QueueAppend\":{\"items\":[]}}"
-    );
-    assert_eq!(
-        serde_json::to_string(&WireCommand::QueueRemove(2)).unwrap(),
-        "{\"PlaylistRemove\":2}"
-    );
-    assert_eq!(
-        serde_json::to_string(&WireCommand::QueueMove(2, 3)).unwrap(),
-        "{\"PlaylistMove\":[2,3]}"
-    );
-    assert_eq!(
         serde_json::to_string(&WireCommand::SetVolume(50)).unwrap(),
         "{\"SetVolume\":50}"
     );
@@ -149,25 +137,9 @@ fn wire_command_tags_are_pinned() {
         .unwrap(),
         "{\"SetSubtitlePrefs\":{\"mode\":\"auto\",\"subtitle_lang\":\"eng\",\"audio_lang\":\"jpn\"}}"
     );
-    assert_eq!(
-        serde_json::to_string(&WireCommand::ReplaceQueue {
-            items: vec![],
-            start_idx: 0,
-        })
-        .unwrap(),
-        "{\"ReplacePlaylist\":{\"items\":[],\"start_idx\":0}}"
-    );
-    // LoadNew and NextUpShow carry a EmbyItem / free-form strings, so
-    // asserting the full JSON body would just restate EmbyItem's field
-    // list; instead check the pinned tag key only.
-    assert_eq!(
-        wire_tag(&WireCommand::LoadNew {
-            url: "http://emby.local/stream".into(),
-            start_pos: 0.0,
-            item: Box::new(stub_media_item()),
-        }),
-        "LoadNew"
-    );
+    // NextUpShow carries free-form strings, so asserting the full JSON body
+    // would just restate the field list; instead check the pinned tag key
+    // only.
     assert_eq!(
         wire_tag(&WireCommand::NextUpShow {
             item_id: "item1".into(),
@@ -198,7 +170,7 @@ fn old_stopped_player_event_defaults_progress_report_accepted() {
 #[test]
 fn old_track_completed_player_event_defaults_progress_report_accepted() {
     let event: CtrlEvent = serde_json::from_str(
-        r#"{"Player":{"TrackCompleted":{"idx":1,"position_ticks":456,"played":true,"consume":true}}}"#,
+        r#"{"Player":{"TrackCompleted":{"slot_id":1,"position_ticks":456,"played":true,"consume":true}}}"#,
     )
     .unwrap();
 
@@ -399,12 +371,36 @@ fn unified_queue_state_data_round_trips() {
         active_slot: Some(1),
         revision: 5,
         source: QueueSource::Unknown,
+        in_flight_transition: Some(crate::ctrl::TransitionSummary {
+            request_id: 7,
+            generation: 3,
+            target_slot: 2,
+        }),
+        queued_latest_transition: Some(crate::ctrl::TransitionSummary {
+            request_id: 8,
+            generation: 3,
+            target_slot: 1,
+        }),
     };
     let json = serde_json::to_string(&state).unwrap();
     let decoded: UnifiedQueueStateData = serde_json::from_str(&json).unwrap();
     assert_eq!(decoded.slots.len(), 2);
     assert_eq!(decoded.active_slot, Some(1));
     assert_eq!(decoded.revision, 5);
+    assert_eq!(decoded.in_flight_transition, state.in_flight_transition);
+    assert_eq!(
+        decoded.queued_latest_transition,
+        state.queued_latest_transition
+    );
+
+    // Older payloads omit the transition fields entirely.
+    let mut legacy: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let obj = legacy.as_object_mut().unwrap();
+    obj.remove("in_flight_transition");
+    obj.remove("queued_latest_transition");
+    let decoded_legacy: UnifiedQueueStateData = serde_json::from_value(legacy).unwrap();
+    assert_eq!(decoded_legacy.in_flight_transition, None);
+    assert_eq!(decoded_legacy.queued_latest_transition, None);
 }
 
 #[test]
@@ -523,6 +519,8 @@ fn unified_queue_state_event_round_trips() {
         active_slot: None,
         revision: 0,
         source: QueueSource::Unknown,
+        in_flight_transition: None,
+        queued_latest_transition: None,
     });
     let json = serde_json::to_string(&event).unwrap();
     let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();

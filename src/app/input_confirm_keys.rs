@@ -53,6 +53,7 @@ impl App {
                             if self.connected_session_id.is_some() {
                                 self.playback_target().stop(self);
                             } else {
+                                self.reset_bare_transitions();
                                 self.player.stop();
                             }
                             if self.local_queue_metadata_applies(scope) {

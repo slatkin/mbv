@@ -75,7 +75,7 @@ fn home_enqueue_appends_to_direct_remote_queue() {
     ));
     assert!(
         cmd_rx.try_recv().is_err(),
-        "Ctrl+A append must not follow UnifiedQueueAppend with ReplaceQueue"
+        "Ctrl+A append must not follow UnifiedQueueAppend with queue replacement"
     );
 }
 
@@ -248,7 +248,7 @@ fn clearing_remote_queue_in_direct_remote_mode_leaves_local_queue_metadata_intac
 /// daemon queue -- the queue lives in `remote_player_tab`, so the old
 /// `self.player_tab.total_queue_len() == 0` check (the always-empty local queue)
 /// silently swallowed the key. Clearing itself is already supported
-/// (`execute_pending_queue_action` -> `replace_direct_remote_queue`).
+/// (`execute_pending_queue_action` -> unified queue clear).
 #[test]
 fn clear_queue_prompt_opens_for_direct_remote_daemon_queue() {
     let _guard = crate::config::TestStateDirGuard::new();

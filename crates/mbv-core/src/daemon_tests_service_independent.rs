@@ -87,6 +87,7 @@ fn absent_emby_websocket_is_a_noop_for_ctrl_and_queue_state() {
     };
     let mut queue = PlaybackQueue::default();
     let mut source = QueueSource::Unknown;
+    let mut transitions = crate::playback_transition::OwnerTransitionState::default();
     handle_ws(
         WsEvent::TogglePause,
         None,
@@ -94,6 +95,7 @@ fn absent_emby_websocket_is_a_noop_for_ctrl_and_queue_state() {
         false,
         &mut queue,
         &mut source,
+        &mut transitions,
         &shared_queue_state(),
         &registry,
     );
@@ -223,8 +225,17 @@ fn reconcile_abs_with_queue(
     let shared = shared_queue_state();
     let clients = Arc::new(Mutex::new(CtrlClients::default()));
     let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let mut transitions = crate::playback_transition::OwnerTransitionState::default();
     reconcile_packaged_audiobookshelf(
-        revision, current, &player, queue, source, &shared, &clients, &client,
+        revision,
+        current,
+        &player,
+        queue,
+        source,
+        &mut transitions,
+        &shared,
+        &clients,
+        &client,
     )
 }
 

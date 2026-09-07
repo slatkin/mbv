@@ -13,7 +13,7 @@ struct PlaybackRun {
     subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     server_url: String,
     token: String,
-    queue: PlaybackQueue,
+    queue: ExecutionSequence,
     audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
     active_lifecycle: ActiveItemLifecycle,
     active_file: bool,
@@ -23,6 +23,19 @@ struct PlaybackRun {
     // loop state
     current_idx: usize,
     forced_slot_id: Option<QueueSlotId>,
+    /// Request identity of the in-flight explicit jump that set
+    /// `forced_slot_id`, so the settling `TrackChanged` observation can be
+    /// tagged with the `(request_id, generation)` it satisfies (design D4).
+    /// Cleared in lockstep with `forced_slot_id`.
+    forced_transition: Option<crate::playback_transition::Transition>,
+    /// Slot identity captured at the moment a stop/quit is first observed, so a
+    /// `QueueMove`/`QueueRemove` applied before the deferred `Stopped` emit
+    /// (shutdown / quit-timeout paths) cannot change which occurrence the event
+    /// names (design D2). `None` once taken or when no stop is pending.
+    stop_slot: Option<QueueSlotId>,
+    /// Runtime captured with `stop_slot`, so deferred quit/shutdown decisions
+    /// use the completed occurrence rather than a later status update.
+    stop_runtime: Option<i64>,
     quit_at: Option<Instant>,
     last_seek_at: Option<Instant>,
     last_valid_pos: i64,

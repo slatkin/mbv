@@ -3,7 +3,7 @@ use super::components::{
     QueueRequest,
 };
 use super::shell::Model;
-use super::{PanelFocus, QueueCursorPush, QueueScope};
+use super::{PanelFocus, QueueScope};
 use crate::app::notify_actions::ToastSeverity;
 
 impl Model {
@@ -33,30 +33,25 @@ impl Model {
 
         let scope = self.app.viewed_queue_scope();
         let slots = self.app.queue_for_scope(scope).slots().to_vec();
-        // An authoritative writer armed `playhead.pending_push` for a specific
-        // scope. Consume it as a `Set` that wins over slot-identity
-        // reconciliation only when that scope is the one on screen: a push
-        // armed for a scope the user is not viewing (e.g. a remote daemon
-        // update while the user browses Local) must not snap the visible
-        // scope's independent selection. A `Follow` push additionally yields
-        // to an in-progress user navigation; a `Reanchor` (scope switch, full
-        // replacement, wheel scroll, jump-to-now-playing) always wins.
-        // Anything else is a routine content refresh: `Preserve` the
-        // component's own selection pinned to its slot.
-        let cursor = match self.app.playhead.pending_push.take() {
-            Some(push) if push.scope() == scope => match push {
-                QueueCursorPush::Follow(_) if self.app.queue_cursor_held_by_user() => {
-                    QueueCursorUpdate::Preserve
-                }
-                _ => QueueCursorUpdate::Set(self.app.queue_for_scope(scope).queue_cursor),
-            },
+        // Re-anchor only for authoritative content changes; routine updates preserve
+        // the component-owned cursor.
+        let cursor = match self.app.pending_queue_cursor_reanchor.take() {
+            Some(reanchor) if reanchor == scope => {
+                QueueCursorUpdate::Set(self.app.queue_for_scope(scope).queue_cursor)
+            }
             _ => QueueCursorUpdate::Preserve,
         };
         let playback = self.app.displayed_queue_playback_state();
+        let pending_slot = self
+            .app
+            .queue_scope_is_playback(scope)
+            .then(|| self.app.pending_playback_slot())
+            .flatten();
         let title = self.app.queue_title_model();
         let title_area = self.app.layout.main.queue_title_area;
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
+                queue.set_pending_slot(pending_slot);
                 queue.set_content(slots, cursor, scope, playback, title);
                 queue.set_area(self.app.layout.main.queue_area);
                 queue.set_title_area(title_area);
@@ -173,8 +168,7 @@ impl Model {
                         self.app.set_queue_scope(QueueScope::Remote);
                     }
                     // Jump-to-now-playing is an explicit, authoritative move.
-                    self.app.playhead.pending_push =
-                        Some(QueueCursorPush::Reanchor(self.app.playing_queue_scope()));
+                    self.app.pending_queue_cursor_reanchor = Some(self.app.playing_queue_scope());
                 } else {
                     self.app
                         .flash("Nothing is playing".into(), ToastSeverity::Error);
@@ -340,62 +334,22 @@ mod tests {
     }
 
     #[test]
-    fn stale_follow_push_yields_to_a_user_navigation_after_it_was_armed() {
-        // Finding 2: a follow push must not snap the selection back onto the
-        // playhead slot once the user has arrowed away in the meantime.
-        // The playhead cursor (App `queue_cursor`) stays at row 0 while the
-        // component sits on row 1, so a consumed `Set` would visibly move the
-        // component and this assertion fails if the hold-window guard is
-        // dropped from `sync_queue`.
+    fn observed_refresh_preserves_user_cursor() {
         let mut app = make_app_stub();
         app.player_tab.set_queue_items(emby_items(3), 0);
         app.panel_focus = PanelFocus::Queue;
         let mut model = Model::new(app);
         model.sync_queue();
+        press_down(&mut model);
+        assert_eq!(queue_cursor(&model), 1);
 
-        // User arrows down to row 1 and the shell records the navigation
-        // (arming the hold window via `select_queue_slot`).
-        let msg = model
-            .application
-            .get_component_mut(&ComponentId::Queue)
-            .unwrap()
-            .on(&Event::Keyboard(KeyEvent {
-                code: Key::Down,
-                modifiers: KeyModifiers::NONE,
-            }));
-        let Some(Msg::Queue(request)) = msg else {
-            panic!("Down must emit a Cursor request");
-        };
-        model.handle_queue_request(request);
-        assert_eq!(
-            queue_cursor(&model),
-            1,
-            "component moved under user control"
-        );
-        assert_eq!(
-            model.app.player_tab.queue_cursor, 0,
-            "the playhead cursor is still the stale row 0"
-        );
-
-        // A follow push for the visible scope arms *after* the navigation.
-        model.app.playhead.pending_push = Some(QueueCursorPush::Follow(QueueScope::Local));
         model.sync_queue();
-
-        assert_eq!(
-            queue_cursor(&model),
-            1,
-            "user navigation wins; the follow push must not re-snap to row 0"
-        );
-        assert!(
-            model.app.playhead.pending_push.is_none(),
-            "the stale push is cleared"
-        );
+        assert_eq!(queue_cursor(&model), 1);
+        assert!(model.app.pending_queue_cursor_reanchor.is_none());
     }
 
     #[test]
-    fn cursor_push_is_scope_aware() {
-        // Finding 3: a push armed for Remote scope (e.g. a remote daemon queue
-        // update) must not force the component while the user views Local.
+    fn cursor_reanchor_is_scope_aware() {
         let mut app = make_remote_app_stub(
             crate::app::tests::make_items(3),
             crate::app::tests::make_items(3),
@@ -404,32 +358,21 @@ mod tests {
         app.panel_focus = PanelFocus::Queue;
         let mut model = Model::new(app);
         model.sync_queue();
-        assert_eq!(model.app.viewed_queue_scope(), QueueScope::Local);
 
         model.app.player_tab.queue_cursor = 2;
-        model.app.playhead.pending_push = Some(QueueCursorPush::Follow(QueueScope::Remote));
+        model.app.pending_queue_cursor_reanchor = Some(QueueScope::Remote);
         model.sync_queue();
-        assert_eq!(
-            queue_cursor(&model),
-            0,
-            "a Remote-scoped push must not move the Local view"
-        );
-        assert!(
-            model.app.playhead.pending_push.is_none(),
-            "stale push cleared"
-        );
+        assert_eq!(queue_cursor(&model), 0);
+        assert!(model.app.pending_queue_cursor_reanchor.is_none());
 
-        // A push armed for the visible scope still applies.
-        model.app.playhead.pending_push = Some(QueueCursorPush::Follow(QueueScope::Local));
+        model.app.pending_queue_cursor_reanchor = Some(QueueScope::Local);
         model.sync_queue();
-        assert_eq!(queue_cursor(&model), 2, "matching-scope push applies");
+        assert_eq!(queue_cursor(&model), 2);
+        assert!(model.app.pending_queue_cursor_reanchor.is_none());
     }
 
     #[test]
     fn full_replacement_reanchors_instead_of_preserving() {
-        // Finding 4: a full queue replacement regenerates slot ids, so a
-        // preserved selection could collide with an unrelated new slot. The
-        // replacement must arm a Set push to the new start index.
         let mut app = make_app_stub();
         app.player_tab.set_queue_items(emby_items(3), 0);
         app.panel_focus = PanelFocus::Queue;
@@ -444,17 +387,13 @@ mod tests {
             .app
             .replace_playback_queue(crate::app::tests::make_items(4), 1);
         assert_eq!(
-            model.app.playhead.pending_push,
-            Some(QueueCursorPush::Reanchor(QueueScope::Local)),
-            "a replacement arms a Reanchor push"
+            model.app.pending_queue_cursor_reanchor,
+            Some(QueueScope::Local),
+            "a replacement arms a re-anchor"
         );
 
         model.sync_queue();
-        assert_eq!(
-            queue_cursor(&model),
-            1,
-            "component re-anchors to the replacement's start index"
-        );
+        assert_eq!(queue_cursor(&model), 1);
     }
 
     #[test]

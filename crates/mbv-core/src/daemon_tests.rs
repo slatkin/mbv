@@ -1,7 +1,9 @@
 use super::{
     all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws,
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
-    CtrlRequest, CtrlTransport, DaemonEvent, PlaybackIntentState, SharedQueueState,
+    CtrlRequest, CtrlTransport, DaemonEvent, DaemonPlayerOwner, PlaybackIntentState,
+    PlayerOwnerState,
+    SharedQueueState,
 };
 use crate::api::EmbyItem;
 use crate::config::{Config, QueueSource};
@@ -81,6 +83,7 @@ fn shared_queue_state() -> SharedQueueState {
     SharedQueueState {
         queue: Arc::new(Mutex::new(PlaybackQueue::default())),
         source: Arc::new(Mutex::new(QueueSource::Unknown)),
+        observed_active_slot: Arc::new(Mutex::new(None)),
     }
 }
 
@@ -252,10 +255,11 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         connect_client(&mut clients)
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
-    let mut queue = PlaybackQueue::default();
-    let mut source = QueueSource::Unknown;
+    let queue = PlaybackQueue::default();
+    let source = QueueSource::Unknown;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::TogglePause)),
         1,
@@ -265,15 +269,14 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
         false,
     );
+    let _queue = owner.core.queue;
 
     assert!(registry.lock().unwrap().has_driver());
     assert!(sender_rx.try_recv().is_err());
@@ -288,10 +291,11 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
     let client = Arc::new(Mutex::new(client));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (reply_tx, _reply_rx) = mpsc::channel();
-    let mut queue = PlaybackQueue::default();
-    let mut source = QueueSource::Unknown;
+    let queue = PlaybackQueue::default();
+    let source = QueueSource::Unknown;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![emby_qi("adopted", "Video", "Movie")],
@@ -305,15 +309,14 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
         false,
     );
+    let queue = owner.core.queue;
 
     assert_eq!(queue.len(), 1);
     assert_eq!(queue.slots()[0].item.id(), "adopted");
@@ -331,10 +334,11 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         connect_client(&mut clients)
     };
     let (reply_tx, reply_rx) = mpsc::channel();
-    let mut queue = queue_from_items(&[item("existing", "Video", "Movie")], 0);
-    let mut source = QueueSource::Remote;
+    let queue = queue_from_items(&[item("existing", "Video", "Movie")], 0);
+    let source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![emby_qi("stale", "Video", "Movie")],
@@ -348,15 +352,14 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
         false,
     );
+    let queue = owner.core.queue;
 
     assert_eq!(queue.len(), 1);
     assert_eq!(queue.slots()[0].item.id(), "existing");
@@ -379,278 +382,6 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
 }
 
 #[test]
-fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
-    let player = cold_player();
-    let player_cmd_rx = player.spy_on_commands();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
-    let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, sender_rx) = {
-        let mut clients = registry.lock().unwrap();
-        connect_client(&mut clients)
-    };
-    let (reply_tx, _reply_rx) = mpsc::channel();
-    let shared_queue = shared_queue_state();
-    let mut queue = queue_from_items(
-        &[
-            item("item-0", "Video", "Movie"),
-            item("item-1", "Video", "Movie"),
-            item("item-2", "Video", "Movie"),
-        ],
-        1,
-    );
-    let mut source = QueueSource::Remote;
-    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-
-    handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueMove(1, 2))),
-        1,
-        CtrlRequest {
-            reply_tx: &reply_tx,
-        },
-        &client,
-        &player,
-        false,
-        &mut queue,
-        &mut source,
-        &shared_queue,
-        &registry,
-        &mut PlaybackIntentState::default(),
-        false,
-        &dummy_merged_tx,
-        false,
-    );
-
-    assert!(matches!(
-        player_cmd_rx.try_recv(),
-        Ok(PlayerCommand::QueueMove(1, 2))
-    ));
-    assert_eq!(
-        queue
-            .slots()
-            .iter()
-            .map(|s| s.item.id())
-            .collect::<Vec<_>>(),
-        vec!["item-0", "item-2", "item-1"]
-    );
-    // Active slot follows the moved item (identity-based).
-    assert_eq!(queue.active_index(), Some(2));
-    // Reconnect snapshot updated.
-    {
-        let q = shared_queue.queue.lock().unwrap();
-        assert_eq!(
-            q.slots().iter().map(|s| s.item.id()).collect::<Vec<_>>(),
-            vec!["item-0", "item-2", "item-1"]
-        );
-    }
-    match recv_event(&sender_rx) {
-        CtrlEvent::UnifiedQueueState(state) => {
-            assert_eq!(
-                state.slots.iter().map(|s| s.item.id()).collect::<Vec<_>>(),
-                vec!["item-0", "item-2", "item-1"]
-            );
-        }
-        _ => panic!("expected unified queue state update"),
-    }
-}
-
-#[test]
-fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
-    let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
-    let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, sender_rx) = {
-        let mut clients = registry.lock().unwrap();
-        connect_client(&mut clients)
-    };
-    let (reply_tx, _reply_rx) = mpsc::channel();
-    let shared_queue = shared_queue_state();
-    let mut queue = queue_from_items(
-        &[
-            item("item-0", "Video", "Movie"),
-            item("item-1", "Video", "Movie"),
-        ],
-        1,
-    );
-    let mut source = QueueSource::Remote;
-    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-
-    handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueAppend {
-            items: vec![QueueItem::Emby(Box::new(item("item-2", "Video", "Movie")))],
-        })),
-        1,
-        CtrlRequest {
-            reply_tx: &reply_tx,
-        },
-        &client,
-        &player,
-        false,
-        &mut queue,
-        &mut source,
-        &shared_queue,
-        &registry,
-        &mut PlaybackIntentState::default(),
-        false,
-        &dummy_merged_tx,
-        false,
-    );
-
-    assert_eq!(
-        queue
-            .slots()
-            .iter()
-            .map(|s| s.item.id())
-            .collect::<Vec<_>>(),
-        vec!["item-0", "item-1", "item-2"]
-    );
-    assert_eq!(queue.active_index(), Some(1));
-    match recv_event(&sender_rx) {
-        CtrlEvent::UnifiedQueueState(state) => {
-            assert_eq!(
-                state.slots.iter().map(|s| s.item.id()).collect::<Vec<_>>(),
-                vec!["item-0", "item-1", "item-2"]
-            );
-        }
-        _ => panic!("expected unified queue state update"),
-    }
-}
-
-#[test]
-fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
-    let player = cold_player();
-    let player_cmd_rx = player.spy_on_commands();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
-    let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, sender_rx) = {
-        let mut clients = registry.lock().unwrap();
-        connect_client(&mut clients)
-    };
-    let (reply_tx, _reply_rx) = mpsc::channel();
-    let shared_queue = shared_queue_state();
-    let mut queue = queue_from_items(
-        &[
-            item("item-0", "Video", "Movie"),
-            item("item-1", "Video", "Movie"),
-            item("item-2", "Video", "Movie"),
-        ],
-        1,
-    );
-    let mut source = QueueSource::Remote;
-    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-
-    handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueRemove(1))),
-        1,
-        CtrlRequest {
-            reply_tx: &reply_tx,
-        },
-        &client,
-        &player,
-        false,
-        &mut queue,
-        &mut source,
-        &shared_queue,
-        &registry,
-        &mut PlaybackIntentState::default(),
-        false,
-        &dummy_merged_tx,
-        false,
-    );
-
-    assert!(matches!(
-        player_cmd_rx.try_recv(),
-        Ok(PlayerCommand::QueueRemove(1))
-    ));
-    assert_eq!(
-        queue
-            .slots()
-            .iter()
-            .map(|s| s.item.id())
-            .collect::<Vec<_>>(),
-        vec!["item-0", "item-2"]
-    );
-    // Active slot moved to successor after removal.
-    assert_eq!(queue.active_index(), Some(1));
-    match recv_event(&sender_rx) {
-        CtrlEvent::UnifiedQueueState(state) => {
-            assert_eq!(
-                state.slots.iter().map(|s| s.item.id()).collect::<Vec<_>>(),
-                vec!["item-0", "item-2"]
-            );
-        }
-        _ => panic!("expected unified queue state update"),
-    }
-}
-
-#[test]
-fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
-    let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
-    let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, sender_rx) = {
-        let mut clients = registry.lock().unwrap();
-        connect_client(&mut clients)
-    };
-    let (reply_tx, reply_rx) = mpsc::channel();
-    let shared_queue = shared_queue_state();
-    let mut queue = queue_from_items(
-        &[
-            item("item-0", "Video", "Movie"),
-            item("item-1", "Video", "Movie"),
-        ],
-        1,
-    );
-    let mut source = QueueSource::Remote;
-    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-
-    handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueMove(1, 2))),
-        1,
-        CtrlRequest {
-            reply_tx: &reply_tx,
-        },
-        &client,
-        &player,
-        false,
-        &mut queue,
-        &mut source,
-        &shared_queue,
-        &registry,
-        &mut PlaybackIntentState::default(),
-        false,
-        &dummy_merged_tx,
-        false,
-    );
-
-    // Queue unchanged.
-    assert_eq!(
-        queue
-            .slots()
-            .iter()
-            .map(|s| s.item.id())
-            .collect::<Vec<_>>(),
-        vec!["item-0", "item-1"]
-    );
-    assert!(sender_rx.try_recv().is_err());
-    match recv_event(&reply_rx) {
-        CtrlEvent::CommandRejected(reason) => {
-            assert_eq!(reason, "remote queue changed; move skipped");
-        }
-        _ => panic!("expected command rejection"),
-    }
-    match recv_event(&reply_rx) {
-        CtrlEvent::UnifiedQueueState(state) => {
-            assert_eq!(
-                state.slots.iter().map(|s| s.item.id()).collect::<Vec<_>>(),
-                vec!["item-0", "item-1"]
-            );
-            assert_eq!(state.active_slot, Some(state.slots[1].slot_id));
-        }
-        _ => panic!("expected queue state resync"),
-    }
-}
-
-#[test]
 fn cold_websocket_noop_does_not_evict_ctrl_driver() {
     let player = cold_player();
     let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
@@ -661,6 +392,7 @@ fn cold_websocket_noop_does_not_evict_ctrl_driver() {
     };
     let mut queue = PlaybackQueue::default();
     let mut source = QueueSource::Unknown;
+    let mut transitions = crate::playback_transition::OwnerTransitionState::default();
 
     handle_ws(
         WsEvent::TogglePause,
@@ -669,6 +401,7 @@ fn cold_websocket_noop_does_not_evict_ctrl_driver() {
         false,
         &mut queue,
         &mut source,
+        &mut transitions,
         &shared_queue_state(),
         &registry,
     );
@@ -677,6 +410,76 @@ fn cold_websocket_noop_does_not_evict_ctrl_driver() {
     assert!(clients.has_client(driver_id));
     drop(clients);
     assert!(driver_rx.try_recv().is_err());
+}
+
+// ── design D6: stale identity is rejected, never repaired by position ────
+
+#[test]
+fn stale_client_jump_to_index_is_rejected_visibly() {
+    let player = cold_player();
+    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let queue = queue_from_items(
+        &[item("a", "Video", "Movie"), item("b", "Video", "Movie")],
+        0,
+    );
+    let mut owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(queue, QueueSource::Remote),
+        ..Default::default()
+    };
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
+
+    handle_ctrl(
+        CtrlCmd::PlayerCmd(WireCommand::JumpTo(1)),
+        1,
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue_state(),
+        &registry,
+        false,
+        &dummy_merged_tx,
+        false,
+    );
+
+    match recv_event(&reply_rx) {
+        CtrlEvent::CommandRejected(reason) => assert!(reason.contains("index-addressed")),
+        _ => panic!("expected a visible CommandRejected for an index-addressed jump"),
+    }
+    // The stale command is never repaired by position.
+    assert_eq!(owner.core.queue.active_index(), Some(0));
+    assert_eq!(owner.core.observed_active_slot(), None);
+}
+
+#[test]
+fn stale_track_changed_report_leaves_queue_and_observed_slot_unchanged() {
+    let queue = queue_from_items(
+        &[item("a", "Video", "Movie"), item("b", "Video", "Movie")],
+        1,
+    );
+    let mut owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(queue, QueueSource::Remote),
+        ..Default::default()
+    };
+
+    // A genuine observation advances the observed active slot.
+    let real = owner.core.queue.slots()[1].slot_id;
+    assert_eq!(owner.core.observe_track_change(real), Some((1, real)));
+    assert_eq!(owner.core.observed_active_slot(), Some(real));
+
+    // A report naming a slot the owner no longer holds is discarded: the
+    // caller (daemon_run's TrackChanged arm) emits nothing and canonical
+    // queue + observed active slot are untouched (design D6, no clamp, no
+    // neighbour fallback).
+    let stale = crate::playback_queue::QueueSlotId::from_raw(9_999_999);
+    assert!(owner.core.observe_track_change(stale).is_none());
+    assert_eq!(owner.core.queue.active_slot_id(), Some(real));
+    assert_eq!(owner.core.observed_active_slot(), Some(real));
 }
 
 #[test]

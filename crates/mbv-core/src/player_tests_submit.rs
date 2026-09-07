@@ -36,10 +36,41 @@ fn submit_queue_fast_path_sends_command_for_feed_entry() {
         PlayerCommand::SubmitQueue { items, start_idx } => {
             assert_eq!(items.len(), 1);
             assert_eq!(start_idx, 0);
-            assert!(matches!(&items[0], QueueItem::Feed(e) if e.guid == "feed-1"));
+            assert!(matches!(&items[0].1, QueueItem::Feed(e) if e.guid == "feed-1"));
         }
         _ => panic!("expected SubmitQueue command"),
     }
+}
+
+#[test]
+fn append_after_cold_start_does_not_reuse_cold_start_slot_ids() {
+    // A cold-started run allocates queue slot ids 1..=N itself. The owner
+    // seeds its counter to N+1 so the next append fast-path hands out ids
+    // that are distinct from every cold-start slot.
+    let (event_tx, _event_rx) = mpsc::channel();
+    let player = Player::new(
+        String::new(),
+        String::new(),
+        false,
+        false,
+        false,
+        false,
+        SubtitlePrefs::default(),
+        event_tx,
+        None,
+    );
+    // Simulate the cold-start seed for a 3-item queue (ids 1..=3 in the run).
+    player.next_slot_id.store(4, Ordering::Relaxed);
+
+    let appended = player.assign_slot_ids(vec![
+        QueueItem::Feed(make_feed_entry("x", "X")),
+        QueueItem::Feed(make_feed_entry("y", "Y")),
+    ]);
+
+    assert_eq!(
+        appended.iter().map(|(id, _)| id.raw()).collect::<Vec<_>>(),
+        vec![4, 5]
+    );
 }
 
 #[test]
@@ -248,7 +279,7 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
     assert!(matches!(
         commands.try_recv().unwrap(),
         PlayerCommand::SubmitQueue { items, start_idx }
-            if start_idx == 0 && items.len() == 1 && items[0].is_audiobookshelf()
+            if start_idx == 0 && items.len() == 1 && items[0].1.is_audiobookshelf()
     ));
 }
 

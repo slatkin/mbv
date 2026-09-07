@@ -6,6 +6,11 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
+use crate::daemon_ctrl::{
+    serialize_ctrl_event, send_to, take_authority_for_emby_remote, AuthorityHolder,
+    ClientRegistry, CtrlClientId, CtrlClients, CtrlOutbound, CtrlRequest, CtrlSender,
+};
+pub use crate::daemon_ctrl::CtrlTransport;
 use crate::ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent, CtrlHello,
     DisconnectReason, PlaybackGeneration, PlaybackIntent, PlaybackIntentAction,
@@ -68,64 +73,6 @@ enum DaemonEvent {
     Shutdown,
 }
 
-type CtrlClientId = u64;
-type CtrlSender = mpsc::Sender<CtrlOutbound>;
-
-enum CtrlOutbound {
-    Event(String),
-    /// Writer-thread barrier used during daemon shutdown. The ack is sent
-    /// only after all earlier events have been written and flushed to the
-    /// socket, so process exit cannot discard a queued shutdown notice.
-    Flush(mpsc::Sender<()>),
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum AuthorityHolder {
-    #[default]
-    None,
-    Ctrl,
-    EmbyRemote,
-}
-
-#[derive(Default)]
-struct CtrlClients {
-    next_id: CtrlClientId,
-    connection: Vec<CtrlClient>,
-    authority: AuthorityHolder,
-}
-
-/// Transport identity for a ctrl client connection.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CtrlTransport {
-    /// Local Unix socket listener.
-    Local,
-    /// TCP listener.
-    Tcp,
-}
-
-struct CtrlClient {
-    id: CtrlClientId,
-    tx: CtrlSender,
-    transport: CtrlTransport,
-    /// Whether this peer advertised `abs-queue` in its Hello. Gates whether
-    /// it receives or may submit `QueueItem::Audiobookshelf` values.
-    supports_abs_queue: bool,
-    /// Whether this peer advertised `abs-progress` in its Hello. Gates
-    /// whether it receives the redacted Audiobookshelf progress event.
-    supports_abs_progress: bool,
-    /// Whether this peer advertised `abs-book-queue` in its Hello. Gates
-    /// whether it receives or may submit `QueueItem::AudiobookshelfBook`.
-    supports_abs_book_queue: bool,
-    /// Whether this peer advertised `abs-book-progress` in its Hello. Gates
-    /// whether it receives the redacted Audiobookshelf book progress event.
-    supports_abs_book_progress: bool,
-}
-
-type ClientRegistry = Arc<Mutex<CtrlClients>>;
-
-struct CtrlRequest<'a> {
-    reply_tx: &'a CtrlSender,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PlaybackIntentPhase {
@@ -143,12 +90,6 @@ struct CurrentPlaybackIntent {
     generation: PlaybackGeneration,
     action: PlaybackIntentAction,
     phase: PlaybackIntentPhase,
-    /// The index this intent is expected to land on, set when the action is
-    /// executed (e.g. the `next_idx()` computed at command time for `Next`).
-    /// `None` until the command is actually dispatched; used by the
-    /// `TrackChanged` handler to avoid crediting natural track transitions
-    /// (end-of-file auto-advance) to a pending Next/Previous intent.
-    target_idx: Option<usize>,
     accepted_at: Instant,
     pipe_output: bool,
     buffering_deadline: Option<Instant>,
@@ -236,7 +177,6 @@ impl PlaybackIntentState {
             generation: intent.generation,
             action: intent.action,
             phase: PlaybackIntentPhase::Accepted,
-            target_idx: None,
             accepted_at: Instant::now(),
             pipe_output,
             buffering_deadline: None,
@@ -343,14 +283,6 @@ impl PlaybackIntentState {
         ))
     }
 
-    fn set_target_idx(&mut self, request_id: PlaybackRequestId, idx: usize) {
-        if let Some(current) = &mut self.current {
-            if current.request_id == request_id {
-                current.target_idx = Some(idx);
-            }
-        }
-    }
-
     fn applied_if_current(
         &mut self,
         connection_id: CtrlClientId,
@@ -405,6 +337,154 @@ impl PlaybackIntentState {
     }
 }
 
+use crate::player_owner_state::PlayerOwnerState;
+
+/// The daemon's Player owner: the reusable [`PlayerOwnerState`] core plus the
+/// daemon-only guarded direct-playback lifecycle coordinator. The daemon event
+/// loop owns exactly one of these.
+#[derive(Default)]
+struct DaemonPlayerOwner {
+    core: PlayerOwnerState,
+    /// Guarded direct-playback lifecycle coordinator. Retained functionally
+    /// as-is (task 3.2 folds its single `current` into the core `transitions`);
+    /// kept here so the event loop owns one struct. Meaningless in Bare mode,
+    /// so it stays daemon-side.
+    intents: PlaybackIntentState,
+    /// Origin client of the transition currently in `core.transitions
+    /// .queued_latest` (there is only ever one). Routes the `Superseded` event
+    /// when it is displaced. task 3.5 folds transition/intent identity tracking
+    /// together.
+    queued_transition_origin: Option<(PlaybackRequestId, CtrlClientId)>,
+}
+
+/// Route one slot-jump transition through the owner's one-in-flight dispatch
+/// gate (design D4): dispatch it now, or hold it behind the in-flight one and
+/// report `Superseded` for whatever queued transition it displaced.
+#[allow(clippy::too_many_arguments)]
+fn dispatch_slot_jump(
+    transitions: &mut crate::playback_transition::OwnerTransitionState,
+    queued_origin: &mut Option<(PlaybackRequestId, CtrlClientId)>,
+    ctrl_clients: &ClientRegistry,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    queue: &PlaybackQueue,
+    source: &crate::config::QueueSource,
+    client_id: CtrlClientId,
+    transition: crate::playback_transition::Transition,
+) {
+    match transitions.accept(transition) {
+        crate::playback_transition::DispatchDecision::DispatchNow(t) => {
+            player.send_command(t.into_jump());
+        }
+        crate::playback_transition::DispatchDecision::Queued { superseded } => {
+            if let (Some(s), Some((origin_request_id, origin_client))) = (superseded, *queued_origin)
+            {
+                if origin_request_id == s.request_id {
+                    ctrl_clients.lock().unwrap().send_to_client(
+                        origin_client,
+                        &CtrlEvent::PlaybackIntent(PlaybackIntentEvent {
+                            request_id: s.request_id,
+                            generation: s.generation,
+                            outcome: PlaybackIntentOutcome::Superseded,
+                        }),
+                    );
+                }
+            }
+            *queued_origin = Some((transition.request_id, client_id));
+        }
+    }
+    // Accepting a transition mutates desired playback state (in_flight /
+    // queued_latest); publish the coherent snapshot so Clients can render the
+    // pending slot before it settles (task 4.1, design D5).
+    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+}
+
+/// Drop any in-flight/queued transition: the caller is issuing a
+/// queue-replacing playback command, which deliberately interrupts them.
+fn reset_slot_jumps(
+    transitions: &mut crate::playback_transition::OwnerTransitionState,
+    queued_origin: &mut Option<(PlaybackRequestId, CtrlClientId)>,
+) {
+    transitions.reset();
+    *queued_origin = None;
+}
+
+/// Settle the in-flight transition against a Playback-run observation and, if
+/// a newer transition was queued behind it, dispatch that one now (task 3.3).
+fn settle_and_redispatch(
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    observed_request_id: PlaybackRequestId,
+    observed_slot: QueueSlotId,
+) {
+    let crate::playback_transition::SettleOutcome::Settled { dispatch_next } = owner
+        .core
+        .transitions
+        .settle(observed_request_id, observed_slot)
+    else {
+        return;
+    };
+    owner.queued_transition_origin = None;
+    if let Some(next) = dispatch_next {
+        player.send_command(next.into_jump());
+    }
+}
+
+/// Bounded in-flight failure handling (task 3.4): if the Playback run has not
+/// confirmed the in-flight transition before its deadline, abandon it, report a
+/// timeout to its origin ctrl client, and dispatch whatever was queued behind
+/// it — rebuilding the execution projection from `owner.core.queue` exactly as
+/// [`settle_and_redispatch`] does.
+fn expire_and_redispatch(
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    ctrl_clients: &ClientRegistry,
+    shared_queue: &SharedQueueState,
+) {
+    let crate::playback_transition::ExpireOutcome::Expired {
+        expired,
+        dispatch_next,
+    } = owner.core.transitions.expire(Instant::now())
+    else {
+        return;
+    };
+    owner.queued_transition_origin = None;
+    // Emit a timeout to the abandoned request's origin when it is the current
+    // guarded intent (Next/Previous). Owner-minted jumps carry no ctrl origin
+    // and need no event.
+    if let Some((connection_id, request_id, generation)) = owner
+        .intents
+        .current
+        .as_ref()
+        .filter(|current| current.request_id == expired.request_id)
+        .map(|current| (current.connection_id, current.request_id, current.generation))
+    {
+        if let Some(event) = owner.intents.rejected_if_current(
+            connection_id,
+            request_id,
+            generation,
+            crate::ctrl::PlaybackIntentRejection::Unavailable,
+        ) {
+            ctrl_clients
+                .lock()
+                .unwrap()
+                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
+        }
+    }
+    if let Some(next) = dispatch_next {
+        player.send_command(next.into_jump());
+    }
+    // Abandoning / promoting a transition changed desired state; republish.
+    broadcast_queue_state(
+        ctrl_clients,
+        player,
+        shared_queue,
+        &owner.core.queue,
+        &owner.core.source,
+        &owner.core.transitions,
+    );
+}
+
 /// Snapshot of the daemon's canonical queue used to seed newly-connecting
 /// ctrl-socket clients.  The queue itself is the single source of truth;
 /// `UnifiedQueueState` is derived from it at the broadcast boundary.
@@ -412,6 +492,7 @@ impl PlaybackIntentState {
 struct SharedQueueState {
     queue: Arc<Mutex<PlaybackQueue>>,
     source: Arc<Mutex<crate::config::QueueSource>>,
+    observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
 }
 
 pub struct DaemonPlayerHandle {
@@ -440,19 +521,6 @@ fn broadcast(clients: &ClientRegistry, event: &CtrlEvent) {
     clients.lock().unwrap().broadcast_to_all(json);
 }
 
-/// Send an event to a single ctrl-socket client, rather than every connected
-/// TUI. Used for per-request responses like a command rejection (#90).
-fn send_to(client: &CtrlSender, event: &CtrlEvent) {
-    if let Some(json) = serialize_ctrl_event(event) {
-        let _ = client.send(CtrlOutbound::Event(json));
-    }
-}
-
-/// Shared by `broadcast` and `send_to` so both go through one serialization
-/// path instead of repeating `serde_json::to_string(event).ok()` inline.
-fn serialize_ctrl_event(event: &CtrlEvent) -> Option<String> {
-    serde_json::to_string(event).ok()
-}
 
 /// Fans out redacted Audiobookshelf progress to peers that negotiated
 /// `abs-progress`. Called from the daemon event loop after the acknowledged
@@ -476,191 +544,6 @@ fn broadcast_audiobookshelf_book_progress(
     clients.lock().unwrap().broadcast_book_progress_gated(json);
 }
 
-impl CtrlClients {
-    /// Append `tx` as a new ctrl connection. Multiple clients may coexist.
-    /// Does NOT override authority if it is currently `EmbyRemote` — the new
-    /// client receives broadcasts but its commands are rejected until
-    /// authority returns to `Ctrl`.
-    fn connect(
-        &mut self,
-        tx: CtrlSender,
-        transport: CtrlTransport,
-        supports_abs_queue: bool,
-        supports_abs_progress: bool,
-        supports_abs_book_queue: bool,
-        supports_abs_book_progress: bool,
-    ) -> CtrlClientId {
-        let id = self.next_id;
-        self.next_id += 1;
-        self.connection.push(CtrlClient {
-            id,
-            tx,
-            transport,
-            supports_abs_queue,
-            supports_abs_progress,
-            supports_abs_book_queue,
-            supports_abs_book_progress,
-        });
-        if self.authority == AuthorityHolder::None {
-            self.authority = AuthorityHolder::Ctrl;
-        }
-        id
-    }
-
-    fn remove(&mut self, id: CtrlClientId) {
-        self.connection.retain(|c| c.id != id);
-        if self.connection.is_empty() && self.authority == AuthorityHolder::Ctrl {
-            self.authority = AuthorityHolder::None;
-        }
-    }
-
-    fn has_client(&self, id: CtrlClientId) -> bool {
-        self.connection.iter().any(|c| c.id == id)
-    }
-
-    fn is_local_client(&self, id: CtrlClientId) -> bool {
-        self.connection
-            .iter()
-            .any(|c| c.id == id && c.transport == CtrlTransport::Local)
-    }
-
-    fn transport(&self, id: CtrlClientId) -> Option<CtrlTransport> {
-        self.connection
-            .iter()
-            .find(|client| client.id == id)
-            .map(|client| client.transport)
-    }
-
-    /// Whether the client `id` advertised `abs-queue` support at Hello.
-    /// Used to gate Audiobookshelf `QueueItem` transport in both directions.
-    fn supports_abs_queue(&self, id: CtrlClientId) -> bool {
-        self.connection
-            .iter()
-            .find(|c| c.id == id)
-            .is_some_and(|c| c.supports_abs_queue)
-    }
-
-    /// Whether the client `id` advertised `abs-book-queue` support at Hello.
-    /// Used to gate Audiobookshelf book `QueueItem` transport in both
-    /// directions.
-    fn supports_abs_book_queue(&self, id: CtrlClientId) -> bool {
-        self.connection
-            .iter()
-            .find(|c| c.id == id)
-            .is_some_and(|c| c.supports_abs_book_queue)
-    }
-
-    fn send_to_client(&self, id: CtrlClientId, event: &CtrlEvent) {
-        if let Some(client) = self.connection.iter().find(|client| client.id == id) {
-            send_to(&client.tx, event);
-        }
-    }
-
-    fn has_driver(&self) -> bool {
-        !self.connection.is_empty()
-    }
-
-    /// Broadcast `json` to all connected ctrl clients. Removes any client
-    /// whose channel has failed (broken pipe / disconnected).
-    fn broadcast_to_all(&mut self, json: String) {
-        self.connection
-            .retain(|c| c.tx.send(CtrlOutbound::Event(json.clone())).is_ok());
-    }
-
-    /// Broadcasts a state event gated per client:
-    /// - `unified_full_json` → peers advertising `abs-queue` + `abs-book-queue`
-    /// - `unified_abs_json` → peers advertising `abs-queue` only
-    /// - `unified_book_json` → peers advertising `abs-book-queue` only
-    /// - `unified_json` → all others
-    ///
-    /// Mirrors `broadcast_to_all`'s drop-on-failed-send behavior.
-    fn broadcast_state_gated(
-        &mut self,
-        unified_full_json: String,
-        unified_abs_json: String,
-        unified_book_json: String,
-        unified_json: String,
-    ) {
-        self.connection.retain(|c| {
-            let json = match (c.supports_abs_queue, c.supports_abs_book_queue) {
-                (true, true) => &unified_full_json,
-                (true, false) => &unified_abs_json,
-                (false, true) => &unified_book_json,
-                (false, false) => &unified_json,
-            };
-            c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
-        });
-    }
-
-    /// Sends redacted Audiobookshelf progress `json` only to clients that
-    /// advertised `abs-progress` at Hello. Peers lacking the capability are
-    /// silently skipped (not dropped) — mirrors `broadcast_state_gated`'s
-    /// drop-on-failed-send semantics for the peers that do receive it.
-    fn broadcast_progress_gated(&mut self, json: String) {
-        self.connection.retain(|c| {
-            if !c.supports_abs_progress {
-                return true;
-            }
-            c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
-        });
-    }
-
-    /// Sends redacted Audiobookshelf book progress `json` only to clients
-    /// that advertised `abs-book-progress` at Hello.
-    fn broadcast_book_progress_gated(&mut self, json: String) {
-        self.connection.retain(|c| {
-            if !c.supports_abs_book_progress {
-                return true;
-            }
-            c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
-        });
-    }
-
-    /// Broadcast a `Disconnected` notification to all connected ctrl clients
-    /// without closing their connections. Used for Emby remote authority
-    /// transitions — clients observe the authority change but stay connected.
-    fn notify_disconnected_all(&self, reason: DisconnectReason) {
-        for client in &self.connection {
-            send_to(&client.tx, &CtrlEvent::Disconnected { reason });
-        }
-    }
-
-    /// Wait until every currently connected writer has drained the events
-    /// queued before its barrier. A single deadline bounds the whole client
-    /// set; a broken or non-reading socket must not hold daemon shutdown
-    /// forever.
-    fn flush_writers(&self, timeout: Duration) {
-        let acks: Vec<_> = self
-            .connection
-            .iter()
-            .filter_map(|client| {
-                let (ack_tx, ack_rx) = mpsc::channel();
-                client
-                    .tx
-                    .send(CtrlOutbound::Flush(ack_tx))
-                    .ok()
-                    .map(|_| ack_rx)
-            })
-            .collect();
-        let deadline = Instant::now() + timeout;
-        for ack_rx in acks {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            let _ = ack_rx.recv_timeout(remaining);
-        }
-    }
-
-    fn take_authority_for_emby_remote(&mut self) {
-        self.notify_disconnected_all(DisconnectReason::TakenOverByEmbyRemote);
-        self.authority = AuthorityHolder::EmbyRemote;
-    }
-}
-
-fn take_authority_for_emby_remote(ctrl_clients: &ClientRegistry) {
-    ctrl_clients
-        .lock()
-        .unwrap()
-        .take_authority_for_emby_remote();
-}
 
 /// A reason a ctrl-socket command is not acted on, computed server-side.
 /// Currently the only case is audio-only mode rejecting a non-audio play

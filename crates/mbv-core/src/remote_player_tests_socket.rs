@@ -1,5 +1,3 @@
-use crate::ctrl::WireCommand;
-use crate::player::PlayerCommand;
 
 #[test]
 fn adopt_queue_returns_false_when_ctrl_socket_is_dead() {
@@ -94,6 +92,8 @@ fn disconnect_causes_the_reader_thread_to_observe_the_shutdown_and_exit() {
                 active_slot: None,
                 revision: 0,
                 source: crate::config::QueueSource::Unknown,
+                in_flight_transition: None,
+                queued_latest_transition: None,
             },
         ))
         .unwrap();
@@ -155,6 +155,8 @@ fn spawn_test_daemon_up_to_state(
                 active_slot: None,
                 revision: 0,
                 source: crate::config::QueueSource::Unknown,
+                in_flight_transition: None,
+                queued_latest_transition: None,
             },
         ))
         .unwrap();
@@ -298,7 +300,7 @@ fn connect_endpoint_propagates_active_remote_playback_status() {
     // `RemotePlayer.status` -- that's the shared `Arc<Mutex<PlayerStatus>>`
     // MPRIS polls directly (see `src/mpris.rs::start`). This drives the
     // *real* TCP protocol path (hello exchange, initial `State`, then a
-    // `StatusOnly` push) end-to-end, rather than calling
+    // unified snapshot push) end-to-end, rather than calling
     // `apply_ctrl_event` directly, so it catches propagation bugs in the
     // reader thread / connect handshake that a unit-level test of
     // `apply_ctrl_event` alone would miss.
@@ -330,21 +332,33 @@ fn connect_endpoint_propagates_active_remote_playback_status() {
                 active_slot: None,
                 revision: 0,
                 source: crate::config::QueueSource::Unknown,
+                in_flight_transition: None,
+                queued_latest_transition: None,
             },
         ))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
 
-        // Now the daemon reports active playback, exactly like the #175
-        // repro: an active `StatusOnly` push after the initial handshake.
-        let active_status = serde_json::to_string(&CtrlEvent::StatusOnly(PlayerStatus {
-            active: true,
-            paused: false,
-            title: "Song".to_string(),
-            position_ticks: 5_000_000,
-            runtime_ticks: 100_000_000,
-            ..PlayerStatus::default()
-        }))
+        // Now the daemon reports active playback in the same unified
+        // snapshot used for reconnect and normal updates.
+        let active_status = serde_json::to_string(&CtrlEvent::UnifiedQueueState(
+            crate::ctrl::UnifiedQueueStateData {
+                status: PlayerStatus {
+                    active: true,
+                    paused: false,
+                    title: "Song".to_string(),
+                    position_ticks: 5_000_000,
+                    runtime_ticks: 100_000_000,
+                    ..PlayerStatus::default()
+                },
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 1,
+                source: crate::config::QueueSource::Unknown,
+                in_flight_transition: None,
+                queued_latest_transition: None,
+            },
+        ))
         .unwrap();
         writeln!(writer, "{active_status}").unwrap();
 
@@ -460,6 +474,8 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
                 active_slot: None,
                 revision: 0,
                 source: crate::config::QueueSource::Unknown,
+                in_flight_transition: None,
+                queued_latest_transition: None,
             },
         ))
         .unwrap();
@@ -584,27 +600,4 @@ fn request_shutdown_is_unsupported_and_sends_nothing_when_daemon_lacks_capabilit
         cmd_rx.try_recv(),
         Err(mpsc::TryRecvError::Disconnected)
     ));
-}
-
-#[test]
-fn v3_peer_sends_queue_append_wire_command() {
-    let existing = vec![make_media_item("1")];
-    let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(existing, 0);
-
-    assert!(remote.send_command(PlayerCommand::QueueAppend {
-        items: vec![QueueItem::Emby(Box::new(make_media_item("2")))]
-    }));
-
-    match cmd_rx.recv().unwrap() {
-        CtrlCmd::PlayerCmd(WireCommand::QueueAppend { items }) => {
-            assert_eq!(
-                items
-                    .iter()
-                    .map(|item| item.id.as_str())
-                    .collect::<Vec<_>>(),
-                ["2"]
-            );
-        }
-        _ => panic!("expected QueueAppend"),
-    }
 }

@@ -1,9 +1,30 @@
 use super::notify_actions::ToastSeverity;
-use super::{App, DaemonLostModal, QueueCursorPush, QUIT_REQUESTED};
+use super::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_core::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
 
 impl App {
+    pub(super) fn expire_bare_transition(&mut self, now: std::time::Instant) -> bool {
+        if self.player.is_remote() {
+            return false;
+        }
+        let mbv_core::playback_transition::ExpireOutcome::Expired {
+            dispatch_next: Some(next),
+            ..
+        } = self.bare_owner.expire_local_transition(now)
+        else {
+            return false;
+        };
+        self.player.send_command(next.into_jump());
+        true
+    }
+
+    pub(super) fn reset_bare_transitions(&mut self) {
+        if !self.player.is_remote() {
+            self.bare_owner.reset_local_transitions();
+        }
+    }
+
     /// Mirror mpv's actual volume into `ui_volume` and persist it, so volume
     /// changes made inside the mpv window (not just via mbv's keys) are kept and
     /// restored on the next launch. Skipped while controlling a remote session
@@ -37,14 +58,14 @@ impl App {
     pub(super) fn handle_player_event(&mut self, ev: PlayerEvent) -> bool {
         match ev {
             PlayerEvent::Stopped {
-                idx,
+                slot_id,
                 position_ticks,
                 played,
                 consume,
                 progress_report_accepted,
                 error,
             } => {
-                log::info!(target: "player", "Stopped event: idx={idx} position_ticks={}s played={played} error={error:?}",
+                log::info!(target: "player", "Stopped event: slot_id={slot_id:?} position_ticks={}s played={played} error={error:?}",
                     position_ticks / mbv_core::api::TICKS_PER_SECOND);
                 if self.player.is_remote_disconnected() {
                     self.next_up_item = None;
@@ -73,10 +94,9 @@ impl App {
                     self.refresh_after_stop();
                     return true;
                 }
-                let is_delete = self.pending_delete_slot.take().is_some();
+                let deleted_slot = self.pending_delete_slot.take();
+                let is_delete = deleted_slot.is_some();
                 let preserve_local_state = !self.has_direct_remote_queue();
-                // Resolve the raw mpv index to a slot right away.
-                let slot_id = self.playback_queue().resolve_slot_at(idx);
                 match slot_id {
                     Some(slot_id) => {
                         if !is_delete {
@@ -128,7 +148,7 @@ impl App {
                         }
                     }
                     None => {
-                        log::warn!(target: "player", "Stopped: idx={idx} maps to no live slot; \
+                        log::warn!(target: "player", "Stopped: no live slot reported; \
                             skipping progress update");
                     }
                 }
@@ -142,7 +162,15 @@ impl App {
                     // drop the slot from its own internal queue mirror and
                     // mpv's playlist — that still depends on this event, since
                     // nothing told it about the removal until now.
-                    self.player.send_command(PlayerCommand::QueueRemove(idx));
+                    if let Some(deleted_slot) = deleted_slot {
+                        if !self
+                            .player
+                            .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(deleted_slot))
+                        {
+                            self.player
+                                .send_command(PlayerCommand::QueueRemove(deleted_slot));
+                        }
+                    }
                 } else {
                     let (should_consume, is_audio) = match slot_id {
                         Some(slot_id) => self.should_consume_slot(slot_id, consume),
@@ -172,17 +200,16 @@ impl App {
                 }
             }
             PlayerEvent::TrackCompleted {
-                idx,
+                slot_id,
                 position_ticks,
                 played,
                 consume,
                 progress_report_accepted,
             } => {
-                // Resolve the raw mpv index to a slot right away.
-                let Some(slot_id) = self.playback_queue().resolve_slot_at(idx) else {
-                    log::warn!(target: "consume", "TrackCompleted: idx={idx} maps to no live slot; dropping");
+                if self.playback_queue().queue.slot(slot_id).is_none() {
+                    log::warn!(target: "consume", "TrackCompleted: slot_id={slot_id:?} maps to no live slot; dropping");
                     return false;
-                };
+                }
                 let position = if played {
                     0
                 } else if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
@@ -215,65 +242,75 @@ impl App {
                 }
                 let (should_consume, is_audio) = self.should_consume_slot(slot_id, consume);
                 if should_consume {
-                    self.pending_queue_removal = Some((slot_id, is_audio));
+                    if self.has_direct_remote_queue() {
+                        // The Player owner has already consumed its canonical
+                        // queue. The Client keeps only the service reaction.
+                        if is_audio {
+                            self.on_audio_consumed();
+                        } else {
+                            self.on_video_consumed();
+                        }
+                    } else {
+                        let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
+                        log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?} removed_id={removed_id:?}");
+                        if is_audio {
+                            self.on_audio_consumed();
+                        } else {
+                            self.on_video_consumed();
+                        }
+                        if removed_id.is_some() && !self.has_direct_remote_queue() {
+                            self.save_queue_state();
+                        }
+                    }
                 }
             }
-            PlayerEvent::TrackChanged(idx) => {
+            PlayerEvent::TrackChanged {
+                slot_id: target_slot_id,
+                transition,
+            } => {
                 self.visualizer_failed = false;
                 self.next_up_item = None;
                 if self.status.starts_with("Next up:") {
                     self.status.clear();
                 }
-                // Resolve the incoming index to a slot *before* draining any
-                // deferred consume: `idx` is the player's report from
-                // before it was told (via the QueueRemove sent below) that
-                // the completed slot was removed, so it still lines up with
-                // the queue's current, pre-removal shape.
-                let target_slot_id = self.playback_queue().resolve_slot_at(idx);
 
-                if let Some((slot_id, was_audio)) = self.pending_queue_removal.take() {
-                    let len_before = self.playback_queue().total_queue_len();
-                    let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
-                    let len_after = len_before - removed_id.is_some() as usize;
-                    log::info!(target: "consume", "TrackChanged: consuming pending removal slot_id={slot_id:?} \
-                        new_idx={idx} len_before={len_before} len_after={len_after} removed_id={removed_id:?}");
-                    if removed_id.is_none() {
-                        log::warn!(target: "consume", "TrackChanged: slot_id={slot_id:?} not found, \
-                            removal SKIPPED");
-                    }
-                    if was_audio {
-                        self.on_audio_consumed();
-                    } else {
-                        self.on_video_consumed();
+                if !self.player.is_remote() {
+                    self.bare_owner
+                        .sync_canonical_queue(self.playback_queue().queue.clone());
+                    let _ = self.bare_owner.observe_track_change(target_slot_id);
+                    if let Some((request_id, _generation)) = transition {
+                        if let mbv_core::playback_transition::SettleOutcome::Settled {
+                            dispatch_next: Some(next),
+                        } = self
+                            .bare_owner
+                            .settle_local_transition(request_id, target_slot_id)
+                        {
+                            self.player.send_command(next.into_jump());
+                        }
                     }
                 }
-
-                // Activate the resolved slot by identity (order-independent,
-                // unlike raw index arithmetic) and derive the display
-                // cursor from its post-removal position — this stays
-                // correct regardless of where the just-consumed slot sat
-                // relative to `idx`.
-                let adjusted = match target_slot_id {
-                    Some(slot_id) => {
-                        let _ = self.playback_queue_mut().queue.set_active_slot(slot_id);
-                        self.playback_queue()
-                            .queue
-                            .slot_index(slot_id)
-                            .unwrap_or(idx)
-                    }
-                    None => {
-                        log::warn!(target: "player", "TrackChanged: idx={idx} maps to no live \
-                            slot; skipping activation");
-                        idx
-                    }
+                // Activate by owner-assigned identity. Slot identity is stable
+                // across the pending-removal consume above, so resolving it to
+                // a display position afterward is order-independent.
+                let adjusted = if self.playback_queue().queue.slot(target_slot_id).is_some() {
+                    let _ = self
+                        .playback_queue_mut()
+                        .queue
+                        .set_active_slot(target_slot_id);
+                    self.playback_queue()
+                        .queue
+                        .slot_index(target_slot_id)
+                        .unwrap_or(0)
+                } else {
+                    log::warn!(target: "player", "TrackChanged: slot_id={target_slot_id:?} maps to \
+                        no live slot; skipping activation");
+                    self.playback_queue().queue.active_index().unwrap_or(0)
                 };
-                self.player.status.lock().unwrap().current_idx = adjusted;
+                if !self.player.is_remote() {
+                    self.player.status.lock().unwrap().current_idx = adjusted;
+                }
                 if !self.queue_cursor_held_by_user() {
                     self.playback_queue_mut().queue_cursor = adjusted;
-                    // Local mpv advance: a follow-the-playhead move for the
-                    // playback-target scope (yields to an active user nav).
-                    self.playhead.pending_push =
-                        Some(QueueCursorPush::Follow(self.playing_queue_scope()));
                 }
                 if !self.has_direct_remote_queue() {
                     if let Some(item) = self.playback_queue().emby_item_at(adjusted) {
@@ -319,13 +356,21 @@ impl App {
                         .iter()
                         .position(|s| matches!(&s.item, mbv_core::playback_queue::QueueItem::Emby(e) if e.id == item.id))
                     {
-                        self.player.send_command(PlayerCommand::JumpTo(idx));
+                        let slot_id = self.playback_queue().slots()[idx].slot_id;
+                        self.bare_owner
+                            .sync_canonical_queue(self.playback_queue().queue.clone());
+                        let (request_id, generation) = self.bare_owner.mint_local_transition();
+                        let transition = mbv_core::playback_transition::Transition::new(
+                            request_id,
+                            generation,
+                            slot_id,
+                        );
+                        if let mbv_core::playback_transition::DispatchDecision::DispatchNow(t) =
+                            self.bare_owner.accept_local_transition(transition)
+                        {
+                            self.player.send_command(t.into_jump());
+                        }
                         self.playback_queue_mut().queue_cursor = idx;
-                        // Auto-advance to the next-up item: a follow-the-playhead
-                        // move for the playback-target scope.
-                        self.playhead.pending_push = Some(QueueCursorPush::Follow(
-                            self.playing_queue_scope(),
-                        ));
                         self.flash(label, ToastSeverity::Neutral);
                     } else {
                         log::warn!(target: "app", "next-up: item not in queue, cannot jump");
@@ -335,6 +380,9 @@ impl App {
                 }
             }
             PlayerEvent::UnifiedQueueUpdated(unified) => {
+                // Adopt the owner snapshot as one value. Do not combine its
+                // queue with a separately delivered PlayerStatus coordinate.
+                *self.player.status.lock().unwrap() = unified.status.clone();
                 let total = unified.slots.len();
 
                 // Derive the presentation cursor from the active slot index.
@@ -369,14 +417,6 @@ impl App {
                 let queue = self.playback_queue_mut();
                 queue.set_unified_state(&unified, cursor);
                 self.queue_source = source;
-                if !user_holding_local {
-                    // Unified/direct-remote reconciliation: a follow-the-playhead
-                    // move scoped to the playback target. Consumed only if the
-                    // user is currently viewing that scope (a remote daemon
-                    // update must not snap a Local-scope view).
-                    self.playhead.pending_push =
-                        Some(QueueCursorPush::Follow(self.playing_queue_scope()));
-                }
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 // mbvd never auto-seeks on this event itself — it always

@@ -97,7 +97,7 @@ impl PlaybackRun {
         }
     }
 
-    /// Clears any pending-quit state so a `LoadNew`/`ReplaceQueue` command
+    /// Clears any pending-quit state so a `LoadNew`/`SubmitQueue` command
     /// that arrives while a quit is in flight fully cancels it — not just
     /// `quit_at`, but also the shutdown-scoped report budget set by
     /// `Player::stop_for_shutdown`. Without resetting
@@ -110,6 +110,8 @@ impl PlaybackRun {
     /// reliability for the rest of the session.
     fn cancel_pending_quit(&mut self) {
         self.quit_at = None;
+        self.stop_slot = None;
+        self.stop_runtime = None;
         *self.shutdown_report_timeout.lock().unwrap() = None;
     }
 
@@ -129,27 +131,11 @@ impl PlaybackRun {
         self.active_lifecycle.sync(position_ticks, now, force_sync);
     }
 
-    fn refresh_current_idx_from_queue(&mut self) {
-        if let Some(slot_id) = self.active_slot_id() {
-            if let Some(idx) = self.queue.slot_index(slot_id) {
-                self.current_idx = idx;
-            }
-        } else if self.queue_len() == 0 {
-            self.current_idx = 0;
-        } else {
-            self.current_idx = self.current_idx.min(self.queue_len() - 1);
-        }
-        self.sync_status_position();
-    }
-
     fn set_active_index(&mut self, idx: usize) -> bool {
         let Some(slot_id) = self.slot_id_at(idx) else {
             return false;
         };
-        if !matches!(
-            self.queue.set_active_slot(slot_id),
-            crate::playback_queue::QueueMutationResult::Applied(())
-        ) {
+        if !self.queue.set_active_slot(slot_id) {
             return false;
         }
         self.current_idx = idx;
@@ -257,7 +243,11 @@ impl PlaybackRun {
         let prepared = self.prepare_item(&item)?;
         self.install_active_projection(mpv, prepared, &item)?;
         let _ = self.queue.set_active_slot(slot_id);
-        self.refresh_current_idx_from_queue();
+        // Resolve the just-selected slot to this run's mpv-local coordinate
+        // (command target -> ordinal is the permitted direction, design D2);
+        // never recompute the coordinate from the observed active slot.
+        self.current_idx = self.queue.slot_index(slot_id).unwrap_or(self.current_idx);
+        self.sync_status_position();
         self.load_active_item_state();
         Ok(())
     }
@@ -281,12 +271,13 @@ impl PlaybackRun {
     }
 
     /// Reset per-item lifecycle flags shared by all three reset sites in
-    /// `player_run_commands.rs` (`cmd_replace_queue` empty, non-empty,
+    /// `player_run_commands.rs` (`cmd_submit_queue` empty, non-empty,
     /// and `cmd_load_new`). The caller must set `stop_report` and
     /// `load_state` itself because those differ per call site.
     fn begin_item_lifecycle(&mut self) {
         self.tracks_initialized = false;
         self.forced_slot_id = None;
+        self.forced_transition = None;
         self.reset_next_up_state();
         self.stopped_event_sent = false;
         self.mark_played_id = None;
@@ -391,7 +382,15 @@ impl PlaybackRun {
         audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
         prepared_source: Option<PreparedSource>,
     ) -> Self {
-        let queue = PlaybackQueue::from_queue_items(items, Some(start_idx));
+        // Owner identity for the initial sequence is assigned here, caller-side:
+        // ids 1..=items.len() in order. The execution sequence never mints.
+        let paired: Vec<(QueueSlotId, QueueItem)> = items
+            .into_iter()
+            .enumerate()
+            .map(|(i, item)| (QueueSlotId::from_raw(i as u64 + 1), item))
+            .collect();
+        let active_slot_id = paired.get(start_idx).map(|(id, _)| *id);
+        let queue = ExecutionSequence::from_slot_items(paired, active_slot_id);
         Self::init_from_queue(
             queue,
             start_idx,
@@ -413,7 +412,7 @@ impl PlaybackRun {
 
     #[allow(clippy::too_many_arguments)]
     fn init_from_queue(
-        queue: PlaybackQueue,
+        queue: ExecutionSequence,
         start_idx: usize,
         origin: PlaybackOrigin,
         reporter: SessionReporter,
@@ -522,6 +521,9 @@ impl PlaybackRun {
             ext_sub_urls,
             current_idx: start_idx,
             forced_slot_id: None,
+            forced_transition: None,
+            stop_slot: None,
+            stop_runtime: None,
             quit_at: None,
             last_seek_at: None,
             last_valid_pos: initial_pos,

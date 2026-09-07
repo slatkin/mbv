@@ -168,14 +168,16 @@ impl RemotePlayer {
 
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
         let wire_cmd = match cmd {
-            PlayerCommand::QueueAppend { items }
-                if !self.ctrl_compatibility.supports_queue_append =>
-            {
+            // Queue mutation has no legacy wire form; it crosses ctrl
+            // exclusively as `CtrlCmd::UnifiedQueue*`. Callers use the unified
+            // path (`RemotePlayer::queue_append`/`queue_remove_slot`/
+            // `queue_move_slot`, `PlayerProxy::submit_queue`).
+            PlayerCommand::QueueAppend { .. }
+            | PlayerCommand::QueueRemove(_)
+            | PlayerCommand::QueueMove(..) => {
                 log::warn!(
                     target: "remote",
-                    "remote ctrl peer protocol v{} does not support QueueAppend for {} item(s)",
-                    self.ctrl_compatibility.peer_protocol_version,
-                    items.len()
+                    "queue mutation not sendable over legacy ctrl; caller must use a unified queue command"
                 );
                 return false;
             }

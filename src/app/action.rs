@@ -14,7 +14,6 @@
 
 use super::input_resolver::KeyChord;
 use super::notify_actions::ToastSeverity;
-use super::types_playback::{PlayheadConfidence, PredictionReason};
 use super::App;
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_core::api::EmbyItem;
@@ -503,10 +502,6 @@ impl App {
                     if t == current_idx && is_audio {
                         self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
                     } else if t != current_idx {
-                        self.playhead.confidence =
-                            PlayheadConfidence::Predicted(PredictionReason::ItemSelected);
-                        self.playhead.slot = t;
-                        self.playhead.scope = self.playing_queue_scope();
                         if self.player.is_remote() {
                             let Some(slot_id) = slot_id else {
                                 return false;
@@ -515,15 +510,26 @@ impl App {
                                 .player
                                 .queue_play_slot(mbv_core::ctrl::slot_id_to_u64(slot_id))
                             {
-                                self.playhead.confidence = PlayheadConfidence::Confirmed;
-                                self.playhead.slot = current_idx;
                                 self.flash(
                                     "Playback owner rejected the queue selection".into(),
                                     ToastSeverity::Error,
                                 );
                             }
                         } else {
-                            self.player.send_command(PlayerCommand::JumpTo(t));
+                            let Some(slot_id) = slot_id else {
+                                return false;
+                            };
+                            self.bare_owner
+                                .sync_canonical_queue(self.playback_queue().queue.clone());
+                            let (request_id, generation) = self.bare_owner.mint_local_transition();
+                            let transition = mbv_core::playback_transition::Transition::new(
+                                request_id, generation, slot_id,
+                            );
+                            if let mbv_core::playback_transition::DispatchDecision::DispatchNow(t) =
+                                self.bare_owner.accept_local_transition(transition)
+                            {
+                                self.player.send_command(t.into_jump());
+                            }
                         }
                     }
                 } else {

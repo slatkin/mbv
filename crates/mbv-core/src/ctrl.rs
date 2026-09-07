@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::api::EmbyItem;
 use crate::config::{QueueSource, ServiceKind};
 use crate::playback_queue::{QueueItem, QueueSlotId};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
@@ -223,6 +222,16 @@ pub struct UnifiedQueueSlot {
     pub item: QueueItem,
 }
 
+/// Summary of a pending playback transition carried in the owner snapshot
+/// (design D5). Kept independent of internal queue types — the target slot is
+/// a raw u64, matching `UnifiedQueueSlot::slot_id`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TransitionSummary {
+    pub request_id: PlaybackRequestId,
+    pub generation: PlaybackGeneration,
+    pub target_slot: u64,
+}
+
 /// Full queue state exchanged between unified-queue-capable peers.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct UnifiedQueueStateData {
@@ -233,6 +242,14 @@ pub struct UnifiedQueueStateData {
     pub revision: u64,
     #[serde(default)]
     pub source: QueueSource,
+    /// Transition dispatched to the Playback run and awaiting observation
+    /// (design D5). `None` when no transition is in flight.
+    #[serde(default)]
+    pub in_flight_transition: Option<TransitionSummary>,
+    /// Newest queued transition held back behind the in-flight one (design
+    /// D4/D5). `None` when nothing is queued.
+    #[serde(default)]
+    pub queued_latest_transition: Option<TransitionSummary>,
 }
 
 /// Build an `UnifiedQueueSlot` from a `QueueSlotId`.  Callers in
@@ -337,12 +354,6 @@ pub enum WireCommand {
     TogglePause,
     #[serde(rename = "JumpTo")]
     JumpTo(usize),
-    #[serde(rename = "QueueAppend")]
-    QueueAppend { items: Vec<EmbyItem> },
-    #[serde(rename = "PlaylistRemove")]
-    QueueRemove(usize),
-    #[serde(rename = "PlaylistMove")]
-    QueueMove(usize, usize),
     #[serde(rename = "SetVolume")]
     SetVolume(i64),
     #[serde(rename = "Seek")]
@@ -361,12 +372,6 @@ pub enum WireCommand {
     },
     #[serde(rename = "SetMute")]
     SetMute(bool),
-    #[serde(rename = "LoadNew")]
-    LoadNew {
-        url: String,
-        start_pos: f64,
-        item: Box<EmbyItem>,
-    },
     #[serde(rename = "NextUpShow")]
     NextUpShow {
         item_id: String,
@@ -378,26 +383,12 @@ pub enum WireCommand {
     NextUpDismiss,
     #[serde(rename = "SkipIntroDismiss")]
     SkipIntroDismiss,
-    #[serde(rename = "ReplacePlaylist")]
-    ReplaceQueue {
-        items: Vec<EmbyItem>,
-        start_idx: usize,
-    },
 }
 
 impl From<PlayerCommand> for WireCommand {
     fn from(cmd: PlayerCommand) -> Self {
         match cmd {
             PlayerCommand::TogglePause => WireCommand::TogglePause,
-            PlayerCommand::JumpTo(idx) => WireCommand::JumpTo(idx),
-            PlayerCommand::QueueAppend { items } => WireCommand::QueueAppend {
-                items: items
-                    .iter()
-                    .filter_map(|qi| qi.as_emby().cloned())
-                    .collect(),
-            },
-            PlayerCommand::QueueRemove(idx) => WireCommand::QueueRemove(idx),
-            PlayerCommand::QueueMove(from, to) => WireCommand::QueueMove(from, to),
             PlayerCommand::SetVolume(v) => WireCommand::SetVolume(v),
             PlayerCommand::Seek(s) => WireCommand::Seek(s),
             PlayerCommand::SeekAbsolute(s) => WireCommand::SeekAbsolute(s),
@@ -413,15 +404,6 @@ impl From<PlayerCommand> for WireCommand {
                 audio_lang,
             },
             PlayerCommand::SetMute(m) => WireCommand::SetMute(m),
-            PlayerCommand::LoadNew {
-                url,
-                start_pos,
-                item,
-            } => WireCommand::LoadNew {
-                url,
-                start_pos,
-                item,
-            },
             PlayerCommand::NextUpShow {
                 item_id,
                 show_title,
@@ -435,12 +417,19 @@ impl From<PlayerCommand> for WireCommand {
             },
             PlayerCommand::NextUpDismiss => WireCommand::NextUpDismiss,
             PlayerCommand::SkipIntroDismiss => WireCommand::SkipIntroDismiss,
-            PlayerCommand::ReplaceQueue { items, start_idx } => {
-                WireCommand::ReplaceQueue { items, start_idx }
-            }
-            // SubmitQueue is a local-only command — it is never serialized to the wire.
-            PlayerCommand::SubmitQueue { .. } => {
-                unreachable!("SubmitQueue is local-only; never sent over ctrl")
+            // Local-only commands: never serialized across ctrl. Slot-addressed
+            // queue mutation crosses exclusively as `CtrlCmd::UnifiedQueue*`;
+            // `SubmitQueue` is resolved before send; `QueueAppend` and `LoadNew`
+            // have no legacy wire form.
+            PlayerCommand::QueueAppend { .. }
+            | PlayerCommand::QueueRemove(_)
+            | PlayerCommand::QueueMove(..)
+            | PlayerCommand::JumpTo { .. }
+            | PlayerCommand::LoadNew { .. }
+            | PlayerCommand::Next
+            | PlayerCommand::Previous
+            | PlayerCommand::SubmitQueue { .. } => {
+                unreachable!("local-only PlayerCommand never crosses ctrl")
             }
         }
     }
@@ -450,15 +439,9 @@ impl From<WireCommand> for PlayerCommand {
     fn from(cmd: WireCommand) -> Self {
         match cmd {
             WireCommand::TogglePause => PlayerCommand::TogglePause,
-            WireCommand::JumpTo(idx) => PlayerCommand::JumpTo(idx),
-            WireCommand::QueueAppend { items } => PlayerCommand::QueueAppend {
-                items: items
-                    .into_iter()
-                    .map(|e| QueueItem::Emby(Box::new(e)))
-                    .collect(),
-            },
-            WireCommand::QueueRemove(idx) => PlayerCommand::QueueRemove(idx),
-            WireCommand::QueueMove(from, to) => PlayerCommand::QueueMove(from, to),
+            WireCommand::JumpTo(_) => unreachable!(
+                "inbound WireCommand::JumpTo is rejected via CommandRejected in daemon_control before conversion (design D6)"
+            ),
             WireCommand::SetVolume(v) => PlayerCommand::SetVolume(v),
             WireCommand::Seek(s) => PlayerCommand::Seek(s),
             WireCommand::SeekAbsolute(s) => PlayerCommand::SeekAbsolute(s),
@@ -474,15 +457,6 @@ impl From<WireCommand> for PlayerCommand {
                 audio_lang,
             },
             WireCommand::SetMute(m) => PlayerCommand::SetMute(m),
-            WireCommand::LoadNew {
-                url,
-                start_pos,
-                item,
-            } => PlayerCommand::LoadNew {
-                url,
-                start_pos,
-                item,
-            },
             WireCommand::NextUpShow {
                 item_id,
                 show_title,
@@ -496,9 +470,6 @@ impl From<WireCommand> for PlayerCommand {
             },
             WireCommand::NextUpDismiss => PlayerCommand::NextUpDismiss,
             WireCommand::SkipIntroDismiss => PlayerCommand::SkipIntroDismiss,
-            WireCommand::ReplaceQueue { items, start_idx } => {
-                PlayerCommand::ReplaceQueue { items, start_idx }
-            }
         }
     }
 }

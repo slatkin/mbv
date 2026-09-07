@@ -1,4 +1,4 @@
-use super::types_playback::PlayheadProjection;
+
 use super::types_settings::SettingsDestination;
 use super::*;
 
@@ -92,6 +92,8 @@ pub(crate) fn run_stub_daemon_handshake(stream: std::net::TcpStream) -> std::net
             active_slot: None,
             revision: 0,
             source: crate::config::QueueSource::Unknown,
+            in_flight_transition: None,
+            queued_latest_transition: None,
         },
     ))
     .unwrap();
@@ -181,6 +183,7 @@ pub(crate) fn make_app_stub() -> App {
         shared_client: None,
         shared_reconnect_rx: None,
         player,
+        bare_owner: mbv_core::player_owner_state::PlayerOwnerState::default(),
         mpris: None,
         launched_as_remote: false,
         player_rx,
@@ -211,12 +214,11 @@ pub(crate) fn make_app_stub() -> App {
         pending_overlay: None,
         pending_exit_message: None,
         pending_delete_slot: None,
-        pending_queue_removal: None,
         queue_undo_stack: Vec::new(),
         remote_queue_undo_stack: Vec::new(),
         pending_remote_move_cursor: None,
         pending_queue_edit_cursor: None,
-        playhead: PlayheadProjection::new(),
+        pending_queue_cursor_reanchor: None,
         next_up_item: None,
         panel_focus: PanelFocus::default(),
         tab: TabSelection::Home,
@@ -664,5 +666,7 @@ pub(crate) fn emby_unified_state(
         slots,
         revision: 1,
         source: crate::config::QueueSource::Remote,
+        in_flight_transition: None,
+        queued_latest_transition: None,
     }
 }

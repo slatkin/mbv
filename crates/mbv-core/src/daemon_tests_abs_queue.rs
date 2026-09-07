@@ -58,6 +58,21 @@ fn recv_unified_queue(rx: &mpsc::Receiver<CtrlOutbound>) -> crate::ctrl::Unified
 // the function handle_ws calls for both. Tested directly here to avoid the
 // socket plumbing that integration tests cover.
 #[test]
+fn unified_projection_uses_observed_slot_not_desired_queue_slot() {
+    let queue = PlaybackQueue::from_queue_items(vec![emby_qi("a", "Video", "Movie"), emby_qi("b", "Video", "Movie")], Some(0));
+    let observed = queue.slots()[1].slot_id;
+    let status = crate::player::PlayerStatus::default();
+    let source = crate::config::QueueSource::Unknown;
+    let event = super::unified_queue_state_for_peer(
+        &status, &queue, &source, Some(observed), None, None, true, true,
+    );
+    let CtrlEvent::UnifiedQueueState(data) = event else {
+        panic!("expected UnifiedQueueState");
+    };
+    assert_eq!(data.active_slot, Some(observed.raw()));
+}
+
+#[test]
 fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let abs = abs_qi("li_1", "ep_1");
     let emby = emby_qi("movie1", "Video", "Movie");
@@ -66,11 +81,11 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let source = crate::config::QueueSource::Unknown;
 
     let capable_data =
-        match super::unified_queue_state_for_peer(&status, &queue, &source, true, false) {
+        match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, None, true, false) {
             CtrlEvent::UnifiedQueueState(d) => d,
             _ => panic!("expected UnifiedQueueState"),
         };
-    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, false, false)
+    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, None, false, false)
     {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),
@@ -95,7 +110,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
     let status = crate::player::PlayerStatus::default();
     let source = crate::config::QueueSource::Unknown;
 
-    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, false, false)
+    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, None, false, false)
     {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),
@@ -121,15 +136,16 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     // Build a mixed queue directly (bypasses daemon_admits so ABS stays in).
-    let mut queue = PlaybackQueue::from_queue_items(
+    let queue = PlaybackQueue::from_queue_items(
         vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
         Some(1),
     );
-    let mut source = QueueSource::Unknown;
+    let source = QueueSource::Unknown;
 
     // Trigger broadcast via UnifiedQueuePlaySlot on the Emby slot (index 1).
     let emby_slot_id = crate::ctrl::slot_id_to_u64(queue.slots()[1].slot_id);
 
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedQueuePlaySlot {
             slot_id: emby_slot_id,
@@ -141,15 +157,14 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
         false,
     );
+    let _queue = owner.core.queue;
 
     let capable_data = recv_unified_queue(&capable_rx);
     let old_data = recv_unified_queue(&old_rx);
@@ -165,6 +180,14 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
         "old peer broadcast includes Emby only"
     );
     assert!(old_data.slots[0].item.is_emby());
+
+    // The broadcast follows transition dispatch, so the requested slot is
+    // published as in-flight (not left invisible until it settles).
+    assert_eq!(
+        capable_data.in_flight_transition.map(|t| t.target_slot),
+        Some(emby_slot_id),
+        "PlaySlot broadcast must carry the pending slot as in-flight"
+    );
 }
 
 // Inbound mutation from an old peer containing ABS items is transport-rejected
@@ -177,9 +200,10 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
     let (old_id, old_rx) = connect_old_unified_peer(&mut registry.lock().unwrap());
     let (reply_tx, reply_rx) = mpsc::channel();
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-    let mut queue = PlaybackQueue::default();
-    let mut source = QueueSource::Unknown;
+    let queue = PlaybackQueue::default();
+    let source = QueueSource::Unknown;
 
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1")],
@@ -193,15 +217,14 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
         false,
     );
+    let queue = owner.core.queue;
 
     assert!(
         queue.is_empty(),
@@ -238,9 +261,10 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
     let (capable_id, _capable_rx) = connect_client(&mut registry.lock().unwrap());
     let (reply_tx, _reply_rx) = mpsc::channel();
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-    let mut queue = PlaybackQueue::default();
-    let mut source = QueueSource::Unknown;
+    let queue = PlaybackQueue::default();
+    let source = QueueSource::Unknown;
 
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
@@ -254,15 +278,14 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
         false,
     );
+    let queue = owner.core.queue;
 
     // Transport gate passed (peer is capable), but the canonical queue must
     // never hold the ABS item — admission is a separate, always-active gate.
@@ -291,9 +314,10 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
     let (capable_id, _capable_rx) = connect_client(&mut registry.lock().unwrap());
     let (reply_tx, reply_rx) = mpsc::channel();
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-    let mut queue = PlaybackQueue::default();
-    let mut source = QueueSource::Unknown;
+    let queue = PlaybackQueue::default();
+    let source = QueueSource::Unknown;
 
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1")],
@@ -307,15 +331,14 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
         false,
     );
+    let _queue = owner.core.queue;
 
     // Transport gate passed. If a CommandRejected arrives, it must not name
     // the abs-queue transport capability — that would mean the capable peer
@@ -345,9 +368,10 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
     let (capable_id, _capable_rx) = connect_client(&mut registry.lock().unwrap());
     let (reply_tx, _reply_rx) = mpsc::channel();
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-    let mut queue = PlaybackQueue::default();
-    let mut source = QueueSource::Unknown;
+    let queue = PlaybackQueue::default();
+    let source = QueueSource::Unknown;
 
+    let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
@@ -361,15 +385,14 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
         &client,
         &player,
         false,
-        &mut queue,
-        &mut source,
+        &mut owner,
         &shared_queue_state(),
         &registry,
-        &mut PlaybackIntentState::default(),
         true,
         &dummy_merged_tx,
         false,
     );
+    let queue = owner.core.queue;
 
     assert_eq!(
         queue.len(),

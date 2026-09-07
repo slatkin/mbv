@@ -80,6 +80,10 @@ pub struct Player {
     pub status: Arc<Mutex<PlayerStatus>>,
     thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
     ws_tx: Arc<Mutex<Option<crate::ws::WsSender>>>,
+    // ponytail: bare-mode owner has no canonical PlaybackQueue yet, so this
+    // monotonic counter is the smallest slot-id source until task 3.1 folds
+    // owner queue state into shell-owned state.
+    next_slot_id: Arc<AtomicU64>,
 }
 
 impl Player {
@@ -116,7 +120,21 @@ impl Player {
             status: Arc::new(Mutex::new(PlayerStatus::default())),
             thread_handle: Mutex::new(None),
             ws_tx: Arc::new(Mutex::new(ws_tx)),
+            next_slot_id: Arc::new(AtomicU64::new(1)),
         }
+    }
+
+    /// Assign owner slot identity to each item immediately before a queue
+    /// command is sent to the Playback run, so the run adopts these ids
+    /// instead of minting its own.
+    fn assign_slot_ids(&self, items: Vec<QueueItem>) -> Vec<(QueueSlotId, QueueItem)> {
+        items
+            .into_iter()
+            .map(|item| {
+                let raw = self.next_slot_id.fetch_add(1, Ordering::Relaxed);
+                (QueueSlotId::from_raw(raw), item)
+            })
+            .collect()
     }
 
     /// Sets the fixed ALSA device identifier packaged-daemon clocked output
@@ -249,17 +267,11 @@ impl Player {
     }
 
     pub fn next(&self) -> bool {
-        match self.status.lock().unwrap().next_idx() {
-            Some(idx) => self.send_command(PlayerCommand::JumpTo(idx)),
-            None => false,
-        }
+        self.send_command(PlayerCommand::Next)
     }
 
     pub fn previous(&self) -> bool {
-        match self.status.lock().unwrap().previous_idx() {
-            Some(idx) => self.send_command(PlayerCommand::JumpTo(idx)),
-            None => false,
-        }
+        self.send_command(PlayerCommand::Previous)
     }
 
     pub fn set_paused(&self, paused: bool) -> bool {
@@ -373,12 +385,22 @@ impl Player {
                 let mut st = self.status.lock().unwrap();
                 st.seed_from_item(start_item, start_idx, items.len());
             }
-            return self.send_command(PlayerCommand::SubmitQueue { items, start_idx });
+            return self.send_command(PlayerCommand::SubmitQueue {
+                items: self.assign_slot_ids(items),
+                start_idx,
+            });
         }
 
         // Cold start: stop, join, spawn fresh player thread.
         self.stop();
         self.join();
+
+        // The fresh run's PlaybackQueue allocates slot ids 1..=items.len()
+        // from its own allocator (new_from_queue_items -> from_queue_items).
+        // Seed this owner counter past them so a later append fast-path never
+        // re-hands an id that is already a slot in the run's queue.
+        self.next_slot_id
+            .store(items.len() as u64 + 1, Ordering::Relaxed);
 
         let (audio_pipe_path, audio_pipe_samplerate, audio_pipe_bitdepth, always_skip_intro) =
             if let Some(ref c) = client {
@@ -457,7 +479,7 @@ impl Player {
                         log::error!(target: "player", "{}", e);
                         status.lock().unwrap().active = false;
                         let _ = event_tx.send(PlayerEvent::Stopped {
-                            idx: 0,
+                            slot_id: None,
                             position_ticks: 0,
                             played: false,
                             consume: false,
@@ -489,7 +511,7 @@ impl Player {
                     Err(error) => {
                         status.lock().unwrap().active = false;
                         let _ = event_tx.send(PlayerEvent::Stopped {
-                            idx: start_idx,
+                            slot_id: None,
                             position_ticks: 0,
                             played: false,
                             consume: false,
@@ -513,7 +535,7 @@ impl Player {
                         prepared.close(0.0);
                         status.lock().unwrap().active = false;
                         let _ = event_tx.send(PlayerEvent::Stopped {
-                            idx: 0,
+                            slot_id: None,
                             position_ticks: 0,
                             played: false,
                             consume: false,
@@ -640,7 +662,9 @@ impl Player {
         {
             return false;
         }
-        self.send_command(PlayerCommand::QueueAppend { items })
+        self.send_command(PlayerCommand::QueueAppend {
+            items: self.assign_slot_ids(items),
+        })
     }
 
     pub fn stop(&self) {

@@ -9,7 +9,12 @@ const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
 // Split out to keep this file under the repo's line cap.
 include!("playback_queue_items.rs");
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+// serde derives so the owner-assigned slot identity can travel on
+// `PlayerEvent` / `PlayerCommand` across the ctrl seam; a newtype over `u64`
+// serializes as its inner value.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct QueueSlotId(u64);
 
 impl QueueSlotId {
@@ -323,6 +328,22 @@ impl PlaybackQueue {
 
     pub fn append(&mut self, item: QueueItem) -> QueueSlotId {
         self.insert(self.slots.len(), item)
+    }
+
+    /// Mint a fresh monotonic slot id without inserting a slot. Owner paths
+    /// that assign identity before handing items to the Playback run use this
+    /// so the run receives the id rather than allocating its own.
+    pub fn mint_slot_id(&mut self) -> QueueSlotId {
+        self.allocate_slot_id()
+    }
+
+    /// Append a slot that already carries an owner-assigned identity. Keeps
+    /// `next_slot_id` ahead of any adopted id so later local allocations do
+    /// not collide.
+    pub fn append_with_id(&mut self, slot_id: QueueSlotId, item: QueueItem) {
+        self.slots.push(QueueSlot::new(slot_id, item));
+        self.next_slot_id = self.next_slot_id.max(slot_id.raw().saturating_add(1));
+        self.revision.bump();
     }
 
     pub fn insert(&mut self, index: usize, item: QueueItem) -> QueueSlotId {

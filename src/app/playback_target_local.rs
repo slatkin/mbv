@@ -23,6 +23,7 @@ impl LocalPlaybackTarget {
     }
 
     pub(super) fn stop(&self, app: &mut App) {
+        app.reset_bare_transitions();
         if app.player.is_remote() {
             app.flash("Stop requested".to_string(), ToastSeverity::Neutral);
         }

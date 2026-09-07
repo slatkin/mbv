@@ -42,6 +42,7 @@ impl App {
             .active_slot()
             .is_some_and(|slot| matches!(slot.item, QueueItem::Feed(_)));
         if !active_is_feed {
+            self.reset_bare_transitions();
             self.player.stop();
         }
         let mut queues = vec![&mut self.player_tab];
@@ -61,8 +62,6 @@ impl App {
         self.queue_undo_stack.clear();
         self.remote_queue_undo_stack.clear();
         self.pending_delete_slot = None;
-        self.pending_queue_removal = None;
-        self.playhead.confidence = super::types_playback::PlayheadConfidence::Confirmed;
         self.pending_queue_edit_cursor = None;
         self.remote_tracker = None;
         self.remote_queue_projection = None;

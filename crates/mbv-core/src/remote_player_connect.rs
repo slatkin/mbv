@@ -292,9 +292,11 @@ fn apply_ctrl_event(
                 PlayerEvent::Stopped { .. } => {
                     status.lock().unwrap().active = false;
                 }
-                PlayerEvent::TrackChanged(idx) => {
-                    status.lock().unwrap().current_idx = *idx;
-                }
+                // `TrackChanged` now names a `QueueSlotId`, not an ordinal;
+                // this read loop has no queue to resolve it against. The
+                // forwarded event reaches the Client, whose queue coordinates
+                // are replaced by the next unified snapshot rather than
+                // merged from this event.
                 PlayerEvent::PausedChanged(paused) => {
                     status.lock().unwrap().paused = *paused;
                 }
@@ -388,7 +390,7 @@ fn disconnect_reason_message(reason: &DisconnectReason) -> &'static str {
 /// reconstruct the canonical queue without decomposing it into Emby-only
 /// shapes.
 fn apply_unified_queue_state(
-    unified: UnifiedQueueStateData,
+    mut unified: UnifiedQueueStateData,
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<EmbyItem>>>,
     unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
@@ -396,15 +398,17 @@ fn apply_unified_queue_state(
     event_tx: &mpsc::Sender<PlayerEvent>,
     notify: bool,
 ) {
-    let mut next_status = unified.status.clone();
-    next_status.queue_len = unified.slots.len();
+    // Normalize the compatibility coordinates on the snapshot itself. Every
+    // projection below, including the event sent to the Client, then observes
+    // the same revision, slots, observed slot, and status.
+    unified.status.queue_len = unified.slots.len();
     if let Some(active_index) = unified.active_slot.and_then(|slot_id| {
         unified
             .slots
             .iter()
             .position(|slot| slot.slot_id == slot_id)
     }) {
-        next_status.current_idx = active_index;
+        unified.status.current_idx = active_index;
     }
 
     // Project Emby-only items for consumers that need them; the status
@@ -414,6 +418,7 @@ fn apply_unified_queue_state(
         .iter()
         .filter_map(|slot| slot.item.as_emby().cloned())
         .collect();
+    let next_status = unified.status.clone();
 
     *status.lock().unwrap() = next_status;
     *items.lock().unwrap() = emby_items;
@@ -558,7 +563,7 @@ pub(crate) fn connect_endpoint(
         log::info!(target: "remote", "daemon disconnected");
         if !expected_disconnect {
             let _ = event_tx_r.send(PlayerEvent::Stopped {
-                idx: 0,
+                slot_id: None,
                 position_ticks: 0,
                 played: false,
                 consume: false,

@@ -5,6 +5,7 @@ fn handle_ws(
     audio_only: bool,
     queue: &mut PlaybackQueue,
     source: &mut crate::config::QueueSource,
+    transitions: &mut crate::playback_transition::OwnerTransitionState,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
 ) {
@@ -47,7 +48,11 @@ fn handle_ws(
             *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
             *source = crate::config::QueueSource::Remote;
             take_authority_for_emby_remote(ctrl_clients);
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+            // A remote play replaces the queue: interrupt any slot jump. The
+            // queued-transition origin cannot outlive a reset here (nothing can
+            // be queued once in_flight is cleared before the next accept).
+            transitions.reset();
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
             if fetched.len() == 1 {
                 let mut play_item = fetched[0].clone();
                 if start_position_ticks > 0 {

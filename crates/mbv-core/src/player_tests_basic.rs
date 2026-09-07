@@ -197,6 +197,17 @@ fn make_media_item(id: &str) -> crate::api::EmbyItem {
     }
 }
 
+/// Pair queue items with owner-assigned slot ids for the run's queue
+/// submission/append helpers. Ids start high so they never collide with a
+/// pre-seeded session's slots.
+fn owner_paired(items: Vec<QueueItem>) -> Vec<(QueueSlotId, QueueItem)> {
+    items
+        .into_iter()
+        .enumerate()
+        .map(|(i, item)| (QueueSlotId::from_raw(1_000 + i as u64), item))
+        .collect()
+}
+
 fn make_queue_session_for_pos_tests(start_idx: usize) -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
     let (session, status, _) = make_queue_session_for_pos_tests_with_events(start_idx);
     (session, status)
