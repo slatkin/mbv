@@ -246,7 +246,26 @@ impl App {
                 }
                 let (should_consume, is_audio) = self.should_consume_slot(slot_id, consume);
                 if should_consume {
-                    self.pending_queue_removal = Some((slot_id, is_audio));
+                    if self.player.is_remote() {
+                        // The Player owner has already consumed its canonical
+                        // queue. The Client keeps only the service reaction.
+                        if is_audio {
+                            self.on_audio_consumed();
+                        } else {
+                            self.on_video_consumed();
+                        }
+                    } else {
+                        let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
+                        log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?} removed_id={removed_id:?}");
+                        if is_audio {
+                            self.on_audio_consumed();
+                        } else {
+                            self.on_video_consumed();
+                        }
+                        if removed_id.is_some() && !self.has_direct_remote_queue() {
+                            self.save_queue_state();
+                        }
+                    }
                 }
             }
             PlayerEvent::TrackChanged {
@@ -257,23 +276,6 @@ impl App {
                 self.next_up_item = None;
                 if self.status.starts_with("Next up:") {
                     self.status.clear();
-                }
-
-                if let Some((slot_id, was_audio)) = self.pending_queue_removal.take() {
-                    let len_before = self.playback_queue().total_queue_len();
-                    let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
-                    let len_after = len_before - removed_id.is_some() as usize;
-                    log::info!(target: "consume", "TrackChanged: consuming pending removal slot_id={slot_id:?} \
-                        target={target_slot_id:?} len_before={len_before} len_after={len_after} removed_id={removed_id:?}");
-                    if removed_id.is_none() {
-                        log::warn!(target: "consume", "TrackChanged: slot_id={slot_id:?} not found, \
-                            removal SKIPPED");
-                    }
-                    if was_audio {
-                        self.on_audio_consumed();
-                    } else {
-                        self.on_video_consumed();
-                    }
                 }
 
                 if !self.player.is_remote() {

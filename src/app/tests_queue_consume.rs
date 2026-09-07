@@ -294,7 +294,6 @@ fn track_completed_for_removed_slot_does_not_mutate_queue() {
         .map(|s| s.slot_id)
         .collect();
     assert_eq!(ids_before, ids_after);
-    assert!(app.pending_queue_removal.is_none());
 }
 
 #[test]
@@ -314,8 +313,8 @@ fn track_changed_activates_the_current_slot() {
 }
 
 #[test]
-fn track_changed_activates_slot_and_consumes_deferred_slot() {
-    // [a, b, c]; complete+consume a (deferred), then TrackChanged to b.
+fn track_completed_consumes_before_track_changed() {
+    // [a, b, c]; completion consumes a before TrackChanged reports b.
     let mut app = make_app_stub();
     app.player_tab
         .set_items(make_items(3), app.player_tab.queue_cursor);
@@ -329,14 +328,13 @@ fn track_changed_activates_slot_and_consumes_deferred_slot() {
         consume: true,
         progress_report_accepted: false,
     });
-    assert!(app.pending_queue_removal.is_some());
+    assert_eq!(app.player_tab.queue.slots().len(), 2);
 
-    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(1).unwrap(), transition: None }); // player reports b at old idx 1
+    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: slot_b, transition: None });
 
     // a was consumed; queue is [b, c]; b is active.
     assert_eq!(app.player_tab.queue.slots().len(), 2);
     assert_eq!(app.player_tab.queue.active_slot_id(), Some(slot_b));
-    assert!(app.pending_queue_removal.is_none());
 }
 
 #[test]
@@ -352,7 +350,7 @@ fn consuming_a_video_without_autosave_marks_queue_dirty() {
     app.config.lock().unwrap().consume_videos = true;
     app.config.lock().unwrap().save_playlist_on_consume = false;
 
-    // First item finishes playing and is consumed while advancing to the next track.
+    // First item finishes playing and is consumed at completion.
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(0).unwrap(),
         position_ticks: 0,
@@ -360,7 +358,6 @@ fn consuming_a_video_without_autosave_marks_queue_dirty() {
         consume: true,
         progress_report_accepted: false,
     });
-    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(1).unwrap(), transition: None });
 
     assert_eq!(
         app.player_tab.emby_items().len(),
@@ -398,8 +395,6 @@ fn consuming_a_video_resyncs_the_players_own_queue() {
         consume: true,
         progress_report_accepted: false,
     });
-    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(1).unwrap(), transition: None });
-
     assert!(
         matches!(
             cmd_rx.try_recv(),
@@ -430,7 +425,6 @@ fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
         consume: true,
         progress_report_accepted: false,
     });
-    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(1).unwrap(), transition: None });
 
     assert_eq!(
         app.player_tab.emby_items().len(),
@@ -469,12 +463,10 @@ fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_queue_or_dirty_
         consume: true,
         progress_report_accepted: false,
     });
-    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(1).unwrap(), transition: None });
-
     assert_eq!(
         app.remote_player_tab.as_ref().unwrap().emby_items().len(),
-        1,
-        "consumed item should still be removed from the remote queue"
+        2,
+        "the Client must not remove from the out-of-process owner queue"
     );
     assert_eq!(
         app.player_tab.emby_items().len(),
@@ -508,7 +500,6 @@ fn consuming_an_audio_item_without_autosave_marks_queue_dirty() {
         consume: true,
         progress_report_accepted: false,
     });
-    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(1).unwrap(), transition: None });
 
     assert_eq!(
         app.player_tab.emby_items().len(),
@@ -543,7 +534,6 @@ fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirt
         consume: true,
         progress_report_accepted: false,
     });
-    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(1).unwrap(), transition: None });
 
     assert_eq!(
         app.player_tab.emby_items().len(),
@@ -573,7 +563,6 @@ fn consume_videos_flag_does_not_consume_audio_items() {
         consume: true,
         progress_report_accepted: false,
     });
-    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(1).unwrap(), transition: None });
 
     assert_eq!(
         app.player_tab.emby_items().len(),
@@ -598,7 +587,6 @@ fn consume_audio_flag_does_not_consume_video_items() {
         consume: true,
         progress_report_accepted: false,
     });
-    app.handle_player_event(PlayerEvent::TrackChanged { slot_id: app.playback_queue().resolve_slot_at(1).unwrap(), transition: None });
 
     assert_eq!(
         app.player_tab.emby_items().len(),

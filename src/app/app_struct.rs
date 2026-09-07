@@ -160,7 +160,6 @@ pub struct App {
     /// would never be visible. `None` on every other exit path.
     pub(super) pending_exit_message: Option<String>,
     pub(super) pending_delete_slot: Option<QueueSlotId>, // marks a delete that was already applied optimistically, so the Stopped handler doesn't re-derive it
-    pub(super) pending_queue_removal: Option<(QueueSlotId, bool)>, // deferred removal (slot, is_audio) after TrackChanged index-shifts
     pub(super) queue_undo_stack: Vec<UndoEntry>,
     pub(super) remote_queue_undo_stack: Vec<UndoEntry>,
     pub(super) pending_remote_move_cursor: Option<usize>,

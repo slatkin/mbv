@@ -244,13 +244,9 @@ impl App {
         (should_consume, is_audio)
     }
 
-    /// Removes the given slot from the currently active playback queue by
-    /// identity and, if something was actually removed, tells the player to
-    /// drop the slot's current index from its own internal queue copy.
+    /// Removes a completed slot from the local playback queue by identity.
     /// Uses `consume_slot` rather than `remove_slot` so a slot that is
-    /// currently marked active in the model (set via `set_active_slot`) can
-    /// still be consumed; the active-confirmation gate on `remove_slot` only
-    /// applies to explicit user-initiated removal. Returns the removed
+    /// currently marked active can still be consumed. Returns the removed
     /// item's id, or `None` if the slot no longer exists.
     pub(super) fn consume_slot_from_active_playback_queue(
         &mut self,
@@ -261,11 +257,7 @@ impl App {
             QueueMutationResult::NotFound => return None,
         };
         self.playback_queue_mut().clamp_cursor();
-        // Prefer slot-based removal for unified-capable remote peers.
-        let sent_unified = self
-            .player
-            .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(slot_id));
-        if !sent_unified {
+        if !self.player.is_remote() {
             self.player
                 .send_command(PlayerCommand::QueueRemove(slot_id));
         }

@@ -179,7 +179,6 @@ impl App {
         }
         // Clear transient queue mutation state that might reference ABS slots.
         self.pending_delete_slot = None;
-        self.pending_queue_removal = None;
         // If queue_source was tied to ABS (currently QueueSource has no ABS variant,
         // but future-proof: if items empty, reset source).
         if self.player_tab.total_queue_len() == 0 {
