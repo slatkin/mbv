@@ -454,6 +454,7 @@ pub(in crate::app) fn render_home_content(
             canonical_list,
             focused,
             selection_bg,
+            None,
         );
         paint.selected_row_rect
     } else {

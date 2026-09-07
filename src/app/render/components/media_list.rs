@@ -27,6 +27,7 @@ mod wide_row_regression_tests {
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
+    use unicode_width::UnicodeWidthChar;
 
     /// migrate-home-feeds 4.6: the selected row's highlight bar must span the
     /// whole panel width (never just the row text, with or without a duration
@@ -56,6 +57,7 @@ mod wide_row_regression_tests {
                         &mut list,
                         true,
                         selected_bg,
+                        None,
                     );
                 })
                 .unwrap();
@@ -139,7 +141,7 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(f, rect, rect, &mut list, true, selected_bg);
+                render_wide_media_list(f, rect, rect, &mut list, true, selected_bg, None);
             })
             .unwrap();
         let buf = terminal.backend().buffer();
@@ -190,10 +192,7 @@ mod wide_row_regression_tests {
                 trailing: None,
                 duration: Some("2:00".into()),
                 kind: MediaKind::Media,
-                // This uses the current Active vocabulary as the red-before-green
-                // stand-in for the queue's live row. The production change will
-                // switch it to NowPlaying without changing this assertion.
-                semantic_state: MediaSemanticState::Active {
+                semantic_state: MediaSemanticState::NowPlaying {
                     progress: Some(ActiveProgress::new(47)),
                 },
             },
@@ -212,7 +211,15 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+                render_wide_media_list(
+                    f,
+                    rect,
+                    rect,
+                    &mut list,
+                    true,
+                    palette::SURFACE_RESTING,
+                    Some('⠋'),
+                );
             })
             .unwrap();
         let buf = terminal.backend().buffer();
@@ -230,7 +237,7 @@ mod wide_row_regression_tests {
         let glyph_x = (0..rect.width)
             .find(|&x| buf[(x, 0)].symbol() == "⠋")
             .expect("now-playing glyph is painted");
-        assert_eq!(buf[(glyph_x, 0)].fg, palette::ACCENT);
+        assert_eq!(buf[(glyph_x, 0)].fg, palette::PLAYBACK_THROBBER_FG);
         let percent_x = (0..rect.width)
             .find(|&x| buf[(x, 0)].symbol() == "4")
             .expect("now-playing percent is painted");
@@ -239,10 +246,74 @@ mod wide_row_regression_tests {
         let resume = row_text(1);
         assert!(resume.contains("Resume title 12%"));
         assert!(resume.contains("2:00"));
-        let duration_x = (0..rect.width)
-            .find(|&x| buf[(x, 1)].symbol() == "2")
-            .expect("resume duration is painted");
+        let duration_x = rect.width - 2 - 4;
+        assert_eq!(buf[(duration_x, 1)].symbol(), "2");
         assert_eq!(buf[(duration_x, 1)].fg, palette::STATUS_AVAILABLE);
+    }
+
+    #[test]
+    fn now_playing_braille_and_narrow_reserves_are_safe() {
+        use crate::app::components::media_list::{
+            ActiveProgress, MediaListRow, MediaSemanticState,
+        };
+
+        let glyphs = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
+        for glyph in glyphs {
+            assert_eq!(glyph.width(), Some(1));
+            let mut list: WideMediaList<String> = WideMediaList::new();
+            list.set_content(vec![MediaListRow::Item {
+                target: "playing".into(),
+                primary: "A very long title that must be truncated".into(),
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::NowPlaying {
+                    progress: Some(ActiveProgress::new(100)),
+                },
+            }]);
+            let mut terminal = Terminal::new(TestBackend::new(8, 1)).unwrap();
+            terminal
+                .draw(|f| {
+                    render_wide_media_list(
+                        f,
+                        Rect::new(0, 0, 8, 1),
+                        Rect::new(0, 0, 8, 1),
+                        &mut list,
+                        true,
+                        palette::SURFACE_RESTING,
+                        Some(glyph),
+                    );
+                })
+                .unwrap();
+            let text = (0..8)
+                .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
+                .collect::<String>();
+            assert!(text.contains("100%") || text.contains(glyph));
+        }
+
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![MediaListRow::Item {
+            target: "playing".into(),
+            primary: "Focused".into(),
+            trailing: None,
+            duration: None,
+            kind: MediaKind::Media,
+            semantic_state: MediaSemanticState::NowPlaying { progress: None },
+        }]);
+        let mut terminal = Terminal::new(TestBackend::new(1, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(
+                    f,
+                    Rect::new(0, 0, 1, 1),
+                    Rect::new(0, 0, 1, 1),
+                    &mut list,
+                    true,
+                    palette::SURFACE_RESTING,
+                    Some('⠋'),
+                );
+            })
+            .unwrap();
     }
 
     /// The duration right-aligns to 2 columns from the panel edge whether or
@@ -263,7 +334,7 @@ mod wide_row_regression_tests {
             let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
             terminal
                 .draw(|f| {
-                    render_wide_media_list(f, rect, rect, &mut list, focused, selected_bg);
+                    render_wide_media_list(f, rect, rect, &mut list, focused, selected_bg, None);
                 })
                 .unwrap();
             let buf = terminal.backend().buffer();
@@ -339,6 +410,7 @@ mod wide_row_regression_tests_helpers {
                     list,
                     true,
                     selected_bg,
+                    None,
                 ));
             })
             .unwrap();

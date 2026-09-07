@@ -459,6 +459,7 @@ impl Component for QueueComponent {
             &mut self.list,
             self.focused,
             palette::SURFACE_FOCUSED,
+            None,
         );
         let viewport = self.list.resolve_viewport(area.height as usize);
         self.geometry.rows = (viewport.offset..viewport.total_rows)

@@ -5,7 +5,16 @@ use crate::app::ui_util::trunc_str;
 use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::ListItem;
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
+fn progress_for_now_playing(state: &MediaSemanticState) -> Option<String> {
+    match state {
+        MediaSemanticState::NowPlaying { progress } => {
+            (*progress).map(|value| format!("{}%", value.percent()))
+        }
+        _ => None,
+    }
+}
 
 /// One painted row of a `WideMediaList`. Semantic state drives the row
 /// colour and, for active rows, an appended progress percentage; `primary`
@@ -33,6 +42,7 @@ pub(in crate::app) fn wide_media_row<Target>(
     selected_bg: Color,
     inner_width: usize,
     has_scrollbar: bool,
+    throbber: Option<char>,
 ) -> ListItem<'static> {
     match row {
         MediaListRow::Spacer => ListItem::new(Line::default()),
@@ -69,15 +79,13 @@ pub(in crate::app) fn wide_media_row<Target>(
                     palette::TEXT_FOCUS_ACCENT,
                     (*progress).map(|value| format!("{}%", value.percent())),
                 ),
-                MediaSemanticState::NowPlaying { progress } => (
-                    palette::TEXT_FOCUS_ACCENT,
-                    (*progress).map(|value| format!("{}%", value.percent())),
-                ),
+                MediaSemanticState::NowPlaying { .. } => (palette::TEXT_FOCUS_ACCENT, None),
                 MediaSemanticState::Starting => {
                     (palette::TEXT_FOCUS_ACCENT, Some("starting".into()))
                 }
                 MediaSemanticState::Disabled => (palette::TEXT_MUTED, None),
             };
+            let now_playing = matches!(semantic_state, MediaSemanticState::NowPlaying { .. });
             let trailing = match (
                 trailing.as_deref().filter(|text| !text.is_empty()),
                 progress,
@@ -92,9 +100,14 @@ pub(in crate::app) fn wide_media_row<Target>(
             let duration = duration
                 .as_deref()
                 .filter(|dur| !dur.is_empty())
+                .filter(|_| !matches!(kind, MediaKind::Collection))
+                .filter(|_| !now_playing);
+            let now_playing_slot = now_playing
+                .then(|| throbber.map(|glyph| (glyph, progress_for_now_playing(semantic_state))))
+                .flatten()
                 .filter(|_| !matches!(kind, MediaKind::Collection));
 
-            // Right-align the duration to the panel edge minus RIGHT_INSET,
+            // Right-align the duration or now-playing slot to the panel edge minus RIGHT_INSET,
             // independent of focus: the scrollbar column (when the focused
             // list overflows) must not shift it another column inwards.
             let content_w = (inner_width + usize::from(has_scrollbar)).saturating_sub(RIGHT_INSET);
@@ -103,10 +116,19 @@ pub(in crate::app) fn wide_media_row<Target>(
             } else {
                 1 + trailing.width()
             };
-            let dur_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
+            let slot_reserve = duration.map_or_else(
+                || {
+                    now_playing_slot.as_ref().map_or(0, |(glyph, pct)| {
+                        QUIET_GAP
+                            + glyph.width().unwrap_or(0)
+                            + pct.as_ref().map_or(0, |pct| 1 + pct.width())
+                    })
+                },
+                |dur| QUIET_GAP + dur.width(),
+            );
             let title = trunc_str(
                 primary,
-                content_w.saturating_sub(LEFT_INSET + trailing_w + dur_reserve),
+                content_w.saturating_sub(LEFT_INSET + trailing_w + slot_reserve),
             );
 
             let selected = selected && focused;
@@ -142,6 +164,23 @@ pub(in crate::app) fn wide_media_row<Target>(
                     dur.to_owned(),
                     Style::default().fg(palette::STATUS_AVAILABLE),
                 ));
+            } else if let Some((glyph, pct)) = now_playing_slot {
+                let slot_width =
+                    glyph.width().unwrap_or(0) + pct.as_ref().map_or(0, |pct| 1 + pct.width());
+                let used: usize = spans.iter().map(|span| span.content.width()).sum();
+                let pad = content_w.saturating_sub(used + slot_width);
+                spans.push(Span::raw(" ".repeat(pad)));
+                spans.push(Span::styled(
+                    glyph.to_string(),
+                    Style::default().fg(palette::PLAYBACK_THROBBER_FG),
+                ));
+                if let Some(pct) = pct {
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled(
+                        pct,
+                        Style::default().fg(palette::TEXT_METADATA),
+                    ));
+                }
             }
             // Pad the selected row's spans out to the full row width (up to
             // the scrollbar column) so the highlighted background bar spans

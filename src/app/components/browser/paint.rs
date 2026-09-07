@@ -43,6 +43,7 @@ impl BrowserComponent {
                 &mut self.wide_list,
                 self.focused,
                 palette::list_selected_row_bg(),
+                None,
             );
             self.layout.left_item_rows = paint.left_item_rows;
             self.layout.left_row_map = paint.left_row_map;
@@ -164,6 +165,7 @@ impl BrowserComponent {
                 &mut self.wide_list,
                 self.focused,
                 palette::list_selected_row_bg(),
+                None,
             );
             self.layout.left_item_rows = painted.left_item_rows;
             self.layout.left_row_map = painted.left_row_map;
