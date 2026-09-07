@@ -1,9 +1,9 @@
 ## 1. Drag gesture recognition
 
-- [ ] 1.1 In `src/app/components/mouse/gesture.rs`, add a `MouseGesture::Drag { from: Position, to: Position }` variant (`from` is the press anchor, `to` the current pointer position) and a `MouseGesture::DragEnd` variant; verify with `cargo check -p mbv`.
-- [ ] 1.2 In the same file add a private `drag_anchor: Option<Position>` field to `MouseGestureState`, set it in the existing `Down(MouseButton::Left)` arm (which keeps emitting `Click`/`DoubleClick` unchanged — design D2), emit `Drag` from a new `MouseEventKind::Drag(MouseButton::Left)` arm only while the anchor is set, and clear the anchor in a new `Up(MouseButton::Left)` arm that emits `DragEnd`; verify `cargo check -p mbv` passes.
-- [ ] 1.3 Add unit tests in that file's existing `mod tests`: a press then `Drag(Left)` emits `Click` then `Drag` with the press anchor; a press then `Up(Left)` emits `Click` then `DragEnd` and no `Drag`; a `Drag(Left)` with no preceding press emits nothing; `Drag(Right)` emits nothing. Verify with `cargo nextest run -p mbv gesture`.
-- [ ] 1.4 Add an explicit ignoring arm for `Drag`/`DragEnd` in every other `match` over `MouseGesture` the compiler now flags — never a `_` wildcard (AGENTS.md: no wildcard-hidden dispatch). Verify `cargo check -p mbv` and `cargo clippy --workspace --all-targets` are clean.
+- [x] 1.1 In `src/app/components/mouse/gesture.rs`, add a `MouseGesture::Drag { from: Position, to: Position }` variant (`from` is the press anchor, `to` the current pointer position) and a `MouseGesture::DragEnd` variant; verify with `cargo check -p mbv`.
+- [x] 1.2 In the same file add a private `drag_anchor: Option<Position>` field to `MouseGestureState`, set it in the existing `Down(MouseButton::Left)` arm (which keeps emitting `Click`/`DoubleClick` unchanged — design D2), emit `Drag` from a new `MouseEventKind::Drag(MouseButton::Left)` arm only while the anchor is set, and clear the anchor in a new `Up(MouseButton::Left)` arm that emits `DragEnd`; verify `cargo check -p mbv` passes.
+- [x] 1.3 Add unit tests in that file's existing `mod tests`: a press then `Drag(Left)` emits `Click` then `Drag` with the press anchor; a press then `Up(Left)` emits `Click` then `DragEnd` and no `Drag`; a `Drag(Left)` with no preceding press emits nothing; `Drag(Right)` emits nothing. Verify with `cargo nextest run -p mbv gesture`.
+- [x] 1.4 Add an explicit ignoring arm for `Drag`/`DragEnd` in every other `match` over `MouseGesture` the compiler now flags — never a `_` wildcard (AGENTS.md: no wildcard-hidden dispatch). Verify `cargo check -p mbv` and `cargo clippy --workspace --all-targets` are clean.
 
 ## 2. Arbitrary-destination move path
 
