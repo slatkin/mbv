@@ -179,3 +179,10 @@ This skill supports the "actions on a change" model:
 
 - **Can be invoked anytime**: Before all artifacts are done (if tasks exist), after partial implementation, interleaved with other actions
 - **Allows artifact updates**: If implementation reveals design issues, suggest updating artifacts - not phase-locked, work fluidly
+
+**Tasks tracker panel (herdr):** if `HERDR_ENV=1`, the `opsx-tasks` plugin
+renders the change's `tasks.md` in a right-sidebar pane (toggle: `herdr
+plugin action invoke open-tasks --plugin opsx-tasks`). Set the shown change
+before opening: `echo <change> > "$HERDR_PLUGIN_STATE_DIR/current-change"`.
+The panel auto-refreshes every 2s with done/total counts — check boxes in
+`tasks.md` as usual and the panel follows.
