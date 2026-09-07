@@ -15,16 +15,19 @@ runs Bare, via Local daemon (Stay-alive), or packaged `mbvd` Player owner.
   code; sync applied deltas into `openspec/specs/`; archive when done.
 * Change source-of-truth types before callers; ask only about material
   design/product choices.
-* Commit or undo your changs; never leave a dirty worktree.
+* Commit or undo your changes; never leave a dirty worktree.
 
 ## Repository map
 
 * `src/app/shell*.rs` — interactive shell + TuiRealm `Model`: `App`, mount/focus,
-  runtime lifecycle, projections, dispatch, effects.
+  runtime lifecycle, projections, dispatch, effects, and the single tick/draw
+  path (`shell_run.rs`, `shell_draw.rs`).
 * `src/app/components/` — Interactive Components + typed `Msg`s; `media_list/`
   embedded list controls; `mouse/` pointer primitives.
 * `src/app/render/` — `screens/` prepare content, `arrangements/` place it,
   `components/` paint it, `theme/` semantic roles.
+* `src/app/router.rs`, `key_policy.rs`, and `input_resolver.rs` — the central
+  keyboard policy and chord resolution; do not add another routing site.
 * `src/local_daemon.rs` — Local-daemon bootstrap; rest of `src/` = TUI binary.
 * `crates/mbv-core/` — runtime, Services, providers, config, protocols, canonical
   queue, source prep, mpv projection; no UI/feed fetch.
@@ -40,7 +43,9 @@ App/runtime <- shell handles typed Msg with resolved target <- component update
 * Shell `Model` owns terminal/worker lifecycle, Services, Player/queue
   authority, persistence, protocols, external effects, TuiRealm `Application`;
   projects owned presentation models; not a 2nd store of component-local UI
-  state.
+  state. `App` remains the shell's domain/effect state and base-frame geometry
+  composer; `Model::draw_frame` composes that frame once, then mounted
+  components paint their owned surfaces.
 * Mounted `AppComponent` (`src/app/components/`) owns cursor, scroll, local
   focus/selection, filters, drafts, viewport, event interpretation, `view()`,
   hit geometry; mutates local state directly; typed `Msg` only for work outside
@@ -58,6 +63,19 @@ App/runtime <- shell handles typed Msg with resolved target <- component update
   painted distinct; overlays mount/unmount via TuiRealm focus stack.
 * Every boundary-crossing request variant: exhaustive dispatch arm or documented
   no-op — never wildcard-hidden.
+
+## Playback and queue authority
+
+* A Composed or Bound queue has one canonical ordered sequence of `QueueItem`
+  slots. Use stable `QueueSlotId` for occurrences; do not recreate parallel
+  Emby/Feed/Audiobookshelf lists or use content identity to address a slot.
+* The Player owner is authoritative for Bound queue state, active slot, and
+  playback lifecycle. mpv is a source/output projection (and may materialize
+  only the active file), never queue authority.
+* Owner admission is the capability boundary: media kind, required Service
+  setup, and negotiated ctrl transport determine what enters a Bound queue.
+  Components may edit Composed content but never perform admission or mutate
+  the canonical queue directly; shell/Player paths do that work.
 
 ADRs 0022–0024; `openspec/specs/interactive-component-framework/spec.md`;
 `docs/architecture/interactive-surface-ledger.md`.
@@ -87,13 +105,17 @@ fallback. Contract: `openspec/specs/canonical-media-lists/spec.md`.
 ## Input and rendering boundaries
 
 * Keyboard precedence only in `src/app/router.rs`, ordered policy in
-  `src/app/key_policy.rs`: `UiRoot` picks `Command`/`Swallow`/`FallThrough`;
-  focused component handles only local semantic chords; no 2nd router, no
-  subscription-encoded precedence.
+  `src/app/key_policy.rs`, and chord conversion in `input_resolver.rs`:
+  `UiRoot` picks `Command`/`Swallow`/`FallThrough`; focused components handle
+  local semantic chords. Shell compatibility/fall-through handlers may remain
+  for explicitly unmigrated commands, but they do not become a second router
+  or precedence policy.
 * Mouse (ADR 0024): subscriptions decide eligibility pre-delivery, following
   surfaces painted in latest frame (or topmost overlay); mounted parent owns
   gesture state, resolves only geometry it painted; embedded lists resolve own
-  rows; no global hit map/router; never discard a losing message after its
+  rows; there is no global hit map for component surfaces. Shell-painted chrome
+  (currently the tab bar) may expose its own paint-time hit geometry and resolve
+  the observer message in the shell. Never discard a losing message after its
   component mutated. TuiRealm pinned 4.1 — re-verify ADR 0024's subscription
   assumption before any bump.
 * Render order: screens → arrangements → Render Components → Ratatui. Screens =
@@ -123,7 +145,9 @@ reflow, never revert fmt output; `cargo fmt --all -- --check` = read-only
 verification.
 
 TUI changes: narrowest component/state + buffer tests. Mounting/focus/
-subscription/routing changes need real `Application::tick()` integration test
-via shell sync pass — direct `Component::on` tests don't verify composition.
-Also check relevant Normal/Narrow and Wide breakpoints, one-painter ownership,
-hit geometry when painting moves.
+subscription/routing changes need real `Application::tick()` integration tests
+(`src/app/tests_tick_integration*.rs`) through the shell sync pass — direct
+`Component::on` tests do not verify composition. Also check relevant
+Normal/Narrow and Wide breakpoints, one-painter ownership, and hit geometry
+when painting moves. When a surface is migrated, prove the base frame only
+reserves its area and does not underpaint the mounted component.
