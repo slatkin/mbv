@@ -2,19 +2,15 @@
 
 ## Why
 
-The canonical media-list controls share list mechanics, but several destinations still split cursor, scroll, painting, and row geometry between parent state and helper-like controls. Correcting that ownership now prevents multi-select and later list work from building on contradictory TuiRealm composition, while preserving the wheel policy from #674 as an input constraint.
+The list controls still expose a helper-style paint API that splits a frame's geometry between callers and painters. Repair that seam first, before applying it across destinations, so the shared contract is small enough to verify and later migrations do not inherit duplicate geometry ownership.
 
 ## What Changes
 
-- Make `WideMediaList<Target>` and `InlineMediaBrowser<Target>` persistent embedded TuiRealm `Component`s owned by their destination parents, without mounting, focusing, subscribing, or assigning them independent `ComponentId`s.
-- Give the active embedded control sole authority over live cursor, scroll, viewport, list movement, painting entry point, and list-row geometry; each parent configures one closed per-frame paint policy, calls the child view once, and consumes its retained paint result.
-- Use stable targets for canonical Browser and Home rows: Browser maps stable Emby identity back to current content for effects and persistence; Home uses Service-qualified `QueueItemContentId`, so mixed-Service content cannot collide.
-- Replace Home and Feeds lockstep Wide/Inline mutation with one active-control owner and a one-shot stable-target `ViewportAnchor` handoff at responsive transitions.
-- Remove position-bearing content snapshots, parent cursor/scroll mirrors, render-time canonical control construction, and painter writeback from the existing canonical destinations: Home, generic Emby/Movies/homevideos/podcast browsing, TV, grouped Music, Audiobookshelf Podcast and Book, Feeds, and Queue.
-- Preserve the accepted non-hero two-column Emby catalog carve-out as isolated `BrowserGridState` and `BrowserGridGeometry`, including grid row maps; exclude Inline Search, Search sidebar results, Playlists/open-playlist rows, Settings, and Sessions.
-- Classify TV episode and Audiobookshelf episode/chapter panes as parent-owned provider workspaces outside the destination-rail canonical-control ratchets; preserve their typed episode activation and chapter seek-target ownership.
-- Preserve parent and shell authority for provider workspaces, Service effects, images, playback, persistence, mouse gesture recognition, and typed intent translation.
-- Correct stale canonical-list specifications, terminology, comments, and architecture documentation, and add structural ratchets plus focused component, rendering, breakpoint-handoff, and live-tick regression evidence.
+- Make `WideMediaList<Target>` and `InlineMediaBrowser<Target>` persistent embedded plain TuiRealm `Component`s with a semantic-only per-frame paint policy and retained read-only paint result.
+- Make the child `Component::view` call the sole outer-rectangle input and ordinary-row painter; retain the painted claim/content geometry, selected-row facts, and Inline admitted-detail rectangle for parent reads and point resolution.
+- Prove the seam in Queue's fixed-row Wide presentation and Feeds' Wide and Inline presentations, while preserving their mounted-parent gesture ownership, typed requests, existing visuals, and PR #683 wheel behavior.
+- Remove only the Queue/Feeds row-map reconstruction and compatibility geometry made redundant by the retained child result.
+- Defer responsive active-control handoff, Browser identity/grid work, Home, TV, Music, Audiobookshelf, universal ratchets, documentation sweeps, and multi-select to follow-on changes under issue #681.
 
 ## Capabilities
 
@@ -24,11 +20,10 @@ The canonical media-list controls share list mechanics, but several destinations
 
 ### Modified Capabilities
 
-- `canonical-media-lists`: Require persistent embedded TuiRealm components with closed paint/result policy, stable canonical targets, active-control-only responsive ownership, isolated Browser grid geometry, and current mouse hit-resolution behavior across every existing canonical destination.
-- `interactive-component-framework`: Tighten the embedded-control ownership contract so delegated list state, painting, geometry, and movement cannot remain split across the destination parent and control.
+- `canonical-media-lists`: Define the embedded component view/result seam and its Queue/Feeds proof behavior.
 
 ## Impact
 
-- Affects canonical controls and their existing destination parents under `src/app/components/`, their render-layer entry points under `src/app/render/`, shell projection/persistence adapters, focused and live-tick tests, architecture scan rules, `CONTEXT.md`, and the interactive-surface documentation.
-- No daemon, protocol, Service, playback, queue-authority, external API, dependency, or non-canonical list behavior changes.
-- Implementation starts from landed PR #683 (`6b58a608`) and must preserve its painted-owner arbitration, one-row wheel movement, throttle, routing, and live-tick proofs.
+- Affects `src/app/components/media_list/`, Queue and Feeds components, their existing render entry points, and focused component/render/live-tick tests.
+- No Service, playback, queue-authority, persistence, layout-breakpoint, responsive-handoff, external API, dependency, or non-proof-destination behavior changes.
+- Starts from landed PR #683 (`6b58a608`) and preserves its painted-owner arbitration, one-row wheel movement, throttle, routing, and real-`Application::tick()` evidence.
