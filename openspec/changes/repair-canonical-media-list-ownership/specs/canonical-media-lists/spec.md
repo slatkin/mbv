@@ -8,9 +8,10 @@
 `Component` that owns cursor, scroll, viewport, fixed-height one-column row
 placement, semantic painting delegation, scrollbar, movement, clamping, and
 internal row geometry for painting, scrolling, and point resolution. The
-parent SHALL retain ownership of the destination panel/frame and establish the
-row-flow rectangle using its existing arrangement; the control's
-`Component::view` SHALL receive that row-flow rectangle once and SHALL be the
+parent SHALL retain ownership of the destination panel/frame and establish its
+current claim and row-flow rectangles using its existing arrangement; before
+view, it SHALL configure those rectangles on the control. The control's
+`Component::view` SHALL paint the established row flow once and SHALL be the
 only ordinary-row painting entry point for that control in a frame. Before that
 call, the parent MAY supply only a closed semantic policy for focused/selected
 treatment and optional throbber; the policy SHALL contain no rectangle, raw
@@ -40,8 +41,9 @@ grouping through `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use
 #### Scenario: Queue paints and resolves one current row flow
 
 - **WHEN** Queue paints a non-empty fixed-row list in any panel mode
-- **THEN** its persistent `WideMediaList<QueueSlotId>` receives the established
-  row-flow rectangle through one component view and paints ordinary rows once
+- **THEN** its persistent `WideMediaList<QueueSlotId>` receives equal established
+  claim and row-flow rectangles through one component view and paints ordinary
+  rows once
 - **AND** Queue resolves a later row point to the `QueueSlotId` from that
   current retained result
 - **AND** Queue does not rebuild row rectangles or a selectable row map
@@ -50,7 +52,8 @@ grouping through `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use
 
 - **WHEN** Grouped Music paints its Wide album rail or Wide track table
 - **THEN** each persistent `WideMediaList` receives its parent-established
-  row-flow rectangle through one component view and paints ordinary rows once
+  claim and row-flow rectangles through one component view and paints ordinary
+  rows once
 - **AND** Grouped Music resolves a later row point from that current retained
   result without a uniform row map
 - **AND** its existing panel framing and spacing are unchanged
@@ -70,9 +73,10 @@ grouping through `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use
 selected-row replacement admission, ordinary-row fallback when replacement
 cannot fit, semantic painting delegation, and its internal row and replacement
 geometry for painting, scrolling, and point resolution. The parent SHALL retain
-ownership of destination framing and establish the row-flow rectangle using its
-existing arrangement; the control's `Component::view` SHALL receive that
-row-flow rectangle once and SHALL be its only ordinary-row painting entry point
+ownership of destination framing and establish its current claim and row-flow
+rectangles using its existing arrangement; before view, it SHALL configure those
+rectangles on the control. The control's `Component::view` SHALL paint the
+established row flow once and SHALL be its only ordinary-row painting entry point
 for a frame. Before that call, the parent MAY supply only a closed semantic
 policy for focused/selected treatment and desired detail admission; the policy
 SHALL contain no rectangle, raw style, callback, provider data, or effect.
@@ -101,9 +105,9 @@ focus target, gesture recognizer, or router.
 #### Scenario: Grouped Music consumes one admitted detail result
 
 - **WHEN** Grouped Music paints its Inline album list with a selected album
-- **THEN** its persistent `InlineMediaBrowser` receives the established row-flow
-  rectangle through one component view and admits or falls back from detail
-  within that view
+- **THEN** its persistent `InlineMediaBrowser` receives the established claim
+  and row-flow rectangles through one component view and admits or falls back
+  from detail within that view
 - **AND** Grouped Music reads only the current retained admitted-detail rectangle
   before painting its provider-owned detail
 - **AND** Grouped Music does not rerun list layout or reconstruct selectable row

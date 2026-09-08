@@ -18,8 +18,8 @@ anchor, search, parent gesture, and layout ownership remain unchanged.
 
 **Goals:**
 
-- Preserve parent-owned panel framing and row-flow placement with no visual
-  change.
+- Preserve parent-owned panel framing, claim, and row-flow placement with no
+  visual change.
 - Let an embedded control paint its supplied row flow once and retain current
   frame facts so a parent does not rebuild uniform row maps or pass geometry
   back for point resolution.
@@ -40,14 +40,16 @@ anchor, search, parent gesture, and layout ownership remain unchanged.
 
 ## Decisions
 
-### D1. Parents retain frame and row-flow placement
+### D1. Parents retain frame, claim, and row-flow placement
 
-A destination parent continues to place its panel/frame and its row-flow
-rectangle using its existing arrangement. The embedded control's
-`Component::view` receives that established row-flow rectangle once per frame,
-paints ordinary rows once, and retains a read-only result for that frame. The
-control does not choose destination padding, panel width, or other parent
-layout policy.
+A destination parent continues to place its panel/frame, current claim
+rectangle, and row-flow rectangle using its existing arrangement. Before its
+embedded control views a frame, the parent configures those established claim
+and row-flow rectangles; `Component::view` then paints ordinary rows once and
+retains a read-only result for that frame. Queue configures equal claim and
+row-flow rectangles. Grouped Music preserves its existing full-width claim
+rectangle and padded row-flow rectangle. The control does not choose
+destination padding, panel width, or other parent layout policy.
 
 The retained result exposes only legitimate parent facts: current claim/content
 rectangles, selected target/selected-row rectangle, and Inline admitted-detail
@@ -87,8 +89,9 @@ resolution; irregular pill geometry remains parent-owned.
 - **[#683 mouse behavior changes]** → preserve real-`Application::tick()`
   arbitration, throttle, and one-row tests while routing migrated points
   through retained geometry.
-- **[Music has multiple lists]** → verify both Wide rails and the Inline list,
-  including the unchanged responsive anchor handoff.
+- **[Music has multiple lists and distinct rectangles]** → preserve each
+  parent-established claim/row-flow pair while verifying both Wide rails and the
+  Inline list, including the unchanged responsive anchor handoff.
 
 ## Migration Plan
 
