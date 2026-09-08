@@ -11,7 +11,10 @@ use tuirealm::state::State;
 use super::media_list::{MediaKind, MediaListRow, MediaSemanticState, WideMediaList};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ShellRequest};
+use super::msg::{
+    Msg, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ShellRequest,
+    TerminalObserverEvent,
+};
 use super::user_event::UserEvent;
 use crate::app::palette;
 use crate::app::render::{
@@ -338,10 +341,14 @@ impl QueueComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                if !self.area.contains(at) {
+                if !self.list.claims_point(self.area, at) {
                     return None;
                 }
-                Some(Msg::Shell(ShellRequest::QueueScroll { delta }))
+                self.list.move_selection(delta);
+                // Return a framework-visible claim after mutating local state;
+                // dropping the message would let the framework's mutation be
+                // discarded by the mouse fold.
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::Click(at) => {
                 if let Some(scope) = self.claim_scope_pill(at) {

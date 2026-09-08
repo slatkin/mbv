@@ -42,6 +42,68 @@ fn playlists_component_hit_test_uses_wrapped_row_geometry() {
 }
 
 #[test]
+fn playlists_component_wheel_moves_one_row_and_ignores_pointer_location() {
+    let mut component = PlaylistsComponent::new();
+    component.set_content(PlaylistsContent {
+        playlists: vec![],
+        cursor: 0,
+        scroll: 0,
+        loading: false,
+        open: Some(make_item("Playlist", "Playlist")),
+        open_items: vec![
+            make_item("First item", "Video"),
+            make_item("Second item", "Video"),
+        ],
+        open_cursor: 0,
+        open_scroll: 0,
+        open_loading: false,
+        loaded_id: None,
+    });
+    component.set_panel_area(Some(Rect::new(0, 0, 24, 8)));
+    let mut terminal = Terminal::new(TestBackend::new(24, 8)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let row = component.first_open_row();
+    let wheel = |kind| {
+        Event::Mouse(MouseEvent {
+            column: row.x,
+            row: row.y,
+            kind,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+    component.on(&wheel(MouseEventKind::ScrollDown));
+    assert_eq!(
+        component.open_cursor(),
+        1,
+        "one wheel notch selects one row"
+    );
+    component.reset_mouse_gestures_for_test();
+    component.on(&wheel(MouseEventKind::ScrollUp));
+    assert_eq!(
+        component.open_cursor(),
+        0,
+        "wheel up selects the preceding row"
+    );
+    component.reset_mouse_gestures_for_test();
+    component.on(&wheel(MouseEventKind::ScrollUp));
+    assert_eq!(component.open_cursor(), 0, "the start boundary clamps");
+    component.reset_mouse_gestures_for_test();
+    component.on(&Event::Mouse(MouseEvent {
+        column: 30,
+        row: 20,
+        kind: MouseEventKind::ScrollDown,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(
+        component.open_cursor(),
+        1,
+        "focused wheel ignores pointer location"
+    );
+}
+
+#[test]
 fn playlists_component_double_click_activates_an_open_playlist_item() {
     let mut component = PlaylistsComponent::new();
     component.set_content(PlaylistsContent {

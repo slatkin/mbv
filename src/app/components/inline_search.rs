@@ -91,6 +91,8 @@ pub(in crate::app) enum InlineSearchAction {
 pub(in crate::app) enum InlineSearchMouse {
     /// A right click landed on a result row; the cursor has been moved there.
     ContextMenu,
+    /// A wheel gesture moved the local result cursor/viewport.
+    Consumed,
 }
 
 /// The shared embedded Inline Search control (design.md D1). Never mounted,
@@ -382,7 +384,12 @@ impl InlineSearch {
                     return Some(InlineSearchMouse::ContextMenu);
                 }
             }
-            MouseGesture::Scroll { .. } => {}
+            MouseGesture::Scroll { at, delta } => {
+                if self.layout.left_area.contains(at) {
+                    self.move_cursor(delta);
+                    return Some(InlineSearchMouse::Consumed);
+                }
+            }
             MouseGesture::Drag { .. } | MouseGesture::DragEnd => {}
         }
         None

@@ -520,10 +520,9 @@ fn abs_book_mouse_double_click_emits_activate_intent() {
     ));
 }
 
-/// Task 4.1: the wheel pages the book list by the painted page size and
-/// re-requests; the throttle lives in the gesture state.
+/// The wheel advances the focused book row by one painted row.
 #[test]
-fn abs_book_mouse_wheel_pages_the_book_list() {
+fn abs_book_mouse_wheel_moves_one_book_row() {
     let state = book_state(20, false);
     let mut component = AudiobookshelfBookComponent::new();
     component.set_content(&state, false);
@@ -532,11 +531,16 @@ fn abs_book_mouse_wheel_pages_the_book_list() {
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    let list = component.geometry().left_area;
+    let (row, _) = component
+        .geometry()
+        .book_rows
+        .first()
+        .copied()
+        .expect("a painted book row");
     let msg = component.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
-        column: list.x,
-        row: list.y,
+        column: row.x,
+        row: row.y,
         modifiers: KeyModifiers::NONE,
     }));
     let Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(AudiobookshelfBookMove::Book(index)))) =
@@ -544,8 +548,5 @@ fn abs_book_mouse_wheel_pages_the_book_list() {
     else {
         panic!("wheel must emit a page-size book move, got {msg:?}");
     };
-    assert!(
-        index > 1,
-        "wheel must advance more than one row, got {index}"
-    );
+    assert_eq!(index, 1, "wheel must advance one row, got {index}");
 }

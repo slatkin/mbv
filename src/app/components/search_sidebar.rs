@@ -230,8 +230,9 @@ impl SearchSidebarComponent {
     /// filter (Tab/BackTab cycle equivalent — every chip is reachable by
     /// cycling), and an outside click dismisses (Esc equivalent). The query
     /// row has no cursor-positioning keyboard path, so clicking it is a
-    /// no-op. Right-click and wheel have no keyboard equivalent here and
-    /// are ignored.
+    /// no-op. A wheel over a painted result row moves the local cursor by one
+    /// result; wheel over any other region is ignored. Right-click has no
+    /// keyboard equivalent here and is ignored.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
@@ -256,6 +257,12 @@ impl SearchSidebarComponent {
                 }
                 if !self.frame.contains(at) {
                     return Some(Msg::Shell(ShellRequest::DismissSearch));
+                }
+                None
+            }
+            MouseGesture::Scroll { at, delta } => {
+                if self.hit_results.resolve(at).is_some() {
+                    self.move_cursor(delta);
                 }
                 None
             }

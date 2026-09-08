@@ -21,7 +21,7 @@ use super::media_list::{
     InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use super::msg::{Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{
@@ -350,11 +350,16 @@ impl FeedsComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                if !self.layout.left_area.contains(at) {
+                let claims = if self.wide {
+                    self.canonical_list.claims_point(self.layout.left_area, at)
+                } else {
+                    self.inline_list.claims_point(self.layout.left_area, at)
+                };
+                if !claims {
                     return None;
                 }
                 self.move_selection(delta);
-                None
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::Click(at) => {
                 if let Some((_, target)) = self

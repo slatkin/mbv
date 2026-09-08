@@ -221,7 +221,20 @@ pub(super) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
     }
     let claims = messages
         .iter()
-        .filter(|msg| !matches!(msg, Msg::TerminalEvent(_)))
+        .filter(|msg| {
+            !matches!(
+                msg,
+                Msg::TerminalEvent(
+                    TerminalObserverEvent::NoOp
+                        | TerminalObserverEvent::Key(_)
+                        | TerminalObserverEvent::Resize { .. }
+                        | TerminalObserverEvent::FocusGained
+                        | TerminalObserverEvent::FocusLost
+                        | TerminalObserverEvent::MouseClick { .. }
+                        | TerminalObserverEvent::MouseClaimed
+                )
+            )
+        })
         .count();
     debug_assert!(
         claims <= 1,
@@ -350,7 +363,7 @@ impl Model {
         }
     }
 
-    fn dispatch_router_command(&mut self, command: Command) -> bool {
+    pub(in crate::app) fn dispatch_router_command(&mut self, command: Command) -> bool {
         match command {
             Command::OpenHelp => {
                 self.mount_help();
@@ -475,7 +488,9 @@ fn apply_terminal_observer(
                 model.app.set_library_tab(tab_pos);
             }
         }
-        TerminalObserverEvent::Key(_) | TerminalObserverEvent::NoOp => {}
+        TerminalObserverEvent::Key(_)
+        | TerminalObserverEvent::NoOp
+        | TerminalObserverEvent::MouseClaimed => {}
     }
 }
 
@@ -496,6 +511,16 @@ mod mouse_fold_tests {
                 Msg::Playback(PlaybackRequest::TogglePlayPause),
                 Msg::TerminalEvent(TerminalObserverEvent::NoOp),
             ]
+        );
+    }
+
+    #[test]
+    fn duplicate_mouse_observer_markers_do_not_hide_a_claim() {
+        let marker = Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed);
+        let claim = Msg::Playback(PlaybackRequest::TogglePlayPause);
+        assert_eq!(
+            fold_mouse_messages(vec![marker.clone(), marker.clone(), claim.clone()]),
+            vec![marker.clone(), marker, claim]
         );
     }
 

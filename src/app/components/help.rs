@@ -18,9 +18,11 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use super::msg::{Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
-use crate::app::render::{help_destination, render_help_panel, HelpDestination};
+use crate::app::render::{
+    help_destination, render_help_panel, HelpDestination, HelpRenderGeometry,
+};
 use crate::app::{PanelFocus, TabSelection};
 
 /// The Interactive Component for the Help sidebar.
@@ -35,6 +37,7 @@ pub struct HelpComponent {
     /// hit-testing in `on()`. `None` when no panel area was provided (the
     /// help sidebar uses the full terminal with a width constraint).
     panel_area: Option<Rect>,
+    content_geometry: Option<HelpRenderGeometry>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3).
     mouse_gestures: MouseGestureState,
 }
@@ -45,6 +48,7 @@ impl HelpComponent {
             scroll: 0,
             destination: HelpDestination::EmbyLibrary,
             panel_area: None,
+            content_geometry: None,
             mouse_gestures: MouseGestureState::new(),
         }
     }
@@ -102,7 +106,12 @@ impl HelpComponent {
     /// `MouseGestureState` (ADR 0024, design.md D3). Behaviour unchanged
     /// from the ad-hoc handler: a click inside the panel is swallowed, a
     /// click outside dismisses (the second click of a double included), and
-    /// the wheel adjusts the scroll by 3 per throttled step.
+    /// the focused overlay's wheel adjusts the scroll by one line regardless of pointer.
+    #[cfg(test)]
+    pub(crate) fn test_scroll(&self) -> u16 {
+        self.scroll
+    }
+
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
@@ -118,8 +127,12 @@ impl HelpComponent {
                 }
             }
             MouseGesture::Scroll { delta, .. } => {
-                self.scroll = self.scroll.saturating_add_signed((delta * 3) as i16);
-                None
+                let geometry = self.content_geometry.as_ref()?;
+                self.scroll = self
+                    .scroll
+                    .saturating_add_signed(delta as i16)
+                    .min(geometry.max_scroll);
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             _ => None,
         }
@@ -136,7 +149,12 @@ impl Component for HelpComponent {
     fn view(&mut self, f: &mut Frame, _area: Rect) {
         // Use the panel area set by the shell (via `set_panel_area`), not
         // the `area` parameter from TuiRealm (which is the full terminal).
-        render_help_panel(f, self.panel_area, &mut self.scroll, self.destination);
+        self.content_geometry = Some(render_help_panel(
+            f,
+            self.panel_area,
+            &mut self.scroll,
+            self.destination,
+        ));
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
@@ -279,29 +297,49 @@ mod tests {
     }
 
     #[test]
-    fn mouse_scroll_down_increments_by_three() {
+    fn mouse_scroll_moves_one_line_inside_content_and_clamps() {
         let mut comp = HelpComponent::new();
+        comp.content_geometry = Some(HelpRenderGeometry { max_scroll: 6 });
         comp.scroll = 5;
+        comp.handle_mouse(&MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 1,
+            row: 1,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(comp.scroll, 6);
+        comp.handle_mouse(&MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: 1,
+            row: 1,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(
+            comp.scroll, 6,
+            "throttle coalesces back-to-back wheel input"
+        );
+        comp.mouse_gestures.reset_for_test();
+        comp.handle_mouse(&MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: 1,
+            row: 1,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(comp.scroll, 5);
+    }
+
+    #[test]
+    fn mouse_scroll_moves_off_panel_content() {
+        let mut comp = HelpComponent::new();
+        comp.panel_area = Some(Rect::new(2, 2, 10, 4));
+        comp.content_geometry = Some(HelpRenderGeometry { max_scroll: 6 });
         comp.handle_mouse(&MouseEvent {
             kind: MouseEventKind::ScrollDown,
             column: 0,
             row: 0,
             modifiers: KeyModifiers::NONE,
         });
-        assert_eq!(comp.scroll, 8);
-    }
-
-    #[test]
-    fn mouse_scroll_up_decrements_by_three() {
-        let mut comp = HelpComponent::new();
-        comp.scroll = 5;
-        comp.handle_mouse(&MouseEvent {
-            kind: MouseEventKind::ScrollUp,
-            column: 0,
-            row: 0,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(comp.scroll, 2);
+        assert_eq!(comp.scroll, 1);
     }
 
     #[test]

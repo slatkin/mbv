@@ -305,20 +305,6 @@ impl Model {
                 | ShellRequest::AudiobookshelfBookIntent(_)) => {
                     self.handle_audiobookshelf_book_request(request);
                 }
-                // Browser (generic Emby) mouse gestures are recognized by
-                // `BrowserComponent`'s private `MouseGestureState` (ADR 0024,
-                // design.md D3/D4): it owns the wheel throttle and resolves the
-                // row target itself, so the shell only applies the effect.
-                ShellRequest::BrowserScroll { offset } => {
-                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                        if self.app.is_feed_home_video_group_view(lib_idx) {
-                            if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
-                                state.video_scroll = offset;
-                                self.app.save_default_library_position(lib_idx);
-                            }
-                        }
-                    }
-                }
                 // Browser selected-item typed effects (task 5.3d, Emby
                 // browser effect decoupling): the component reports the
                 // explicit `EmbyItem` target; the shell forwards it
@@ -396,15 +382,12 @@ impl Model {
                     }
                     self.push_emby_browser_content();
                 }
-                // Home (cross-Service) mouse gestures are recognized by
-                // `HomeComponent`'s private `MouseGestureState` (ADR 0024,
-                // design.md D3/D4): it owns the double-click window and wheel
-                // throttle and resolves the row target itself. The wheel
-                // effect still runs through `handle_home_scroll` (its App gate
-                // plus the Continue Watching `cw_move_cursor` quirk) until
-                // task 4.3.
-                ShellRequest::HomeScroll { delta } => {
-                    self.handle_home_scroll(delta);
+                // Home wheel movement is local; only the resolved Continue
+                // Watching cursor crosses the Model boundary.
+                ShellRequest::HomeContinueCursor { index } => {
+                    self.home_content.continue_cursor =
+                        index.min(self.home_content.continue_items.len().saturating_sub(1));
+                    self.push_home_content();
                 }
                 ShellRequest::HomeRowClick => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
@@ -441,14 +424,6 @@ impl Model {
                 | ShellRequest::HomeDelete(_)
                 | ShellRequest::HomeToggleWatched
                 | ShellRequest::HomeSectionSelected(_)) => self.handle_home_request(request),
-                // Queue mouse gestures are recognized by `QueueComponent`'s
-                // private `MouseGestureState` (ADR 0024, design.md D3/D4): it
-                // owns the double-click window and wheel throttle, switches
-                // its own scope, and resolves the slot itself. The shell only
-                // applies the cross-boundary effect.
-                ShellRequest::QueueScroll { delta } => {
-                    self.app.handle_mouse_scroll_queue(delta);
-                }
                 ShellRequest::QueueScopeClick { scope } => {
                     self.app.handle_mouse_selector_click_queue(scope);
                     self.queue_click_reproject();
@@ -494,15 +469,6 @@ impl Model {
                 | ShellRequest::TvCycleLetterPill { .. }
                 | ShellRequest::TvEpisodeMove { .. }
                 | ShellRequest::TvSeasonMove { .. }) => self.handle_tv_request(request),
-                // TV workspace mouse gestures are recognized by
-                // `TvWorkspaceComponent`'s private `MouseGestureState` (ADR
-                // 0024, design.md D3/D4): it owns the double-click window and
-                // wheel throttle, resolves the pane + hit itself, and moves
-                // its own pane/cursor before emitting. The shell only applies
-                // the cross-boundary effect.
-                ShellRequest::TvScroll { .. } => {
-                    self.push_tv_workspace_content();
-                }
                 ShellRequest::TvHitClick { hit } => {
                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
                         self.app.handle_mouse_single_click_tv(lib_idx, hit);

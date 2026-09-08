@@ -572,7 +572,7 @@ fn feed_home_video_group_metadata_bearing_hero_keeps_complete_frame() {
 }
 
 #[test]
-fn feed_home_video_group_browser_scroll_updates_video_scroll() {
+fn feed_home_video_group_browser_wheel_persists_the_video_cursor() {
     let mut app = feed_home_video_group_app();
     let state = app.libs[0].feed_home_video.as_mut().unwrap();
     for i in 0..30 {
@@ -607,10 +607,10 @@ fn feed_home_video_group_browser_scroll_updates_video_scroll() {
     assert!(max_offset > 0, "feed fixture must overflow the mounted control");
     let mut music_resize = false;
     let mut tv_resize = false;
-    // Drive the existing typed wheel path through the mounted control: the
-    // final event has a raw result of max_offset + 1, but the control emits
-    // its clamped offset to the persisted feed-home-video state.
-    for _ in 0..=max_offset {
+    // Drive the typed wheel path through the mounted control: one wheel step
+    // moves one row and the shell persists the resolved cursor as
+    // `video_cursor`; the persisted viewport scroll is no longer wheel-driven.
+    for _ in 0..total_rows {
         model
             .application
             .get_component_mut(&id)
@@ -632,17 +632,20 @@ fn feed_home_video_group_browser_scroll_updates_video_scroll() {
             .expect("scroll emits typed request");
         model.handle_terminal_message(msg, &mut music_resize, &mut tv_resize);
     }
-    assert_ne!(max_offset + 1, max_offset);
-    let control_scroll = model
+    let control_cursor = model
         .application
         .get_component(&id)
         .and_then(|component| component.as_any().downcast_ref::<BrowserComponent>())
         .expect("feed browser remains mounted")
-        .scroll();
-    assert_eq!(control_scroll, max_offset);
+        .cursor();
+    assert_eq!(control_cursor, total_rows - 1, "wheel clamps at the last row");
     assert_eq!(
-        model.app.libs[0].feed_home_video.as_ref().unwrap().video_scroll,
-        max_offset
+        model.app.libs[0]
+            .feed_home_video
+            .as_ref()
+            .unwrap()
+            .video_cursor,
+        total_rows - 1
     );
 }
 

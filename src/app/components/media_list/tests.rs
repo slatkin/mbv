@@ -141,6 +141,8 @@ mod resolve_point {
             height: 6,
         };
         assert_eq!(list.resolve_point(area, Position { x: 1, y: 0 }), None); // heading
+        assert!(list.claims_point(area, Position { x: 1, y: 0 }));
+        assert!(!list.claims_point(area, Position { x: 10, y: 0 }));
         assert_eq!(
             list.resolve_point(area, Position { x: 1, y: 1 }),
             Some(&"a".to_string())
@@ -198,5 +200,7 @@ mod resolve_point {
             browser.resolve_point(area, 2, Position { x: 40, y: 2 }),
             None
         );
+        assert!(browser.claims_point(area, Position { x: 1, y: 3 }));
+        assert!(!browser.claims_point(area, Position { x: 40, y: 2 }));
     }
 }

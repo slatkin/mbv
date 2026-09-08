@@ -13,7 +13,8 @@ use crate::app::components::msg::{ConfirmIntent, PlaybackRequest, ServiceRequest
 use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::{
     ComponentId, ModalId, Msg, MusicWorkspaceComponent, OverlayId, QueueRequest, SearchPool,
-    SearchSidebarComponent, ShellRequest, TerminalObserverEvent, UserEvent,
+    SearchSidebarComponent, ShellRequest, TerminalObserverEvent,
+    UserEvent,
 };
 use crate::app::router::RouterOutcome;
 use crate::app::shell::apply_router_outcome;
@@ -220,7 +221,7 @@ fn search_clock_sweep_dispatches_debounce_on_step() {
 
 /// Mini view keeps `effective_panel_focus` on Queue, so `sync_queue` must not
 /// re-activate Queue on the tick after a sidebar mounts, stealing the Esc that
-/// would close it.
+/// would close it. The sync passes must yield focus while an overlay is up.
 #[test]
 fn esc_closes_a_sidebar_in_mini_view() {
     let mut app = make_app_stub();

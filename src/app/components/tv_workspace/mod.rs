@@ -18,7 +18,7 @@ use super::inline_search::{InlineSearch, InlineSearchHost, InlineSearchMouse};
 use super::media_list::{MediaKind, MediaListRow, MediaSemanticState, WideMediaList};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, ShellRequest, TvHit};
+use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use super::user_event::UserEvent;
 #[cfg(test)]
 use crate::app::layout::LayoutMain;
@@ -398,6 +398,9 @@ impl TvWorkspaceComponent {
                     .inline_search
                     .selected_item()
                     .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item })),
+                Some(InlineSearchMouse::Consumed) => {
+                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+                }
                 None => None,
             };
         }
@@ -407,15 +410,16 @@ impl TvWorkspaceComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                // Wheel scroll over the series list (`left_area` is the
-                // right-pane list area this renderer publishes — the exact
-                // region the legacy scroll arm hit-tested). The Episodes
-                // pane has no wheel behaviour.
-                if !self.layout.left_area.contains(at) {
+                // The series rail is the only scrollable TV surface. Its
+                // canonical control claims the painted region.
+                if !self.list.claims_point(self.layout.left_area, at) {
                     return None;
                 }
                 self.move_rows(delta);
-                Some(Msg::Shell(ShellRequest::TvScroll { delta }))
+                // Return a framework-visible claim after mutating local state;
+                // dropping the message would let the framework's mutation be
+                // discarded by the mouse fold.
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::Click(at) => {
                 let hit = self.resolve_hit(at)?;

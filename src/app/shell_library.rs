@@ -133,10 +133,10 @@ impl Model {
         // Rung 3: the components painted this frame — active destination,
         // Queue, and Playback (the transport chrome).
         let mut ids = Vec::new();
-        if let Some(child) = self
-            .library_child_id()
-            .filter(|child| self.application.mounted(child))
-        {
+        let panel_mode = self.app.effective_panel_mode();
+        if let Some(child) = self.library_child_id().filter(|child| {
+            panel_mode != super::PanelMode::QueueOnly && self.application.mounted(child)
+        }) {
             ids.push(child);
         }
         for id in [
@@ -146,6 +146,7 @@ impl Model {
         ] {
             if self.application.mounted(&id)
                 && (id != ComponentId::QueueBoundary || self.queue_boundary_mouse_eligible())
+                && (id == ComponentId::Playback || panel_mode != super::PanelMode::LibraryOnly)
             {
                 ids.push(id);
             }

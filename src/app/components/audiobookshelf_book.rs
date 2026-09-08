@@ -387,18 +387,26 @@ impl AudiobookshelfBookComponent {
                 None
             }
             MouseGesture::Scroll { at, delta } => {
-                // Page-size move + re-request (Home/Queue precedent, task
-                // 4.1); this surface had no wheel arm before. Mirrors the
-                // keyboard PageUp/PageDown focus split.
-                if !self.geometry.left_area.contains(at) {
+                let chapter_focus = self.chapters_visible && self.chapter_selection.is_some();
+                let claimed = if chapter_focus {
+                    self.geometry
+                        .chapter_rows
+                        .iter()
+                        .any(|(rect, _)| rect.contains(at))
+                } else {
+                    self.geometry
+                        .book_rows
+                        .iter()
+                        .any(|(rect, _)| rect.contains(at))
+                };
+                if !claimed {
                     return None;
                 }
-                let rows = delta * self.page_size() as i64;
-                if self.chapters_visible && self.chapter_selection.is_some() {
-                    self.move_chapter(rows);
+                if chapter_focus {
+                    self.move_chapter(delta);
                     return Some(self.chapter_focus_request());
                 }
-                self.move_book(rows);
+                self.move_book(delta);
                 Some(self.book_request())
             }
             _ => None,
