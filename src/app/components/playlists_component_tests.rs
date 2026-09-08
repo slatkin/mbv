@@ -42,7 +42,7 @@ fn playlists_component_hit_test_uses_wrapped_row_geometry() {
 }
 
 #[test]
-fn playlists_component_wheel_moves_one_row_and_rejects_blank_content_space() {
+fn playlists_component_wheel_moves_one_row_and_ignores_pointer_location() {
     let mut component = PlaylistsComponent::new();
     component.set_content(PlaylistsContent {
         playlists: vec![],
@@ -90,18 +90,16 @@ fn playlists_component_wheel_moves_one_row_and_rejects_blank_content_space() {
     component.on(&wheel(MouseEventKind::ScrollUp));
     assert_eq!(component.open_cursor(), 0, "the start boundary clamps");
     component.reset_mouse_gestures_for_test();
-    // The painter's content area extends below these two one-line rows, but
-    // that blank space is not a scroll target.
     component.on(&Event::Mouse(MouseEvent {
-        column: row.x,
-        row: row.y + 2,
-        kind: MouseEventKind::ScrollUp,
+        column: 30,
+        row: 20,
+        kind: MouseEventKind::ScrollDown,
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(
         component.open_cursor(),
-        0,
-        "blank content does not claim the wheel"
+        1,
+        "focused wheel ignores pointer location"
     );
 }
 

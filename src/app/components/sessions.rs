@@ -121,10 +121,6 @@ impl SessionsComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { delta, .. } => {
-                let at = ratatui::layout::Position::new(mouse.column, mouse.row);
-                if self.hit_rows.resolve(at).is_none() {
-                    return None;
-                }
                 if delta < 0 {
                     self.cursor = self.cursor.saturating_sub(1);
                 } else if !self.targets.is_empty() {
@@ -348,7 +344,7 @@ mod tests {
     }
 
     #[test]
-    fn sessions_mouse_wheel_steps_only_on_painted_rows() {
+    fn sessions_mouse_wheel_steps_independent_of_pointer_location() {
         let mut component = painted_component();
         let (row, _) = component.test_rows().regions()[0];
         component.handle_mouse(&MouseEvent {
@@ -377,13 +373,10 @@ mod tests {
         component.reset_mouse_gestures_for_test();
         component.handle_mouse(&MouseEvent {
             kind: MouseEventKind::ScrollDown,
-            column: 1,
-            row: 1,
+            column: 50,
+            row: 20,
             modifiers: KeyModifiers::NONE,
         });
-        assert_eq!(
-            component.cursor, 0,
-            "wheel outside a painted row is ignored"
-        );
+        assert_eq!(component.cursor, 1, "focused wheel ignores pointer location");
     }
 }

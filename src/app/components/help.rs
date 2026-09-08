@@ -9,7 +9,7 @@
 //! (quit, switch panels, dismiss). Local state changes (scroll) return
 //! `None`; the permanent root observer remains the redraw signal (design D12).
 
-use ratatui::layout::{Position, Rect};
+use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
@@ -106,7 +106,7 @@ impl HelpComponent {
     /// `MouseGestureState` (ADR 0024, design.md D3). Behaviour unchanged
     /// from the ad-hoc handler: a click inside the panel is swallowed, a
     /// click outside dismisses (the second click of a double included), and
-    /// the wheel adjusts the scroll by one line inside the painter's content area.
+    /// the focused overlay's wheel adjusts the scroll by one line regardless of pointer.
     #[cfg(test)]
     pub(crate) fn test_scroll(&self) -> u16 {
         self.scroll
@@ -134,13 +134,9 @@ impl HelpComponent {
                 }
             }
             MouseGesture::Scroll { delta, .. } => {
-                let at = Position::new(mouse.column, mouse.row);
                 let Some(geometry) = self.content_geometry.as_ref() else {
                     return None;
                 };
-                if !geometry.content_area.contains(at) {
-                    return None;
-                }
                 self.scroll = self
                     .scroll
                     .saturating_add_signed(delta as i16)
@@ -345,8 +341,9 @@ mod tests {
     }
 
     #[test]
-    fn mouse_scroll_outside_content_is_ignored() {
+    fn mouse_scroll_moves_off_panel_content() {
         let mut comp = HelpComponent::new();
+        comp.panel_area = Some(Rect::new(2, 2, 10, 4));
         comp.content_geometry = Some(HelpRenderGeometry {
             content_area: Rect::new(2, 2, 10, 4),
             max_scroll: 6,
@@ -357,7 +354,7 @@ mod tests {
             row: 0,
             modifiers: KeyModifiers::NONE,
         });
-        assert_eq!(comp.scroll, 0);
+        assert_eq!(comp.scroll, 1);
     }
 
     #[test]

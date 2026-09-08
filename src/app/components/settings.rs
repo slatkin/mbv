@@ -1,4 +1,4 @@
-use ratatui::layout::{Position, Rect};
+use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
@@ -322,7 +322,7 @@ impl SettingsComponent {
     /// `HitRegions` (D6). Behaviour unchanged from the ad-hoc handler: a
     /// click outside the panel dismisses, a click on a cursor-activatable
     /// row selects and activates it (the Enter/Space equivalent), and the
-    /// wheel scrolls by one document line per throttled step inside the painted content.
+    /// focused overlay's wheel scrolls by one document line per throttled step.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
@@ -343,10 +343,6 @@ impl SettingsComponent {
                 )))
             }
             MouseGesture::Scroll { delta, .. } => {
-                let at = Position::new(mouse.column, mouse.row);
-                if !self.geometry.content_area.contains(at) {
-                    return None;
-                }
                 let max_scroll = self
                     .geometry
                     .cursor_lines
@@ -567,16 +563,19 @@ mod tests {
     }
 
     #[test]
-    fn settings_mouse_wheel_outside_content_is_ignored() {
+    fn settings_mouse_wheel_moves_off_panel_content() {
         let mut component = painted_settings(SettingsDestination::Main);
+        component.geometry.panel_area = Rect::new(2, 2, 10, 4);
+        component.geometry.content_area = Rect::new(2, 2, 10, 4);
+        component.geometry.cursor_lines = vec![0, 20];
         component.scroll = 2;
         component.on(&Event::Mouse(MouseEvent {
             kind: MouseEventKind::ScrollDown,
-            column: 1,
-            row: 1,
+            column: 0,
+            row: 0,
             modifiers: KeyModifiers::NONE,
         }));
-        assert_eq!(component.scroll, 2);
+        assert_eq!(component.scroll, 3);
     }
 
     #[test]

@@ -570,8 +570,8 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
     apply_outcome(&mut harness, outcome);
 }
 
-/// A sidebar opened from the F4 path must publish its painted list before the
-/// first wheel event; a normal key afterward proves the tick remains healthy.
+/// A sidebar opened from the F4 path must claim a wheel at an off-panel
+/// pointer; a normal key afterward proves the tick remains healthy.
 #[test]
 fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     let mut app = make_app_stub();
@@ -594,10 +594,6 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     apply_outcome(&mut harness, outcome);
     harness.model_mut().sync_mounted_surfaces();
     let playlists_id = ComponentId::Overlay(OverlayId::Playlists);
-    let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
-    terminal
-        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
-        .unwrap();
     assert!(harness.model().application.mounted(&playlists_id));
     assert_eq!(harness.model().application.focus(), Some(&playlists_id));
     assert_eq!(
@@ -605,23 +601,12 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
         std::iter::once(playlists_id.clone()).collect(),
         "the real F4 lifecycle leaves only Playlists mouse-eligible"
     );
-    let playlist_row = harness
-        .model_mut()
-        .application
-        .get_component_mut(&playlists_id)
-        .unwrap()
-        .as_any_mut()
-        .downcast_mut::<PlaylistsComponent>()
-        .unwrap()
-        .test_playlist_rows()
-        .first()
-        .copied()
-        .expect("playlist list painted at least one row")
-        .0;
+    // The focused sole overlay claims its wheel without needing a prior paint
+    // or a pointer inside the sidebar.
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
-        column: playlist_row.x,
-        row: playlist_row.y,
+        column: 59,
+        row: 23,
         modifiers: KeyModifiers::NONE,
     }));
     let outcome = harness.step();
@@ -654,9 +639,6 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
         message,
         Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::Key(_))
     )));
-    terminal
-        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
-        .unwrap();
 }
 
 #[test]
