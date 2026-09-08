@@ -11,8 +11,8 @@
 
 ## 3. Convert sidebar and viewport surfaces
 
-- [ ] 3.1 Convert Settings and Help to one-line local viewport movement as focus-owned sole overlays, independent of pointer position; update or replace only the existing focused tests that would otherwise preserve the three-line behavior.
-- [ ] 3.2 Convert Sessions and Playlists to one-step local list movement as focus-owned sole overlays, independent of pointer position; verify focused mouse tests cover selection, boundaries, and an off-panel pointer.
+- [x] 3.1 Convert Settings and Help to one-line local viewport movement as focus-owned sole overlays, independent of pointer position; update or replace only the existing focused tests that would otherwise preserve the three-line behavior.
+- [x] 3.2 Convert Sessions and Playlists to one-step local list movement as focus-owned sole overlays, independent of pointer position; verify focused mouse tests cover selection, boundaries, and an off-panel pointer.
 
 ## 4. Record and verify the contract
 
