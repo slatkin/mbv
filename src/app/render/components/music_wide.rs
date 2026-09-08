@@ -2,7 +2,8 @@
 
 use crate::app::components::inline_search::InlineSearch;
 use crate::app::components::media_list::{
-    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
+    InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaKind, MediaListRow, MediaSemanticState,
+    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
 };
 use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::library as library_arrangement;
@@ -25,6 +26,7 @@ use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::Frame;
+use tuirealm::component::Component;
 
 #[derive(Clone)]
 pub(in crate::app) struct MusicWideRenderCtx {
@@ -166,16 +168,6 @@ pub(in crate::app) fn grouped_album_rows(
 pub(in crate::app) struct MusicWideRenderOutput {
     pub(in crate::app) final_scroll: usize,
     pub(in crate::app) image_paint: Option<MusicImagePaint>,
-    /// The content-area height the narrow `InlineMediaBrowser` painted into
-    /// (area minus the group pill row). The component feeds this back as the
-    /// painted viewport height for the responsive `ViewportAnchor` hand-off.
-    pub(in crate::app) viewport_height: usize,
-    /// Narrow presentation only: the screen rect the album rows were painted
-    /// into (area minus the group pill row). The component resolves narrow
-    /// mouse row hits against this same rect via
-    /// `InlineMediaBrowser::resolve_point` (task 6.1). `Rect::default()` in the
-    /// wide presentation.
-    pub(in crate::app) narrow_list_area: Rect,
 }
 
 /// Strips the "Artist (Year) " folder-name prefix from an album's display
@@ -334,6 +326,7 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
     browser: &mut InlineMediaBrowser<String>,
     pending_anchor: Option<&crate::app::components::media_list::ViewportAnchor<String>>,
 ) -> MusicWideRenderOutput {
+    browser.invalidate_paint();
     // Group pill bar above the album rows, mirroring the narrow browser
     // (`list_narrow.rs`) and the wide sibling's right-pane pill slot. Album
     // rows then render into the reduced content area.
@@ -374,8 +367,6 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
         return MusicWideRenderOutput {
             final_scroll: 0,
             image_paint: None,
-            viewport_height: visible,
-            narrow_list_area: content_area,
         };
     }
 
@@ -392,44 +383,49 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
     let focused = ctx.focused;
     let cursor = ctx.list.cursor;
 
-    let result = super::media_list::render_inline_media_browser(
-        f,
-        content_area,
-        &*browser,
-        hero_rows,
+    browser.set_geometry(content_area, content_area);
+    browser.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
         focused,
-        palette::list_selected_row_bg(),
-    );
-    let geometry = &result.row_geometry;
-    let offset = geometry.offset();
+        SelectedRowSurface::ListBackdrop,
+        hero_rows,
+    ));
+    Component::view(browser, f, content_area);
 
+    let content_area = browser.current_content_rect().unwrap_or(content_area);
+    let offset = browser.scroll();
     let id_to_index = |id: &String| ctx.list.items.iter().position(|item| &item.id == id);
     layout.left_sorted_indices = ctx.album_order.clone();
     layout.left_screen_offset = 0;
-    layout.left_item_rows = geometry
-        .targets()
-        .map(|target| {
-            target
+    let flow_len = browser.rows().len().saturating_sub(1)
+        + browser
+            .current_detail_rect()
+            .map_or(1, |rect| rect.height as usize);
+    layout.left_item_rows = (0..flow_len)
+        .map(|row| {
+            browser
+                .resolve_current_point(ratatui::layout::Position {
+                    x: content_area.x,
+                    y: content_area.y + row as u16,
+                })
                 .and_then(id_to_index)
                 .map(|idx| vec![idx])
                 .unwrap_or_default()
         })
         .collect();
-    layout.left_row_map = geometry
-        .targets()
-        .skip(offset)
-        .take(visible)
-        .map(|target| target.and_then(id_to_index))
+    layout.left_row_map = (0..visible)
+        .map(|row| {
+            browser
+                .resolve_current_point(ratatui::layout::Position {
+                    x: content_area.x,
+                    y: content_area.y + row as u16,
+                })
+                .and_then(id_to_index)
+        })
         .collect();
-    layout.left_row_targets = geometry
-        .targets()
-        .skip(offset)
-        .take(visible)
-        .map(|target| target.and_then(id_to_index))
-        .collect();
+    layout.left_row_targets = layout.left_row_map.clone();
 
     let mut image_paint = None;
-    match result.hero_area {
+    match browser.current_detail_rect() {
         Some(hero_area) => {
             layout.hero_area = hero_area;
             layout.inline_hero_area = hero_area;
@@ -474,15 +470,13 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
             }
         }
         None => {
-            layout.selected_item_rect = geometry.selected_row_rect(content_area);
+            layout.selected_item_rect = browser.current_selected_row_rect();
         }
     }
 
     MusicWideRenderOutput {
         final_scroll: offset,
         image_paint,
-        viewport_height: visible,
-        narrow_list_area: content_area,
     }
 }
 
@@ -498,13 +492,13 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     inline_search: &mut InlineSearch,
 ) -> MusicWideRenderOutput {
     let mut output = MusicWideRenderOutput::default();
+    album_list.invalidate_paint();
     // The pure arrangement is computed exactly once here in
     // `publish_geometry`; the paint path below consumes the returned panes
     // and left layout rather than recomputing them.
     let Some((panes, left_layout)) = ctx.publish_geometry(area, layout) else {
         return output;
     };
-    layout.wide_music_track_hitmap.clear();
     let browser_panel = panes.browser_panel;
     let browser_area = panes.browser_area;
     let track_active = ctx.track_cursor.is_some();
@@ -518,6 +512,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
         return output;
     };
     layout.left_area = left_area;
+    track_list.invalidate_paint();
 
     if let Some(album) = ctx.selected_album.as_ref() {
         output.image_paint = render_wide_left_hero(
@@ -535,34 +530,14 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
                 crate::app::render::arrangements::wide_hero::wide_hero_hero_content_box(
                     f, track_area,
                 );
-            let paint_area = Rect {
-                x: track_panel.x,
-                width: track_panel.width,
-                ..track_content_area
-            };
-            let paint = super::media_list::render_wide_media_list(
-                f,
-                paint_area,
-                track_content_area,
-                track_list,
+            track_list.set_geometry(track_panel, track_content_area);
+            track_list.set_paint_policy(WideMediaListPaintPolicy::new(
                 left_focused,
-                palette::resolve_surface_focus(left_focused),
+                SelectedRowSurface::OwningSurface,
                 None,
-            );
-            layout.selected_item_rect = paint.selected_row_rect;
-            layout.wide_music_track_hitmap.clear();
-            for (row, index) in paint.left_row_map.into_iter().enumerate() {
-                if let Some(index) = index {
-                    layout.wide_music_track_hitmap.push((
-                        Rect {
-                            y: track_content_area.y + row as u16,
-                            height: 1,
-                            ..track_panel
-                        },
-                        index,
-                    ));
-                }
-            }
+            ));
+            Component::view(track_list, f, track_area);
+            layout.selected_item_rect = track_list.current_selected_row_rect();
         }
     } else {
         crate::app::render::render_placeholder(f, left_area, " Loading\u{2026}");

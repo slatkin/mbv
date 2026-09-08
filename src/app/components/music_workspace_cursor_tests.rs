@@ -228,11 +228,8 @@ fn music_workspace_track_selection_uses_the_shared_focused_row_surface() {
     assert_eq!(component.track_cursor(), Some(0));
     assert_eq!(component.track_selected_row(), Some(0));
     let track_panel = component
-        .layout()
-        .wide_music_track_hitmap
-        .first()
-        .map(|(rect, _)| *rect)
-        .expect("selected track row hit geometry published");
+        .test_track_selected_row_rect()
+        .expect("selected track row geometry retained");
     let buffer = terminal.backend().buffer();
     for x in [track_panel.x, track_panel.right().saturating_sub(1)] {
         assert_eq!(

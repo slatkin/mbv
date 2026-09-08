@@ -7,9 +7,10 @@ use tuirealm::event::{
 
 use crate::app::action::Command;
 use crate::app::components::{
-    BrowserComponent, ComponentId, HelpComponent, ModalId, Msg, OverlayId, PlaylistsComponent,
-    QueueComponent, ShellRequest, TerminalObserverEvent, UserEvent,
+    BrowserComponent, ComponentId, HelpComponent, ModalId, Msg, MusicWorkspaceComponent,
+    OverlayId, PlaylistsComponent, QueueComponent, ShellRequest, TerminalObserverEvent, UserEvent,
 };
+use crate::app::render::make_music_group_app;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
 use crate::app::tests_tick_integration::search_component_mut;
@@ -690,6 +691,54 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
             .any(|msg| matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
         "a click on the narrow-painted list row must resolve through the canonical control"
     );
+    apply_outcome(&mut harness, outcome);
+}
+
+/// A Music click delivered through `Application::tick` resolves against the
+/// retained wide-list geometry rather than a parent hitmap.
+#[test]
+fn music_click_resolves_current_retained_geometry_through_application_tick() {
+    let mut app = make_music_group_app();
+    let mut second_album = make_item("Album 2", "MusicAlbum");
+    second_album.id = "album-2".into();
+    second_album.artist = "Alpha".into();
+    app.libs[0].nav_stack[1].items.push(second_album);
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let music_id = harness
+        .model()
+        .music_workspace_id
+        .clone()
+        .expect("grouped Music child mounted");
+    let click = |column, row| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+
+    let mut wide_terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    wide_terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    let wide_area = harness
+        .model()
+        .application
+        .get_component(&music_id)
+        .and_then(|component| component.as_any().downcast_ref::<MusicWorkspaceComponent>())
+        .map(|music| music.layout().wide_music_browser_area)
+        .expect("Music component layout");
+    assert!(wide_area.width > 0 && wide_area.height > 0);
+    harness.inject(click(wide_area.x + 1, wide_area.y + 1));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::MusicAlbumCursor { .. })
+    )));
     apply_outcome(&mut harness, outcome);
 }
 

@@ -64,7 +64,7 @@ impl<Target> InlineMediaBrowser<Target> {
         }
     }
 
-    fn invalidate_paint(&mut self) {
+    pub fn invalidate_paint(&mut self) {
         self.paint = None;
     }
 

@@ -113,8 +113,10 @@ impl<Target: Clone> RowGeometry<Target> {
         offset: usize,
     ) -> Self {
         let mut flow = Vec::with_capacity(rows.len() - 1 + detail_rows);
+        let mut selected_flow_row = None;
         for (source_row, row) in rows.iter().enumerate() {
             if source_row == selected_row {
+                selected_flow_row = Some(flow.len());
                 flow.extend((0..detail_rows).map(|detail_row| FlowRow {
                     source_row: None,
                     target: if detail_row == 0 {
@@ -133,7 +135,7 @@ impl<Target: Clone> RowGeometry<Target> {
         Self {
             offset,
             rows: flow,
-            selected_row: Some(selected_row),
+            selected_row: selected_flow_row,
         }
     }
 }

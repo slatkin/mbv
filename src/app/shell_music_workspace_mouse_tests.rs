@@ -78,7 +78,7 @@ fn narrow_music_album_click_selects_and_requests_cursor_move() {
             .as_any()
             .downcast_ref::<MusicWorkspaceComponent>()
             .unwrap();
-        let area = c.test_narrow_list_area();
+        let area = c.test_narrow_content_rect();
         (area.x + 1, area.y, area.y + 2)
     };
 
@@ -145,7 +145,7 @@ fn narrow_music_album_double_click_requests_activation() {
             .as_any()
             .downcast_ref::<MusicWorkspaceComponent>()
             .unwrap();
-        let area = c.test_narrow_list_area();
+        let area = c.test_narrow_content_rect();
         (area.x + 1, area.y + 2)
     };
     let down = Event::Mouse(MouseEvent {
@@ -234,7 +234,7 @@ fn narrow_music_album_right_click_carries_pointer_anchor() {
             .as_any()
             .downcast_ref::<MusicWorkspaceComponent>()
             .unwrap();
-        let area = c.test_narrow_list_area();
+        let area = c.test_narrow_content_rect();
         (area.x + 1, area.y + 2)
     };
     let message = model
@@ -330,13 +330,16 @@ fn music_mouse_track_click_stays_component_local() {
             .downcast_ref::<MusicWorkspaceComponent>()
             .unwrap();
         assert_eq!(component.track_cursor(), None);
-        let (rect, _) = component
-            .layout()
-            .wide_music_track_hitmap
-            .get(1)
-            .copied()
-            .expect("painted second track hitmap");
-        (rect.x + 1, rect.y)
+        let buffer = terminal.backend().buffer();
+        (0..30)
+            .find_map(|row| {
+                let text = (0..100)
+                    .map(|column| buffer[(column, row)].symbol())
+                    .collect::<String>();
+                text.find("2. Track Two")
+                    .map(|column| (column as u16 + 1, row))
+            })
+            .expect("painted second track row")
     };
     let message = model
         .application

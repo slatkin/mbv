@@ -51,7 +51,7 @@ impl<Target> WideMediaList<Target> {
         }
     }
 
-    fn invalidate_paint(&mut self) {
+    pub fn invalidate_paint(&mut self) {
         self.paint = None;
     }
 

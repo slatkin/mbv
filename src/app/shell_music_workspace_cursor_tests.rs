@@ -43,18 +43,18 @@ fn music_resize_push_uses_current_frame_geometry() {
         );
         assert_eq!(wide.track_cursor(), Some(0));
     }
-    let hitmap_before = model.app.layout.main.wide_music_track_hitmap.len();
-    assert!(
-        hitmap_before > 0,
-        "wide music render did not publish track hitmap: area={:?}, id={id:?}",
-        model.app.layout.main.wide_music_area
-    );
     wide_terminal
         .draw(|frame| model.render_music_workspace_component(frame))
         .unwrap();
-    assert_eq!(
-        model.app.layout.main.wide_music_track_hitmap.len(),
-        hitmap_before
+    let track_selected = model
+        .application
+        .get_component(&id)
+        .and_then(|component| component.as_any().downcast_ref::<MusicWorkspaceComponent>())
+        .and_then(MusicWorkspaceComponent::test_track_selected_row_rect);
+    assert!(
+        track_selected.is_some(),
+        "wide music render did not retain track geometry: area={:?}, id={id:?}",
+        model.app.layout.main.wide_music_area
     );
 
     let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
