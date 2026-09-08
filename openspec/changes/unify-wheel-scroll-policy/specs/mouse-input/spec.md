@@ -5,7 +5,7 @@ Every scrollable interactive surface SHALL interpret an accepted wheel gesture a
 
 The component that owns the pointed list, selection, or text viewport SHALL apply the step locally. It SHALL send a message beyond that component only when the resolved result requires an existing shell-owned effect or persistence operation; the shell SHALL NOT recompute the wheel step or re-resolve the pointed surface.
 
-A canonical media-list surface SHALL accept a wheel gesture only when its embedded list control claims the pointed list region. A text viewport or an irregular row surface without an embedded canonical control SHALL accept a wheel gesture only when the point is inside the geometry published by its own painter. A gesture outside the relevant painted scroll region SHALL leave the surface unchanged.
+A canonical media-list surface SHALL accept a wheel gesture only when its embedded list control claims the pointed list region. A text viewport or irregular-row surface that competes with another eligible surface SHALL accept a wheel gesture only when the point is inside geometry published by its own painter. A sole eligible focused overlay SHALL accept its wheel gesture independently of pointer position; its local boundary clamp SHALL retain valid state.
 
 #### Scenario: Wheel moves a canonical list by one row
 - **WHEN** the user turns the wheel down once over a painted canonical media list with a following row
@@ -17,9 +17,14 @@ A canonical media-list surface SHALL accept a wheel gesture only when its embedd
 - **THEN** the viewport's owning component moves its local offset back by one line
 - **AND** its cursor or selection remains unchanged unless that surface's ordinary one-step navigation also changes it
 
-#### Scenario: Wheel outside a scroll region is ignored
-- **WHEN** the user turns the wheel over painted chrome or blank space outside a surface's relevant list or viewport region
-- **THEN** that surface does not change its selection, cursor, or viewport offset
+#### Scenario: A competing surface ignores an outside wheel gesture
+- **WHEN** the user turns the wheel over painted chrome or blank space outside a competing surface's relevant list or viewport region
+- **THEN** that competing surface does not change its selection, cursor, or viewport offset
+
+#### Scenario: A focused sole overlay accepts wheel independently of pointer
+- **WHEN** a focused sidebar is the sole eligible overlay and the user turns the wheel with the pointer outside its painted content
+- **THEN** the sidebar moves its local selection or viewport by one step
+- **AND** focus does not follow the pointer
 
 #### Scenario: A boundary clamps wheel movement
 - **WHEN** the user turns the wheel toward the start or end of a scrollable surface that is already at that boundary
@@ -27,7 +32,7 @@ A canonical media-list surface SHALL accept a wheel gesture only when its embedd
 - **AND** no shell-side movement is requested
 
 ### Requirement: Wheel behavior is verified for each scrollable surface
-Every scrollable interactive surface recorded in the interactive-surface ledger SHALL identify its uniform one-step wheel behavior, the painted region that accepts it, and its verification. A surface rendered at more than one breakpoint SHALL verify wheel behavior at every breakpoint where its scroll region can differ.
+Every scrollable interactive surface recorded in the interactive-surface ledger SHALL identify its uniform one-step wheel behavior, whether its wheel claim is pointer-gated or focus-owned as the sole eligible overlay, and its verification. A surface rendered at more than one breakpoint SHALL verify wheel behavior at every breakpoint where its scroll region can differ.
 
 #### Scenario: A multi-breakpoint list receives a wheel gesture
 - **WHEN** a list surface is rendered in each of its supported breakpoints and the user turns the wheel over its painted list region
@@ -56,15 +61,13 @@ the listed painted region, and retains only the stated semantic boundary:
 | Audiobookshelf books | `AudiobookshelfBookComponent`; painted book- or chapter-row geometry | Wide and Normal/Narrow | resolved book/chapter selection or focus |
 | Inline Search | active host component; painted results `left_area`, first refusal | Browser, Music, and TV host paths | local result selection only |
 | Global Search sidebar | `SearchSidebarComponent`; painter-published result-row hit regions | fixed overlay geometry (breakpoint-invariant) | local result selection only |
-| Settings | `SettingsComponent`; painter-published `content_area` | fixed overlay geometry (breakpoint-invariant) | none for wheel |
-| Help | `HelpComponent`; painter-published `content_area` | fixed overlay geometry (breakpoint-invariant) | none for wheel |
-| Sessions | `SessionsComponent`; painter-published session-row hit regions | fixed overlay geometry (breakpoint-invariant) | selection/connect action remains semantic |
-| Playlists | `PlaylistsComponent`; painter-published wrapped-row hit regions | fixed overlay geometry (breakpoint-invariant) | playlist/open-item actions remain semantic |
+| Settings | `SettingsComponent`; focus-owned wheel while sole eligible overlay | fixed overlay geometry (breakpoint-invariant) | none for wheel |
+| Help | `HelpComponent`; focus-owned wheel while sole eligible overlay | fixed overlay geometry (breakpoint-invariant) | none for wheel |
+| Sessions | `SessionsComponent`; focus-owned wheel while sole eligible overlay | fixed overlay geometry (breakpoint-invariant) | selection/connect action remains semantic |
+| Playlists | `PlaylistsComponent`; focus-owned wheel while sole eligible overlay | fixed overlay geometry (breakpoint-invariant) | playlist/open-item actions remain semantic |
 
 Focused verification names and geometry evidence are maintained with the rows in
-`docs/architecture/interactive-surface-ledger.md`; the Global Search sidebar's
-focused proof is `search_sidebar_wheel_moves_one_result_and_rejects_non_result_regions`,
-covering down/up direction, the start boundary, and a non-result painted region.
-The Playlists proof is `playlists_component_wheel_moves_one_row_and_rejects_blank_content_space`,
-covering down/up direction, the start boundary, and blank painted content. These
-records do not add a second interaction policy or require a shell wheel handler.
+`docs/architecture/interactive-surface-ledger.md`; canonical-list proofs retain
+pointed-region rejection, while focused-sidebar proofs cover down/up direction,
+boundaries, and an off-panel pointer. These records do not add a second
+interaction policy or require a shell wheel handler.

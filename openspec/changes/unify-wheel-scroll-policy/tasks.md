@@ -11,10 +11,10 @@
 
 ## 3. Convert sidebar and viewport surfaces
 
-- [x] 3.1 Convert Settings and Help to one-line local viewport movement gated by their painted content regions; update or replace only the existing focused tests that would otherwise preserve the three-line behavior.
-- [x] 3.2 Convert Sessions and Playlists to one-step local list movement gated by their painted list regions; verify the existing focused mouse tests cover list selection, boundaries, and outside-region rejection.
+- [ ] 3.1 Convert Settings and Help to one-line local viewport movement as focus-owned sole overlays, independent of pointer position; update or replace only the existing focused tests that would otherwise preserve the three-line behavior.
+- [ ] 3.2 Convert Sessions and Playlists to one-step local list movement as focus-owned sole overlays, independent of pointer position; verify focused mouse tests cover selection, boundaries, and an off-panel pointer.
 
 ## 4. Record and verify the contract
 
-- [x] 4.1 Update `docs/architecture/interactive-surface-ledger.md` and the mouse-input delta to identify each scrollable surface's one-step behavior, painted claim region, and breakpoint evidence; verify every affected ledger row is coherent with the implemented owner.
-- [x] 4.2 Run `cargo fmt`, focused `cargo nextest run -p mbv` filters for the changed mouse/component suites, `cargo check -p mbv`, `ast-grep scan`, and `make check-code-file-lines`; manually exercise one narrow and one wide list plus a sidebar to confirm one-step direction, boundaries, and no wheel action outside the painted scroll region.
+- [ ] 4.1 Update `docs/architecture/interactive-surface-ledger.md` and the mouse-input delta to distinguish pointer-gated competing surfaces from focus-owned sole overlays and record breakpoint evidence; verify every affected ledger row is coherent with the implemented owner.
+- [ ] 4.2 Run `cargo fmt`, focused `cargo nextest run -p mbv` filters for the changed mouse/component suites, `cargo check -p mbv`, `ast-grep scan`, and `make check-code-file-lines`; manually exercise one narrow and one wide list plus a focused sidebar to confirm one-step direction, boundaries, canonical-list outside-region rejection, and pointer-independent sidebar scrolling.

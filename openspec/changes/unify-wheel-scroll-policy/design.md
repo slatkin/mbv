@@ -31,7 +31,7 @@ Alternative considered: a configurable shared helper with per-surface step sizes
 
 ### D2: Claim the painted scroll region at the component boundary
 
-A destination using `WideMediaList` or `InlineMediaBrowser` will use that embedded control's point-resolution/claim path before applying its one-step local move. Text viewports and the Audiobookshelf irregular layouts will use their existing painter-published region or row geometry, not a shell-owned rectangle and not reconstructed coordinates.
+A destination using `WideMediaList` or `InlineMediaBrowser` will use that embedded control's point-resolution/claim path before applying its one-step local move. Text viewports and Audiobookshelf irregular layouts use their painter-published region or row geometry when they compete with another eligible surface. A focused sidebar that is the sole eligible overlay accepts wheel independently of pointer position; click and row activation remain geometry-resolved.
 
 Inline Search continues to take first refusal where it overlays its host list; its currently ignored wheel gesture becomes a one-step move within its own results viewport if it is scrollable.
 
