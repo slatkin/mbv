@@ -399,7 +399,7 @@ impl TvWorkspaceComponent {
                     .selected_item()
                     .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item })),
                 Some(InlineSearchMouse::Consumed) => {
-                    Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
                 }
                 None => None,
             };
@@ -419,7 +419,7 @@ impl TvWorkspaceComponent {
                 // Return a framework-visible claim after mutating local state;
                 // dropping the message would let the framework's mutation be
                 // discarded by the mouse fold.
-                Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::Click(at) => {
                 let hit = self.resolve_hit(at)?;

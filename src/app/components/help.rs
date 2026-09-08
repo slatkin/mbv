@@ -145,7 +145,7 @@ impl HelpComponent {
                     .scroll
                     .saturating_add_signed(delta as i16)
                     .min(geometry.max_scroll);
-                Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             _ => None,
         }

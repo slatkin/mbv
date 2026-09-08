@@ -359,7 +359,7 @@ impl FeedsComponent {
                     return None;
                 }
                 self.move_selection(delta);
-                Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::Click(at) => {
                 if let Some((_, target)) = self

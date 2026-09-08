@@ -32,7 +32,7 @@ impl Component for MouseProbe {
 impl AppComponent<Msg, UserEvent> for MouseProbe {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
-            Event::Mouse(_) => Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp)),
+            Event::Mouse(_) => Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)),
             _ => None,
         }
     }
@@ -101,7 +101,7 @@ fn mouse_sub_forwards_every_kind_at_any_coordinate() {
         }
         assert_eq!(
             messages,
-            vec![Msg::TerminalEvent(TerminalObserverEvent::NoOp)],
+            vec![Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)],
             "mouse_sub() must forward {kind:?} at arbitrary coordinates"
         );
     }

@@ -346,7 +346,7 @@ impl QueueComponent {
                 // Return a framework-visible claim after mutating local state;
                 // dropping the message would let the framework's mutation be
                 // discarded by the mouse fold.
-                Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::Click(at) => {
                 if let Some(scope) = self.claim_scope_pill(at) {

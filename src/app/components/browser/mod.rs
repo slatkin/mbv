@@ -436,7 +436,7 @@ impl BrowserComponent {
                     .selected_item()
                     .map(|item| Msg::Shell(ShellRequest::BrowserContextMenu { item })),
                 Some(InlineSearchMouse::Consumed) => {
-                    Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
                 }
                 None => None,
             };

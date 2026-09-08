@@ -359,7 +359,7 @@ impl SettingsComponent {
                     .scroll
                     .saturating_add_signed(delta as isize)
                     .min(max_scroll);
-                Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             _ => None,
         }

@@ -130,7 +130,7 @@ impl SessionsComponent {
                 } else if !self.targets.is_empty() {
                     self.cursor = (self.cursor + 1).min(self.targets.len() - 1);
                 }
-                Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::Click(at) | MouseGesture::DoubleClick(at) => {
                 if !self

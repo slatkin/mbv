@@ -263,7 +263,7 @@ impl PlaylistsComponent {
                         (self.cursor + 1).min(self.playlists.len().saturating_sub(1))
                     };
                 }
-                Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::RightClick(_) if self.open.is_some() => {
                 self.open = None;

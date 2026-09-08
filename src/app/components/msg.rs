@@ -2,8 +2,8 @@
 //!
 //! `Msg` carries cross-authority requests. Local state changes mutate the
 //! component in `on`/`update`; a component may additionally return the
-//! framework-local `TerminalObserverEvent::NoOp` marker when the event was
-//! consumed after such a mutation. Request payloads are placeholder scaffolds
+//! framework-local `TerminalObserverEvent::MouseClaimed` marker when a mouse
+//! event was consumed after such a mutation. Request payloads are placeholder scaffolds
 //! filled in as each surface converts (see per-type TODOs).
 //!
 //! Task 8.3 split the per-family request/intent enums into submodules so
@@ -72,7 +72,9 @@ pub enum TerminalObserverEvent {
         column: u16,
         row: u16,
     },
-    /// Framework-local consumption marker. The shell deliberately ignores
-    /// this variant; it is not a relay for the local mutation that preceded it.
+    /// Framework-local redraw marker emitted by the root observer.
     NoOp,
+    /// A mounted component consumed a mouse event after mutating local state.
+    /// This is a claim marker, not a shell relay.
+    MouseClaimed,
 }

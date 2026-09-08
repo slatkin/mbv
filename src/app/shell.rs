@@ -221,7 +221,19 @@ pub(super) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
     }
     let claims = messages
         .iter()
-        .filter(|msg| !matches!(msg, Msg::TerminalEvent(_)))
+        .filter(|msg| {
+            !matches!(
+                msg,
+                Msg::TerminalEvent(
+                    TerminalObserverEvent::NoOp
+                        | TerminalObserverEvent::Key(_)
+                        | TerminalObserverEvent::Resize { .. }
+                        | TerminalObserverEvent::FocusGained
+                        | TerminalObserverEvent::FocusLost
+                        | TerminalObserverEvent::MouseClick { .. }
+                )
+            )
+        })
         .count();
     debug_assert!(
         claims <= 1,
@@ -461,7 +473,9 @@ fn apply_terminal_observer(
                 model.app.set_library_tab(tab_pos);
             }
         }
-        TerminalObserverEvent::Key(_) | TerminalObserverEvent::NoOp => {}
+        TerminalObserverEvent::Key(_)
+        | TerminalObserverEvent::NoOp
+        | TerminalObserverEvent::MouseClaimed => {}
     }
 }
 

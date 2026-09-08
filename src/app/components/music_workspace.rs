@@ -394,7 +394,7 @@ impl MusicWorkspaceComponent {
                     .selected_item()
                     .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item })),
                 Some(InlineSearchMouse::Consumed) => {
-                    Some(Msg::TerminalEvent(TerminalObserverEvent::NoOp))
+                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
                 }
                 None => None,
             };

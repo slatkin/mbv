@@ -596,7 +596,7 @@ fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
     assert!(outcome
         .raw_messages
         .iter()
-        .any(|msg| matches!(msg, Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::NoOp))));
+        .any(|msg| matches!(msg, Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::MouseClaimed))));
     let help = harness
         .model_mut()
         .application
@@ -609,8 +609,9 @@ fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
 }
 
 #[test]
-fn tick_narrow_queue_scroll_does_not_lock_keyboard_input() {
+fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
     let mut app = crate::app::render::make_queue_app(8);
+    app.terminal_width = 70;
     app.mini_view_focus = PanelFocus::Queue;
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
@@ -620,6 +621,24 @@ fn tick_narrow_queue_scroll_does_not_lock_keyboard_input() {
         .unwrap();
 
     let queue_id = ComponentId::Queue;
+    let library_id = harness
+        .model()
+        .emby_browser_id
+        .clone()
+        .expect("Queue-only keeps the Library destination mounted");
+    assert!(
+        !harness.model().mouse_subscribed.contains(&library_id),
+        "an unpainted Library destination must not be mouse-eligible"
+    );
+    let library_cursor_before = harness
+        .model_mut()
+        .application
+        .get_component_mut(&library_id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<BrowserComponent>()
+        .unwrap()
+        .cursor();
     let first_row = harness
         .model_mut()
         .application
@@ -653,6 +672,19 @@ fn tick_narrow_queue_scroll_does_not_lock_keyboard_input() {
         .raw_messages
         .iter()
         .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::QueueIntent(_)) )));
+    assert_eq!(
+        harness
+            .model_mut()
+            .application
+            .get_component_mut(&library_id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<BrowserComponent>()
+            .unwrap()
+            .cursor(),
+        library_cursor_before,
+        "the hidden Library must not mutate from Queue-only wheel"
+    );
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
