@@ -1,0 +1,91 @@
+## MODIFIED Requirements
+
+### Requirement: Destination components may embed reusable interaction controls
+
+A destination `AppComponent` MAY own a reusable plain TuiRealm `Component` as an embedded interaction control when the control is not an independently mounted surface. The embedded control SHALL implement the framework's component contract and SHALL be persistent for the parent's lifetime, sharing the parent's mount, activation, focus, and subscription. It SHALL NOT be constructed during rendering, receive a `ComponentId`, register independently with the application, recognize raw events, or create another event-precedence boundary.
+
+The embedded control SHALL own any delegated live cursor, scroll, viewport, movement, list painting entry point, and render-derived row geometry for its region. The destination parent SHALL remain the application-level `Event` to `Msg` boundary, own provider-specific chrome and workspace state, delegate list-local commands only to the active embedded control, and translate that control's resolved opaque target into the destination's typed request.
+
+#### Scenario: A destination owns a canonical media list
+
+- **WHEN** a destination component is mounted for a media browser
+
+- **THEN** each embedded media-list control is created and destroyed with that destination and implements the plain component view contract
+
+- **AND** the application registry contains only the destination's existing identity
+
+- **AND** focus and subscriptions continue to target the destination component
+
+#### Scenario: A list-local key is received
+
+- **WHEN** the destination parent receives a key that belongs to its currently painted media list
+
+- **THEN** it delegates the corresponding local command to that embedded control only
+
+- **AND** the control resolves and applies movement against its own geometry
+
+- **AND** the parent emits a typed request only when work crosses the component boundary
+
+#### Scenario: A global key is received
+
+- **WHEN** a key is owned by the central keyboard policy rather than the destination list
+
+- **THEN** the existing router resolves it before list-local delegation
+
+- **AND** embedding a reusable control creates no second global resolution site
+
+#### Scenario: A parent recognizes a pointer gesture
+
+- **WHEN** the destination parent recognizes a pointer gesture inside its painted list rectangle
+
+- **THEN** it delegates point resolution to the active embedded control
+
+- **AND** the control returns a stable target from its own painted row geometry without receiving the raw event or owning gesture state
+
+### Requirement: Embedded controls have one state owner and one painter
+
+For each rectangle and reachable presentation, exactly one persistent embedded control or parent-owned workspace SHALL own interaction state and painting for that region. A parent that delegates a list to an embedded control SHALL NOT retain a second live list cursor or scroll, repaint the control's ordinary rows, rebuild or copy its row geometry, repeatedly seed its selection during rendering, or copy the control's paint-resolved state back into parent state. A convenience field that mirrors the embedded control's current cursor is forbidden even when the parent, rather than the shell, owns it.
+
+Canonical content projection types SHALL exclude cursor and scroll; carrying those values but ignoring them is not sufficient. Position input retained for an explicit non-canonical carve-out SHALL use a separate type and code path that canonical presentations cannot read. A discrete navigation or breakpoint transition MAY explicitly re-anchor a control using the selected stable target and the selected ordinary row's zero-based offset from the top of the list viewport.
+
+#### Scenario: Content refreshes in place
+
+- **WHEN** a destination pushes refreshed rows while the visible browse identity is unchanged
+
+- **THEN** each embedded control preserves its live selection and scroll by stable target where possible
+
+- **AND** the parent does not push a duplicate cursor or scroll value
+
+#### Scenario: A breakpoint changes the presentation
+
+- **WHEN** a destination changes between its Wide and Inline controls
+
+- **THEN** the parent obtains one explicit anchor from the outgoing control and applies it once to the incoming control
+
+- **AND** only the incoming active control receives subsequent movement
+
+- **AND** ordinary render passes do not synchronize the two controls
+
+#### Scenario: The parent renders a destination
+
+- **WHEN** the parent delegates its list rectangle to the embedded control
+
+- **THEN** the control's component view is the sole ordinary-row painter and row-geometry owner for that rectangle
+
+- **AND** the parent paints only its arrangement-adjacent pills, hero/detail payload, workspace, or other separately owned regions
+
+#### Scenario: A canonical destination keeps no parent mirror
+
+- **WHEN** the embedded control changes its cursor or paint-resolved scroll
+
+- **THEN** the parent resolves selected content through the control's stable target and does not copy the numeric state into parallel fields
+
+- **AND** shell-owned persistence receives a resolved target or resting position only at the event that requires it
+
+#### Scenario: A non-canonical grid remains separate
+
+- **WHEN** a destination uses the accepted two-column non-hero grid presentation
+
+- **THEN** grid cursor, columns, and scroll live in an explicitly grid-specific state path
+
+- **AND** that state is not shared with or projected into a canonical embedded control
