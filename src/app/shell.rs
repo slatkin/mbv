@@ -267,8 +267,9 @@ impl Model {
         };
         let key = super::input_resolver::tuirealm_key_to_crossterm(tui_key);
 
+        let player_active = self.app.player.status.lock().unwrap().active;
         let snapshot = RouterSnapshot {
-            player_active: self.app.player.status.lock().unwrap().active,
+            player_active,
             has_remote_session: self.app.connected_session_id.is_some()
                 || self.app.player.is_remote()
                 || self.app.is_cast_attached(),
