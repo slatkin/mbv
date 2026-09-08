@@ -17,4 +17,4 @@
 ## 4. Record and verify the contract
 
 - [x] 4.1 Update `docs/architecture/interactive-surface-ledger.md` and the mouse-input delta to distinguish pointer-gated competing surfaces from focus-owned sole overlays and record breakpoint evidence; verify every affected ledger row is coherent with the implemented owner.
-- [ ] 4.2 Run `cargo fmt`, focused `cargo nextest run -p mbv` filters for the changed mouse/component suites, `cargo check -p mbv`, `ast-grep scan`, and `make check-code-file-lines`; manually exercise one narrow and one wide list plus a focused sidebar to confirm one-step direction, boundaries, canonical-list outside-region rejection, and pointer-independent sidebar scrolling.
+- [x] 4.2 Run `cargo fmt`, focused `cargo nextest run -p mbv` filters for the changed mouse/component suites, `cargo check -p mbv`, `ast-grep scan`, and `make check-code-file-lines`; manually exercise one narrow and one wide list plus a focused sidebar to confirm one-step direction, boundaries, canonical-list outside-region rejection, and pointer-independent sidebar scrolling.
