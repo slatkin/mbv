@@ -72,6 +72,25 @@ the one open F2 (two painters), deferred to #629.
 
 Canonical media-list destinations use `WideMediaList` for fixed-row Wide rails and Queue, and `InlineMediaBrowser` for Normal/Narrow selected-row replacement. Inline Search is an embedded destination capability: Browser owns and paints it for generic/Movies/homevideos, Emby podcast, and Normal TV; MusicWorkspace owns and paints it for grouped Music; TvWorkspace owns and paints it for Wide TV. Non-hero catalogs retain their existing two-column arrangement. Primary owner/painter mapping: Home — `HomeComponent`; generic Emby, Movies, homevideos, and Emby podcast — `BrowserComponent`; TV Series — `TvWorkspaceComponent` in Wide and `BrowserComponent` in Normal; grouped Music — `MusicWorkspaceComponent`; Audiobookshelf Podcast — `AudiobookshelfPodcastComponent`; Audiobookshelf Books — `AudiobookshelfBookComponent`; Feeds — `FeedsComponent`; Queue — `QueueComponent`.
 
+### Queue-side column boundary (add-mouse-column-resize, 2026-09-08)
+
+The full-height trailing one-column edge of the root Queue-side column is owned
+and painted solely by `QueueBoundaryComponent`. It is mouse-eligible only in
+`PanelMode::Both`, with no exclusive overlay or popup; Queue and the routed
+Library destination retain ownership of their own painted areas and do not
+handle this gesture. A left press on the exact boundary column arms a drag;
+press-drag-release emits clamped semantic live widths and persists only the
+changed final width on release. No gutter, hover treatment, or wider target is
+introduced.
+
+Verification evidence: `tick_queue_boundary_drag_live_width_then_persists_once_on_release`
+and `tick_queue_boundary_drag_is_suppressed_by_blocking_overlay` in
+`src/app/tests_tick_integration_mouse.rs` exercise real `Application::tick()`
+synchronization and overlay arbitration; focused coordinate/clamping/click-only
+coverage remains in `queue_boundary_component_tests.rs`. Normal and Wide
+unchanged appearance plus one-column draggability require the representative
+terminal-size manual review recorded for this change.
+
 ### #607 acceptance criterion — "component-local interaction state has one owner" (met 2026-08-31)
 
 `delete-browse-level-cursor-scroll` task 4.3
