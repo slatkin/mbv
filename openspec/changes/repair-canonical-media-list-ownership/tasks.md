@@ -13,10 +13,10 @@
 
 ## 3. Prove Wide and Inline Seams in Grouped Music
 
-- [ ] 3.1 Convert Grouped Music's framed Wide album rail to invoke its persistent `WideMediaList` view once and consume only the retained result; remove its uniform selectable-map reconstruction while preserving grouped content, images, Inline Search, parent framing, and scroll behavior; verify existing Wide buffer and component tests.
-- [ ] 3.2 Convert Grouped Music's framed Wide track table to invoke its persistent `WideMediaList` view once and resolve track rows from the retained result; remove the uniform track hit map while preserving provider-owned track and gesture authority; verify focused track, mouse, and buffer tests.
-- [ ] 3.3 Convert Grouped Music's Inline album presentation to invoke its persistent `InlineMediaBrowser` view once and paint provider detail only in the retained admitted-detail rectangle; remove selectable-map reconstruction while preserving admission/fallback, responsive anchor handoff, grouping, images, and Inline Search; verify existing Inline buffer and component tests.
-- [ ] 3.4 Verify Grouped Music clicks, double clicks, right clicks, wheel, and breakpoint anchor behavior use current retained geometry across Wide and Inline presentations; add relevant real-`Application::tick()` mouse tests.
+- [x] 3.1 Convert Grouped Music's framed Wide album rail to invoke its persistent `WideMediaList` view once and consume only the retained result; remove its uniform selectable-map reconstruction while preserving grouped content, images, Inline Search, parent framing, and scroll behavior; verify existing Wide buffer and component tests.
+- [x] 3.2 Convert Grouped Music's framed Wide track table to invoke its persistent `WideMediaList` view once and resolve track rows from the retained result; remove the uniform track hit map while preserving provider-owned track and gesture authority; verify focused track, mouse, and buffer tests.
+- [x] 3.3 Convert Grouped Music's Inline album presentation to invoke its persistent `InlineMediaBrowser` view once and paint provider detail only in the retained admitted-detail rectangle; remove selectable-map reconstruction while preserving admission/fallback, responsive anchor handoff, grouping, images, and Inline Search; verify existing Inline buffer and component tests.
+- [x] 3.4 Verify Grouped Music clicks, double clicks, right clicks, wheel, and breakpoint anchor behavior use current retained geometry across Wide and Inline presentations; add relevant real-`Application::tick()` mouse tests.
 
 ## 4. Verify and Accept the Seam
 
