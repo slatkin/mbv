@@ -164,9 +164,6 @@ impl Model {
         let id = ComponentId::QueueBoundary;
         let area = self.app.layout.main.queue_boundary_area;
         let enabled = self.queue_boundary_mouse_eligible() && area.width == 1 && area.height > 0;
-        if !enabled {
-            self.queue_resize_start_width = None;
-        }
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(boundary) = comp
                 .as_any_mut()

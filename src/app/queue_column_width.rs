@@ -8,13 +8,8 @@ pub(crate) fn normalize_queue_column_width(width: u16, terminal_width: u16) -> u
 }
 
 impl App {
-    pub(super) fn normalize_queue_column_width(width: u16, terminal_width: u16) -> u16 {
-        normalize_queue_column_width(width, terminal_width)
-    }
-
     pub(super) fn clamp_queue_column_width(&mut self) -> bool {
-        let normalized =
-            Self::normalize_queue_column_width(self.queue_column_width, self.terminal_width);
+        let normalized = normalize_queue_column_width(self.queue_column_width, self.terminal_width);
         if normalized == self.queue_column_width {
             return false;
         }

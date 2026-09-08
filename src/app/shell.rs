@@ -128,8 +128,6 @@ pub struct Model {
     /// gates the rebuild: queue revision + viewed scope + active slot + a
     /// progress-% bucket + paused + the title model.
     pub(super) last_queue_projection: Option<super::shell_queue::QueueProjectionFingerprint>,
-    /// Original width for the active mouse resize, persisted at drag end.
-    pub(super) queue_resize_start_width: Option<u16>,
 }
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
@@ -393,7 +391,6 @@ impl Model {
             home_section_pref_semantic: home_section.clone(),
             home_section_pending: home_section,
             last_queue_projection: None,
-            queue_resize_start_width: None,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other
