@@ -166,6 +166,14 @@ impl Model {
         }
     }
 
+    pub(super) fn render_queue_boundary(&mut self, frame: &mut ratatui::Frame) {
+        let id = ComponentId::QueueBoundary;
+        if self.application.mounted(&id) {
+            self.application
+                .view(&id, frame, self.app.layout.main.queue_boundary_area);
+        }
+    }
+
     pub(super) fn render_queue_component(&mut self, frame: &mut ratatui::Frame) {
         let id = ComponentId::Queue;
         if !self.application.mounted(&id) {
@@ -236,6 +244,15 @@ impl Model {
                 if from != to {
                     self.app.move_queue_item_to(scope, from, to);
                 }
+            }
+            QueueRequest::ResizeColumnLive(width) => {
+                self.app.queue_column_width = width;
+            }
+            // The boundary only emits End after a Live move, so persist
+            // unconditionally rather than tracking the drag's start width.
+            QueueRequest::ResizeColumnEnd(width) => {
+                self.app.queue_column_width = width;
+                self.app.save_prefs();
             }
             QueueRequest::Undo { scope } => {
                 // The component can still be showing (and emit for) `Remote`

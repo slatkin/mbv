@@ -91,6 +91,8 @@ pub(crate) struct LayoutMain {
     /// (and identity order for ungrouped lists).
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
+    /// The exact full-height trailing column reserved for Queue boundary resizing.
+    pub queue_boundary_area: Rect,
     /// The full area `App::render_home_list` was given (hero + pills + list,
     /// not just the inner list). The shell reads this to re-paint the
     /// mounted `HomeComponent`'s `view()` over the same area right after
@@ -214,6 +216,8 @@ pub(crate) struct FrameChromeGeometry {
     pub panel_content_area: Rect,
     /// Left panel (card + queue) column rect.
     pub left_area: Rect,
+    /// Exact full-height trailing column reserved for the boundary component.
+    pub queue_boundary_area: Rect,
     /// Right panel (tabs, player, library, status) rect.
     pub right_area: Rect,
     /// Full-column right-panel background rect (tabs/player/library/status).

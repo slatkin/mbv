@@ -42,6 +42,16 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         PanelMode::QueueOnly => area.width,
     };
     let right_w = area.width.saturating_sub(left_w);
+    let queue_boundary_area = if input.panel_mode == PanelMode::Both && left_w > 0 {
+        Rect {
+            x: area.x + left_w - 1,
+            y: area.y,
+            width: 1,
+            height: area.height,
+        }
+    } else {
+        Rect::default()
+    };
     let right_visible = input.panel_mode != PanelMode::QueueOnly;
 
     let content_h = area.height;
@@ -142,6 +152,7 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         panel_area,
         panel_content_area,
         left_area,
+        queue_boundary_area,
         right_area,
         right_full_area,
         left_content,

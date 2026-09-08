@@ -37,6 +37,8 @@ pub enum QueueRequest {
     Undo {
         scope: crate::app::types_playback::QueueScope,
     },
+    ResizeColumnLive(u16),
+    ResizeColumnEnd(u16),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

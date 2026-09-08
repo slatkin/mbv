@@ -3,8 +3,8 @@ use std::time::{Duration, Instant};
 use super::action::{playback_command_for_key, Command};
 use super::components::msg::AlbumCursorKind;
 use super::components::{
-    media_list::ViewportAnchor, ComponentId, Msg, OverlayId, PlaybackComponent, ShellRequest,
-    TerminalObserverEvent, UiRootComponent, UserEvent,
+    media_list::ViewportAnchor, ComponentId, Msg, OverlayId, PlaybackComponent,
+    QueueBoundaryComponent, ShellRequest, TerminalObserverEvent, UiRootComponent, UserEvent,
 };
 use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
@@ -419,6 +419,14 @@ impl Model {
         // input stays on the shell path, only its render is component-owned
         model.mount_home();
         model.mount_feeds();
+        model
+            .application
+            .mount(
+                ComponentId::QueueBoundary,
+                Box::new(QueueBoundaryComponent::new()),
+                vec![],
+            )
+            .expect("mount QueueBoundary");
         // Playback is also the stable attribute carrier for precedence gates.
         model
             .application

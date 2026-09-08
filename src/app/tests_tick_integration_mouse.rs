@@ -434,6 +434,130 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
     );
 }
 
+// --- add-mouse-column-resize 3.1: the root-owned one-column boundary is
+// exercised through the real Application::tick() path. Queue and Library are
+// both eligible beside it, but only the boundary receives its drag messages.
+#[test]
+fn tick_queue_boundary_drag_live_width_then_persists_once_on_release() {
+    let mut app = crate::app::render::make_queue_app(2);
+    app.panel_mode = PanelMode::Both;
+    app.panel_focus = PanelFocus::Library;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    let boundary = harness.model().app.layout.main.queue_boundary_area;
+    assert_eq!(boundary.width, 1, "the drag target is exactly one column");
+    let start_width = harness.model().app.queue_column_width;
+    let target = boundary.x.saturating_add(57);
+    let mouse = |kind, column| {
+        Event::Mouse(MouseEvent {
+            kind,
+            column,
+            row: boundary.y,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+
+    harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), boundary.x));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().all(|msg| {
+        !matches!(msg, Msg::Shell(ShellRequest::QueueRowClick { .. }))
+            && !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))
+    }));
+    apply_outcome(&mut harness, outcome);
+
+    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), target));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|msg| {
+        matches!(msg, Msg::Queue(crate::app::components::QueueRequest::ResizeColumnLive(_)))
+    }));
+    assert!(outcome.raw_messages.iter().all(|msg| {
+        !matches!(msg, Msg::Shell(ShellRequest::QueueRowClick { .. }))
+            && !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))
+    }));
+    let live_width = outcome
+        .raw_messages
+        .iter()
+        .find_map(|msg| match msg {
+            Msg::Queue(crate::app::components::QueueRequest::ResizeColumnLive(width)) => {
+                Some(*width)
+            }
+            _ => None,
+        })
+        .expect("boundary owner emits the live width");
+    assert_eq!(live_width, 55);
+    apply_outcome(&mut harness, outcome);
+    assert_eq!(harness.model().app.queue_column_width, live_width);
+    assert_ne!(live_width, start_width);
+
+    harness.inject(mouse(MouseEventKind::Up(MouseButton::Left), target));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome
+            .raw_messages
+            .iter()
+            .filter(|msg| matches!(msg, Msg::Queue(crate::app::components::QueueRequest::ResizeColumnEnd(_))))
+            .count(),
+        1,
+        "release persists exactly once"
+    );
+    assert!(outcome.raw_messages.iter().all(|msg| {
+        !matches!(msg, Msg::Shell(ShellRequest::QueueRowClick { .. }))
+            && !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))
+    }));
+    apply_outcome(&mut harness, outcome);
+    assert_eq!(harness.model().app.queue_column_width, live_width);
+}
+
+#[test]
+fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
+    let mut app = crate::app::render::make_queue_app(2);
+    app.panel_mode = PanelMode::Both;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    let boundary = harness.model().app.layout.main.queue_boundary_area;
+    let width = harness.model().app.queue_column_width;
+    harness.model_mut().app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
+        title: "Block resize?".into(),
+        message: "overlay owns the pointer".into(),
+        hint: "[Esc] Cancel".into(),
+        on_confirm: ConfirmAction::ClearQueue,
+    }));
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(harness.model().mouse_subscribed.len(), 1);
+
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Drag(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        harness.inject(Event::Mouse(MouseEvent {
+            kind,
+            column: boundary.x.saturating_add(20),
+            row: boundary.y,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let outcome = harness.step();
+        assert!(outcome.raw_messages.iter().all(|msg| {
+            !matches!(msg, Msg::Queue(crate::app::components::QueueRequest::ResizeColumnLive(_)))
+                && !matches!(msg, Msg::Queue(crate::app::components::QueueRequest::ResizeColumnEnd(_)))
+                && !matches!(msg, Msg::Shell(ShellRequest::QueueRowClick { .. }))
+                && !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))
+        }));
+    }
+    assert_eq!(harness.model().app.queue_column_width, width);
+}
+
 // --- Task 7.3 (breakpoint half): the Movies destination switches its
 // embedded canonical control (`WideMediaList` -> `InlineMediaBrowser`) when a
 // resize crosses the wide/narrow breakpoint. A click must resolve against the
