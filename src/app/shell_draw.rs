@@ -112,6 +112,8 @@ impl App {
         if area.height >= 4 {
             layout.main.panel_area = chrome.panel_area;
             layout.main.panel_content_area = chrome.panel_content_area;
+            layout.main.left_area = chrome.left_area;
+            layout.main.queue_boundary_area = chrome.queue_boundary_area;
             layout.playback.player_area = chrome.player_area;
             layout.playback.status_area = chrome.status_area;
             layout.tabs_area = chrome.tabs_area;
@@ -214,6 +216,7 @@ impl App {
             panel_area: _,
             panel_content_area: _,
             left_area,
+            queue_boundary_area: _,
             right_area,
             // Consumed by `paint_legacy_chrome` (via the `chrome` ref), not the body.
             right_full_area: _,

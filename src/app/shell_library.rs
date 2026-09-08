@@ -1,7 +1,7 @@
 use super::components::{BrowserKey, BrowserKind, ComponentId};
 use super::shell::Model;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
-use super::{PanelFocus, TabSelection};
+use super::{PanelFocus, PanelMode, TabSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -139,12 +139,43 @@ impl Model {
         {
             ids.push(child);
         }
-        for id in [ComponentId::Queue, ComponentId::Playback] {
-            if self.application.mounted(&id) {
+        for id in [
+            ComponentId::Queue,
+            ComponentId::QueueBoundary,
+            ComponentId::Playback,
+        ] {
+            if self.application.mounted(&id)
+                && (id != ComponentId::QueueBoundary
+                    || (self.app.effective_panel_mode() == PanelMode::Both
+                        && !self.blocking_overlay_active()))
+            {
                 ids.push(id);
             }
         }
         ids
+    }
+
+    pub(super) fn sync_queue_boundary(&mut self) {
+        let id = ComponentId::QueueBoundary;
+        let area = self.app.layout.main.queue_boundary_area;
+        let enabled = self.app.effective_panel_mode() == PanelMode::Both
+            && !self.blocking_overlay_active()
+            && area.width == 1
+            && area.height > 0;
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            if let Some(boundary) = comp
+                .as_any_mut()
+                .downcast_mut::<super::components::QueueBoundaryComponent>()
+            {
+                boundary.sync(
+                    area,
+                    self.app.terminal_width,
+                    self.app.queue_column_width,
+                    matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
+                    enabled,
+                );
+            }
+        }
     }
 
     /// ADR 0024 D2: reconcile the `mouse_sub()` subscription table to

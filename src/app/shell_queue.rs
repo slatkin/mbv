@@ -166,6 +166,14 @@ impl Model {
         }
     }
 
+    pub(super) fn render_queue_boundary(&mut self, frame: &mut ratatui::Frame) {
+        let id = ComponentId::QueueBoundary;
+        if self.application.mounted(&id) {
+            self.application
+                .view(&id, frame, self.app.layout.main.queue_boundary_area);
+        }
+    }
+
     pub(super) fn render_queue_component(&mut self, frame: &mut ratatui::Frame) {
         let id = ComponentId::Queue;
         if !self.application.mounted(&id) {
@@ -237,6 +245,7 @@ impl Model {
                     self.app.move_queue_item_to(scope, from, to);
                 }
             }
+            QueueRequest::ResizeColumnLive(_) | QueueRequest::ResizeColumnEnd(_) => {}
             QueueRequest::Undo { scope } => {
                 // The component can still be showing (and emit for) `Remote`
                 // for a frame after a remote disconnect, before the projection

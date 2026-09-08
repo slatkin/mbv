@@ -17,6 +17,7 @@ impl Model {
         self.sync_audiobookshelf_podcast();
         self.sync_audiobookshelf_book();
         self.sync_queue();
+        self.sync_queue_boundary();
         // Publish wide-TV geometry before other readers of `tv_wide_right_area`/
         // `tv_wide_left_area` (e.g. context-menu anchors) see this frame's
         // values, since those fields are otherwise a previous-frame paint
@@ -90,6 +91,7 @@ impl Model {
         self.render_tv_workspace_component(f);
         self.render_music_workspace_component(f);
         self.render_queue_component(f);
+        self.render_queue_boundary(f);
         self.render_overlay_stack(f);
     }
 

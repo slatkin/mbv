@@ -17,6 +17,7 @@ pub enum ComponentId {
     UiRoot,
     Playback,
     Queue,
+    QueueBoundary,
     Home,
     Browser(BrowserKey),
     /// Wide TV workspace (`TvWorkspaceComponent`). Distinct from

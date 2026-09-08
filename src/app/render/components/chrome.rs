@@ -22,10 +22,18 @@ pub(in crate::app) fn render_legacy_backdrops(
     right_visible: bool,
 ) {
     if left_visible {
+        let backdrop = Rect {
+            width: left_area.width.saturating_sub(1),
+            ..left_area
+        };
         frame.render_widget(
             Block::default()
                 .style(Style::default().bg(palette::resolve_surface_focus(queue_focused))),
-            left_area,
+            if left_area.width > 0 {
+                backdrop
+            } else {
+                left_area
+            },
         );
     }
     if right_visible {

@@ -1,15 +1,15 @@
 use super::{App, LEFT_WIDTH_DEFAULT};
 
-impl App {
-    pub(super) fn queue_column_width_max_for_terminal(terminal_width: u16) -> u16 {
-        LEFT_WIDTH_DEFAULT.max(terminal_width.saturating_mul(3) / 5)
-    }
+pub(crate) fn normalize_queue_column_width(width: u16, terminal_width: u16) -> u16 {
+    width.clamp(
+        LEFT_WIDTH_DEFAULT,
+        LEFT_WIDTH_DEFAULT.max(terminal_width.saturating_mul(3) / 5),
+    )
+}
 
+impl App {
     pub(super) fn normalize_queue_column_width(width: u16, terminal_width: u16) -> u16 {
-        width.clamp(
-            LEFT_WIDTH_DEFAULT,
-            Self::queue_column_width_max_for_terminal(terminal_width),
-        )
+        normalize_queue_column_width(width, terminal_width)
     }
 
     pub(super) fn clamp_queue_column_width(&mut self) -> bool {
