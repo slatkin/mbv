@@ -654,21 +654,11 @@ fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
         .unwrap();
 
-    let help_id = ComponentId::Overlay(OverlayId::Help);
-    let content = harness
-        .model_mut()
-        .application
-        .get_component_mut(&help_id)
-        .unwrap()
-        .as_any_mut()
-        .downcast_mut::<HelpComponent>()
-        .unwrap()
-        .test_content_area()
-        .unwrap();
+    // Help owns wheel delivery while focused; pointer position is irrelevant.
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
-        column: content.x + 1,
-        row: content.y + 1,
+        column: 0,
+        row: 0,
         modifiers: KeyModifiers::NONE,
     }));
     let outcome = harness.step();

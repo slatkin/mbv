@@ -112,13 +112,6 @@ impl HelpComponent {
         self.scroll
     }
 
-    #[cfg(test)]
-    pub(crate) fn test_content_area(&self) -> Option<Rect> {
-        self.content_geometry
-            .as_ref()
-            .map(|geometry| geometry.content_area)
-    }
-
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
@@ -308,10 +301,7 @@ mod tests {
     #[test]
     fn mouse_scroll_moves_one_line_inside_content_and_clamps() {
         let mut comp = HelpComponent::new();
-        comp.content_geometry = Some(HelpRenderGeometry {
-            content_area: Rect::new(0, 0, 20, 4),
-            max_scroll: 6,
-        });
+        comp.content_geometry = Some(HelpRenderGeometry { max_scroll: 6 });
         comp.scroll = 5;
         comp.handle_mouse(&MouseEvent {
             kind: MouseEventKind::ScrollDown,
@@ -344,10 +334,7 @@ mod tests {
     fn mouse_scroll_moves_off_panel_content() {
         let mut comp = HelpComponent::new();
         comp.panel_area = Some(Rect::new(2, 2, 10, 4));
-        comp.content_geometry = Some(HelpRenderGeometry {
-            content_area: Rect::new(2, 2, 10, 4),
-            max_scroll: 6,
-        });
+        comp.content_geometry = Some(HelpRenderGeometry { max_scroll: 6 });
         comp.handle_mouse(&MouseEvent {
             kind: MouseEventKind::ScrollDown,
             column: 0,

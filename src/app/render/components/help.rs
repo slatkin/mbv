@@ -262,7 +262,6 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
 //
 // `pub(in crate::app)` so the Interactive Component can call it.
 pub(in crate::app) struct HelpRenderGeometry {
-    pub content_area: ratatui::layout::Rect,
     pub max_scroll: u16,
 }
 
@@ -309,10 +308,7 @@ pub(in crate::app) fn render_help_panel(
     *scroll = (*scroll).min(max_scroll);
     f.render_widget(Paragraph::new(lines).scroll((*scroll, 0)), content);
     chrome::render_sidebar_scrollbar(f, content, total, *scroll as usize);
-    HelpRenderGeometry {
-        content_area: content,
-        max_scroll,
-    }
+    HelpRenderGeometry { max_scroll }
 }
 
 #[cfg(test)]
