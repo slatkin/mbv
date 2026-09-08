@@ -253,9 +253,15 @@ impl Model {
             return RouterOutcome::FallThrough;
         };
         let key = super::input_resolver::tuirealm_key_to_crossterm(tui_key);
-
+        // `player.status` is a plain (non-reentrant) mutex and `RouterSnapshot`
+        // initializers below call `effective_playback_state()`, which locks it
+        // again. A temporary created anywhere inside the struct literal lives
+        // until the whole `let snapshot = ...;` statement ends, so taking that
+        // lock inline self-deadlocked the run loop on the first key press in
+        // any QueueOnly/mini-view frame. Read it in its own statement.
+        let player_active = self.app.player.status.lock().unwrap().active;
         let snapshot = RouterSnapshot {
-            player_active: self.app.player.status.lock().unwrap().active,
+            player_active,
             has_remote_session: self.app.connected_session_id.is_some()
                 || self.app.player.is_remote()
                 || self.app.is_cast_attached(),
