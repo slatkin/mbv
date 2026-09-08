@@ -8,7 +8,7 @@ use tuirealm::event::{
 use crate::app::action::Command;
 use crate::app::components::{
     BrowserComponent, ComponentId, HelpComponent, ModalId, Msg, OverlayId, PlaylistsComponent,
-    QueueComponent, ShellRequest, UserEvent,
+    QueueComponent, ShellRequest, TerminalObserverEvent, UserEvent,
 };
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
@@ -612,7 +612,7 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::MouseClaimed)
+        Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)
     )));
     assert_eq!(
         harness
@@ -635,10 +635,9 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
             std::time::Duration::from_millis(500),
         ))
         .expect("normal key tick");
-    assert!(key_messages.iter().any(|message| matches!(
-        message,
-        Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::Key(_))
-    )));
+    assert!(key_messages
+        .iter()
+        .any(|message| matches!(message, Msg::TerminalEvent(TerminalObserverEvent::Key(_)))));
 }
 
 #[test]
@@ -665,7 +664,12 @@ fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
     assert!(outcome
         .raw_messages
         .iter()
-        .any(|msg| matches!(msg, Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::MouseClaimed))));
+        .any(|msg| {
+            matches!(
+                msg,
+                Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)
+            )
+        }));
     let help = harness
         .model_mut()
         .application
@@ -740,7 +744,7 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
     assert!(outcome
         .raw_messages
         .iter()
-        .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::QueueIntent(_)) )));
+        .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::QueueIntent(_)))));
     assert_eq!(
         harness
             .model_mut()
@@ -754,10 +758,7 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
         library_cursor_before,
         "the hidden Library must not mutate from Queue-only wheel"
     );
-    harness.inject(Event::Keyboard(KeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    }));
+    harness.inject(key(Key::Down));
     let raw_messages = harness
         .model_mut()
         .application
@@ -765,8 +766,7 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
             std::time::Duration::from_millis(500),
         ))
         .unwrap();
-    assert!(raw_messages.iter().any(|msg| matches!(
-        msg,
-        Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::Key(_))
-    )));
+    assert!(raw_messages
+        .iter()
+        .any(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::Key(_)))));
 }

@@ -127,9 +127,7 @@ impl HelpComponent {
                 }
             }
             MouseGesture::Scroll { delta, .. } => {
-                let Some(geometry) = self.content_geometry.as_ref() else {
-                    return None;
-                };
+                let geometry = self.content_geometry.as_ref()?;
                 self.scroll = self
                     .scroll
                     .saturating_add_signed(delta as i16)

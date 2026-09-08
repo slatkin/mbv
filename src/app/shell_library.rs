@@ -133,15 +133,13 @@ impl Model {
         // Rung 3: the components painted this frame — active destination,
         // Queue, and Playback (the transport chrome).
         let mut ids = Vec::new();
-        if self.app.effective_panel_mode() != super::PanelMode::QueueOnly {
-            if let Some(child) = self
-                .library_child_id()
-                .filter(|child| self.application.mounted(child))
-            {
-                ids.push(child);
-            }
+        let panel_mode = self.app.effective_panel_mode();
+        if let Some(child) = self.library_child_id().filter(|child| {
+            panel_mode != super::PanelMode::QueueOnly && self.application.mounted(child)
+        }) {
+            ids.push(child);
         }
-        if self.app.effective_panel_mode() != super::PanelMode::LibraryOnly
+        if panel_mode != super::PanelMode::LibraryOnly
             && self.application.mounted(&ComponentId::Queue)
         {
             ids.push(ComponentId::Queue);
