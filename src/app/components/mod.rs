@@ -105,8 +105,11 @@ mod library_routes_component_tests;
 #[path = "multiselect_component_tests.rs"]
 mod multiselect_component_tests;
 #[cfg(test)]
-#[path = "music_workspace_component_tests.rs"]
-mod music_workspace_component_tests;
+#[path = "music_workspace_actions_tests.rs"]
+mod music_workspace_actions_tests;
+#[cfg(test)]
+#[path = "music_workspace_cursor_tests.rs"]
+mod music_workspace_cursor_tests;
 #[cfg(test)]
 #[path = "playlists_component_tests.rs"]
 mod playlists_component_tests;
