@@ -47,7 +47,7 @@ impl App {
         if self.terminal_width >= crate::app::MINI_VIEW_THRESHOLD
             && area.width < crate::app::MINI_VIEW_THRESHOLD
         {
-            self.mini_view_focus = PanelFocus::Queue;
+            self.set_panel_focus(PanelFocus::Queue);
         }
         self.terminal_width = area.width;
         self.terminal_height = area.height;

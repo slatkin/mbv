@@ -139,10 +139,13 @@ impl Model {
         {
             ids.push(child);
         }
-        for id in [ComponentId::Queue, ComponentId::Playback] {
-            if self.application.mounted(&id) {
-                ids.push(id);
-            }
+        if self.app.effective_panel_mode() != super::PanelMode::LibraryOnly
+            && self.application.mounted(&ComponentId::Queue)
+        {
+            ids.push(ComponentId::Queue);
+        }
+        if self.application.mounted(&ComponentId::Playback) {
+            ids.push(ComponentId::Playback);
         }
         ids
     }

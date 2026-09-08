@@ -107,6 +107,18 @@ impl HelpComponent {
     /// from the ad-hoc handler: a click inside the panel is swallowed, a
     /// click outside dismisses (the second click of a double included), and
     /// the wheel adjusts the scroll by one line inside the painter's content area.
+    #[cfg(test)]
+    pub(crate) fn test_scroll(&self) -> u16 {
+        self.scroll
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_content_area(&self) -> Option<Rect> {
+        self.content_geometry
+            .as_ref()
+            .map(|geometry| geometry.content_area)
+    }
+
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;

@@ -1,10 +1,13 @@
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
-use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 use crate::app::components::{
-    BrowserComponent, ComponentId, ModalId, Msg, OverlayId, QueueComponent, ShellRequest,
+    BrowserComponent, ComponentId, HelpComponent, ModalId, Msg, OverlayId, QueueComponent,
+    ShellRequest,
 };
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
@@ -557,4 +560,112 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
         "a click on the narrow-painted list row must resolve through the canonical control"
     );
     apply_outcome(&mut harness, outcome);
+}
+
+#[test]
+fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
+    let mut app = make_app_stub();
+    app.layout.main.panel_area = Rect::new(0, 0, 30, 16);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().mount_help();
+    harness.model_mut().sync_mounted_surfaces();
+
+    let mut terminal = Terminal::new(TestBackend::new(40, 16)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+
+    let help_id = ComponentId::Overlay(OverlayId::Help);
+    let content = harness
+        .model_mut()
+        .application
+        .get_component_mut(&help_id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<HelpComponent>()
+        .unwrap()
+        .test_content_area()
+        .unwrap();
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: content.x + 1,
+        row: content.y + 1,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(outcome
+        .raw_messages
+        .iter()
+        .any(|msg| matches!(msg, Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::NoOp))));
+    let help = harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Overlay(OverlayId::Help))
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<HelpComponent>()
+        .unwrap();
+    assert_eq!(help.test_scroll(), 1);
+}
+
+#[test]
+fn tick_narrow_queue_scroll_does_not_lock_keyboard_input() {
+    let mut app = crate::app::render::make_queue_app(8);
+    app.mini_view_focus = PanelFocus::Queue;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(70, 24)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+
+    let queue_id = ComponentId::Queue;
+    let first_row = harness
+        .model_mut()
+        .application
+        .get_component_mut(&queue_id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<QueueComponent>()
+        .unwrap()
+        .test_rows()[0]
+        .0;
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: first_row.x,
+        row: first_row.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert_eq!(
+        harness
+            .model_mut()
+            .application
+            .get_component_mut(&queue_id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<QueueComponent>()
+            .unwrap()
+            .test_cursor(),
+        1
+    );
+    assert!(outcome
+        .raw_messages
+        .iter()
+        .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::QueueIntent(_)) )));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let raw_messages = harness
+        .model_mut()
+        .application
+        .tick(tuirealm::application::PollStrategy::Once(
+            std::time::Duration::from_millis(500),
+        ))
+        .unwrap();
+    assert!(raw_messages.iter().any(|msg| matches!(
+        msg,
+        Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::Key(_))
+    )));
 }
