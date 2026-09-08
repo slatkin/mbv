@@ -180,5 +180,9 @@ mod tests_tick_integration_mouse;
 mod tests_tick_integration_music_mouse;
 
 #[cfg(test)]
+#[path = "tests_tick_integration_mouse_sidebar.rs"]
+mod tests_tick_integration_mouse_sidebar;
+
+#[cfg(test)]
 #[path = "tests_narrow_browse_migration.rs"]
 mod tests_narrow_browse_migration;
