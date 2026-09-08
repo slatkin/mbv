@@ -8,8 +8,8 @@
 
 ## 2. Prove the Wide Seam in Queue
 
-- [ ] 2.1 Convert Queue to invoke its persistent `WideMediaList<QueueSlotId>` view once in every panel mode and consume its retained result; remove Queue row-rectangle/selectable-map reconstruction while preserving scope-pill and drag gesture authority; verify Queue component, drag, and buffer tests.
-- [ ] 2.2 Verify Queue click, context, drag, and scroll resolve current painted `QueueSlotId` rows, and retain PR #683 one-row wheel, throttle, painted-owner arbitration, and live-`Application::tick()` evidence.
+- [x] 2.1 Convert Queue to invoke its persistent `WideMediaList<QueueSlotId>` view once in every panel mode and consume its retained result; remove Queue row-rectangle/selectable-map reconstruction while preserving scope-pill and drag gesture authority; verify Queue component, drag, and buffer tests.
+- [x] 2.2 Verify Queue click, context, drag, and scroll resolve current painted `QueueSlotId` rows, and retain PR #683 one-row wheel, throttle, painted-owner arbitration, and live-`Application::tick()` evidence.
 
 ## 3. Prove Wide and Inline Seams in Grouped Music
 
