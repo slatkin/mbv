@@ -390,6 +390,7 @@ impl InlineSearch {
                     return Some(InlineSearchMouse::Consumed);
                 }
             }
+            MouseGesture::Drag { .. } | MouseGesture::DragEnd => {}
         }
         None
     }

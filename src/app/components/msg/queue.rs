@@ -29,9 +29,16 @@ pub enum QueueRequest {
         slot_id: QueueSlotId,
         direction: QueueMove,
     },
+    MoveTo {
+        scope: crate::app::types_playback::QueueScope,
+        slot_id: QueueSlotId,
+        onto: QueueSlotId,
+    },
     Undo {
         scope: crate::app::types_playback::QueueScope,
     },
+    ResizeColumnLive(u16),
+    ResizeColumnEnd(u16),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -166,6 +166,14 @@ impl Model {
         }
     }
 
+    pub(super) fn render_queue_boundary(&mut self, frame: &mut ratatui::Frame) {
+        let id = ComponentId::QueueBoundary;
+        if self.application.mounted(&id) {
+            self.application
+                .view(&id, frame, self.app.layout.main.queue_boundary_area);
+        }
+    }
+
     pub(super) fn render_queue_component(&mut self, frame: &mut ratatui::Frame) {
         let id = ComponentId::Queue;
         if !self.application.mounted(&id) {
@@ -221,6 +229,30 @@ impl Model {
                         QueueMove::Down => self.app.move_queue_item_down(index),
                     }
                 }
+            }
+            QueueRequest::MoveTo {
+                scope,
+                slot_id,
+                onto,
+            } => {
+                let Some(from) = self.select_queue_slot(scope, slot_id) else {
+                    return;
+                };
+                let Some(to) = self.slot_index(scope, onto) else {
+                    return;
+                };
+                if from != to {
+                    self.app.move_queue_item_to(scope, from, to);
+                }
+            }
+            QueueRequest::ResizeColumnLive(width) => {
+                self.app.queue_column_width = width;
+            }
+            // The boundary only emits End after a Live move, so persist
+            // unconditionally rather than tracking the drag's start width.
+            QueueRequest::ResizeColumnEnd(width) => {
+                self.app.queue_column_width = width;
+                self.app.save_prefs();
             }
             QueueRequest::Undo { scope } => {
                 // The component can still be showing (and emit for) `Remote`
@@ -332,16 +364,25 @@ impl Model {
         if scope == QueueScope::Remote && !self.app.has_direct_remote_queue() {
             return None;
         }
-        let index = self
-            .app
-            .queue_for_scope(scope)
-            .slots()
-            .iter()
-            .position(|slot| slot.slot_id == slot_id)?;
+        let index = self.slot_index(scope, slot_id)?;
         self.app.set_queue_scope(scope);
         self.app.set_panel_focus(PanelFocus::Queue);
         self.app.mark_queue_cursor_user_active();
         Some(index)
+    }
+
+    /// Position of `slot_id` in `scope`'s queue, if present. Pure lookup with
+    /// none of `select_queue_slot`'s scope/focus/hold-window side effects.
+    fn slot_index(
+        &self,
+        scope: QueueScope,
+        slot_id: mbv_core::playback_queue::QueueSlotId,
+    ) -> Option<usize> {
+        self.app
+            .queue_for_scope(scope)
+            .slots()
+            .iter()
+            .position(|slot| slot.slot_id == slot_id)
     }
 }
 

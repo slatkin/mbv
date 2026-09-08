@@ -43,9 +43,7 @@ impl Model {
         let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
         let projection = PlaybackProjection {
             state,
-            player_area: self.app.layout.playback.player_area,
             show_controls,
-            player_h: self.app.layout.playback.player_area.height.max(4),
             panel_bg: if focused {
                 palette::SURFACE_FOCUSED
             } else {
@@ -81,7 +79,12 @@ impl Model {
     pub(super) fn render_playback_component(&mut self, frame: &mut ratatui::Frame) {
         let id = super::components::ComponentId::Playback;
         if self.application.mounted(&id) {
-            self.application.view(&id, frame, frame.area());
+            // `compose_base_frame` has already published this frame's chrome in
+            // this same pass, so the panel rect is current. In every mode where
+            // the base frame paints the panel itself (queue-only mini view) it
+            // is empty, and the component paints nothing.
+            let area = self.app.layout.playback.player_area;
+            self.application.view(&id, frame, area);
         }
     }
 

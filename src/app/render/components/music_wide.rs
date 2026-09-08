@@ -531,17 +531,22 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
         );
         let track_area = left_layout.track_area;
         if track_area.height > 0 && track_area.width > 0 && !track_list.is_empty() {
-            let (_, track_content_area) =
+            let (track_panel, track_content_area) =
                 crate::app::render::arrangements::wide_hero::wide_hero_hero_content_box(
                     f, track_area,
                 );
+            let paint_area = Rect {
+                x: track_panel.x,
+                width: track_panel.width,
+                ..track_content_area
+            };
             let paint = super::media_list::render_wide_media_list(
                 f,
-                track_content_area,
+                paint_area,
                 track_content_area,
                 track_list,
                 left_focused,
-                palette::list_selected_row_bg(),
+                palette::resolve_surface_focus(left_focused),
                 None,
             );
             layout.selected_item_rect = paint.selected_row_rect;
@@ -552,7 +557,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
                         Rect {
                             y: track_content_area.y + row as u16,
                             height: 1,
-                            ..track_content_area
+                            ..track_panel
                         },
                         index,
                     ));

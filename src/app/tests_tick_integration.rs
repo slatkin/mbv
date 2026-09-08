@@ -219,10 +219,9 @@ fn search_clock_sweep_dispatches_debounce_on_step() {
     let _ = ServiceRequest::SearchQuery;
 }
 
-/// Mini view keeps `effective_panel_focus` on Queue, so `sync_queue` used to
-/// re-activate Queue on the tick after a sidebar mounted, stealing the Esc
-/// that would close it. The sync passes must yield focus while an overlay is
-/// up.
+/// Mini view keeps `effective_panel_focus` on Queue, so `sync_queue` must not
+/// re-activate Queue on the tick after a sidebar mounts, stealing the Esc that
+/// would close it. The sync passes must yield focus while an overlay is up.
 #[test]
 fn esc_closes_a_sidebar_in_mini_view() {
     let mut app = make_app_stub();
@@ -231,6 +230,7 @@ fn esc_closes_a_sidebar_in_mini_view() {
     harness.model_mut().mount_sidebar(SidebarId::Sessions);
     let id = ComponentId::Overlay(OverlayId::Sessions);
 
+    // The sync pass that previously stole focus back to Queue.
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(harness.model().application.focus(), Some(&id));
 

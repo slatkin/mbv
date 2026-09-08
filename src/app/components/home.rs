@@ -525,6 +525,7 @@ impl HomeComponent {
                     anchor: (mouse.column, mouse.row),
                 }))
             }
+            MouseGesture::Drag { .. } | MouseGesture::DragEnd => None,
         }
     }
 

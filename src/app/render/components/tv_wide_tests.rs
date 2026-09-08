@@ -36,14 +36,10 @@ fn render_tv_workspace(app: &mut App, layout: &mut LayoutMain) -> (String, TvWor
         component.view(f, area);
     })
     .unwrap();
-    let layout = component.test_layout();
-    let buffer = term.backend().buffer();
+    let image_paint = component.take_image_paint();
     assert!(
-        (layout.tv_wide_right_area.x..layout.tv_wide_right_area.right()).all(|x| {
-            (layout.tv_wide_right_area.y..layout.tv_wide_right_area.bottom())
-                .all(|y| buffer[(x, y)].bg != palette::SURFACE_ARTWORK_PLACEHOLDER)
-        }),
-        "images-off TV hero must not reserve artwork placeholder cells"
+        image_paint.is_none(),
+        "images-off TV hero must not request image painting"
     );
     (buffer_to_string(&term), component)
 }
@@ -332,12 +328,10 @@ fn wide_series_with_no_seasons_keeps_the_child_region_blank() {
 }
 
 #[test]
-fn wide_tv_episode_list_uses_soft_accent_when_focused() {
-    // A second episode (task 4.2d) so there is an unselected row: the
-    // canonical episode `WideMediaList` paints its own selected-row
-    // background (`palette::list_selected_row_bg`) over the cursor row, so
-    // the box-level soft accent this test characterizes is now only visible
-    // through an unselected row.
+fn wide_tv_episode_list_uses_shared_focus_surfaces_when_focused() {
+    // A second episode (task 4.2d) so there is an unselected row. The
+    // canonical episode `WideMediaList` uses the shared focused surface for
+    // its selected row; the enclosing detail panel keeps the soft accent.
     let mut app = tv_app();
     let mut second_episode = make_item("Episode Two", "Episode");
     second_episode.id = "episode-2".into();
@@ -364,6 +358,11 @@ fn wide_tv_episode_list_uses_soft_accent_when_focused() {
     terminal.draw(|f| component.view(f, f.area())).unwrap();
 
     let episode_list_area = component.test_layout().tv_wide_episode_list_area;
+    assert_eq!(
+        terminal.backend().buffer()[(episode_list_area.x, episode_list_area.y)].bg,
+        palette::SURFACE_FOCUSED,
+        "selected episode row uses the shared focused surface"
+    );
     let unselected_row_y = episode_list_area.y.saturating_add(1);
     assert_eq!(
         terminal.backend().buffer()[(
@@ -459,15 +458,14 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
     let (focused_buffer, focused_layout) = render(true);
     let fla = focused_layout.tv_wide_list_area;
     // Focused rail: panel body is the focused surface, and the selected row
-    // takes the resting surface (legacy `item_cell_spans` parity) so it
-    // reads against the green panel body.
+    // takes the library backdrop so it reads against the green panel body.
     assert_eq!(
         focused_buffer[(fla.x.saturating_sub(1), fla.y.saturating_sub(1))].bg,
         palette::resolve_surface_focus(true)
     );
     assert_eq!(
         focused_buffer[(fla.x, fla.y + 1)].bg,
-        palette::SURFACE_RESTING
+        palette::SURFACE_BACKDROP
     );
     assert_ne!(
         focused_buffer[(fla.x, fla.y + 1)].bg,

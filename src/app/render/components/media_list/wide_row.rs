@@ -25,10 +25,11 @@ fn progress_for_now_playing(state: &MediaSemanticState) -> Option<String> {
 /// `selected_bg` is not a free per-caller choice: the focused selected row
 /// "punches through" to the surface *containing* the panel that holds the
 /// list, so it must be that parent container's background. Every library
-/// rail plus Home and Feeds sits inside a resting-surface parent (even while
-/// the list panel itself is focus-green), so they pass
-/// `palette::list_selected_row_bg()` (`SURFACE_RESTING`). Queue's parent is
-/// itself focus-green, so it passes `SURFACE_FOCUSED`.
+/// rail plus Home and Feeds sits on the library backdrop (even while the
+/// list panel itself is focus-green), so they pass
+/// `palette::list_selected_row_bg()` (`SURFACE_BACKDROP`). Queue and nested
+/// workspace lists pass `palette::resolve_surface_focus(focused)` so their
+/// selected row follows their owning workspace surface.
 ///
 /// Row geometry: the flush edge marker sits at the paint rect's `x` (the
 /// panel border) and the title text is indented `LEFT_INSET` (2) columns in

@@ -171,3 +171,64 @@ fn queue_arrow_press_leaves_exactly_one_highlighted_row() {
         "exactly one queue row must have the focused background"
     );
 }
+
+#[test]
+fn mini_view_panel_does_not_overlay_queue_on_mode_switch() {
+    // Entering queue-only mini view used to repaint the player panel with the
+    // rect published by the *previous* frame, so the panel sat on top of the
+    // queue's rows until the next pass. The component paints with the rect the
+    // base frame publishes for the frame being drawn, which is empty while the
+    // legacy frame owns the queue-only panel.
+    use crate::app::action::Command;
+    let rows = |terminal: &Terminal<TestBackend>, range: std::ops::Range<u16>| -> Vec<String> {
+        let buf = terminal.backend().buffer().clone();
+        range
+            .map(|y| {
+                (0..buf.area().width)
+                    .map(|x| buf[(x, y)].symbol().to_string())
+                    .collect()
+            })
+            .collect()
+    };
+
+    let mut app = make_built_app();
+    app.player_tab.set_items(super::tests::make_items(12), 1);
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 1;
+        status.title = "Movie One".into();
+    }
+    app.terminal_width = 70;
+    app.mini_view_focus = PanelFocus::Library;
+
+    let mut model = Model::new(app);
+    let mut terminal = Terminal::new(TestBackend::new(70, 24)).unwrap();
+    model.sync_mounted_surfaces();
+    terminal
+        .draw(|frame| model.draw_frame(frame, false, false))
+        .unwrap();
+
+    // A second sync pass, so the projection now carries this frame's panel rect.
+    model.sync_mounted_surfaces();
+    model.app.dispatch(Command::CyclePanelMode);
+    assert_eq!(
+        model.app.effective_panel_mode(),
+        crate::app::PanelMode::QueueOnly
+    );
+    terminal
+        .draw(|frame| model.draw_frame(frame, false, false))
+        .unwrap();
+    let transition = rows(&terminal, 3..8);
+
+    model.sync_mounted_surfaces();
+    terminal
+        .draw(|frame| model.draw_frame(frame, false, false))
+        .unwrap();
+    assert_eq!(
+        transition,
+        rows(&terminal, 3..8),
+        "the frame that switches into queue-only mini view must already match \
+         the steady queue-only frame in the rows above the queue list"
+    );
+}

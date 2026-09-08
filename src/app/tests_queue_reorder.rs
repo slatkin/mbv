@@ -1,5 +1,49 @@
 use super::*;
+use crate::app::components::QueueRequest;
 use crate::app::tests::*;
+
+#[test]
+fn move_to_matches_two_keyboard_moves_and_records_one_undo() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let items = make_items(3);
+
+    let mut keyboard = make_app_stub();
+    keyboard.player_tab.set_items(items.clone(), 0);
+    keyboard.move_queue_item_down(0);
+    keyboard.move_queue_item_down(1);
+    let expected = keyboard
+        .player_tab
+        .emby_items()
+        .iter()
+        .map(|item| item.id.clone())
+        .collect::<Vec<_>>();
+
+    let mut model = Model::new({
+        let mut app = make_app_stub();
+        app.player_tab.set_items(items, 0);
+        app
+    });
+    let slot_id = model.app.player_tab.slot_id_at(0).unwrap();
+    let onto = model.app.player_tab.slot_id_at(2).unwrap();
+    model.handle_queue_request(QueueRequest::MoveTo {
+        scope: QueueScope::Local,
+        slot_id,
+        onto,
+    });
+
+    assert_eq!(
+        model
+            .app
+            .player_tab
+            .emby_items()
+            .iter()
+            .map(|item| item.id.clone())
+            .collect::<Vec<_>>(),
+        expected
+    );
+    assert_eq!(model.app.queue_undo_stack.len(), 1);
+    assert_eq!(keyboard.queue_undo_stack.len(), 2);
+}
 
 #[test]
 fn move_queue_item_up_swaps_items_and_cursor_follows() {

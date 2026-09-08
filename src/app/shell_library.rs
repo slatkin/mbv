@@ -1,7 +1,7 @@
 use super::components::{BrowserKey, BrowserKind, ComponentId};
 use super::shell::Model;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
-use super::{PanelFocus, TabSelection};
+use super::{PanelFocus, PanelMode, TabSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -139,15 +139,47 @@ impl Model {
         }) {
             ids.push(child);
         }
-        if panel_mode != super::PanelMode::LibraryOnly
-            && self.application.mounted(&ComponentId::Queue)
-        {
-            ids.push(ComponentId::Queue);
-        }
-        if self.application.mounted(&ComponentId::Playback) {
-            ids.push(ComponentId::Playback);
+        for id in [
+            ComponentId::Queue,
+            ComponentId::QueueBoundary,
+            ComponentId::Playback,
+        ] {
+            if self.application.mounted(&id)
+                && (id != ComponentId::QueueBoundary || self.queue_boundary_mouse_eligible())
+                && (id == ComponentId::Playback || panel_mode != super::PanelMode::LibraryOnly)
+            {
+                ids.push(id);
+            }
         }
         ids
+    }
+
+    /// Whether the Queue boundary column may receive mouse input. Shared by
+    /// `mouse_eligible_ids` (subscription) and `sync_queue_boundary` (arming)
+    /// so the two can never disagree.
+    pub(super) fn queue_boundary_mouse_eligible(&self) -> bool {
+        self.app.effective_panel_mode() == PanelMode::Both && self.panel_mouse_eligible()
+    }
+
+    pub(super) fn sync_queue_boundary(&mut self) {
+        let id = ComponentId::QueueBoundary;
+        let area = self.app.layout.main.queue_boundary_area;
+        let enabled = self.queue_boundary_mouse_eligible() && area.width == 1 && area.height > 0;
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            if let Some(boundary) = comp
+                .as_any_mut()
+                .downcast_mut::<super::components::QueueBoundaryComponent>()
+            {
+                boundary.sync(
+                    area,
+                    self.app.layout.main.left_area.x,
+                    self.app.terminal_width,
+                    self.app.queue_column_width,
+                    matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
+                    enabled,
+                );
+            }
+        }
     }
 
     /// ADR 0024 D2: reconcile the `mouse_sub()` subscription table to

@@ -255,11 +255,11 @@ fn wide_letter_grouped_row_map_indexes_items_without_counting_headings() {
 
 /// migrate-home-feeds 4.6 regression: after the full wide-Movies arrangement
 /// paint, the focused selected row's background is the surface *containing*
-/// the list panel (`SURFACE_RESTING`), and the rail-framing helper — which
+/// the list panel (`SURFACE_BACKDROP`), and the rail-framing helper — which
 /// now runs before the row flow — must not overpaint that bar. Unfocused,
 /// the row must match the panel body (no bar).
 #[test]
-fn wide_movies_selected_row_punches_through_to_the_resting_surface() {
+fn wide_movies_selected_row_punches_through_to_the_library_backdrop() {
     use crate::app::components::browser::{BrowserComponent, BrowserContent};
     use crate::app::components::component_id::BrowserKind;
     use ratatui::backend::TestBackend;
@@ -299,7 +299,7 @@ fn wide_movies_selected_row_punches_through_to_the_resting_surface() {
     }
 
     let (selected, body) = selected_and_body_bg(true);
-    assert_eq!(selected, crate::app::palette::SURFACE_RESTING);
+    assert_eq!(selected, crate::app::palette::SURFACE_BACKDROP);
     assert_eq!(body, crate::app::palette::resolve_surface_focus(true));
     assert_ne!(selected, body);
 

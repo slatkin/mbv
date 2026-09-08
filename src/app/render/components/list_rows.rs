@@ -338,10 +338,10 @@ impl LibraryListRenderCtx {
 /// both the letter-grouped and plain-list rendering branches (identical
 /// styling logic, only how `title`/`dur_str`/`avail` are computed differs
 /// between the two call sites). Every cell starts with a 1-column leading
-/// space; the selected cell carries a `palette::SURFACE_RESTING`
-/// background, in both one- and two-column mode. The marker glyph itself
-/// (the shared `SelectionMarker` component) is drawn separately, at the
-/// list's outer edge, by `draw_column_selection_markers`.
+/// space; the selected cell carries the library backdrop from
+/// `palette::list_selected_row_bg()` in both one- and two-column mode. The
+/// marker glyph itself (the shared `SelectionMarker` component) is drawn
+/// separately, at the list's outer edge, by `draw_column_selection_markers`.
 pub(in crate::app::render) fn build_list_row_spans(
     title: String,
     dur_str: String,
@@ -349,7 +349,7 @@ pub(in crate::app::render) fn build_list_row_spans(
     fg: Color,
 ) -> Vec<Span<'static>> {
     let mut spans: Vec<Span> = if selected {
-        let bg = palette::SURFACE_RESTING;
+        let bg = palette::list_selected_row_bg();
         let title_style = Style::default().fg(palette::TEXT_FOCUS_ACCENT).bg(bg);
         vec![
             Span::styled(" ", Style::default().bg(bg)),
@@ -362,7 +362,7 @@ pub(in crate::app::render) fn build_list_row_spans(
         let dur_style = if selected {
             Style::default()
                 .fg(palette::TEXT_METADATA)
-                .bg(palette::SURFACE_RESTING)
+                .bg(palette::list_selected_row_bg())
         } else {
             Style::default().fg(palette::TEXT_METADATA)
         };
@@ -391,7 +391,7 @@ pub(in crate::app::render) fn item_cell_spans(
         let pad_span = if selected {
             Span::styled(
                 " ".repeat(pad),
-                Style::default().bg(palette::SURFACE_RESTING),
+                Style::default().bg(palette::list_selected_row_bg()),
             )
         } else {
             Span::raw(" ".repeat(pad))
@@ -477,13 +477,13 @@ pub(in crate::app::render) fn draw_column_selection_markers(
         cursor,
         item_rows,
         row_offset,
-        palette::SURFACE_RESTING,
+        palette::list_selected_row_bg(),
     );
 }
 
 /// Draws selection markers with the selected row's surface. Most catalog
-/// lists use the resting selected-row surface; Wide hero Feeds rows use
-/// their focus-resolved surface instead.
+/// lists use the library backdrop; Wide hero Feeds rows use their
+/// focus-resolved surface instead.
 pub(in crate::app::render) fn draw_column_selection_markers_with_background(
     f: &mut Frame,
     content_area: Rect,

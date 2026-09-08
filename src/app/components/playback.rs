@@ -20,9 +20,7 @@ use crate::app::types_playback::PlaybackState;
 #[derive(Clone, Debug, PartialEq)]
 pub(in crate::app) struct PlaybackProjection {
     pub state: PlaybackState,
-    pub player_area: Rect,
     pub show_controls: bool,
-    pub player_h: u16,
     pub panel_bg: Color,
     pub narrow_player: bool,
     pub now_playing_title: Option<(String, Color)>,
@@ -53,9 +51,7 @@ impl PlaybackComponent {
         Self {
             projection: PlaybackProjection {
                 state: PlaybackState::default(),
-                player_area: Rect::default(),
                 show_controls: false,
-                player_h: 0,
                 panel_bg: palette::SURFACE_PLAYBACK,
                 narrow_player: false,
                 now_playing_title: None,
@@ -147,17 +143,24 @@ impl Default for PlaybackComponent {
 }
 
 impl Component for PlaybackComponent {
-    fn view(&mut self, frame: &mut Frame, _area: Rect) {
+    fn view(&mut self, frame: &mut Frame, area: Rect) {
+        // The panel rect is paint-time geometry owned by the shell's base frame,
+        // so it arrives as this component's area. Carrying it in the projection
+        // instead meant the component painted with the rect published by the
+        // *previous* frame, which kept the old panel mode's chrome on top of the
+        // queue for one frame after `x`. `compose_base_frame` leaves the area
+        // empty in every mode where the legacy frame paints the panel itself.
+        let player_h = area.height.max(4);
         let mut playback = LayoutPlayback {
-            player_area: self.projection.player_area,
+            player_area: area,
             ..LayoutPlayback::default()
         };
         render_player_panel(
             frame,
             PlaybackRenderContext {
-                area: self.projection.player_area,
+                area,
                 playback: &mut playback,
-                player_h: self.projection.player_h,
+                player_h,
                 show_controls: self.projection.show_controls,
                 now_playing_title: self.projection.now_playing_title.clone(),
                 panel_bg: self.projection.panel_bg,
@@ -234,9 +237,7 @@ mod tests {
         let mut component = PlaybackComponent::new();
         component.set_projection(PlaybackProjection {
             state: PlaybackState::default(),
-            player_area: Rect::new(10, 5, 40, 4),
             show_controls: true,
-            player_h: 4,
             panel_bg: palette::SURFACE_PLAYBACK,
             narrow_player: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
@@ -250,7 +251,7 @@ mod tests {
         });
         let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
         terminal
-            .draw(|frame| component.view(frame, frame.area()))
+            .draw(|frame| component.view(frame, Rect::new(10, 5, 40, 4)))
             .unwrap();
         component
     }
@@ -291,9 +292,7 @@ mod tests {
         let mut component = PlaybackComponent::new();
         component.set_projection(PlaybackProjection {
             state: PlaybackState::default(),
-            player_area: Rect::new(0, 0, 40, 3),
             show_controls: true,
-            player_h: 3,
             panel_bg: palette::SURFACE_PLAYBACK,
             narrow_player: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),

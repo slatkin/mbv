@@ -3,8 +3,8 @@ use std::time::{Duration, Instant};
 use super::action::{playback_command_for_key, Command};
 use super::components::msg::AlbumCursorKind;
 use super::components::{
-    media_list::ViewportAnchor, ComponentId, Msg, OverlayId, PlaybackComponent, ShellRequest,
-    TerminalObserverEvent, UiRootComponent, UserEvent,
+    media_list::ViewportAnchor, ComponentId, Msg, OverlayId, PlaybackComponent,
+    QueueBoundaryComponent, ShellRequest, TerminalObserverEvent, UiRootComponent, UserEvent,
 };
 use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
@@ -266,7 +266,12 @@ impl Model {
             return RouterOutcome::FallThrough;
         };
         let key = super::input_resolver::tuirealm_key_to_crossterm(tui_key);
-
+        // `player.status` is a plain (non-reentrant) mutex and `RouterSnapshot`
+        // initializers below call `effective_playback_state()`, which locks it
+        // again. A temporary created anywhere inside the struct literal lives
+        // until the whole `let snapshot = ...;` statement ends, so taking that
+        // lock inline self-deadlocked the run loop on the first key press in
+        // any QueueOnly/mini-view frame. Read it in its own statement.
         let player_active = self.app.player.status.lock().unwrap().active;
         let snapshot = RouterSnapshot {
             player_active,
@@ -427,6 +432,14 @@ impl Model {
         // input stays on the shell path, only its render is component-owned
         model.mount_home();
         model.mount_feeds();
+        model
+            .application
+            .mount(
+                ComponentId::QueueBoundary,
+                Box::new(QueueBoundaryComponent::new()),
+                vec![],
+            )
+            .expect("mount QueueBoundary");
         // Playback is also the stable attribute carrier for precedence gates.
         model
             .application

@@ -31,6 +31,7 @@ mod music_workspace_keys;
 pub mod playback;
 pub mod playlists;
 pub mod queue;
+pub mod queue_boundary;
 pub mod remote_reanchor;
 pub mod root;
 pub mod save_playlist;
@@ -66,6 +67,7 @@ pub use self::playlists::PlaylistsComponent;
 pub(in crate::app) use self::playlists::PlaylistsContent;
 pub use self::queue::QueueComponent;
 pub(in crate::app) use self::queue::QueueCursorUpdate;
+pub use self::queue_boundary::QueueBoundaryComponent;
 pub use self::remote_reanchor::RemoteReanchorComponent;
 pub(in crate::app) use self::root::UiRootComponent;
 pub use self::save_playlist::SavePlaylistComponent;
@@ -103,14 +105,23 @@ mod library_routes_component_tests;
 #[path = "multiselect_component_tests.rs"]
 mod multiselect_component_tests;
 #[cfg(test)]
-#[path = "music_workspace_component_tests.rs"]
-mod music_workspace_component_tests;
+#[path = "music_workspace_actions_tests.rs"]
+mod music_workspace_actions_tests;
+#[cfg(test)]
+#[path = "music_workspace_cursor_tests.rs"]
+mod music_workspace_cursor_tests;
 #[cfg(test)]
 #[path = "playlists_component_tests.rs"]
 mod playlists_component_tests;
 #[cfg(test)]
+#[path = "queue_boundary_component_tests.rs"]
+mod queue_boundary_component_tests;
+#[cfg(test)]
 #[path = "queue_component_tests.rs"]
 mod queue_component_tests;
+#[cfg(test)]
+#[path = "queue_drag_component_tests.rs"]
+mod queue_drag_component_tests;
 #[cfg(test)]
 #[path = "save_playlist_component_tests.rs"]
 mod save_playlist_component_tests;
