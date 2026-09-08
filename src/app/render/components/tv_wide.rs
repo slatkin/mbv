@@ -550,7 +550,7 @@ fn render_tv_series_selection(
         episode_list_area,
         episodes,
         focused,
-        palette::list_selected_row_bg(),
+        palette::resolve_surface_focus(focused),
         None,
     );
     (true, image_paint)

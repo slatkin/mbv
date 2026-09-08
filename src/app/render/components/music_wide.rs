@@ -541,7 +541,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
                 track_content_area,
                 track_list,
                 left_focused,
-                palette::list_selected_row_bg(),
+                palette::resolve_surface_focus(left_focused),
                 None,
             );
             layout.selected_item_rect = paint.selected_row_rect;

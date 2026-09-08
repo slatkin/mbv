@@ -328,12 +328,10 @@ fn wide_series_with_no_seasons_keeps_the_child_region_blank() {
 }
 
 #[test]
-fn wide_tv_episode_list_uses_soft_accent_when_focused() {
-    // A second episode (task 4.2d) so there is an unselected row: the
-    // canonical episode `WideMediaList` paints its own selected-row
-    // background (`palette::list_selected_row_bg`) over the cursor row, so
-    // the box-level soft accent this test characterizes is now only visible
-    // through an unselected row.
+fn wide_tv_episode_list_uses_shared_focus_surfaces_when_focused() {
+    // A second episode (task 4.2d) so there is an unselected row. The
+    // canonical episode `WideMediaList` uses the shared focused surface for
+    // its selected row; the enclosing detail panel keeps the soft accent.
     let mut app = tv_app();
     let mut second_episode = make_item("Episode Two", "Episode");
     second_episode.id = "episode-2".into();
@@ -360,6 +358,11 @@ fn wide_tv_episode_list_uses_soft_accent_when_focused() {
     terminal.draw(|f| component.view(f, f.area())).unwrap();
 
     let episode_list_area = component.test_layout().tv_wide_episode_list_area;
+    assert_eq!(
+        terminal.backend().buffer()[(episode_list_area.x, episode_list_area.y)].bg,
+        palette::SURFACE_FOCUSED,
+        "selected episode row uses the shared focused surface"
+    );
     let unselected_row_y = episode_list_area.y.saturating_add(1);
     assert_eq!(
         terminal.backend().buffer()[(
