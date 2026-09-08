@@ -4,11 +4,32 @@
 
 ### Requirement: WideMediaList owns fixed-row mechanics
 
-`WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm `Component` that owns cursor, scroll, viewport, fixed-height one-column row placement, semantic painting delegation, scrollbar, movement, clamping, and internal row geometry for painting, scrolling, and point resolution. Its `Component::view` call SHALL be its only outer-rectangle input and its only ordinary-row painting entry point for a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment and optional throbber; the policy SHALL contain no rectangle, raw style, callback, provider data, or effect.
+`WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm
+`Component` that owns cursor, scroll, viewport, fixed-height one-column row
+placement, semantic painting delegation, scrollbar, movement, clamping, and
+internal row geometry for painting, scrolling, and point resolution. The
+parent SHALL retain ownership of the destination panel/frame and establish the
+row-flow rectangle using its existing arrangement; the control's
+`Component::view` SHALL receive that row-flow rectangle once and SHALL be the
+only ordinary-row painting entry point for that control in a frame. Before that
+call, the parent MAY supply only a closed semantic policy for focused/selected
+treatment and optional throbber; the policy SHALL contain no rectangle, raw
+style, callback, provider data, or effect.
 
-The control SHALL derive its own claim/content/flow geometry during that view, retain the current frame's read-only claim/content rectangles, selected target/selected-row rectangle, and point-resolution facts, and expose no mutable row map or `RowGeometry` to its parent. A point-resolution call after view SHALL accept only the point and resolve it from that retained geometry. Configuring the control, beginning view, or viewing an empty/zero-area rectangle SHALL invalidate a prior result; before the current view completes, it SHALL claim no point and expose no selected/detail geometry.
+The control SHALL retain the current frame's read-only claim/content rectangles,
+selected target/selected-row rectangle, and point-resolution facts, and expose
+no mutable row map or `RowGeometry` to a migrated parent. A point-resolution
+call after view SHALL accept only the point and resolve it from that retained
+geometry. Configuring the control, beginning view, or viewing an empty/zero-area
+rectangle SHALL invalidate a prior result; before the current view completes,
+it SHALL claim no point and expose no selected/detail geometry. Untouched
+destinations MAY retain their existing compatibility painter and geometry path
+until their own migration.
 
-It SHALL support Wide hero rails and Queue fixed rows, but SHALL NOT implement Inline replacement or a non-hero two-column policy. It SHALL express letter grouping through `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use `WideMediaList<QueueSlotId>` as its fixed-row control in every panel mode.
+It SHALL support Wide hero rails and Queue fixed rows, but SHALL NOT implement
+Inline replacement or a non-hero two-column policy. It SHALL express letter
+grouping through `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use
+`WideMediaList<QueueSlotId>` as its fixed-row control in every panel mode.
 
 #### Scenario: Wide TV rail composes the control
 
@@ -19,23 +40,57 @@ It SHALL support Wide hero rails and Queue fixed rows, but SHALL NOT implement I
 #### Scenario: Queue paints and resolves one current row flow
 
 - **WHEN** Queue paints a non-empty fixed-row list in any panel mode
-- **THEN** its persistent `WideMediaList<QueueSlotId>` receives the panel rectangle through one component view and paints ordinary rows once
-- **AND** Queue resolves a later row point to the `QueueSlotId` from that current retained result
+- **THEN** its persistent `WideMediaList<QueueSlotId>` receives the established
+  row-flow rectangle through one component view and paints ordinary rows once
+- **AND** Queue resolves a later row point to the `QueueSlotId` from that
+  current retained result
 - **AND** Queue does not rebuild row rectangles or a selectable row map
+
+#### Scenario: Grouped Music paints both Wide row flows
+
+- **WHEN** Grouped Music paints its Wide album rail or Wide track table
+- **THEN** each persistent `WideMediaList` receives its parent-established
+  row-flow rectangle through one component view and paints ordinary rows once
+- **AND** Grouped Music resolves a later row point from that current retained
+  result without a uniform row map
+- **AND** its existing panel framing and spacing are unchanged
 
 #### Scenario: A Wide result expires before another view
 
-- **WHEN** a Wide control is configured for a new frame or receives an empty or zero-area view
+- **WHEN** a Wide control is configured for a new frame or receives an empty or
+  zero-area view
 - **THEN** its prior point claim and selected-row geometry are unavailable
-- **AND** a parent treats the control as having no list target until the current view finishes
+- **AND** a parent treats the control as having no list target until the current
+  view finishes
 
 ### Requirement: InlineMediaBrowser owns selected-row replacement
 
-`InlineMediaBrowser<Target>` SHALL be a persistent embedded plain TuiRealm `Component` owning one-column placement, selection visibility, variable-height selected-row replacement admission, ordinary-row fallback when replacement cannot fit, semantic painting delegation, and its internal row and replacement geometry for painting, scrolling, and point resolution. Its `Component::view` call SHALL be its only outer-rectangle input and its only ordinary-row painting entry point for a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment and desired detail admission; the policy SHALL contain no rectangle, raw style, callback, provider data, or effect.
+`InlineMediaBrowser<Target>` SHALL be a persistent embedded plain TuiRealm
+`Component` owning one-column placement, selection visibility, variable-height
+selected-row replacement admission, ordinary-row fallback when replacement
+cannot fit, semantic painting delegation, and its internal row and replacement
+geometry for painting, scrolling, and point resolution. The parent SHALL retain
+ownership of destination framing and establish the row-flow rectangle using its
+existing arrangement; the control's `Component::view` SHALL receive that
+row-flow rectangle once and SHALL be its only ordinary-row painting entry point
+for a frame. Before that call, the parent MAY supply only a closed semantic
+policy for focused/selected treatment and desired detail admission; the policy
+SHALL contain no rectangle, raw style, callback, provider data, or effect.
 
-The control SHALL derive its own claim/content/flow geometry during that view, retain the current frame's read-only claim/content rectangles, selected target/selected-row rectangle, admitted detail rectangle, and point-resolution facts, and expose no mutable row map or `RowGeometry` to its parent. A point-resolution call after view SHALL accept only the point and resolve ordinary and replacement targets from that retained geometry. Configuring the control, beginning view, or viewing an empty/zero-area rectangle SHALL invalidate a prior result; before the current view completes, it SHALL claim no point and expose no detail rectangle.
+The control SHALL retain the current frame's read-only claim/content rectangles,
+selected target/selected-row rectangle, admitted detail rectangle, and
+point-resolution facts, and expose no mutable row map or `RowGeometry` to a
+migrated parent. A point-resolution call after view SHALL accept only the point
+and resolve ordinary and replacement targets from that retained geometry.
+Configuring the control, beginning view, or viewing an empty/zero-area rectangle
+SHALL invalidate a prior result; before the current view completes, it SHALL
+claim no point and expose no detail rectangle. Untouched destinations MAY retain
+their existing compatibility painter and geometry path until their own
+migration.
 
-It SHALL be distinct from Inline Search, SHALL NOT be constructed during a render pass, and SHALL NOT become a second mounted identity, subscription, focus target, gesture recognizer, or router.
+It SHALL be distinct from Inline Search, SHALL NOT be constructed during a
+render pass, and SHALL NOT become a second mounted identity, subscription,
+focus target, gesture recognizer, or router.
 
 #### Scenario: A selected row is replaced
 
@@ -43,15 +98,22 @@ It SHALL be distinct from Inline Search, SHALL NOT be constructed during a rende
 - **THEN** its ordinary row is replaced once by the detail block
 - **AND** there is no blank duplicate row and the parent target remains stable
 
-#### Scenario: Feeds consumes one admitted detail result
+#### Scenario: Grouped Music consumes one admitted detail result
 
-- **WHEN** Feeds paints its Inline list with a selected entry
-- **THEN** its persistent `InlineMediaBrowser` receives the list rectangle through one component view and admits or falls back from detail within that view
-- **AND** Feeds reads only the current retained admitted-detail rectangle before painting its provider-owned detail
-- **AND** Feeds does not rerun list layout or reconstruct selectable row geometry
+- **WHEN** Grouped Music paints its Inline album list with a selected album
+- **THEN** its persistent `InlineMediaBrowser` receives the established row-flow
+  rectangle through one component view and admits or falls back from detail
+  within that view
+- **AND** Grouped Music reads only the current retained admitted-detail rectangle
+  before painting its provider-owned detail
+- **AND** Grouped Music does not rerun list layout or reconstruct selectable row
+  geometry
+- **AND** existing framing and spacing are unchanged
 
 #### Scenario: An Inline result expires before another view
 
-- **WHEN** an Inline control is configured for a new frame or receives an empty or zero-area view
+- **WHEN** an Inline control is configured for a new frame or receives an empty
+  or zero-area view
 - **THEN** its prior point claim and admitted-detail rectangle are unavailable
-- **AND** a parent treats the control as having no list target or detail region until the current view finishes
+- **AND** a parent treats the control as having no list target or detail region
+  until the current view finishes
