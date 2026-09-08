@@ -231,6 +231,7 @@ pub(super) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
                         | TerminalObserverEvent::FocusGained
                         | TerminalObserverEvent::FocusLost
                         | TerminalObserverEvent::MouseClick { .. }
+                        | TerminalObserverEvent::MouseClaimed
                 )
             )
         })
@@ -496,6 +497,16 @@ mod mouse_fold_tests {
                 Msg::Playback(PlaybackRequest::TogglePlayPause),
                 Msg::TerminalEvent(TerminalObserverEvent::NoOp),
             ]
+        );
+    }
+
+    #[test]
+    fn duplicate_mouse_observer_markers_do_not_hide_a_claim() {
+        let marker = Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed);
+        let claim = Msg::Playback(PlaybackRequest::TogglePlayPause);
+        assert_eq!(
+            fold_mouse_messages(vec![marker.clone(), marker.clone(), claim.clone()]),
+            vec![marker.clone(), marker, claim]
         );
     }
 
