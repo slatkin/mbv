@@ -145,9 +145,7 @@ impl Model {
             ComponentId::Playback,
         ] {
             if self.application.mounted(&id)
-                && (id != ComponentId::QueueBoundary
-                    || (self.app.effective_panel_mode() == PanelMode::Both
-                        && self.panel_mouse_eligible()))
+                && (id != ComponentId::QueueBoundary || self.queue_boundary_mouse_eligible())
             {
                 ids.push(id);
             }
@@ -155,13 +153,17 @@ impl Model {
         ids
     }
 
+    /// Whether the Queue boundary column may receive mouse input. Shared by
+    /// `mouse_eligible_ids` (subscription) and `sync_queue_boundary` (arming)
+    /// so the two can never disagree.
+    pub(super) fn queue_boundary_mouse_eligible(&self) -> bool {
+        self.app.effective_panel_mode() == PanelMode::Both && self.panel_mouse_eligible()
+    }
+
     pub(super) fn sync_queue_boundary(&mut self) {
         let id = ComponentId::QueueBoundary;
         let area = self.app.layout.main.queue_boundary_area;
-        let enabled = self.app.effective_panel_mode() == PanelMode::Both
-            && self.panel_mouse_eligible()
-            && area.width == 1
-            && area.height > 0;
+        let enabled = self.queue_boundary_mouse_eligible() && area.width == 1 && area.height > 0;
         if !enabled {
             self.queue_resize_start_width = None;
         }

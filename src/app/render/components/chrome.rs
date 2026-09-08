@@ -22,6 +22,8 @@ pub(in crate::app) fn render_legacy_backdrops(
     right_visible: bool,
 ) {
     if left_visible {
+        // One column is left unpainted for the Queue boundary component;
+        // `saturating_sub` makes this a no-op for a zero-width column.
         let backdrop = Rect {
             width: left_area.width.saturating_sub(1),
             ..left_area
@@ -29,11 +31,7 @@ pub(in crate::app) fn render_legacy_backdrops(
         frame.render_widget(
             Block::default()
                 .style(Style::default().bg(palette::resolve_surface_focus(queue_focused))),
-            if left_area.width > 0 {
-                backdrop
-            } else {
-                left_area
-            },
+            backdrop,
         );
     }
     if right_visible {

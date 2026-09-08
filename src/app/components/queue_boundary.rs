@@ -73,22 +73,13 @@ impl QueueBoundaryComponent {
     }
 
     fn handle_mouse(&mut self, event: &tuirealm::event::MouseEvent) -> Option<Msg> {
-        if matches!(event.kind, MouseEventKind::Down(MouseButton::Left))
-            && !self.inside(Position {
-                x: event.column,
-                y: event.row,
-            })
-        {
+        let at = Position::new(event.column, event.row);
+        if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) && !self.inside(at) {
             return None;
         }
         let gesture = self.gestures.recognize(event)?;
         match gesture {
-            MouseGesture::Click(_)
-                if self.inside(Position {
-                    x: event.column,
-                    y: event.row,
-                }) =>
-            {
+            MouseGesture::Click(_) if self.inside(at) => {
                 self.changed = false;
                 None
             }
