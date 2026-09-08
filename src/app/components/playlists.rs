@@ -124,6 +124,11 @@ impl PlaylistsComponent {
         self.open_cursor
     }
 
+    #[cfg(test)]
+    pub(in crate::app) fn test_playlist_rows(&self) -> &[(Rect, usize)] {
+        &self.geometry.playlist_rows
+    }
+
     fn local_change() -> Option<Msg> {
         None
     }

@@ -356,7 +356,7 @@ impl Model {
         }
     }
 
-    fn dispatch_router_command(&mut self, command: Command) -> bool {
+    pub(in crate::app) fn dispatch_router_command(&mut self, command: Command) -> bool {
         match command {
             Command::OpenHelp => {
                 self.mount_help();

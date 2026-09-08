@@ -5,9 +5,10 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
+use crate::app::action::Command;
 use crate::app::components::{
     BrowserComponent, ComponentId, HelpComponent, ModalId, Msg, OverlayId, PlaylistsComponent,
-    QueueComponent, ShellRequest,
+    QueueComponent, ShellRequest, UserEvent,
 };
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
@@ -20,6 +21,13 @@ use crate::app::types_daemon_lost::DaemonLostModal;
 use crate::app::types_overlay::OverlayRequest;
 use crate::app::types_playback::RemoteReanchorPopup;
 use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
+
+fn key(code: Key) -> Event<UserEvent> {
+    Event::Keyboard(KeyEvent {
+        code,
+        modifiers: KeyModifiers::NONE,
+    })
+}
 
 // --- Task 5.3: blocking modals suppress mouse activity by eligibility (D2
 // rung 1), not by message discarding. A mounted Search sidebar painted with
@@ -567,27 +575,37 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
 #[test]
 fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     let mut app = make_app_stub();
-    let playlist = make_item("P1", "Playlist");
-    app.playlists = vec![playlist.clone()];
+    app.playlists = vec![make_item("P1", "Playlist"), make_item("P2", "Playlist")];
     app.playlists_cursor = 0;
-    app.playlists_open = Some(playlist);
-    app.playlists_open_items = vec![make_item("First song", "Audio"), make_item("Second song", "Audio")];
-    app.playlists_open_cursor = 0;
+    assert!(app.playlists_open.is_none());
+    assert!(app.playlists_open_items.is_empty());
     app.layout.main.panel_area = Rect::new(0, 0, 40, 20);
     let mut harness = TickHarness::new(app);
-    harness.model_mut().app.pending_overlay =
-        Some(OverlayRequest::OpenSidebar(SidebarId::Playlists));
+    harness.inject(key(Key::Function(4)));
+    let outcome = harness.step();
+    assert!(matches!(
+        outcome.router,
+        crate::app::router::RouterOutcome::Command(Command::OpenPlaylists)
+    ));
+    assert!(outcome.messages.is_empty(), "the router consumes F4's leaf message");
+    harness
+        .model_mut()
+        .dispatch_router_command(Command::OpenPlaylists);
+    apply_outcome(&mut harness, outcome);
     harness.model_mut().sync_mounted_surfaces();
-
+    let playlists_id = ComponentId::Overlay(OverlayId::Playlists);
     let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
     terminal
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
         .unwrap();
-
-    let playlists_id = ComponentId::Overlay(OverlayId::Playlists);
-    assert_eq!(harness.model().mouse_subscribed.len(), 1);
-    assert!(harness.model().mouse_subscribed.contains(&playlists_id));
-    let first_open_row = harness
+    assert!(harness.model().application.mounted(&playlists_id));
+    assert_eq!(harness.model().application.focus(), Some(&playlists_id));
+    assert_eq!(
+        harness.model().mouse_subscribed,
+        std::iter::once(playlists_id.clone()).collect(),
+        "the real F4 lifecycle leaves only Playlists mouse-eligible"
+    );
+    let playlist_row = harness
         .model_mut()
         .application
         .get_component_mut(&playlists_id)
@@ -595,11 +613,15 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
         .as_any_mut()
         .downcast_mut::<PlaylistsComponent>()
         .unwrap()
-        .first_open_row();
+        .test_playlist_rows()
+        .first()
+        .copied()
+        .expect("playlist list painted at least one row")
+        .0;
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
-        column: first_open_row.x,
-        row: first_open_row.y,
+        column: playlist_row.x,
+        row: playlist_row.y,
         modifiers: KeyModifiers::NONE,
     }));
     let outcome = harness.step();
@@ -616,14 +638,11 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
             .as_any_mut()
             .downcast_mut::<PlaylistsComponent>()
             .unwrap()
-            .open_cursor(),
-        1
+            .cursor(),
+        1,
+        "one wheel notch advances the playlist-list cursor exactly one row"
     );
-
-    harness.inject(Event::Keyboard(KeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    }));
+    harness.inject(key(Key::Down));
     let key_messages = harness
         .model_mut()
         .application
