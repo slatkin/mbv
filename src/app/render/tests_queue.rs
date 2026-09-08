@@ -207,6 +207,15 @@ fn idle_queue_only_hides_card_and_panel_at_both_widths() {
         .lines()
         .take(layout.queue_area.y as usize)
         .all(|row| !row.contains('\u{2594}') && !row.contains("On Now:")));
+
+    // With the card and panel collapsed, the inter-panel gap row hides too:
+    // the queue frame starts at the top of the left content column (1 row of
+    // column-box padding, then frame top pad + title + title gap = 3 rows
+    // before the list).
+    let mut app = make_queue_app(5);
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    let (_, layout) = render_view_to_terminal(&mut app, 80, 40);
+    assert_eq!(layout.queue_area.y, layout.left_area.y + 4);
 }
 
 #[test]
@@ -246,8 +255,8 @@ fn idle_queue_only_reclaims_card_and_panel_rows_until_playback_starts() {
 
     let idle_term = render_app_to_terminal(&mut app, width, height);
     let idle_queue_area = app.layout.main.queue_area;
-    // Idle queue-only keeps the single separator row above the list, then
-    // hands every card/panel row to the queue.
+    // Idle queue-only hides the separator row along with the card/panel and
+    // hands every reclaimed row to the queue.
     assert_eq!(app.layout.main.card.height, 0);
     let idle_screen = buffer_to_string(&idle_term);
     assert!(!idle_screen.contains("On Now:"));

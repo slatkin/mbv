@@ -18,14 +18,17 @@ pub(in crate::app) struct QueuePanelInputs {
 
 /// Places the complete queue panel and its framed sub-areas.
 pub(in crate::app) fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
+    // The 1-row gap separates the queue panel from the card/player above
+    // it; when idle collapse hides both, the gap hides with them.
+    let gap = u16::from(input.card_height + input.narrow_player_height > 0);
     let panel_area = Rect {
-        y: input.left_content.y + input.card_height + input.narrow_player_height + 1,
+        y: input.left_content.y + input.card_height + input.narrow_player_height + gap,
         height: input
             .left_content
             .height
             .saturating_sub(input.card_height)
             .saturating_sub(input.narrow_player_height)
-            .saturating_sub(1),
+            .saturating_sub(gap),
         ..input.left_content
     };
     let title_reserved = panel_area.height >= 4;
