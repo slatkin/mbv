@@ -1,6 +1,67 @@
 use super::*;
+use crate::app::components::{Msg, TerminalObserverEvent};
 use crate::app::tests::*;
+use crate::app::tests_tick_harness::TickHarness;
 use crate::app::types_playback::HomeLatestSource;
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
+use tuirealm::event::Event;
+
+#[test]
+fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
+    let mut app = make_app_stub();
+    app.terminal_width = 100;
+    app.panel_focus = PanelFocus::Library;
+    app.mini_view_focus = PanelFocus::Library;
+    let mut harness = TickHarness::new(app);
+
+    let mut wide_terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+    wide_terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+
+    harness.inject(Event::WindowResize(60, 24));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::Resize {
+            width: 60,
+            height: 24
+        })
+    )));
+
+    let mut narrow_terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    narrow_terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    assert_eq!(
+        harness.model().app.effective_panel_focus(),
+        PanelFocus::Queue,
+        "crossing into mini view selects Queue"
+    );
+    assert_eq!(
+        harness.model().app.panel_focus,
+        PanelFocus::Library,
+        "mini-view focus must not replace the stored wide focus"
+    );
+
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    let mut widened_terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+    widened_terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    assert_eq!(
+        harness.model().app.effective_panel_focus(),
+        PanelFocus::Library,
+        "widening restores the prior wide focus"
+    );
+    assert_eq!(harness.model().app.panel_focus, PanelFocus::Library);
+}
 
 #[test]
 fn build_restores_panel_focus_from_prefs_for_both_values() {

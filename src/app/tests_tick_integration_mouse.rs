@@ -6,8 +6,8 @@ use tuirealm::event::{
 };
 
 use crate::app::components::{
-    BrowserComponent, ComponentId, HelpComponent, ModalId, Msg, OverlayId, QueueComponent,
-    ShellRequest,
+    BrowserComponent, ComponentId, HelpComponent, ModalId, Msg, OverlayId, PlaylistsComponent,
+    QueueComponent, ShellRequest,
 };
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
@@ -560,6 +560,84 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
         "a click on the narrow-painted list row must resolve through the canonical control"
     );
     apply_outcome(&mut harness, outcome);
+}
+
+/// A sidebar opened from the F4 path must publish its painted list before the
+/// first wheel event; a normal key afterward proves the tick remains healthy.
+#[test]
+fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
+    let mut app = make_app_stub();
+    let playlist = make_item("P1", "Playlist");
+    app.playlists = vec![playlist.clone()];
+    app.playlists_cursor = 0;
+    app.playlists_open = Some(playlist);
+    app.playlists_open_items = vec![make_item("First song", "Audio"), make_item("Second song", "Audio")];
+    app.playlists_open_cursor = 0;
+    app.layout.main.panel_area = Rect::new(0, 0, 40, 20);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().app.pending_overlay =
+        Some(OverlayRequest::OpenSidebar(SidebarId::Playlists));
+    harness.model_mut().sync_mounted_surfaces();
+
+    let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+
+    let playlists_id = ComponentId::Overlay(OverlayId::Playlists);
+    assert_eq!(harness.model().mouse_subscribed.len(), 1);
+    assert!(harness.model().mouse_subscribed.contains(&playlists_id));
+    let first_open_row = harness
+        .model_mut()
+        .application
+        .get_component_mut(&playlists_id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<PlaylistsComponent>()
+        .unwrap()
+        .first_open_row();
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: first_open_row.x,
+        row: first_open_row.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::MouseClaimed)
+    )));
+    assert_eq!(
+        harness
+            .model_mut()
+            .application
+            .get_component_mut(&playlists_id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<PlaylistsComponent>()
+            .unwrap()
+            .open_cursor(),
+        1
+    );
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let key_messages = harness
+        .model_mut()
+        .application
+        .tick(tuirealm::application::PollStrategy::Once(
+            std::time::Duration::from_millis(500),
+        ))
+        .expect("normal key tick");
+    assert!(key_messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::Key(_))
+    )));
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
 }
 
 #[test]
