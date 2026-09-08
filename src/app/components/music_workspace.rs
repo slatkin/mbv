@@ -82,9 +82,9 @@ pub struct MusicWorkspaceComponent {
     mouse_gestures: MouseGestureState,
     /// The wide right-rail's canonical album control, seeded each `view()` by
     /// `render_wide_right_album_browser_with_ctx` from the pushed context.
-    /// Its `resolve_point` gives the wide-rail row identity for the mouse
-    /// path (design.md D6). The narrow list / track table are net-new mouse
-    /// work in task 6.1.
+    /// Its retained current-frame result gives the wide-rail row identity for
+    /// the mouse path (design.md D6); `track_list` does the same for the
+    /// provider-owned track table.
     wide_list: WideMediaList<String>,
     pub(super) track_list: WideMediaList<String>,
     /// Group-pill rects (design.md D6), repopulated in `view()` from
@@ -371,10 +371,9 @@ impl MusicWorkspaceComponent {
     /// Handle a mouse event against the wide workspace's painted geometry.
     ///
     /// Recognition comes from the private `MouseGestureState` (ADR 0024,
-    /// design.md D3). The wide right-rail album row identity comes from the
-    /// embedded `WideMediaList::resolve_point` (design.md D6). The wide-left
-    /// track table keeps its component-local cursor claim unchanged — its
-    /// full mouse surface is net-new work in task 6.1.
+    /// design.md D3). Row identities come only from the embedded controls'
+    /// completed current-frame retained results (design.md D6); album pills
+    /// remain the parent's irregular chrome.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         // Inline Search gets first refusal while active (design.md D6): it
         // is painted over the same area the ordinary album rail/rows would
@@ -398,6 +397,13 @@ impl MusicWorkspaceComponent {
         let wide = self.last_wide.unwrap_or(false);
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
+                if wide && self.track_list.claims_current_point(at) {
+                    // Track focus is provider-owned and local to this
+                    // workspace. The shell never recomputes a wheel step.
+                    self.track_list.move_selection(delta);
+                    self.track_cursor = Some(self.track_list.cursor());
+                    return None;
+                }
                 let claimed = if wide {
                     self.wide_list.claims_current_point(at)
                 } else {
@@ -430,16 +436,11 @@ impl MusicWorkspaceComponent {
                     kind: AlbumCursorKind::Move,
                 }))
             }
-            // Wide right-rail / track table: unchanged from task 3.6.
-            MouseGesture::Click(at) | MouseGesture::DoubleClick(at) if wide => {
-                if let Some(track_id) = self.track_list.resolve_current_point(at) {
-                    let track = self
-                        .context
-                        .album_tracks
-                        .as_deref()
-                        .unwrap_or_default()
-                        .iter()
-                        .position(|track| &track.id == track_id)?;
+            // Wide album rail and provider-owned track table both resolve from
+            // their own retained current-frame geometry. A double click
+            // activates the pointed row; a single click only focuses it.
+            MouseGesture::Click(at) if wide => {
+                if let Some(track) = self.resolve_wide_track(at) {
                     self.track_cursor = Some(track);
                     self.track_list.select_index(track);
                     return None;
@@ -449,6 +450,28 @@ impl MusicWorkspaceComponent {
                 Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target: album,
                     kind: AlbumCursorKind::Move,
+                }))
+            }
+            MouseGesture::DoubleClick(at) if wide => {
+                if let Some(track) = self.resolve_wide_track(at) {
+                    self.track_cursor = Some(track);
+                    self.track_list.select_index(track);
+                    return Some(Msg::Shell(ShellRequest::MusicTrackActivate));
+                }
+                let album = self.resolve_wide_album(at)?;
+                self.album_cursor = album;
+                Some(Msg::Shell(ShellRequest::MusicAlbumActivate))
+            }
+            MouseGesture::RightClick(at) if wide => {
+                if let Some(track) = self.resolve_wide_track(at) {
+                    self.track_cursor = Some(track);
+                    self.track_list.select_index(track);
+                    return Some(Msg::Shell(ShellRequest::MusicTrackContextMenu));
+                }
+                let album = self.resolve_wide_album(at)?;
+                self.album_cursor = album;
+                Some(Msg::Shell(ShellRequest::MusicAlbumContextMenu {
+                    anchor: (at.x, at.y),
                 }))
             }
             // Narrow: group pills, then album rows (task 6.1).
@@ -504,6 +527,18 @@ impl MusicWorkspaceComponent {
         (delta != 0).then_some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta }))
     }
 
+    /// The track ordinal under `at` in the provider-owned Wide track table,
+    /// resolved by the child control's retained current-frame geometry.
+    fn resolve_wide_track(&self, at: Position) -> Option<usize> {
+        let id = self.track_list.resolve_current_point(at)?;
+        self.context
+            .album_tracks
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .position(|track| &track.id == id)
+    }
+
     /// The album index under `at` on the wide right rail, resolved by the
     /// embedded canonical control against the rail area it painted, then
     /// mapped to the pushed context's item index (design.md D6). `None` for a
@@ -536,6 +571,11 @@ impl MusicWorkspaceComponent {
     #[cfg(test)]
     pub(in crate::app) fn test_track_selected_row_rect(&self) -> Option<Rect> {
         self.track_list.current_selected_row_rect()
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_track_content_rect(&self) -> Option<Rect> {
+        self.track_list.current_content_rect()
     }
 
     #[cfg(test)]

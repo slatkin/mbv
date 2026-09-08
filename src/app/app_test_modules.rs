@@ -176,5 +176,9 @@ mod tests_tick_integration;
 mod tests_tick_integration_mouse;
 
 #[cfg(test)]
+#[path = "tests_tick_integration_music_mouse.rs"]
+mod tests_tick_integration_music_mouse;
+
+#[cfg(test)]
 #[path = "tests_narrow_browse_migration.rs"]
 mod tests_narrow_browse_migration;

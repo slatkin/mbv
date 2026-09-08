@@ -85,6 +85,33 @@ fn wide_music_composes_the_canonical_control_exactly_once() {
 }
 
 #[test]
+fn wide_music_track_table_uses_one_retained_canonical_view() {
+    let mut app = multi_artist_app();
+    let tracks = (0..2)
+        .map(|index| {
+            let mut track = make_item(&format!("Track {}", index + 1), "Audio");
+            track.id = format!("track-{}", index + 1);
+            track.index_number = index + 1;
+            track
+        })
+        .collect::<Vec<_>>();
+    app.album_tracks_cache.insert("album-1".into(), tracks);
+    WIDE_MEDIA_LIST_PAINTS.with(|c| c.set(0));
+    PLAIN_ROWS_PAINTS.with(|c| c.set(0));
+
+    let (terminal, component) = render_wide(&app, true, 0);
+
+    assert_eq!(
+        WIDE_MEDIA_LIST_PAINTS.with(std::cell::Cell::get),
+        2,
+        "Grouped Music paints its album rail and track table through one view each"
+    );
+    assert_eq!(PLAIN_ROWS_PAINTS.with(std::cell::Cell::get), 0);
+    assert!(component.test_track_selected_row_rect().is_some());
+    assert!(buffer_to_string(&terminal).contains("Track 1"));
+}
+
+#[test]
 fn wide_music_search_mode_uses_the_plain_rows_painter_not_the_wide_control() {
     // Search mode is a separate, already-canonical path (`render_plain_rows`);
     // it must stay working and must not double-paint the grouped control.
