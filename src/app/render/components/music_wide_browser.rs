@@ -68,13 +68,12 @@ pub(in crate::app) fn render_wide_right_album_browser_with_ctx(
 
     layout.selected_item_rect = media.current_selected_row_rect();
     layout.left_sorted_indices = order.to_vec();
-    layout.left_row_targets = (0..browser_area.height)
+    let offset = media.current_flow_offset().unwrap_or_default();
+    layout.left_row_targets = (0..browser_area.height as usize)
         .map(|row| {
             media
-                .resolve_current_point(ratatui::layout::Position {
-                    x: browser_area.x,
-                    y: browser_area.y + row,
-                })
+                .current_flow_target_at(offset + row)
+                .flatten()
                 .and_then(|id| list.items.iter().position(|item| &item.id == id))
         })
         .collect();

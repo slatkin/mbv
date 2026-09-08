@@ -135,6 +135,22 @@ impl<Target> InlineMediaBrowser<Target> {
         self.paint.as_ref().and_then(|paint| paint.detail_rect)
     }
 
+    /// Number of rows in the complete flow retained by the current view.
+    pub fn current_flow_len(&self) -> Option<usize> {
+        self.paint.as_ref().map(|paint| paint.row_geometry.len())
+    }
+
+    /// Display-row offset and target retained by the current view.
+    pub fn current_flow_target_at(&self, row: usize) -> Option<Option<&Target>> {
+        self.paint
+            .as_ref()
+            .map(|paint| paint.row_geometry.targets().nth(row).flatten())
+    }
+
+    pub fn current_flow_offset(&self) -> Option<usize> {
+        self.paint.as_ref().map(|paint| paint.row_geometry.offset())
+    }
+
     pub fn claims_current_point(&self, point: Position) -> bool {
         self.current_claim_rect()
             .is_some_and(|rect| rect.contains(point))

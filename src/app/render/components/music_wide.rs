@@ -391,22 +391,19 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
     ));
     Component::view(browser, f, content_area);
 
-    let content_area = browser.current_content_rect().unwrap_or(content_area);
-    let offset = browser.scroll();
+    let offset = browser.current_flow_offset().unwrap_or_default();
     let id_to_index = |id: &String| ctx.list.items.iter().position(|item| &item.id == id);
     layout.left_sorted_indices = ctx.album_order.clone();
-    layout.left_screen_offset = 0;
-    let flow_len = browser.rows().len().saturating_sub(1)
-        + browser
-            .current_detail_rect()
-            .map_or(1, |rect| rect.height as usize);
+    // The retained flow is in absolute display-row space. Keep that contract
+    // for legacy consumers and publish the viewport-relative map separately;
+    // neither is reconstructed by probing screen coordinates.
+    layout.left_screen_offset = offset;
+    let flow_len = browser.current_flow_len().unwrap_or_default();
     layout.left_item_rows = (0..flow_len)
         .map(|row| {
             browser
-                .resolve_current_point(ratatui::layout::Position {
-                    x: content_area.x,
-                    y: content_area.y + row as u16,
-                })
+                .current_flow_target_at(row)
+                .flatten()
                 .and_then(id_to_index)
                 .map(|idx| vec![idx])
                 .unwrap_or_default()
@@ -415,10 +412,8 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
     layout.left_row_map = (0..visible)
         .map(|row| {
             browser
-                .resolve_current_point(ratatui::layout::Position {
-                    x: content_area.x,
-                    y: content_area.y + row as u16,
-                })
+                .current_flow_target_at(offset + row)
+                .flatten()
                 .and_then(id_to_index)
         })
         .collect();
