@@ -129,3 +129,5 @@ Grouped Music album browsing and Audiobookshelf Podcast show browsing and Book b
 - **THEN** one persistent book-list control paints ordinary fixed-height rows in the rail while the selected book's provider detail workspace renders separately
 
 - **AND** no selected-row replacement, render-time list construction, or parent-owned book-list cursor/scroll is used in the Wide rail
+
+- **AND** chapter rows remain provider-owned seek targets for the selected book

@@ -1,5 +1,39 @@
 ## MODIFIED Requirements
 
+### Requirement: Mounted parents recognize mouse gestures and embedded controls resolve targets
+
+A mounted destination `AppComponent` SHALL own its TuiRealm mouse subscription and its `MouseGestureState`. An embedded media-list control SHALL resolve a point within the list rectangle its parent painted to a stable target, using the same internal row flow its component `view` painted. After the parent recognizes a mouse gesture, it SHALL delegate point resolution to the active embedded control and translate the returned stable target into the destination request.
+
+An embedded control SHALL NOT subscribe independently, own a second gesture recognizer, store a per-row rectangle list duplicating its internal row flow, export that flow to a parent-owned list painter, or publish row rectangles into a parent-owned hit map. Parent-owned controls outside the list rectangle, such as pills or Queue scope buttons, MAY retain separate parent hit regions, populated where those rectangles are painted. When a recognized point falls within the embedded list rectangle, the embedded control's explicit list targets SHALL be resolved before any parent workspace target. Canonical destinations SHALL NOT retain per-surface canonical row-hit `*HitRegion` enums; `QueueHitRegion` and equivalent row registries SHALL remain absent once row hits resolve through the embedded control.
+
+#### Scenario: A pointer gesture targets a list row
+
+- **WHEN** the mounted parent recognizes a click, double click, context click, or scroll gesture over its embedded list rectangle
+
+- **THEN** the parent passes the list rectangle it allocated and the point to the active embedded control, which resolves it from the same internal row flow its component `view` painted
+
+- **AND** it returns the stable target or list-local scroll result to the parent
+
+- **AND** neither the parent nor shell recomputes the row from coordinates
+
+#### Scenario: A pointer gesture targets a parent control
+
+- **WHEN** the mounted parent recognizes a gesture over a pill, Queue scope button, or another region outside the embedded list rectangle
+
+- **THEN** the parent resolves that separately owned region
+
+- **AND** the embedded control's hit regions remain limited to its own painted rectangle
+
+#### Scenario: Queue migrates mouse hit ownership
+
+- **WHEN** Queue composes the canonical fixed-row control
+
+- **THEN** Queue's parent keeps the subscription, gesture state, and scope-button geometry
+
+- **AND** the embedded control resolves a point in its painted row area to a `QueueSlotId`
+
+- **AND** Queue has no `QueueHitRegion` or equivalent parent-owned row registry
+
 ### Requirement: Destination components may embed reusable interaction controls
 
 A destination `AppComponent` MAY own a reusable plain TuiRealm `Component` as an embedded interaction control when the control is not an independently mounted surface. The embedded control SHALL implement the framework's component contract and SHALL be persistent for the parent's lifetime, sharing the parent's mount, activation, focus, and subscription. It SHALL NOT be constructed during rendering, receive a `ComponentId`, register independently with the application, recognize raw events, or create another event-precedence boundary.

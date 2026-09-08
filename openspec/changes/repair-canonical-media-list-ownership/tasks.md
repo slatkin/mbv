@@ -36,8 +36,8 @@
 
 ## 7. Finish Paint and Geometry Cleanup
 
-- [ ] 7.1 Route Queue's fixed rows through its embedded control's component view and delete only the parent compatibility geometry/state superseded by the control, preserving Queue scope and drag ownership; verify existing Queue component, drag, and one-painter tests.
-- [ ] 7.2 Delete canonical compatibility row maps, render-function constructors, parent mirrors, and ordinary-render selection/scroll writeback after their last consumers are gone; verify targeted source searches are empty and `cargo check -p mbv` passes.
+- [ ] 7.1 Route Queue's fixed rows through its embedded control's component view and delete only the parent compatibility geometry/state superseded by the control, preserving Queue scope and drag ownership; verify existing Queue component, drag, and one-painter tests and confirm `QueueHitRegion` remains absent.
+- [ ] 7.2 Delete canonical compatibility row maps, render-function constructors, parent mirrors, ordinary-render selection/scroll writeback, and any remaining per-surface canonical row-hit `*HitRegion` enums after their last consumers are gone; verify targeted source searches are empty and `cargo check -p mbv` passes.
 - [ ] 7.3 Add narrow structural ratchets for the known mirror/writeback forms removed by this change, with positive and negative fixtures, then run `ast-grep test` and `ast-grep scan`.
 
 ## 8. Reconcile Documentation and Acceptance Evidence
