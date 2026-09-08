@@ -1,7 +1,7 @@
 ## 1. Boundary Ownership
 
-- [ ] 1.1 Add full-height trailing-edge boundary geometry to the root Queue-side column, exclude that column from root backdrop painting, and verify relational arrangement coverage plus a sentinel buffer test proving root chrome leaves the boundary untouched.
-- [ ] 1.2 Add the boundary Interactive Component as sole painter and gesture owner, preserve the exact focused and unfocused edge appearance, add semantic live-width and drag-end messages, and include it in Both-mode synchronization and mouse eligibility; verify focused component and buffer tests cover appearance, exact-edge arming, one-column resolution, clamping, click-only behavior, and eligibility cancellation.
+- [x] 1.1 Add full-height trailing-edge boundary geometry to the root Queue-side column, exclude that column from root backdrop painting, and verify relational arrangement coverage plus a sentinel buffer test proving root chrome leaves the boundary untouched.
+- [x] 1.2 Add the boundary Interactive Component as sole painter and gesture owner, preserve the exact focused and unfocused edge appearance, add semantic live-width and drag-end messages, and include it in Both-mode synchronization and mouse eligibility; verify focused component and buffer tests cover appearance, exact-edge arming, one-column resolution, clamping, click-only behavior, and eligibility cancellation.
 
 ## 2. Width Application
 
