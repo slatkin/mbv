@@ -1,6 +1,7 @@
 use super::wide_row::wide_media_row;
 use crate::app::components::media_list::{
-    InlineLayout, InlineMediaBrowser, MediaListRow, RowGeometry, WideMediaList,
+    InlineLayout, InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaListRow, RowGeometry,
+    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
 };
 use crate::app::palette;
 use ratatui::layout::Rect;
@@ -211,4 +212,65 @@ pub(in crate::app) fn render_inline_media_browser<Target: Clone>(
         row_geometry: geometry,
         hero_area,
     }
+}
+
+fn selected_row_surface_color(surface: SelectedRowSurface, focused: bool) -> Color {
+    match surface {
+        SelectedRowSurface::ListBackdrop => palette::list_selected_row_bg(),
+        SelectedRowSurface::OwningSurface => palette::resolve_surface_focus(focused),
+    }
+}
+
+/// Component-view adapter for the retained-result seam. The compatibility
+/// painter above remains available to destinations that still own its legacy
+/// geometry contract.
+pub(in crate::app) fn render_wide_media_list_component<Target: Clone>(
+    f: &mut Frame,
+    area: Rect,
+    list: &mut WideMediaList<Target>,
+    policy: WideMediaListPaintPolicy,
+) {
+    list.begin_view();
+    if area.is_empty() || list.is_empty() {
+        return;
+    }
+    let paint = render_wide_media_list(
+        f,
+        area,
+        area,
+        list,
+        policy.focused(),
+        selected_row_surface_color(policy.selected_surface(), policy.focused()),
+        policy.throbber(),
+    );
+    list.finish_view(area, area, paint.row_geometry, paint.selected_row_rect);
+}
+
+/// Component-view adapter for the Inline retained-result seam.
+pub(in crate::app) fn render_inline_media_browser_component<Target: Clone>(
+    f: &mut Frame,
+    area: Rect,
+    list: &mut InlineMediaBrowser<Target>,
+    policy: InlineMediaBrowserPaintPolicy,
+) {
+    list.begin_view();
+    if area.is_empty() || list.is_empty() {
+        return;
+    }
+    let paint = render_inline_media_browser(
+        f,
+        area,
+        list,
+        policy.desired_detail_rows(),
+        policy.focused(),
+        selected_row_surface_color(policy.selected_surface(), policy.focused()),
+    );
+    let selected_row_rect = paint.row_geometry.selected_row_rect(area);
+    list.finish_view(
+        area,
+        area,
+        paint.row_geometry,
+        selected_row_rect,
+        paint.hero_area,
+    );
 }

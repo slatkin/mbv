@@ -1,16 +1,33 @@
 use super::{
-    letter_grouped_rows, ListCore, MediaListRow, RowGeometry, ViewportAnchor, WideViewport,
+    letter_grouped_rows, ListCore, MediaListRow, RowGeometry, ViewportAnchor,
+    WideMediaListPaintPolicy, WideViewport,
 };
 use ratatui::layout::{Position, Rect};
+use ratatui::Frame;
+use tuirealm::command::{Cmd, CmdResult};
+use tuirealm::component::Component;
+use tuirealm::props::{AttrValue, Attribute, QueryResult};
+use tuirealm::state::State;
+
+/// The read-only facts retained by one completed `WideMediaList::view`.
+struct WidePaintResult<Target> {
+    claim_rect: Rect,
+    content_rect: Rect,
+    row_geometry: RowGeometry<Target>,
+    selected_target: Option<Target>,
+    selected_row_rect: Option<Rect>,
+}
 
 /// Embedded plain fixed-height, one-column media list: owns the display-row
 /// list, the selectable index over it, the cursor, and the resting scroll
 /// offset through the shared [`ListCore`]. It has no mouse hit-resolution API
 /// and accepts no column-count or inline-detail options (design.md D1).
-/// Painting is
-/// `crate::app::render::components::media_list::render_wide_media_list`.
+/// Painting is performed by its `Component::view` through the render adapter;
+/// current-frame point resolution is retained alongside the painted flow.
 pub struct WideMediaList<Target> {
     core: ListCore<Target>,
+    policy: WideMediaListPaintPolicy,
+    paint: Option<WidePaintResult<Target>>,
 }
 
 impl<Target> Default for WideMediaList<Target> {
@@ -23,7 +40,89 @@ impl<Target> WideMediaList<Target> {
     pub fn new() -> Self {
         Self {
             core: ListCore::new(),
+            policy: WideMediaListPaintPolicy::new(
+                false,
+                super::SelectedRowSurface::ListBackdrop,
+                None,
+            ),
+            paint: None,
         }
+    }
+
+    fn invalidate_paint(&mut self) {
+        self.paint = None;
+    }
+
+    /// Configure the semantic policy used by the next `view`.
+    pub fn set_paint_policy(&mut self, policy: WideMediaListPaintPolicy) {
+        self.policy = policy;
+        self.invalidate_paint();
+    }
+
+    pub(crate) fn begin_view(&mut self) {
+        self.invalidate_paint();
+    }
+
+    pub(crate) fn finish_view(
+        &mut self,
+        claim_rect: Rect,
+        content_rect: Rect,
+        row_geometry: RowGeometry<Target>,
+        selected_row_rect: Option<Rect>,
+    ) where
+        Target: Clone,
+    {
+        self.paint = Some(WidePaintResult {
+            claim_rect,
+            content_rect,
+            row_geometry,
+            selected_target: self.core.selected_target().cloned(),
+            selected_row_rect,
+        });
+    }
+
+    /// The current frame's claimed list rectangle, if `view` completed.
+    pub fn current_claim_rect(&self) -> Option<Rect> {
+        self.paint.as_ref().map(|paint| paint.claim_rect)
+    }
+
+    /// The current frame's content rectangle, if `view` completed.
+    pub fn current_content_rect(&self) -> Option<Rect> {
+        self.paint.as_ref().map(|paint| paint.content_rect)
+    }
+
+    /// The current frame's selected target, if `view` completed.
+    pub fn current_selected_target(&self) -> Option<&Target> {
+        self.paint
+            .as_ref()
+            .and_then(|paint| paint.selected_target.as_ref())
+    }
+
+    /// The current frame's selected-row rectangle, if it is visible.
+    pub fn current_selected_row_rect(&self) -> Option<Rect> {
+        self.paint
+            .as_ref()
+            .and_then(|paint| paint.selected_row_rect)
+    }
+
+    /// Whether the current frame's painted list claims `point`.
+    pub fn claims_current_point(&self, point: Position) -> bool {
+        self.current_claim_rect()
+            .is_some_and(|rect| rect.contains(point))
+    }
+
+    /// Resolve `point` from the current frame's retained painted geometry.
+    pub fn resolve_current_point(&self, point: Position) -> Option<&Target> {
+        let paint = self.paint.as_ref()?;
+        if !paint.claim_rect.contains(point) {
+            return None;
+        }
+        let row = (point.y - paint.content_rect.y) as usize + paint.row_geometry.offset();
+        paint
+            .row_geometry
+            .source_row(row)
+            .and_then(|source_row| self.core.rows().get(source_row))
+            .and_then(MediaListRow::selectable_target)
     }
 
     pub fn rows(&self) -> &[MediaListRow<Target>] {
@@ -62,24 +161,29 @@ impl<Target> WideMediaList<Target> {
 
     /// Store the offset a painter resolved, so the next frame resumes from it.
     pub fn set_scroll(&mut self, offset: usize) {
+        self.invalidate_paint();
         self.core.set_scroll(offset);
     }
 
     /// Move the cursor by `delta` selectable rows, clamped to the ends.
     pub fn move_selection(&mut self, delta: i64) {
+        self.invalidate_paint();
         self.core.move_selection(delta);
     }
 
     pub fn select_first(&mut self) {
+        self.invalidate_paint();
         self.core.select_first();
     }
 
     pub fn select_last(&mut self) {
+        self.invalidate_paint();
         self.core.select_last();
     }
 
     /// Place the cursor at selectable index `index`, clamped to the last row.
     pub fn select_index(&mut self, index: usize) {
+        self.invalidate_paint();
         self.core.select_index(index);
     }
 
@@ -158,11 +262,13 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
     /// Replace the display rows, preserving the selected target where possible
     /// and locally clamping otherwise (design.md D3).
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
+        self.invalidate_paint();
         self.core.set_content(rows);
     }
 
     /// Replace one existing row by stable target, preserving selection and scroll.
     pub fn patch_row(&mut self, target: &Target, row: MediaListRow<Target>) -> bool {
+        self.invalidate_paint();
         self.core.patch_row(target, row)
     }
 
@@ -177,6 +283,7 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
         total_count: usize,
         letter_filter_active: bool,
     ) {
+        self.invalidate_paint();
         self.core.set_content(letter_grouped_rows(
             items,
             total_count,
@@ -186,6 +293,7 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
 
     /// Move the cursor to `target` when it is present; returns whether it was.
     pub fn select_target(&mut self, target: &Target) -> bool {
+        self.invalidate_paint();
         self.core.select_target(target)
     }
 
@@ -203,6 +311,27 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
         anchor: &ViewportAnchor<Target>,
         viewport_height: usize,
     ) {
+        self.invalidate_paint();
         self.core.apply_viewport_anchor(anchor, viewport_height);
+    }
+}
+
+impl<Target: Clone> Component for WideMediaList<Target> {
+    fn view(&mut self, frame: &mut Frame, area: Rect) {
+        crate::app::render::render_wide_media_list_component(frame, area, self, self.policy);
+    }
+
+    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+        None
+    }
+
+    fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
+
+    fn state(&self) -> State {
+        State::None
+    }
+
+    fn perform(&mut self, _cmd: Cmd) -> CmdResult {
+        CmdResult::NoChange
     }
 }

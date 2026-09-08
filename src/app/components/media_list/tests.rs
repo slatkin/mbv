@@ -1,4 +1,11 @@
-use super::{MediaKind, MediaListRow, MediaSemanticState, WideMediaList};
+use super::{
+    InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaKind, MediaListRow, MediaSemanticState,
+    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
+};
+use ratatui::backend::TestBackend;
+use ratatui::layout::{Position, Rect};
+use ratatui::Terminal;
+use tuirealm::component::Component;
 
 #[test]
 fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
@@ -79,7 +86,6 @@ mod resolve_point {
         InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
     };
     use ratatui::layout::{Position, Rect};
-
     fn item(target: &str) -> MediaListRow<String> {
         MediaListRow::Item {
             target: target.into(),
@@ -203,4 +209,90 @@ mod resolve_point {
         assert!(browser.claims_point(area, Position { x: 1, y: 3 }));
         assert!(!browser.claims_point(area, Position { x: 40, y: 2 }));
     }
+}
+
+fn lifecycle_item(target: &str) -> MediaListRow<String> {
+    MediaListRow::Item {
+        target: target.into(),
+        primary: target.into(),
+        trailing: None,
+        duration: None,
+        kind: MediaKind::Media,
+        semantic_state: MediaSemanticState::Ordinary,
+    }
+}
+
+#[test]
+fn wide_component_retains_only_completed_current_frame_facts() {
+    let mut list = WideMediaList::new();
+    list.set_content(vec![lifecycle_item("one"), lifecycle_item("two")]);
+    let area = Rect::new(2, 1, 12, 2);
+
+    assert!(list.current_claim_rect().is_none());
+    list.begin_view();
+    assert!(!list.claims_current_point(Position { x: 3, y: 1 }));
+
+    let mut terminal = Terminal::new(TestBackend::new(20, 5)).unwrap();
+    terminal
+        .draw(|frame| {
+            list.set_paint_policy(WideMediaListPaintPolicy::new(
+                true,
+                SelectedRowSurface::ListBackdrop,
+                None,
+            ));
+            Component::view(&mut list, frame, area);
+        })
+        .unwrap();
+    assert_eq!(list.current_claim_rect(), Some(area));
+    assert_eq!(list.current_content_rect(), Some(area));
+    assert_eq!(list.current_selected_target(), Some(&"one".to_string()));
+    assert_eq!(
+        list.resolve_current_point(Position { x: 3, y: 1 }),
+        Some(&"one".to_string())
+    );
+
+    list.set_content(vec![]);
+    assert!(list.current_claim_rect().is_none());
+    terminal
+        .draw(|frame| Component::view(&mut list, frame, area))
+        .unwrap();
+    assert!(list.current_claim_rect().is_none());
+
+    terminal
+        .draw(|frame| Component::view(&mut list, frame, Rect::new(2, 1, 0, 2)))
+        .unwrap();
+    assert!(list.current_claim_rect().is_none());
+}
+
+#[test]
+fn inline_component_retains_detail_and_resolves_from_the_current_view() {
+    let mut browser = InlineMediaBrowser::new();
+    browser.set_content(vec![
+        MediaListRow::Heading { text: "A".into() },
+        lifecycle_item("one"),
+        lifecycle_item("two"),
+    ]);
+    browser.select_target(&"two".to_string());
+    let area = Rect::new(0, 0, 20, 5);
+    let mut terminal = Terminal::new(TestBackend::new(24, 6)).unwrap();
+
+    terminal
+        .draw(|frame| {
+            browser.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
+                true,
+                SelectedRowSurface::ListBackdrop,
+                2,
+            ));
+            Component::view(&mut browser, frame, area);
+        })
+        .unwrap();
+
+    assert_eq!(browser.current_claim_rect(), Some(area));
+    assert!(browser.current_detail_rect().is_some());
+    assert_eq!(
+        browser.resolve_current_point(Position { x: 1, y: 2 }),
+        Some(&"two".to_string())
+    );
+    browser.set_content(vec![]);
+    assert!(browser.current_detail_rect().is_none());
 }

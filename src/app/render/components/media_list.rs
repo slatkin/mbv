@@ -3,7 +3,10 @@ mod wide;
 mod wide_row;
 
 pub(in crate::app) use plain_rows::render_plain_rows;
-pub(in crate::app) use wide::{render_inline_media_browser, render_wide_media_list};
+pub(in crate::app) use wide::{
+    render_inline_media_browser, render_inline_media_browser_component, render_wide_media_list,
+    render_wide_media_list_component,
+};
 
 // §3.2 one-painter instrumentation: per-frame execution counters for the two
 // canonical wide list paint entry points. Tests reset these, render one

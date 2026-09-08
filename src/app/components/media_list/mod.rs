@@ -185,6 +185,84 @@ impl MediaSemanticState {
     }
 }
 
+/// Which semantic surface should receive the selected-row treatment.
+///
+/// The policy is deliberately closed: callers choose a named surface role,
+/// never a raw Ratatui style or colour.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SelectedRowSurface {
+    ListBackdrop,
+    OwningSurface,
+}
+
+/// Semantic paint policy for one `WideMediaList` view.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WideMediaListPaintPolicy {
+    focused: bool,
+    selected_surface: SelectedRowSurface,
+    throbber: Option<char>,
+}
+
+impl WideMediaListPaintPolicy {
+    pub const fn new(
+        focused: bool,
+        selected_surface: SelectedRowSurface,
+        throbber: Option<char>,
+    ) -> Self {
+        Self {
+            focused,
+            selected_surface,
+            throbber,
+        }
+    }
+
+    pub(crate) const fn focused(self) -> bool {
+        self.focused
+    }
+
+    pub(crate) const fn selected_surface(self) -> SelectedRowSurface {
+        self.selected_surface
+    }
+
+    pub(crate) const fn throbber(self) -> Option<char> {
+        self.throbber
+    }
+}
+
+/// Semantic paint policy for one `InlineMediaBrowser` view.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InlineMediaBrowserPaintPolicy {
+    focused: bool,
+    selected_surface: SelectedRowSurface,
+    desired_detail_rows: usize,
+}
+
+impl InlineMediaBrowserPaintPolicy {
+    pub const fn new(
+        focused: bool,
+        selected_surface: SelectedRowSurface,
+        desired_detail_rows: usize,
+    ) -> Self {
+        Self {
+            focused,
+            selected_surface,
+            desired_detail_rows,
+        }
+    }
+
+    pub(crate) const fn focused(self) -> bool {
+        self.focused
+    }
+
+    pub(crate) const fn selected_surface(self) -> SelectedRowSurface {
+        self.selected_surface
+    }
+
+    pub(crate) const fn desired_detail_rows(self) -> usize {
+        self.desired_detail_rows
+    }
+}
+
 /// A closed, provider-neutral row vocabulary for embedded media lists.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaListRow<Target> {
