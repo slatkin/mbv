@@ -79,6 +79,21 @@ fn pill_bar_scrolls_to_keep_selected_visible_and_maps_its_id() {
 }
 
 #[test]
+fn pill_bar_keeps_all_pills_visible_when_they_fit() {
+    let labels: Vec<String> = (0..4).map(|i| format!("Season {i}")).collect();
+    let ids: Vec<usize> = (0..4).collect();
+
+    for selected in 0..4 {
+        let tabs = render_pill_bar_hitboxes(&labels, &ids, selected, 60);
+        assert_eq!(
+            tabs.iter().map(|(_, id)| *id).collect::<Vec<_>>(),
+            ids,
+            "all four pills fit, so selecting {selected} must not scroll any out"
+        );
+    }
+}
+
+#[test]
 fn pill_bar_does_not_pin_a_backwards_selection_to_the_trailing_edge() {
     let labels: Vec<String> = (0..8).map(|i| format!("Group{i}")).collect();
     let ids: Vec<usize> = (0..8).map(|i| 20 + i).collect();

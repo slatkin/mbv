@@ -340,43 +340,51 @@ pub(in crate::app) fn render_pill_bar(
         count
     };
 
-    // Keep the selected pill near the middle of the visible window when it
-    // overflows. Starting at zero always put the selection at the trailing
-    // edge, so moving backward looked as though the final visible pill stayed
-    // focused.
+    // Only scroll when the pills overflow: when everything fits, paint
+    // all of them from zero so moving selection never pushes visible
+    // pills out. When it overflows, keep the selected pill near the middle
+    // of the visible window. Starting at zero always put the selection at
+    // the trailing edge, so moving backward looked as though the final
+    // visible pill stayed focused.
     // ponytail: O(n²) over a short selector row; use a sliding window only if
     // selector counts become large enough to measure.
-    let scroll_start = (0..=bar.selected_pos.min(n - 1))
-        .filter_map(|start| {
-            let avail = bar_w
-                .saturating_sub(prefix_w)
-                .saturating_sub(if start > 0 { 2 } else { 0 }) // "‹ "
-                .saturating_sub(2); // reserve for " ›"
-            let count = count_fitting(start, avail);
-            let end = (start + count).min(n);
-            if count == 0 || bar.selected_pos >= end {
-                return None;
-            }
-            Some((
-                (bar.selected_pos - start).min(end - 1 - bar.selected_pos),
-                start,
-            ))
-        })
-        // Prefer the later window on a tie: with only two pills visible,
-        // moving left must put the selection at the leading edge rather than
-        // leaving it pinned to the trailing edge.
-        .max_by_key(|(edge_distance, start)| (*edge_distance, *start))
-        .map(|(_, start)| start)
-        .unwrap_or(0);
+    let total_w: usize = prefix_w + pill_widths.iter().sum::<usize>();
+    let (scroll_start, scroll_end, has_left, has_right) = if total_w <= bar_w {
+        (0, n, false, false)
+    } else {
+        let scroll_start = (0..=bar.selected_pos.min(n - 1))
+            .filter_map(|start| {
+                let avail = bar_w
+                    .saturating_sub(prefix_w)
+                    .saturating_sub(if start > 0 { 2 } else { 0 }) // "‹ "
+                    .saturating_sub(2); // reserve for " ›"
+                let count = count_fitting(start, avail);
+                let end = (start + count).min(n);
+                if count == 0 || bar.selected_pos >= end {
+                    return None;
+                }
+                Some((
+                    (bar.selected_pos - start).min(end - 1 - bar.selected_pos),
+                    start,
+                ))
+            })
+            // Prefer the later window on a tie: with only two pills visible,
+            // moving left must put the selection at the leading edge rather than
+            // leaving it pinned to the trailing edge.
+            .max_by_key(|(edge_distance, start)| (*edge_distance, *start))
+            .map(|(_, start)| start)
+            .unwrap_or(0);
 
-    let has_left = scroll_start > 0;
-    let avail_pills = bar_w
-        .saturating_sub(prefix_w)
-        .saturating_sub(if has_left { 2 } else { 0 })
-        .saturating_sub(2); // reserve for " ›"
-    let cnt = count_fitting(scroll_start, avail_pills);
-    let scroll_end = (scroll_start + cnt).min(n);
-    let has_right = scroll_end < n;
+        let has_left = scroll_start > 0;
+        let avail_pills = bar_w
+            .saturating_sub(prefix_w)
+            .saturating_sub(if has_left { 2 } else { 0 })
+            .saturating_sub(2); // reserve for " ›"
+        let cnt = count_fitting(scroll_start, avail_pills);
+        let scroll_end = (scroll_start + cnt).min(n);
+        let has_right = scroll_end < n;
+        (scroll_start, scroll_end, has_left, has_right)
+    };
 
     // The row surface is part of the canonical shell.
     f.render_widget(
