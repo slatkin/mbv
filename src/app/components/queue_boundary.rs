@@ -17,6 +17,7 @@ use tuirealm::state::State;
 /// private: the shell only receives resolved semantic widths.
 pub struct QueueBoundaryComponent {
     area: Rect,
+    frame_left: u16,
     terminal_width: u16,
     focused: bool,
     enabled: bool,
@@ -29,6 +30,7 @@ impl QueueBoundaryComponent {
     pub fn new() -> Self {
         Self {
             area: Rect::default(),
+            frame_left: 0,
             terminal_width: 0,
             focused: false,
             enabled: false,
@@ -41,6 +43,7 @@ impl QueueBoundaryComponent {
     pub fn sync(
         &mut self,
         area: Rect,
+        frame_left: u16,
         terminal_width: u16,
         width: u16,
         focused: bool,
@@ -51,6 +54,7 @@ impl QueueBoundaryComponent {
             self.changed = false;
         }
         self.area = area;
+        self.frame_left = frame_left;
         self.terminal_width = terminal_width;
         self.width = width;
         self.focused = focused;
@@ -63,7 +67,7 @@ impl QueueBoundaryComponent {
 
     fn resolve(&self, at: Position) -> u16 {
         normalize_queue_column_width(
-            at.x.saturating_sub(self.area.x).saturating_add(1),
+            at.x.saturating_sub(self.frame_left).saturating_add(1),
             self.terminal_width,
         )
     }

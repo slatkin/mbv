@@ -245,7 +245,20 @@ impl Model {
                     self.app.move_queue_item_to(scope, from, to);
                 }
             }
-            QueueRequest::ResizeColumnLive(_) | QueueRequest::ResizeColumnEnd(_) => {}
+            QueueRequest::ResizeColumnLive(width) => {
+                self.queue_resize_start_width
+                    .get_or_insert(self.app.queue_column_width);
+                self.app.queue_column_width = width;
+            }
+            QueueRequest::ResizeColumnEnd(width) => {
+                let Some(start_width) = self.queue_resize_start_width.take() else {
+                    return;
+                };
+                if start_width != width {
+                    self.app.queue_column_width = width;
+                    self.app.save_prefs();
+                }
+            }
             QueueRequest::Undo { scope } => {
                 // The component can still be showing (and emit for) `Remote`
                 // for a frame after a remote disconnect, before the projection

@@ -162,6 +162,9 @@ impl Model {
             && !self.blocking_overlay_active()
             && area.width == 1
             && area.height > 0;
+        if !enabled {
+            self.queue_resize_start_width = None;
+        }
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(boundary) = comp
                 .as_any_mut()
@@ -169,6 +172,7 @@ impl Model {
             {
                 boundary.sync(
                     area,
+                    self.app.layout.main.left_area.x,
                     self.app.terminal_width,
                     self.app.queue_column_width,
                     matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
