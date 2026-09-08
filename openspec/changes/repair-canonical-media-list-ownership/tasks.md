@@ -3,8 +3,8 @@
 ## 1. Establish the Component-View Seam
 
 - [x] 1.1 Confirm landed PR #683 (`6b58a608`) painted-owner arbitration, one-row wheel, throttle, routing, and real-`Application::tick()` tests pass before changing shared list code.
-- [ ] 1.2 Implement plain TuiRealm `Component` bounds for `WideMediaList` and `InlineMediaBrowser`, semantic-only paint policy, and retained read-only results within the parent-established row-flow rectangle; verify compile-time bounds and focused result lifecycle tests before, during, after, and after empty/zero-area view.
-- [ ] 1.3 Route existing row primitives through each control's one component view, preserve parent panel framing and row-flow placement, retain current claim/content/selected/detail facts, and resolve a later point without caller-supplied geometry; retain compatibility behavior for untouched destinations and verify representative Wide and Inline buffer tests.
+- [x] 1.2 Implement plain TuiRealm `Component` bounds for `WideMediaList` and `InlineMediaBrowser`, semantic-only paint policy, and retained read-only results within the parent-established row-flow rectangle; verify compile-time bounds and focused result lifecycle tests before, during, after, and after empty/zero-area view.
+- [x] 1.3 Route existing row primitives through each control's one component view, preserve parent panel framing and row-flow placement, retain current claim/content/selected/detail facts, and resolve a later point without caller-supplied geometry; retain compatibility behavior for untouched destinations and verify representative Wide and Inline buffer tests.
 
 ## 2. Prove the Wide Seam in Queue
 
