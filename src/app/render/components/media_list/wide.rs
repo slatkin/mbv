@@ -87,14 +87,14 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
     let left_row_map: Vec<Option<usize>> = selectable_by_flow_row
         .into_iter()
         .skip(offset)
-        .take(paint_area.height as usize)
+        .take(content_area.height as usize)
         .collect();
 
-    let overflows = total_rows > paint_area.height as usize;
+    let overflows = total_rows > content_area.height as usize;
     let scrollbar = focused && overflows;
     let inner_width = paint_area.width.saturating_sub(u16::from(scrollbar)) as usize;
     let list_items: Vec<ListItem> = (offset..total_rows)
-        .take(paint_area.height as usize)
+        .take(content_area.height as usize)
         .map(|row| {
             let source_row = geometry
                 .source_row(row)
@@ -118,7 +118,7 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
         crate::app::render::render_right_scrollbar(
             f,
             paint_area,
-            total_rows.saturating_sub(paint_area.height as usize),
+            total_rows.saturating_sub(content_area.height as usize),
             offset,
             palette::SCROLLBAR,
         );
@@ -158,19 +158,41 @@ pub(in crate::app) fn render_inline_media_browser<Target: Clone>(
     focused: bool,
     selected_bg: Color,
 ) -> InlinePaintResult<Target> {
+    render_inline_media_browser_with_geometry(
+        f,
+        area,
+        area,
+        list,
+        desired_detail_rows,
+        focused,
+        selected_bg,
+    )
+}
+
+fn render_inline_media_browser_with_geometry<Target: Clone>(
+    f: &mut Frame,
+    paint_area: Rect,
+    content_area: Rect,
+    list: &InlineMediaBrowser<Target>,
+    desired_detail_rows: usize,
+    focused: bool,
+    selected_bg: Color,
+) -> InlinePaintResult<Target> {
     #[cfg(test)]
     super::INLINE_MEDIA_BROWSER_PAINTS.with(|count| count.set(count.get() + 1));
     let layout: InlineLayout<Target> =
-        list.resolve_inline_layout(area.height as usize, desired_detail_rows);
+        list.resolve_inline_layout(content_area.height as usize, desired_detail_rows);
     let geometry = layout.row_geometry;
     let rows = list.rows();
     let offset = geometry.offset();
     let total_rows = geometry.len();
     let selected_row = geometry.selected_row();
 
-    let overflows = total_rows > area.height as usize;
-    let inner_width = area.width.saturating_sub(u16::from(focused && overflows)) as usize;
-    let window = (offset..total_rows).take(area.height as usize);
+    let overflows = total_rows > content_area.height as usize;
+    let inner_width = paint_area
+        .width
+        .saturating_sub(u16::from(focused && overflows)) as usize;
+    let window = (offset..total_rows).take(content_area.height as usize);
     let list_items: Vec<ListItem> = window
         .map(|display_row| {
             geometry
@@ -189,20 +211,25 @@ pub(in crate::app) fn render_inline_media_browser<Target: Clone>(
                 .unwrap_or_else(|| ListItem::new(Line::default()))
         })
         .collect();
-    f.render_widget(List::new(list_items), area);
+    let row_paint_area = Rect {
+        y: content_area.y,
+        height: content_area.height,
+        ..paint_area
+    };
+    f.render_widget(List::new(list_items), row_paint_area);
 
     if focused && overflows {
         crate::app::render::render_right_scrollbar(
             f,
-            area,
-            total_rows.saturating_sub(area.height as usize),
+            row_paint_area,
+            total_rows.saturating_sub(content_area.height as usize),
             offset,
             palette::SCROLLBAR,
         );
     }
 
     let hero_area = (layout.detail_rows > 0)
-        .then(|| geometry.selected_row_rect(area))
+        .then(|| geometry.selected_row_rect(content_area))
         .flatten()
         .map(|selected| Rect {
             height: layout.detail_rows as u16,
@@ -231,19 +258,25 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone>(
     policy: WideMediaListPaintPolicy,
 ) {
     list.begin_view();
-    if area.is_empty() || list.is_empty() {
+    let (claim_rect, content_rect) = list.view_geometry(area);
+    if area.is_empty() || claim_rect.is_empty() || content_rect.is_empty() || list.is_empty() {
         return;
     }
     let paint = render_wide_media_list(
         f,
-        area,
-        area,
+        claim_rect,
+        content_rect,
         list,
         policy.focused(),
         selected_row_surface_color(policy.selected_surface(), policy.focused()),
         policy.throbber(),
     );
-    list.finish_view(area, area, paint.row_geometry, paint.selected_row_rect);
+    list.finish_view(
+        claim_rect,
+        content_rect,
+        paint.row_geometry,
+        paint.selected_row_rect,
+    );
 }
 
 /// Component-view adapter for the Inline retained-result seam.
@@ -254,21 +287,23 @@ pub(in crate::app) fn render_inline_media_browser_component<Target: Clone>(
     policy: InlineMediaBrowserPaintPolicy,
 ) {
     list.begin_view();
-    if area.is_empty() || list.is_empty() {
+    let (claim_rect, content_rect) = list.view_geometry(area);
+    if area.is_empty() || claim_rect.is_empty() || content_rect.is_empty() || list.is_empty() {
         return;
     }
-    let paint = render_inline_media_browser(
+    let paint = render_inline_media_browser_with_geometry(
         f,
-        area,
+        claim_rect,
+        content_rect,
         list,
         policy.desired_detail_rows(),
         policy.focused(),
         selected_row_surface_color(policy.selected_surface(), policy.focused()),
     );
-    let selected_row_rect = paint.row_geometry.selected_row_rect(area);
+    let selected_row_rect = paint.row_geometry.selected_row_rect(content_rect);
     list.finish_view(
-        area,
-        area,
+        claim_rect,
+        content_rect,
         paint.row_geometry,
         selected_row_rect,
         paint.hero_area,

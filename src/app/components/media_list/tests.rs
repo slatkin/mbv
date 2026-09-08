@@ -227,10 +227,13 @@ fn wide_component_retains_only_completed_current_frame_facts() {
     let mut list = WideMediaList::new();
     list.set_content(vec![lifecycle_item("one"), lifecycle_item("two")]);
     let area = Rect::new(2, 1, 12, 2);
+    let claim_rect = Rect::new(1, 1, 16, 2);
+    let content_rect = Rect::new(4, 1, 8, 2);
+    list.set_geometry(claim_rect, content_rect);
 
     assert!(list.current_claim_rect().is_none());
     list.begin_view();
-    assert!(!list.claims_current_point(Position { x: 3, y: 1 }));
+    assert!(!list.claims_current_point(Position { x: 0, y: 1 }));
 
     let mut terminal = Terminal::new(TestBackend::new(20, 5)).unwrap();
     terminal
@@ -243,13 +246,21 @@ fn wide_component_retains_only_completed_current_frame_facts() {
             Component::view(&mut list, frame, area);
         })
         .unwrap();
-    assert_eq!(list.current_claim_rect(), Some(area));
-    assert_eq!(list.current_content_rect(), Some(area));
+    assert_eq!(list.current_claim_rect(), Some(claim_rect));
+    assert_eq!(list.current_content_rect(), Some(content_rect));
     assert_eq!(list.current_selected_target(), Some(&"one".to_string()));
     assert_eq!(
-        list.resolve_current_point(Position { x: 3, y: 1 }),
+        list.resolve_current_point(Position { x: 2, y: 1 }),
         Some(&"one".to_string())
     );
+    assert_eq!(list.resolve_current_point(Position { x: 0, y: 1 }), None);
+    list.set_geometry(Rect::new(1, 1, 16, 2), Rect::new(5, 1, 6, 2));
+    assert!(list.current_claim_rect().is_none());
+    list.set_geometry(Rect::new(1, 1, 0, 2), Rect::new(5, 1, 6, 2));
+    terminal
+        .draw(|frame| Component::view(&mut list, frame, area))
+        .unwrap();
+    assert!(list.current_claim_rect().is_none());
 
     list.set_content(vec![]);
     assert!(list.current_claim_rect().is_none());
@@ -273,8 +284,11 @@ fn inline_component_retains_detail_and_resolves_from_the_current_view() {
         lifecycle_item("two"),
     ]);
     browser.select_target(&"two".to_string());
-    let area = Rect::new(0, 0, 20, 5);
-    let mut terminal = Terminal::new(TestBackend::new(24, 6)).unwrap();
+    let area = Rect::new(0, 0, 24, 5);
+    let claim_rect = Rect::new(0, 0, 24, 5);
+    let content_rect = Rect::new(3, 0, 18, 5);
+    browser.set_geometry(claim_rect, content_rect);
+    let mut terminal = Terminal::new(TestBackend::new(28, 6)).unwrap();
 
     terminal
         .draw(|frame| {
@@ -287,12 +301,18 @@ fn inline_component_retains_detail_and_resolves_from_the_current_view() {
         })
         .unwrap();
 
-    assert_eq!(browser.current_claim_rect(), Some(area));
-    assert!(browser.current_detail_rect().is_some());
+    assert_eq!(browser.current_claim_rect(), Some(claim_rect));
+    assert_eq!(browser.current_content_rect(), Some(content_rect));
+    assert_eq!(browser.current_detail_rect(), Some(Rect::new(3, 2, 18, 2)));
     assert_eq!(
         browser.resolve_current_point(Position { x: 1, y: 2 }),
         Some(&"two".to_string())
     );
+    assert_eq!(
+        browser.resolve_current_point(Position { x: 24, y: 2 }),
+        None
+    );
     browser.set_content(vec![]);
+    assert!(browser.current_claim_rect().is_none());
     assert!(browser.current_detail_rect().is_none());
 }

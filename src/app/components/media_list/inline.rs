@@ -40,6 +40,7 @@ struct InlinePaintResult<Target> {
 pub struct InlineMediaBrowser<Target> {
     core: ListCore<Target>,
     policy: InlineMediaBrowserPaintPolicy,
+    configured_geometry: Option<(Rect, Rect)>,
     paint: Option<InlinePaintResult<Target>>,
 }
 
@@ -58,6 +59,7 @@ impl<Target> InlineMediaBrowser<Target> {
                 super::SelectedRowSurface::ListBackdrop,
                 0,
             ),
+            configured_geometry: None,
             paint: None,
         }
     }
@@ -70,6 +72,18 @@ impl<Target> InlineMediaBrowser<Target> {
     pub fn set_paint_policy(&mut self, policy: InlineMediaBrowserPaintPolicy) {
         self.policy = policy;
         self.invalidate_paint();
+    }
+
+    /// Configure the parent-owned claim and row-flow rectangles for the next
+    /// `view`. The rectangles may differ in width, as when a framed list
+    /// claims its full panel while rows use an inset flow.
+    pub fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
+        self.configured_geometry = Some((claim_rect, content_rect));
+        self.invalidate_paint();
+    }
+
+    pub(crate) fn view_geometry(&self, area: Rect) -> (Rect, Rect) {
+        self.configured_geometry.unwrap_or((area, area))
     }
 
     pub(crate) fn begin_view(&mut self) {
@@ -128,7 +142,10 @@ impl<Target> InlineMediaBrowser<Target> {
 
     pub fn resolve_current_point(&self, point: Position) -> Option<&Target> {
         let paint = self.paint.as_ref()?;
-        if !paint.claim_rect.contains(point) {
+        if !paint.claim_rect.contains(point)
+            || point.y < paint.content_rect.y
+            || point.y >= paint.content_rect.bottom()
+        {
             return None;
         }
         let flow_row = (point.y - paint.content_rect.y) as usize + paint.row_geometry.offset();
