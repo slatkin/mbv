@@ -191,11 +191,11 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
 
 /// migrate-home-feeds 4.6 regression: after the full wide-Home arrangement
 /// paint the focused selected row's background is the surface *containing*
-/// the list panel (`SURFACE_RESTING`) — not the panel's focus-green fill and
-/// not the old `SURFACE_BACKDROP` — and the rail-framing helper (now run
-/// before the row flow) must not overpaint it. Unfocused: no bar.
+/// the list panel (`SURFACE_BACKDROP`) — not the panel's focus-green fill —
+/// and the rail-framing helper (now run before the row flow) must not
+/// overpaint it. Unfocused: no bar.
 #[test]
-fn wide_home_selected_row_punches_through_to_the_resting_surface() {
+fn wide_home_selected_row_punches_through_to_the_library_backdrop() {
     let bgs = |focused: bool| {
         let mut app = home_app();
         if !focused {
@@ -222,7 +222,7 @@ fn wide_home_selected_row_punches_through_to_the_resting_surface() {
     };
 
     let (selected, body) = bgs(true);
-    assert_eq!(selected, Some(palette::SURFACE_RESTING));
+    assert_eq!(selected, Some(palette::SURFACE_BACKDROP));
     assert_eq!(body, Some(palette::resolve_surface_focus(true)));
     assert_ne!(selected, body);
 

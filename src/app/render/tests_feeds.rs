@@ -80,11 +80,11 @@ fn terminal_for(component: &mut FeedsComponent, width: u16, height: u16) -> Term
 
 /// migrate-home-feeds 4.6 regression: after the full arrangement paint the
 /// focused selected row's background must be the surface *containing* the
-/// list panel (`SURFACE_RESTING`), not the panel's own focus-green fill, and
+/// list panel (`SURFACE_BACKDROP`), not the panel's own focus-green fill, and
 /// the rail-framing helper must not overpaint that bar. Unfocused, the row
 /// must be indistinguishable from the panel body (no bar).
 #[test]
-fn wide_feeds_selected_row_punches_through_to_the_resting_surface() {
+fn wide_feeds_selected_row_punches_through_to_the_library_backdrop() {
     fn selected_and_body_bg(focused: bool) -> (ratatui::style::Color, ratatui::style::Color) {
         let subscriptions = vec![FeedSubscription {
             name: "Test Feed".into(),
@@ -117,7 +117,7 @@ fn wide_feeds_selected_row_punches_through_to_the_resting_surface() {
     }
 
     let (selected, body) = selected_and_body_bg(true);
-    assert_eq!(selected, crate::app::palette::SURFACE_RESTING);
+    assert_eq!(selected, crate::app::palette::SURFACE_BACKDROP);
     assert_eq!(body, crate::app::palette::resolve_surface_focus(true));
     assert_ne!(selected, body);
 

@@ -459,15 +459,14 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
     let (focused_buffer, focused_layout) = render(true);
     let fla = focused_layout.tv_wide_list_area;
     // Focused rail: panel body is the focused surface, and the selected row
-    // takes the resting surface (legacy `item_cell_spans` parity) so it
-    // reads against the green panel body.
+    // takes the library backdrop so it reads against the green panel body.
     assert_eq!(
         focused_buffer[(fla.x.saturating_sub(1), fla.y.saturating_sub(1))].bg,
         palette::resolve_surface_focus(true)
     );
     assert_eq!(
         focused_buffer[(fla.x, fla.y + 1)].bg,
-        palette::SURFACE_RESTING
+        palette::SURFACE_BACKDROP
     );
     assert_ne!(
         focused_buffer[(fla.x, fla.y + 1)].bg,
