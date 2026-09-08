@@ -477,6 +477,15 @@ fn render_tv_series_selection(
     ) else {
         return (true, image_paint);
     };
+    // Match the overview box above: `wide_hero_hero_content_box` insets by
+    // `PANE_PAD_X`, so expand the placed (already-inset) area back out to
+    // the full content width before painting the recessed episode box.
+    let media_list_area = Rect::new(
+        media_list_area.x.saturating_sub(PANE_PAD_X),
+        media_list_area.y,
+        media_list_area.width.saturating_add(PANE_PAD_X * 2),
+        media_list_area.height,
+    );
     let Some(detail) = detail else {
         let (_, content) = wide_hero::wide_hero_hero_content_box(f, media_list_area);
         render_placeholder(f, content, " Loading\u{2026}");
