@@ -189,6 +189,36 @@ fn music_workspace_renders_without_app() {
 }
 
 #[test]
+fn music_workspace_track_selection_uses_the_shared_focused_row_surface() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_focused(true);
+    component.set_content(context(None));
+    component.set_inline_track_focus_enabled(true);
+    component.enter_track_focus();
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+
+    assert_eq!(component.track_cursor(), Some(0));
+    assert_eq!(component.track_selected_row(), Some(0));
+    let track_panel = component
+        .layout()
+        .wide_music_track_hitmap
+        .first()
+        .map(|(rect, _)| *rect)
+        .expect("selected track row hit geometry published");
+    let buffer = terminal.backend().buffer();
+    for x in [track_panel.x, track_panel.right().saturating_sub(1)] {
+        assert_eq!(
+            buffer[(x, track_panel.y)].bg,
+            crate::app::palette::SURFACE_FOCUSED,
+            "focused track selection reaches track panel edge {x}"
+        );
+    }
+}
+
+#[test]
 fn music_workspace_horizontal_move_is_ignored_at_one_column() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
