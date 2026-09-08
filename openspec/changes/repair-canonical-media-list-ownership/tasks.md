@@ -1,49 +1,47 @@
-## 1. Establish the Landed Baseline
+# Repair Canonical Media-List Ownership
 
-- [ ] 1.1 Start from the accepted #674 HEAD, confirm its live-tick painted-owner arbitration tests and one-logical-row wheel tests pass, and record the commit in this change before modifying shared mouse/list paths.
-- [ ] 1.2 Update the existing canonical-control tests with one compile-time TuiRealm `Component` bound and one active-only Wide↔Inline `ViewportAnchor` transition case; verify the focused media-list test target fails for the current helper-only or lockstep behavior.
+## 1. Establish the Landed Baseline and Control Contract
+
+- [ ] 1.1 Start from landed PR #683 commit `6b58a608`; confirm its live-tick painted-owner arbitration, one-logical-row wheel, throttle, and routing tests pass before altering shared mouse/list paths, and record that baseline in this change.
+- [ ] 1.2 Add compile-time plain TuiRealm `Component` bounds for both canonical controls and focused control tests for one configured child view with retained Wide row/selected geometry and Inline admitted-detail geometry; verify the current helper/second-painter behavior would fail.
+- [ ] 1.3 Implement the closed per-frame canonical paint policy (outer paint rectangle, named content inset, focus/selection, throbber, and Inline detail request) and retained paint-result getters; verify every migrated parent calls its child view once and consumes no recomputed geometry.
+- [ ] 1.4 Add architecture fixtures and rules rejecting production canonical-control construction under `src/app/render/**`, except the explicit provider-workspace seams; run `ast-grep test` for the new rules and `ast-grep scan`.
 
 ## 2. Make Canonical Controls the Source of Truth
 
-- [ ] 2.1 Implement the plain TuiRealm `Component` view contract for `WideMediaList` using the existing canonical row painter, a closed semantic paint policy, and retained paint/row geometry; verify the control test and representative Wide buffer test pass.
-- [ ] 2.2 Implement the same contract for `InlineMediaBrowser`, including replacement admission, ordinary-row fallback, and an exposed provider-detail rectangle; verify the existing replacement/fallback and pointer-resolution tests pass without raw style or callback inputs.
-- [ ] 2.3 Add architecture fixtures and rules rejecting production canonical-control construction under `src/app/render/**`; run `ast-grep test` for the new rules and `ast-grep scan`.
+- [ ] 2.1 Route `WideMediaList` through its component view and retained result using the existing canonical row painter, then verify focused control and representative Wide buffer tests pass.
+- [ ] 2.2 Route `InlineMediaBrowser` through its component view and retained result, including replacement admission and ordinary-row fallback; verify existing replacement, fallback, and pointer-resolution tests pass without raw style or callback inputs.
+- [ ] 2.3 Delete only compatibility `left_item_rows`/`left_row_map` output whose canonical consumers have moved to retained child results; verify a targeted source search finds no remaining canonical consumer and `cargo check -p mbv` passes.
 
 ## 3. Correct Shared Responsive Destinations
 
-- [ ] 3.1 Change Home so only its currently painted control receives movement, selection, wheel, and point-resolution delegation, with one transition anchor instead of lockstep mutation; verify the existing Home component/buffer tests plus a focused inactive-control regression test pass.
-- [ ] 3.2 Change Feeds to the same active-control and one-anchor model while preserving grouped headings, watched filtering, and parent-owned selector pills; verify the existing Feeds component/buffer tests plus a focused inactive-control regression test pass.
-- [ ] 3.3 Remove Home/Feeds compatibility row maps or paint writeback made redundant by child-owned geometry, then run their existing Normal/Wide one-painter characterization tests.
+- [ ] 3.1 Change Home so only its painted control receives movement, selection, wheel, and point delegation, with one transition anchor instead of lockstep mutation; use `QueueItemContentId` as the row target and verify existing Home tests plus a mixed-Service native-id collision regression.
+- [ ] 3.2 Change Feeds to the same active-control and one-anchor model while preserving grouped headings, watched filtering, and parent-owned selector pills; verify existing Feeds component/buffer tests plus an inactive-control regression test.
+- [ ] 3.3 Remove Home/Feeds compatibility row maps or paint writeback made redundant by child-owned geometry; verify their Normal/Wide one-painter characterization tests.
 
 ## 4. Isolate Browser and TV Ownership
 
-- [ ] 4.1 Introduce an explicitly grid-only Browser position type for the accepted non-hero two-column path, move canonical cursor/scroll/selection reads to the active embedded control, and verify existing generic/Movies/homevideos/podcast Browser tests at Normal and Wide presentations.
-- [ ] 4.2 Convert Browser activation, context-menu, persistence, navigation re-anchor, and #674 wheel paths to use control-resolved targets/resting positions without replaying deltas; verify the existing Browser component tests and relevant shell routing tests.
-- [ ] 4.3 Remove TV's parent series-cursor shadow and cursor-based mouse fallback, resolving selection and row hits through its persistent series control while retaining season/episode workspace state; verify TV component selection, mouse, buffer, and Wide↔Normal handoff tests.
+- [ ] 4.1 Introduce `BrowserGridState` and `BrowserGridGeometry` for the accepted non-hero two-column path, including grid row maps, and remove their use from canonical paths; verify existing generic/Movies/homevideos/podcast Browser tests at Normal and Wide presentations.
+- [ ] 4.2 Replace Browser canonical index targets with stable Emby identity and map the target back to current content at activation, context-menu, persistence, navigation, and wheel boundaries; verify a refresh/reorder and Wide↔Normal target-plus-offset regression test and relevant shell routing tests.
+- [ ] 4.3 Make TV series content position-free, move series selection/scroll to its persistent controls, and remove parent cursor shadow and cursor-based mouse fallback; retain season/episode workspace state and verify existing TV selection, mouse, buffer, and breakpoint-handoff tests.
+- [ ] 4.4 Declare TV's episode pane a parent-owned provider workspace exemption from destination-rail ratchets; preserve its typed episode activation and verify its existing episode selection and buffer tests.
 
-## 5. Correct Music Ownership
+## 5. Correct Music and Audiobookshelf Rail Ownership
 
-- [ ] 5.1 Move grouped Music album selection and scroll into its persistent Wide and Inline controls, remove `album_cursor`/`album_scroll` lockstep helpers and ordinary-render writeback, and keep track focus/workspace authority in Music; verify existing Music component key/mouse tests.
-- [ ] 5.2 Convert Music shell requests, selected-item lookup, persistence, and breakpoint handoff to control-resolved stable targets/resting positions; verify existing shell Music workspace and Wide↔Normal re-anchor tests.
-- [ ] 5.3 Route both Music album presentations through the embedded controls' component views and verify existing narrow/wide buffer and one-painter characterization tests remain unchanged.
+- [ ] 5.1 Introduce position-free Music content plus a separately named discrete resting-position/re-anchor input; move album selection and scroll to persistent Wide/Inline controls, remove ordinary-render writeback, and verify existing Music key/mouse and Wide↔Normal tests.
+- [ ] 5.2 Introduce position-free Audiobookshelf Podcast and Book browse-content projections plus separately named re-anchor inputs; project show/book rows during content updates and remove render-time rail construction, seeded selection, and parent list offsets; verify Podcast/Book component key/mouse and Normal/Wide buffer tests.
+- [ ] 5.3 Add focused source or component ratchets proving ordinary Music, TV, and Audiobookshelf content pushes carry no cursor/scroll; verify each control preserves or clamps local state until an explicit re-anchor.
+- [ ] 5.4 Declare Audiobookshelf Podcast episode and Book chapter panes parent-owned provider workspace exemptions from destination-rail ratchets; preserve typed episode intent and chapter absolute-seek target ownership and verify existing workspace tests.
 
-## 6. Correct Audiobookshelf Ownership
+## 6. Finish Queue, Ratchets, and Documentation
 
-- [ ] 6.1 Add a persistent Wide show-list control to `AudiobookshelfPodcastComponent`, project show rows during content updates, and remove render-time control construction plus parent show cursor/scroll authority; verify Podcast component key/mouse and Normal/Wide buffer tests.
-- [ ] 6.2 Convert Podcast selection, show-fetch requests, persistence, and breakpoint handoff to control-resolved stable targets while retaining episode filter/selection in the provider workspace; verify existing shell Podcast and breakpoint tests.
-- [ ] 6.3 Add a persistent Wide book-list control to `AudiobookshelfBookComponent`, project book rows during content updates, and remove render-time control construction plus parent book cursor/browser-offset authority; verify Book component key/mouse and Normal/Wide buffer tests.
-- [ ] 6.4 Convert Book selection, bucket/book requests, persistence, and breakpoint handoff to control-resolved stable targets while retaining bucket and chapter workspace state; verify existing shell Book and breakpoint tests.
+- [ ] 6.1 Route Queue fixed rows through its embedded control component view and delete only superseded parent compatibility geometry/state, preserving Queue scope and drag ownership; verify existing Queue component, drag, and one-painter tests and confirm `QueueHitRegion` remains absent.
+- [ ] 6.2 Add narrow structural ratchets for parent cursor/scroll mirrors, ordinary-render writeback, position-bearing content projections, and isolated grid access, with positive and negative fixtures; run `ast-grep test` and `ast-grep scan`.
+- [ ] 6.3 Update `CONTEXT.md`, canonical-control comments, the interactive-surface ledger, and architecture documentation to describe actual embedded component views, retained paint results, stable targets, active-only handoff, grid isolation, and provider-workspace exemptions; verify terminology matches `CONTEXT.md`.
 
-## 7. Finish Paint and Geometry Cleanup
+## 7. Verify and Accept the Slice
 
-- [ ] 7.1 Route Queue's fixed rows through its embedded control's component view and delete only the parent compatibility geometry/state superseded by the control, preserving Queue scope and drag ownership; verify existing Queue component, drag, and one-painter tests and confirm `QueueHitRegion` remains absent.
-- [ ] 7.2 Delete canonical compatibility row maps, render-function constructors, parent mirrors, ordinary-render selection/scroll writeback, and any remaining per-surface canonical row-hit `*HitRegion` enums after their last consumers are gone; verify targeted source searches are empty and `cargo check -p mbv` passes.
-- [ ] 7.3 Add narrow structural ratchets for the known mirror/writeback forms removed by this change, with positive and negative fixtures, then run `ast-grep test` and `ast-grep scan`.
-
-## 8. Reconcile Documentation and Acceptance Evidence
-
-- [ ] 8.1 Update `CONTEXT.md`, canonical-control comments, the interactive-surface ledger, and related architecture documentation to describe actual embedded component views, child-owned point resolution, active-only handoff, and the grid carve-out; verify terminology matches `CONTEXT.md` and no stale “no hit-resolution API” or per-render-control claim remains.
-- [ ] 8.2 Run the focused media-list, Home, Feeds, Browser, TV, Music, Audiobookshelf, Queue, render-characterization, and real-`Application::tick()` mouse tests; confirm #674 painted-owner arbitration, one-row wheel, throttle, routing, and Playlists/Queue regression evidence remains passing.
-- [ ] 8.3 Run `cargo fmt`, `cargo check -p mbv`, `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`, `ast-grep scan`, and `make check-code-file-lines`; fix all failures before acceptance.
-- [ ] 8.4 Have a human verify representative Normal and Wide Home, Feeds, Browser, TV, Music, Audiobookshelf, and Queue behavior, plus focused-sidebar wheel arbitration; record the result or an explicit human waiver before acceptance.
-- [ ] 8.5 Sync both delta specs into the main specs and archive the change only after implementation, automated gates, review, and human verification are accepted; verify final OpenSpec validation succeeds.
+- [ ] 7.1 Run focused media-list, Home, Feeds, Browser, TV, Music, Audiobookshelf, Queue, render-characterization, and real-`Application::tick()` mouse tests; confirm PR #683 painted-owner arbitration, one-row wheel, throttle, routing, and Playlists/Queue regression evidence remains passing.
+- [ ] 7.2 Run `cargo fmt`, `cargo check -p mbv`, `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`, `ast-grep scan`, and `make check-code-file-lines`; fix all failures before acceptance.
+- [ ] 7.3 Have a human verify representative Normal and Wide Home, Feeds, Browser, TV, Music, Audiobookshelf, and Queue behavior, plus focused-sidebar wheel arbitration; record the result or an explicit human waiver before acceptance.
+- [ ] 7.4 Sync both delta specs into the main specs and archive the change only after implementation, automated gates, review, and human verification are accepted; verify final OpenSpec validation succeeds.
