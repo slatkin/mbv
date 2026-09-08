@@ -2,19 +2,19 @@
 
 ### Requirement: The Wide hero split supports precise pane resizing
 
-When a Wide hero two-pane surface is active, the existing gap columns between the browser (list) pane and the hero pane SHALL be a mouse resize target. Pressing the left button on those gap columns and dragging horizontally SHALL resize the list pane live at one-column precision, with the hero pane taking the remainder. The resulting list-pane width SHALL place the grabbed edge at the pointer column, subject to the shared arrangement's minimum pane widths: neither pane may fall below the minimum, so the split is clamped to the bounds implied by the active surface's content area.
+When a Wide hero surface is actively painting its two-pane split, the existing gap columns between the browser (list) pane and the hero pane SHALL be a mouse resize target. A surface that fits the wide breakpoint but does not paint the split (empty, loading, or no-selection states) SHALL NOT expose a resize target. Pressing the left button on those gap columns and dragging horizontally SHALL resize the list pane live at one-column precision, with the hero pane taking the remainder. The list-pane width SHALL resolve as the pointer column minus the pane origin: the gap column nearest the browser pane is the exact edge, so grabbing it without motion changes nothing, and the outer gap column resolves one column wider before exact-edge tracking resumes. Once a drag has changed the width, tracking SHALL continue while the pointer moves outside the gap. The resolved width SHALL be clamped to the shared arrangement's minimum pane widths — neither pane may fall below the minimum — against the active surface's content area.
 
 The resize target SHALL use the existing gap without adding a divider, gutter, hover treatment, or wider invisible hit region. A left press and release without drag motion SHALL leave the split unchanged. The split SHALL be mouse-only: no keyboard binding SHALL move it.
 
 A dedicated Interactive Component SHALL be the sole painter and gesture owner of the gap columns. The panes' hit geometry SHALL exclude the gap. The boundary owner SHALL receive mouse events through normal component subscriptions, follow the same overlay arbitration as other panel surfaces, recognize the gesture locally, and emit resolved widths. The shell SHALL NOT re-resolve raw pointer coordinates. Pane row dragging and other pane mouse gestures SHALL remain independently owned and SHALL NOT activate from the gap columns.
 
-The resulting split SHALL be a single in-memory session width shared by every Wide hero surface: switching between wide surfaces SHALL apply the same split, clamped to each surface's valid range. The split SHALL NOT be persisted: it SHALL NOT be written to preferences or config, and SHALL return to the default split after the application restarts. Refreshing the current view SHALL revert the split to the default ratio. When the terminal is resized, the split SHALL be clamped to the valid range at the new size, not reverted.
+The resulting split SHALL be a single in-memory session width shared by every Wide hero surface: switching between wide surfaces SHALL apply the same split, clamped to each surface's valid range. The split SHALL NOT be persisted: it SHALL NOT be written to preferences or config, and SHALL return to the default split after the application restarts. Refreshing the current view SHALL revert the split to the default ratio. When the terminal is resized, the split SHALL be clamped to the valid range at the new size each time it is applied, not reverted.
 
 #### Scenario: Drag resizes by one column
 
-- **WHEN** a Wide hero surface is active and the user presses the gap columns between the list and hero panes and drags by one terminal column within the allowed range
+- **WHEN** a Wide hero surface is painting its two-pane split and the user presses the gap columns between the list and hero panes and drags by one terminal column within the allowed range
 - **THEN** the list pane becomes exactly one column wider or narrower during the drag and the hero pane takes the remainder
-- **AND** the existing visual gap follows the pointer without adding new chrome
+- **AND** grabbing either gap column resolves within one column of the pointer, with continued tracking exact, and the existing visual gap follows the pointer without adding new chrome
 
 #### Scenario: Drag is clamped to the shared pane bounds
 
@@ -41,9 +41,20 @@ The resulting split SHALL be a single in-memory session width shared by every Wi
 
 #### Scenario: Refresh reverts to the default split
 
-- **WHEN** the user refreshes the current view
+- **WHEN** the user refreshes the active library view
 - **THEN** the split returns to the default arrangement ratio on that surface
 - **AND** the session width override is cleared
+
+#### Scenario: Refreshing the queue leaves the split alone
+
+- **WHEN** the user refreshes while the Queue panel holds focus
+- **THEN** the wide split is unchanged
+
+#### Scenario: No resize target where no split is painted
+
+- **WHEN** a wide surface shows an empty, loading, or no-selection state that paints without the two-pane split
+- **THEN** the gap columns do not arm split resizing
+- **AND** pane gestures behave normally in those states
 
 #### Scenario: The split is never persisted
 
