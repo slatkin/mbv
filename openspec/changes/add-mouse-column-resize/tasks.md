@@ -5,8 +5,8 @@
 
 ## 2. Width Application
 
-- [ ] 2.1 Separate exact in-memory queue-column width updates from preference persistence while retaining the existing keyboard resize behavior; verify focused state tests show mouse movement does not save and drag end saves only a changed final width.
-- [ ] 2.2 Dispatch boundary messages exhaustively, recompute the frame for each distinct live width, and cancel the component when Panel mode or overlay arbitration removes eligibility; verify Queue title/list geometry does not overlap the boundary and queue-slot dragging plus panel clicks outside it retain their existing behavior.
+- [x] 2.1 Separate exact in-memory queue-column width updates from preference persistence while retaining the existing keyboard resize behavior; verify focused state tests show mouse movement does not save and drag end saves only a changed final width.
+- [x] 2.2 Dispatch boundary messages exhaustively, recompute the frame for each distinct live width, and cancel the component when Panel mode or overlay arbitration removes eligibility; verify Queue title/list geometry does not overlap the boundary and queue-slot dragging plus panel clicks outside it retain their existing behavior.
 
 ## 3. Integration and Documentation
 
