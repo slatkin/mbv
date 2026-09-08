@@ -109,7 +109,9 @@ fn music_wide_track_table_uses_retained_geometry_for_live_mouse_gestures() {
     let outcome = harness.step();
     assert!(outcome.messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::MusicTrackContextMenu)
+        Msg::Shell(ShellRequest::MusicTrackContextMenuAt {
+            anchor: (x, y)
+        }) if *x == second_track_point.0 && *y == second_track_point.1
     )));
 
     // Wheel over the painted table advances exactly one local track row and

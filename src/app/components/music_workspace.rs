@@ -466,7 +466,9 @@ impl MusicWorkspaceComponent {
                 if let Some(track) = self.resolve_wide_track(at) {
                     self.track_cursor = Some(track);
                     self.track_list.select_index(track);
-                    return Some(Msg::Shell(ShellRequest::MusicTrackContextMenu));
+                    return Some(Msg::Shell(ShellRequest::MusicTrackContextMenuAt {
+                        anchor: (at.x, at.y),
+                    }));
                 }
                 let album = self.resolve_wide_album(at)?;
                 self.album_cursor = album;

@@ -46,6 +46,12 @@ pub enum ShellRequest {
     /// raises the menu through `App` (target resolution lives at the
     /// shell/component boundary).
     MusicTrackContextMenu,
+    /// Right-click on a focused Wide track row: the shell resolves the track
+    /// from `MusicWorkspaceComponent::track_cursor()` and preserves the
+    /// component-provided pointer anchor for menu placement.
+    MusicTrackContextMenuAt {
+        anchor: (u16, u16),
+    },
     /// `[`/`]` in grouped Music: cycle to the previous (`delta == -1`) or next
     /// (`delta == 1`) group; the shell runs `App::switch_music_group`.
     MusicGroupSwitch {
