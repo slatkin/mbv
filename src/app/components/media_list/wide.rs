@@ -167,23 +167,19 @@ impl<Target> WideMediaList<Target> {
 
     /// Move the cursor by `delta` selectable rows, clamped to the ends.
     pub fn move_selection(&mut self, delta: i64) {
-        self.invalidate_paint();
         self.core.move_selection(delta);
     }
 
     pub fn select_first(&mut self) {
-        self.invalidate_paint();
         self.core.select_first();
     }
 
     pub fn select_last(&mut self) {
-        self.invalidate_paint();
         self.core.select_last();
     }
 
     /// Place the cursor at selectable index `index`, clamped to the last row.
     pub fn select_index(&mut self, index: usize) {
-        self.invalidate_paint();
         self.core.select_index(index);
     }
 
@@ -292,8 +288,9 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
     }
 
     /// Move the cursor to `target` when it is present; returns whether it was.
+    /// Selection does not change row flow geometry, so a completed view remains
+    /// valid for pointer gestures until the next view begins.
     pub fn select_target(&mut self, target: &Target) -> bool {
-        self.invalidate_paint();
         self.core.select_target(target)
     }
 

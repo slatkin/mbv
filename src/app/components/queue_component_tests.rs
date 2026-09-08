@@ -190,7 +190,7 @@ fn queue_right_click_uses_the_rendered_slot_target() {
     let mut component = QueueComponent::new();
     component.set_content(
         slots,
-        QueueCursorUpdate::Set(0),
+        QueueCursorUpdate::Set(1),
         QueueScope::Local,
         PlaybackState::default(),
         QueueTitleModel::default(),
@@ -200,7 +200,9 @@ fn queue_right_click_uses_the_rendered_slot_target() {
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    let (rect, _) = component.test_rows()[1];
+    let rect = component
+        .selected_row_rect()
+        .expect("selected queue row is retained after paint");
     let message = component.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Right),
         column: rect.x,

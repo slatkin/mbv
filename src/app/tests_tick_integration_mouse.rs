@@ -356,7 +356,7 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         .draw(|f| harness.model_mut().draw_frame(f, false, false))
         .unwrap();
 
-    let (queue_rect, _) = *harness
+    let queue_rect = harness
         .model_mut()
         .application
         .get_component_mut(&ComponentId::Queue)
@@ -364,9 +364,8 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         .as_any_mut()
         .downcast_mut::<QueueComponent>()
         .expect("queue component type")
-        .test_rows()
-        .first()
-        .expect("queue painted at least one row");
+        .selected_row_rect()
+        .expect("queue painted selected row");
 
     let library_point = harness
         .model_mut()
@@ -844,8 +843,8 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
         .as_any_mut()
         .downcast_mut::<QueueComponent>()
         .unwrap()
-        .test_rows()[0]
-        .0;
+        .selected_row_rect()
+        .expect("queue painted selected row");
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
         column: first_row.x,
