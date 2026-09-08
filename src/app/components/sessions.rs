@@ -377,6 +377,9 @@ mod tests {
             row: 20,
             modifiers: KeyModifiers::NONE,
         });
-        assert_eq!(component.cursor, 1, "focused wheel ignores pointer location");
+        assert_eq!(
+            component.cursor, 1,
+            "focused wheel ignores pointer location"
+        );
     }
 }
