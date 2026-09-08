@@ -10,6 +10,6 @@
 
 ## 3. Integration and Documentation
 
-- [ ] 3.1 Extend the existing live-tick mouse integration coverage with a press-drag-release sequence and an overlay-suppression case, verifying exact live width, final persistence, only the boundary owner's message is delivered, and Queue/Library destinations do not handle the gesture through `Application::tick()`.
-- [ ] 3.2 Update `docs/architecture/interactive-surface-ledger.md` with the boundary owner, one-column drag gesture, Both-only availability, and focused/live-tick/manual verification evidence.
-- [ ] 3.3 Manually verify the boundary is visually unchanged and draggable at representative Normal and Wide terminal sizes, then run `cargo fmt`, targeted `cargo nextest` tests, `cargo check -p mbv`, `ast-grep scan`, and `make check-code-file-lines`.
+- [x] 3.1 Extend the existing live-tick mouse integration coverage with a press-drag-release sequence and an overlay-suppression case, verifying exact live width, final persistence, only the boundary owner's message is delivered, and Queue/Library destinations do not handle the gesture through `Application::tick()`.
+- [x] 3.2 Update `docs/architecture/interactive-surface-ledger.md` with the boundary owner, one-column drag gesture, Both-only availability, and focused/live-tick/manual verification evidence.
+- [x] 3.3 Manually verify the boundary is visually unchanged and draggable at representative Normal and Wide terminal sizes, then run `cargo fmt`, targeted `cargo nextest` tests, `cargo check -p mbv`, `ast-grep scan`, and `make check-code-file-lines`.
