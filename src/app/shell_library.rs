@@ -147,7 +147,7 @@ impl Model {
             if self.application.mounted(&id)
                 && (id != ComponentId::QueueBoundary
                     || (self.app.effective_panel_mode() == PanelMode::Both
-                        && !self.blocking_overlay_active()))
+                        && self.panel_mouse_eligible()))
             {
                 ids.push(id);
             }
@@ -159,7 +159,7 @@ impl Model {
         let id = ComponentId::QueueBoundary;
         let area = self.app.layout.main.queue_boundary_area;
         let enabled = self.app.effective_panel_mode() == PanelMode::Both
-            && !self.blocking_overlay_active()
+            && self.panel_mouse_eligible()
             && area.width == 1
             && area.height > 0;
         if !enabled {

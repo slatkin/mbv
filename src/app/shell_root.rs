@@ -46,6 +46,15 @@ impl Model {
         }
     }
 
+    /// Whether the ordinary Queue/Library panel surfaces may receive mouse
+    /// input. Any mounted overlay arbitrates the panel surfaces, including
+    /// non-blocking overlays that remain visible without dimming the frame.
+    pub(super) fn panel_mouse_eligible(&self) -> bool {
+        !UiRootComponent::overlay_ids()
+            .iter()
+            .any(|id| self.application.mounted(id))
+    }
+
     pub(super) fn blocking_overlay_active(&self) -> bool {
         [
             ComponentId::Overlay(OverlayId::ContextMenu),

@@ -43,6 +43,27 @@ fn exact_column_arms_and_resolves_from_frame_origin() {
 }
 
 #[test]
+fn drag_end_reports_changed_width_once_after_live_motion() {
+    let mut component = boundary();
+    assert_eq!(
+        component.on(&mouse(MouseEventKind::Down(MouseButton::Left), 10)),
+        None
+    );
+    assert_eq!(
+        component.on(&mouse(MouseEventKind::Drag(MouseButton::Left), 60)),
+        Some(Msg::Queue(QueueRequest::ResizeColumnLive(51)))
+    );
+    assert_eq!(
+        component.on(&mouse(MouseEventKind::Up(MouseButton::Left), 60)),
+        Some(Msg::Queue(QueueRequest::ResizeColumnEnd(51)))
+    );
+    assert_eq!(
+        component.on(&mouse(MouseEventKind::Up(MouseButton::Left), 60)),
+        None
+    );
+}
+
+#[test]
 fn click_only_and_disabled_sync_cancel_without_messages() {
     let mut component = boundary();
     assert_eq!(
