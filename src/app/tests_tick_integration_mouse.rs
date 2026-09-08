@@ -731,4 +731,3 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
     )));
     apply_outcome(&mut harness, outcome);
 }
-
