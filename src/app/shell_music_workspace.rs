@@ -239,15 +239,12 @@ impl Model {
                 let (album_cursor, album_order) = music.painted_album_cursor_and_order();
                 (
                     image_paint,
-                    layout.wide_music_track_hitmap.clone(),
                     layout.selected_item_rect,
                     album_cursor,
                     album_order.to_vec(),
                 )
             });
-        if let Some((image_paint, track_hitmap, selected_item_rect, album_cursor, album_order)) =
-            projection
-        {
+        if let Some((image_paint, selected_item_rect, album_cursor, album_order)) = projection {
             if self.app.images_enabled() && !search_active {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
                     let context = self.app.wide_music_render_ctx(lib_idx, None);
@@ -259,9 +256,6 @@ impl Model {
                 }
             }
             self.app.paint_music_image(frame, image_paint);
-            if wide {
-                self.app.layout.main.wide_music_track_hitmap = track_hitmap;
-            }
             self.app.layout.main.selected_item_rect = selected_item_rect;
         }
     }

@@ -131,6 +131,35 @@ fn narrow_music_one_column_geometry_and_non_selectable_structural_rows() {
 }
 
 #[test]
+fn narrow_music_publishes_full_flow_rows_and_viewport_offset_after_scroll() {
+    let app = multi_artist_app();
+    let lib_idx = app.tab.emby_library_index().unwrap();
+    let mut context = app.wide_music_render_ctx(lib_idx, None);
+    context.focused = true;
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context);
+    component.set_focused(true);
+    component.re_anchor(12, 12);
+
+    let mut terminal = Terminal::new(TestBackend::new(NW, 8)).unwrap();
+    terminal
+        .draw(|f| component.view(f, Rect::new(0, 0, NW, 8)))
+        .unwrap();
+    let layout = component.layout();
+
+    assert!(layout.left_screen_offset > 0);
+    assert!(layout.left_item_rows.len() > layout.left_row_targets.len());
+    assert_eq!(
+        layout.left_row_targets,
+        layout.left_item_rows
+            [layout.left_screen_offset..layout.left_screen_offset + layout.left_row_targets.len()]
+            .iter()
+            .map(|row| row.first().copied())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn narrow_music_admits_the_selected_album_detail_block() {
     let app = multi_artist_app();
     let (_terminal, component) = render_narrow(&app, true, 0);

@@ -1,5 +1,4 @@
 use crate::app::{palette, App, QueueScope, RemoteSlotState};
-use mbv_core::playback_queue::QueueSlotId;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -9,7 +8,6 @@ use unicode_width::UnicodeWidthStr;
 
 #[derive(Default)]
 pub(in crate::app) struct QueueRenderGeometry {
-    pub rows: Vec<(Rect, QueueSlotId)>,
     pub scope_local_area: Rect,
     pub scope_remote_area: Rect,
 }

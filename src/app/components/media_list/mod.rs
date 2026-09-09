@@ -113,8 +113,10 @@ impl<Target: Clone> RowGeometry<Target> {
         offset: usize,
     ) -> Self {
         let mut flow = Vec::with_capacity(rows.len() - 1 + detail_rows);
+        let mut selected_flow_row = None;
         for (source_row, row) in rows.iter().enumerate() {
             if source_row == selected_row {
+                selected_flow_row = Some(flow.len());
                 flow.extend((0..detail_rows).map(|detail_row| FlowRow {
                     source_row: None,
                     target: if detail_row == 0 {
@@ -133,7 +135,7 @@ impl<Target: Clone> RowGeometry<Target> {
         Self {
             offset,
             rows: flow,
-            selected_row: Some(selected_row),
+            selected_row: selected_flow_row,
         }
     }
 }
@@ -182,6 +184,84 @@ impl MediaSemanticState {
         Self::Active {
             progress: progress.map(ActiveProgress::new),
         }
+    }
+}
+
+/// Which semantic surface should receive the selected-row treatment.
+///
+/// The policy is deliberately closed: callers choose a named surface role,
+/// never a raw Ratatui style or colour.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SelectedRowSurface {
+    ListBackdrop,
+    OwningSurface,
+}
+
+/// Semantic paint policy for one `WideMediaList` view.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WideMediaListPaintPolicy {
+    focused: bool,
+    selected_surface: SelectedRowSurface,
+    throbber: Option<char>,
+}
+
+impl WideMediaListPaintPolicy {
+    pub const fn new(
+        focused: bool,
+        selected_surface: SelectedRowSurface,
+        throbber: Option<char>,
+    ) -> Self {
+        Self {
+            focused,
+            selected_surface,
+            throbber,
+        }
+    }
+
+    pub(crate) const fn focused(self) -> bool {
+        self.focused
+    }
+
+    pub(crate) const fn selected_surface(self) -> SelectedRowSurface {
+        self.selected_surface
+    }
+
+    pub(crate) const fn throbber(self) -> Option<char> {
+        self.throbber
+    }
+}
+
+/// Semantic paint policy for one `InlineMediaBrowser` view.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InlineMediaBrowserPaintPolicy {
+    focused: bool,
+    selected_surface: SelectedRowSurface,
+    desired_detail_rows: usize,
+}
+
+impl InlineMediaBrowserPaintPolicy {
+    pub const fn new(
+        focused: bool,
+        selected_surface: SelectedRowSurface,
+        desired_detail_rows: usize,
+    ) -> Self {
+        Self {
+            focused,
+            selected_surface,
+            desired_detail_rows,
+        }
+    }
+
+    pub(crate) const fn focused(self) -> bool {
+        self.focused
+    }
+
+    pub(crate) const fn selected_surface(self) -> SelectedRowSurface {
+        self.selected_surface
+    }
+
+    pub(crate) const fn desired_detail_rows(self) -> usize {
+        self.desired_detail_rows
     }
 }
 

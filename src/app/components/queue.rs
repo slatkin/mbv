@@ -8,7 +8,10 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{MediaKind, MediaListRow, MediaSemanticState, WideMediaList};
+use super::media_list::{
+    MediaKind, MediaListRow, MediaSemanticState, SelectedRowSurface, WideMediaList,
+    WideMediaListPaintPolicy,
+};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use super::msg::{
@@ -17,9 +20,7 @@ use super::msg::{
 };
 use super::user_event::UserEvent;
 use crate::app::palette;
-use crate::app::render::{
-    render_queue_title_content, render_wide_media_list, QueueRenderGeometry, QueueTitleModel,
-};
+use crate::app::render::{render_queue_title_content, QueueRenderGeometry, QueueTitleModel};
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use crate::app::ui_util::{fmt_duration_short, fmt_playback_pct};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -60,12 +61,7 @@ pub struct QueueComponent {
 
 impl QueueComponent {
     pub(crate) fn selected_row_rect(&self) -> Option<Rect> {
-        let selected = self.list.selected_target()?;
-        self.geometry
-            .rows
-            .iter()
-            .find(|(_, slot_id)| slot_id == selected)
-            .map(|(rect, _)| *rect)
+        self.list.current_selected_row_rect()
     }
 
     pub fn new() -> Self {
@@ -125,8 +121,11 @@ impl QueueComponent {
         if let QueueCursorUpdate::Set(idx) = cursor {
             self.list.select_index(idx);
         }
-        self.list
-            .set_scroll(self.list.scroll().min(self.list.cursor()));
+        let scroll = self.list.scroll();
+        let clamped = scroll.min(self.list.cursor());
+        if clamped != scroll {
+            self.list.set_scroll(clamped);
+        }
     }
 
     /// Deliver the current scope and title/chrome independently of row delivery.
@@ -330,7 +329,8 @@ impl QueueComponent {
 
     /// Gesture recognition (click / double-click / right-click / wheel) comes
     /// from the private `MouseGestureState` (ADR 0024, design.md D3). Row
-    /// identity comes from the embedded control's `resolve_point`
+    /// identity comes from the embedded control's retained current-frame
+    /// point resolution
     /// (design.md D6); scope pills from `scope_regions`. The component emits a
     /// semantic `Msg` with a resolved `QueueSlotId`/scope — never raw
     /// coordinates — except the context-menu anchor (design.md D4).
@@ -341,7 +341,7 @@ impl QueueComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                if !self.list.claims_point(self.area, at) {
+                if !self.list.claims_current_point(at) {
                     return None;
                 }
                 self.list.move_selection(delta);
@@ -354,7 +354,7 @@ impl QueueComponent {
                 if let Some(scope) = self.claim_scope_pill(at) {
                     return Some(Msg::Shell(ShellRequest::QueueScopeClick { scope }));
                 }
-                if !self.area.contains(at) {
+                if !self.list.claims_current_point(at) {
                     return None;
                 }
                 self.drag_grab = self.claim_slot(at);
@@ -366,7 +366,7 @@ impl QueueComponent {
                 if let Some(scope) = self.claim_scope_pill(at) {
                     return Some(Msg::Shell(ShellRequest::QueueScopeClick { scope }));
                 }
-                if !self.area.contains(at) {
+                if !self.list.claims_current_point(at) {
                     return None;
                 }
                 self.claim_slot(at);
@@ -375,9 +375,6 @@ impl QueueComponent {
                 }))
             }
             MouseGesture::RightClick(at) => {
-                if !self.area.contains(at) {
-                    return None;
-                }
                 // Legacy parity: a right-click on blank queue space opens no
                 // menu. Only resolve a menu when the click lands on a row —
                 // never fall back to the prior selection (design.md D4).
@@ -389,7 +386,7 @@ impl QueueComponent {
             }
             MouseGesture::Drag { to, .. } => {
                 let grabbed = self.drag_grab?;
-                let resolved = self.list.resolve_point(self.area, to).copied()?;
+                let resolved = self.list.resolve_current_point(to).copied()?;
                 if resolved == grabbed {
                     return None;
                 }
@@ -420,16 +417,11 @@ impl QueueComponent {
     /// selection to it (a blank click keeps the previous slot, preserving the
     /// legacy no-op). Returns the resolved slot, if any.
     fn claim_slot(&mut self, at: Position) -> Option<QueueSlotId> {
-        let slot_id = self.list.resolve_point(self.area, at).copied();
+        let slot_id = self.list.resolve_current_point(at).copied();
         if let Some(id) = slot_id {
             self.list.select_target(&id);
         }
         slot_id
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_rows(&self) -> &[(Rect, mbv_core::playback_queue::QueueSlotId)] {
-        &self.geometry.rows
     }
 
     #[cfg(test)]
@@ -481,6 +473,12 @@ impl Component for QueueComponent {
             self.scope_regions
                 .push(self.geometry.scope_remote_area, QueueScope::Remote);
         }
+        self.list.set_paint_policy(WideMediaListPaintPolicy::new(
+            self.focused,
+            SelectedRowSurface::OwningSurface,
+            self.throbber,
+        ));
+        Component::view(&mut self.list, frame, area);
         if area.height < 1 {
             return;
         }
@@ -492,37 +490,8 @@ impl Component for QueueComponent {
             );
             return;
         }
-        // The canonical child is the sole Queue body painter
-        // (migrate-queue-to-canonical-list D4). It persists the resolved scroll
-        // offset back into the list; Queue resolves click slots via
-        // `list.resolve_point` now, and keeps `geometry.rows` (rebuilt below)
-        // only for `selected_row_rect` and tests.
-        // Legacy `render_queue_content` parity: the selected row takes the
-        // focused queue-column surface (its parent panel).
-        render_wide_media_list(
-            frame,
-            area,
-            area,
-            &mut self.list,
-            self.focused,
-            palette::SURFACE_FOCUSED,
-            self.throbber,
-        );
-        let viewport = self.list.resolve_viewport(area.height as usize);
-        self.geometry.rows = (viewport.offset..viewport.total_rows)
-            .take(viewport.height)
-            .enumerate()
-            .filter_map(|(line, row)| {
-                let slot_id = *self.list.rows()[row].selectable_target()?;
-                let rect = Rect {
-                    x: area.x,
-                    y: area.y + line as u16,
-                    width: area.width,
-                    height: 1,
-                };
-                Some((rect, slot_id))
-            })
-            .collect();
+        // The persistent canonical child is the sole Queue body painter and
+        // retains the current painted row geometry for later point resolution.
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

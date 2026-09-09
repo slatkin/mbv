@@ -142,7 +142,6 @@ fn narrow_grouped_music_publishes_no_wide_track_targets() {
     let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 30);
 
     assert!(!(layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0));
-    assert!(layout.wide_music_track_hitmap.is_empty());
 }
 
 #[test]

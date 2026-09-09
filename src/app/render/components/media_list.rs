@@ -3,7 +3,10 @@ mod wide;
 mod wide_row;
 
 pub(in crate::app) use plain_rows::render_plain_rows;
-pub(in crate::app) use wide::{render_inline_media_browser, render_wide_media_list};
+pub(in crate::app) use wide::{
+    render_inline_media_browser, render_inline_media_browser_component, render_wide_media_list,
+    render_wide_media_list_component,
+};
 
 // §3.2 one-painter instrumentation: per-frame execution counters for the two
 // canonical wide list paint entry points. Tests reset these, render one
@@ -91,6 +94,45 @@ mod wide_row_regression_tests {
                 "only the selected row is filled (duration={duration:?})"
             );
         }
+    }
+
+    /// A framed parent may claim a full-width panel while reserving a
+    /// vertically offset row-flow rect. The row painter keeps its established
+    /// full-width selection treatment, but rows and scrollbar must start at the
+    /// content flow's y-coordinate and use its height.
+    #[test]
+    fn distinct_claim_and_content_geometry_keeps_rows_on_the_retained_flow() {
+        let claim = Rect::new(6, 0, 30, 6);
+        let content = Rect::new(8, 2, 26, 2);
+        let selected_bg = palette::SURFACE_RESTING;
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            item("selected", "Selected", None),
+            item("other", "Other", None),
+        ]);
+
+        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+        let mut selected_row_rect = None;
+        terminal
+            .draw(|f| {
+                selected_row_rect = Some(
+                    render_wide_media_list(f, claim, content, &mut list, true, selected_bg, None)
+                        .selected_row_rect,
+                );
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+
+        assert_eq!(
+            selected_row_rect,
+            Some(Some(Rect::new(content.x, content.y, content.width, 1)))
+        );
+        assert_eq!(buffer[(claim.x, content.y)].symbol(), "▎");
+        assert_eq!(buffer[(content.x, content.y)].symbol(), "S");
+        assert_eq!(buffer[(claim.x, content.y)].bg, selected_bg);
+        assert_eq!(buffer[(claim.right() - 1, content.y)].bg, selected_bg);
+        assert_ne!(buffer[(claim.x, claim.y)].symbol(), "▎");
+        assert_ne!(buffer[(claim.x, content.y + 1)].bg, selected_bg);
     }
 
     /// Step 4 latent bug: the painter must persist the resolved scroll offset

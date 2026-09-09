@@ -1,10 +1,12 @@
-use crate::app::components::media_list::WideMediaList;
+use crate::app::components::media_list::{
+    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
+};
 use crate::app::layout::LayoutMain;
-use crate::app::palette;
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::components::music_wide::grouped_album_rows;
 use ratatui::layout::Rect;
 use ratatui::Frame;
+use tuirealm::component::Component;
 
 /// Paints the wide Music right rail through the canonical `WideMediaList`
 /// control, exactly as the wide TV series rail and wide Movies list do
@@ -56,34 +58,25 @@ pub(in crate::app) fn render_wide_right_album_browser_with_ctx(
         width: panel_area.width,
         ..browser_area
     };
-    let paint = super::media_list::render_wide_media_list(
-        f,
-        paint_area,
-        browser_area,
-        media,
+    media.set_geometry(paint_area, browser_area);
+    media.set_paint_policy(WideMediaListPaintPolicy::new(
         right_focused,
-        palette::list_selected_row_bg(),
+        SelectedRowSurface::ListBackdrop,
         None,
-    );
+    ));
+    Component::view(media, f, browser_area);
 
-    layout.selected_item_rect = paint.selected_row_rect;
+    layout.selected_item_rect = media.current_selected_row_rect();
     layout.left_sorted_indices = order.to_vec();
-    layout.left_row_targets = vec![None; browser_area.height as usize];
-    let geometry = &paint.row_geometry;
-    for (screen_row, target) in geometry
-        .targets()
-        .skip(geometry.offset())
-        .take(browser_area.height as usize)
-        .enumerate()
-    {
-        if let Some(id) = target {
-            if let Some(index) = list.items.iter().position(|item| &item.id == id) {
-                if let Some(slot) = layout.left_row_targets.get_mut(screen_row) {
-                    *slot = Some(index);
-                }
-            }
-        }
-    }
+    let offset = media.current_flow_offset().unwrap_or_default();
+    layout.left_row_targets = (0..browser_area.height as usize)
+        .map(|row| {
+            media
+                .current_flow_target_at(offset + row)
+                .flatten()
+                .and_then(|id| list.items.iter().position(|item| &item.id == id))
+        })
+        .collect();
 
-    geometry.offset()
+    media.scroll()
 }

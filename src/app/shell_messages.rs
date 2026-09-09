@@ -99,6 +99,18 @@ impl Model {
                     }
                     self.push_music_workspace_content();
                 }
+                ShellRequest::MusicTrackContextMenuAt { anchor } => {
+                    self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                    if let Some((_, track)) = self
+                        .app
+                        .tab
+                        .emby_library_index()
+                        .and_then(|_| self.focused_music_track())
+                    {
+                        self.app.open_context_menu_for_at(track, anchor.0, anchor.1);
+                    }
+                    self.push_music_workspace_content();
+                }
                 ShellRequest::MusicAlbumContextMenu { anchor } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
                     let album = self
