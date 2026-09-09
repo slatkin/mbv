@@ -123,12 +123,12 @@ pub(crate) struct LayoutMain {
     /// not include the `«`/`»` scroll-indicator glyphs. Cleared and
     /// repopulated every frame; paint-coupled by design.
     pub tabs_hitmap: Vec<(Rect, usize)>,
-    /// Bounding rect of the wide Music left pane's hero artwork area.
+    /// Bounding rect of the wide Music right pane's hero artwork area.
     /// Clicks here should not activate track selection or playback.
     pub wide_music_art_area: Rect,
     /// Full area passed to the grouped Music component after legacy layout.
     pub wide_music_area: Rect,
-    /// Bounding rect of the wide Music right pane (album browser).
+    /// Bounding rect of the wide Music left pane (album browser).
     /// Populated only when the wide Music layout is active.
     pub wide_music_right_area: Rect,
     /// Bounding rect of the wide Movies right rail (pills + list).

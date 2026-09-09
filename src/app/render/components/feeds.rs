@@ -181,11 +181,11 @@ pub(in crate::app) fn render_feeds_content(
     let wide = wide_panes.is_some();
 
     // Wide: paint the parent-owned Wide hero detail pane, then frame the
-    // right rail and inset the canonical control inside it so the border can
+    // left browser pane and inset the canonical control inside it so the border can
     // never replace a heading or the last visible entry at a scroll boundary.
     let (list_area, outer_panel) = if let Some(hero_panel) = wide_panes.map(|panes| panes.hero) {
         layout.hero_area = hero_panel;
-        // Wide left hero pane: unconditional fill via the shared primitive
+        // Wide right hero pane: unconditional fill via the shared primitive
         // (D1, persistent pane -- painted even with no selected entry). Feeds
         // is read-only and never focus-green (D3/D8).
         let hero_content_area =

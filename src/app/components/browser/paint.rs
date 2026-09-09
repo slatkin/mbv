@@ -14,10 +14,9 @@ use crate::app::render::{
 };
 
 impl BrowserComponent {
-    /// Paints the wide Movies/home-video Wide hero layout: a read-only
-    /// shared Emby hero card on the left and the letter-pill/count/search
-    /// row plus the one-column list in the right rail. Mirrors the deleted
-    /// legacy wide renderer so the picture is unchanged.
+    /// Paints the wide Movies/home-video Wide hero layout: the one-column
+    /// list and letter-pill/count/search row in the left browser pane, with a
+    /// read-only shared Emby hero card in the right pane.
     /// Returns the final list scroll (the component owns its cursor/scroll,
     /// so it records it instead of writing the App nav level).
     pub(super) fn render_wide_movies(
@@ -53,9 +52,9 @@ impl BrowserComponent {
         let browser_area = panes.browser_area;
         self.layout.movies_wide_right_area = browser_area;
 
-        // Left pane: read-only shared hero card (not an interactive hero —
-        // `layout.hero_area` stays unset so the left pane is outside mouse
-        // geometry, mirroring the legacy wide renderer).
+        // Right pane: read-only shared hero card (not an interactive hero —
+        // `layout.hero_area` stays unset so the hero pane is outside mouse
+        // geometry).
         let hero_content =
             wide_hero_hero_pane(f, body_area, crate::app::render::LeftPaneFocus::ReadOnly)
                 .expect("wide movies layout has a hero pane");

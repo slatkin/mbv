@@ -134,7 +134,7 @@ fn wide_feeds_selected_row_punches_through_to_the_library_backdrop() {
     assert_eq!(selected, body, "unfocused rail shows no selection bar");
 }
 
-/// migrate-home-feeds 4.6 regression: the Wide left hero pane mirrors the
+/// migrate-home-feeds 4.6 regression: the Wide right hero pane mirrors the
 /// sibling media tabs -- a plain `SURFACE_RESTING` fill with no `▔`/`▁`
 /// HeroShell border and no focus tint from the list panel. Focusing the list
 /// must not turn the hero pane green.

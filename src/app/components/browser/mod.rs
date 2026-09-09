@@ -1,6 +1,6 @@
 //! Interactive Component for the generic Emby browser rows.
 //!
-//! The shell mirrors the active list source into this component. Generic,
+//! The shell projects the active list source into this component. Generic,
 //! Movies, and home-video rows use the existing typed render seam; music,
 //! TV/series, and album-track presentation remain on their legacy branches
 //! until their owning tasks convert them.
@@ -567,7 +567,8 @@ impl BrowserComponent {
     }
 
     /// Resolve the list item under `(col, row)` from the component's own
-    /// painted `LayoutMain` for the non-canonical generic multi-column grid:
+    /// painted `LayoutMain` for the preserved non-hero generic multi-column
+    /// grid. That legacy grid publishes `left_row_map` and `left_item_rows`;
     /// the exact cell is picked when the list is two-column, and header/gap
     /// screen rows are `None` (no-op).
     fn resolve_left_cursor(&self, col: u16, row: u16) -> Option<usize> {
@@ -578,7 +579,8 @@ impl BrowserComponent {
         let click_y = (row.saturating_sub(la.y)) as usize;
         let display_row = self.scroll() + click_y;
         // Cell-aware two-column resolution: pick the exact column under the
-        // click. Single-column and header rows fall back to the row map below.
+        // click. Single-column and header rows use the preserved grid's
+        // `left_row_map` published by its legacy renderer.
         if let Some(items) = self.layout.left_item_rows.get(display_row) {
             if items.len() > 1 {
                 let cols = self

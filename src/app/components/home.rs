@@ -6,7 +6,7 @@
 //! active section's projected rows. `render_home_content`
 //! (`render/components/home.rs`) is the parent-owned hero + pill + chrome
 //! painter and mounts the active control into the list area. Content is
-//! mirrored from the shell; Home keyboard interpretation stays local. It emits
+//! projected from the shell; Home keyboard interpretation stays local. It emits
 //! typed shell requests for effects that cross the Model boundary;
 //! destination-independent chords are handled by the central router.
 

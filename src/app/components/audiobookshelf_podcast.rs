@@ -1,6 +1,6 @@
 //! Interactive Component for one Audiobookshelf podcast library.
 //!
-//! The shell mirrors validated browse content into this stable browser
+//! The shell projects validated browse content into this stable browser
 //! instance. Show, episode, filter, and scroll state stays local here; typed
 //! shell requests remain the shell-owned effect path.
 

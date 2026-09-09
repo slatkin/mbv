@@ -23,8 +23,8 @@ use crate::app::types_audiobookshelf_browse::{
 };
 use mbv_core::audiobookshelf::AudiobookshelfShow;
 
-/// Podcast hero content row budget, shared by the legacy `App` narrow
-/// renderer and `AudiobookshelfPodcastComponent`'s narrow path so both admit
+/// Podcast hero content row budget, shared by the narrow
+/// `App` renderer and `AudiobookshelfPodcastComponent`'s narrow path so both admit
 /// the same inline-detail height. Mirrors the prior
 /// `App::audiobookshelf_hero_content_rows` behavior exactly: title row,
 /// optional author row, blank before a nonempty description, wrapped
@@ -196,8 +196,8 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         );
     };
 
-    // Wide layout: the list/browser occupies the right pane; the hero panel is
-    // the painted hero. No inline hero and no selected-item shell exist here.
+    // Wide layout: the list/browser occupies the left pane; the hero panel is
+    // the painted hero on the right. No inline hero and no selected-item shell exist here.
     geometry.list_area = right_panel;
     geometry.right_area = right_panel;
     let right_pane = wide_hero_browser_pane(right_panel, right_panel);

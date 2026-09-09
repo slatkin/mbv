@@ -43,23 +43,19 @@ pub(in crate::app) struct BookInteraction {
 pub(in crate::app) struct AudiobookshelfBookGeometry {
     pub selector_tabs: Vec<(Rect, usize)>,
     pub chapter_rows: Vec<(Rect, usize)>,
-    /// Painted book-list rect: the wide right-pane browser, or the narrow
-    /// content area below the pill bar. Mirrors the legacy
-    /// `LayoutMain.left_area` so `lib_page_size()` regains its real stride
-    /// after render ownership moved to the component (2.1j).
+    /// Painted book-list rect: the Wide browser pane on the left, or the
+    /// narrow content area below the pill bar. This is the list geometry used
+    /// by `lib_page_size()` for its real stride (2.1j).
     pub left_area: Rect,
-    /// Whether the last painted presentation is the wide Wide hero
-    /// layout (mirrors the legacy wide/narrow gate; the Enter activate
-    /// decision now uses `App::is_right_panel_wide()` instead).
+    /// Whether the last painted presentation uses the Wide hero layout. The
+    /// Enter activation decision uses `App::is_right_panel_wide()` instead.
     pub wide: bool,
-    /// Hero rect the component painted for the selected book (wide left pane,
-    /// or narrow inline-detail flow). Mirrors the legacy `LayoutMain.hero_area`
-    /// so conformance/context-menu readers keep working after render ownership
-    /// moved to the component (task 5.3d.13).
+    /// Hero rect the component painted for the selected book (Wide right pane,
+    /// or narrow inline-detail flow). This is the painted hero geometry used
+    /// by conformance/context-menu readers (task 5.3d.13).
     pub hero_area: Option<Rect>,
     /// Selected-item rect the component painted (the hero when one is shown, or
-    /// the selected book row otherwise). Mirrors the legacy
-    /// `LayoutMain.selected_item_rect`.
+    /// the selected book row otherwise).
     pub selected_item_rect: Option<Rect>,
 }
 
@@ -211,7 +207,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             paint.row_geometry,
             paint.selected_row_rect,
         );
-        // In the wide layout the selected book's hero (left pane) is the
+        // In the Wide layout the selected book's hero (right pane) is the
         // selected item; record it so conformance/context-menu readers see the
         // same `selected_item_rect` the legacy renderer published.
         geometry.selected_item_rect = Some(hero_area);

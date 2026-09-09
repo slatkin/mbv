@@ -183,7 +183,7 @@ fn feeds_wide_left_pane_fills_when_an_entry_is_selected() {
     );
 }
 
-/// Feeds (task 2.3): the wide left pane fill is unconditional (D1) -- with
+/// Feeds (task 2.3): the wide right hero pane fill is unconditional (D1) -- with
 /// entries present but nothing selected, the pane still fills
 /// `SURFACE_RESTING` (D3: read-only, never focus-green), with no hero
 /// content painted. `render_feeds_content` is called directly with
@@ -291,7 +291,7 @@ fn feeds_wide_left_pane_unfilled_with_no_selected_entry() {
 }
 
 /// ABS Books (task 2.2): the `.style(Color)` foreground-only bug is fixed --
-/// the wide left pane is filled via `wide_hero_hero_pane`, focus-green
+/// the wide right hero pane is filled via `wide_hero_hero_pane`, focus-green
 /// (`LeftPaneFocus::Workspace`) only when a chapter is selected while
 /// focused.
 #[test]
@@ -332,7 +332,8 @@ fn abs_books_wide_left_pane_fills_via_shared_primitive() {
     );
 }
 
-/// ABS Podcasts (task 2.1): the wide left pane fills via `wide_hero_hero_pane`.
+/// ABS Podcasts (task 2.1): the wide right hero pane fills via
+/// `wide_hero_hero_pane`.
 /// D8's gain: this surface goes focus-green when the episode workspace holds
 /// focus (mirroring TV), not a bare `focused`.
 #[test]

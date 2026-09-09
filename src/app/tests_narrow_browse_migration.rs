@@ -521,8 +521,8 @@ fn feed_home_video_group_narrow_uses_shared_inline_hero() {
 #[test]
 fn feed_home_video_group_wide_uses_wide_hero() {
     // Wide: Wide hero. Selected item's detail (overview + meta) is the
-    // left hero card; the right rail is a plain one-column list with the
-    // feed-group pills - no inline expansion in the rail.
+    // right hero card; the left browser pane is a plain one-column list with
+    // the feed-group pills - no inline expansion in the browser.
     let output = feed_snapshot(140, 40);
     assert!(
         output.contains("All") && output.contains("Channel A"),
@@ -530,7 +530,7 @@ fn feed_home_video_group_wide_uses_wide_hero() {
     );
     assert!(
         output.contains("Distinctive wrapping"),
-        "left hero overview missing:\n{output}"
+        "right hero overview missing:\n{output}"
     );
     // Video Two is only ever a rail row (never the selected hero), so it
     // pins single-paint of the rail without the hero-echo of Video One.

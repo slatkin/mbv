@@ -643,8 +643,8 @@ fn breakpoint_flip_carries_one_viewport_anchor() {
         "wide viewport scrolled to the selection"
     );
 
-    // Breakpoint flip Wide -> Narrow: the cursors stay in lockstep and the
-    // single ViewportAnchor keeps the selection on screen.
+    // Breakpoint flip Wide -> Narrow: one ViewportAnchor carries the
+    // selection and keeps it on screen.
     let narrow = wide - 1;
     Terminal::new(TestBackend::new(narrow, 10))
         .unwrap()
