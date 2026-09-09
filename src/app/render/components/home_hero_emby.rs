@@ -312,9 +312,10 @@ impl App {
             Some(HomeImagePaint::AudiobookshelfBookCover {
                 area,
                 library_item_id,
+                show_placeholder,
             }) => {
                 if let Some(cache_key) = self.audiobookshelf_book_cover_key(&library_item_id) {
-                    self.paint_audiobookshelf_cover(f, area, &cache_key, true, false);
+                    self.paint_audiobookshelf_cover(f, area, &cache_key, show_placeholder, false);
                 }
             }
             None => {}

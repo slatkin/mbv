@@ -200,6 +200,10 @@ mod tests_tick_integration_feeds; // Feeds ownership tick coverage
 mod tests_tick_integration_podcast; // Podcast ownership tick coverage
 
 #[cfg(test)]
+#[path = "tests_tick_integration_book.rs"]
+mod tests_tick_integration_book; // Book ownership tick coverage
+
+#[cfg(test)]
 #[path = "tests_tick_integration_mouse_sidebar.rs"]
 mod tests_tick_integration_mouse_sidebar;
 

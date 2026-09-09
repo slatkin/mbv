@@ -8,6 +8,7 @@ use crate::app::render::arrangements::wide_hero::{
     self, wide_hero_browser_border, wide_hero_browser_pane, PANE_PAD_X, PANE_PAD_Y,
 };
 use crate::app::render::components::audiobookshelf_books::BookHeroPlan;
+use crate::app::render::components::detail_series_view::{SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS};
 use crate::app::render::components::hero::{
     paint_hero_content, selected_detail_shell, wrap_overview_lines, HeroContent, HeroImage,
     HeroLine, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
@@ -220,6 +221,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
         images_enabled,
         geometry,
         narrow_list,
+        chapter_list,
         flip_anchor,
     )
 }
@@ -234,6 +236,7 @@ fn render_narrow_book(
     images_enabled: bool,
     geometry: &mut AudiobookshelfBookGeometry,
     narrow_list: &mut InlineMediaBrowser<String>,
+    chapter_list: &mut WideMediaList<String>,
     flip_anchor: Option<&ViewportAnchor<String>>,
 ) -> Option<super::home_hero::HomeImagePaint> {
     let parts = wide_hero::pill_bar_areas(area);
@@ -256,7 +259,14 @@ fn render_narrow_book(
         narrow_list.apply_viewport_anchor(anchor, visible);
     }
 
-    let desired_detail_rows = (plan.content_rows + HERO_BLOCK_EXTRA_ROWS) as usize;
+    let hero_rows = book_hero_content_rows(state, &plan);
+    let chapter_rows = state
+        .selected_id
+        .as_deref()
+        .map(|id| state.visible_rows(id).len())
+        .unwrap_or(0);
+    let desired_detail_rows =
+        (hero_rows + 1 + chapter_rows as u16 + HERO_BLOCK_EXTRA_ROWS) as usize;
     let result = render_inline_media_browser(
         frame,
         content_area,
@@ -284,7 +294,24 @@ fn render_narrow_book(
     selected_detail_shell(frame, hero_area, hero_area.height, focused);
     geometry.hero_area = Some(hero_area);
     geometry.selected_item_rect = Some(hero_area);
-    render_book_hero(frame, hero_area, state, focused, true, &plan)
+    let image = render_book_hero(frame, hero_area, state, focused, true, &plan);
+    let chapter_area = Rect {
+        y: hero_area.y + SELECTED_BLOCK_SIDE_PADDING + hero_rows + 1,
+        height: hero_area
+            .height
+            .saturating_sub(SELECTED_BLOCK_SIDE_PADDING + hero_rows + 1),
+        ..hero_area
+    };
+    render_book_rows(
+        frame,
+        chapter_area,
+        state,
+        interaction.chapter_selection,
+        focused && interaction.chapter_selection.is_some(),
+        chapter_list,
+        geometry,
+    );
+    image
 }
 
 fn render_book_pills(
@@ -407,6 +434,7 @@ fn render_book_hero(
         super::home_hero::HomeImagePaint::AudiobookshelfBookCover {
             area: result.img_rect.unwrap(),
             library_item_id: book.library_item_id.clone(),
+            show_placeholder: true,
         }
     })
 }
@@ -480,6 +508,14 @@ fn render_book_rows(
         .collect();
 }
 
+fn book_hero_content_rows(state: &AudiobookshelfBookBrowseState, plan: &BookHeroPlan) -> u16 {
+    let author_rows = state
+        .selected_book()
+        .and_then(|book| book.author_display.as_deref())
+        .is_some_and(|author| !author.is_empty()) as u16;
+    plan.content_rows.max(HERO_TITLE_ROWS + author_rows)
+}
+
 fn book_hero_plan(
     state: &AudiobookshelfBookBrowseState,
     width: u16,
@@ -494,17 +530,8 @@ fn book_hero_plan(
         };
     };
     let has_cover = images_enabled && book.cover_path.is_some();
-    let image_width = if has_cover {
-        crate::app::render::components::detail_series_view::SERIES_IMAGE_COLS
-    } else {
-        0
-    }
-    .min(width);
-    let image_height = if has_cover {
-        crate::app::render::components::detail_series_view::SERIES_IMAGE_ROWS
-    } else {
-        0
-    };
+    let image_width = if has_cover { SERIES_IMAGE_COLS } else { 0 }.min(width);
+    let image_height = if has_cover { SERIES_IMAGE_ROWS } else { 0 };
     let author_rows = u16::from(
         book.author_display
             .as_deref()
@@ -524,7 +551,8 @@ fn book_hero_plan(
             HERO_TITLE_ROWS + 2 + author_rows + line as u16,
         ) as usize
     })
-    .len() as u16;
+    .len()
+    .min(4) as u16;
     BookHeroPlan {
         has_image: has_cover,
         image_width,

@@ -209,6 +209,7 @@ pub(in crate::app) fn render_generic_hero_content(
                 QueueItem::AudiobookshelfBook(_) => HomeImagePaint::AudiobookshelfBookCover {
                     area: image_area,
                     library_item_id: item_id.to_owned(),
+                    show_placeholder: true,
                 },
                 _ => return None,
             };
@@ -264,7 +265,11 @@ pub(in crate::app) enum HomeImagePaint {
     /// Audiobookshelf book artwork must stay isolated from podcast artwork,
     /// including when both use the same library item ID (book-browsing spec
     /// line 124).
-    AudiobookshelfBookCover { area: Rect, library_item_id: String },
+    AudiobookshelfBookCover {
+        area: Rect,
+        library_item_id: String,
+        show_placeholder: bool,
+    },
 }
 
 fn render_hero_layout_meta_content(
