@@ -652,3 +652,41 @@ fn abs_podcast_mouse_double_click_emits_open_or_play_and_right_click_ignored() {
         "task 4.6: right-click must be ignored on this surface"
     );
 }
+
+#[test]
+fn abs_podcast_refresh_preserves_surviving_target_and_clamps_removed_target() {
+    let state = narrow_grid_component_state();
+    let mut component = AudiobookshelfPodcastComponent::new();
+    component.set_content(&state, false);
+    component.set_focused(true);
+    view_narrow(&mut component, 100, 12);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    view_narrow(&mut component, 100, 12);
+    let selected = component.selected_id().expect("selected target");
+    let selected_cursor = component.cursor();
+
+    let mut refreshed = state.clone();
+    refreshed.selected_id = Some(selected.clone());
+    refreshed.select(selected_cursor);
+    component.set_content(&refreshed, false);
+    assert_eq!(component.selected_id().as_deref(), Some(selected.as_str()));
+    assert_eq!(
+        component.cursor(),
+        selected_cursor,
+        "refresh keeps a surviving selected target"
+    );
+
+    refreshed.shows.truncate(2);
+    refreshed.selected_id = Some(selected);
+    component.set_content(&refreshed, false);
+    view_narrow(&mut component, 100, 12);
+    assert_eq!(component.selected_id().as_deref(), Some("show-0"));
+    assert_eq!(
+        component.cursor(),
+        0,
+        "refresh clamps when the selected target disappears"
+    );
+}
