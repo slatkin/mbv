@@ -10,7 +10,7 @@ A row closes only when its bounded change is accepted, synced where applicable, 
 - [x] 1.2 Record Queue as complete under the full current contract; verify the audit found a persistent `WideMediaList<QueueSlotId>`, stable-target refresh preservation, explicit re-anchor, control-owned movement, retained-geometry point resolution, and no parent cursor/row-map mirror.
 - [x] 1.3 Correct the prior Grouped Music completion claim to incomplete; verify the audit records parent album cursor/scroll, inactive-control synchronization, render-time target/scroll reseeding, paint-result writeback, and compatibility geometry.
 - [x] 1.4 Record the remaining audited destination failures and preserved boundaries in `design.md` D2; verify Home, Feeds, the Browser family, TV Series, Audiobookshelf Podcasts, and Audiobookshelf Books each have a named evidence-backed gap while non-hero two-column catalogs remain preserved.
-- [ ] 1.5 Establish the paired human record in GitHub issue #681; verify #681 links this umbrella, carries the same status matrix and authorization boundary, and neither record contradicts the other.
+- [x] 1.5 Establish the paired human record in GitHub issue #681; verify #681 links this umbrella, carries the same status matrix and authorization boundary, and neither record contradicts the other.
 
 ## 2. Complete Grouped Music
 
