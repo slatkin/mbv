@@ -22,5 +22,5 @@
 
 - [x] 4.1 Run focused media-list, Queue, Grouped Music, render-characterization, and real-`Application::tick()` mouse tests; confirm PR #683 painted-owner arbitration, one-row wheel, throttle, routing, and Playlists regression evidence remains passing.
 - [x] 4.2 Run `cargo fmt`, `cargo check -p mbv`, `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`, `ast-grep scan`, and `make check-code-file-lines`; fix all failures before acceptance.
-- [ ] 4.3 Have a human verify Queue fixed rows and Grouped Music Wide album rail, Wide track table, and Inline behavior, plus focused-sidebar wheel arbitration; record the result or an explicit human waiver before acceptance.
+- [x] 4.3 Have a human verify Queue fixed rows and Grouped Music Wide album rail, Wide track table, and Inline behavior, plus focused-sidebar wheel arbitration; record the result or an explicit human waiver before acceptance.
 - [ ] 4.4 Defer responsive active-control ownership, Browser/Home identity and grid work, TV/Feeds/Audiobookshelf migration, universal ratchets, documentation sweep, and multi-select to follow-on changes under issue #681; sync and archive only after implementation, acceptance, and final OpenSpec validation.
