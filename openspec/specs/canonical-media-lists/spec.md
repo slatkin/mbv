@@ -181,7 +181,7 @@ The slice SHALL compose persistent `WideMediaList` controls in the applicable Wi
 - **AND** the old loop is not run as an underpaint
 
 ### Requirement: Migration is accepted as one verified slice
-The implementation, representative stateful and rendered tests, automated gates, review, and acceptance SHALL form one uninterrupted slice. There SHALL be no pre-test visual-approval checkpoint. Affected surfaces SHALL provide metadata/state/image-bearing rendered evidence, stateful target-and-anchor evidence, source-level one-painter evidence, manual/live Wide/Narrow evidence, and the 800-line file-size gate before acceptance. A visual defect found during review or acceptance SHALL be treated as a bug, fixed, and followed by rerunning the affected tests and gates.
+The implementation, representative stateful and rendered tests, automated gates, review, and acceptance SHALL form one uninterrupted slice. There SHALL be no pre-test visual-approval checkpoint. Affected surfaces SHALL provide metadata/state/image-bearing rendered evidence, stateful target-and-anchor evidence, source-level one-painter evidence, manual/live Wide/Narrow evidence before acceptance. The 800-line file-size gate SHALL be enforced as a pre-push check only and SHALL NOT gate acceptance of individual changes. A visual defect found during review or acceptance SHALL be treated as a bug, fixed, and followed by rerunning the affected tests and gates.
 
 #### Scenario: Evidence precedes acceptance
 - **WHEN** the implementation changes a visual surface

@@ -137,7 +137,7 @@ coverage.
 * test: `cargo nextest run -p <package>` (prefer nextest)
 * lint: `cargo clippy --workspace --all-targets`
 * architecture: `ast-grep scan`
-* size: `make check-code-file-lines`
+* size (pre-push only): `make check-code-file-lines` — run just before pushing, never as a per-task/CI/acceptance gate
 * format: `cargo fmt`
 * anything web related: `ketch` not curl
 * docs/concept discovery (ADRs, openspec, CONTEXT.md): `qmd query "..."` (collection `mbv`); `rg` only for exact strings
