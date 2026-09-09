@@ -14,8 +14,9 @@ A row closes when its bounded change is merged plus reviewer-signed-off and both
 
 ## 2. Complete Grouped Music
 
-- [ ] 2.1 After separately authorized exploration, merge one bounded Grouped Music ownership change with reviewer sign-off; verify the active control solely owns album position, ordinary refresh does not reseed either presentation, a breakpoint transition uses one `ViewportAnchor`, paint does not write position back, pointer resolution uses retained geometry, and the Music track workspace remains Music-owned.
-- [ ] 2.2 Record the change path and matching GitHub status before closing Grouped Music.
+- [x] 2.1 After separately authorized exploration, merge one bounded Grouped Music ownership change with reviewer sign-off; verify the active control solely owns album position, ordinary refresh does not reseed either presentation, a breakpoint transition uses one `ViewportAnchor`, paint does not write position back, pointer resolution uses retained geometry, and the Music track workspace remains Music-owned.
+- [x] 2.2 Record the change path and matching GitHub status before closing Grouped Music.
+  - Change path: `fix-grouped-music-media-list-ownership` implemented at `99e53fd9` + correction `e69bb2f5` on `refactor/finish-canonical-media-list-ownership`; two-axis review BLOCK, correction, focused re-review PASS. GitHub #681 updated to match.
 
 ## 3. Complete Home
 
