@@ -401,7 +401,7 @@ fn abs_book_viewport_anchor_round_trips_across_wide_narrow_wide() {
     let mut term = Terminal::new(TestBackend::new(120, 12)).unwrap();
 
     term.draw(|f| component.view(f, wide)).unwrap();
-    let wide_offset = component.geometry().selected_row_offset;
+    let wide_offset = component.selected_row_offset_for_test();
     assert!(
         wide_offset.is_some(),
         "the bottom book scrolls the wide rail"
@@ -416,7 +416,7 @@ fn abs_book_viewport_anchor_round_trips_across_wide_narrow_wide() {
 
     term.draw(|f| component.view(f, wide)).unwrap();
     assert_eq!(
-        component.geometry().selected_row_offset,
+        component.selected_row_offset_for_test(),
         wide_offset,
         "the selected-row screen offset returns to the wide arrangement"
     );
@@ -447,13 +447,10 @@ fn abs_book_mouse_click_resolves_row_and_right_click_is_ignored() {
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    let (rect, clicked) = component
-        .geometry()
-        .book_rows
-        .iter()
-        .copied()
-        .find(|(_, i)| i != &0)
-        .expect("a non-selected book row is painted");
+    let rect = component
+        .book_row_rect_for_test(1)
+        .expect("a book row is painted");
+    let clicked = 1;
     let mut click = |column: u16, row: u16, kind: MouseEventKind| {
         component.on(&Event::Mouse(MouseEvent {
             kind,
@@ -490,11 +487,8 @@ fn abs_book_mouse_double_click_emits_activate_intent() {
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    let (rect, _) = component
-        .geometry()
-        .book_rows
-        .first()
-        .copied()
+    let rect = component
+        .book_row_rect_for_test(0)
         .expect("a book row is painted");
     for _ in 0..2 {
         component.on(&Event::Mouse(MouseEvent {
@@ -531,11 +525,8 @@ fn abs_book_mouse_wheel_moves_one_book_row() {
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    let (row, _) = component
-        .geometry()
-        .book_rows
-        .first()
-        .copied()
+    let row = component
+        .book_row_rect_for_test(0)
         .expect("a painted book row");
     let msg = component.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,

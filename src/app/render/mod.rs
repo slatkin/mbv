@@ -11,7 +11,7 @@ mod theme;
 pub(in crate::app) use components::album_art::MusicImagePaint;
 pub(in crate::app) use components::artwork_placeholder::render_artwork_placeholder;
 pub(in crate::app) use components::audiobookshelf_book::{
-    render_audiobookshelf_book_content, AudiobookshelfBookGeometry, BookInteraction,
+    book_rows, render_audiobookshelf_book_content, AudiobookshelfBookGeometry, BookInteraction,
 };
 pub(in crate::app) use components::audiobookshelf_podcast::{
     render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry, PodcastInteraction,

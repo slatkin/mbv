@@ -1,6 +1,5 @@
 use crate::app::components::media_list::{
-    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, RowGeometry, ViewportAnchor,
-    WideMediaList,
+    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
 };
 use crate::app::palette;
 use crate::app::render::arrangements::library as library_arrangement;
@@ -38,7 +37,6 @@ pub(in crate::app) struct BookInteraction {
 #[derive(Default)]
 pub(in crate::app) struct AudiobookshelfBookGeometry {
     pub selector_tabs: Vec<(Rect, usize)>,
-    pub book_rows: Vec<(Rect, usize)>,
     pub chapter_rows: Vec<(Rect, usize)>,
     /// Painted book-list rect: the wide right-pane browser, or the narrow
     /// content area below the pill bar. Mirrors the legacy
@@ -58,17 +56,13 @@ pub(in crate::app) struct AudiobookshelfBookGeometry {
     /// the selected book row otherwise). Mirrors the legacy
     /// `LayoutMain.selected_item_rect`.
     pub selected_item_rect: Option<Rect>,
-    /// Screen-row offset of the selected list row from the viewport top, for
-    /// the `ViewportAnchor` read side (§2.5). `None` when nothing is
-    /// selected/visible. Not a paint rect; consumed by the component only.
-    pub selected_row_offset: Option<usize>,
 }
 
 /// Canonical row projection for the book catalog: one selectable `Item` per
 /// book in the selected surname bucket, keyed by its stable `library_item_id`.
 /// Books carry no in-list letter headings (the surname buckets are a pill row)
 /// and no played/active semantic state (matching the legacy book rows).
-fn book_rows(
+pub(in crate::app) fn book_rows(
     state: &AudiobookshelfBookBrowseState,
     selected_bucket: usize,
 ) -> Vec<MediaListRow<String>> {
@@ -91,43 +85,6 @@ fn book_rows(
         .collect()
 }
 
-/// Rebuilds the mouse-compat `book_rows` hit map from the painted flow
-/// geometry: each visible source row that resolves to a book index gets its
-/// screen rect. Replacement/detail rows (no source row) are skipped.
-fn push_book_rows(
-    geo: &RowGeometry<String>,
-    area: Rect,
-    state: &AudiobookshelfBookBrowseState,
-    geometry: &mut AudiobookshelfBookGeometry,
-) {
-    let offset = geo.offset();
-    let targets: Vec<Option<&String>> = geo.targets().collect();
-    for (screen_row, flow_row) in (offset..geo.len()).take(area.height as usize).enumerate() {
-        if geo.source_row(flow_row).is_none() {
-            continue;
-        }
-        let Some(Some(id)) = targets.get(flow_row) else {
-            continue;
-        };
-        let Some(index) = state
-            .books
-            .iter()
-            .position(|book| &book.library_item_id == *id)
-        else {
-            continue;
-        };
-        geometry.book_rows.push((
-            Rect {
-                x: area.x,
-                y: area.y + screen_row as u16,
-                width: area.width,
-                height: 1,
-            },
-            index,
-        ));
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(in crate::app) fn render_audiobookshelf_book_content(
     frame: &mut Frame,
@@ -137,13 +94,15 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
     interaction: BookInteraction,
     images_enabled: bool,
     geometry: &mut AudiobookshelfBookGeometry,
-    browser_offset: &mut usize,
     narrow_list: &mut InlineMediaBrowser<String>,
+    wide_book_list: &mut WideMediaList<String>,
     chapter_list: &mut WideMediaList<String>,
     flip_anchor: Option<&ViewportAnchor<String>>,
 ) -> Option<super::home_hero::HomeImagePaint> {
     *geometry = AudiobookshelfBookGeometry::default();
     if state.books.is_empty() {
+        narrow_list.invalidate_paint();
+        wide_book_list.invalidate_paint();
         render_placeholder(
             frame,
             area,
@@ -221,14 +180,9 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
         // every panel cell background, so it must not run after the list.
         wide_hero_browser_border(frame, list_panel, rail_focused);
 
-        let mut media: WideMediaList<String> = WideMediaList::new();
-        media.set_content(book_rows(state, interaction.selected_bucket));
-        if let Some(id) = state.selected_id.as_ref() {
-            media.select_target(id);
-        }
-        media.set_scroll(*browser_offset);
+        wide_book_list.set_geometry(list_panel, content_area);
         if let Some(anchor) = flip_anchor {
-            media.apply_viewport_anchor(anchor, content_area.height.max(1) as usize);
+            wide_book_list.apply_viewport_anchor(anchor, content_area.height.max(1) as usize);
         }
         let paint_area = Rect {
             x: list_panel.x,
@@ -239,17 +193,17 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             frame,
             paint_area,
             content_area,
-            &mut media,
+            wide_book_list,
             rail_focused,
             palette::list_selected_row_bg(),
             None,
         );
-        *browser_offset = media.scroll();
-        geometry.selected_row_offset = paint
-            .row_geometry
-            .selected_row()
-            .map(|row| row.saturating_sub(paint.row_geometry.offset()));
-        push_book_rows(&paint.row_geometry, content_area, state, geometry);
+        wide_book_list.finish_view(
+            list_panel,
+            content_area,
+            paint.row_geometry,
+            paint.selected_row_rect,
+        );
         // In the wide layout the selected book's hero (left pane) is the
         // selected item; record it so conformance/context-menu readers see the
         // same `selected_item_rect` the legacy renderer published.
@@ -265,7 +219,6 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
         interaction,
         images_enabled,
         geometry,
-        browser_offset,
         narrow_list,
         flip_anchor,
     )
@@ -280,7 +233,6 @@ fn render_narrow_book(
     interaction: BookInteraction,
     images_enabled: bool,
     geometry: &mut AudiobookshelfBookGeometry,
-    browser_offset: &mut usize,
     narrow_list: &mut InlineMediaBrowser<String>,
     flip_anchor: Option<&ViewportAnchor<String>>,
 ) -> Option<super::home_hero::HomeImagePaint> {
@@ -298,11 +250,7 @@ fn render_narrow_book(
         images_enabled,
     );
 
-    narrow_list.set_content(book_rows(state, interaction.selected_bucket));
-    if let Some(id) = state.selected_id.as_ref() {
-        narrow_list.select_target(id);
-    }
-    narrow_list.set_scroll(*browser_offset);
+    narrow_list.set_geometry(content_area, content_area);
     let visible = content_area.height.max(1) as usize;
     if let Some(anchor) = flip_anchor {
         narrow_list.apply_viewport_anchor(anchor, visible);
@@ -317,15 +265,20 @@ fn render_narrow_book(
         focused,
         palette::list_selected_row_bg(),
     );
-    let geo = &result.row_geometry;
-    *browser_offset = geo.offset();
-    narrow_list.set_scroll(geo.offset());
-    geometry.selected_row_offset = narrow_list.selected_row_offset(visible);
-    push_book_rows(geo, content_area, state, geometry);
+    let selected_row_rect = result.row_geometry.selected_row_rect(content_area);
+    let hero = result.hero_area;
+    let row_geometry = result.row_geometry;
+    narrow_list.finish_view(
+        content_area,
+        content_area,
+        row_geometry,
+        selected_row_rect,
+        hero,
+    );
 
-    let Some(hero_area) = result.hero_area else {
+    let Some(hero_area) = hero else {
         // Ordinary-row fallback: no inline hero, no selected-item shell.
-        geometry.selected_item_rect = geo.selected_row_rect(content_area);
+        geometry.selected_item_rect = selected_row_rect;
         return None;
     };
     selected_detail_shell(frame, hero_area, hero_area.height, focused);
@@ -541,8 +494,17 @@ fn book_hero_plan(
         };
     };
     let has_cover = images_enabled && book.cover_path.is_some();
-    let image_width = if has_cover { 18 } else { 0 }.min(width);
-    let image_height = if has_cover { 12 } else { 0 };
+    let image_width = if has_cover {
+        crate::app::render::components::detail_series_view::SERIES_IMAGE_COLS
+    } else {
+        0
+    }
+    .min(width);
+    let image_height = if has_cover {
+        crate::app::render::components::detail_series_view::SERIES_IMAGE_ROWS
+    } else {
+        0
+    };
     let author_rows = u16::from(
         book.author_display
             .as_deref()

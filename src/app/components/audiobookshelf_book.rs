@@ -26,7 +26,6 @@ pub struct AudiobookshelfBookComponent {
     /// content type (split-browse-state-interaction-fields task 2.2).
     chapter_selection: Option<usize>,
     selected_bucket: usize,
-    browser_offset: usize,
     focused: bool,
     images_enabled: bool,
     geometry: AudiobookshelfBookGeometry,
@@ -35,10 +34,10 @@ pub struct AudiobookshelfBookComponent {
     /// must follow the rendered wide/chapter geometry rather than that state.
     chapters_visible: bool,
     image_paint: Option<HomeImagePaint>,
-    /// Persistent narrow-presentation control, fed the canonical book-row
-    /// projection by the renderer each frame. Never constructed during a
-    /// render pass. The wide rail composes its own per-frame `WideMediaList`.
+    /// Persistent controls; the active control owns selection, viewport,
+    /// and retained hit geometry for its presentation.
     narrow_list: InlineMediaBrowser<String>,
+    wide_book_list: WideMediaList<String>,
     /// Parent-owned chapter control for the wide hero workspace.
     chapter_list: WideMediaList<String>,
     /// One-shot `ViewportAnchor` carried across a Wide<->Narrow breakpoint
@@ -46,9 +45,6 @@ pub struct AudiobookshelfBookComponent {
     pending_anchor: Option<ViewportAnchor<String>>,
     /// The presentation the last `view` painted; `None` before the first paint.
     last_wide: Option<bool>,
-    /// Selected-row screen offset captured each `view`, so `viewport_anchor`
-    /// can report the outgoing control's anchor at a flip.
-    painted_row_offset: Option<usize>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
@@ -67,17 +63,16 @@ impl AudiobookshelfBookComponent {
             initialized: false,
             chapter_selection: None,
             selected_bucket: 0,
-            browser_offset: 0,
             focused: false,
             images_enabled: false,
             geometry: AudiobookshelfBookGeometry::default(),
             chapters_visible: false,
             image_paint: None,
             narrow_list: InlineMediaBrowser::new(),
+            wide_book_list: WideMediaList::new(),
             chapter_list: WideMediaList::new(),
             pending_anchor: None,
             last_wide: None,
-            painted_row_offset: None,
             mouse_gestures: MouseGestureState::new(),
         }
     }
@@ -85,10 +80,17 @@ impl AudiobookshelfBookComponent {
     /// The outgoing control's `ViewportAnchor` for the last painted
     /// presentation (mirrors `AudiobookshelfPodcastComponent::viewport_anchor`).
     fn viewport_anchor(&self) -> Option<ViewportAnchor<String>> {
-        Some(ViewportAnchor {
-            selected_target: self.state.selected_id.clone()?,
-            selected_row_offset: self.painted_row_offset?,
-        })
+        if self.last_wide == Some(true) {
+            self.wide_book_list.current_content_rect().and_then(|rect| {
+                self.wide_book_list
+                    .viewport_anchor(rect.height.max(1) as usize)
+            })
+        } else {
+            self.narrow_list.current_content_rect().and_then(|rect| {
+                self.narrow_list
+                    .viewport_anchor(rect.height.max(1) as usize)
+            })
+        }
     }
 
     /// Test-only: drive framework focus the way `Component::attr` does.
@@ -117,10 +119,8 @@ impl AudiobookshelfBookComponent {
             });
         self.state = snapshot.clone();
         if self.initialized && !survived {
-            // The selected book dropped out of the new content: reset the
-            // derived local state rather than adopting anything.
             self.chapter_selection = None;
-            self.browser_offset = 0;
+            self.state.select(0);
         }
         // Re-anchor the surname-bucket pill onto the selected book
         // (book-browsing spec: refresh/paging preserves the selected book
@@ -137,6 +137,18 @@ impl AudiobookshelfBookComponent {
         self.selected_bucket = self
             .selected_bucket
             .min(self.state.buckets.len().saturating_sub(1));
+        let rows = crate::app::render::book_rows(&self.state, self.selected_bucket);
+        self.narrow_list.set_content(rows.clone());
+        self.wide_book_list.set_content(rows);
+        if !self.initialized {
+            if let Some(target) = self.state.selected_id.as_ref() {
+                self.narrow_list.select_target(target);
+                self.wide_book_list.select_target(target);
+            }
+        } else if !survived {
+            self.narrow_list.select_first();
+            self.wide_book_list.select_first();
+        }
         self.initialized = true;
         self.images_enabled = images_enabled;
     }
@@ -161,6 +173,30 @@ impl AudiobookshelfBookComponent {
     }
 
     #[cfg(test)]
+    pub(crate) fn selected_row_offset_for_test(&self) -> Option<usize> {
+        let height = self.geometry.left_area.height.max(1) as usize;
+        if self.last_wide == Some(true) {
+            self.wide_book_list.selected_row_offset(height)
+        } else {
+            self.narrow_list.selected_row_offset(height)
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn book_row_rect_for_test(&self, row: usize) -> Option<Rect> {
+        let content = if self.last_wide == Some(true) {
+            self.wide_book_list.current_content_rect()?
+        } else {
+            self.narrow_list.current_content_rect()?
+        };
+        Some(Rect {
+            y: content.y + row as u16,
+            height: 1,
+            ..content
+        })
+    }
+
+    #[cfg(test)]
     pub(crate) fn selected_bucket(&self) -> usize {
         self.selected_bucket
     }
@@ -180,6 +216,47 @@ impl AudiobookshelfBookComponent {
         Msg::Shell(ShellRequest::AudiobookshelfBookMove(
             AudiobookshelfBookMove::Book(self.state.cursor()),
         ))
+    }
+
+    fn select_book(&mut self, index: usize) {
+        let local = self
+            .state
+            .buckets
+            .get(self.selected_bucket)
+            .map(|bucket| index.saturating_sub(bucket.start))
+            .unwrap_or(0);
+        if self.last_wide == Some(true) {
+            self.wide_book_list.select_index(local);
+        } else {
+            self.narrow_list.select_index(local);
+        }
+        self.state.select(index);
+    }
+
+    fn refresh_bucket_rows(&mut self) {
+        let rows = crate::app::render::book_rows(&self.state, self.selected_bucket);
+        self.narrow_list.set_content(rows.clone());
+        self.wide_book_list.set_content(rows);
+        let index = self.state.cursor().max(
+            self.state
+                .buckets
+                .get(self.selected_bucket)
+                .map(|b| b.start)
+                .unwrap_or(0),
+        );
+        self.select_book(index);
+    }
+
+    fn book_index_at(&self, at: ratatui::layout::Position) -> Option<usize> {
+        let target = if self.last_wide == Some(true) {
+            self.wide_book_list.resolve_current_point(at).cloned()
+        } else {
+            self.narrow_list.resolve_current_point(at).cloned()
+        }?;
+        self.state
+            .books
+            .iter()
+            .position(|book| book.library_item_id == target)
     }
 
     fn bucket_request(&self) -> Msg {
@@ -202,8 +279,9 @@ impl AudiobookshelfBookComponent {
             return;
         }
         let cursor = (self.state.cursor() as i64).clamp(bucket.start as i64, bucket.end as i64 - 1);
-        self.state
-            .select((cursor + delta).clamp(bucket.start as i64, bucket.end as i64 - 1) as usize);
+        self.select_book(
+            (cursor + delta).clamp(bucket.start as i64, bucket.end as i64 - 1) as usize,
+        );
     }
 
     fn move_chapter(&mut self, delta: i64) {
@@ -279,12 +357,16 @@ impl AudiobookshelfBookComponent {
                 self.chapter_selection = None;
                 Some(self.chapter_focus_request())
             }
-            Key::Char(' ') if chapters_focused => Some(Msg::Shell(
-                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::ActivateChapter),
-            )),
-            Key::Enter if chapters_focused => Some(Msg::Shell(
-                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::ActivateChapter),
-            )),
+            Key::Char(' ') if chapters_focused => {
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+                    AudiobookshelfBookIntent::ActivateChapter(self.chapter_selection),
+                )))
+            }
+            Key::Enter if chapters_focused => {
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+                    AudiobookshelfBookIntent::ActivateChapter(self.chapter_selection),
+                )))
+            }
             Key::Char(' ') => Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
                 AudiobookshelfBookIntent::Play,
             ))),
@@ -309,8 +391,9 @@ impl AudiobookshelfBookComponent {
                 (self.selected_bucket as i64 + delta).rem_euclid(count as i64) as usize;
             if let Some(bucket) = self.state.buckets.get(self.selected_bucket).copied() {
                 if !(bucket.start..bucket.end).contains(&self.state.cursor()) {
-                    self.state.select(bucket.start);
+                    self.select_book(bucket.start);
                 }
+                self.refresh_bucket_rows();
             }
         }
     }
@@ -318,19 +401,12 @@ impl AudiobookshelfBookComponent {
     fn select_bucket_edge(&mut self, end: bool) {
         if let Some(bucket) = self.state.buckets.get(self.selected_bucket).copied() {
             if bucket.end > bucket.start {
-                self.state
-                    .select(if end { bucket.end - 1 } else { bucket.start });
+                self.select_book(if end { bucket.end - 1 } else { bucket.start });
             }
         }
     }
 
-    /// Handle a TuiRealm mouse event via the private `MouseGestureState`
-    /// (ADR 0024, design.md D3). Row identity comes from the painted row
-    /// rects (`book_rows`/`chapter_rows`) — the wide rail is composed
-    /// per-frame in the renderer and is not a persistent control, so
-    /// `resolve_point` does not apply there (task 4.1). Effects reuse the
-    /// existing move/intent Msgs (task 4.5). Book has no keyboard
-    /// context-menu action (task 4.6), so right-click is ignored.
+    /// Handle pointer input using retained geometry from the active book list.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         // The book surface does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
@@ -346,68 +422,72 @@ impl AudiobookshelfBookComponent {
                 {
                     if let Some(range) = self.state.buckets.get(*bucket).copied() {
                         self.selected_bucket = *bucket;
-                        self.state.select(range.start);
+                        self.select_book(range.start);
+                        self.refresh_bucket_rows();
                     }
                     return Some(self.bucket_request());
                 }
-                if let Some((_, index)) = self
-                    .geometry
-                    .book_rows
-                    .iter()
-                    .find(|(rect, _)| rect.contains(at))
-                {
-                    self.state.select(*index);
-                    return Some(self.book_request());
-                }
-                if self.chapters_visible {
-                    if let Some((_, index)) = self
+                if let Some(index) = self.book_index_at(at) {
+                    self.select_book(index);
+                    Some(self.book_request())
+                } else if self.chapters_visible {
+                    let chapter = self
                         .geometry
                         .chapter_rows
                         .iter()
                         .find(|(rect, _)| rect.contains(at))
-                    {
-                        self.chapter_selection = Some(*index);
-                        return Some(self.chapter_focus_request());
-                    }
+                        .map(|(_, index)| *index);
+                    chapter.map(|index| {
+                        self.chapter_selection = Some(index);
+                        self.chapter_focus_request()
+                    })
+                } else {
+                    None
                 }
-                None
             }
-            MouseGesture::DoubleClick(at) => {
-                if let Some((_, index)) = self
-                    .geometry
-                    .book_rows
-                    .iter()
-                    .find(|(rect, _)| rect.contains(at))
-                {
-                    self.state.select(*index);
-                    return Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
-                        AudiobookshelfBookIntent::Activate,
-                    )));
-                }
-                None
-            }
+            MouseGesture::DoubleClick(at) => self.book_index_at(at).map(|index| {
+                self.select_book(index);
+                Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+                    AudiobookshelfBookIntent::Activate,
+                ))
+            }),
             MouseGesture::Scroll { at, delta } => {
                 let chapter_focus = self.chapters_visible && self.chapter_selection.is_some();
-                let claimed = if chapter_focus {
-                    self.geometry
+                if chapter_focus {
+                    if !self
+                        .geometry
                         .chapter_rows
                         .iter()
                         .any(|(rect, _)| rect.contains(at))
-                } else {
-                    self.geometry
-                        .book_rows
-                        .iter()
-                        .any(|(rect, _)| rect.contains(at))
-                };
-                if !claimed {
-                    return None;
-                }
-                if chapter_focus {
+                    {
+                        return None;
+                    }
                     self.move_chapter(delta);
-                    return Some(self.chapter_focus_request());
+                    Some(self.chapter_focus_request())
+                } else {
+                    let claims = if self.last_wide == Some(true) {
+                        self.wide_book_list.claims_current_point(at)
+                    } else {
+                        self.narrow_list.claims_current_point(at)
+                    };
+                    if !claims {
+                        return None;
+                    }
+                    let start = self
+                        .state
+                        .buckets
+                        .get(self.selected_bucket)
+                        .map(|bucket| bucket.start)
+                        .unwrap_or(0);
+                    if self.last_wide == Some(true) {
+                        self.wide_book_list.move_selection(delta);
+                        self.select_book(start + self.wide_book_list.cursor());
+                    } else {
+                        self.narrow_list.move_selection(delta);
+                        self.select_book(start + self.narrow_list.cursor());
+                    }
+                    Some(self.book_request())
                 }
-                self.move_book(delta);
-                Some(self.book_request())
             }
             _ => None,
         }
@@ -448,13 +528,10 @@ impl Component for AudiobookshelfBookComponent {
         }
         let flip_anchor = self.pending_anchor.take();
         if let Some(anchor) = &flip_anchor {
-            if let Some(idx) = self
-                .state
-                .books
-                .iter()
-                .position(|book| book.library_item_id == anchor.selected_target)
-            {
-                self.state.select(idx);
+            if wide {
+                self.wide_book_list.select_target(&anchor.selected_target);
+            } else {
+                self.narrow_list.select_target(&anchor.selected_target);
             }
         }
         self.image_paint = render_audiobookshelf_book_content(
@@ -468,12 +545,11 @@ impl Component for AudiobookshelfBookComponent {
             },
             self.images_enabled,
             &mut self.geometry,
-            &mut self.browser_offset,
             &mut self.narrow_list,
+            &mut self.wide_book_list,
             &mut self.chapter_list,
             flip_anchor.as_ref(),
         );
-        self.painted_row_offset = self.geometry.selected_row_offset;
         self.last_wide = Some(wide);
         // A wide frame can still have no painted chapter rows (for example
         // while detail is loading or when the selected book has no chapters).

@@ -80,7 +80,7 @@ pub enum AudiobookshelfBookIntent {
     Play,
     Activate,
     Enqueue,
-    ActivateChapter,
+    ActivateChapter(Option<usize>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

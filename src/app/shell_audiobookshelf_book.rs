@@ -50,21 +50,32 @@ impl Model {
                         self.app.enqueue_selected_audiobookshelf_book(index);
                     }
                 }
-                AudiobookshelfBookIntent::ActivateChapter => {
-                    let chapter_selection = self
-                        .abs_book_id
-                        .as_ref()
-                        .and_then(|id| self.application.get_component(id))
-                        .and_then(|comp| {
-                            comp.as_any().downcast_ref::<AudiobookshelfBookComponent>()
-                        })
-                        .and_then(AudiobookshelfBookComponent::chapter_selection);
+                AudiobookshelfBookIntent::ActivateChapter(chapter_selection) => {
                     self.app.activate_audiobookshelf_book_row(chapter_selection);
                 }
             },
             _ => unreachable!("non-book request routed to book handler"),
         }
         self.push_audiobookshelf_book_content();
+    }
+
+    #[cfg(test)]
+    pub(super) fn abs_book_component_mut(
+        &mut self,
+        index: usize,
+    ) -> Option<&mut AudiobookshelfBookComponent> {
+        let active_index = match self.app.tab {
+            TabSelection::AudiobookshelfLibrary(index) => index,
+            _ => return None,
+        };
+        if active_index != index {
+            return None;
+        }
+        let id = self.abs_book_id.as_ref()?;
+        self.application.get_component_mut(id).and_then(|comp| {
+            comp.as_any_mut()
+                .downcast_mut::<AudiobookshelfBookComponent>()
+        })
     }
 
     fn abs_book_component_id(&self, index: usize) -> Option<ComponentId> {
