@@ -467,6 +467,145 @@ fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
     }
 }
 
+/// The third `apply_position` branch — a canonical kind (Movies/HomeVideos) or
+/// group-pill content with NO active control, i.e. the legacy non-hero
+/// two-column browse — seeds BOTH persistent controls from the resolved
+/// resting state. That is what makes a drill-in + BrowserBack round-trip
+/// surface the user's position through whichever control becomes active on the
+/// next breakpoint paint, instead of landing on cursor 0 or a stale shell
+/// value.
+#[test]
+fn apply_position_seeds_both_controls_for_canonical_kind_without_active_control() {
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    browser.set_content(BrowserContent::from_items(make_items(40)));
+    browser.set_focused(true);
+    // No narrow hero extras: neither control is active at the reset seam.
+
+    // Back-restore push (browse identity changed): the shell re-seeds the
+    // controls from the user's resting position.
+    browser.apply_position(25, 9);
+    assert_eq!(
+        browser.test_inline_selected_target(),
+        Some(25),
+        "inline control seeded"
+    );
+    assert_eq!(
+        browser.test_inline_scroll(),
+        9,
+        "inline control scroll seeded"
+    );
+    assert_eq!(
+        browser.test_wide_selected_target(),
+        Some(25),
+        "wide control seeded"
+    );
+    assert_eq!(browser.test_wide_scroll(), 9, "wide control scroll seeded");
+
+    // Wide activation (e.g. a terminal resize): the position now lives in the
+    // active wide control, not cursor 0 or a stale shell value.
+    let mut wide_terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    wide_terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    assert_eq!(
+        browser.cursor(),
+        25,
+        "wide activation must surface the seeded target through the active control"
+    );
+
+    // Narrow-with-hero activation: same seeding observed on the inline side
+    // through the public `cursor()` seam.
+    let mut narrow_browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    narrow_browser.set_content(BrowserContent::from_items(make_items(40)));
+    narrow_browser.set_focused(true);
+    narrow_browser.apply_position(25, 9);
+    narrow_browser.set_narrow_extras(NarrowBrowseExtras {
+        hero_placeholder: true,
+        ..NarrowBrowseExtras::default()
+    });
+    let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    narrow_terminal
+        .draw(|frame| narrow_browser.view(frame, frame.area()))
+        .unwrap();
+    assert_eq!(
+        narrow_browser.cursor(),
+        25,
+        "narrow hero activation must surface the seeded target through the active control"
+    );
+}
+
+/// The third branch must NOT fire while a control IS active (guard): the
+/// active control alone takes the re-seed, and the non-active control keeps
+/// its live selection instead of being clobbered from the shell's resting
+/// value.
+#[test]
+fn apply_position_seeds_only_the_active_control_when_one_is_active() {
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    browser.set_content(BrowserContent::from_items(make_items(40)));
+    browser.set_focused(true);
+
+    // Wide session: the wide rail owns the live position.
+    let mut wide_terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    wide_terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    });
+    browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_eq!(browser.cursor(), 2, "wide rail live selection");
+
+    // Narrow-with-hero: the inline control becomes the active one; the wide
+    // rail keeps its live selection through the breakpoint anchor handoff.
+    browser.set_narrow_extras(NarrowBrowseExtras {
+        hero_placeholder: true,
+        ..NarrowBrowseExtras::default()
+    });
+    let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    narrow_terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    assert_eq!(
+        browser.cursor(),
+        2,
+        "inline took the live target at the handoff"
+    );
+    let wide_scroll_before = browser.test_wide_scroll();
+
+    // Back-restore re-seed with a control active: only the active inline
+    // control takes the shell position; the wide rail is left alone.
+    browser.apply_position(25, 9);
+    assert_eq!(
+        browser.cursor(),
+        25,
+        "active control takes the restored position"
+    );
+    assert_eq!(
+        browser.test_inline_selected_target(),
+        Some(25),
+        "the active inline control is seeded"
+    );
+    assert_eq!(
+        browser.test_inline_scroll(),
+        9,
+        "the active inline control scroll is seeded"
+    );
+    assert_eq!(
+        browser.test_wide_selected_target(),
+        Some(2),
+        "the non-active wide rail keeps its live selection"
+    );
+    assert_eq!(
+        browser.test_wide_scroll(),
+        wide_scroll_before,
+        "the non-active wide rail scroll is untouched"
+    );
+}
+
 #[test]
 fn browser_renders_the_shared_generic_rows() {
     let mut browser = BrowserComponent::new();

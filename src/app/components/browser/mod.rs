@@ -353,6 +353,31 @@ impl BrowserComponent {
             self.scroll
         }
     }
+
+    /// Test-only: the persistent canonical controls' own public selection and
+    /// scroll state, for asserting which control `apply_position` seeded. The
+    /// `cursor()`/`scroll()` getters delegate to the ACTIVE control (or the
+    /// legacy fields when none is active), so they cannot observe a control
+    /// that is seeded but not currently active.
+    #[cfg(test)]
+    pub(crate) fn test_inline_selected_target(&self) -> Option<usize> {
+        self.inline_browser.selected_target().copied()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_inline_scroll(&self) -> usize {
+        self.inline_browser.scroll()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_wide_selected_target(&self) -> Option<usize> {
+        self.wide_list.selected_target().copied()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_wide_scroll(&self) -> usize {
+        self.wide_list.scroll()
+    }
     pub(in crate::app) fn viewport_anchor(
         &self,
         viewport_height: usize,
