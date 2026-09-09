@@ -140,15 +140,37 @@ impl Model {
                     .and_then(|id| self.application.get_component(&id))
                     .and_then(|comp| comp.as_any().downcast_ref::<BrowserComponent>())
                     .is_some_and(BrowserComponent::owns_canonical_position);
-                if !canonical {
+                // Keep only the persistence-facing resting value, using the
+                // index already resolved by the active control. This is not a
+                // live mirror: ordinary content pushes never read it back.
+                let valid_index = if self.app.is_feed_home_video_group_view(lib_idx) {
+                    self.app.libs[lib_idx]
+                        .feed_home_video
+                        .as_ref()
+                        .is_some_and(|state| index < state.selected_len())
+                } else {
+                    self.app.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .is_some_and(|level| index < level.items.len())
+                };
+                if canonical && valid_index {
+                    if self.app.is_feed_home_video_group_view(lib_idx) {
+                        if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
+                            state.video_cursor = index;
+                        }
+                    } else if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
+                        level.set_resting_cursor(index);
+                    }
+                    self.app.save_default_library_position(lib_idx);
+                } else if !canonical && valid_index {
                     if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
                         level.set_resting_cursor(index);
                         self.app.save_default_library_position(lib_idx);
                     }
                 }
-                // Canonical controls own live selection; retain navigation
-                // effects and pagination without a shell write-back.
-                if idle {
+                // Group pickers are a fixed local list and never paginate.
+                if idle && !self.app.is_feed_home_video_group_view(lib_idx) {
                     self.app.maybe_fetch_next_page(lib_idx, index);
                 }
             }

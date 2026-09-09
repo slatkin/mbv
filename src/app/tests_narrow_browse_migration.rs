@@ -572,7 +572,7 @@ fn feed_home_video_group_metadata_bearing_hero_keeps_complete_frame() {
 }
 
 #[test]
-fn feed_home_video_group_browser_wheel_persists_the_video_cursor() {
+fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
     let mut app = feed_home_video_group_app();
     let state = app.libs[0].feed_home_video.as_mut().unwrap();
     for i in 0..30 {
@@ -645,8 +645,8 @@ fn feed_home_video_group_browser_wheel_persists_the_video_cursor() {
             .as_ref()
             .unwrap()
             .video_cursor,
-        0,
-        "shell feed state is not a live cursor mirror"
+        total_rows - 1,
+        "shell resting state follows the resolved control selection"
     );
 }
 

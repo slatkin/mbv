@@ -529,7 +529,7 @@ fn shell_mounts_and_syncs_the_generic_emby_browser() {
             .cursor(),
         1
     );
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
     assert!(model
         .application
         .get_component(&id)

@@ -570,7 +570,7 @@ fn narrow_canonical_list_click_moves_cursor_and_emits_row_click() {
     }));
     assert_eq!(
         message,
-        Some(Msg::Shell(ShellRequest::BrowserRowClick { target })),
+        Some(Msg::Shell(ShellRequest::BrowserRowClick { target: 1 })),
         "narrow canonical row click must resolve via inline_browser.resolve_point"
     );
     assert_eq!(browser.cursor(), 1);
@@ -611,12 +611,12 @@ fn narrow_canonical_list_double_click_emits_row_activate() {
     let first = browser.on(&down);
     assert_eq!(
         first,
-        Some(Msg::Shell(ShellRequest::BrowserRowClick { target }))
+        Some(Msg::Shell(ShellRequest::BrowserRowClick { target: 1 }))
     );
     let second = browser.on(&down);
     assert_eq!(
         second,
-        Some(Msg::Shell(ShellRequest::BrowserRowActivate { target }))
+        Some(Msg::Shell(ShellRequest::BrowserRowActivate { target: 1 }))
     );
 }
 

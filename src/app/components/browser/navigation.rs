@@ -4,6 +4,42 @@ use crate::app::library_column_width::library_column_count;
 use crate::app::ui_util::move_cursor;
 
 impl BrowserComponent {
+    pub(super) fn reanchor_content(&mut self) {
+        if let Some(anchor) = self.preserved_anchor.as_ref() {
+            if let Some(target) = self
+                .context
+                .items
+                .iter()
+                .position(|item| item.id == anchor.selected_target)
+            {
+                if self.wide_movies {
+                    self.wide_list.select_index(target);
+                } else if self.uses_inline_control() {
+                    self.inline_browser.select_index(target);
+                }
+            }
+        }
+    }
+
+    pub(super) fn prepare_incoming_control(&mut self, reset: bool, seed_legacy: bool) {
+        if reset {
+            if self.wide_movies {
+                self.wide_list.select_first();
+            } else if self.uses_inline_control() {
+                self.inline_browser.select_first();
+            }
+        } else if seed_legacy {
+            if self.wide_movies {
+                if self.wide_list.selected_target().is_none() {
+                    self.wide_list.select_index(self.cursor);
+                }
+            } else if self.uses_inline_control() && self.inline_browser.selected_target().is_none()
+            {
+                self.inline_browser.select_index(self.cursor);
+            }
+        }
+    }
+
     /// Return the column count used by the legacy two-column browse geometry.
     pub(super) fn columns(&self) -> usize {
         if self.wide_movies
@@ -28,7 +64,7 @@ impl BrowserComponent {
             && (self.narrow_extras.inline_hero.is_some() || self.narrow_extras.hero_placeholder)
     }
 
-    fn has_active_control(&self) -> bool {
+    pub(in crate::app) fn has_active_control(&self) -> bool {
         self.wide_movies || self.uses_inline_control()
     }
 
@@ -207,8 +243,7 @@ impl BrowserComponent {
                 } else {
                     self.wide_list.select_first();
                 }
-                if let Some(target) = self.wide_list.selected_target().copied() {
-                    self.cursor = target;
+                if self.wide_list.selected_target().is_some() {
                     self.sync_active_viewport();
                 }
             } else {
@@ -217,8 +252,7 @@ impl BrowserComponent {
                 } else {
                     self.inline_browser.select_first();
                 }
-                if let Some(target) = self.inline_browser.selected_target().copied() {
-                    self.cursor = target;
+                if self.inline_browser.selected_target().is_some() {
                     self.sync_active_viewport();
                 }
             }

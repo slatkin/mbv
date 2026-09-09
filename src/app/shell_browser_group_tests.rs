@@ -12,6 +12,7 @@ use crate::app::{
 };
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
+use std::time::{Duration, Instant};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 /// A two-Emby-library app: the generic `lib-films` (index 0) and a second
@@ -248,6 +249,21 @@ fn feed_group_picker_app() -> App {
     });
 
     app
+}
+
+#[test]
+fn feed_group_picker_wheel_does_not_paginate_the_hidden_group_root() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = feed_group_picker_app();
+    app.libs[0].nav_stack[0].total_count = 100;
+    let mut model = Model::new(app);
+    model.app.last_nav_at = Instant::now() - Duration::from_secs(1);
+    model.sync_emby_browser();
+    assert!(model.app.is_feed_home_video_group_view(0));
+
+    model.handle_browser_request(ShellRequest::BrowserCursorIndex { index: 1 });
+
+    assert!(!model.app.libs[0].nav_stack[0].loading);
 }
 
 #[test]
