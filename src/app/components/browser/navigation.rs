@@ -39,11 +39,9 @@ impl BrowserComponent {
         if self.wide_movies {
             let offset = self.wide_list.resolve_viewport(viewport_height).offset;
             self.wide_list.set_scroll(offset);
-            self.scroll = self.wide_list.scroll();
         } else if self.uses_inline_control() {
             let offset = self.inline_browser.resolve_viewport(viewport_height).offset;
             self.inline_browser.set_scroll(offset);
-            self.scroll = self.inline_browser.scroll();
         }
     }
 
@@ -60,8 +58,7 @@ impl BrowserComponent {
         } else {
             return None;
         };
-        if let Some(target) = target {
-            self.cursor = target;
+        if target.is_some() {
             self.sync_active_viewport();
         }
         target
@@ -83,7 +80,7 @@ impl BrowserComponent {
         } else {
             self.move_legacy_item_rows(item_rows);
         }
-        self.cursor
+        self.cursor()
     }
 
     /// Move by one selectable item in the legacy source order.
@@ -106,7 +103,7 @@ impl BrowserComponent {
         } else {
             self.move_raw_cursor(delta);
         }
-        self.cursor
+        self.cursor()
     }
 
     /// Move the component cursor by `delta` in raw item order, clamped to the
@@ -225,7 +222,7 @@ impl BrowserComponent {
                     self.sync_active_viewport();
                 }
             }
-            return self.cursor;
+            return self.cursor();
         }
         if self.uses_letter_grouping() {
             let sorted = self.sorted_indices();
@@ -296,8 +293,6 @@ impl BrowserComponent {
             if self.wide_list.selected_target() != Some(&target) {
                 return false;
             }
-            self.cursor = target;
-            self.scroll = self.wide_list.scroll();
             true
         } else if self.uses_inline_control() {
             self.inline_browser
@@ -305,8 +300,6 @@ impl BrowserComponent {
             if self.inline_browser.selected_target() != Some(&target) {
                 return false;
             }
-            self.cursor = target;
-            self.scroll = self.inline_browser.scroll();
             true
         } else {
             false

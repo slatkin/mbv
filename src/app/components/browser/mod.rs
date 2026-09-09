@@ -50,6 +50,8 @@ pub struct BrowserComponent {
     /// only when this changes; within one identity (pagination, loading
     /// completion, refresh, cursor echo) no position crosses the boundary.
     last_identity: Option<BrowserIdentity>,
+    // Legacy two-column Generic browse state. Canonical Movies/home-video
+    // surfaces keep selection and viewport exclusively in their controls.
     cursor: usize,
     scroll: usize,
     focused: bool,
@@ -175,18 +177,8 @@ impl BrowserComponent {
 
     pub(in crate::app) fn set_content(&mut self, content: BrowserContent) {
         self.context = content;
-        let anchor_target = self
-            .preserved_anchor
-            .as_ref()
-            .map(|anchor| anchor.selected_target.clone());
-        if let Some(cursor) = anchor_target
-            .and_then(|target| self.context.items.iter().position(|item| item.id == target))
-        {
-            self.cursor = cursor;
-        }
-        // Clamp the control-owned cursor to the new item count (a within-identity
-        // refresh may return fewer items, e.g. inline search). This keeps the
-        // invariant, not a position re-seed: `BrowserContent` has no cursor.
+        // ListCore::set_content retains stable targets and clamps both
+        // persistent controls; ordinary refresh never re-seeds position.
         self.cursor = self.cursor.min(self.context.item_count().saturating_sub(1));
         self.feed_inline_browser();
         self.feed_wide_list();
@@ -200,12 +192,19 @@ impl BrowserComponent {
     /// ordinary refresh, and the component's own `BrowserCursorIndex` echo
     /// leave the control-owned cursor and scroll untouched.
     pub(in crate::app) fn apply_position(&mut self, cursor: usize, scroll: usize) {
-        self.cursor = cursor.min(self.context.item_count().saturating_sub(1));
-        self.scroll = scroll;
+        let target = cursor.min(self.context.item_count().saturating_sub(1));
+        if !matches!(self.kind, BrowserKind::Movies | BrowserKind::HomeVideos)
+            && !self.context.has_group_pills()
+        {
+            self.cursor = target;
+            self.scroll = scroll;
+        }
         self.feed_inline_browser();
-        self.inline_browser.select_target(&self.cursor);
-        self.inline_browser.set_scroll(self.scroll);
+        self.inline_browser.select_index(target);
+        self.inline_browser.set_scroll(scroll);
         self.feed_wide_list();
+        self.wide_list.select_index(target);
+        self.wide_list.set_scroll(scroll);
     }
 
     /// Records the browse identity of the current shell content push and
@@ -327,13 +326,22 @@ impl BrowserComponent {
                 .collect();
             self.wide_list.set_content(rows);
         }
-        let cursor = self.cursor.min(ctx.item_count().saturating_sub(1));
-        self.wide_list.select_target(&cursor);
-        self.wide_list.set_scroll(self.scroll);
     }
 
     pub(in crate::app) fn cursor(&self) -> usize {
-        self.cursor
+        if self.wide_movies {
+            self.wide_list
+                .selected_target()
+                .copied()
+                .unwrap_or(self.cursor)
+        } else if self.uses_inline_control() {
+            self.inline_browser
+                .selected_target()
+                .copied()
+                .unwrap_or(self.cursor)
+        } else {
+            self.cursor
+        }
     }
 
     /// The scroll offset the last `view()` painted the list at. The control
@@ -344,23 +352,20 @@ impl BrowserComponent {
     /// the shell-owned resting position (design D3). It is not a per-frame
     /// mirror.
     pub(in crate::app) fn scroll(&self) -> usize {
-        self.scroll
+        if self.wide_movies {
+            self.wide_list.scroll()
+        } else if self.uses_inline_control() {
+            self.inline_browser.scroll()
+        } else {
+            self.scroll
+        }
     }
 
     pub(in crate::app) fn viewport_anchor(
         &self,
         viewport_height: usize,
     ) -> Option<ViewportAnchor<String>> {
-        self.active_viewport_anchor(viewport_height).or_else(|| {
-            let item = self.context.items.get(self.cursor)?;
-            Some(ViewportAnchor {
-                selected_target: item.id.clone(),
-                selected_row_offset: self
-                    .cursor
-                    .saturating_sub(self.scroll)
-                    .min(viewport_height.saturating_sub(1)),
-            })
-        })
+        self.active_viewport_anchor(viewport_height)
     }
 
     pub(in crate::app) fn apply_viewport_anchor(&mut self, anchor: ViewportAnchor<String>) {
@@ -372,7 +377,11 @@ impl BrowserComponent {
             .iter()
             .position(|item| item.id == anchor.selected_target)
         {
-            self.cursor = cursor;
+            if self.wide_movies {
+                self.wide_list.select_index(cursor);
+            } else if self.uses_inline_control() {
+                self.inline_browser.select_index(cursor);
+            }
         }
         self.preserved_anchor = Some(anchor.clone());
         self.pending_anchor = Some(anchor);
@@ -491,7 +500,7 @@ impl BrowserComponent {
                     return None;
                 }
                 Some(Msg::Shell(ShellRequest::BrowserRowContextMenu {
-                    target: self.cursor,
+                    target: self.cursor(),
                     anchor: (mouse.column, mouse.row),
                 }))
             }
@@ -507,7 +516,13 @@ impl BrowserComponent {
             return false;
         }
         if let Some(target) = self.resolve_row_target(at) {
-            self.cursor = target;
+            if self.wide_movies {
+                self.wide_list.select_index(target);
+            } else if self.uses_inline_control() {
+                self.inline_browser.select_index(target);
+            } else {
+                self.cursor = target;
+            }
         }
         true
     }
@@ -519,20 +534,16 @@ impl BrowserComponent {
     /// the parent's painted row map.
     fn resolve_row_target(&self, point: Position) -> Option<usize> {
         if self.wide_movies {
-            return self
-                .wide_list
-                .resolve_point(self.layout.left_area, point)
-                .copied();
+            return self.wide_list.resolve_current_point(point).copied();
         }
-        if self.layout.inline_hero_area.contains(point) {
-            return Some(self.cursor);
-        }
-        if self.layout.left_item_rows.is_empty() {
-            let detail_rows = self.layout.inline_hero_area.height as usize;
-            return self
-                .inline_browser
-                .resolve_point(self.layout.left_area, detail_rows, point)
-                .copied();
+        if self.uses_inline_control() {
+            if let Some(target) = self.inline_browser.resolve_current_point(point).copied() {
+                return Some(target);
+            }
+            if self.layout.inline_hero_area.contains(point) {
+                return self.inline_browser.current_selected_target().copied();
+            }
+            return None;
         }
         self.resolve_left_cursor(point.x, point.y)
     }
@@ -547,7 +558,7 @@ impl BrowserComponent {
             return None;
         }
         let click_y = (row.saturating_sub(la.y)) as usize;
-        let display_row = self.scroll + click_y;
+        let display_row = self.scroll() + click_y;
         // Cell-aware two-column resolution: pick the exact column under the
         // click. Single-column and header rows fall back to the row map below.
         if let Some(items) = self.layout.left_item_rows.get(display_row) {
@@ -577,12 +588,53 @@ impl BrowserComponent {
         &self.layout
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_inline_targets(&self) -> (Rect, Vec<Option<usize>>) {
+        let base = self
+            .inline_browser
+            .current_content_rect()
+            .unwrap_or_default();
+        let detail = self
+            .inline_browser
+            .current_detail_rect()
+            .map_or(0, |rect| rect.height);
+        let area = Rect {
+            y: base.y.saturating_add(detail),
+            height: base.height.saturating_sub(detail),
+            ..base
+        };
+        let offset = self
+            .inline_browser
+            .current_flow_offset()
+            .unwrap_or(0)
+            .saturating_add(detail as usize);
+        let targets = (offset..offset.saturating_add(area.height as usize))
+            .map(|row| {
+                self.inline_browser
+                    .current_flow_target_at(row)
+                    .flatten()
+                    .copied()
+            })
+            .collect();
+        (area, targets)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_inline_target_position(&self, target: usize) -> Option<Position> {
+        let (area, _) = self.test_inline_targets();
+        (0..area.height)
+            .map(|row| Position::new(area.x, area.y + row))
+            .find(|point| self.inline_browser.resolve_current_point(*point) == Some(&target))
+    }
+
     /// Test-only cursor seed (task 5.3d.16): `set_content` no longer mirrors
     /// the shell cursor, so tests position the authoritative local cursor
     /// directly before exercising navigation.
     #[cfg(test)]
     pub(crate) fn set_cursor_for_test(&mut self, cursor: usize) {
         self.cursor = cursor;
+        self.inline_browser.select_index(cursor);
+        self.wide_list.select_index(cursor);
     }
 
     /// Test-only reset of the private gesture recognizer, so a synchronous
@@ -628,33 +680,19 @@ impl Component for BrowserComponent {
             self.wide_movies = wide;
         }
         if let Some(anchor) = self.pending_anchor.take() {
-            if !self.apply_active_viewport_anchor(&anchor, area.height as usize) {
-                if let Some(cursor) = self
-                    .context
-                    .items
-                    .iter()
-                    .position(|item| item.id == anchor.selected_target)
-                {
-                    self.cursor = cursor;
-                    self.scroll = cursor.saturating_sub(anchor.selected_row_offset).min(
-                        self.context
-                            .items
-                            .len()
-                            .saturating_sub(area.height as usize),
-                    );
-                }
-                // A newly-mounted receiving control may not have rows until
-                // this render populates it. Retry the handoff once next frame.
-                if switching_controls {
-                    self.pending_anchor = Some(anchor);
-                }
+            if !self.apply_active_viewport_anchor(&anchor, area.height as usize)
+                && switching_controls
+            {
+                // The receiving control may not have rows until this render
+                // populates it; retry the control-to-control handoff.
+                self.pending_anchor = Some(anchor);
             }
         }
         self.layout = LayoutMain::default();
         let mut context = self
             .context
             .clone()
-            .with_cursor_scroll(self.cursor, self.scroll);
+            .with_cursor_scroll(self.cursor(), self.scroll());
         if let Some(items) = self.narrow_extras.feed_items.as_ref() {
             let feed = BrowserContent {
                 items: items.clone(),
@@ -663,8 +701,10 @@ impl Component for BrowserComponent {
                 loading: context.loading,
                 ..BrowserContent::default()
             };
-            context = feed
-                .with_cursor_scroll(self.cursor.min(items.len().saturating_sub(1)), self.scroll);
+            context = feed.with_cursor_scroll(
+                self.cursor().min(items.len().saturating_sub(1)),
+                self.scroll(),
+            );
         }
         // Task 5.3d.17a: when the wide Movies/home-video Wide hero layout
         // is active (this component's own `kind` AND the area is wide enough
@@ -717,15 +757,12 @@ impl Component for BrowserComponent {
                 &mut self.inline_browser,
             );
             self.image_paint = image_paint;
-            // Keep the active control's resting viewport in lockstep with the
-            // painter's resolved flow; the parent field remains only the
-            // shell's navigation/teardown persistence seam.
-            if self.uses_inline_control() {
-                self.inline_browser.set_scroll(scroll);
-            }
+            // The painter resolves and stores the control viewport together
+            // with its retained hit geometry; do not invalidate that geometry
+            // by writing the same offset back after painting.
             scroll
         };
-        if !self.inline_search.is_active() {
+        if !self.inline_search.is_active() && !(self.wide_movies || self.uses_inline_control()) {
             self.scroll = rendered_scroll;
         }
 

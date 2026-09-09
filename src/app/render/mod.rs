@@ -79,7 +79,7 @@ pub(in crate::app) use components::home_hero::{
 };
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
 pub(in crate::app) use components::media_list::{
-    render_inline_media_browser_component, render_wide_media_list, render_wide_media_list_component,
+    render_inline_media_browser_component, render_wide_media_list_component,
 };
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,

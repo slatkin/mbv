@@ -135,19 +135,9 @@ impl Model {
                 let idle = now.duration_since(self.app.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
                 self.app.last_nav_at = now;
                 self.app.mark_library_navigation(now);
-                if self.app.is_feed_home_video_group_view(lib_idx) {
-                    if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
-                        if state.selected_len() > 0 {
-                            state.video_cursor = index;
-                            self.app.save_default_library_position(lib_idx);
-                        }
-                    }
-                    return;
-                }
-                if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
-                    level.set_resting_cursor(index);
-                    self.app.save_default_library_position(lib_idx);
-                }
+                // The mounted Browser control owns the live selection. This
+                // request is retained for navigation effects and pagination;
+                // it must not echo into App's resting mirror on every move.
                 if idle {
                     self.app.maybe_fetch_next_page(lib_idx, index);
                 }

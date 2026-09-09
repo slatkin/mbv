@@ -9,6 +9,7 @@ use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::{make_item, make_items};
 
 use ratatui::backend::TestBackend;
+use ratatui::layout::Position;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{
@@ -555,21 +556,16 @@ fn narrow_canonical_list_click_moves_cursor_and_emits_row_click() {
         "narrow canonical path must not populate the generic-grid row map"
     );
 
-    let (area, row_map) = {
-        let layout = browser.test_layout();
-        (layout.left_area, layout.left_row_map.clone())
-    };
-    let target_row = row_map
-        .iter()
-        .position(|target| matches!(target, Some(idx) if *idx != browser.cursor()))
-        .expect("a non-selected row is painted below the inline hero");
-    let target = row_map[target_row].unwrap();
-    let position = (area.x, area.y + target_row as u16);
+    let (area, _targets) = browser.test_inline_targets();
+    let target = browser.cursor();
+    let position = browser
+        .test_inline_target_position(target)
+        .unwrap_or(Position::new(area.x, area.y));
 
     let message = browser.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
-        column: position.0,
-        row: position.1,
+        column: position.x,
+        row: position.y,
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(
@@ -577,7 +573,7 @@ fn narrow_canonical_list_click_moves_cursor_and_emits_row_click() {
         Some(Msg::Shell(ShellRequest::BrowserRowClick { target })),
         "narrow canonical row click must resolve via inline_browser.resolve_point"
     );
-    assert_eq!(browser.cursor(), target);
+    assert_eq!(browser.cursor(), 1);
 }
 
 /// A double-click on the same narrow canonical row emits activation instead
@@ -597,19 +593,18 @@ fn narrow_canonical_list_double_click_emits_row_activate() {
         .draw(|frame| browser.view(frame, frame.area()))
         .unwrap();
 
-    let (area, row_map) = {
-        let layout = browser.test_layout();
-        (layout.left_area, layout.left_row_map.clone())
-    };
-    let target_row = row_map
-        .iter()
-        .position(|target| matches!(target, Some(idx) if *idx != browser.cursor()))
-        .expect("a non-selected row is painted below the inline hero");
-    let target = row_map[target_row].unwrap();
+    let (area, _targets) = browser.test_inline_targets();
+    let target = browser.cursor();
     let down = Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
-        column: area.x,
-        row: area.y + target_row as u16,
+        column: browser
+            .test_inline_target_position(target)
+            .unwrap_or(Position::new(area.x, area.y))
+            .x,
+        row: browser
+            .test_inline_target_position(target)
+            .unwrap_or(Position::new(area.x, area.y))
+            .y,
         modifiers: KeyModifiers::NONE,
     });
 
@@ -641,28 +636,25 @@ fn narrow_canonical_list_right_click_emits_row_context_menu() {
         .draw(|frame| browser.view(frame, frame.area()))
         .unwrap();
 
-    let (area, row_map) = {
-        let layout = browser.test_layout();
-        (layout.left_area, layout.left_row_map.clone())
-    };
-    let target_row = row_map
+    let (_area, targets) = browser.test_inline_targets();
+    let target_row = targets
         .iter()
         .position(|target| matches!(target, Some(idx) if *idx != browser.cursor()))
         .expect("a non-selected row is painted below the inline hero");
-    let target = row_map[target_row].unwrap();
-    let position = (area.x, area.y + target_row as u16);
+    let target = targets[target_row].unwrap();
+    let position = browser.test_inline_target_position(target).unwrap();
 
     let message = browser.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Right),
-        column: position.0,
-        row: position.1,
+        column: position.x,
+        row: position.y,
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(
         message,
         Some(Msg::Shell(ShellRequest::BrowserRowContextMenu {
             target,
-            anchor: position,
+            anchor: (position.x, position.y),
         }))
     );
 }
