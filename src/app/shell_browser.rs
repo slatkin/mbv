@@ -135,9 +135,19 @@ impl Model {
                 let idle = now.duration_since(self.app.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
                 self.app.last_nav_at = now;
                 self.app.mark_library_navigation(now);
-                // The mounted Browser control owns the live selection. This
-                // request is retained for navigation effects and pagination;
-                // it must not echo into App's resting mirror on every move.
+                let canonical = self
+                    .emby_browser_component_id()
+                    .and_then(|id| self.application.get_component(&id))
+                    .and_then(|comp| comp.as_any().downcast_ref::<BrowserComponent>())
+                    .is_some_and(BrowserComponent::owns_canonical_position);
+                if !canonical {
+                    if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
+                        level.set_resting_cursor(index);
+                        self.app.save_default_library_position(lib_idx);
+                    }
+                }
+                // Canonical controls own live selection; retain navigation
+                // effects and pagination without a shell write-back.
                 if idle {
                     self.app.maybe_fetch_next_page(lib_idx, index);
                 }

@@ -36,17 +36,18 @@ impl BrowserComponent {
             // fails on the same rect (`body_area == area`). If a degenerate
             // rect ever reaches here, keep a canonical render rather than
             // routing to the legacy painter.
-            crate::app::render::render_wide_media_list_component(
+            let paint = crate::app::render::render_wide_media_list(
                 f,
                 body_area,
+                body_area,
                 &mut self.wide_list,
-                crate::app::components::media_list::WideMediaListPaintPolicy::new(
-                    self.focused,
-                    crate::app::components::media_list::SelectedRowSurface::ListBackdrop,
-                    None,
-                ),
+                self.focused,
+                palette::list_selected_row_bg(),
+                None,
             );
-            return self.wide_list.current_flow_offset().unwrap_or(0);
+            self.layout.left_item_rows = paint.left_item_rows;
+            self.layout.left_row_map = paint.left_row_map;
+            return paint.row_geometry.offset();
         };
         let browser_panel = panes.browser_panel;
 
@@ -157,18 +158,38 @@ impl BrowserComponent {
             );
             0
         } else {
-            crate::app::render::render_wide_media_list_component(
+            let painted = crate::app::render::render_wide_media_list(
                 f,
                 paint,
+                content,
                 &mut self.wide_list,
-                crate::app::components::media_list::WideMediaListPaintPolicy::new(
-                    self.focused,
-                    crate::app::components::media_list::SelectedRowSurface::ListBackdrop,
-                    None,
-                ),
+                self.focused,
+                palette::list_selected_row_bg(),
+                None,
             );
-            let offset = self.wide_list.current_flow_offset().unwrap_or(0);
-            self.layout.selected_item_rect = self.wide_list.current_selected_row_rect();
+            self.layout.left_item_rows = painted.left_item_rows;
+            self.layout.left_row_map = painted.left_row_map;
+            let offset = painted.row_geometry.offset();
+            // Export the selected-row anchor from the control's exact painted
+            // flow; the shell consumes it for context-menu placement.
+            self.layout.selected_item_rect = painted.selected_row_rect;
+            // Republish the sorted display order the rail was built from so the
+            // parent's letter-aware keyboard navigation keeps resolving targets
+            // against `self.layout` (mirrors `render_wide_tv_with_ctx`; task
+            // 3.5c re-points navigation onto the control itself).
+            let grouped =
+                !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some());
+            self.layout.left_sorted_indices = if grouped {
+                let mut order: Vec<usize> = (0..ctx.items.len()).collect();
+                order.sort_by_cached_key(|&index| {
+                    crate::app::ui_util::natural_sort_key(crate::app::render::effective_sort_str(
+                        &ctx.items[index],
+                    ))
+                });
+                order
+            } else {
+                (0..ctx.items.len()).collect()
+            };
             offset
         };
 

@@ -328,6 +328,11 @@ impl BrowserComponent {
         }
     }
 
+    pub(in crate::app) fn owns_canonical_position(&self) -> bool {
+        matches!(self.kind, BrowserKind::Movies | BrowserKind::HomeVideos)
+            || self.context.has_group_pills()
+    }
+
     pub(in crate::app) fn cursor(&self) -> usize {
         if self.wide_movies {
             self.wide_list
