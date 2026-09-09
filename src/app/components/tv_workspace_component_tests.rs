@@ -1,5 +1,5 @@
 use super::inline_search::{InlineSearchHost, SearchPool};
-use super::msg::{Msg, ShellRequest, TvHit};
+use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use super::tv_workspace::TvWorkspaceComponent;
 use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_item;
@@ -63,6 +63,66 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
             ..
         })) if target == "id"
     ));
+}
+
+#[test]
+fn tv_series_hits_use_retained_rows_and_wheel_moves_the_control() {
+    let mut first = make_item("Series A", "Series");
+    first.id = "series-a".into();
+    let mut second = make_item("Series B", "Series");
+    second.id = "series-b".into();
+    let mut component = TvWorkspaceComponent::new();
+    component.set_focused(true);
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![first, second], 0, 0),
+        None,
+        None,
+        0,
+        None,
+        false,
+    ));
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let (col, row) = {
+        let layout = component.test_layout();
+        (layout.tv_wide_list_area.x, layout.tv_wide_list_area.y)
+    };
+
+    let click = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: col,
+        row: row + 1,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        click,
+        Some(Msg::Shell(ShellRequest::TvHitClick {
+            hit: TvHit::SeriesRow(ref target),
+        })) if target == "series-b"
+    ));
+    assert_eq!(component.selected_item_id(), Some("series-b".into()));
+
+    let blank = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: col,
+        row: row.saturating_sub(1),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(blank.is_none());
+
+    let wheel = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: col,
+        row,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        wheel,
+        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    ));
+    assert_eq!(component.selected_item_id(), Some("series-b".into()));
 }
 
 #[test]
