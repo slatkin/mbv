@@ -283,7 +283,6 @@ fn abs_podcast_narrow_one_column_navigation_uses_page_rows() {
     component.set_content(&state, false);
     component.set_focused(true);
     view_narrow(&mut component, 100, 6);
-    assert_eq!(component.geometry().columns, 1);
     assert!(matches!(
         component.on(&Event::Keyboard(KeyEvent {
             code: Key::Down,
@@ -333,28 +332,27 @@ fn abs_podcast_wheel_moves_one_visual_row_and_ignores_outside_list() {
         row: list.y,
         modifiers: KeyModifiers::NONE,
     };
-    assert!(matches!(
+    assert_eq!(
         component.on(&Event::Mouse(inside)),
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 3
-        }))
-    ));
+        Some(Msg::TerminalEvent(
+            crate::app::components::msg::TerminalObserverEvent::MouseClaimed
+        ))
+    );
     // The wheel throttle lives in the private gesture state (ADR 0024, D3);
     // reset it so the synchronous test loop's second wheel step is recognized.
     component.reset_mouse_gestures_for_test();
+    view_narrow(&mut component, 100, 6);
     let up = component.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollUp,
         column: list.x,
         row: list.y,
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(
-        matches!(
-            up,
-            Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-                index: 2
-            }))
-        ),
+    assert_eq!(
+        up,
+        Some(Msg::TerminalEvent(
+            crate::app::components::msg::TerminalObserverEvent::MouseClaimed
+        )),
         "unexpected upward wheel message: {up:?}"
     );
     assert_eq!(component.cursor(), 2);
@@ -377,22 +375,17 @@ fn abs_podcast_row_mouse_selects_the_clicked_show_and_bucket_start() {
     component.set_content(&state, false);
     component.set_focused(true);
     view_narrow(&mut component, 100, 6);
-    let rects = component.geometry().show_rows.clone();
-    let (rect, clicked) = rects
-        .iter()
-        .copied()
-        .find(|(_, i)| *i != component.cursor())
-        .expect("a non-selected show row is painted");
+    let list = component.geometry().list_area;
     let msg = component.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
-        column: rect.x + rect.width / 2,
-        row: rect.y,
+        column: list.x,
+        row: list.y,
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(
         msg,
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: clicked
+            index: 0
         }))
     );
     let bucket = component.geometry().selector_tabs[0].0;
@@ -626,13 +619,8 @@ fn abs_podcast_mouse_double_click_emits_open_or_play_and_right_click_ignored() {
     component.set_content(&state, false);
     component.set_focused(true);
     view_narrow(&mut component, 100, 6);
-    let (rect, clicked) = component
-        .geometry()
-        .show_rows
-        .iter()
-        .copied()
-        .find(|(_, i)| *i != component.cursor())
-        .expect("a non-selected show row is painted");
+    let rect = component.geometry().list_area;
+    let clicked = 0usize;
     // Two quick Downs at the same point = DoubleClick on the second.
     component.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),

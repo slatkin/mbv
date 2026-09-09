@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::tests::*;
 
-pub(super) fn audiobookshelf_app() -> App {
+pub(crate) fn audiobookshelf_app() -> App {
     let mut app = make_app_stub();
     let library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
