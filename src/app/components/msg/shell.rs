@@ -151,7 +151,7 @@ pub enum ShellRequest {
     /// Enqueue the Home item at the component-owned flat cursor.
     HomeEnqueue(usize),
     /// Open Home's context menu for the Continue Watching target resolved by
-    /// the mounted component and its Model-owned content snapshot.
+    /// the mounted component.
     HomeContextMenu {
         home_cw_selected: bool,
         cw_item: Option<mbv_core::api::EmbyItem>,
@@ -169,11 +169,6 @@ pub enum ShellRequest {
     /// preference, resolved via the mounted component's `source_for_section`
     /// at the Model boundary (task 5.3d, numeric Home section deletion).
     HomeSectionSelected(usize),
-    /// The resolved Continue Watching cursor after local Home movement. The
-    /// Model remains authoritative for this independently persisted cursor.
-    HomeContinueCursor {
-        index: usize,
-    },
     /// A row the user single-clicked in the Home list or inline hero. The
     /// component has already moved its own selection to the resolved row; the
     /// shell only pulls panel focus to the Library (design.md D4/D5).

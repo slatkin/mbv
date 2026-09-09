@@ -493,10 +493,8 @@ mod tests {
         );
 
         // Right-click: focuses Library and opens a Pointer-anchored context
-        // menu whose entries resolve from the Continue Watching
-        // `continue_cursor` item — a CW movie, not the folder. (The Home menu
-        // target is continue_cursor, never the clicked row, so preserving it
-        // needs no cursor copy.)
+        // menu whose entries resolve from the Continue Watching item supplied
+        // by Home — a CW movie, not the folder.
         route(
             &mut model,
             ShellRequest::HomeRowContextMenu { anchor: (70, 20) },

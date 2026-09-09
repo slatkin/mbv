@@ -394,9 +394,6 @@ impl Model {
                     }
                     self.push_emby_browser_content();
                 }
-                // Retained for exhaustive compatibility with older messages;
-                // Home wheel movement is entirely component-local.
-                ShellRequest::HomeContinueCursor { .. } => {}
                 ShellRequest::HomeRowClick => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
                     self.push_home_content();

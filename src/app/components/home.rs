@@ -437,14 +437,20 @@ impl HomeComponent {
                 self.select_end();
                 None
             }
-            Key::Char('.') => Some(Msg::Shell(ShellRequest::HomeContextMenu {
-                home_cw_selected: self.section == 0,
-                cw_item: self.cw_item.clone(),
-            })),
+            Key::Char('.') if self.section == 0 => {
+                Some(Msg::Shell(ShellRequest::HomeContextMenu {
+                    home_cw_selected: true,
+                    cw_item: self.cw_item.clone(),
+                }))
+            }
+            Key::Char('.') => None,
             Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor()))),
             Key::Enter => Some(Msg::Shell(ShellRequest::HomePlay(self.cursor()))),
             Key::Char('a') if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor()))),
-            Key::Char('w') if ctrl => Some(Msg::Shell(ShellRequest::HomeToggleWatched)),
+            Key::Char('w') if ctrl && self.section == 0 => {
+                Some(Msg::Shell(ShellRequest::HomeToggleWatched))
+            }
+            Key::Char('w') if ctrl => None,
             Key::Delete => Some(Msg::Shell(ShellRequest::HomeDelete(self.cursor()))),
             _ => None,
         }
@@ -557,18 +563,16 @@ impl HomeComponent {
     /// selection.
     fn resolve_row_id(&self, point: Position) -> Option<String> {
         if self.wide {
-            return self
-                .canonical_list
-                .resolve_point(self.list_area, point)
-                .cloned();
+            return self.canonical_list.resolve_current_point(point).cloned();
         }
-        if self.hero_area.is_some_and(|hero| hero.contains(point)) {
-            return self.inline_list.selected_target().cloned();
+        if self
+            .inline_list
+            .current_detail_rect()
+            .is_some_and(|detail| detail.contains(point))
+        {
+            return self.inline_list.current_selected_target().cloned();
         }
-        let detail_rows = self.hero_area.map_or(0, |hero| hero.height as usize);
-        self.inline_list
-            .resolve_point(self.list_area, detail_rows, point)
-            .cloned()
+        self.inline_list.resolve_current_point(point).cloned()
     }
 
     /// Test seam: reset the private gesture recognizer so a synchronous test
@@ -650,8 +654,8 @@ impl Component for HomeComponent {
     fn view(&mut self, f: &mut Frame, area: Rect) {
         // One `ViewportAnchor` handoff at a breakpoint transition: carry the
         // outgoing control's selected target and screen-row offset into the
-        // incoming control (design.md D2). The cursors already track in
-        // lockstep; the anchor keeps the offset continuous across the resize.
+        // incoming control (design.md D2). The anchor keeps the offset
+        // continuous across the resize.
         let wide = crate::app::render::wide_hero_presentation(area).is_some();
         if wide != self.wide {
             let viewport_height = self.list_area.height.max(1) as usize;

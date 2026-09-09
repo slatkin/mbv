@@ -221,6 +221,25 @@ fn unmatched_key_stays_unclaimed() {
     assert_eq!(msg, None);
 }
 #[test]
+fn latest_section_context_menu_and_watched_toggle_are_no_ops() {
+    let mut home = two_section_home();
+    assert!(
+        home.restore_section(&crate::app::types_playback::HomeLatestSource::Emby(
+            "movies".into(),
+        ))
+    );
+
+    assert_eq!(home.on(&key(Key::Char('.'))), None);
+    assert_eq!(
+        home.on(&Event::Keyboard(KeyEvent {
+            code: Key::Char('w'),
+            modifiers: KeyModifiers::CONTROL,
+        })),
+        None
+    );
+}
+
+#[test]
 fn ctrl_w_emits_toggle_watched_without_a_cursor_payload() {
     let mut home = two_section_home();
     let msg = home.on(&Event::Keyboard(KeyEvent {

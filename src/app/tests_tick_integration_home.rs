@@ -96,11 +96,9 @@ fn home_narrow_tick_wheel_and_click_use_current_inline_geometry() {
     let _ = draw(&mut harness, 60, 20);
     let (selected, _) = home(&harness).test_hitmap()[0];
     harness.inject(wheel(selected.x, selected.y));
-    let outcome = harness.step();
-    assert!(outcome.messages.iter().all(|message| {
-        !matches!(message, Msg::Shell(ShellRequest::HomeContinueCursor { .. }))
-    }));
+    let _outcome = harness.step();
     assert_eq!(home(&harness).cursor(), 1);
+    let _ = draw(&mut harness, 60, 20);
 
     let (target, _) = home(&harness).test_hitmap()[1];
     harness.inject(Event::Mouse(MouseEvent {
@@ -116,8 +114,19 @@ fn home_narrow_tick_wheel_and_click_use_current_inline_geometry() {
         .any(|message| matches!(message, Msg::Shell(ShellRequest::HomeRowClick))));
     assert_eq!(home(&harness).cursor(), 2);
     reset_home_media_list_paints();
-    let _ = draw(&mut harness, 60, 20);
+    let terminal = draw(&mut harness, 60, 20);
     assert_eq!(home_inline_media_browser_paints(), 1);
+    let painted: String = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect();
+    assert!(
+        painted.contains("Home Item 2"),
+        "painted frame must show selected row: {painted:?}"
+    );
 }
 
 #[test]
