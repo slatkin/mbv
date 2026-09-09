@@ -45,8 +45,9 @@ A row closes when its bounded change is merged plus reviewer-signed-off and both
 
 ## 7. Complete Audiobookshelf Podcasts
 
-- [ ] 7.1 After sections 2-5 are complete and after separately authorized exploration, merge one bounded Audiobookshelf Podcast ownership change with reviewer sign-off; verify the show-list controls persist across frames, the active control owns show position, ordinary refresh and responsive handoff follow the shared contract, row hits use retained geometry without parent show-row maps, and paint does not write position back; episode filter/selection state, images, and playback intents remain Podcast-owned authority, and Podcast presentation converges fully on the Emby reference with deviations repaired rather than preserved.
-- [ ] 7.2 Record the change path and matching GitHub status before closing Audiobookshelf Podcasts.
+- [x] 7.1 After sections 2-5 are complete and after separately authorized exploration, merge one bounded Audiobookshelf Podcast ownership change with reviewer sign-off; verify the show-list controls persist across frames, the active control owns show position, ordinary refresh and responsive handoff follow the shared contract, row hits use retained geometry without parent show-row maps, and paint does not write position back; episode filter/selection state, images, and playback intents remain Podcast-owned authority, and Podcast presentation converges fully on the Emby reference with deviations repaired rather than preserved.
+- [x] 7.2 Record the change path and matching GitHub status before closing Audiobookshelf Podcasts.
+  - Change path: `fix-podcast-media-list-ownership` implemented at `c5ca6974` → tests `d397274c` → corrections `25bd6824` (select_show drives the active control, wheel returns resolved index, clippy allows removed) + `2dce54a6` (wide/narrow placeholder claim invalidation) on `refactor/finish-canonical-media-list-ownership`; two-axis BLOCK → corrections → focused re-review confirmed fixes → mechanical closure. Carries the approved `audiobookshelf-podcast-library-ui` spec delta (narrow hero shows episodes + pills in TV-equivalent positions; bucket-pill text fixed to non-empty surname ranges). Episode filter/selection, modal, playback intents, images, persistence stay Podcast-owned. GitHub #681 updated to match.
 
 ## 8. Complete Audiobookshelf Books
 
