@@ -275,7 +275,6 @@ fn mixed_home_latest() -> Vec<(
     String,
     crate::app::types_playback::HomeLatestSource,
     Vec<QueueItem>,
-    usize,
 )> {
     vec![
         (
@@ -293,7 +292,6 @@ fn mixed_home_latest() -> Vec<(
                     cover_path: None,
                 },
             )],
-            0,
         ),
         (
             "Feeds".into(),
@@ -311,7 +309,6 @@ fn mixed_home_latest() -> Vec<(
                 position_ticks: 0,
                 played: false,
             })],
-            0,
         ),
     ]
 }

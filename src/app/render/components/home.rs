@@ -1,4 +1,7 @@
-use crate::app::components::media_list::{InlineMediaBrowser, WideMediaList};
+use crate::app::components::media_list::{
+    InlineMediaBrowser, InlineMediaBrowserPaintPolicy, SelectedRowSurface, WideMediaList,
+    WideMediaListPaintPolicy,
+};
 use crate::app::palette;
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
@@ -15,6 +18,7 @@ use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
+use tuirealm::component::Component;
 
 /// Output of [`render_home_content`]: painted geometry the caller owns.
 /// `hero_area`/`selected_item_rect` are `None` when this render touched no
@@ -25,9 +29,6 @@ pub(in crate::app) struct HomeContentOutput {
     pub(in crate::app) hero_area: Option<Rect>,
     pub(in crate::app) left_area: Rect,
     pub(in crate::app) selected_item_rect: Option<Rect>,
-    /// The `section` actually rendered, after the invalid-section clamp.
-    /// `HomeComponent::view()` writes it back into its own section state.
-    pub(in crate::app) resolved_section: usize,
 }
 
 /// The QueueItem at flat `cursor` in the continue-watching + latest-sections
@@ -62,7 +63,7 @@ pub(in crate::app) fn render_home_content(
     section: usize,
     cursor: usize,
     canonical_list: &mut WideMediaList<String>,
-    inline_list: &InlineMediaBrowser<String>,
+    inline_list: &mut InlineMediaBrowser<String>,
     use_nerd_fonts: bool,
     images_enabled: bool,
 ) -> HomeContentOutput {
@@ -73,7 +74,6 @@ pub(in crate::app) fn render_home_content(
             hero_area: None,
             left_area: Rect::default(),
             selected_item_rect: None,
-            resolved_section: section,
         };
     }
 
@@ -88,15 +88,6 @@ pub(in crate::app) fn render_home_content(
             items: items.clone(),
         });
     }
-
-    // The caller resolves which section is *persisted*; a section that no
-    // longer exists (e.g. a provider went away) still falls back to the
-    // first available new section here, matching the legacy clamp.
-    let section = if section != 0 && !new_sections.iter().any(|s| s.section_idx == section) {
-        new_sections.first().map(|s| s.section_idx).unwrap_or(0)
-    } else {
-        section
-    };
 
     let selected_new = new_sections.iter().find(|s| s.section_idx == section);
 
@@ -389,7 +380,6 @@ pub(in crate::app) fn render_home_content(
     // Selected-row highlight colour: the row punches through to the surface
     // containing the list panel, which is a resting surface in both layouts
     // (the wide list panel is focus-green, but its parent container is not).
-    let selection_bg = palette::list_selected_row_bg();
 
     // Keep the row immediately below the Home pill bar free of list text.
     // The wide layout uses the list panel surface; the single-column
@@ -447,26 +437,23 @@ pub(in crate::app) fn render_home_content(
             width: green_panel_full.map_or(list_area.width, |panel| panel.width),
             ..list_area
         };
-        let paint = super::media_list::render_wide_media_list(
-            f,
-            paint_rect,
-            list_area,
-            canonical_list,
+        canonical_list.set_geometry(paint_rect, list_area);
+        canonical_list.set_paint_policy(WideMediaListPaintPolicy::new(
             focused,
-            selection_bg,
+            SelectedRowSurface::ListBackdrop,
             None,
-        );
-        paint.selected_row_rect
+        ));
+        canonical_list.view(f, paint_rect);
+        canonical_list.current_selected_row_rect()
     } else {
-        let result = super::media_list::render_inline_media_browser(
-            f,
-            list_area,
-            inline_list,
-            narrow_desired_hero_rows as usize,
+        inline_list.set_geometry(list_area, list_area);
+        inline_list.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
             focused,
-            selection_bg,
-        );
-        match result.hero_area {
+            SelectedRowSurface::ListBackdrop,
+            narrow_desired_hero_rows as usize,
+        ));
+        inline_list.view(f, list_area);
+        match inline_list.current_detail_rect() {
             Some(hero_area) => {
                 hero_area_out = Some(hero_area);
                 hero::selected_detail_shell(f, hero_area, hero_area.height, focused);
@@ -502,7 +489,7 @@ pub(in crate::app) fn render_home_content(
                 }
                 Some(hero_area)
             }
-            None => result.row_geometry.selected_row_rect(list_area),
+            None => inline_list.current_selected_row_rect(),
         }
     };
 
@@ -512,7 +499,6 @@ pub(in crate::app) fn render_home_content(
         hero_area: hero_area_out,
         left_area,
         selected_item_rect,
-        resolved_section: section,
     }
 }
 

@@ -81,7 +81,7 @@ impl Model {
             .home_content
             .latest
             .iter()
-            .map(|(title, source, items, _cursor)| (title.clone(), source.clone(), items.clone()))
+            .map(|(title, source, items)| (title.clone(), source.clone(), items.clone()))
             .collect();
         let cw_item = self.home_cw_item();
         let use_nerd_fonts = self.app.use_nerd_fonts;
@@ -220,7 +220,6 @@ mod tests {
             "Books".into(),
             crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()),
             vec![],
-            0,
         )];
         model.push_home_content();
         {
@@ -308,7 +307,6 @@ mod tests {
             "Folder".into(),
             crate::app::types_playback::HomeLatestSource::Emby("lib".into()),
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
-            0,
         )];
         model.push_home_content();
 
@@ -343,7 +341,6 @@ mod tests {
         // the emby-gated effect still acts (flashes unavailable) rather than
         // skipping.
         model.app.status.clear();
-        model.home_content.continue_cursor = 1;
         model.handle_home_request(ShellRequest::HomeToggleWatched);
         assert_eq!(
             model.app.status, "Emby is unavailable",
@@ -377,7 +374,6 @@ mod tests {
                 vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
                     make_item("Movie one", "Movie"),
                 ))],
-                0,
             ),
             (
                 "Podcasts".into(),
@@ -385,7 +381,6 @@ mod tests {
                 vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
                     make_item("Episode one", "Episode"),
                 ))],
-                0,
             ),
         ];
         model.push_home_content();
@@ -420,7 +415,6 @@ mod tests {
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
                 make_item("Movie one", "Movie"),
             ))],
-            0,
         )];
         model.push_home_content();
         model.handle_home_request(ShellRequest::HomeSectionSelected(1));
@@ -460,29 +454,18 @@ mod tests {
             "Folder".into(),
             crate::app::types_playback::HomeLatestSource::Emby("lib".into()),
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
-            0,
         )];
         model.push_home_content();
 
         // Single click on CW row 0: focuses the Library panel, but does not
         // mutate App's independent Continue Watching column cursor or the
         // per-latest pill cursor, and does not activate.
-        model.home_content.continue_cursor = 1;
-        model.home_content.latest[0].3 = 7;
         model.app.status.clear();
         route(&mut model, ShellRequest::HomeRowClick);
         assert_eq!(
             model.app.effective_panel_focus(),
             PanelFocus::Library,
             "single click must focus the Library panel"
-        );
-        assert_eq!(
-            model.home_content.continue_cursor, 1,
-            "single click must not mutate the Continue Watching column cursor"
-        );
-        assert_eq!(
-            model.home_content.latest[0].3, 7,
-            "single click must not mutate the per-latest pill cursor"
         );
         assert!(
             model.app.status.is_empty(),
@@ -514,7 +497,6 @@ mod tests {
         // `continue_cursor` item — a CW movie, not the folder. (The Home menu
         // target is continue_cursor, never the clicked row, so preserving it
         // needs no cursor copy.)
-        model.home_content.continue_cursor = 0;
         route(
             &mut model,
             ShellRequest::HomeRowContextMenu { anchor: (70, 20) },

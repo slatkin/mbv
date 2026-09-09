@@ -221,8 +221,11 @@ impl HomeComponent {
             self.section = idx + 1;
             self.clamp_section();
             self.project_active_section();
-            self.canonical_list.select_first();
-            self.inline_list.select_first();
+            if self.wide {
+                self.canonical_list.select_first();
+            } else {
+                self.inline_list.select_first();
+            }
             true
         } else {
             false
@@ -321,24 +324,30 @@ impl HomeComponent {
         }
     }
 
-    /// Move the selection within the active section (clamped to its bounds) on
-    /// both canonical controls in lockstep, so they stay cursor-aligned across
-    /// a breakpoint transition. The keyboard navigation and the Model-boundary
-    /// wheel scroll both use this (task 5.3d, Home wheel-scroll ownership) with
-    /// the same delta semantics as keyboard Up/Down.
+    /// Move only the painted control; the inactive control is a parked handoff
+    /// target and must not become a second live authority.
     pub(in crate::app) fn move_local_cursor(&mut self, delta: i64) {
-        self.canonical_list.move_selection(delta);
-        self.inline_list.move_selection(delta);
+        if self.wide {
+            self.canonical_list.move_selection(delta);
+        } else {
+            self.inline_list.move_selection(delta);
+        }
     }
 
     fn select_start(&mut self) {
-        self.canonical_list.select_first();
-        self.inline_list.select_first();
+        if self.wide {
+            self.canonical_list.select_first();
+        } else {
+            self.inline_list.select_first();
+        }
     }
 
     fn select_end(&mut self) {
-        self.canonical_list.select_last();
-        self.inline_list.select_last();
+        if self.wide {
+            self.canonical_list.select_last();
+        } else {
+            self.inline_list.select_last();
+        }
     }
 
     /// Select `section_idx` (clamped to the nearest valid section). Returns
@@ -358,11 +367,13 @@ impl HomeComponent {
         }
         self.section = resolved;
         // A discrete section change re-projects the active section and parks
-        // the selection at its first row on both controls (no per-section
-        // cursor cache).
+        // the active control at its first row (no per-section cursor cache).
         self.project_active_section();
-        self.canonical_list.select_first();
-        self.inline_list.select_first();
+        if self.wide {
+            self.canonical_list.select_first();
+        } else {
+            self.inline_list.select_first();
+        }
         true
     }
 
@@ -480,16 +491,10 @@ impl HomeComponent {
                     return None;
                 }
                 self.move_local_cursor(delta);
-                if self.section == 0 {
-                    Some(Msg::Shell(ShellRequest::HomeContinueCursor {
-                        index: self.cursor(),
-                    }))
-                } else {
-                    // Return a framework-visible claim after mutating local
-                    // state; dropping the message would let the framework's
-                    // mutation be discarded by the mouse fold.
-                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-                }
+                // Return a framework-visible claim after mutating local state;
+                // the shell resolves effects from the component's selected
+                // stable target rather than an App-wide cursor mirror.
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::Click(at) => {
                 if let Some(&section_idx) = self.pill_regions.resolve(at) {
@@ -537,8 +542,11 @@ impl HomeComponent {
             return false;
         }
         if let Some(id) = self.resolve_row_id(at) {
-            self.canonical_list.select_target(&id);
-            self.inline_list.select_target(&id);
+            if self.wide {
+                self.canonical_list.select_target(&id);
+            } else {
+                self.inline_list.select_target(&id);
+            }
         }
         true
     }
@@ -674,11 +682,10 @@ impl Component for HomeComponent {
             self.section,
             cursor,
             &mut self.canonical_list,
-            &self.inline_list,
+            &mut self.inline_list,
             self.use_nerd_fonts,
             self.images_enabled,
         );
-        self.section = result.resolved_section;
         self.pill_targets = result.pill_targets;
         self.list_area = result.left_area;
         self.selected_item_rect = result.selected_item_rect;

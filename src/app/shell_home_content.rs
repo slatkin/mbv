@@ -24,9 +24,7 @@ impl Model {
     /// computation) is authoritative, so an assigned refresh also clears a
     /// pending startup skeleton.
     pub(super) fn assign_home_content(&mut self, content: HomeContent) {
-        let old_cursor = self.home_content.continue_cursor;
         self.home_content = content;
-        self.home_content.continue_cursor = old_cursor;
         self.push_home_content();
     }
 
@@ -38,7 +36,6 @@ impl Model {
     pub(super) fn clear_home_content(&mut self) {
         self.home_content.continue_items.clear();
         self.home_content.latest.clear();
-        self.home_content.continue_cursor = 0;
         self.push_home_content();
     }
 
@@ -102,7 +99,7 @@ impl Model {
             }
             pos += 1;
         }
-        for (_, _, items, _) in &self.home_content.latest {
+        for (_, _, items) in &self.home_content.latest {
             for item in items {
                 if pos == cursor {
                     return Some((item.clone(), false));
@@ -113,16 +110,15 @@ impl Model {
         None
     }
 
-    /// The Continue Watching column item under the column's own
-    /// `continue_cursor` (Model-owned, task 5.3d) — the authoritative target
-    /// for the CW effects (`cw_play`/`cw_enqueue`/`cw_toggle_watched`), the
-    /// context-menu Home/queue-coupling arms, and the keyboard-threaded
-    /// `cw_item` (§5.3d input thread).
+    /// The component-selected Continue Watching item for shell effects.
     pub(super) fn home_cw_item(&self) -> Option<EmbyItem> {
-        self.home_content
-            .continue_items
-            .get(self.home_content.continue_cursor)
-            .cloned()
+        let cursor = self
+            .application
+            .get_component(&ComponentId::Home)
+            .and_then(|component| component.as_any().downcast_ref::<HomeComponent>())
+            .filter(|home| home.section() == 0)
+            .map(HomeComponent::cursor)?;
+        self.home_content.continue_items.get(cursor).cloned()
     }
 
     /// Synchronous startup/commit fetch drain for `fetch_home` (task 5.3d):

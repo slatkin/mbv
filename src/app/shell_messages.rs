@@ -394,13 +394,9 @@ impl Model {
                     }
                     self.push_emby_browser_content();
                 }
-                // Home wheel movement is local; only the resolved Continue
-                // Watching cursor crosses the Model boundary.
-                ShellRequest::HomeContinueCursor { index } => {
-                    self.home_content.continue_cursor =
-                        index.min(self.home_content.continue_items.len().saturating_sub(1));
-                    self.push_home_content();
-                }
+                // Retained for exhaustive compatibility with older messages;
+                // Home wheel movement is entirely component-local.
+                ShellRequest::HomeContinueCursor { .. } => {}
                 ShellRequest::HomeRowClick => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
                     self.push_home_content();

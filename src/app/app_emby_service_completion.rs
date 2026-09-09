@@ -18,7 +18,7 @@ impl App {
     pub(super) fn apply_emby_completion(
         &mut self,
         completion: super::service_startup::Completion,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>, usize)],
+        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
     ) -> Option<HomeContent> {
         self.transition_emby_failure(
             Some(completion.generation),
@@ -32,7 +32,7 @@ impl App {
     pub(super) fn apply_emby_completion_with_secret_deleter(
         &mut self,
         completion: super::service_startup::Completion,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>, usize)],
+        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
         delete: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
     ) -> Option<HomeContent> {
         self.transition_emby_failure(
@@ -47,7 +47,7 @@ impl App {
         &mut self,
         generation: Option<mbv_core::service_runtime::SetupGeneration>,
         result: Result<super::service_startup::Startup, mbv_core::service_runtime::EmbyFailure>,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>, usize)],
+        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
         delete_secret: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
     ) -> Option<HomeContent> {
         use super::notify_actions::ToastSeverity;
@@ -169,7 +169,7 @@ impl App {
     pub(super) fn apply_emby_setup_completion(
         &mut self,
         completion: super::service_startup::SetupCompletion,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>, usize)],
+        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
     ) -> Option<HomeContent> {
         self.apply_emby_setup_completion_inner(completion, true, prior_latest)
     }
@@ -178,7 +178,7 @@ impl App {
     pub(super) fn apply_emby_setup_completion_without_network(
         &mut self,
         completion: super::service_startup::SetupCompletion,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>, usize)],
+        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
     ) -> Option<HomeContent> {
         self.apply_emby_setup_completion_inner(completion, false, prior_latest)
     }
@@ -187,7 +187,7 @@ impl App {
         &mut self,
         completion: super::service_startup::SetupCompletion,
         start_network: bool,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>, usize)],
+        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
     ) -> Option<HomeContent> {
         use super::notify_actions::ToastSeverity;
         if !self.emby_runtime.accepts(completion.generation) {
@@ -291,7 +291,7 @@ impl App {
     pub(super) fn apply_emby_bootstrap(
         &mut self,
         bootstrap: mbv_core::service_runtime::EmbyBootstrap,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>, usize)],
+        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
     ) -> HomeContent {
         let continue_items = bootstrap.continue_items;
         self.rebuild_library_tabs_from_views(&bootstrap.views);
@@ -327,7 +327,6 @@ impl App {
         });
         HomeContent {
             continue_items,
-            continue_cursor: 0,
             latest,
             loading: false,
         }
