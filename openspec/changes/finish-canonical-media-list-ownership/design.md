@@ -17,7 +17,7 @@ Wide hero orientation is not an implementation defect: current source follows th
 - Maintain one accurate agent-facing ledger of verified destination status.
 - Keep the governing specifications unchanged and require implementation to conform to them.
 - Split future work into bounded, independently authorized visible-screen changes.
-- Make conformance evidence durable and auditable before a row closes.
+- Close rows on merged PR plus reviewer sign-off, recorded consistently here and in #681.
 - Keep GitHub issue #681 and this umbrella linked and semantically aligned.
 
 **Non-Goals:**
@@ -34,7 +34,7 @@ Wide hero orientation is not an implementation defect: current source follows th
 
 ### D1. Current specifications remain the acceptance contract
 
-The campaign does not weaken or reinterpret the current specifications to match landed code. A destination is complete only when source and evidence satisfy the applicable requirements from the union of the canonical-list, Interactive Component, and arrangement contracts.
+The campaign does not weaken or reinterpret the current specifications to match landed code. Bounded changes conform to them; a row closes per D5 (merged PR plus reviewer sign-off with both records updated), not a per-requirement proof bundle.
 
 Alternative: revise the specification to describe PR #684's bounded seam endpoint. Rejected because that would erase the active-control-only ownership decision that motivated the campaign and would legitimize known duplicate state.
 
@@ -59,20 +59,20 @@ Alternative: preserve the earlier “Queue and Grouped Music complete” baselin
 
 Each row or genuinely cohesive family starts with interactive exploration. Only after scope confirmation may one bounded proposal be created; implementation requires a later separate apply request. This umbrella records status and evidence but never makes proposal creation an apply task.
 
-The initial families are:
+The initial families, in Emby-first execution order, are:
 
 1. Grouped Music.
 2. Home.
-3. Feeds.
-4. Movies and the Emby homevideos feed view, preserving non-hero two-column catalogs.
-5. TV Series, after the Browser-family ownership decisions it shares are accepted.
+3. Movies and the Emby homevideos feed view, preserving non-hero two-column catalogs.
+4. TV Series, after the Browser-family ownership decisions it shares are accepted.
+5. Feeds.
 6. Audiobookshelf Podcasts.
 7. Audiobookshelf Books.
-8. Final conformance and only evidence-required reconciliation.
+8. Final reconciliation.
 
-Only TV has a fixed technical dependency on the Browser family because its Normal presentation uses `BrowserComponent`. Other rows may be selected interactively rather than chained by an artificial serial order.
+The Emby families (1-4) complete before the skeleton families (5-7). TV stays after the Browser family because its Normal presentation uses `BrowserComponent`; otherwise the order is advisory and any Emby row may be pulled forward.
 
-Alternative: one broad implementation change or a fixed serial campaign. Rejected because both recreate the sampling and continuity failures that caused the original plan to fail review.
+Alternative: one broad implementation change or purely pick-per-round ordering with no default. Rejected because the former recreates the sampling and continuity failures that caused the original plan to fail review, and the latter leaves the reference design unsettled while skeleton families are reworked.
 
 ### D4. Queue is the concrete ownership precedent
 
@@ -82,19 +82,11 @@ This is a comparison tool, not permission to force Queue's fixed-row presentatio
 
 Alternative: derive every repair independently from prose requirements. Rejected because a conforming landed precedent reduces ambiguity without introducing another abstraction.
 
-### D5. Row closure requires a durable conformance record
+### D5. Rows close on merged PR plus reviewer sign-off
 
-A follow-on can close its umbrella row only after its archive/status update records, for every applicable requirement:
+A follow-on closes its umbrella row when its bounded change is merged and a reviewer signs off, with the change path and GitHub status updated in both records. No per-requirement source-to-test trace or live-evidence bundle is required.
 
-- the source owner and relevant path;
-- the focused automated evidence;
-- applicable live Normal/Wide evidence;
-- reviewer disposition for any unclear or not-applicable clause;
-- accepted commit/PR and main-spec sync status where behavior changed.
-
-`openspec validate`, automatic spec sync, functional verification, and review are inputs, not substitutes for this trace. A bare `PASS` without durable reasoning cannot close a row.
-
-Alternative: infer completion from checked slice tasks or a merged PR. Rejected because both previously recorded completion despite source-level nonconformance.
+Alternative: require a durable per-requirement trace with live Normal/Wide evidence. Rejected per user direction: the close-out cost outweighs its value and PR plus reviewer judgment is the bar.
 
 ### D6. GitHub and OpenSpec are paired records
 
@@ -102,15 +94,15 @@ GitHub issue #681 is the human-readable campaign plan, current status, and index
 
 Alternative: use only OpenSpec or only GitHub. Rejected because the user requires a human plan and agent execution detail, and the previous replacement of one with the other caused lost intent.
 
-### D7. Reconciliation is evidence-driven
+### D7. Reconciliation follows the families
 
-Stale comments, contradictory Wide-orientation scenario titles, compatibility paths, and structural ratchets are corrected with the family that proves their disposition, or in the final row if they remain. The final row cannot absorb an unimplemented destination repair.
+Stale comments, contradictory Wide-orientation scenario titles, compatibility paths, and structural ratchets are corrected with the family whose reviewer judges their disposition, or in the final row if they remain. The final row cannot absorb an unimplemented destination repair.
 
 Alternative: begin with a global docs/ratchet cleanup. Rejected because premature universal rules and exemption bookkeeping were a primary source of scope growth.
 
 ### D8. Emby destinations are the canonical design reference
 
-The Emby surfaces (Queue, Home, the Browser family, TV Series, grouped Music) are the most developed screens and define the presentation the campaign converges on. Feeds, Audiobookshelf Podcasts, and Audiobookshelf Books are functional skeletons: their bounded changes conform presentation, chrome, framing, and interaction to that reference and repair deviations rather than preserve them. Preservation language in this ledger scopes to provider workspace authority (state, typed intents, persistence), never to deviant presentation.
+The Emby surfaces (Queue, Home, the Browser family, TV Series, grouped Music) are the most developed screens and define the presentation the campaign converges on. Feeds, Audiobookshelf Podcasts, and Audiobookshelf Books are functional skeletons: their bounded changes converge fully on that reference — visual design, chrome, framing, and interaction — and repair deviations rather than preserve them, even where no current specification clause already demands it. Preservation language in this ledger scopes to provider workspace authority (state, typed intents, persistence), never to deviant presentation.
 
 Where current specification text entrenches a deviation, the bounded change proposes the conforming design and carries the required spec delta; this umbrella reinterprets no specification, keeping D1 intact.
 
@@ -118,8 +110,8 @@ Alternative: treat each skeleton's current presentation as accepted heritage. Re
 
 ## Risks / Trade-offs
 
-- **[The umbrella becomes another implementation plan]** → Keep its tasks limited to status transitions, bounded-change links, and evidence; implementation details belong only to authorized follow-ons.
-- **[A family is marked complete from functional behavior again]** → Require the per-requirement conformance record before closure.
+- **[The umbrella becomes another implementation plan]** → Keep its tasks limited to status transitions, bounded-change links, and status records; implementation details belong only to authorized follow-ons.
+- **[A family is marked complete from looks alone]** → Row closure requires a merged PR plus reviewer sign-off recorded in both records.
 - **[GitHub and OpenSpec drift]** → Updating both records is one acceptance action for every status transition.
 - **[Preserved workspace state is mistaken for a violation]** → Each follow-on identifies the exact list position/geometry authority separately from legitimate provider workspace state.
 - **[Preservation language is read as protecting skeleton presentation]** → D8 scopes preservation to provider authority; non-Emby presentation deviations are repair targets for their bounded changes.
@@ -128,10 +120,10 @@ Alternative: treat each skeleton's current presentation as accepted heritage. Re
 ## Migration Plan
 
 1. Establish this planning-only umbrella and the matching human record in issue #681.
-2. Explore and authorize bounded follow-ons one family at a time; do not implement through this umbrella.
-3. After each follow-on is accepted, synced where applicable, and archived, add its durable conformance record and update the matching GitHub status.
-4. Run the final source-to-spec audit after every included destination row is complete.
-5. Reconcile only surviving comments, scenario wording, compatibility paths, and narrow structural enforcement proven by that audit.
-6. Archive this umbrella and close issue #681 only when the two records agree and every included row has auditable evidence.
+2. Explore and authorize bounded follow-ons in Emby-first order (Grouped Music, Home, Browser family, TV, then Feeds, Audiobookshelf Podcasts, Audiobookshelf Books); do not implement through this umbrella.
+3. After each follow-on is merged and reviewed, record its change path and update the matching GitHub status.
+4. Run a final review pass after every included destination row is complete.
+5. Reconcile only surviving comments, scenario wording, compatibility paths, and narrow structural enforcement still judged necessary in that review.
+6. Archive this umbrella and close issue #681 only when the two records agree and every included row is merged plus signed off.
 
 Rollback is documentary: revert an incorrect ledger update and reopen the affected row. Source rollback belongs to the bounded follow-on that changed it.
