@@ -20,8 +20,9 @@ A row closes when its bounded change is merged plus reviewer-signed-off and both
 
 ## 3. Complete Home
 
-- [ ] 3.1 After separately authorized exploration, merge one bounded Home ownership change with reviewer sign-off; verify only the active Wide/Inline control moves, shell/per-section cursor mirrors are removed or explicitly proven non-live, ordinary refresh preserves local target, one `ViewportAnchor` performs responsive handoff, and row hits use retained current-frame geometry while Home sections, pills, hero, images, and effects remain parent/shell-owned.
-- [ ] 3.2 Record the change path and matching GitHub status before closing Home.
+- [x] 3.1 After separately authorized exploration, merge one bounded Home ownership change with reviewer sign-off; verify only the active Wide/Inline control moves, shell/per-section cursor mirrors are removed or explicitly proven non-live, ordinary refresh preserves local target, one `ViewportAnchor` performs responsive handoff, and row hits use retained current-frame geometry while Home sections, pills, hero, images, and effects remain parent/shell-owned.
+- [x] 3.2 Record the change path and matching GitHub status before closing Home.
+  - Change path: `fix-home-media-list-ownership` implemented at `54e704f8` + tests `d74309b1` + correction `23291256` on `refactor/finish-canonical-media-list-ownership`; two-axis review BLOCK, correction, focused re-review PASS. CW-only menu/toggle semantics documented as intended. GitHub #681 updated to match.
 
 ## 4. Complete Movies and the Emby homevideos feed view
 
