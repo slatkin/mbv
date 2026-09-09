@@ -26,6 +26,9 @@ use ratatui::style::Style;
 use ratatui::widgets::Block;
 use ratatui::Frame;
 
+/// Narrow replacement keeps a bounded overview so chapter rows remain visible.
+pub(in crate::app::render) const BOOK_NARROW_OVERVIEW_ROWS: u16 = 4;
+
 /// The component-owned interaction values the book renderer needs, passed in
 /// rather than read off the projected content type
 /// (split-browse-state-interaction-fields task 2.2).
@@ -143,6 +146,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             focused && interaction.chapter_selection.is_some(),
             true,
             &plan,
+            None,
         );
         let chapters_area = Rect {
             y: hero_content_area.y + hero_height,
@@ -259,14 +263,27 @@ fn render_narrow_book(
         narrow_list.apply_viewport_anchor(anchor, visible);
     }
 
-    let hero_rows = book_hero_content_rows(state, &plan);
-    let chapter_rows = state
+    let hero_rows = book_hero_content_rows(&plan, BOOK_NARROW_OVERVIEW_ROWS);
+    let chapter_count = state
         .selected_id
         .as_deref()
         .map(|id| state.visible_rows(id).len())
         .unwrap_or(0);
-    let desired_detail_rows =
-        (hero_rows + 1 + chapter_rows as u16 + HERO_BLOCK_EXTRA_ROWS) as usize;
+    // Admit the detail block using only the chapter rows that can fit. The
+    // chapter painter owns the remaining area and clips/scrolls the full list.
+    let hero_block_base = hero_rows as usize + 1 + HERO_BLOCK_EXTRA_ROWS as usize;
+    let chapter_budget = (content_area.height as usize)
+        .saturating_sub(hero_block_base)
+        .max(1);
+    let chapter_rows = chapter_count.min(chapter_budget);
+    // Preserve the ordinary-row fallback when even the bounded hero shell
+    // cannot fit; otherwise cap the projected chapter rows below the strict
+    // inline admission boundary and let the chapter list scroll the rest.
+    let desired_detail_rows = if hero_block_base >= content_area.height as usize {
+        hero_block_base
+    } else {
+        (hero_block_base + chapter_rows).min(content_area.height.saturating_sub(1).max(1) as usize)
+    };
     let result = render_inline_media_browser(
         frame,
         content_area,
@@ -294,7 +311,15 @@ fn render_narrow_book(
     selected_detail_shell(frame, hero_area, hero_area.height, focused);
     geometry.hero_area = Some(hero_area);
     geometry.selected_item_rect = Some(hero_area);
-    let image = render_book_hero(frame, hero_area, state, focused, true, &plan);
+    let image = render_book_hero(
+        frame,
+        hero_area,
+        state,
+        focused,
+        true,
+        &plan,
+        Some(BOOK_NARROW_OVERVIEW_ROWS as usize),
+    );
     let chapter_area = Rect {
         y: hero_area.y + SELECTED_BLOCK_SIDE_PADDING + hero_rows + 1,
         height: hero_area
@@ -348,6 +373,7 @@ fn render_book_hero(
     focused: bool,
     show_title: bool,
     plan: &BookHeroPlan,
+    overview_limit: Option<usize>,
 ) -> Option<super::home_hero::HomeImagePaint> {
     let book = state.selected_book()?;
     let mut meta = Vec::new();
@@ -407,7 +433,12 @@ fn render_book_hero(
     if !author.is_empty() {
         hero_lines.push(HeroLine::Plain(author.into()));
     }
-    hero_lines.extend(lines.into_iter().map(HeroLine::Plain));
+    hero_lines.extend(
+        lines
+            .into_iter()
+            .take(overview_limit.unwrap_or(usize::MAX))
+            .map(HeroLine::Plain),
+    );
     let result = paint_hero_content(
         frame,
         Rect {
@@ -508,12 +539,10 @@ fn render_book_rows(
         .collect();
 }
 
-fn book_hero_content_rows(state: &AudiobookshelfBookBrowseState, plan: &BookHeroPlan) -> u16 {
-    let author_rows = state
-        .selected_book()
-        .and_then(|book| book.author_display.as_deref())
-        .is_some_and(|author| !author.is_empty()) as u16;
-    plan.content_rows.max(HERO_TITLE_ROWS + author_rows)
+fn book_hero_content_rows(plan: &BookHeroPlan, overview_limit: u16) -> u16 {
+    plan.image_height
+        .saturating_add(1)
+        .max(HERO_TITLE_ROWS + 2 + plan.author_rows + plan.overview_rows.min(overview_limit))
 }
 
 fn book_hero_plan(
@@ -526,6 +555,8 @@ fn book_hero_plan(
             has_image: false,
             image_width: 0,
             image_height: 0,
+            author_rows: 0,
+            overview_rows: 0,
             content_rows: HERO_TITLE_ROWS,
         };
     };
@@ -551,9 +582,10 @@ fn book_hero_plan(
             HERO_TITLE_ROWS + 2 + author_rows + line as u16,
         ) as usize
     })
-    .len()
-    .min(4) as u16;
+    .len() as u16;
     BookHeroPlan {
+        author_rows,
+        overview_rows,
         has_image: has_cover,
         image_width,
         image_height,

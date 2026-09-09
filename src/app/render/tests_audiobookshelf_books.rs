@@ -90,6 +90,69 @@ fn book_narrow_replacement_contains_chapters_and_shared_hero_evidence() {
 }
 
 #[test]
+fn book_narrow_long_chapter_list_keeps_inline_detail_and_clips_rows() {
+    let mut state = book_catalog_state(1);
+    let chapters: Vec<_> = (0..30)
+        .map(|index| AudiobookshelfChapter {
+            id: index,
+            start: index as f64 * 60.0,
+            end: (index + 1) as f64 * 60.0,
+            title: format!("Chapter {index}"),
+        })
+        .collect();
+    state.books[0].chapters = chapters.clone();
+    state
+        .detail_cache
+        .insert("book-0".into(), (chapters, Vec::new()));
+    let mut component = AudiobookshelfBookComponent::new();
+    component.set_content(&state, false);
+    let mut term = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    term.draw(|f| component.view(f, f.area())).unwrap();
+
+    assert!(component.geometry().hero_area.is_some());
+    assert!(!component.geometry().chapter_rows.is_empty());
+    let text: String = term
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect();
+    assert!(text.contains("Chapter 0"));
+}
+
+#[test]
+fn book_narrow_overview_cap_keeps_chapter_rows_below_hero() {
+    let mut state = book_catalog_state(1);
+    state.books[0].description = Some("A very long overview ".repeat(80));
+    let chapter = AudiobookshelfChapter {
+        id: 0,
+        start: 0.0,
+        end: 60.0,
+        title: "Chapter after overview".into(),
+    };
+    state.books[0].chapters = vec![chapter.clone()];
+    state
+        .detail_cache
+        .insert("book-0".into(), (vec![chapter], Vec::new()));
+    let mut component = AudiobookshelfBookComponent::new();
+    component.set_content(&state, false);
+    let mut term = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    term.draw(|f| component.view(f, f.area())).unwrap();
+
+    assert!(component.geometry().hero_area.is_some());
+    assert!(!component.geometry().chapter_rows.is_empty());
+    let text: String = term
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect();
+    assert!(text.contains("Chapter after overview"));
+}
+
+#[test]
 fn book_loading_cover_reserves_shared_series_image_slot() {
     let mut state = book_catalog_state(1);
     state.books[0].cover_path = Some("cover.jpg".into());

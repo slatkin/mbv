@@ -137,9 +137,7 @@ impl AudiobookshelfBookComponent {
         self.selected_bucket = self
             .selected_bucket
             .min(self.state.buckets.len().saturating_sub(1));
-        let rows = crate::app::render::book_rows(&self.state, self.selected_bucket);
-        self.narrow_list.set_content(rows.clone());
-        self.wide_book_list.set_content(rows);
+        self.set_book_rows();
         if !self.initialized {
             if let Some(target) = self.state.selected_id.as_ref() {
                 self.narrow_list.select_target(target);
@@ -233,10 +231,14 @@ impl AudiobookshelfBookComponent {
         self.state.select(index);
     }
 
-    fn refresh_bucket_rows(&mut self) {
+    fn set_book_rows(&mut self) {
         let rows = crate::app::render::book_rows(&self.state, self.selected_bucket);
         self.narrow_list.set_content(rows.clone());
         self.wide_book_list.set_content(rows);
+    }
+
+    fn refresh_bucket_rows(&mut self) {
+        self.set_book_rows();
         let index = self.state.cursor().max(
             self.state
                 .buckets
