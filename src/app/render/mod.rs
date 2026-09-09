@@ -35,6 +35,22 @@ pub(in crate::app) use components::help::{
     help_destination, render_help_panel, HelpDestination, HelpRenderGeometry,
 };
 pub(in crate::app) use components::home::render_home_content;
+
+#[cfg(test)]
+pub(crate) fn reset_home_media_list_paints() {
+    components::media_list::WIDE_MEDIA_LIST_PAINTS.with(|count| count.set(0));
+    components::media_list::INLINE_MEDIA_BROWSER_PAINTS.with(|count| count.set(0));
+}
+
+#[cfg(test)]
+pub(crate) fn home_wide_media_list_paints() -> usize {
+    components::media_list::WIDE_MEDIA_LIST_PAINTS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(crate) fn home_inline_media_browser_paints() -> usize {
+    components::media_list::INLINE_MEDIA_BROWSER_PAINTS.with(std::cell::Cell::get)
+}
 pub(in crate::app) use components::home_hero::HomeImagePaint;
 pub(in crate::app) use components::inline_search::render_inline_search;
 pub(in crate::app) use components::library_routes::{

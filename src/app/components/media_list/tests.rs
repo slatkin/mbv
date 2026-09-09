@@ -241,6 +241,7 @@ fn media_lists_preserve_refresh_clamp_and_transfer_grouped_anchor() {
     // An ordinary projection preserves the stable selected target.
     wide.set_content(grouped_rows());
     assert_eq!(wide.selected_target(), Some(&"b".to_string()));
+    assert_eq!(wide.scroll(), 2, "ordinary refresh preserves local scroll");
 
     // A smaller projection clamps only locally when the target disappeared.
     wide.set_content(vec![
@@ -264,6 +265,15 @@ fn media_lists_preserve_refresh_clamp_and_transfer_grouped_anchor() {
     inline.apply_viewport_anchor(&anchor, 3);
     assert_eq!(inline.selected_target(), Some(&"b".to_string()));
     assert_eq!(inline.resolve_viewport(3).offset, 2);
+
+    // The explicit anchor, unlike an ordinary refresh, transfers the row
+    // offset. Verify the reverse direction uses the same contract.
+    let reverse = inline.viewport_anchor(3).expect("inline row anchors");
+    let mut wide_again = WideMediaList::new();
+    wide_again.set_content(grouped_rows());
+    wide_again.apply_viewport_anchor(&reverse, 3);
+    assert_eq!(wide_again.selected_target(), Some(&"b".to_string()));
+    assert_eq!(wide_again.resolve_viewport(3).offset, 2);
 }
 
 #[test]

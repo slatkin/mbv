@@ -377,6 +377,15 @@ fn breakpoint_transition_hands_off_one_viewport_anchor() {
         home.test_active_scroll() > 0,
         "the handoff seeded the incoming control's resting offset from the anchor",
     );
+
+    // The reverse transition uses the same single anchor seam, rather than
+    // reseeding the parked Wide control from the beginning of the list.
+    wide.draw(|frame| home.view(frame, frame.area())).unwrap();
+    assert_eq!(home.cursor(), 35, "the reverse handoff retains the target");
+    assert!(
+        home.test_active_scroll() > 0,
+        "the reverse handoff retains the offset"
+    );
 }
 
 #[test]

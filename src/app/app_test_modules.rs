@@ -180,6 +180,10 @@ mod tests_tick_integration_mouse;
 mod tests_tick_integration_music_mouse;
 
 #[cfg(test)]
+#[path = "tests_tick_integration_home.rs"]
+mod tests_tick_integration_home; // Home ownership tick coverage
+
+#[cfg(test)]
 #[path = "tests_tick_integration_mouse_sidebar.rs"]
 mod tests_tick_integration_mouse_sidebar;
 
