@@ -1,5 +1,4 @@
 use super::music_workspace::MusicWorkspaceComponent;
-use crate::app::render::grouped_album_target;
 
 impl MusicWorkspaceComponent {
     pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
@@ -33,7 +32,7 @@ impl MusicWorkspaceComponent {
     }
 
     pub(in crate::app) fn album_target_rows(&self, target: usize) -> Vec<usize> {
-        let wanted = grouped_album_target(&self.context.list.items, target);
+        let wanted = self.context.album_targets[target].clone();
         self.album_flow_targets()
             .iter()
             .enumerate()

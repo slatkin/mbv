@@ -291,10 +291,8 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
     /// Replace the display rows, preserving the selected target where possible
     /// and locally clamping otherwise (design.md D3).
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
-        if self.core.rows() != rows.as_slice() {
-            self.invalidate_paint();
-            self.core.set_content(rows);
-        }
+        self.invalidate_paint();
+        self.core.set_content(rows);
     }
 
     /// Replace one existing row by stable target, preserving selection and scroll.

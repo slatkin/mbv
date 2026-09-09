@@ -21,8 +21,8 @@ use super::msg::{AlbumCursorKind, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{
-    grouped_album_target, render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx,
-    wide_hero_presentation, MusicImagePaint, MusicWideRenderCtx,
+    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, wide_hero_presentation,
+    MusicImagePaint, MusicWideRenderCtx,
 };
 use crate::app::ui_util::list_duration_secs;
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
@@ -72,9 +72,6 @@ pub struct MusicWorkspaceComponent {
     pending_anchor: Option<ViewportAnchor<String>>,
     /// The presentation the last `view` painted; `None` before the first paint.
     last_wide: Option<bool>,
-    /// Incoming Wide viewport height used while applying a retained anchor
-    /// before the new Wide list has painted.
-    wide_viewport_height: usize,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
@@ -90,7 +87,7 @@ pub struct MusicWorkspaceComponent {
     pill_regions: HitRegions<usize>,
     /// The embedded Inline Search control (design.md D1). See
     /// `BrowserComponent::inline_search` for the migration-phase notes.
-    /// `pub(super)`, matching `track_cursor`/`album_cursor`, so the sibling
+    /// `pub(super)`, matching `track_cursor`, so the sibling
     /// `music_workspace_keys` module (split out for file size) can reach it.
     pub(super) inline_search: InlineSearch,
 }
@@ -121,7 +118,6 @@ impl MusicWorkspaceComponent {
             narrow_list: InlineMediaBrowser::new(),
             pending_anchor: None,
             last_wide: None,
-            wide_viewport_height: 1,
             mouse_gestures: MouseGestureState::new(),
             wide_list: WideMediaList::new(),
             track_list: WideMediaList::new(),
@@ -162,13 +158,7 @@ impl MusicWorkspaceComponent {
     }
 
     pub(super) fn select_album_index(&mut self, index: usize) {
-        let Some(target) = self
-            .context
-            .list
-            .items
-            .get(index)
-            .map(|_| grouped_album_target(&self.context.list.items, index))
-        else {
+        let Some(target) = self.context.album_targets.get(index).cloned() else {
             return;
         };
         self.select_active_target(&target);
@@ -178,13 +168,9 @@ impl MusicWorkspaceComponent {
         self.active_target()
             .and_then(|target| {
                 self.context
-                    .list
-                    .items
+                    .album_targets
                     .iter()
-                    .enumerate()
-                    .position(|(index, _)| {
-                        grouped_album_target(&self.context.list.items, index) == target
-                    })
+                    .position(|candidate| candidate == &target)
             })
             .unwrap_or(0)
     }
@@ -293,7 +279,7 @@ impl MusicWorkspaceComponent {
             .list
             .items
             .get(cursor)
-            .map(|_| grouped_album_target(&self.context.list.items, cursor))
+            .map(|_| self.context.album_targets[cursor].clone())
         {
             if self.last_wide.is_some() {
                 self.select_active_target(&target);
@@ -441,9 +427,7 @@ impl MusicWorkspaceComponent {
                         .items
                         .iter()
                         .enumerate()
-                        .position(|(index, _)| {
-                            grouped_album_target(&self.context.list.items, index) == id
-                        })
+                        .position(|(index, _)| self.context.album_targets[index] == id)
                 })?;
                 Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
@@ -536,7 +520,7 @@ impl MusicWorkspaceComponent {
             .items
             .iter()
             .enumerate()
-            .position(|(index, _)| grouped_album_target(&self.context.list.items, index) == id)?;
+            .position(|(index, _)| self.context.album_targets[index] == id)?;
         self.select_active_target(&id);
         Some(album)
     }
@@ -573,7 +557,7 @@ impl MusicWorkspaceComponent {
             .items
             .iter()
             .enumerate()
-            .position(|(index, _)| grouped_album_target(&self.context.list.items, index) == *id)
+            .position(|(index, _)| self.context.album_targets[index] == *id)
     }
 
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<MusicImagePaint> {
@@ -629,25 +613,9 @@ impl Component for MusicWorkspaceComponent {
         self.layout = LayoutMain::default();
         let wide = wide_hero_presentation(area).is_some();
 
-        // The first projection receives the shell's explicit resting target.
-        // There is no prior active presentation to transfer from yet, so seed
-        // only the control that will paint this frame.
-        if self.last_wide.is_none() {
-            let cursor = self.context.list.cursor();
-            if let Some(target) = self
-                .context
-                .list
-                .items
-                .get(cursor)
-                .map(|_| grouped_album_target(&self.context.list.items, cursor))
-            {
-                if wide {
-                    self.wide_list.select_target(&target);
-                } else {
-                    self.narrow_list.select_target(&target);
-                }
-            }
-        }
+        // The active control owns the painted selection. Use its index for
+        // render-derived detail content before cloning the shell snapshot.
+        self.context.list.set_cursor(self.selected_album_index());
 
         if let Some(was_wide) = self.last_wide {
             if was_wide != wide && self.pending_anchor.is_none() {
@@ -658,10 +626,12 @@ impl Component for MusicWorkspaceComponent {
         if let Some(anchor) = &flip_anchor {
             if wide {
                 self.context.publish_geometry(area, &mut self.layout);
-                self.wide_list.apply_viewport_anchor(
-                    anchor,
-                    self.layout.wide_music_browser_area.height as usize,
-                );
+                if let Some(content_rect) = self.wide_list.current_content_rect() {
+                    self.wide_list
+                        .apply_viewport_anchor(anchor, content_rect.height as usize);
+                } else {
+                    self.pending_anchor = flip_anchor;
+                }
             } else {
                 let content_area = if self.context.groups.is_empty() {
                     area
@@ -722,7 +692,6 @@ impl Component for MusicWorkspaceComponent {
                 &mut self.inline_search,
             );
             self.image_paint = output.image_paint;
-            self.wide_viewport_height = self.layout.wide_music_browser_area.height as usize;
         }
         self.pill_regions.clear();
         for (rect, target) in &self.layout.selector_tabs {

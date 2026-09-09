@@ -270,6 +270,10 @@ impl LibraryListRenderCtx {
         self
     }
 
+    pub(in crate::app) fn set_cursor(&mut self, cursor: usize) {
+        self.cursor = cursor;
+    }
+
     pub(in crate::app) fn with_loading(mut self, loading: bool) -> Self {
         self.loading = loading;
         self

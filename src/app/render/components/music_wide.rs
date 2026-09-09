@@ -26,11 +26,13 @@ use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::Frame;
+use std::collections::HashMap;
 use tuirealm::component::Component;
 
 #[derive(Clone)]
 pub(in crate::app) struct MusicWideRenderCtx {
     pub(in crate::app) list: LibraryListRenderCtx,
+    pub(in crate::app) album_targets: Vec<String>,
     pub(in crate::app) selected_album: Option<EmbyItem>,
     pub(in crate::app) album_artist: String,
     pub(in crate::app) groups: Vec<EmbyItem>,
@@ -60,8 +62,25 @@ impl MusicWideRenderCtx {
         album_tracks_loading: bool,
         track_cursor: Option<usize>,
     ) -> Self {
+        let mut counts = HashMap::<&str, usize>::new();
+        for album in &list.items {
+            *counts.entry(&album.id).or_default() += 1;
+        }
+        let album_targets = list
+            .items
+            .iter()
+            .enumerate()
+            .map(|(index, album)| {
+                if counts[album.id.as_str()] > 1 {
+                    format!("{}\u{0}{index}", album.id)
+                } else {
+                    album.id.clone()
+                }
+            })
+            .collect();
         Self {
             list,
+            album_targets,
             selected_album,
             album_artist,
             groups,
@@ -113,26 +132,14 @@ impl MusicWideRenderCtx {
     /// id. Grouped Music album rows carry no played/active state (parity with
     /// the wide rail and the legacy painter).
     pub(in crate::app) fn grouped_rows(&self) -> Vec<MediaListRow<String>> {
-        grouped_album_rows(&self.list.items, &self.album_info, &self.album_order)
+        grouped_album_rows_with_targets(&self.album_info, &self.album_order, &self.album_targets)
     }
 }
 
-/// Projects the grouped album order onto the canonical row vocabulary. Shared
-/// by `render_wide_right_album_browser_with_ctx` (Wide) and the narrow
-/// `InlineMediaBrowser` composition.
-pub(in crate::app) fn grouped_album_target(albums: &[EmbyItem], index: usize) -> String {
-    let id = &albums[index].id;
-    if albums.iter().filter(|album| &album.id == id).count() > 1 {
-        format!("{id}\u{0}{index}")
-    } else {
-        id.clone()
-    }
-}
-
-pub(in crate::app) fn grouped_album_rows(
-    albums: &[EmbyItem],
+fn grouped_album_rows_with_targets(
     album_info: &[(String, String, String)],
     order: &[usize],
+    targets: &[String],
 ) -> Vec<MediaListRow<String>> {
     let mut rows = Vec::new();
     let mut start = 0;
@@ -149,7 +156,7 @@ pub(in crate::app) fn grouped_album_rows(
         for &idx in &order[start..end] {
             let (_, year, name) = &album_info[idx];
             rows.push(MediaListRow::Item {
-                target: grouped_album_target(albums, idx),
+                target: targets[idx].clone(),
                 primary: name.clone(),
                 trailing: (!year.is_empty()).then(|| year.clone()),
                 duration: None,

@@ -7,7 +7,6 @@ use tuirealm::event::{Key, KeyModifiers};
 use super::inline_search::InlineSearchAction;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::music_workspace::MusicWorkspaceComponent;
-use crate::app::render::grouped_album_target;
 use crate::app::ui_util::move_cursor;
 
 impl MusicWorkspaceComponent {
@@ -32,7 +31,7 @@ impl MusicWorkspaceComponent {
                 .min(order.len().saturating_sub(1))
         };
         let target = order[target_position];
-        let id = grouped_album_target(&self.context.list.items, target);
+        let id = self.context.album_targets[target].clone();
         self.select_active_target(&id);
         Some(target)
     }
