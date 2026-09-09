@@ -65,7 +65,7 @@ Alternative: restate or redesign the shared seam in every proposal. Rejected bec
 - TV seasons and episodes, including the season grid, remain TV-specific workspace state.
 - Audiobookshelf episode filters and episode selection remain Podcast-specific workspace state.
 - Audiobookshelf surname buckets, chapters, and absolute chapter seeking remain Book-specific workspace state.
-- Non-grouped Music views remain an explicit reconciliation row until evidence either brings them into this campaign or records them out of scope.
+- Non-grouped Music views are explicitly out of scope for this campaign and the Grouped Music follow-on: V1 album-folder states whose levels do not start with `group`, V2 transient group-list roots, V3 non-album intermediate levels, and V4 deeper-than-configured levels are not closed by any campaign row. Default-config non-grouped Music remains a separate product decision/change.
 
 Alternative: repeat exclusions in every change. Rejected because repeated exemption bookkeeping was a primary cause of the original plan becoming too large and inconsistent.
 
