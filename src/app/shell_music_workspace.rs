@@ -103,42 +103,37 @@ impl Model {
         {
             return;
         }
-        // The Music component owns the selection cursor. Derive the selected
-        // album from the component's authoritative selection (its own cursor),
-        // not the App browse cursor. Only on first mount fall back to the
-        // App-derived item.
-        // Resting position: the persistence-facing cursor/scroll the shell
-        // restores on re-entry, and the first-mount re-anchor target.
+        // The persistent album controls own live selection and scroll. The
+        // shell only chooses the content snapshot's selected item: the
+        // resting position on an explicit re-anchor, otherwise the control's
+        // stable selected target when it is still present in the new catalog.
         let resting = self.app.libs[index].nav_stack.last().map(|level| {
             let resting = level.resting();
             (resting.cursor(), resting.scroll())
         });
-        let cursor_scroll = if self.music_workspace_reanchor {
-            resting
-        } else {
-            self.application
-                .get_component(id)
-                .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                .map(|music| (music.album_cursor(), music.album_scroll()))
-                .or(resting)
-        };
-        let list = self.app.library_list_render_ctx(
-            index,
-            cursor_scroll.map_or(0, |(cursor, _)| cursor),
-            cursor_scroll.map_or(0, |(_, scroll)| scroll),
-        );
-        // On a re-anchor tick the component's local cursor is still stale (it
-        // is re-pointed below), so the authoritative album is the resting one
-        // -- resolve the track-fetch target from the list, not that cursor.
-        let selected_album = if self.music_workspace_reanchor {
-            list.selected_item().cloned()
-        } else {
-            self.application
-                .get_component(id)
-                .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                .and_then(MusicWorkspaceComponent::selected_item)
-                .or_else(|| list.selected_item().cloned())
-        };
+        let selected_target = (!self.music_workspace_reanchor)
+            .then(|| {
+                self.application
+                    .get_component(id)
+                    .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
+                    .and_then(MusicWorkspaceComponent::selected_item)
+                    .map(|item| item.id)
+            })
+            .flatten();
+        let selected_cursor = self.app.libs[index]
+            .nav_stack
+            .last()
+            .and_then(|level| {
+                selected_target
+                    .as_deref()
+                    .and_then(|target| level.items.iter().position(|item| item.id == target))
+            })
+            .or_else(|| resting.map(|(cursor, _)| cursor));
+        let cursor_scroll = selected_cursor.map(|cursor| (cursor, 0));
+        let list = self
+            .app
+            .library_list_render_ctx(index, selected_cursor.unwrap_or(0), 0);
+        let selected_album = list.selected_item().cloned();
         if let Some(album) = selected_album.as_ref() {
             if !self.app.album_tracks_cache.contains_key(&album.id)
                 && !self.app.album_tracks_loading.contains(&album.id)
@@ -155,7 +150,7 @@ impl Model {
         // (mount, group switch, recursive activation, saved-position restore)
         // adopts the shell's resting cursor/scroll below, unconditionally.
         let reanchor = std::mem::take(&mut self.music_workspace_reanchor)
-            .then(|| (context.list.cursor(), context.list.scroll()));
+            .then(|| resting.unwrap_or((context.list.cursor(), 0)));
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(music) = comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>() {
                 music.set_content(context);

@@ -159,6 +159,9 @@ fn narrow_music_album_double_click_requests_activation() {
         first,
         Some(Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
     ));
+    terminal
+        .draw(|frame| model.render_music_workspace_component(frame))
+        .unwrap();
     let second = model.application.get_component_mut(&id).unwrap().on(&down);
     assert_eq!(second, Some(Msg::Shell(ShellRequest::MusicAlbumActivate)));
 }

@@ -7,6 +7,7 @@ use tuirealm::event::{Key, KeyModifiers};
 use super::inline_search::InlineSearchAction;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::music_workspace::MusicWorkspaceComponent;
+use crate::app::render::grouped_album_target;
 use crate::app::ui_util::move_cursor;
 
 impl MusicWorkspaceComponent {
@@ -15,9 +16,10 @@ impl MusicWorkspaceComponent {
         if order.is_empty() {
             return None;
         }
+        let current = self.selected_album_index();
         let position = order
             .iter()
-            .position(|&index| index == self.album_cursor)
+            .position(|&index| index == current)
             .unwrap_or(0);
         let delta = rows.saturating_mul(columns.max(1) as i64);
         let target_position = if wrap {
@@ -29,8 +31,10 @@ impl MusicWorkspaceComponent {
                 .saturating_add(delta as usize)
                 .min(order.len().saturating_sub(1))
         };
-        self.album_cursor = order[target_position];
-        Some(self.album_cursor)
+        let target = order[target_position];
+        let id = grouped_album_target(&self.context.list.items, target);
+        self.select_active_target(&id);
+        Some(target)
     }
 
     fn can_emit_album_cursor(&self) -> bool {
@@ -215,7 +219,7 @@ impl MusicWorkspaceComponent {
             Key::Up | Key::Char('k') if self.can_emit_album_cursor() => {
                 let target = self
                     .move_album_rows(-1, self.album_columns, true)
-                    .unwrap_or(self.album_cursor);
+                    .unwrap_or(self.selected_album_index());
                 Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Move,
@@ -224,7 +228,7 @@ impl MusicWorkspaceComponent {
             Key::Down | Key::Char('j') if self.can_emit_album_cursor() => {
                 let target = self
                     .move_album_rows(1, self.album_columns, true)
-                    .unwrap_or(self.album_cursor);
+                    .unwrap_or(self.selected_album_index());
                 Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Move,
@@ -236,8 +240,8 @@ impl MusicWorkspaceComponent {
                     .album_order
                     .first()
                     .copied()
-                    .unwrap_or(self.album_cursor);
-                self.album_cursor = target;
+                    .unwrap_or(self.selected_album_index());
+                self.select_album_index(target);
                 Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Jump,
@@ -249,8 +253,8 @@ impl MusicWorkspaceComponent {
                     .album_order
                     .last()
                     .copied()
-                    .unwrap_or(self.album_cursor);
-                self.album_cursor = target;
+                    .unwrap_or(self.selected_album_index());
+                self.select_album_index(target);
                 Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Jump,
@@ -259,7 +263,7 @@ impl MusicWorkspaceComponent {
             Key::PageUp if self.can_emit_album_cursor() => {
                 let target = self
                     .move_album_rows(-(self.page_rows as i64), self.album_columns, false)
-                    .unwrap_or(self.album_cursor);
+                    .unwrap_or(self.selected_album_index());
                 Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Page,
@@ -268,7 +272,7 @@ impl MusicWorkspaceComponent {
             Key::PageDown if self.can_emit_album_cursor() => {
                 let target = self
                     .move_album_rows(self.page_rows as i64, self.album_columns, false)
-                    .unwrap_or(self.album_cursor);
+                    .unwrap_or(self.selected_album_index());
                 Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Page,

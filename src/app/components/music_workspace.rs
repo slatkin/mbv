@@ -21,8 +21,8 @@ use super::msg::{AlbumCursorKind, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{
-    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, wide_hero_presentation,
-    MusicImagePaint, MusicWideRenderCtx,
+    grouped_album_target, render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx,
+    wide_hero_presentation, MusicImagePaint, MusicWideRenderCtx,
 };
 use crate::app::ui_util::list_duration_secs;
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
@@ -52,10 +52,8 @@ fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
 
 pub struct MusicWorkspaceComponent {
     pub(super) context: MusicWideRenderCtx,
-    pub(super) album_cursor: usize,
     pub(super) album_columns: usize,
     pub(super) page_rows: usize,
-    album_scroll: usize,
     pub(super) track_cursor: Option<usize>,
     /// Selected-album identity from the last pushed context. When it changes
     /// (group switch, recursive-album activation, position restore), inline
@@ -68,8 +66,8 @@ pub struct MusicWorkspaceComponent {
     /// Persistent narrow-presentation control: fed the canonical grouped-album
     /// row projection by `set_content`, painted by
     /// `render_narrow_music_group_with_ctx`. Never constructed during a render
-    /// pass. The wide rail composes its own per-frame `WideMediaList`.
-    narrow_list: InlineMediaBrowser<String>,
+    /// pass.
+    pub(super) narrow_list: InlineMediaBrowser<String>,
     /// One-shot `ViewportAnchor` carried across a breakpoint flip (§2.5).
     pending_anchor: Option<ViewportAnchor<String>>,
     /// The presentation the last `view` painted; `None` before the first paint.
@@ -80,12 +78,11 @@ pub struct MusicWorkspaceComponent {
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
-    /// The wide right-rail's canonical album control, seeded each `view()` by
-    /// `render_wide_right_album_browser_with_ctx` from the pushed context.
-    /// Its retained current-frame result gives the wide-rail row identity for
-    /// the mouse path (design.md D6); `track_list` does the same for the
-    /// provider-owned track table.
-    wide_list: WideMediaList<String>,
+    /// The wide right-rail's persistent canonical album control. Its retained
+    /// current-frame result gives the wide-rail row identity for the mouse path
+    /// (design.md D6); `track_list` does the same for the provider-owned track
+    /// table.
+    pub(super) wide_list: WideMediaList<String>,
     pub(super) track_list: WideMediaList<String>,
     /// Group-pill rects (design.md D6), repopulated in `view()` from
     /// `layout.selector_tabs` — the pill painter's own output — for both
@@ -114,10 +111,8 @@ impl MusicWorkspaceComponent {
                 false,
                 None,
             ),
-            album_cursor: 0,
             album_columns: 1,
             page_rows: 1,
-            album_scroll: 0,
             track_cursor: None,
             last_album_id: None,
             layout: LayoutMain::default(),
@@ -135,40 +130,63 @@ impl MusicWorkspaceComponent {
         }
     }
 
-    /// The stable id of the album under the component's authoritative
-    /// `album_cursor`, resolved through the cached render context.
-    fn selected_album_id(&self) -> Option<String> {
-        self.context
-            .list
-            .items
-            .get(self.album_cursor)
-            .map(|album| album.id.clone())
+    pub(super) fn active_is_wide(&self) -> bool {
+        self.last_wide.unwrap_or(false)
     }
 
-    /// Keep the narrow control's selection in lockstep with the authoritative
-    /// `album_cursor` (the component owns the cursor; the control owns only
-    /// viewport + row geometry).
-    fn sync_narrow_selection(&mut self) {
-        if let Some(id) = self.selected_album_id() {
-            self.narrow_list.select_target(&id);
+    pub(super) fn active_target(&self) -> Option<String> {
+        if self.active_is_wide() {
+            self.wide_list.selected_target().cloned()
+        } else {
+            self.narrow_list.selected_target().cloned()
         }
     }
 
-    /// Place the wide rail's resting scroll so the anchor's target lands at the
-    /// requested screen-row offset, clamping where the grouped row flow does
-    /// not allow it. The wide painter re-clamps to keep the selection visible.
-    fn apply_wide_anchor(&mut self, anchor: &ViewportAnchor<String>, viewport_height: usize) {
-        let rows = self.context.grouped_rows();
-        let Some(display_row) = rows
-            .iter()
-            .position(|row| row.selectable_target() == Some(&anchor.selected_target))
+    pub(super) fn select_active_target(&mut self, target: &str) {
+        if self.active_target().as_deref() == Some(target) {
+            return;
+        }
+        if self.active_is_wide() {
+            self.wide_list.select_target(&target.to_string());
+        } else {
+            self.narrow_list.select_target(&target.to_string());
+        }
+    }
+
+    fn set_active_scroll(&mut self, scroll: usize) {
+        if self.active_is_wide() {
+            self.wide_list.set_scroll(scroll);
+        } else {
+            self.narrow_list.set_scroll(scroll);
+        }
+    }
+
+    pub(super) fn select_album_index(&mut self, index: usize) {
+        let Some(target) = self
+            .context
+            .list
+            .items
+            .get(index)
+            .map(|_| grouped_album_target(&self.context.list.items, index))
         else {
             return;
         };
-        let max_offset = rows.len().saturating_sub(viewport_height.max(1));
-        self.album_scroll = display_row
-            .saturating_sub(anchor.selected_row_offset)
-            .min(max_offset);
+        self.select_active_target(&target);
+    }
+
+    pub(super) fn selected_album_index(&self) -> usize {
+        self.active_target()
+            .and_then(|target| {
+                self.context
+                    .list
+                    .items
+                    .iter()
+                    .enumerate()
+                    .position(|(index, _)| {
+                        grouped_album_target(&self.context.list.items, index) == target
+                    })
+            })
+            .unwrap_or(0)
     }
 
     /// The outgoing control's `ViewportAnchor` for the last painted
@@ -199,16 +217,6 @@ impl MusicWorkspaceComponent {
     /// Deliver a `ViewportAnchor` to the kept-mounted workspace; consumed at
     /// the next `view` against the then-current presentation.
     pub(in crate::app) fn apply_viewport_anchor(&mut self, anchor: ViewportAnchor<String>) {
-        if let Some(idx) = self
-            .context
-            .list
-            .items
-            .iter()
-            .position(|item| item.id == anchor.selected_target)
-        {
-            self.album_cursor = idx;
-        }
-        self.sync_narrow_selection();
         self.pending_anchor = Some(anchor);
     }
 
@@ -249,64 +257,80 @@ impl MusicWorkspaceComponent {
         let focused = self.context.focused;
         self.context = context;
         self.context.focused = focused;
+        let album_rows = self.context.grouped_rows();
+        // Both controls remain mounted and retain their own stable target and
+        // local clamp. Only the active control is ever used for interaction;
+        // the inactive control is deliberately not synchronized here.
+        if self.narrow_list.rows() != album_rows.as_slice() {
+            self.narrow_list.set_content(album_rows.clone());
+        }
+        if self.wide_list.rows() != album_rows.as_slice() {
+            self.wide_list.set_content(album_rows);
+        }
         self.track_list.set_content(build_track_rows(
             self.context.album_tracks.as_deref().unwrap_or_default(),
         ));
         if let Some(cursor) = self.track_cursor {
             self.track_list.select_index(cursor);
         }
-        // The component owns `album_cursor`/`album_scroll` outright; an
-        // ordinary content push never adopts the shell's cursor. A shrunk
-        // projection can still orphan the local cursor, so clamp it against
-        // the new content.
-        self.album_cursor = self
-            .album_cursor
-            .min(self.context.list.item_count().saturating_sub(1));
         if let Some(cursor) = self.track_cursor {
             let count = self.context.album_tracks.as_ref().map_or(0, Vec::len);
             if count > 0 {
                 self.track_cursor = Some(cursor.min(count - 1));
             }
         }
-        // The narrow control retains its selected target across an ordinary
-        // content push; re-sync it to the authoritative cursor afterwards
-        // (D3: no shell cursor mirror, local clamp only).
-        self.narrow_list.set_content(self.context.grouped_rows());
-        self.sync_narrow_selection();
     }
 
-    /// Shell-driven re-anchor of the album cursor/scroll at a navigation
+    /// Shell-driven re-anchor of the active album control at a navigation
     /// event: group switch, recursive-album activation, saved-position
     /// restore, or the first projection after mount. Unlike a content push
     /// this adopts the shell's value unconditionally -- the outcome does not
     /// depend on whether the user moved the cursor since the last push.
     pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
-        self.album_cursor = cursor.min(self.context.list.item_count().saturating_sub(1));
-        self.album_scroll = scroll;
-        // An explicit shell re-anchor supersedes any pending breakpoint anchor.
+        let cursor = cursor.min(self.context.list.item_count().saturating_sub(1));
+        if let Some(target) = self
+            .context
+            .list
+            .items
+            .get(cursor)
+            .map(|_| grouped_album_target(&self.context.list.items, cursor))
+        {
+            if self.last_wide.is_some() {
+                self.select_active_target(&target);
+                self.set_active_scroll(scroll);
+            } else {
+                // Before the first frame there is no painted active control;
+                // initialize both persistent controls once so the first
+                // presentation receives the explicit resting position.
+                self.narrow_list.select_target(&target.to_string());
+                self.narrow_list.set_scroll(scroll);
+                self.wide_list.select_target(&target.to_string());
+                self.wide_list.set_scroll(scroll);
+            }
+        }
         self.pending_anchor = None;
-        self.sync_narrow_selection();
-        self.narrow_list.set_scroll(scroll);
     }
-
     pub(in crate::app) fn set_album_columns(&mut self, columns: usize) {
         self.album_columns = columns.max(1);
     }
-
     pub(in crate::app) fn set_page_rows(&mut self, rows: usize) {
         self.page_rows = rows.max(1);
     }
 
     pub(in crate::app) fn album_cursor(&self) -> usize {
-        self.album_cursor
+        self.selected_album_index()
     }
 
     pub(in crate::app) fn album_scroll(&self) -> usize {
-        self.album_scroll
+        if self.active_is_wide() {
+            self.wide_list.scroll()
+        } else {
+            self.narrow_list.scroll()
+        }
     }
 
     pub(in crate::app) fn painted_album_cursor_and_order(&self) -> (usize, &[usize]) {
-        (self.album_cursor, &self.context.album_order)
+        (self.selected_album_index(), &self.context.album_order)
     }
 
     /// The album item under the component's own album cursor, cloned out of
@@ -318,24 +342,13 @@ impl MusicWorkspaceComponent {
     pub(in crate::app) fn selected_item(&self) -> Option<mbv_core::api::EmbyItem> {
         self.context
             .list
-            .clone()
-            .with_cursor_scroll(self.album_cursor, self.album_scroll)
-            .selected_item()
+            .items
+            .get(self.selected_album_index())
             .cloned()
     }
 
     pub(in crate::app) fn track_cursor(&self) -> Option<usize> {
         self.track_cursor
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
-        self.track_list.selected_display_row()
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn album_tracks_loading(&self) -> bool {
-        self.context.album_tracks_loading
     }
 
     /// Whether inline track focus can be entered right now: wide mode
@@ -427,10 +440,11 @@ impl MusicWorkspaceComponent {
                         .list
                         .items
                         .iter()
-                        .position(|item| item.id == id)
+                        .enumerate()
+                        .position(|(index, _)| {
+                            grouped_album_target(&self.context.list.items, index) == id
+                        })
                 })?;
-                self.album_cursor = target;
-                self.sync_narrow_selection();
                 Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target,
                     kind: AlbumCursorKind::Move,
@@ -440,26 +454,32 @@ impl MusicWorkspaceComponent {
             // their own retained current-frame geometry. A double click
             // activates the pointed row; a single click only focuses it.
             MouseGesture::Click(at) if wide => {
+                if let Some(msg) = self.claim_group_pill(at) {
+                    return Some(msg);
+                }
                 if let Some(track) = self.resolve_wide_track(at) {
                     self.track_cursor = Some(track);
                     self.track_list.select_index(track);
                     return None;
                 }
                 let album = self.resolve_wide_album(at)?;
-                self.album_cursor = album;
+                self.select_album_index(album);
                 Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                     target: album,
                     kind: AlbumCursorKind::Move,
                 }))
             }
             MouseGesture::DoubleClick(at) if wide => {
+                if let Some(msg) = self.claim_group_pill(at) {
+                    return Some(msg);
+                }
                 if let Some(track) = self.resolve_wide_track(at) {
                     self.track_cursor = Some(track);
                     self.track_list.select_index(track);
                     return Some(Msg::Shell(ShellRequest::MusicTrackActivate));
                 }
                 let album = self.resolve_wide_album(at)?;
-                self.album_cursor = album;
+                self.select_album_index(album);
                 Some(Msg::Shell(ShellRequest::MusicAlbumActivate))
             }
             MouseGesture::RightClick(at) if wide => {
@@ -471,7 +491,7 @@ impl MusicWorkspaceComponent {
                     }));
                 }
                 let album = self.resolve_wide_album(at)?;
-                self.album_cursor = album;
+                self.select_album_index(album);
                 Some(Msg::Shell(ShellRequest::MusicAlbumContextMenu {
                     anchor: (at.x, at.y),
                 }))
@@ -509,14 +529,15 @@ impl MusicWorkspaceComponent {
     /// D6). Returns the pushed-context item index, or `None` for a
     /// heading/spacer row or a point outside the list.
     fn claim_narrow_album(&mut self, at: Position) -> Option<usize> {
-        let id = self.narrow_list.resolve_current_point(at)?;
+        let id = self.narrow_list.resolve_current_point(at)?.clone();
         let album = self
             .context
             .list
             .items
             .iter()
-            .position(|item| &item.id == id)?;
-        self.album_cursor = album;
+            .enumerate()
+            .position(|(index, _)| grouped_album_target(&self.context.list.items, index) == id)?;
+        self.select_active_target(&id);
         Some(album)
     }
 
@@ -551,7 +572,8 @@ impl MusicWorkspaceComponent {
             .list
             .items
             .iter()
-            .position(|item| &item.id == id)
+            .enumerate()
+            .position(|(index, _)| grouped_album_target(&self.context.list.items, index) == *id)
     }
 
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<MusicImagePaint> {
@@ -607,10 +629,26 @@ impl Component for MusicWorkspaceComponent {
         self.layout = LayoutMain::default();
         let wide = wide_hero_presentation(area).is_some();
 
-        // §2.5: at a breakpoint flip carry the outgoing control's anchor into
-        // the incoming one so the selected album keeps its screen-row offset.
-        // Music is a single kept-mounted component, so the hand-off is internal
-        // to `view` (no cross-component shell dance like TV).
+        // The first projection receives the shell's explicit resting target.
+        // There is no prior active presentation to transfer from yet, so seed
+        // only the control that will paint this frame.
+        if self.last_wide.is_none() {
+            let cursor = self.context.list.cursor();
+            if let Some(target) = self
+                .context
+                .list
+                .items
+                .get(cursor)
+                .map(|_| grouped_album_target(&self.context.list.items, cursor))
+            {
+                if wide {
+                    self.wide_list.select_target(&target);
+                } else {
+                    self.narrow_list.select_target(&target);
+                }
+            }
+        }
+
         if let Some(was_wide) = self.last_wide {
             if was_wide != wide && self.pending_anchor.is_none() {
                 self.pending_anchor = self.viewport_anchor();
@@ -618,31 +656,25 @@ impl Component for MusicWorkspaceComponent {
         }
         let flip_anchor = self.pending_anchor.take();
         if let Some(anchor) = &flip_anchor {
-            if let Some(idx) = self
-                .context
-                .list
-                .items
-                .iter()
-                .position(|item| item.id == anchor.selected_target)
-            {
-                self.album_cursor = idx;
-            }
-            // The write side uses the same *content* viewport height the read
-            // side (`viewport_anchor`) measured against: for Wide that is the
-            // last painted browser-area height (unchanged across a flip at a
-            // fixed terminal size); for Narrow the painter applies it itself
-            // at its own content-area height.
             if wide {
-                self.apply_wide_anchor(anchor, self.wide_viewport_height.max(1));
+                self.context.publish_geometry(area, &mut self.layout);
+                self.wide_list.apply_viewport_anchor(
+                    anchor,
+                    self.layout.wide_music_browser_area.height as usize,
+                );
+            } else {
+                let content_area = if self.context.groups.is_empty() {
+                    area
+                } else {
+                    crate::app::render::arrangements::wide_hero::pill_bar_areas(area).content_area
+                };
+                self.narrow_list
+                    .apply_viewport_anchor(anchor, content_area.height as usize);
             }
         }
-        self.sync_narrow_selection();
 
-        let context = self.context.clone().with_local_state(
-            self.album_cursor,
-            self.album_scroll,
-            self.track_cursor,
-        );
+        let mut context = self.context.clone();
+        context.track_cursor = self.track_cursor;
         if !wide && self.inline_search.is_active() {
             // Normal Music passes its whole list area to the shared search
             // painter (design.md D3); the ordinary grouped composer does not
@@ -677,9 +709,7 @@ impl Component for MusicWorkspaceComponent {
                 &context,
                 &mut self.layout,
                 &mut self.narrow_list,
-                flip_anchor.as_ref(),
             );
-            self.album_scroll = output.final_scroll;
             self.image_paint = output.image_paint;
         } else {
             let output = render_wide_music_group_with_ctx(
@@ -691,14 +721,9 @@ impl Component for MusicWorkspaceComponent {
                 &mut self.track_list,
                 &mut self.inline_search,
             );
-            if !self.inline_search.is_active() {
-                self.album_scroll = output.final_scroll;
-            }
             self.image_paint = output.image_paint;
             self.wide_viewport_height = self.layout.wide_music_browser_area.height as usize;
         }
-        // Adopt the group-pill rects the pill painter just published into the
-        // irregular-chrome registry (design.md D6), for both breakpoints.
         self.pill_regions.clear();
         for (rect, target) in &self.layout.selector_tabs {
             self.pill_regions.push(*rect, *target);

@@ -130,6 +130,75 @@ fn music_wide_track_table_uses_retained_geometry_for_live_mouse_gestures() {
         .all(|message| !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))));
 }
 
+/// The Wide album rail resolves its own retained row. Group pills remain
+/// Music-owned parent chrome, while the track table retains its independent
+/// child behavior (covered above).
+#[test]
+fn music_wide_album_and_group_pill_use_their_own_retained_geometry() {
+    let mut app = make_music_group_app();
+    let mut second_album = make_item("Album 2", "MusicAlbum");
+    second_album.id = "album-2".into();
+    second_album.artist = "Alpha".into();
+    app.libs[0].nav_stack[1].items.push(second_album);
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let music_id = harness
+        .model()
+        .music_workspace_id
+        .clone()
+        .expect("grouped Music child mounted");
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    let (album_point, pill_point, group) = harness
+        .model()
+        .application
+        .get_component(&music_id)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<MusicWorkspaceComponent>()
+        .map(|music| {
+            let album = music
+                .album_selected_row_rect()
+                .expect("Wide album control retained its selected row");
+            let (pill, group) = music
+                .test_pill_regions()
+                .iter()
+                .find(|(_, group)| *group > 0)
+                .copied()
+                .expect("a non-selected group pill painted");
+            ((album.x, album.y), (pill.x, pill.y), group)
+        })
+        .expect("Music component type");
+    let click = |(column, row)| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        })
+    };
+
+    harness.inject(click(album_point));
+    let outcome = harness.step();
+    assert!(outcome.messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::MusicAlbumCursor { target: 0, .. })
+    )));
+
+    harness.inject(click(pill_point));
+    let outcome = harness.step();
+    assert!(outcome.messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::MusicGroupSwitch { delta }) if *delta == group as i64
+    )));
+}
+
 /// Normal grouped Music uses the retained Inline result for album clicks and
 /// wheel input. This live-tick proof also checks the mounted destination is
 /// subscribed after the current frame, rather than relying on direct `on()`.

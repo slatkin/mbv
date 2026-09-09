@@ -79,14 +79,6 @@ pub(crate) struct LayoutMain {
     /// right (empty for headers/fillers). Column-aware cursor movement and
     /// mouse hit-testing resolve cells from this between frames.
     pub left_item_rows: Vec<Vec<usize>>,
-    /// Screen-row offset for `left_item_rows` when the renderer packs display
-    /// rows into screen rows (e.g. grouped album views with two-column
-    /// layout). The mouse handler adds this (instead of `lvl.scroll`) to
-    /// `click_y` to index into `left_item_rows`.
-    pub left_screen_offset: usize,
-    /// Grouped-album row targets for visible packed screen rows. The grouped
-    /// display plan publishes these before any row or detail painter.
-    pub left_row_targets: Vec<Option<usize>>,
     /// Source-item order published by the authoritative grouped display plan
     /// (and identity order for ungrouped lists).
     pub left_sorted_indices: Vec<usize>,
@@ -160,13 +152,9 @@ pub(crate) struct LayoutMain {
     pub tv_wide_season_tabs: Vec<(Rect, usize)>,
     pub tv_wide_left_area: Rect,
     pub tv_wide_area: Rect,
-    /// Bounding rect of the grouped-album browser itself (`Self::
-    /// render_wide_right_album_browser`), the sub-rect of
-    /// `wide_music_right_area` below the pill row. `left_row_targets` is
-    /// indexed relative to this rect's top -- set by both the wide and
-    /// narrow inline callers of the shared browser renderer, since
-    /// they share row-target indexing but differ in outer gating rect.
-    /// This is published at its natural checkpoint before paint.
+    /// Bounding rect of the grouped-album browser itself, the sub-rect of
+    /// `wide_music_right_area` below the pill row. The embedded canonical
+    /// control owns row identity and hit geometry within this rect.
     pub wide_music_browser_area: Rect,
     /// Full area passed to the Audiobookshelf podcast component after the
     /// legacy frame computes the current library layout.

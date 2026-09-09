@@ -223,6 +223,50 @@ fn lifecycle_item(target: &str) -> MediaListRow<String> {
 }
 
 #[test]
+fn media_lists_preserve_refresh_clamp_and_transfer_grouped_anchor() {
+    let grouped_rows = || {
+        vec![
+            MediaListRow::Heading { text: "A".into() },
+            lifecycle_item("a"),
+            MediaListRow::Spacer,
+            lifecycle_item("b"),
+            lifecycle_item("c"),
+        ]
+    };
+    let mut wide = WideMediaList::new();
+    wide.set_content(grouped_rows());
+    wide.select_target(&"b".to_string());
+    wide.set_scroll(2);
+
+    // An ordinary projection preserves the stable selected target.
+    wide.set_content(grouped_rows());
+    assert_eq!(wide.selected_target(), Some(&"b".to_string()));
+
+    // A smaller projection clamps only locally when the target disappeared.
+    wide.set_content(vec![
+        MediaListRow::Heading { text: "A".into() },
+        lifecycle_item("a"),
+    ]);
+    assert_eq!(wide.selected_target(), Some(&"a".to_string()));
+
+    // A responsive handoff transfers one display-row anchor, including the
+    // heading and spacer structural rows, to the other persistent control.
+    wide.set_content(grouped_rows());
+    wide.select_target(&"b".to_string());
+    wide.set_scroll(2);
+    let anchor = wide
+        .viewport_anchor(3)
+        .expect("selected grouped row anchors");
+    assert_eq!(anchor.selected_row_offset, 1);
+
+    let mut inline = InlineMediaBrowser::new();
+    inline.set_content(grouped_rows());
+    inline.apply_viewport_anchor(&anchor, 3);
+    assert_eq!(inline.selected_target(), Some(&"b".to_string()));
+    assert_eq!(inline.resolve_viewport(3).offset, 2);
+}
+
+#[test]
 fn wide_component_retains_only_completed_current_frame_facts() {
     let mut list = WideMediaList::new();
     list.set_content(vec![lifecycle_item("one"), lifecycle_item("two")]);

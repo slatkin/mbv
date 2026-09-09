@@ -139,14 +139,14 @@ fn music_workspace_wheel_moves_one_painted_album_row_and_reuses_cursor_request()
         row: area.y,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.album_cursor(), 0);
     assert!(matches!(
         message,
         Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-            target: 0,
+            target: 1,
             kind: AlbumCursorKind::Move,
         }))
     ));
+    assert_eq!(component.album_cursor(), 1);
 }
 
 #[test]

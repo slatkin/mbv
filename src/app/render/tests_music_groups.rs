@@ -42,19 +42,18 @@ fn selectable_artist_headers_are_typed_row_targets() {
         .push(beta_album);
 
     let (model, out) = narrow_music_frame(app, 20);
-    let layout = mounted_music_layout(&model);
-
     assert!(
         out.contains("Alpha") && out.contains("Beta"),
         "expected both artist headers to render:\n{out}"
     );
     // Artist headers are display-only and must not appear as row targets.
-    // Music-group view renders through `render_wide_right_album_browser`
-    // (shared with the wide Wide hero layout), which populates
-    // `left_row_targets` directly rather than the legacy `left_row_map`.
+    // Read the complete flow retained by the mounted InlineMediaBrowser;
+    // legacy LayoutMain row maps are no longer populated by this owner.
     assert!(
-        layout.left_row_targets.iter().any(|t| t.is_none()),
-        "expected a non-album row (artist header) in the row targets"
+        mounted_music_flow_targets(&model)
+            .iter()
+            .any(Option::is_none),
+        "expected a non-album row (artist header) in the retained flow"
     );
 }
 
@@ -82,11 +81,7 @@ fn narrow_grouped_music_replaces_selected_album_row_with_hero_detail() {
         "selected album hero must render its title"
     );
     assert_eq!(
-        layout
-            .left_row_targets
-            .iter()
-            .filter(|target| { matches!(target, Some(0)) })
-            .count(),
+        mounted_music_album_target_rows(&model, 0).len(),
         1,
         "the selected album must publish one replacement parent target"
     );
@@ -158,35 +153,23 @@ fn narrow_grouped_music_keeps_bottom_hero_fully_visible() {
     assert!(layout.hero_area.y > list_area.y);
     assert_eq!(layout.hero_area.bottom(), list_area.bottom());
     assert_eq!(layout.selected_item_rect, Some(layout.hero_area));
-    let selected_row = layout
-        .left_item_rows
-        .iter()
-        .position(|row| row == &vec![cursor])
+    let flow = mounted_music_flow_targets(&model);
+    let selected_row = mounted_music_album_target_rows(&model, cursor)
+        .into_iter()
+        .next()
         .expect("the selected source row becomes the parent hero row");
     assert_eq!(
-        layout
-            .left_row_targets
-            .iter()
-            .filter(|target| { matches!(target, Some(idx) if *idx == cursor) })
+        flow.iter()
+            .filter(|target| target
+                .as_ref()
+                .is_some_and(|target| target == &format!("album-{cursor:02}")))
             .count(),
         1,
         "the admitted hero publishes exactly one selected parent target"
     );
     let continuation_end = selected_row + expected_height;
-    assert!(layout.left_item_rows.len() >= continuation_end);
-    assert!(layout.left_item_rows[selected_row + 1..continuation_end]
-        .iter()
-        .all(Vec::is_empty));
-    // Album rows render below the reserved group pill row (task 3.6a), so
-    // screen-space row targets are measured from the content area, not the
-    // pane top.
-    let content_top = super::arrangements::wide_hero::pill_bar_areas(list_area)
-        .content_area
-        .y;
-    let selected_screen_row = layout.hero_area.y.saturating_sub(content_top) as usize;
-    let target_end = selected_screen_row + expected_height;
-    assert!(layout.left_row_targets.len() >= target_end);
-    assert!(layout.left_row_targets[selected_screen_row + 1..target_end]
+    assert!(flow.len() >= continuation_end);
+    assert!(flow[selected_row + 1..continuation_end]
         .iter()
         .all(Option::is_none));
 
@@ -257,10 +240,7 @@ fn short_grouped_music_restores_the_ordinary_selected_album_row() {
         .selected_item_rect
         .expect("the ordinary selected album row remains targetable");
     assert_ne!(selected, layout.hero_area);
-    assert!(layout
-        .left_row_targets
-        .iter()
-        .any(|target| matches!(target, Some(0))));
+    assert_eq!(mounted_music_album_target_rows(&model, 0).len(), 1);
 }
 
 #[test]
@@ -321,22 +301,7 @@ fn grouped_music_maps_reordered_non_contiguous_album_source() {
 
     assert!(rendered.contains("Selected Album"));
     assert_eq!(layout.selected_item_rect, Some(layout.hero_area));
-    assert_eq!(
-        layout
-            .left_row_targets
-            .iter()
-            .filter(|target| { matches!(target, Some(3)) })
-            .count(),
-        1
-    );
-    assert_eq!(
-        layout
-            .left_item_rows
-            .iter()
-            .filter(|row| row.as_slice() == [3])
-            .count(),
-        1
-    );
+    assert_eq!(mounted_music_album_target_rows(&model, cursor).len(), 1);
 }
 
 #[test]

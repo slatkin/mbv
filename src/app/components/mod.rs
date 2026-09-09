@@ -111,6 +111,8 @@ mod music_workspace_actions_tests;
 #[path = "music_workspace_cursor_tests.rs"]
 mod music_workspace_cursor_tests;
 #[cfg(test)]
+mod music_workspace_test_support;
+#[cfg(test)]
 #[path = "playlists_component_tests.rs"]
 mod playlists_component_tests;
 #[cfg(test)]

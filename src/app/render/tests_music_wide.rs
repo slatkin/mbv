@@ -136,26 +136,17 @@ fn wide_music_search_mode_uses_the_plain_rows_painter_not_the_wide_control() {
 fn wide_music_headings_and_spacers_are_not_selectable_row_targets() {
     let app = multi_artist_app();
     let (_terminal, component) = render_wide(&app, true, 0);
-    let layout = component.layout();
-
-    let album_rows = layout
-        .left_row_targets
-        .iter()
-        .filter(|t| t.is_some())
-        .count();
-    let structural_rows = layout
-        .left_row_targets
-        .iter()
-        .filter(|t| t.is_none())
-        .count();
+    let flow = component.album_flow_targets();
+    let album_rows = flow.iter().filter(|t| t.is_some()).count();
+    let structural_rows = flow.iter().filter(|t| t.is_none()).count();
     assert_eq!(album_rows, 7, "seven album rows are selectable targets");
     assert!(
         structural_rows >= 2,
         "the two artist headings (and the inter-group spacer) publish no target: {:?}",
-        layout.left_row_targets
+        flow
     );
     // The first painted row is the "Alpha" heading -> no target.
-    assert!(layout.left_row_targets[0].is_none());
+    assert!(flow[0].is_none());
 }
 
 #[test]

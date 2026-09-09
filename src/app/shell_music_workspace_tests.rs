@@ -26,26 +26,20 @@ fn music_mouse_album_click_emits_and_shell_applies_cursor() {
         .draw(|frame| model.render_music_workspace_component(frame))
         .unwrap();
     let id = model.music_workspace_id.clone().unwrap();
-    let (browser_area, left_row_targets) = {
-        let layout = model
+    let (browser_area, row, target) = {
+        let music = model
             .application
             .get_component(&id)
             .unwrap()
             .as_any()
             .downcast_ref::<MusicWorkspaceComponent>()
-            .unwrap()
-            .layout();
+            .unwrap();
         (
-            layout.wide_music_browser_area,
-            layout.left_row_targets.clone(),
+            music.layout().wide_music_browser_area,
+            music.album_target_rows(1)[0],
+            1,
         )
     };
-    let (row, target) = left_row_targets
-        .iter()
-        .enumerate()
-        .filter_map(|(row, target)| target.as_ref().map(|album| (row, *album)))
-        .nth(1)
-        .expect("second painted album target");
     let message = model
         .application
         .get_component_mut(&id)

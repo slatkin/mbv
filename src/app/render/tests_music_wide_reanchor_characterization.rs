@@ -57,12 +57,16 @@ fn re_anchor_to(model: &mut Model, cursor: usize, scroll: usize) {
 }
 
 fn album_targets(model: &Model, want: usize) -> Vec<usize> {
-    mounted_music_layout(model)
-        .left_row_targets
-        .iter()
-        .enumerate()
-        .filter_map(|(row, target)| matches!(target, Some(idx) if *idx == want).then_some(row))
-        .collect()
+    let id = model
+        .music_workspace_id
+        .as_ref()
+        .expect("music workspace mounted");
+    model
+        .application
+        .get_component(id)
+        .and_then(|component| component.as_any().downcast_ref::<MusicWorkspaceComponent>())
+        .map(|music| music.album_target_rows(want))
+        .unwrap_or_default()
 }
 
 #[test]
