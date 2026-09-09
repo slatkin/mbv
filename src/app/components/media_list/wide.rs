@@ -194,10 +194,8 @@ impl<Target> WideMediaList<Target> {
 
     /// Store the offset a painter resolved, so the next frame resumes from it.
     pub fn set_scroll(&mut self, offset: usize) {
-        if self.core.scroll() != offset {
-            self.invalidate_paint();
-            self.core.set_scroll(offset);
-        }
+        self.invalidate_paint();
+        self.core.set_scroll(offset);
     }
 
     /// Move the cursor by `delta` selectable rows, clamped to the ends.

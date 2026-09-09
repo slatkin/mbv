@@ -3,7 +3,7 @@
 use crate::app::action::Command;
 use crate::app::components::msg::TvHit;
 use crate::app::{App, QueueScope};
-use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
 use mbv_core::remote_reconciliation::RemoteIntent;
 use std::time::{Duration, Instant};
@@ -172,24 +172,50 @@ impl App {
         self.open_context_menu(home_cw_selected, None);
     }
 
-    pub(super) fn handle_mouse_single_click_tv(&mut self, _lib_idx: usize, hit: TvHit) {
+    fn resolve_tv_series_target(&self, lib_idx: usize, target: &str) -> Option<(usize, EmbyItem)> {
+        self.libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.last())
+            .and_then(|level| {
+                level
+                    .items
+                    .iter()
+                    .enumerate()
+                    .find(|(_, item)| item.id == target)
+                    .map(|(index, item)| (index, item.clone()))
+            })
+    }
+
+    pub(super) fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
         match hit {
             TvHit::SeasonTab(_) | TvHit::EpisodeRow(_) => {
                 self.set_panel_focus(super::PanelFocus::Library);
             }
-            TvHit::SeriesRow(_) => {}
+            TvHit::SeriesRow(target) => {
+                self.set_panel_focus(super::PanelFocus::Library);
+                // The component resolved the stable ID from its painted row;
+                // persist that resolved nav index rather than re-reading the
+                // shell's previous cursor. A stale target is a no-op.
+                if let Some((index, _)) = self.resolve_tv_series_target(lib_idx, &target) {
+                    if let Some(level) = self
+                        .libs
+                        .get_mut(lib_idx)
+                        .and_then(|lib| lib.nav_stack.last_mut())
+                    {
+                        level.set_resting_cursor(index);
+                        self.save_default_library_position(lib_idx);
+                    }
+                }
+            }
             TvHit::EpisodesPane => {}
         }
     }
 
     pub(super) fn handle_mouse_double_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
         if let TvHit::SeriesRow(target) = &hit {
-            let item = self.libs[lib_idx]
-                .nav_stack
-                .last()
-                .and_then(|level| level.items.iter().find(|item| item.id == *target))
-                .cloned();
-            if let Some(item) = item {
+            // A target can go stale between painting and delivery; in that
+            // case the double-click is intentionally ignored.
+            if let Some((_, item)) = self.resolve_tv_series_target(lib_idx, target) {
                 self.activate_selected_series_item(lib_idx, &item);
             }
         } else if matches!(hit, TvHit::EpisodeRow(_)) {
@@ -205,11 +231,8 @@ impl App {
         row: u16,
     ) {
         let tracked_item = if let TvHit::SeriesRow(target) = &hit {
-            self.libs[lib_idx]
-                .nav_stack
-                .last()
-                .and_then(|level| level.items.iter().find(|item| item.id == *target))
-                .cloned()
+            self.resolve_tv_series_target(lib_idx, target)
+                .map(|(_, item)| item)
         } else {
             None
         };

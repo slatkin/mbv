@@ -358,6 +358,23 @@ fn wide_component_retains_only_completed_current_frame_facts() {
 }
 
 #[test]
+fn wide_same_scroll_invalidates_retained_claims_for_new_geometry() {
+    let mut list = WideMediaList::new();
+    list.set_content(vec![lifecycle_item("one"), lifecycle_item("two")]);
+    list.set_geometry(Rect::new(0, 0, 20, 2), Rect::new(0, 0, 20, 2));
+    let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut list, frame, frame.area()))
+        .unwrap();
+    assert!(list.current_claim_rect().is_some());
+
+    // A responsive re-split can resolve the same offset while requiring a
+    // fresh paint; the shared control must not retain the old frame's claim.
+    list.set_scroll(list.scroll());
+    assert!(list.current_claim_rect().is_none());
+}
+
+#[test]
 fn inline_component_retains_detail_and_resolves_from_the_current_view() {
     let mut browser = InlineMediaBrowser::new();
     browser.set_content(vec![

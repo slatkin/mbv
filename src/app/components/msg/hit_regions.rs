@@ -20,6 +20,8 @@ pub enum TvHit {
     /// cursor): consumed without changing the pane or panel focus.
     EpisodesPane,
     /// The Series pane (series list): the stable series target the component
-    /// resolved from its own painted geometry.
+    /// resolved from its own painted geometry. The shell resolves that target
+    /// to the navigation item, sets App's resting library cursor, and persists
+    /// the resolved value; the component never accesses App.
     SeriesRow(String),
 }

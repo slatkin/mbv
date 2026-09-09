@@ -544,7 +544,11 @@ impl Component for TvWorkspaceComponent {
             &mut self.episodes,
             &mut self.inline_search,
         );
-        if !self.inline_search.is_active() {
+        if !self.inline_search.is_active() && self.list.scroll() != scroll {
+            // `render_wide_tv_with_ctx` has already retained the completed
+            // paint; avoid invalidating it when the resolved offset is
+            // unchanged. Other callers retain the shared control's
+            // unconditional invalidation semantics.
             self.list.set_scroll(scroll);
         }
         self.image_paint = image_paint;
