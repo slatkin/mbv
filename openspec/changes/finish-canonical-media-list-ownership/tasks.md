@@ -26,9 +26,10 @@ A row closes when its bounded change is merged plus reviewer-signed-off and both
 
 ## 4. Complete Movies and the Emby homevideos feed view
 
-- [ ] 4.1 After separately authorized exploration, merge one bounded Browser-family ownership change for Movies and the Emby homevideos feed view with reviewer sign-off; verify embedded controls solely own canonical cursor/scroll, row hits use retained current-frame geometry, ordinary refresh and explicit re-anchor remain distinct, and each visible screen's provider behavior is preserved.
-- [ ] 4.2 Verify the same bounded change preserves non-hero two-column catalogs as isolated screen-owned grid interaction with arrangement-owned placement; record evidence that canonical controls neither read nor overwrite grid state.
-- [ ] 4.3 Record the change path and matching GitHub status before closing the Browser family.
+- [x] 4.1 After separately authorized exploration, merge one bounded Browser-family ownership change for Movies and the Emby homevideos feed view with reviewer sign-off; verify embedded controls solely own canonical cursor/scroll, row hits use retained current-frame geometry, ordinary refresh and explicit re-anchor remain distinct, and each visible screen's provider behavior is preserved.
+- [x] 4.2 Verify the same bounded change preserves non-hero two-column catalogs as isolated screen-owned grid interaction with arrangement-owned placement; record evidence that canonical controls neither read nor overwrite grid state.
+- [x] 4.3 Record the change path and matching GitHub status before closing the Browser family.
+  - Change path: `fix-browser-media-list-ownership` implemented at `7658e07e` (partial) → `c468fb05` (dilution, recovered) → `880c9b17` (canonical seam restored) → `638162ba` (tasks 1.1/1.2 tests) → `a70fffee` (persistence/seed/anchor correction) → `466bfc83` (apply_position branch tests) on `refactor/finish-canonical-media-list-ownership`; two-axis review BLOCK → correction → focused re-review verified findings fixed → final mechanical closure. GitHub #681 updated to match. Deferred to row 9.3: `browser/mod.rs` 825 and `browser_component_tests.rs` 840 lines exceed the 800-line ceiling (campaign-end constraint only).
 
 ## 5. Complete TV Series
 
