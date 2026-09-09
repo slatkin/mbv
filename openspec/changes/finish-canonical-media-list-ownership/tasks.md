@@ -39,8 +39,9 @@ A row closes when its bounded change is merged plus reviewer-signed-off and both
 
 ## 6. Complete Feeds
 
-- [ ] 6.1 After sections 2-5 are complete and after separately authorized exploration, merge one bounded Feeds ownership change with reviewer sign-off; verify only the active Wide/Inline control moves, ordinary refresh preserves local target, one `ViewportAnchor` performs responsive handoff, parent row maps and compatibility point resolution are removed, group/heading structural rows and selector/filter parent ownership remain, and Feeds presentation converges fully on the Emby reference (visual design, chrome, framing, interaction) with deviations repaired rather than preserved.
-- [ ] 6.2 Record the change path and matching GitHub status before closing Feeds.
+- [x] 6.1 After sections 2-5 are complete and after separately authorized exploration, merge one bounded Feeds ownership change with reviewer sign-off; verify only the active Wide/Inline control moves, ordinary refresh preserves local target, one `ViewportAnchor` performs responsive handoff, parent row maps and compatibility point resolution are removed, group/heading structural rows and selector/filter parent ownership remain, and Feeds presentation converges fully on the Emby reference (visual design, chrome, framing, interaction) with deviations repaired rather than preserved.
+- [x] 6.2 Record the change path and matching GitHub status before closing Feeds.
+  - Change path: `fix-feeds-media-list-ownership` implemented at `a3852f25` → correction `683a70b6` (pill hitboxes wired, typed WatchedFilter, MAX_LABEL 18 char-safe, tick proofs) → tick strengthening `c0471840` on `refactor/finish-canonical-media-list-ownership`; two-axis BLOCK → correction → focused re-review confirmed fixes → mechanical closure of the final test-discrimination gap. Hero placeholder kept+justified per user decision; group/filter persistence ruled out of scope; no spec deltas required. GitHub #681 updated to match.
 
 ## 7. Complete Audiobookshelf Podcasts
 
