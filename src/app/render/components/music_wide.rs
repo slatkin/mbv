@@ -521,10 +521,13 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
         );
         let track_area = left_layout.track_area;
         if track_area.height > 0 && track_area.width > 0 && !track_list.is_empty() {
-            let (track_panel, track_content_area) =
-                crate::app::render::arrangements::wide_hero::wide_hero_hero_content_box(
-                    f, track_area,
-                );
+            let track_surface = if left_focused {
+                crate::app::render::arrangements::wide_hero::WideHeroContentBoxSurface::FocusedTrackList
+            } else {
+                crate::app::render::arrangements::wide_hero::WideHeroContentBoxSurface::Backdrop
+            };
+            let (track_panel, track_content_area) = crate::app::render::arrangements::wide_hero::
+                wide_hero_hero_content_box_with_surface(f, track_area, track_surface);
             track_list.set_geometry(track_panel, track_content_area);
             track_list.set_paint_policy(WideMediaListPaintPolicy::new(
                 left_focused,

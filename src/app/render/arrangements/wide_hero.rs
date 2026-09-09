@@ -377,6 +377,13 @@ pub(in crate::app) fn wide_hero_browser_border(f: &mut Frame, list_panel: Rect, 
     );
 }
 
+/// Semantic surface variants for the shared Wide hero content-box framing.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app::render) enum WideHeroContentBoxSurface {
+    Backdrop,
+    FocusedTrackList,
+}
+
 /// Paints the Wide hero arrangement's main content box: a
 /// [`palette::SURFACE_BACKDROP`] inset within the Wide hero left pane,
 /// present on every Wide hero surface with a kind-dependent payload (the
@@ -390,13 +397,25 @@ pub(in crate::app::render) fn wide_hero_hero_content_box(
     f: &mut Frame,
     area: Rect,
 ) -> (Rect, Rect) {
+    wide_hero_hero_content_box_with_surface(f, area, WideHeroContentBoxSurface::Backdrop)
+}
+
+pub(in crate::app::render) fn wide_hero_hero_content_box_with_surface(
+    f: &mut Frame,
+    area: Rect,
+    surface: WideHeroContentBoxSurface,
+) -> (Rect, Rect) {
     let panel = Rect {
         x: area.x.saturating_add(PANE_PAD_X),
         width: area.width.saturating_sub(PANE_PAD_X * 2),
         ..area
     };
+    let background = match surface {
+        WideHeroContentBoxSurface::Backdrop => palette::SURFACE_BACKDROP,
+        WideHeroContentBoxSurface::FocusedTrackList => palette::SURFACE_ACCENT_SOFT,
+    };
     f.render_widget(
-        Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+        Block::default().style(Style::default().bg(background)),
         panel,
     );
     let content = Rect {

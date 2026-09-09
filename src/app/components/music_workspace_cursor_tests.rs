@@ -241,6 +241,33 @@ fn music_workspace_track_selection_uses_the_shared_focused_row_surface() {
 }
 
 #[test]
+fn music_workspace_focused_track_box_uses_the_soft_surface_role() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_focused(true);
+    component.set_content(context(None));
+    component.set_inline_track_focus_enabled(true);
+    component.enter_track_focus();
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+
+    let track_content = component
+        .test_track_content_rect()
+        .expect("track content geometry retained");
+    assert!(
+        track_content.height > 1,
+        "fixture needs an ordinary track row"
+    );
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[(track_content.x, track_content.y + 1)].bg,
+        crate::app::palette::SURFACE_ACCENT_SOFT,
+        "focused track-list box uses the semantic soft surface role"
+    );
+}
+
+#[test]
 fn music_workspace_horizontal_move_is_ignored_at_one_column() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
