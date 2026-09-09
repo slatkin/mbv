@@ -184,6 +184,10 @@ mod tests_tick_integration_music_mouse;
 mod tests_tick_integration_home; // Home ownership tick coverage
 
 #[cfg(test)]
+#[path = "tests_tick_integration_browser.rs"]
+mod tests_tick_integration_browser; // Browser ownership tick coverage
+
+#[cfg(test)]
 #[path = "tests_tick_integration_mouse_sidebar.rs"]
 mod tests_tick_integration_mouse_sidebar;
 

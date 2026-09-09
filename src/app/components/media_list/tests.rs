@@ -1,6 +1,6 @@
 use super::{
     InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaKind, MediaListRow, MediaSemanticState,
-    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
+    SelectedRowSurface, ViewportAnchor, WideMediaList, WideMediaListPaintPolicy,
 };
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
@@ -274,6 +274,34 @@ fn media_lists_preserve_refresh_clamp_and_transfer_grouped_anchor() {
     wide_again.apply_viewport_anchor(&reverse, 3);
     assert_eq!(wide_again.selected_target(), Some(&"b".to_string()));
     assert_eq!(wide_again.resolve_viewport(3).offset, 2);
+}
+
+#[test]
+fn browser_refresh_preserves_local_target_until_explicit_anchor_reanchors() {
+    let rows = vec![
+        lifecycle_item("a"),
+        lifecycle_item("b"),
+        lifecycle_item("c"),
+    ];
+    let mut wide = WideMediaList::new();
+    wide.set_content(rows.clone());
+    wide.select_target(&"b".to_string());
+    wide.set_scroll(1);
+
+    wide.set_content(rows.clone());
+    assert_eq!(wide.selected_target(), Some(&"b".to_string()));
+    assert_eq!(wide.scroll(), 1);
+
+    let anchor = ViewportAnchor {
+        selected_target: "c".to_string(),
+        selected_row_offset: 0,
+    };
+    wide.apply_viewport_anchor(&anchor, 2);
+    assert_eq!(wide.selected_target(), Some(&"c".to_string()));
+    assert_eq!(wide.scroll(), 1);
+
+    wide.set_content(vec![lifecycle_item("a")]);
+    assert_eq!(wide.selected_target(), Some(&"a".to_string()));
 }
 
 #[test]
