@@ -334,9 +334,9 @@ fn abs_podcast_wheel_moves_one_visual_row_and_ignores_outside_list() {
     };
     assert_eq!(
         component.on(&Event::Mouse(inside)),
-        Some(Msg::TerminalEvent(
-            crate::app::components::msg::TerminalObserverEvent::MouseClaimed
-        ))
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            index: 3
+        }))
     );
     // The wheel throttle lives in the private gesture state (ADR 0024, D3);
     // reset it so the synchronous test loop's second wheel step is recognized.
@@ -350,9 +350,9 @@ fn abs_podcast_wheel_moves_one_visual_row_and_ignores_outside_list() {
     }));
     assert_eq!(
         up,
-        Some(Msg::TerminalEvent(
-            crate::app::components::msg::TerminalObserverEvent::MouseClaimed
-        )),
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            index: 2
+        })),
         "unexpected upward wheel message: {up:?}"
     );
     assert_eq!(component.cursor(), 2);

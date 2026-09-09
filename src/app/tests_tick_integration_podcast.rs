@@ -1,5 +1,5 @@
 use crate::app::components::{
-    AudiobookshelfPodcastComponent, BrowserKey, BrowserKind, ComponentId, Msg,
+    AudiobookshelfPodcastComponent, BrowserKey, BrowserKind, ComponentId, Msg, ShellRequest,
     TerminalObserverEvent,
 };
 use crate::app::tests_podcast::audiobookshelf_app;
@@ -137,8 +137,8 @@ fn podcast_tick_wheel_is_claimed_only_over_active_control() {
             modifiers: KeyModifiers::NONE,
         }));
         let outcome = on.step();
-        assert!(outcome.raw_messages.contains(&Msg::TerminalEvent(
-            TerminalObserverEvent::MouseClaimed
+        assert!(outcome.raw_messages.contains(&Msg::Shell(
+            ShellRequest::AudiobookshelfPodcastShowMove { index: 1 }
         )));
         assert_eq!(selected_id(&mut on), "show-1");
     }

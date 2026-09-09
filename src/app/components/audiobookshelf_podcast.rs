@@ -135,6 +135,7 @@ impl AudiobookshelfPodcastComponent {
             self.episode_selection = None;
             self.narrow_list.select_first();
             self.wide_show_list.select_first();
+            self.state.select(0);
         }
         self.initialized = true;
         self.images_enabled = images_enabled;
@@ -185,6 +186,11 @@ impl AudiobookshelfPodcastComponent {
             self.episode_filter = AudiobookshelfEpisodeFilter::All;
         }
         self.episode_selection = None;
+        if self.last_wide == Some(true) {
+            self.wide_show_list.select_index(cursor);
+        } else {
+            self.narrow_list.select_index(cursor);
+        }
         self.state.select(cursor);
     }
 
@@ -369,100 +375,90 @@ impl AudiobookshelfPodcastComponent {
         self.set_episode_filter(AudiobookshelfEpisodeFilter::ALL[next]);
     }
 
+    /// Resolve a show row under the active persistent control.
+    fn show_index_at(&self, at: ratatui::layout::Position) -> Option<usize> {
+        let target = if self.last_wide == Some(true) {
+            self.wide_show_list
+                .resolve_current_point(at)
+                .cloned()
+                .or_else(|| {
+                    self.wide_show_list
+                        .resolve_point(self.geometry.list_area, at)
+                        .cloned()
+                })
+        } else {
+            self.narrow_list
+                .resolve_current_point(at)
+                .cloned()
+                .or_else(|| {
+                    self.narrow_list
+                        .resolve_point(self.geometry.list_area, 0, at)
+                        .cloned()
+                })
+        }?;
+        self.state
+            .shows
+            .iter()
+            .position(|show| show.library_item_id == target)
+    }
+
     /// Handle pointer input using the active persistent show control's
     /// retained current-frame geometry.
-    #[allow(clippy::needless_return, clippy::question_mark)]
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         // The podcast surface does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
-            return None;
-        }
-        match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Scroll { at, delta } => {
-                if self.episode_selection.is_some() {
-                    return None;
-                }
-                let claims = if self.last_wide == Some(true) {
-                    self.wide_show_list.claims_current_point(at)
-                } else {
-                    self.narrow_list.claims_current_point(at)
-                };
-                if !claims {
-                    return None;
-                }
-                if self.last_wide == Some(true) {
-                    self.wide_show_list.move_selection(delta);
-                    self.select_show(self.wide_show_list.cursor());
-                } else {
-                    self.narrow_list.move_selection(delta);
-                    self.select_show(self.narrow_list.cursor());
-                }
-                return Some(Msg::TerminalEvent(
-                    crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
-                ));
-            }
-            MouseGesture::Click(at) => {
-                let target = if self.last_wide == Some(true) {
-                    self.wide_show_list.resolve_current_point(at).cloned()
-                } else {
-                    self.narrow_list.resolve_current_point(at).cloned()
-                };
-                if let Some(target) = target {
-                    let Some(index) = self
-                        .state
-                        .shows
-                        .iter()
-                        .position(|show| show.library_item_id == target)
-                    else {
-                        return None;
+            None
+        } else {
+            match self.mouse_gestures.recognize(mouse)? {
+                MouseGesture::Scroll { at, delta } => {
+                    let claims = if self.last_wide == Some(true) {
+                        self.wide_show_list.claims_current_point(at)
+                    } else {
+                        self.narrow_list.claims_current_point(at)
                     };
-                    self.select_show(index);
-                    return Some(self.show_move_request());
+                    if self.episode_selection.is_some() || !claims {
+                        None
+                    } else {
+                        if self.last_wide == Some(true) {
+                            self.wide_show_list.move_selection(delta);
+                            self.select_show(self.wide_show_list.cursor());
+                        } else {
+                            self.narrow_list.move_selection(delta);
+                            self.select_show(self.narrow_list.cursor());
+                        }
+                        Some(self.show_move_request())
+                    }
                 }
-                if let Some((_, bucket)) = self
-                    .geometry
-                    .selector_tabs
-                    .iter()
-                    .find(|(rect, _)| rect.contains(at))
-                {
-                    if let Some(range) =
+                MouseGesture::Click(at) => {
+                    if let Some(index) = self.show_index_at(at) {
+                        self.select_show(index);
+                        Some(self.show_move_request())
+                    } else if let Some((_, bucket)) = self
+                        .geometry
+                        .selector_tabs
+                        .iter()
+                        .find(|(rect, _)| rect.contains(at))
+                    {
                         crate::app::types_audiobookshelf_browse::build_show_title_buckets(
                             &self.state.shows,
                         )
                         .get(*bucket)
-                    {
-                        self.select_show(range.start);
-                        return Some(self.show_move_request());
+                        .map(|range| {
+                            self.select_show(range.start);
+                            self.show_move_request()
+                        })
+                    } else {
+                        None
                     }
-                    return None;
                 }
-                None
-            }
-            MouseGesture::DoubleClick(at) => {
-                let target = if self.last_wide == Some(true) {
-                    self.wide_show_list.resolve_current_point(at).cloned()
-                } else {
-                    self.narrow_list.resolve_current_point(at).cloned()
-                };
-                if let Some(target) = target {
-                    let Some(index) = self
-                        .state
-                        .shows
-                        .iter()
-                        .position(|show| show.library_item_id == target)
-                    else {
-                        return None;
-                    };
+                MouseGesture::DoubleClick(at) => self.show_index_at(at).map(|index| {
                     self.select_show(index);
-                    return Some(Msg::Shell(
-                        ShellRequest::AudiobookshelfPodcastEpisodeIntent(
-                            PodcastEpisodeIntent::OpenOrPlay,
-                        ),
-                    ));
-                }
-                None
+                    Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+                        PodcastEpisodeIntent::OpenOrPlay,
+                    ))
+                }),
+                _ => None,
             }
-            _ => None,
         }
     }
 
@@ -519,19 +515,6 @@ impl Component for AudiobookshelfPodcastComponent {
             flip_anchor.as_ref(),
             &mut self.geometry,
         );
-        let target = if wide {
-            self.wide_show_list.selected_target()
-        } else {
-            self.narrow_list.selected_target()
-        };
-        if let Some(index) = target.and_then(|target| {
-            self.state
-                .shows
-                .iter()
-                .position(|show| &show.library_item_id == target)
-        }) {
-            self.state.select(index);
-        }
         self.last_wide = Some(wide);
     }
 

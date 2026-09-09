@@ -299,6 +299,7 @@ fn render_narrow_podcast(
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
     if state.shows.is_empty() {
+        narrow_list.invalidate_paint();
         render_placeholder(
             frame,
             area,
