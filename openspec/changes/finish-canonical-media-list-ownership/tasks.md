@@ -33,8 +33,9 @@ A row closes when its bounded change is merged plus reviewer-signed-off and both
 
 ## 5. Complete TV Series
 
-- [ ] 5.1 After section 4 is accepted and after separately authorized exploration, merge one bounded TV Series ownership change with reviewer sign-off; verify the Wide series control has no parent cursor mirror, Normal/Wide handoff preserves one stable target/row offset, row hits resolve only painted retained geometry with blank/header space unclaimed, and seasons, episodes, season pills, and the episode workspace retain their accepted TV ownership.
-- [ ] 5.2 Record the change path and matching GitHub status before closing TV Series.
+- [x] 5.1 After section 4 is accepted and after separately authorized exploration, merge one bounded TV Series ownership change with reviewer sign-off; verify the Wide series control has no parent cursor mirror, Normal/Wide handoff preserves one stable target/row offset, row hits resolve only painted retained geometry with blank/header space unclaimed, and seasons, episodes, season pills, and the episode workspace retain their accepted TV ownership.
+- [x] 5.2 Record the change path and matching GitHub status before closing TV Series.
+  - Change path: `fix-tv-series-media-list-ownership` implemented at `25ea96e2` → tests `16837e98`/`96fa2e33` → handoff viewport fix `f8b016be` → correction `9f6bdf70` on `refactor/finish-canonical-media-list-ownership`; spec-axis PASS-with-P2 + standards BLOCK → correction → focused re-review PASS. `resolve_ordinal_at_y` retired (TV was last caller). GitHub #681 updated to match. Deferred to section 9: inline-search-active frames leave the series rail's retained claims unresolved-stale or proven-unreachable (flagged, unconfirmed).
 
 ## 6. Complete Feeds
 
