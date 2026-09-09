@@ -13,6 +13,7 @@ use crate::app::render::components::widgets::{render_pill_bar, render_placeholde
 use crate::app::render::render_artwork_placeholder;
 use crate::app::render::screens::feeds_model::{feed_entry_meta_line, feed_hero_content_rows};
 use crate::app::types_feed_tab::WatchedFilter;
+use crate::app::ui_util::trunc_str;
 use mbv_core::config::FeedSubscription;
 use mbv_core::playback_queue::FeedEntry;
 use ratatui::layout::Rect;
@@ -68,15 +69,13 @@ pub(in crate::app) fn render_feeds_content(
         let areas = wide_hero::pill_bar_areas(pane);
         let mut selector_tabs = Vec::new();
         if has_subs && areas.pills_area.height > 0 {
-            const MAX_LABEL: usize = 12;
+            const MAX_LABEL: usize = 18;
             let labels: Vec<String> = std::iter::once("All".to_string())
-                .chain(subscriptions.iter().map(|sub| {
-                    if sub.name.len() > MAX_LABEL {
-                        format!("{}…", &sub.name[..MAX_LABEL])
-                    } else {
-                        sub.name.clone()
-                    }
-                }))
+                .chain(
+                    subscriptions
+                        .iter()
+                        .map(|sub| trunc_str(&sub.name, MAX_LABEL)),
+                )
                 .collect();
             let ids: Vec<usize> = (0..labels.len()).collect();
             selector_tabs = render_pill_bar(
@@ -101,27 +100,30 @@ pub(in crate::app) fn render_feeds_content(
             ..areas.content_area
         };
         if has_subs && filter_area.height > 0 {
-            let labels = vec![
-                WatchedFilter::All.label().to_string(),
-                WatchedFilter::Watched.label().to_string(),
-                WatchedFilter::Unwatched.label().to_string(),
+            let filters = [
+                WatchedFilter::All,
+                WatchedFilter::Watched,
+                WatchedFilter::Unwatched,
             ];
-            let ids = vec![0, 1, 2];
-            let selected_pos = match model.watched_filter {
-                WatchedFilter::All => 0,
-                WatchedFilter::Watched => 1,
-                WatchedFilter::Unwatched => 2,
-            };
-            let _ = render_pill_bar(
+            let labels: Vec<String> = filters
+                .iter()
+                .map(|filter| filter.label().to_string())
+                .collect();
+            let filter_base = subscriptions.len() + 1;
+            let ids: Vec<usize> = (0..filters.len())
+                .map(|index| filter_base + index)
+                .collect();
+            let filter_tabs = render_pill_bar(
                 f,
                 filter_area,
                 PillBar {
                     labels: &labels,
                     ids: &ids,
-                    selected_pos,
+                    selected_pos: model.watched_filter.position(),
                     prefix: None,
                 },
             );
+            selector_tabs.extend(filter_tabs);
         }
 
         let list_y = filter_area

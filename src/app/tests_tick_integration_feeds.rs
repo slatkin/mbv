@@ -1,6 +1,8 @@
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 use crate::app::components::{ComponentId, FeedsComponent};
 use crate::app::tests::make_app_stub;
@@ -64,7 +66,7 @@ fn feeds(harness: &TickHarness) -> &FeedsComponent {
 }
 
 #[test]
-fn feeds_tick_sync_and_draw_preserve_navigation_at_both_breakpoints() {
+fn feeds_tick_navigation_paints_selected_row_at_wide_and_narrow() {
     let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
     assert_eq!(feeds(&harness).cursor(), 0);
@@ -79,4 +81,74 @@ fn feeds_tick_sync_and_draw_preserve_navigation_at_both_breakpoints() {
     let narrow = crate::app::TWO_COLUMN_THRESHOLD - 1;
     draw(&mut harness, narrow);
     assert_eq!(feeds(&harness).cursor(), 1);
+}
+
+#[test]
+fn feeds_tick_click_resolves_painted_entry_and_blank_is_noop() {
+    let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
+    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
+    let selected = feeds(&harness).layout().selected_item_rect.expect("row");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: selected.x + 1,
+        row: selected.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(!outcome.raw_messages.is_empty());
+    assert_eq!(feeds(&harness).cursor(), 0);
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: 0,
+        row: 0,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert_eq!(feeds(&harness).cursor(), 0);
+}
+
+#[test]
+fn feeds_tick_wheel_is_claimed_only_over_active_control() {
+    let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
+    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
+    let before = feeds(&harness).cursor();
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: 0,
+        row: 0,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert_eq!(feeds(&harness).cursor(), before);
+    let list = feeds(&harness).layout().left_area;
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: list.x + 1,
+        row: list.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(!outcome.raw_messages.is_empty());
+    assert_eq!(feeds(&harness).cursor(), before);
+}
+
+#[test]
+fn feeds_tick_round_trip_preserves_selected_target() {
+    let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
+    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
+    harness.inject(Event::Keyboard(KeyEvent { code: Key::Down, modifiers: KeyModifiers::NONE }));
+    let _ = harness.step();
+    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD - 1);
+    assert_eq!(feeds(&harness).cursor(), 1);
+    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
+    assert_eq!(feeds(&harness).cursor(), 1);
+}
+
+#[test]
+fn feeds_tick_has_one_painted_list_surface() {
+    let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
+    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
+    assert!(feeds(&harness).layout().selected_item_rect.is_some());
+    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD - 1);
+    assert!(feeds(&harness).layout().selected_item_rect.is_some());
 }

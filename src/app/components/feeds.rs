@@ -59,6 +59,57 @@ pub struct FeedsComponent {
     mouse_gestures: MouseGestureState,
 }
 
+trait MediaListAccess {
+    fn cursor(&self) -> usize;
+    fn scroll(&self) -> usize;
+    fn move_selection(&mut self, delta: i64);
+    fn select_first(&mut self);
+    fn select_last(&mut self);
+    fn select_target(&mut self, target: &str);
+}
+
+impl MediaListAccess for WideMediaList<String> {
+    fn cursor(&self) -> usize {
+        self.cursor()
+    }
+    fn scroll(&self) -> usize {
+        self.scroll()
+    }
+    fn move_selection(&mut self, delta: i64) {
+        self.move_selection(delta);
+    }
+    fn select_first(&mut self) {
+        self.select_first();
+    }
+    fn select_last(&mut self) {
+        self.select_last();
+    }
+    fn select_target(&mut self, target: &str) {
+        self.select_target(&target.to_string());
+    }
+}
+
+impl MediaListAccess for InlineMediaBrowser<String> {
+    fn cursor(&self) -> usize {
+        self.cursor()
+    }
+    fn scroll(&self) -> usize {
+        self.scroll()
+    }
+    fn move_selection(&mut self, delta: i64) {
+        self.move_selection(delta);
+    }
+    fn select_first(&mut self) {
+        self.select_first();
+    }
+    fn select_last(&mut self) {
+        self.select_last();
+    }
+    fn select_target(&mut self, target: &str) {
+        self.select_target(&target.to_string());
+    }
+}
+
 impl FeedsComponent {
     pub fn new() -> Self {
         Self {
@@ -121,12 +172,24 @@ impl FeedsComponent {
         }
     }
 
-    pub(in crate::app) fn cursor(&self) -> usize {
+    fn active(&self) -> &dyn MediaListAccess {
         if self.wide {
-            self.canonical_list.cursor()
+            &self.canonical_list
         } else {
-            self.inline_list.cursor()
+            &self.inline_list
         }
+    }
+
+    fn active_mut(&mut self) -> &mut dyn MediaListAccess {
+        if self.wide {
+            &mut self.canonical_list
+        } else {
+            &mut self.inline_list
+        }
+    }
+
+    pub(in crate::app) fn cursor(&self) -> usize {
+        self.active().cursor()
     }
 
     pub(in crate::app) fn watched_filter(&self) -> WatchedFilter {
@@ -138,11 +201,7 @@ impl FeedsComponent {
     }
 
     pub(in crate::app) fn scroll(&self) -> usize {
-        if self.wide {
-            self.canonical_list.scroll()
-        } else {
-            self.inline_list.scroll()
-        }
+        self.active().scroll()
     }
 
     pub(in crate::app) fn visible_titles(&self) -> Vec<&str> {
@@ -161,6 +220,21 @@ impl FeedsComponent {
 
     pub(in crate::app) fn layout(&self) -> &LayoutMain {
         &self.layout
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn canonical_rows(&self) -> &[MediaListRow<String>] {
+        self.canonical_list.rows()
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn canonical_selectable_len(&self) -> usize {
+        self.canonical_list.selectable_len()
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn canonical_selected_target(&self) -> Option<&String> {
+        self.canonical_list.current_selected_target()
     }
 
     pub(in crate::app) fn group_count(&self) -> usize {
@@ -230,30 +304,18 @@ impl FeedsComponent {
     /// Park the active control at the first entry after a discrete
     /// group/filter change; the inactive control is only a handoff target.
     fn reset_selection(&mut self) {
-        if self.wide {
-            self.canonical_list.select_first();
-        } else {
-            self.inline_list.select_first();
-        }
+        self.active_mut().select_first();
     }
 
     /// Move only the active control.
     fn move_selection(&mut self, delta: i64) {
-        if self.wide {
-            self.canonical_list.move_selection(delta);
-        } else {
-            self.inline_list.move_selection(delta);
-        }
+        self.active_mut().move_selection(delta);
     }
 
     /// Select only on the active control.
     fn select_target(&mut self, target: &str) {
         let target = target.to_string();
-        if self.wide {
-            self.canonical_list.select_target(&target);
-        } else {
-            self.inline_list.select_target(&target);
-        }
+        self.active_mut().select_target(&target);
     }
 
     /// Adopt `target` as the selected group and rebuild.
@@ -317,19 +379,11 @@ impl FeedsComponent {
                 None
             }
             Key::Home => {
-                if self.wide {
-                    self.canonical_list.select_first();
-                } else {
-                    self.inline_list.select_first();
-                }
+                self.active_mut().select_first();
                 None
             }
             Key::End => {
-                if self.wide {
-                    self.canonical_list.select_last();
-                } else {
-                    self.inline_list.select_last();
-                }
+                self.active_mut().select_last();
                 None
             }
             Key::Char('[') => {
@@ -385,8 +439,14 @@ impl FeedsComponent {
                     .iter()
                     .find(|(rect, _)| rect.contains(at))
                 {
-                    if *target < self.group_count() {
+                    let filter_base = self.group_count();
+                    if *target < filter_base {
                         self.select_group(*target);
+                    } else if let Some(filter) = WatchedFilter::from_position(*target - filter_base)
+                    {
+                        self.watched_filter = filter;
+                        self.rebuild_visible_entries();
+                        self.reset_selection();
                     }
                     return None;
                 }
@@ -411,7 +471,7 @@ impl FeedsComponent {
 
     /// The stable row id under `point`, resolved by the embedded canonical
     /// control that painted the active list (design.md D6).
-    fn resolve_row_id(&self, at: Position) -> Option<String> {
+    pub(in crate::app) fn resolve_row_id(&self, at: Position) -> Option<String> {
         if self.wide {
             return self.canonical_list.resolve_current_point(at).cloned();
         }
@@ -444,8 +504,8 @@ impl Component for FeedsComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         // One `ViewportAnchor` handoff at a breakpoint flip: carry the
         // outgoing control's selected target + screen-row offset into the
-        // incoming control (design.md D2/D3). The cursors already track in
-        // lockstep.
+        // incoming control (design.md D2/D3). Only the painted control is
+        // authoritative.
         let wide = crate::app::render::wide_hero_presentation(area).is_some();
         if wide != self.wide {
             let viewport_height = self.layout.left_area.height.max(1) as usize;

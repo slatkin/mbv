@@ -49,6 +49,24 @@ fn feed_component() -> FeedsComponent {
 }
 
 #[test]
+fn feeds_subscription_pills_use_reference_width_and_char_safe_truncation() {
+    let mut component = feed_component();
+    let subscriptions = [FeedSubscription {
+        name: "ABCDEFGHIJKLMNOPQRST".into(),
+        url: "https://example.test/feed".into(),
+        kind: FeedKind::Audio,
+    }];
+    let entries = [feed_entry("entry-1", "Entry One", false)];
+    component.set_content(&subscriptions, &[entries.to_vec()], &entries, false);
+    let terminal = terminal_for(&mut component, 120, 30);
+    let output = buffer_to_string(&terminal);
+    assert!(
+        output.contains("ABCDEFGHIJKLMNOPQ…"),
+        "missing truncated pill: {output:?}"
+    );
+}
+
+#[test]
 fn feeds_images_off_collapses_artwork_and_uses_full_text_width() {
     let mut component = feed_component();
     component.set_images_enabled(false);
@@ -272,16 +290,31 @@ fn feeds_pill_row_and_targets_are_characterized_end_to_end() {
     let assert_geometry = |terminal: &Terminal<TestBackend>, layout: &LayoutMain| {
         let panel = Rect::new(0, 0, 60, 20);
         let areas = wide_hero::pill_bar_areas(panel);
-        assert_surface_pills(
-            terminal,
-            layout,
-            panel,
-            2,
-            ratatui::style::Color::Reset,
-            &[0, 1],
-            &["⌘", "All", "Test Feed"],
-            0,
+        assert_eq!(
+            layout
+                .selector_tabs
+                .iter()
+                .map(|(_, id)| *id)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2, 3, 4],
+            "subscription and watched-filter hitboxes"
         );
+        assert!(layout
+            .selector_tabs
+            .iter()
+            .all(|(rect, _)| rect.height == 1));
+        let buffer = terminal.backend().buffer();
+        let painted_rows: std::collections::BTreeSet<u16> = (panel.y..panel.bottom())
+            .filter(|y| {
+                (panel.x..panel.right()).any(|x| matches!(buffer[(x, *y)].symbol(), "◢" | "◤"))
+            })
+            .collect();
+        assert_eq!(painted_rows.len(), 2);
+        for (rect, _) in &layout.selector_tabs {
+            assert!(painted_rows.contains(&rect.y));
+            assert!(panel.contains((rect.x, rect.y).into()));
+            assert!(panel.contains((rect.right() - 1, rect.bottom() - 1).into()));
+        }
         assert_eq!(layout.selector_tabs[0].0.y, areas.pills_area.y);
         assert_eq!(layout.left_area.y, areas.spacer_area.bottom() + 2);
         let buffer = terminal.backend().buffer();

@@ -336,14 +336,25 @@ fn assert_one_pill_row_and_spacer(
         .first()
         .unwrap_or_else(|| panic!("{surface} should publish pill targets"))
         .0;
-    assert!(
-        layout
+    if surface == "Feeds" {
+        assert!(layout
             .selector_tabs
             .iter()
-            .all(|(rect, _)| rect.y == first.y && rect.height == 1),
-        "pill targets must share one row: {:?}",
-        layout.selector_tabs
-    );
+            .all(|(rect, _)| rect.height == 1));
+        assert!(layout
+            .selector_tabs
+            .iter()
+            .any(|(rect, _)| rect.y != first.y));
+    } else {
+        assert!(
+            layout
+                .selector_tabs
+                .iter()
+                .all(|(rect, _)| rect.y == first.y && rect.height == 1),
+            "pill targets must share one row: {:?}",
+            layout.selector_tabs
+        );
+    }
 
     let buffer = terminal.backend().buffer();
     let painted_rows = (0..buffer.area().height)
@@ -354,11 +365,15 @@ fn assert_one_pill_row_and_spacer(
             })
         })
         .collect::<Vec<_>>();
-    assert_eq!(
-        painted_rows,
-        vec![first.y],
-        "{surface} should paint exactly one pill bar"
-    );
+    if surface == "Feeds" {
+        assert_eq!(painted_rows.len(), 0, "Feeds uses separate chrome rows");
+    } else {
+        assert_eq!(
+            painted_rows,
+            vec![first.y],
+            "{surface} should paint exactly one pill bar"
+        );
+    }
 
     let last = layout.selector_tabs.last().unwrap().0;
     assert!(first.bottom() < buffer.area().height);

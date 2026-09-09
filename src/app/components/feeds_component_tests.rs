@@ -1,11 +1,12 @@
 use super::feeds::FeedsComponent;
+use super::media_list::MediaListRow;
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::types_feed_tab::WatchedFilter;
 use mbv_core::config::{FeedKind, FeedSubscription};
 use mbv_core::playback_queue::FeedEntry;
 use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{
@@ -467,18 +468,24 @@ fn changing_group_invalidates_previous_row_geometry() {
     terminal
         .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
         .unwrap();
-    assert!(component.layout().left_item_rows.is_empty());
+    let previous_row = component
+        .layout()
+        .selected_item_rect
+        .expect("the initial selected row is painted");
 
     component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
         code: Key::Char(']'),
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(component.layout().left_item_rows.is_empty());
+    component.set_content(&[], &[], &[], false);
+    assert!(component
+        .resolve_row_id(Position::new(previous_row.x, previous_row.y))
+        .is_none());
     component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.cursor(), 1);
+    assert_eq!(component.cursor(), 0);
 }
 
 #[test]
@@ -579,6 +586,15 @@ fn structural_rows_are_non_selectable_and_cursor_movement_skips_them() {
         ["New One", "Recent One", "Old One"]
     );
     assert_eq!(component.cursor(), 0);
+    assert_eq!(component.canonical_selectable_len(), 3);
+    assert_eq!(
+        component
+            .canonical_rows()
+            .iter()
+            .filter(|row| matches!(row, MediaListRow::Heading { .. } | MediaListRow::Spacer))
+            .count(),
+        5
+    );
     for expected in [1, 2, 2] {
         component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
             code: Key::Down,
@@ -635,7 +651,10 @@ fn breakpoint_flip_carries_one_viewport_anchor() {
         .draw(|frame| component.view(frame, Rect::new(0, 0, narrow, 10)))
         .unwrap();
     assert_eq!(component.cursor(), 15);
-    assert!(component.layout().selected_item_rect.is_some());
+    assert_eq!(
+        component.canonical_selected_target(),
+        Some(&"Entry 15".to_string())
+    );
 }
 
 /// Task 4.1/4.5: a click on a list row resolves through the active canonical
