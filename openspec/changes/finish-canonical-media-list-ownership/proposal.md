@@ -7,8 +7,10 @@ The canonical media-list campaign was closed after functional and bounded seam v
 ## What Changes
 
 - Record Queue as the sole completed destination under the full current contract.
-- Record the verified remaining families: Grouped Music; Home; Feeds; Movies, the Emby homevideos feed view, and the Emby podcast channel list; TV Series; Audiobookshelf Podcasts; and Audiobookshelf Books.
-- Preserve non-hero two-column Emby catalogs and destination-specific track, season/episode, chapter, selector, image, effect, and persistence authority rather than treating those boundaries as migration work.
+- Record the verified remaining families: Grouped Music; Home; Feeds; Movies and the Emby homevideos feed view; TV Series; Audiobookshelf Podcasts; and Audiobookshelf Books.
+- Preserve non-hero two-column Emby catalogs and destination-specific workspace authority (track, season/episode, chapter, episode-filter, image, effect, persistence) rather than treating those ownership boundaries as migration work; presentation that deviates from the Emby reference design is a repair target, not heritage.
+- Require Emby-first canonical design: the Emby destinations are the most developed surfaces and are the design reference; the Feeds, Audiobookshelf Podcast, and Audiobookshelf Book families conform their presentation to that reference within their bounded changes instead of preserving deviant behaviour.
+- Keep non-grouped Music (excluded by the 2026-09-09 decision) and the Emby podcast channel list (removed from scope by user direction) outside this campaign; neither is a ledger row.
 - Require one separately explored and authorized bounded proposal per row or cohesive family; this umbrella neither creates those proposals nor authorizes implementation.
 - Require durable requirement-to-source-and-test conformance evidence before a row can close. Functional verification, successful OpenSpec validation, automatic spec sync, or a bare review pass is not sufficient alone.
 - Keep the human-readable campaign plan and status in GitHub issue #681 and agent-facing execution detail here, with each linking the other and neither silently replacing the other.

@@ -6,6 +6,8 @@ See `proposal.md` for motivation. The current behavioral truth is already define
 
 PR #684 established and verified the component-view/retained-current-frame seam for Queue and Grouped Music painting. It fully completed Queue. A later source-to-spec audit found that Grouped Music still retains parent album position authority, ordinary-render reseeding, and paint-result writeback, while other named destinations retain analogous ownership or geometry violations. Functional visual verification and prior review passes did not establish full architectural conformance.
 
+Emby destinations are the most developed surfaces and serve as the campaign's canonical design reference; Feeds, Audiobookshelf Podcasts, and Audiobookshelf Books are functional skeletons whose presentation deviations are repair targets rather than heritage.
+
 Wide hero orientation is not an implementation defect: current source follows the normative browser-left/detail-right arrangement. Stale names/comments and contradictory scenario titles are documentation reconciliation items.
 
 ## Goals / Non-Goals
@@ -22,9 +24,10 @@ Wide hero orientation is not an implementation defect: current source follows th
 
 - Implementing any destination repair through this umbrella.
 - Pre-creating or pre-authorizing follow-on proposals.
-- Reopening Queue or non-grouped Music.
+- Reopening Queue or non-grouped Music, or adding the excluded Emby podcast channel list to the campaign.
 - Converting non-hero two-column catalogs.
 - Treating provider workspaces, selectors, images, effects, persistence, or arrangement placement as list-control state.
+- Grandfathering non-Emby presentation deviations as accepted behaviour.
 - Adding speculative universal ratchets or a documentation sweep before concrete accepted work establishes the need.
 
 ## Decisions
@@ -45,7 +48,7 @@ The initial status is:
 | Grouped Music | incomplete | Parent album cursor/scroll, inactive-control synchronization, render-time target/scroll reseeding, paint-result writeback, and compatibility geometry remain. |
 | Home | incomplete | Wide/Inline controls move in lockstep, shell per-section position remains, and compatibility geometry/point resolution remains. |
 | Feeds | incomplete | Wide/Inline controls move in lockstep and parent row-map/compatibility point resolution remains. |
-| Movies, Emby homevideos feed view, Emby podcast channel list | incomplete | Browser parent cursor/scroll mirrors the controls and compatibility geometry remains. |
+| Movies and the Emby homevideos feed view | incomplete | Browser parent cursor/scroll mirrors the controls and compatibility geometry remains. |
 | TV Series | incomplete | Series cursor mirrors the Wide control and row hits are re-derived from parent geometry, including a blank-hit fallback. |
 | Audiobookshelf Podcasts | incomplete | The Wide show control is constructed per frame; parent show position, row maps, and paint writeback remain. |
 | Audiobookshelf Books | incomplete | The Wide book control is constructed per frame; parent book/chapter position, row maps, render mutation, and paint writeback remain. |
@@ -61,7 +64,7 @@ The initial families are:
 1. Grouped Music.
 2. Home.
 3. Feeds.
-4. Movies, Emby homevideos feed view, and Emby podcast channel list, preserving non-hero two-column catalogs.
+4. Movies and the Emby homevideos feed view, preserving non-hero two-column catalogs.
 5. TV Series, after the Browser-family ownership decisions it shares are accepted.
 6. Audiobookshelf Podcasts.
 7. Audiobookshelf Books.
@@ -105,12 +108,21 @@ Stale comments, contradictory Wide-orientation scenario titles, compatibility pa
 
 Alternative: begin with a global docs/ratchet cleanup. Rejected because premature universal rules and exemption bookkeeping were a primary source of scope growth.
 
+### D8. Emby destinations are the canonical design reference
+
+The Emby surfaces (Queue, Home, the Browser family, TV Series, grouped Music) are the most developed screens and define the presentation the campaign converges on. Feeds, Audiobookshelf Podcasts, and Audiobookshelf Books are functional skeletons: their bounded changes conform presentation, chrome, framing, and interaction to that reference and repair deviations rather than preserve them. Preservation language in this ledger scopes to provider workspace authority (state, typed intents, persistence), never to deviant presentation.
+
+Where current specification text entrenches a deviation, the bounded change proposes the conforming design and carries the required spec delta; this umbrella reinterprets no specification, keeping D1 intact.
+
+Alternative: treat each skeleton's current presentation as accepted heritage. Rejected because it would cement known-imperfect surfaces as the campaign endpoint.
+
 ## Risks / Trade-offs
 
 - **[The umbrella becomes another implementation plan]** → Keep its tasks limited to status transitions, bounded-change links, and evidence; implementation details belong only to authorized follow-ons.
 - **[A family is marked complete from functional behavior again]** → Require the per-requirement conformance record before closure.
 - **[GitHub and OpenSpec drift]** → Updating both records is one acceptance action for every status transition.
 - **[Preserved workspace state is mistaken for a violation]** → Each follow-on identifies the exact list position/geometry authority separately from legitimate provider workspace state.
+- **[Preservation language is read as protecting skeleton presentation]** → D8 scopes preservation to provider authority; non-Emby presentation deviations are repair targets for their bounded changes.
 - **[Cleanup hides unfinished migration]** → Final reconciliation may not change an incomplete destination's status or include its source repair.
 
 ## Migration Plan

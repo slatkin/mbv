@@ -2,7 +2,7 @@
 
 This planning-only ledger records campaign status. It does not authorize proposal creation or implementation. Before any pending destination row advances, the user must select that row for interactive exploration, confirm its scope, authorize one bounded proposal, and later issue a separate apply request.
 
-A row closes only when its bounded change is accepted, synced where applicable, archived, and represented consistently here and in GitHub issue #681 with durable requirement-to-source-and-test evidence.
+A row closes only when its bounded change is accepted, synced where applicable, archived, and represented consistently here and in GitHub issue #681 with durable requirement-to-source-and-test evidence. Non-grouped Music and the Emby podcast channel list are outside this campaign and are not ledger rows.
 
 ## 1. Establish the Corrected Baseline
 
@@ -10,7 +10,7 @@ A row closes only when its bounded change is accepted, synced where applicable, 
 - [x] 1.2 Record Queue as complete under the full current contract; verify the audit found a persistent `WideMediaList<QueueSlotId>`, stable-target refresh preservation, explicit re-anchor, control-owned movement, retained-geometry point resolution, and no parent cursor/row-map mirror.
 - [x] 1.3 Correct the prior Grouped Music completion claim to incomplete; verify the audit records parent album cursor/scroll, inactive-control synchronization, render-time target/scroll reseeding, paint-result writeback, and compatibility geometry.
 - [x] 1.4 Record the remaining audited destination failures and preserved boundaries in `design.md` D2; verify Home, Feeds, the Browser family, TV Series, Audiobookshelf Podcasts, and Audiobookshelf Books each have a named evidence-backed gap while non-hero two-column catalogs remain preserved.
-- [ ] 1.5 Establish the paired human record in GitHub issue #681 and retire #685; verify #681 links this umbrella, carries the same status matrix and authorization boundary, and neither record contradicts the other.
+- [ ] 1.5 Establish the paired human record in GitHub issue #681; verify #681 links this umbrella, carries the same status matrix and authorization boundary, and neither record contradicts the other.
 
 ## 2. Complete Grouped Music
 
@@ -24,12 +24,12 @@ A row closes only when its bounded change is accepted, synced where applicable, 
 
 ## 4. Complete Feeds
 
-- [ ] 4.1 After separately authorized exploration, accept and archive one bounded Feeds ownership change; verify only the active Wide/Inline control moves, ordinary refresh preserves local target, one `ViewportAnchor` performs responsive handoff, parent row maps and compatibility point resolution are removed, and groups, headings, filters, selectors, detail, images, and effects remain at their accepted boundaries.
+- [ ] 4.1 After separately authorized exploration, accept and archive one bounded Feeds ownership change; verify only the active Wide/Inline control moves, ordinary refresh preserves local target, one `ViewportAnchor` performs responsive handoff, parent row maps and compatibility point resolution are removed, group/heading structural rows and selector/filter parent ownership remain, and Feeds presentation is conformed to the Emby-derived canonical design with deviations repaired rather than preserved.
 - [ ] 4.2 Record the accepted change path, PR/commit, requirement-to-source trace, focused component/buffer/live-`Application::tick()` evidence, Normal/Wide human evidence or explicit waiver, spec-sync disposition, and matching GitHub status before closing Feeds.
 
-## 5. Complete Movies and Related Emby Screens
+## 5. Complete Movies and the Emby homevideos feed view
 
-- [ ] 5.1 After separately authorized exploration, accept and archive one bounded Browser-family ownership change for Movies, the Emby homevideos feed view, and the Emby podcast channel list; verify embedded controls solely own canonical cursor/scroll, row hits use retained current-frame geometry, ordinary refresh and explicit re-anchor remain distinct, and each visible screen's provider behavior is preserved.
+- [ ] 5.1 After separately authorized exploration, accept and archive one bounded Browser-family ownership change for Movies and the Emby homevideos feed view; verify embedded controls solely own canonical cursor/scroll, row hits use retained current-frame geometry, ordinary refresh and explicit re-anchor remain distinct, and each visible screen's provider behavior is preserved.
 - [ ] 5.2 Verify the same bounded change preserves non-hero two-column catalogs as isolated screen-owned grid interaction with arrangement-owned placement; record evidence that canonical controls neither read nor overwrite grid state.
 - [ ] 5.3 Record the accepted change path, PR/commit, requirement-to-source trace, focused evidence for every named screen and the preserved grid, Normal/Wide human evidence or explicit waiver, spec-sync disposition, and matching GitHub status before closing the Browser family.
 
@@ -40,12 +40,12 @@ A row closes only when its bounded change is accepted, synced where applicable, 
 
 ## 7. Complete Audiobookshelf Podcasts
 
-- [ ] 7.1 After separately authorized exploration, accept and archive one bounded Audiobookshelf Podcast ownership change; verify the show-list controls persist across frames, the active control owns show position, ordinary refresh and responsive handoff follow the shared contract, row hits use retained geometry without parent show-row maps, paint does not write position back, and episode filters/selection, images, and playback intents remain Podcast-owned.
+- [ ] 7.1 After separately authorized exploration, accept and archive one bounded Audiobookshelf Podcast ownership change; verify the show-list controls persist across frames, the active control owns show position, ordinary refresh and responsive handoff follow the shared contract, row hits use retained geometry without parent show-row maps, and paint does not write position back; episode filter/selection state, images, and playback intents remain Podcast-owned authority, and Podcast presentation is conformed to the Emby-derived canonical design with deviations repaired rather than preserved.
 - [ ] 7.2 Record the accepted change path, PR/commit, requirement-to-source trace, focused component/buffer/live-`Application::tick()` evidence, Normal/Wide human evidence or explicit waiver, spec-sync disposition, and matching GitHub status before closing Audiobookshelf Podcasts.
 
 ## 8. Complete Audiobookshelf Books
 
-- [ ] 8.1 After separately authorized exploration, accept and archive one bounded Audiobookshelf Book ownership change; verify the book-list controls persist across frames, the active control owns book position, ordinary refresh and responsive handoff follow the shared contract, book-row hits use retained geometry without parent maps or paint writeback, and surname buckets, chapters, images, and absolute chapter seeking remain Book-owned.
+- [ ] 8.1 After separately authorized exploration, accept and archive one bounded Audiobookshelf Book ownership change; verify the book-list controls persist across frames, the active control owns book position, ordinary refresh and responsive handoff follow the shared contract, book-row hits use retained geometry without parent maps or paint writeback; surname buckets, chapter state, images, and absolute chapter-seek authority remain Book-owned, and Book presentation is conformed to the Emby-derived canonical design with deviations repaired rather than preserved.
 - [ ] 8.2 Resolve chapter-list geometry within the same exploration only if required by the applicable current specification; verify the accepted scope explicitly distinguishes canonical book-list ownership from legitimate provider-workspace chapter state rather than silently expanding the change.
 - [ ] 8.3 Record the accepted change path, PR/commit, requirement-to-source trace, focused component/buffer/live-`Application::tick()` evidence, Normal/Wide human evidence or explicit waiver, spec-sync disposition, and matching GitHub status before closing Audiobookshelf Books.
 
