@@ -27,6 +27,7 @@ use ratatui::widgets::Block;
 use ratatui::Frame;
 
 /// Narrow replacement keeps a bounded overview so chapter rows remain visible.
+pub(in crate::app::render) const BOOK_WIDE_OVERVIEW_ROWS: u16 = 4;
 pub(in crate::app::render) const BOOK_NARROW_OVERVIEW_ROWS: u16 = 4;
 
 /// The component-owned interaction values the book renderer needs, passed in
@@ -133,7 +134,8 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             wide_hero::LeftPaneFocus::Workspace(focused && interaction.chapter_selection.is_some()),
         )
         .expect("wide branch already confirmed wide_hero_presentation fits");
-        let hero_height = (plan.content_rows + 1).min(hero_content_area.height);
+        let hero_height = (book_hero_content_rows(&plan, BOOK_WIDE_OVERVIEW_ROWS) + 1)
+            .min(hero_content_area.height);
         let hero_area = Rect {
             height: hero_height,
             ..hero_content_area
@@ -557,7 +559,6 @@ fn book_hero_plan(
             image_height: 0,
             author_rows: 0,
             overview_rows: 0,
-            content_rows: HERO_TITLE_ROWS,
         };
     };
     let has_cover = images_enabled && book.cover_path.is_some();
@@ -589,8 +590,5 @@ fn book_hero_plan(
         has_image: has_cover,
         image_width,
         image_height,
-        content_rows: image_height
-            .saturating_add(1)
-            .max(HERO_TITLE_ROWS + 2 + author_rows + overview_rows),
     }
 }

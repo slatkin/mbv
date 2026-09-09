@@ -9,5 +9,4 @@ pub(in crate::app::render) struct BookHeroPlan {
     pub(in crate::app::render) image_height: u16,
     pub(in crate::app::render) author_rows: u16,
     pub(in crate::app::render) overview_rows: u16,
-    pub(in crate::app::render) content_rows: u16,
 }

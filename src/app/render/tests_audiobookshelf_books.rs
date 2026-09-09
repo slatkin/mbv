@@ -153,6 +153,28 @@ fn book_narrow_overview_cap_keeps_chapter_rows_below_hero() {
 }
 
 #[test]
+fn book_wide_overview_cap_keeps_chapter_hit_geometry() {
+    let mut state = book_catalog_state(1);
+    state.books[0].description = Some("A very long overview ".repeat(80));
+    let chapter = AudiobookshelfChapter {
+        id: 0,
+        start: 0.0,
+        end: 60.0,
+        title: "Chapter after wide overview".into(),
+    };
+    state.books[0].chapters = vec![chapter.clone()];
+    state
+        .detail_cache
+        .insert("book-0".into(), (vec![chapter], Vec::new()));
+    let mut component = AudiobookshelfBookComponent::new();
+    component.set_content(&state, false);
+    let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    term.draw(|f| component.view(f, f.area())).unwrap();
+
+    assert!(!component.geometry().chapter_rows.is_empty());
+}
+
+#[test]
 fn book_loading_cover_reserves_shared_series_image_slot() {
     let mut state = book_catalog_state(1);
     state.books[0].cover_path = Some("cover.jpg".into());
