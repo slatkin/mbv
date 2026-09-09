@@ -25,10 +25,11 @@ completed-frame hit map, or a global coordinate router.
 The mounted destination parent owns gesture recognition for its surface. The
 parent SHALL decide whether an event is its own by testing the event coordinates
 against the non-list chrome geometry it painted on its most recent render —
-pills, scope buttons, the seek bar and transport, overlay and popup regions. For
-a canonical media-list row the parent SHALL delegate point resolution to the
-embedded list control, passing the list rectangle the parent itself painted, and
-SHALL NOT re-derive row coordinates itself. The parent SHALL emit a `Msg` for a
+pills, scope buttons, the seek bar and transport, overlay and popup regions. For a canonical media-list row whose embedded control has a completed current-frame
+retained result, the parent SHALL delegate point resolution by passing only the
+point to that result, and SHALL NOT re-derive row coordinates itself. An
+unmigrated destination MAY continue to pass its painted list rectangle through its
+existing compatibility path until its own retained-result migration. The parent SHALL emit a `Msg` for a
 mouse event only when it resolves to a region it painted or to a row the embedded
 control claims; otherwise it SHALL ignore the event.
 
@@ -133,9 +134,10 @@ Each mounted destination parent SHALL recognize click, double-click, right-click
 wheel, and drag gestures from the raw mouse events it receives, using a private
 `MouseGestureState`. The double-click interval and wheel throttle SHALL NOT be
 held as shell-global state keyed by screen position. An embedded canonical
-media-list control SHALL NOT recognize gestures — it only resolves a point
-within the list rectangle its parent painted to a stable target, and the parent
-delegates list-point resolution to it.
+media-list control SHALL NOT recognize gestures — it only resolves a point from
+its completed current-frame retained geometry to a stable target, and the parent
+delegates list-point resolution to it. An unmigrated destination MAY retain its
+existing painted-rectangle compatibility path until its own migration.
 
 A drag SHALL be recognized as a left-button press that arms a drag anchor at the
 press position, followed by pointer motion while the button is held, and ended
@@ -150,9 +152,10 @@ Drag anchor state SHALL be private to the recognizing parent, in the same way
 the double-click interval and wheel throttle are. A parent that does not
 interpret drag SHALL be unaffected by the gesture's existence.
 
-Hit geometry for a uniform row flow SHALL be resolved from the flow the control
-already exports to its painter, not from a separately stored per-row rectangle
-list. A stored rectangle registry is for irregular painted controls — pills,
+Hit geometry for a migrated uniform row flow SHALL be resolved from the completed
+current-frame result the control retains, not from a separately stored per-row
+rectangle list. An unmigrated destination MAY retain its existing compatibility
+flow until its own migration. A stored rectangle registry is for irregular painted controls — pills,
 scope buttons, transport controls, group selectors, overlay rows — whose owner
 populates it in the same code that paints those rectangles.
 
@@ -277,7 +280,10 @@ Every scrollable interactive surface SHALL interpret an accepted wheel gesture a
 
 The component that owns the pointed list, selection, or text viewport SHALL apply the step locally. It SHALL send a message beyond that component only when the resolved result requires an existing shell-owned effect or persistence operation; the shell SHALL NOT recompute the wheel step or re-resolve the pointed surface.
 
-A canonical media-list surface SHALL accept a wheel gesture only when its embedded list control claims the pointed list region. A text viewport or irregular-row surface that competes with another eligible surface SHALL accept a wheel gesture only when the point is inside geometry published by its own painter. A sole eligible focused overlay SHALL accept its wheel gesture independently of pointer position; its local boundary clamp SHALL retain valid state.
+A migrated canonical media-list surface SHALL accept a wheel gesture only when its
+embedded list control claims the pointed list region from its completed current-frame
+retained result. An unmigrated destination MAY retain its existing compatibility
+claim path until its own migration. A text viewport or irregular-row surface that competes with another eligible surface SHALL accept a wheel gesture only when the point is inside geometry published by its own painter. A sole eligible focused overlay SHALL accept its wheel gesture independently of pointer position; its local boundary clamp SHALL retain valid state.
 
 #### Scenario: Wheel moves a canonical list by one row
 
@@ -352,6 +358,7 @@ Focused verification names and geometry evidence are maintained with the rows in
 pointed-region rejection, while focused-sidebar proofs cover down/up direction,
 boundaries, and an off-panel pointer. These records do not add a second
 interaction policy or require a shell wheel handler.
+
 ### Requirement: The Queue panel boundary supports precise column resizing
 
 When both panels are visible, the single full-height terminal column at the outer right edge of the Queue-side column SHALL be a mouse resize target. This is the root Queue column's trailing edge next to the Library panel, not the inset queue frame or list edge. Pressing the left button on that column and dragging horizontally SHALL resize the queue column live at one-column precision. The resulting width SHALL place the grabbed edge at the pointer column, subject to the same minimum and maximum bounds as keyboard resizing.
