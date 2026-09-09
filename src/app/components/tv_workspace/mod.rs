@@ -282,7 +282,12 @@ impl TvWorkspaceComponent {
     }
 
     pub(in crate::app) fn painted_viewport_height(&self) -> usize {
-        self.viewport_height
+        let painted = self.layout.tv_wide_list_area.height as usize;
+        if painted == 0 {
+            self.viewport_height
+        } else {
+            painted
+        }
     }
 
     /// Whether letter pills are enabled in the pushed context.

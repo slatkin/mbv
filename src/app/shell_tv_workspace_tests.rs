@@ -369,6 +369,11 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
         model.handle_tv_request(request);
     }
     model.sync_active_destination();
+    let mut initial_wide_terminal = Terminal::new(TestBackend::new(160, 40)).unwrap();
+    initial_wide_terminal
+        .draw(|frame| model.draw_frame(frame, false, false))
+        .unwrap();
+    model.sync_mounted_surfaces();
 
     let (wide_anchor, _wide_scroll) = model
         .application
@@ -419,6 +424,10 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     assert_eq!(
         narrow_anchor.selected_target, wide_anchor.selected_target,
         "wide→narrow hand-off must preserve the selected series target"
+    );
+    assert_eq!(
+        narrow_anchor.selected_row_offset, wide_anchor.selected_row_offset,
+        "wide→narrow hand-off must preserve the selected row offset"
     );
 
     // Narrow: move the browser selection back to row 0 (movie-focused).
@@ -481,6 +490,10 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     assert_eq!(
         final_wide_anchor.selected_target, narrow_return_anchor.selected_target,
         "narrow→wide hand-off must preserve the selected series target"
+    );
+    assert_eq!(
+        final_wide_anchor.selected_row_offset, narrow_return_anchor.selected_row_offset,
+        "narrow→wide hand-off must preserve the selected row offset"
     );
 }
 
