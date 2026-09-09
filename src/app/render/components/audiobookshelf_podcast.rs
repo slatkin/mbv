@@ -232,6 +232,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         geometry,
     );
     if state.shows.is_empty() {
+        wide_show_list.invalidate_paint();
         render_placeholder(frame, right_panel, "No podcast shows");
         return image_paint;
     }

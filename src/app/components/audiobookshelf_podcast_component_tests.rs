@@ -369,6 +369,71 @@ fn abs_podcast_wheel_moves_one_visual_row_and_ignores_outside_list() {
 }
 
 #[test]
+fn abs_podcast_placeholder_does_not_claim_stale_wheel_area_at_any_breakpoint() {
+    let library = AudiobookshelfLibrary {
+        id: "abs-podcasts".into(),
+        name: "ABS Podcasts".into(),
+        media_type: "podcast".into(),
+    };
+    let mut shows = AudiobookshelfBrowseState::new(library.clone());
+    shows.append_page(
+        0,
+        2,
+        2,
+        vec![
+            AudiobookshelfShow {
+                library_item_id: "show-a".into(),
+                title: "Show A".into(),
+                author: None,
+                description: None,
+                cover_path: None,
+            },
+            AudiobookshelfShow {
+                library_item_id: "show-b".into(),
+                title: "Show B".into(),
+                author: None,
+                description: None,
+                cover_path: None,
+            },
+        ],
+    );
+    let empty = AudiobookshelfBrowseState::new(library);
+
+    for (width, height) in [(100, 40), (60, 40)] {
+        let mut component = AudiobookshelfPodcastComponent::new();
+        component.set_content(&shows, false);
+        component.set_focused(true);
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, Rect::new(0, 0, width, height)))
+            .unwrap();
+        let stale_area = component.geometry().list_area;
+        assert!(!stale_area.is_empty());
+
+        component.set_content(&empty, false);
+        terminal
+            .draw(|frame| component.view(frame, Rect::new(0, 0, width, height)))
+            .unwrap();
+        let cursor = component.cursor();
+        let message = component.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: stale_area.x,
+            row: stale_area.y,
+            modifiers: KeyModifiers::NONE,
+        }));
+
+        assert_eq!(
+            message, None,
+            "placeholder claimed a stale area at width {width}"
+        );
+        assert_eq!(
+            component.cursor(),
+            cursor,
+            "placeholder changed cursor at width {width}"
+        );
+    }
+}
+
 fn abs_podcast_row_mouse_selects_the_clicked_show_and_bucket_start() {
     let state = narrow_grid_component_state();
     let mut component = AudiobookshelfPodcastComponent::new();
