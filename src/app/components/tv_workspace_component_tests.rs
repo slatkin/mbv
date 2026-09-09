@@ -46,8 +46,8 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
     assert!(matches!(
         left,
         Some(Msg::Shell(ShellRequest::TvHitClick {
-            hit: TvHit::SeriesRow(1),
-        }))
+            hit: TvHit::SeriesRow(ref target),
+        })) if target == "id"
     ));
 
     let right = component.on(&Event::Mouse(MouseEvent {
@@ -59,9 +59,9 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
     assert!(matches!(
         right,
         Some(Msg::Shell(ShellRequest::TvHitContextMenu {
-            hit: TvHit::SeriesRow(1),
+            hit: TvHit::SeriesRow(ref target),
             ..
-        }))
+        })) if target == "id"
     ));
 }
 

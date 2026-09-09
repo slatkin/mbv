@@ -321,6 +321,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     } else {
         // Legacy rail parity (`item_cell_spans`): the selected row takes the
         // resting surface so it reads against the focused green panel body.
+        media_list.set_geometry(paint_area, list_area);
         let paint = super::media_list::render_wide_media_list(
             f,
             paint_area,
@@ -329,6 +330,13 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
             right_focused,
             palette::list_selected_row_bg(),
             None,
+        );
+        let offset = paint.row_geometry.offset();
+        media_list.finish_view(
+            paint_area,
+            list_area,
+            paint.row_geometry,
+            paint.selected_row_rect,
         );
         layout.left_item_rows = paint.left_item_rows;
         layout.left_row_map = paint.left_row_map;
@@ -342,7 +350,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
             ))
         });
         layout.left_sorted_indices = order;
-        paint.row_geometry.offset()
+        offset
     };
     (final_scroll, image_paint)
 }
@@ -553,7 +561,8 @@ fn render_tv_series_selection(
         width: detail_panel.width,
         ..episode_list_area
     };
-    super::media_list::render_wide_media_list(
+    episodes.set_geometry(paint_area, episode_list_area);
+    let paint = super::media_list::render_wide_media_list(
         f,
         paint_area,
         episode_list_area,
@@ -561,6 +570,12 @@ fn render_tv_series_selection(
         focused,
         palette::resolve_surface_focus(focused),
         None,
+    );
+    episodes.finish_view(
+        paint_area,
+        episode_list_area,
+        paint.row_geometry,
+        paint.selected_row_rect,
     );
     (true, image_paint)
 }

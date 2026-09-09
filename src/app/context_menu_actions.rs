@@ -669,7 +669,19 @@ impl App {
         home_cw_selected: bool,
         cw_item: Option<EmbyItem>,
     ) {
-        let Some(mut menu) = self.build_context_menu(home_cw_selected, cw_item) else {
+        self.open_context_menu_at_for_item(x, y, home_cw_selected, cw_item, None);
+    }
+
+    pub(super) fn open_context_menu_at_for_item(
+        &mut self,
+        x: u16,
+        y: u16,
+        home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
+        tracked_item: Option<EmbyItem>,
+    ) {
+        let Some(mut menu) = self.build_context_menu_for(tracked_item, home_cw_selected, cw_item)
+        else {
             return;
         };
         menu.anchor = ContextMenuAnchor::Pointer { x, y };

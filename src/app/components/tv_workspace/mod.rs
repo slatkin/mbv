@@ -41,7 +41,6 @@ enum Pane {
 pub struct TvWorkspaceComponent {
     context: TvWideRenderCtx,
     list: WideMediaList<String>,
-    cursor: usize,
     season_cursor: usize,
     /// Embedded canonical control for the recessed episode media-list box
     /// (task 4.2d): owns cursor/scroll/hit-resolution for the current
@@ -63,8 +62,8 @@ pub struct TvWorkspaceComponent {
     /// Irregular Episodes-pane chrome — season pills only (design.md D6),
     /// repopulated in `view()` from the geometry the wide-TV painter just
     /// produced. Both panes now have an embedded canonical control, so row
-    /// identity comes from `WideMediaList::resolve_ordinal_at_y` instead; the
-    /// blank Episodes-pane fallback is resolved directly against
+    /// identity comes from each control's retained current-frame geometry;
+    /// the blank Episodes-pane fallback is resolved directly against
     /// `tv_wide_left_area` in `resolve_hit`.
     tv_chrome: HitRegions<TvHit>,
     /// The embedded Inline Search control (design.md D1). See
@@ -110,7 +109,6 @@ impl TvWorkspaceComponent {
         Self {
             context,
             list: WideMediaList::new(),
-            cursor: 0,
             season_cursor: 0,
             episodes: WideMediaList::new(),
             pane: Pane::Series,
@@ -207,7 +205,6 @@ impl TvWorkspaceComponent {
         let focused = self.context.focused;
         self.context = context;
         self.context.focused = focused;
-        self.cursor = self.list.cursor();
         let season_count = self
             .context
             .series_detail
@@ -310,9 +307,7 @@ impl TvWorkspaceComponent {
         &mut self,
         anchor: super::media_list::ViewportAnchor<String>,
     ) {
-        if self.list.select_target(&anchor.selected_target) {
-            self.cursor = self.list.cursor();
-        }
+        self.list.select_target(&anchor.selected_target);
         self.pending_anchor = Some(anchor);
     }
 
@@ -412,7 +407,7 @@ impl TvWorkspaceComponent {
             MouseGesture::Scroll { at, delta } => {
                 // The series rail is the only scrollable TV surface. Its
                 // canonical control claims the painted region.
-                if !self.list.claims_point(self.layout.left_area, at) {
+                if !self.list.claims_current_point(at) {
                     return None;
                 }
                 self.move_rows(delta);
@@ -423,12 +418,12 @@ impl TvWorkspaceComponent {
             }
             MouseGesture::Click(at) => {
                 let hit = self.resolve_hit(at)?;
-                self.apply_pane_click(hit);
+                self.apply_pane_click(hit.clone());
                 Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
             }
             MouseGesture::DoubleClick(at) => {
                 let hit = self.resolve_hit(at)?;
-                self.apply_pane_click(hit);
+                self.apply_pane_click(hit.clone());
                 Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
             }
             MouseGesture::RightClick(at) => {
@@ -455,13 +450,13 @@ impl TvWorkspaceComponent {
                 self.refresh_episode_rows();
                 self.episodes.select_first();
             }
-            TvHit::EpisodeRow(index) => {
+            TvHit::EpisodeRow(target) => {
                 self.pane = Pane::Episodes;
-                self.episodes.select_index(index);
+                self.episodes.select_target(&target);
             }
-            TvHit::SeriesRow(index) => {
+            TvHit::SeriesRow(target) => {
                 self.pane = Pane::Series;
-                self.cursor = index;
+                self.list.select_target(&target);
             }
             TvHit::EpisodesPane => {}
         }
@@ -471,34 +466,22 @@ impl TvWorkspaceComponent {
     /// component's own painted geometry. `None` = outside every TV rect
     /// (the clicks that remain unhandled).
     fn resolve_hit(&self, position: Position) -> Option<TvHit> {
-        if let Some(&hit) = self.tv_chrome.resolve(position) {
+        if let Some(hit) = self.tv_chrome.resolve(position).cloned() {
             return Some(hit);
         }
-        if self.layout.tv_wide_right_area.contains(position) {
-            // Resolve the series row under the click from the embedded
-            // canonical control (design.md D6). A header/gap cell (or a click
-            // in the pane outside the list rows) returns the current series
-            // cursor, matching the legacy blank-space click no-op. A click in
-            // the right pane above the list clamps to the first row, matching
-            // the legacy `saturating_sub` row keying.
-            let list_area = self.layout.tv_wide_list_area;
-            let target = self
+        if self.list.claims_current_point(position) {
+            return self
                 .list
-                .resolve_ordinal_at_y(list_area, position.y.max(list_area.y))
-                .unwrap_or(self.cursor);
-            return Some(TvHit::SeriesRow(target));
+                .resolve_current_point(position)
+                .cloned()
+                .map(TvHit::SeriesRow);
         }
-        // Episode rows resolve the same way against the embedded episode
-        // control (design.md D6) before falling back to the blank
-        // Episodes-pane no-op.
-        let episode_list_area = self.layout.tv_wide_episode_list_area;
-        if episode_list_area.contains(position) {
-            if let Some(target) = self
+        if self.episodes.claims_current_point(position) {
+            return self
                 .episodes
-                .resolve_ordinal_at_y(episode_list_area, position.y)
-            {
-                return Some(TvHit::EpisodeRow(target));
-            }
+                .resolve_current_point(position)
+                .cloned()
+                .map(TvHit::EpisodeRow);
         }
         if self.layout.tv_wide_left_area.contains(position) {
             return Some(TvHit::EpisodesPane);
@@ -559,7 +542,6 @@ impl Component for TvWorkspaceComponent {
         if !self.inline_search.is_active() {
             self.list.set_scroll(scroll);
         }
-        self.cursor = self.list.cursor();
         self.image_paint = image_paint;
 
         // Adopt the season-pill chrome the wide-TV painter just produced into

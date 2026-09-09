@@ -28,7 +28,6 @@ impl TvWorkspaceComponent {
             return;
         }
         self.list.move_selection(rows);
-        self.cursor = self.list.cursor();
     }
 
     pub(super) fn jump_cursor(&mut self, to_end: bool) {
@@ -37,6 +36,5 @@ impl TvWorkspaceComponent {
         } else {
             self.list.select_first();
         }
-        self.cursor = self.list.cursor();
     }
 }

@@ -172,31 +172,27 @@ impl App {
         self.open_context_menu(home_cw_selected, None);
     }
 
-    pub(super) fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
+    pub(super) fn handle_mouse_single_click_tv(&mut self, _lib_idx: usize, hit: TvHit) {
         match hit {
             TvHit::SeasonTab(_) | TvHit::EpisodeRow(_) => {
                 self.set_panel_focus(super::PanelFocus::Library);
             }
-            TvHit::SeriesRow(target) => {
-                // The component resolved the series under the click; apply it
-                // to `App`'s library cursor before any further pane effect.
-                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                    level.set_resting_cursor(target);
-                }
-            }
+            TvHit::SeriesRow(_) => {}
             TvHit::EpisodesPane => {}
         }
     }
 
     pub(super) fn handle_mouse_double_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
-        if let TvHit::SeriesRow(target) = hit {
-            // Apply the clicked series before activating (the click may land
-            // on a series other than the focused one).
-            if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                level.set_resting_cursor(target);
+        if let TvHit::SeriesRow(target) = &hit {
+            let item = self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .and_then(|level| level.items.iter().find(|item| item.id == *target))
+                .cloned();
+            if let Some(item) = item {
+                self.activate_selected_series_item(lib_idx, &item);
             }
-        }
-        if matches!(hit, TvHit::EpisodeRow(_) | TvHit::SeriesRow(_)) {
+        } else if matches!(hit, TvHit::EpisodeRow(_)) {
             self.activate_selected_series(lib_idx);
         }
     }
@@ -208,10 +204,19 @@ impl App {
         col: u16,
         row: u16,
     ) {
+        let tracked_item = if let TvHit::SeriesRow(target) = &hit {
+            self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .and_then(|level| level.items.iter().find(|item| item.id == *target))
+                .cloned()
+        } else {
+            None
+        };
         self.handle_mouse_single_click_tv(lib_idx, hit);
         // TV-workspace right-click is never a Home-tab menu, so the
         // Continue-Watching-selected fact and the CW item are harmless
         // `false`/`None`.
-        self.open_context_menu_at(col, row, false, None);
+        self.open_context_menu_at_for_item(col, row, false, None, tracked_item);
     }
 }
