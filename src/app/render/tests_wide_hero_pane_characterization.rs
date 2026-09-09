@@ -204,7 +204,7 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
     let entries = vec![feed_entry("entry-1", "Entry One")];
     let mut layout = LayoutMain::default();
     let mut canonical_list: WideMediaList<String> = WideMediaList::new();
-    let inline_list: InlineMediaBrowser<String> = InlineMediaBrowser::new();
+    let mut inline_list: InlineMediaBrowser<String> = InlineMediaBrowser::new();
     let area = wide_area();
     let terminal = direct_terminal(|f| {
         render_feeds_content(
@@ -222,7 +222,7 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
                 images_enabled: true,
             },
             &mut canonical_list,
-            &inline_list,
+            &mut inline_list,
         );
     });
     let hero = layout.hero_area;
@@ -252,7 +252,7 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
                 images_enabled: true,
             },
             &mut focused_list,
-            &inline_list,
+            &mut inline_list,
         );
     });
     let focused_hero = focused_layout.hero_area;

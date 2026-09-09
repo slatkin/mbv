@@ -294,6 +294,9 @@ fn unfocused_component_handles_mouse_input() {
         kind: MouseEventKind::Down(MouseButton::Left),
         modifiers: KeyModifiers::NONE,
     }));
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
+        .unwrap();
     component.on(&Event::<UserEvent>::Mouse(MouseEvent {
         column: component.layout().left_area.x,
         row: component.layout().left_area.y,
@@ -464,7 +467,7 @@ fn changing_group_invalidates_previous_row_geometry() {
     terminal
         .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
         .unwrap();
-    assert!(!component.layout().left_item_rows.is_empty());
+    assert!(component.layout().left_item_rows.is_empty());
 
     component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
         code: Key::Char(']'),
@@ -487,14 +490,7 @@ fn wide_feeds_keep_the_list_out_of_the_inline_hero_flow() {
         .draw(|frame| wide.view(frame, Rect::new(0, 0, crate::app::TWO_COLUMN_THRESHOLD, 20)))
         .unwrap();
     assert_eq!(wide.layout().inline_hero_area, Rect::default());
-    let wide_item_rows = wide
-        .layout()
-        .left_item_rows
-        .iter()
-        .filter(|row| !row.is_empty())
-        .cloned()
-        .collect::<Vec<_>>();
-    assert_eq!(wide_item_rows, vec![vec![0], vec![1]]);
+    assert!(wide.layout().selected_item_rect.is_some());
 
     let mut narrow = component();
     let width = crate::app::TWO_COLUMN_THRESHOLD - 1;
@@ -603,16 +599,8 @@ fn structural_rows_are_non_selectable_and_cursor_movement_skips_them() {
     terminal
         .draw(|frame| component.view(frame, Rect::new(0, 0, crate::app::TWO_COLUMN_THRESHOLD, 30)))
         .unwrap();
-    let item_rows = &component.layout().left_item_rows;
-    assert_eq!(
-        item_rows.iter().filter(|row| !row.is_empty()).count(),
-        3,
-        "three selectable entries: {item_rows:?}"
-    );
-    assert!(
-        item_rows.len() > 3,
-        "structural rows occupy display rows without a selectable index: {item_rows:?}"
-    );
+    assert_eq!(component.cursor(), 0);
+    assert!(component.layout().selected_item_rect.is_some());
 }
 
 #[test]
@@ -647,11 +635,7 @@ fn breakpoint_flip_carries_one_viewport_anchor() {
         .draw(|frame| component.view(frame, Rect::new(0, 0, narrow, 10)))
         .unwrap();
     assert_eq!(component.cursor(), 15);
-    assert!(
-        component.layout().left_row_map.contains(&Some(15)),
-        "selected entry stays visible after the flip: {:?}",
-        component.layout().left_row_map
-    );
+    assert!(component.layout().selected_item_rect.is_some());
 }
 
 /// Task 4.1/4.5: a click on a list row resolves through the active canonical
@@ -724,16 +708,23 @@ fn feeds_mouse_double_click_plays_the_resolved_entry() {
     for row in (list.y..list.y + list.height).rev() {
         component.reset_mouse_gestures_for_test();
         let mut played = None;
-        for _ in 0..2 {
-            let msg = component.on(&Event::<UserEvent>::Mouse(MouseEvent {
-                kind: MouseEventKind::Down(MouseButton::Left),
-                column: list.x,
-                row,
-                modifiers: KeyModifiers::NONE,
-            }));
-            if let Some(Msg::Shell(ShellRequest::FeedsPlay(Some(entry)))) = msg {
-                played = Some(entry);
-            }
+        let _ = component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: list.x,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }));
+        terminal
+            .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
+            .unwrap();
+        let msg = component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: list.x,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }));
+        if let Some(Msg::Shell(ShellRequest::FeedsPlay(Some(entry)))) = msg {
+            played = Some(entry);
         }
         if let Some(entry) = played {
             assert_eq!(entry.guid, "Second");

@@ -97,17 +97,13 @@ fn wide_feeds_selected_row_punches_through_to_the_library_backdrop() {
         let terminal = terminal_for(&mut component, 120, 30);
         let layout = component.layout();
         let buffer = terminal.backend().buffer();
-        let row_for = |target: usize| {
-            layout.left_area.y
-                + layout
-                    .left_row_map
-                    .iter()
-                    .position(|item| item == &Some(target))
-                    .expect("row present") as u16
-        };
+        let selected_row = layout
+            .selected_item_rect
+            .expect("selected row retained by active list")
+            .y;
         (
-            buffer[(layout.left_area.x, row_for(0))].bg,
-            buffer[(layout.left_area.x, row_for(1))].bg,
+            buffer[(layout.left_area.x, selected_row)].bg,
+            buffer[(layout.left_area.x, selected_row + 1)].bg,
         )
     }
 
@@ -280,7 +276,7 @@ fn feeds_pill_row_and_targets_are_characterized_end_to_end() {
             terminal,
             layout,
             panel,
-            1,
+            2,
             ratatui::style::Color::Reset,
             &[0, 1],
             &["⌘", "All", "Test Feed"],

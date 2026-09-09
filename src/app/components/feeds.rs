@@ -49,9 +49,6 @@ pub struct FeedsComponent {
     /// inline Narrow). Drives the single `ViewportAnchor` handoff on a
     /// breakpoint flip and which control `cursor()` reads.
     wide: bool,
-    /// The scroll offset the painter resolved this frame — observability only
-    /// (characterization tests), never fed back into the control.
-    painted_offset: usize,
     loading: bool,
     images_enabled: bool,
     focused: bool,
@@ -74,7 +71,6 @@ impl FeedsComponent {
             watched_filter: WatchedFilter::default(),
             selected_group: 0,
             wide: false,
-            painted_offset: 0,
             loading: false,
             images_enabled: true,
             focused: false,
@@ -142,7 +138,11 @@ impl FeedsComponent {
     }
 
     pub(in crate::app) fn scroll(&self) -> usize {
-        self.painted_offset
+        if self.wide {
+            self.canonical_list.scroll()
+        } else {
+            self.inline_list.scroll()
+        }
     }
 
     pub(in crate::app) fn visible_titles(&self) -> Vec<&str> {
@@ -168,10 +168,6 @@ impl FeedsComponent {
     }
 
     fn rebuild_visible_entries(&mut self) {
-        // Navigation uses maps produced by the previous render; invalidate
-        // them whenever filtering/group content changes.
-        self.layout.left_item_rows.clear();
-        self.layout.left_row_map.clear();
         let source = if self.selected_group == 0 {
             &self.all_entries
         } else {
@@ -211,6 +207,15 @@ impl FeedsComponent {
                         kind: MediaKind::Media,
                         semantic_state: if entry.played {
                             MediaSemanticState::Played
+                        } else if entry.position_ticks > 0 {
+                            let progress = entry
+                                .duration_ticks
+                                .filter(|duration| *duration > 0)
+                                .map(|duration| {
+                                    ((entry.position_ticks.max(0) as u64 * 100) / duration).min(100)
+                                        as u16
+                                });
+                            MediaSemanticState::active(progress)
                         } else {
                             MediaSemanticState::Ordinary
                         },
@@ -222,27 +227,33 @@ impl FeedsComponent {
         self.inline_list.set_content(rows);
     }
 
-    /// Park the selection at the first entry on both controls (a discrete
-    /// group/filter change; there is no per-group cursor cache).
+    /// Park the active control at the first entry after a discrete
+    /// group/filter change; the inactive control is only a handoff target.
     fn reset_selection(&mut self) {
-        self.canonical_list.select_first();
-        self.inline_list.select_first();
-        self.painted_offset = 0;
+        if self.wide {
+            self.canonical_list.select_first();
+        } else {
+            self.inline_list.select_first();
+        }
     }
 
-    /// Move the selection by `delta` selectable rows on both controls in
-    /// lockstep, so they stay cursor-aligned across a breakpoint flip.
+    /// Move only the active control.
     fn move_selection(&mut self, delta: i64) {
-        self.canonical_list.move_selection(delta);
-        self.inline_list.move_selection(delta);
+        if self.wide {
+            self.canonical_list.move_selection(delta);
+        } else {
+            self.inline_list.move_selection(delta);
+        }
     }
 
-    /// Select the row carrying `target` (a stable guid) on both controls, so
-    /// they stay cursor-aligned across a breakpoint flip.
+    /// Select only on the active control.
     fn select_target(&mut self, target: &str) {
         let target = target.to_string();
-        self.canonical_list.select_target(&target);
-        self.inline_list.select_target(&target);
+        if self.wide {
+            self.canonical_list.select_target(&target);
+        } else {
+            self.inline_list.select_target(&target);
+        }
     }
 
     /// Adopt `target` as the selected group and rebuild.
@@ -306,13 +317,19 @@ impl FeedsComponent {
                 None
             }
             Key::Home => {
-                self.canonical_list.select_first();
-                self.inline_list.select_first();
+                if self.wide {
+                    self.canonical_list.select_first();
+                } else {
+                    self.inline_list.select_first();
+                }
                 None
             }
             Key::End => {
-                self.canonical_list.select_last();
-                self.inline_list.select_last();
+                if self.wide {
+                    self.canonical_list.select_last();
+                } else {
+                    self.inline_list.select_last();
+                }
                 None
             }
             Key::Char('[') => {
@@ -351,9 +368,9 @@ impl FeedsComponent {
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
                 let claims = if self.wide {
-                    self.canonical_list.claims_point(self.layout.left_area, at)
+                    self.canonical_list.claims_current_point(at)
                 } else {
-                    self.inline_list.claims_point(self.layout.left_area, at)
+                    self.inline_list.claims_current_point(at)
                 };
                 if !claims {
                     return None;
@@ -396,15 +413,16 @@ impl FeedsComponent {
     /// control that painted the active list (design.md D6).
     fn resolve_row_id(&self, at: Position) -> Option<String> {
         if self.wide {
-            return self
-                .canonical_list
-                .resolve_point(self.layout.left_area, at)
-                .cloned();
+            return self.canonical_list.resolve_current_point(at).cloned();
         }
-        let detail_rows = self.layout.inline_hero_area.height as usize;
-        self.inline_list
-            .resolve_point(self.layout.left_area, detail_rows, at)
-            .cloned()
+        if self
+            .inline_list
+            .current_detail_rect()
+            .is_some_and(|detail| detail.contains(at))
+        {
+            return self.inline_list.current_selected_target().cloned();
+        }
+        self.inline_list.resolve_current_point(at).cloned()
     }
 
     /// Test seam: reset the private gesture recognizer so a synchronous test
@@ -450,7 +468,7 @@ impl Component for FeedsComponent {
 
         let mut layout = LayoutMain::default();
         let selected_entry = self.visible_entries.get(self.cursor()).cloned();
-        let offset = render_feeds_content(
+        render_feeds_content(
             frame,
             area,
             self.focused,
@@ -465,9 +483,8 @@ impl Component for FeedsComponent {
                 images_enabled: self.images_enabled,
             },
             &mut self.canonical_list,
-            &self.inline_list,
+            &mut self.inline_list,
         );
-        self.painted_offset = offset;
         self.layout = layout;
     }
 
