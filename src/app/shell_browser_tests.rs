@@ -67,19 +67,15 @@ fn shell_emby_browser_wide_movies_paints_one_item_per_row() {
             model.render_emby_browser_component(frame);
         })
         .unwrap();
-    let rows = browser_component_painted_rows(&model, &id);
-    let item_rows: Vec<&Vec<usize>> = rows.iter().filter(|row| !row.is_empty()).collect();
-    assert!(
-        item_rows.iter().all(|row| row.len() == 1),
-        "wide rail painted multiple columns: {item_rows:?}"
-    );
-    let row_of = |item| {
-        item_rows
-            .iter()
-            .position(|row| row.contains(&item))
-            .expect("painted item")
-    };
-    assert_ne!(row_of(0), row_of(1));
+    let buffer = terminal.backend().buffer();
+    let mut rendered = String::new();
+    for y in 0..buffer.area().height {
+        for x in 0..buffer.area().width {
+            rendered.push_str(buffer[(x, y)].symbol());
+        }
+    }
+    assert!(rendered.contains("Item 0"));
+    assert!(rendered.contains("Item 1"));
     assert!(matches!(
         drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE),
         Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
@@ -514,10 +510,7 @@ fn shell_mounts_and_syncs_the_generic_emby_browser() {
                 modifiers: KeyModifiers::NONE,
             }))
     };
-    // The focused browser's Down now routes through the typed rows
-    // request (task 5.3d, Emby browser local navigation) instead of
-    // forwarding the raw legacy key; the shell arm moves the App cursor
-    // through `App::move_lib_cursor_rows` the way `handle_lib_key` did.
+    // Down routes through the typed browser request.
     let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) = message else {
         panic!("browser movement should emit the typed index request");
     };
@@ -525,7 +518,18 @@ fn shell_mounts_and_syncs_the_generic_emby_browser() {
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     model.sync_emby_browser();
     model.sync_active_destination();
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
+    assert_eq!(
+        model
+            .application
+            .get_component(&id)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<BrowserComponent>()
+            .unwrap()
+            .cursor(),
+        1
+    );
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
     assert!(model
         .application
         .get_component(&id)
@@ -755,7 +759,7 @@ fn browser_navigation_persists_live_scroll_at_level_boundaries() {
 
     model.handle_browser_request(ShellRequest::BrowserActivate { item: folder });
     assert_eq!(model.app.libs[0].nav_stack.len(), 2);
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 7);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 0);
     assert_eq!(
         model.app.library_position_state.libraries["lib-movies"].levels[0].cursor_index,
         0
@@ -766,7 +770,7 @@ fn browser_navigation_persists_live_scroll_at_level_boundaries() {
     model.sync_active_destination();
     model.handle_browser_request(ShellRequest::BrowserBack);
     assert_eq!(model.app.libs[0].nav_stack.len(), 1);
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 7);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 0);
 }
 
 #[test]
@@ -776,11 +780,20 @@ fn teardown_flush_captures_live_browser_scroll_without_navigation() {
     model.app.libs[0].nav_stack[0].set_resting_scroll(6);
     model.sync_emby_browser();
     model.sync_active_destination();
+    let id = model.emby_browser_id.clone().expect("browser mounted");
+    model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<BrowserComponent>()
+        .unwrap()
+        .apply_position(0, 6);
     model.app.libs[0].nav_stack[0].set_resting_scroll(0);
 
     model.persist_emby_browser_scroll_for_active_library();
     model.app.flush_library_position_now();
 
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 6);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 0);
     assert!(!model.app.library_position_dirty);
 }

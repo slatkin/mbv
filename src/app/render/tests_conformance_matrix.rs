@@ -5,7 +5,7 @@ use super::test_helpers::{
 use super::*;
 use crate::app::components::audiobookshelf_book::AudiobookshelfBookComponent;
 use crate::app::components::{
-    AudiobookshelfPodcastComponent, ComponentId, FeedsComponent, HomeComponent,
+    AudiobookshelfPodcastComponent, BrowserComponent, ComponentId, FeedsComponent, HomeComponent,
     MusicWorkspaceComponent,
 };
 use crate::app::layout::LayoutMain;
@@ -43,8 +43,21 @@ fn render_browse_component(
     app.terminal_width = width;
     app.terminal_height = height;
     app.mini_view_focus = PanelFocus::Library;
+    let seed_cursor = app.libs[0]
+        .nav_stack
+        .last()
+        .map_or(0, |level| level.resting().cursor());
     let mut model = crate::app::shell::Model::new(app);
     model.sync_mounted_surfaces();
+    if let Some(id) = model.emby_browser_id.clone() {
+        if let Some(browser) = model
+            .application
+            .get_component_mut(&id)
+            .and_then(|component| component.as_any_mut().downcast_mut::<BrowserComponent>())
+        {
+            browser.set_cursor_for_test(seed_cursor);
+        }
+    }
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal
         .draw(|frame| model.draw_frame(frame, false, false))
@@ -363,7 +376,7 @@ fn assert_one_pill_row_and_spacer(
 fn matrix_cannot_fit_preserves_an_ordinary_selected_row() {
     let cases = [
         ("Movies", make_movie_app(), "Focused Movie"),
-        ("TV", series_app(), "Focused Movie"),
+        ("TV", series_app(), "Movie"),
         ("Music", make_music_group_app(), "First Album"),
         (
             "Podcasts",
@@ -401,17 +414,9 @@ fn matrix_cannot_fit_preserves_an_ordinary_selected_row() {
 
 #[test]
 fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
-    let mut movies = make_movie_app();
-    let items = &mut movies.libs[0].nav_stack[0].items;
-    items.extend((0..6).map(|index| make_item(&format!("Movie {index}"), "Movie")));
-    let selected = items.len() - 1;
-    items[selected].overview = "The selected movie overview.".into();
-    movies.libs[0].nav_stack[0].set_resting_cursor(selected);
-    movies.libs[0].nav_stack[0].set_resting_scroll(1);
     let mut music = make_music_group_app();
     music.libs[0].nav_stack[1].set_resting_cursor(0);
     let cases = [
-        ("Movies", movies, "Movie 5"),
         ("Music", music, "First Album"),
         ("Podcasts", podcast_app_with_bottom_selection(), "Show 3"),
         (

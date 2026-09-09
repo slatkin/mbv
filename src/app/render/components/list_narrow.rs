@@ -4,7 +4,9 @@
 
 use super::detail::compact_banner_image_cache_key;
 use crate::app::components::browser_narrow::{NarrowBrowseExtras, NarrowInlineHero};
-use crate::app::components::media_list::InlineMediaBrowser;
+use crate::app::components::media_list::{
+    InlineMediaBrowser, InlineMediaBrowserPaintPolicy, SelectedRowSurface,
+};
 use crate::app::images::series_image_cache_key;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::library_column_count;
@@ -148,29 +150,20 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         // The persistent InlineMediaBrowser is fed by BrowserComponent before
         // this painter runs. Its rows, selection, and scroll are authoritative;
         // this function only paints and exports the control's flow geometry.
-        let result = super::media_list::render_inline_media_browser(
+        super::media_list::render_inline_media_browser_component(
             f,
             list_area,
-            &*browser,
-            inline_hero_rows as usize,
-            focused,
-            // Legacy `item_cell_spans` parity: selected row on the resting
-            // surface, read against the focused panel body.
-            crate::app::palette::list_selected_row_bg(),
+            browser,
+            InlineMediaBrowserPaintPolicy::new(
+                focused,
+                SelectedRowSurface::ListBackdrop,
+                inline_hero_rows as usize,
+            ),
         );
-        layout.hero_area = result.hero_area.unwrap_or_default();
+        layout.hero_area = browser.current_detail_rect().unwrap_or_default();
         layout.inline_hero_area = layout.hero_area;
-        // Keep this one map as pre-#638 mouse compatibility. It is copied from
-        // the painter's replacement flow rather than rebuilt here.
-        layout.left_row_map = result
-            .row_geometry
-            .targets()
-            .skip(result.row_geometry.offset())
-            .take(list_area.height as usize)
-            .map(|target| target.copied())
-            .collect();
-        layout.selected_item_rect = result.row_geometry.selected_row_rect(list_area);
-        result.row_geometry.offset()
+        layout.selected_item_rect = browser.current_selected_row_rect();
+        browser.current_flow_offset().unwrap_or(0)
     } else {
         let row_ctx = ctx.rows(list_area, cols, focused, inline_hero_rows);
         if use_letter_groups {

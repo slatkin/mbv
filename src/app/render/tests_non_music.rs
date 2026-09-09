@@ -35,6 +35,7 @@ fn narrow_home_video_selected_item_retains_inline_detail() {
     app.libs[0].nav_stack[0].items[1].overview = "The selected home video overview.".into();
     app.libs[0].nav_stack[0].set_resting_cursor(1);
     let mut model = mounted_model_at(app, 70, 30);
+    set_browser_cursor_for_test(&mut model, 1);
     let output = draw_mounted_frame(&mut model, 70, 30);
     let layout = mounted_browser_layout(&model);
 

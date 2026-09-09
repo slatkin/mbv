@@ -41,30 +41,20 @@ pub(in crate::app) use content::{BrowserContent, BrowserIdentity};
 
 pub struct BrowserComponent {
     kind: BrowserKind,
-    /// Position-free content the shell pushed (task 3.7). The legacy
-    /// `LibraryListRenderCtx` is rebuilt on demand from this plus the
-    /// control-owned `cursor`/`scroll` at a single private site.
+    /// Position-free content pushed by the shell.
     context: BrowserContent,
-    /// The browse identity the last shell content push carried (task 3.7).
-    /// `push_emby_browser_content` re-seeds position through `apply_position`
-    /// only when this changes; within one identity (pagination, loading
-    /// completion, refresh, cursor echo) no position crosses the boundary.
+    /// Identity carried by the last shell content push; it gates re-anchoring.
     last_identity: Option<BrowserIdentity>,
-    // Legacy two-column Generic browse state. Canonical Movies/home-video
-    // surfaces keep selection and viewport exclusively in their controls.
+    // Legacy two-column Generic browse state.
     cursor: usize,
     scroll: usize,
     focused: bool,
     layout: LayoutMain,
-    /// Whether the component's own BrowserKey kind and painted geometry select
-    /// the Wide hero layout. The value is derived in `view()` rather than
-    /// projected from the App layout.
+    /// Whether the component's kind and painted geometry select Wide hero layout.
     wide_movies: bool,
-    /// Whether the wide layout's pill row is a home-video count label (vs. a
-    /// letter-range pill row). Fed by the shell from validated content.
+    /// Whether the wide layout's pill row is a home-video count label.
     wide_movies_home_video: bool,
-    /// Whether the wide layout shows the letter-range pill row. Fed by the
-    /// shell each draw (task 5.3d.17a).
+    /// Whether the wide layout shows the letter-range pill row.
     wide_movies_letter_pills: bool,
     /// Runtime terminal-capability flag (config-derived), set by the shell so
     /// the component can paint the hero text like every other surface.
