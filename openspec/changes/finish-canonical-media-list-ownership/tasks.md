@@ -2,7 +2,7 @@
 
 This planning-only ledger records campaign status. It does not authorize proposal creation or implementation. Before any pending destination row advances, the user must select that row for interactive exploration, confirm its scope, authorize one bounded proposal, and later issue a separate apply request.
 
-A row closes when its bounded change is merged plus reviewer-signed-off and both this ledger and GitHub issue #681 record the status. No per-requirement trace or live-evidence bundle is required. The Emby families (sections 2-5) complete before the skeleton families (sections 6-8). Non-grouped Music and the Emby podcast channel list are outside this campaign and are not ledger rows.
+A row closes when its bounded change is merged plus reviewer-signed-off and both this ledger and GitHub issue #681 record the status. No per-requirement trace or live-evidence bundle is required. The Emby families (sections 2-5) complete before the skeleton families (sections 6-8). Non-grouped Music is outside this campaign. The obsolete Emby podcast channel-list requirement has been removed; neither is a ledger row.
 
 ## 1. Establish the Corrected Baseline
 

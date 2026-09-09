@@ -10,7 +10,7 @@ of one another and a new screen inherits a known arrangement without being indiv
 
 ### Requirement: Each screen is assigned one wide arrangement
 
-Every hero-bearing right-panel browse surface SHALL use Wide hero for its wide presentation. This includes Home, Movies, TV shows, grouped Music, Emby podcasts, Emby home videos, Audiobookshelf podcasts, Audiobookshelf books, and Feeds. A read-only selected-item hero SHALL remain a projection of the left-hand browser selection. A surface whose right detail workspace contains episodes, tracks, or chapters MAY expose that existing interactive content without changing the shared placement rule. No hero-bearing browse surface SHALL declare a separate detail placement or a surface-specific responsive placement.
+Every hero-bearing right-panel browse surface SHALL use Wide hero for its wide presentation. This includes Home, Movies, TV shows, grouped Music, Emby home videos, Audiobookshelf podcasts, Audiobookshelf books, and Feeds. A read-only selected-item hero SHALL remain a projection of the left-hand browser selection. A surface whose right detail workspace contains episodes, tracks, or chapters MAY expose that existing interactive content without changing the shared placement rule. No hero-bearing browse surface SHALL declare a separate detail placement or a surface-specific responsive placement.
 
 #### Scenario: Wide read-only hero surface
 - **WHEN** Home, Movies, an Emby home-video library, or Feeds is displayed with wide geometry

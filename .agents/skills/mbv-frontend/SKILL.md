@@ -77,7 +77,7 @@ is the separate `InlineSearchComponent`, not a media-list variant. Non-hero
 catalogs retain the existing two-column policy.
 
 The primary destination owners and painters are Home (`HomeComponent`), generic
-Emby/Movies/homevideos and Emby podcast (`BrowserComponent`), TV Series
+Emby/Movies/homevideos (`BrowserComponent`), TV Series
 (`TvWorkspaceComponent` in Wide, `BrowserComponent` in Normal), grouped Music
 (`MusicWorkspaceComponent`), Audiobookshelf Podcast (`AudiobookshelfPodcastComponent`),
 Audiobookshelf Books (`AudiobookshelfBookComponent`), Feeds (`FeedsComponent`),

@@ -173,7 +173,7 @@ At Wide↔Narrow transitions the parent SHALL hand off `ViewportAnchor { selecte
 - **AND** replacement matches that evidence unless separately approved
 
 ### Requirement: Named destinations compose without changing provider authority
-The slice SHALL compose persistent `WideMediaList` controls in the applicable Wide hero paths and persistent `InlineMediaBrowser` controls in the applicable Narrow paths for hero-bearing generic Emby catalogs, Movies, the Emby homevideos feed view, the Emby podcast channel list, and TV Series browsing. Non-hero two-column Emby catalogs SHALL keep their existing two-column arrangement policy and SHALL NOT be forced onto either canonical control. Provider workspaces, images, effects, persistence, Service and Player authority, and typed message translation SHALL remain in their existing parents/shell.
+The slice SHALL compose persistent `WideMediaList` controls in the applicable Wide hero paths and persistent `InlineMediaBrowser` controls in the applicable Narrow paths for hero-bearing generic Emby catalogs, Movies, the Emby homevideos feed view, and TV Series browsing. Non-hero two-column Emby catalogs SHALL keep their existing two-column arrangement policy and SHALL NOT be forced onto either canonical control. Provider workspaces, images, effects, persistence, Service and Player authority, and typed message translation SHALL remain in their existing parents/shell.
 
 #### Scenario: One painter is active
 - **WHEN** a listed destination is rendered at its applicable breakpoint

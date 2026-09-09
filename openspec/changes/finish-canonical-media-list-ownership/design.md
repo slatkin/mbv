@@ -6,7 +6,7 @@ See `proposal.md` for motivation. The current behavioral truth is already define
 
 PR #684 established and verified the component-view/retained-current-frame seam for Queue and Grouped Music painting. It fully completed Queue. A later source-to-spec audit found that Grouped Music still retains parent album position authority, ordinary-render reseeding, and paint-result writeback, while other named destinations retain analogous ownership or geometry violations. Functional visual verification and prior review passes did not establish full architectural conformance.
 
-Emby destinations are the most developed surfaces and serve as the campaign's canonical design reference; Feeds, Audiobookshelf Podcasts, and Audiobookshelf Books are functional skeletons whose presentation deviations are repair targets rather than heritage.
+Emby destinations are the most developed surfaces and serve as the campaign's canonical design reference; Feeds, Audiobookshelf Podcasts, and Audiobookshelf Books are functional skeletons whose presentation deviations are repair targets rather than heritage. The obsolete Emby podcast channel-list requirement has been removed from current specifications and architecture guidance: it is not a core Emby feature, Audiobookshelf is the supported podcast path, and no further Emby-podcast work is planned.
 
 Wide hero orientation is not an implementation defect: current source follows the normative browser-left/detail-right arrangement. Stale names/comments and contradictory scenario titles are documentation reconciliation items.
 
@@ -24,7 +24,7 @@ Wide hero orientation is not an implementation defect: current source follows th
 
 - Implementing any destination repair through this umbrella.
 - Pre-creating or pre-authorizing follow-on proposals.
-- Reopening Queue or non-grouped Music, or adding the excluded Emby podcast channel list to the campaign.
+- Reopening Queue or non-grouped Music, or restoring the removed Emby podcast channel-list requirement.
 - Converting non-hero two-column catalogs.
 - Treating provider workspaces, selectors, images, effects, persistence, or arrangement placement as list-control state.
 - Grandfathering non-Emby presentation deviations as accepted behaviour.

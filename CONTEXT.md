@@ -300,10 +300,6 @@ _Avoid_: Inline Search, detail panel, generic list
 A library-scoped search capability embedded in the selected searchable Emby destination. The destination owns the local search control, session, query, result selection, painting, and keyboard/mouse interpretation; the shell owns full-library fetches, recursive album indexing, stale-completion guards, navigation effects, and activation effects. Browser, MusicWorkspace, or TvWorkspace is the sole owner and painter for the current presentation; TV transfers one snapshot between Normal and Wide, while an ordinary tab change dismisses search. It is distinct from the cross-library **Search sidebar**.
 _Avoid_: global search, Search sidebar, search overlay
 
-**Emby podcast channel list**:
-The Emby-side list for browsing podcast channels. It is distinct from the Feeds Service tab and from the Emby homevideos feed view.
-_Avoid_: podcast library, Feeds tab, Emby homevideos feed view
-
 **Tab selection**:
 The single selected destination in the left panel: Home, EmbyLibrary(index),
 AudiobookshelfLibrary(index), or Feeds. Tab positions are count-aware

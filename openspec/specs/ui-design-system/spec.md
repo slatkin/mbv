@@ -270,7 +270,7 @@ conformance.
 
 ### Requirement: Named primary media browsers reuse the canonical list controls
 
-Home, the hero-bearing generic Emby library catalog browser, Movies, TV Series browsing, grouped Music album browsing, the Emby homevideos feed view, the Emby podcast channel list, Audiobookshelf Podcast show browsing, Audiobookshelf Book browsing, Feeds, and Queue's fixed-row list SHALL compose the applicable canonical control for shared cursor, scroll, viewport, movement, fixed-row painting, selection, truncation, and scrollbar behavior.
+Home, the hero-bearing generic Emby library catalog browser, Movies, TV Series browsing, grouped Music album browsing, the Emby homevideos feed view, Audiobookshelf Podcast show browsing, Audiobookshelf Book browsing, Feeds, and Queue's fixed-row list SHALL compose the applicable canonical control for shared cursor, scroll, viewport, movement, fixed-row painting, selection, truncation, and scrollbar behavior.
 
 A destination SHALL NOT copy those mechanics into its own painter merely because its content comes from another provider or has different metadata. Queue composes fixed-row behavior only; non-hero two-column browsers remain governed by their existing column policy.
 

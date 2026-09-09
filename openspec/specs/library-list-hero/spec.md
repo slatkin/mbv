@@ -343,8 +343,7 @@ chain completion re-pushes TV content.
 
 ### Requirement: Feed group picker uses the shared selected-row replacement
 
-The Emby homevideos feed view group picker (an Emby homevideos feed view
-library or an Emby podcast channel list) SHALL present the selected video with
+The Emby homevideos feed view group picker SHALL present the selected video with
 the same variable-height Inline hero block that other hero-bearing browsers
 use, at Normal geometry, and SHALL paint each visible video row exactly once.
 
