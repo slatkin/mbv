@@ -313,6 +313,8 @@ mod tests_feeds;
 #[cfg(test)]
 mod tests_home_inline;
 #[cfg(test)]
+mod tests_playback_panel;
+#[cfg(test)]
 mod tests_selection_modal;
 #[cfg(test)]
 mod tests_surface_conformance;

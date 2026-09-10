@@ -14,7 +14,13 @@ mod grid;
 mod grouping;
 mod inline;
 #[cfg(test)]
+mod test_helpers;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_grid;
+#[cfg(test)]
+mod tests_resolve_point;
 mod wide;
 
 pub use anchor::ViewportAnchor;
