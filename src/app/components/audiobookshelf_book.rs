@@ -8,7 +8,9 @@ use tuirealm::state::State;
 
 use super::media_list::{InlineMediaBrowser, ViewportAnchor, WideMediaList};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use super::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, Msg, ShellRequest};
+use super::msg::{
+    AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, Msg, ShellRequest,
+};
 use super::user_event::UserEvent;
 use crate::app::render::{
     render_audiobookshelf_book_content, wide_hero_presentation, AudiobookshelfBookGeometry,
@@ -165,6 +167,13 @@ impl AudiobookshelfBookComponent {
         self.chapter_selection
     }
 
+    fn chapter_target(&self) -> Option<BookChapterTarget> {
+        Some(BookChapterTarget::new(
+            self.state.selected_id.clone()?,
+            self.chapter_selection?,
+        ))
+    }
+
     #[cfg(test)]
     pub(crate) fn selected_book_id(&self) -> Option<&str> {
         self.state.selected_id.as_deref()
@@ -212,7 +221,7 @@ impl AudiobookshelfBookComponent {
 
     fn book_request(&self) -> Msg {
         Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::Book(self.state.cursor()),
+            AudiobookshelfBookMove::Book(self.state.selected_id.clone().unwrap_or_default()),
         ))
     }
 
@@ -269,7 +278,7 @@ impl AudiobookshelfBookComponent {
 
     fn chapter_focus_request(&self) -> Msg {
         Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::ChapterFocus(self.chapter_selection),
+            AudiobookshelfBookMove::ChapterFocus(self.chapter_target()),
         ))
     }
 
@@ -361,12 +370,12 @@ impl AudiobookshelfBookComponent {
             }
             Key::Char(' ') if chapters_focused => {
                 Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
-                    AudiobookshelfBookIntent::ActivateChapter(self.chapter_selection),
+                    AudiobookshelfBookIntent::ActivateChapter(self.chapter_target()),
                 )))
             }
             Key::Enter if chapters_focused => {
                 Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
-                    AudiobookshelfBookIntent::ActivateChapter(self.chapter_selection),
+                    AudiobookshelfBookIntent::ActivateChapter(self.chapter_target()),
                 )))
             }
             Key::Char(' ') => Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(

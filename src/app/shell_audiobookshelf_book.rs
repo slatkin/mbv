@@ -22,7 +22,9 @@ impl Model {
                 // component carries the landed value; apply it through the
                 // existing index-taking entry points, never recomputing the
                 // movement from a delta.
-                AudiobookshelfBookMove::Book(index) => self.app.select_audiobookshelf_book(index),
+                AudiobookshelfBookMove::Book(target) => {
+                    self.app.select_audiobookshelf_book_target(&target)
+                }
                 AudiobookshelfBookMove::Bucket(position) => {
                     self.app.select_audiobookshelf_book_bucket(position)
                 }
@@ -51,7 +53,8 @@ impl Model {
                     }
                 }
                 AudiobookshelfBookIntent::ActivateChapter(chapter_selection) => {
-                    self.app.activate_audiobookshelf_book_row(chapter_selection);
+                    self.app
+                        .activate_audiobookshelf_book_row_target(chapter_selection);
                 }
             },
             _ => unreachable!("non-book request routed to book handler"),

@@ -93,7 +93,7 @@ fn book_tick_wheel_claims_only_the_active_control_at_both_breakpoints() {
             modifiers: KeyModifiers::NONE,
         }));
         assert!(on.step().raw_messages.contains(&Msg::Shell(
-            ShellRequest::AudiobookshelfBookMove(AudiobookshelfBookMove::Book(1)),
+            ShellRequest::AudiobookshelfBookMove(AudiobookshelfBookMove::Book("book-1".into())),
         )));
         assert_eq!(book(&mut on).selected_book_id(), Some("book-1"));
     }
