@@ -63,8 +63,8 @@ fn wide_library_column_gutter_follows_panel_focus() {
         let chrome = app.compute_chrome_geometry(ratatui::layout::Rect::new(0, 0, 120, 30));
         let terminal = super::test_helpers::render_app_to_terminal(&mut app, 120, 30);
         let buffer = terminal.backend().buffer();
-        // First content row of the right column, on the unpadded gutter column
-        // the backdrop (not the library content) owns.
+        // A content row of the right column, on the unpadded gutter column the
+        // backdrop (not the library content) owns.
         let gutter = buffer[(chrome.right_area.x, chrome.right_area.y + 1)].bg;
         assert_eq!(gutter, expected, "{label}: column gutter surface");
     }

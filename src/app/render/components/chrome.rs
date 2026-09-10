@@ -13,6 +13,25 @@ use ratatui::Frame;
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 
+/// The right (library) column's chrome backdrop surface for one frame.
+///
+/// The focused arm is the library column's focused surface. The resting arm is
+/// deliberately `SURFACE_BACKDROP` (`#2d353b`), NOT the panel resting role
+/// `SURFACE_RESTING` (`#333c43`) that the neighbouring left/queue arm resolves
+/// through `palette::resolve_surface_focus`; a resting library column is the
+/// shared library backdrop, not a resting panel. Do not replace this with
+/// `resolve_surface_focus` to "fix" that asymmetry.
+///
+/// Transitional: `unify-surface-colour` row 4.2 replaces this pair with the
+/// surface table, which owns it as one row.
+fn library_column_surface(right_focused: bool) -> Color {
+    if right_focused {
+        palette::SURFACE_FOCUSED
+    } else {
+        palette::SURFACE_BACKDROP
+    }
+}
+
 pub(in crate::app) fn render_legacy_backdrops(
     frame: &mut Frame,
     left_area: Rect,
@@ -39,11 +58,7 @@ pub(in crate::app) fn render_legacy_backdrops(
         // The right column is the surface the library panel sits on, so it
         // follows panel focus; the left arm above stays the queue column's.
         frame.render_widget(
-            Block::default().style(Style::default().bg(if right_focused {
-                palette::SURFACE_FOCUSED
-            } else {
-                palette::SURFACE_BACKDROP
-            })),
+            Block::default().style(Style::default().bg(library_column_surface(right_focused))),
             right_area,
         );
     }

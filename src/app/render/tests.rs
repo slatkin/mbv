@@ -279,6 +279,9 @@ fn wide_panel_bottom_row_follows_the_library_column_surface() {
         palette::SURFACE_FOCUSED,
         "the row above the pill bar follows the focused library column"
     );
+    // The only assertion that fails if the focused and resting surface
+    // constants ever collapse to one value — the failure class this change
+    // exists to expose.
     assert_ne!(
         buf[(area.x, area.y + 3)].bg,
         palette::SURFACE_BACKDROP,
@@ -291,6 +294,16 @@ fn wide_panel_bottom_row_follows_the_library_column_surface() {
         buf[(area.x, area.y)].bg,
         palette::SURFACE_FOCUSED,
         "the queue-focused panel content row keeps its fill"
+    );
+    assert_eq!(
+        buf[(area.x, area.y + 1)].bg,
+        palette::SURFACE_FOCUSED,
+        "the queue-focused panel title row keeps its fill"
+    );
+    assert_eq!(
+        buf[(area.x, area.y + 2)].bg,
+        palette::SURFACE_FOCUSED,
+        "the queue-focused panel blank row keeps its fill"
     );
     assert_eq!(
         buf[(area.x, area.y + 3)].bg,

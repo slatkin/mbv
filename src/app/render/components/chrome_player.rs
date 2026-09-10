@@ -126,7 +126,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
                 .style(Style::default().bg(palette::SURFACE_BACKDROP)),
             bottom_area,
         );
-        if ctx.narrow_player && ctx.show_controls {
+        if ctx.show_controls {
             if let Some((title, color)) = ctx.now_playing_title.clone() {
                 let prefix = "On Now: ";
                 let inset_area = Rect {
