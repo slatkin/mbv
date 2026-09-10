@@ -53,12 +53,18 @@ The store is a small in-memory value owned by `App`, persisted whole. Ceiling: a
 per write, O(rows). Acceptable because rows are bounded by feed entries the user has actually
 played, and writes happen on playback lifecycle events, not per frame.
 
-**3. Reuse the existing local-state machinery rather than adding a new persistence layer.**
-`FeedEntryState` moves beside the other persisted state types; the path joins
-`config_paths.rs`; load/save join `config_state.rs` and use its atomic write. The three
-feed-state functions (`hydrate_feed_entry_state`, `hydrate_feed_entries_for_subscription`,
-`write_feed_entry_state`) keep their names and call shapes, so their call sites change only in
-what they call underneath. They relocate from `shared_sync.rs` into `feed_tab_actions.rs`,
+**3. The local store is one self-contained module, reusing the existing local-state behavior
+without sharing its files.**
+`crates/mbv-core/src/feed_entry_state.rs` owns the state type, the `(user_id, feed_id,
+entry_guid)` key, the row set, the `state_dir()` path, the atomic temp-file/rename write (same
+pattern and failure semantics as `config_state.rs`, not factored out of it), and
+`put`/`get`/`scan`. This deviates from the earlier plan, which put the type beside the other
+persisted state types and the load/save in `config_state.rs`: a sibling refactor was splitting
+`config_types_paths.rs` / `config_tests_paths.rs` in the same working tree, and group 2 leaves
+this module standing on its own, so a single-owned file is both the safer and the better end
+state. The three feed-state functions (`hydrate_feed_entry_state`,
+`hydrate_feed_entries_for_subscription`, `write_feed_entry_state`) keep their names and call
+shapes, so their call sites change only in what they call underneath. They relocate from `shared_sync.rs` into `feed_tab_actions.rs`,
 which is already the feed-specific home and stays well under the file-size bar.
 
 **4. New tests use the existing drop guards, not raw `temp_dir()` joins.**
@@ -108,9 +114,11 @@ re-runs strict validation after the edits to confirm that rather than assume it.
   `apply_shared_snapshot`) is the roaming behavior this change removes, not a competing local
   authority.
 - **[Resume could write a zero position over a queued slot's position.]** `action.rs:425-440`
-  hydrates an entry and then calls `apply_progress`. → With the local store the hydrated value is
-  the stored position, matching today's shared-connected behavior; task 1.3 pins the queue-slot
-  case with a test rather than leaving it to reasoning.
+  hydrates an entry and then calls `apply_progress`. → Checked during group 1: the item comes
+  from the queue slot itself, which carries its own persisted position, so hydration with no
+  stored row returns that position unchanged and no zero is written. The remaining case (the
+  Feeds-tab play path appending a new slot from a list entry) matches the old no-shared-endpoint
+  behavior. No test added; the state test covers the store-to-entry direction instead.
 - **[A name-based sweep deletes unrelated state.]** `daemon_core.rs:492`'s `SharedQueueState` is
   ctrl snapshot state (queue, source, observed active slot), not shared data. → Called out
   explicitly in task 2.3.

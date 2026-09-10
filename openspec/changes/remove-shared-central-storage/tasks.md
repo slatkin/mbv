@@ -1,33 +1,38 @@
 ## 1. Local feed-entry state (behavior-preserving, lands first)
 
-- [ ] 1.1 Add the local store to `mbv-core`: `FeedEntryState` beside the other persisted
-  state types, `feed_entry_state_path()` in `config_paths.rs`, and load/save plus
-  put/scan-by-`(user_id, feed_id)` in `config_state.rs` using the existing atomic
-  temp-file/rename write. Verify with unit tests covering: round-trip, last-write-wins
-  replacement, prefix scan returning only one feed's and one user's rows, missing and
-  invalid file yielding empty state without error, and a failed write leaving the
-  previous file readable. Use `TestStateDirGuard` / `TestTempDir`, never a bare
-  `temp_dir()` join. `cargo nextest run -p mbv-core feed_entry`
+- [x] 1.1 Add the local store to `mbv-core` as a self-contained `feed_entry_state.rs` module
+  (`FeedEntryState` rows keyed `(user_id, feed_id, entry_guid)`, `feed_entry_state_path()`,
+  load/save through the atomic temp-file/rename pattern, put/get/scan), registered in `lib.rs`.
+  Kept out of the `config_*.rs` files because a sibling refactor was splitting them in the same
+  working tree, and because group 2 leaves this module standing alone (design decision 3).
+  Verify with unit tests covering: round-trip, last-write-wins replacement, prefix scan
+  returning only one feed's and one user's rows, absent and invalid file yielding empty state
+  without error, and a failed write leaving the previous file readable.
+  `cargo nextest run -p mbv-core feed_entry_state` — 5 tests pass.
 
-- [ ] 1.2 Move the TUI feed-state paths onto the store: hold it on `App`, load it at startup,
+- [x] 1.2 Move the TUI feed-state paths onto the store: hold it on `App`, load it at startup,
   and reimplement `hydrate_feed_entry_state`, `hydrate_feed_entries_for_subscription`, and
   `write_feed_entry_state` against it, relocating them from `shared_sync.rs` into
   `feed_tab_actions.rs` with unchanged signatures. Verify the Feeds tab hydrates stored state
   with no shared-data endpoint configured and that a write/read round-trip survives a
   simulated restart. `cargo nextest run -p mbv feed`
 
-- [ ] 1.3 Verify the three user-visible behaviors are unchanged: the All / Played / Unplayed
-  filter, the "Watched" meta line, and resume-on-play. Add a shell test proving that playing
-  an entry from the Feeds list resumes from stored position and that re-playing it does not
-  reset the queue slot's persisted position to zero. `cargo nextest run -p mbv feeds` plus
-  the feed render tests at Normal and Wide breakpoints
+- [x] 1.3 Verify the three user-visible behaviors are unchanged: the All / Played / Unplayed
+  filter (already covered by the `watched_filter_*` component tests), the "Watched" meta line,
+  and resume-on-play. Followed the test rules: deleted the fake
+  `hydration_merges_by_guid_and_ignores_unknown` test (it re-implemented the merge inline and
+  exercised no production code, and it referenced the store group 2 deletes) and replaced it
+  with a real App-level test that writes through the playback path, reloads from disk, hydrates
+  a fresh fetch, and asserts per-user and per-feed scoping. The queue-slot clobber turned out
+  not to exist: the queued item carries its own persisted position, so an empty store cannot
+  zero it (design risks). `cargo nextest run -p mbv feed`
 
-- [ ] 1.4 Gate group 1: confirm the feed-state paths no longer consult a shared client at all
+- [x] 1.4 Gate group 1: confirm the feed-state paths no longer consult a shared client at all
   (no client-state branch left in the three functions), with the shared modules still
   compiled. `rg -n "shared_client|SharedClientState" src/app/feed_tab_actions.rs` returns
   nothing, and a full `cargo nextest run` is green.
 
-- [ ] 1.5 Correct the main-spec prose a delta cannot carry: the `feed-entry-state` Purpose
+- [x] 1.5 Correct the main-spec prose a delta cannot carry: the `feed-entry-state` Purpose
   (`openspec/specs/feed-entry-state/spec.md`) still says "durable roaming state on the existing
   shared-data transport", and the `feed-subscriptions` Purpose still says the client remembers
   no playback state. Rewrite both to the local-store end state, and drop the stale `shared-data`

@@ -1,7 +1,7 @@
 # feed-entry-state Specification
 
 ## Purpose
-Provide per-user, per-entry feed playback state (resume position and watched flag) as durable roaming state on the existing shared-data transport, stored as independent keyed rows with last-write-wins semantics so unbounded feed entries never share a single revisioned document.
+Provide per-user, per-entry feed playback state (resume position and watched flag) as durable machine-local state, stored as independent keyed rows with last-write-wins semantics so unbounded feed entries never share a single revisioned document. The state does not roam between machines.
 ## Requirements
 ### Requirement: Feed entry state is keyed and per-user
 

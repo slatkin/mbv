@@ -1,7 +1,7 @@
 # feed-subscriptions Specification
 
 ## Purpose
-The user can subscribe to RSS/podcast/video feeds in local configuration, browse their entries in a dedicated tab, and play any entry through the playback queue — without the client remembering playback position or watched state.
+The user can subscribe to RSS/podcast/video feeds in local configuration, browse their entries in a dedicated tab, and play any entry through the playback queue, with per-entry resume position and watched state remembered locally on that machine.
 ## Requirements
 ### Requirement: Subscriptions are stored in local config
 

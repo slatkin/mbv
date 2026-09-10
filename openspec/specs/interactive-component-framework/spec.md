@@ -191,18 +191,18 @@ and writes it only at a navigation event.
 The application Model SHALL retain terminal setup/teardown, redraw cadence, and
 fatal I/O handling; Remote Service clients, credentials, startup, and worker
 lifecycle; Player ownership, canonical queue mutation, and reconciliation;
-daemon/Local-daemon/`mbvd`, ctrl, and shared-data protocols; persistence and
+daemon/Local-daemon/`mbvd` and ctrl protocols; persistence and
 external effects; and conversion of runtime state into owned presentation models.
 The Model SHALL hold the TuiRealm `Application` but SHALL NOT become a second
 global UI state store holding component-local interaction state.
 
 This migration SHALL NOT change any daemon, Local-daemon, `mbvd`, ctrl,
-shared-data, provider, playback, or canonical-queue behaviour.
+provider, playback, or canonical-queue behaviour.
 
 #### Scenario: Runtime completion reaches a component without a lock
 
 - **WHEN** an asynchronous runtime completion (startup, library, Search, session,
-  cast, shared-data, feed, image, websocket, or ABS socket) arrives
+  cast, feed, image, websocket, or ABS socket) arrives
 - **THEN** it is delivered to the subscribed component as a TuiRealm `UserEvent`
   or via a minimal shell adapter carrying an owned presentation model
 - **AND** the component receives no channel, client, or lock
