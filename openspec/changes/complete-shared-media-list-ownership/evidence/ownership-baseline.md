@@ -59,6 +59,8 @@ same test was rerun and passed. No mutated path is committed.
 | `media_list::tests::wide_list_maps_display_rows_to_selectable_indices_and_viewport` | disconnected `Item` target resolution | FAIL | PASS |
 | `home_component_tests::home_down_moves_the_component_cursor_without_app_state` | disconnected local movement delegation | FAIL | PASS |
 | `media_list::tests::resolve_point::wide_resolves_against_a_scrolled_viewport` | disconnected retained row-hit target resolution | FAIL | PASS |
+| `media_list::tests::inline_component_retains_detail_and_resolves_from_the_current_view` | disconnected Inline painter/detail fact publication | FAIL | PASS |
+| `browser_component_tests::browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks` | disconnected Grid cell target resolution | FAIL | PASS |
 
 
 The unchanged focused suite also exercises Inline replacement, two-column Grid
