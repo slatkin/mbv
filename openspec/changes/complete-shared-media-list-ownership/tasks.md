@@ -21,8 +21,8 @@
 
 ## 4. Migrate Browser and Home
 
-- [ ] 4.1 Move generic Emby non-hero two-column catalogs onto the shared owner and Grid presentation; remove Browser's parent `cursor`/`scroll`, legacy item-row reconstruction, `left_row_map`, and fallback cell hit arithmetic, then verify generic catalog tick navigation and mouse tests use retained Grid geometry.
-- [ ] 4.2 Move Movies and the Emby homevideos feed view onto one owner whose presentation changes between Wide and Inline; remove responsive owner-to-owner anchor transfer while preserving selected-row viewport offset, and verify Wide/Normal tick tests plus stable refresh pass.
+- [x] 4.1 Move generic Emby non-hero two-column catalogs onto the shared owner and Grid presentation; remove Browser's parent `cursor`/`scroll`, legacy item-row reconstruction, `left_row_map`, and fallback cell hit arithmetic, then verify generic catalog tick navigation and mouse tests use retained Grid geometry.
+- [x] 4.2 Move Movies and the Emby homevideos feed view onto one owner whose presentation changes between Wide and Inline; remove responsive owner-to-owner anchor transfer while preserving selected-row viewport offset, and verify Wide/Normal tick tests plus stable refresh pass.
 - [ ] 4.3 Move Home's active section rows onto one owner with Wide/Inline presentations and the common delegation seam; preserve section chrome and semantic section restoration, then verify existing Wide/Normal tick, refresh, pointer, and effect tests pass without shell cursor reads.
 
 ## 5. Migrate Feeds and Queue
