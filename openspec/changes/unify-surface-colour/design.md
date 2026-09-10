@@ -56,6 +56,14 @@ boxes, the dialog frame, the recess rows — and one function mapping it plus th
 stay as the values, so a level's appearance is still changed by editing one role, and the table
 proves which surfaces that reaches.
 
+The levels are, shallowest first: **column/pane** — the surface a panel sits on, including the column
+gutters the shell paints and the hero pane fill; **panel** — a focusable panel body (queue panel,
+library panel, a screen's episode/track/chapter box, a hero content box, a dialog's list); **recess**
+— a non-focusable inset inside a panel (the now-playing panel's own rows and status pills, the
+visualizer background); **dialog** — an overlay frame that never follows a panel. A surface's level
+is what an edit to that level reaches, so two surfaces at the same level share their appearance and
+shall not be given separate ones.
+
 _Alternative:_ a registry keyed by strings/ids so screens can add surfaces. Rejected — the closed
 enum is what makes "every surface is in the table" checkable.
 
