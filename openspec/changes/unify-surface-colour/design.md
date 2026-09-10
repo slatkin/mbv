@@ -154,6 +154,13 @@ enumerate variants. `SelectedRow` is the hole in its panel through which the con
 surface shows; a popup's context-menu row is the one row at that level with a different value and is
 declared as a named variant rather than silently.
 
+**A popup whose body paints no fill.** The context menu clears its rect to the terminal default and
+draws foreground-only rows, so it has no body fill to name: the table's popup frame covers the popups
+that do paint one, and the context menu's only table row is its selected row. Recorded because
+`Color::Reset` is the terminal default rather than a chosen colour — the site names no role — and
+because filling it with the popup frame would repaint a surface the user did not ask to change. A
+later change that gives the context menu a frame names `PopupFrame` like every other popup.
+
 _Alternative:_ a registry keyed by strings/ids so screens can add surfaces. Rejected — the closed
 enum is what makes "every surface is in the table" checkable.
 
