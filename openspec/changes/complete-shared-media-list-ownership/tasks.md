@@ -32,9 +32,9 @@
 
 ## 6. Migrate Grouped Music and TV Workspaces
 
-- [ ] 6.1 Move Grouped Music album rows onto one owner across Wide/Inline presentations and common delegation while preserving group pills, Inline Search, images, and album effects; verify album target/order, responsive, keyboard, mouse, and buffer tests pass.
-- [ ] 6.2 Replace Music `track_cursor` with explicit track-pane focus and make the track owner authoritative for selection, scrolling, delegated input, painting, and retained hits; verify track activation/context behavior and Wide workspace tests pass with no cursor synchronization.
-- [ ] 6.3 Convert TV series and episode flows to the common owner/delegation API while preserving `Pane`, season chrome, episode content refresh, Inline Search, and Normal routing through Browser; verify Wide series/episode and Normal TV tick tests pass with no destination row mutator calls.
+- [x] 6.1 Move Grouped Music album rows onto one owner across Wide/Inline presentations and common delegation while preserving group pills, Inline Search, images, and album effects; verify album target/order, responsive, keyboard, mouse, and buffer tests pass.
+- [x] 6.2 Replace Music `track_cursor` with explicit track-pane focus and make the track owner authoritative for selection, scrolling, delegated input, painting, and retained hits; verify track activation/context behavior and Wide workspace tests pass with no cursor synchronization.
+- [x] 6.3 Convert TV series and episode flows to the common owner/delegation API while preserving `Pane`, season chrome, episode content refresh, Inline Search, and Normal routing through Browser; verify Wide series/episode and Normal TV tick tests pass with no destination row mutator calls.
 
 ## 7. Migrate Audiobookshelf Workspaces
 
