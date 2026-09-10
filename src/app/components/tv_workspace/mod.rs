@@ -175,12 +175,16 @@ impl TvWorkspaceComponent {
         });
         let rows = rows.collect::<Vec<_>>();
         // The canonical cursor is in the rendered (natural-sort) order. Seed
-        // the local list from that order on first mount; thereafter preserve
-        // the stable target already owned by the component.
+        // the local list from that stable target on first mount; thereafter
+        // preserve the stable target already owned by the component.
         let restore_target = self.list.selected_target().cloned();
         self.list.set_content(rows);
         if !self.initialized {
-            self.list.select_index(context.list.cursor());
+            // First mount seeds from the shell's stable target, not its
+            // numeric display cursor (design.md D4/D5).
+            if let Some(item) = context.list.items.get(context.list.cursor()) {
+                self.list.select_target(&item.id);
+            }
         } else if let Some(target) = restore_target {
             self.list.select_target(&target);
         }
@@ -192,11 +196,9 @@ impl TvWorkspaceComponent {
             self.pane = Pane::Series;
             self.last_series_id = context.selected_series.as_ref().map(|item| item.id.clone());
         }
-        let mut restore_episode_index = None;
         if !self.initialized {
             if !series_changed {
                 self.season_cursor = context.season_cursor;
-                restore_episode_index = context.episode_cursor;
                 self.pane = if context.episode_cursor.is_some() {
                     Pane::Episodes
                 } else {
@@ -223,9 +225,6 @@ impl TvWorkspaceComponent {
         // unconditionally -- the box previews episodes regardless of pane.
         if self.current_season_episodes_key_present() {
             self.refresh_episode_rows();
-            if let Some(index) = restore_episode_index {
-                self.episodes.select_index(index);
-            }
         }
     }
 
@@ -544,7 +543,7 @@ impl Component for TvWorkspaceComponent {
             self.season_cursor,
             episode_focus_cursor,
         );
-        let (scroll, image_paint) = render_wide_tv_with_ctx(
+        let (_, image_paint) = render_wide_tv_with_ctx(
             frame,
             area,
             &context,
@@ -553,13 +552,6 @@ impl Component for TvWorkspaceComponent {
             TvEpisodePresentation::Wide(&mut self.episodes),
             &mut self.inline_search,
         );
-        if !self.inline_search.is_active() && self.list.scroll() != scroll {
-            // `render_wide_tv_with_ctx` has already retained the completed
-            // paint; avoid invalidating it when the resolved offset is
-            // unchanged. Other callers retain the shared control's
-            // unconditional invalidation semantics.
-            self.list.set_scroll(scroll);
-        }
         self.image_paint = image_paint;
 
         // Adopt the season-pill chrome the wide-TV painter just produced into

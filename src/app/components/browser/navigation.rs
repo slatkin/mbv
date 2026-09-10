@@ -1,5 +1,6 @@
 use super::BrowserComponent;
 use crate::app::components::component_id::BrowserKind;
+use crate::app::components::media_list::RowLocalInput;
 use crate::app::library_column_width::library_column_count;
 
 impl BrowserComponent {
@@ -49,7 +50,7 @@ impl BrowserComponent {
     /// Move by one selectable item in the shared owner's row order.
     pub(super) fn move_cursor_delta(&mut self, delta: i64) -> usize {
         self.ensure_carrier();
-        self.carrier.move_selection(delta);
+        self.carrier.delegate(RowLocalInput::Move(delta), None);
         if self.carrier.selected_target().is_some() {
             self.carrier.sync_viewport(self.painted_viewport_height());
         }

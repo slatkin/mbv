@@ -35,17 +35,16 @@ impl BrowserComponent {
             // fails on the same rect (`body_area == area`). If a degenerate
             // rect ever reaches here, keep a canonical render rather than
             // routing to the legacy painter.
-            let policy = crate::app::components::media_list::WideMediaListPaintPolicy::new(
-                self.focused,
-                crate::app::components::media_list::SelectedRowSurface::ListBackdrop,
-                None,
+            let wide = self.carrier.wide_mut();
+            wide.set_geometry(body_area, body_area);
+            wide.set_paint_policy(
+                crate::app::components::media_list::WideMediaListPaintPolicy::new(
+                    self.focused,
+                    crate::app::components::media_list::SelectedRowSurface::ListBackdrop,
+                    None,
+                ),
             );
-            crate::app::render::render_wide_media_list_component(
-                f,
-                body_area,
-                self.carrier.wide_mut(),
-                policy,
-            );
+            tuirealm::component::Component::view(wide, f, body_area);
             return self.carrier.wide().current_flow_offset().unwrap_or(0);
         };
         let browser_panel = panes.browser_panel;
@@ -118,7 +117,7 @@ impl BrowserComponent {
 
         self.layout.left_area = content;
         // Frame the rail before the row flow: the helper fills the whole
-        // panel background, so it must run before `render_wide_media_list`
+        // panel background, so it must run before the canonical Wide view
         // paints the selected-row bar (matches TV / Music ordering).
         wide_hero_browser_border(f, list_panel, self.focused);
         let final_scroll = if self.inline_search.is_active() {
@@ -157,17 +156,16 @@ impl BrowserComponent {
             );
             0
         } else {
-            let policy = crate::app::components::media_list::WideMediaListPaintPolicy::new(
-                self.focused,
-                crate::app::components::media_list::SelectedRowSurface::ListBackdrop,
-                None,
+            let wide = self.carrier.wide_mut();
+            wide.set_geometry(paint, content);
+            wide.set_paint_policy(
+                crate::app::components::media_list::WideMediaListPaintPolicy::new(
+                    self.focused,
+                    crate::app::components::media_list::SelectedRowSurface::ListBackdrop,
+                    None,
+                ),
             );
-            crate::app::render::render_wide_media_list_component(
-                f,
-                paint,
-                self.carrier.wide_mut(),
-                policy,
-            );
+            tuirealm::component::Component::view(wide, f, paint);
             let offset = self.carrier.wide().current_flow_offset().unwrap_or(0);
             self.layout.selected_item_rect = self.carrier.wide().current_selected_row_rect();
             offset

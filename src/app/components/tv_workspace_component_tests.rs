@@ -369,7 +369,7 @@ fn tv_episode_brackets_wrap_season_selection() {
 }
 
 #[test]
-fn tv_grouped_cursor_mirrors_rendered_sorted_rows() {
+fn tv_first_mount_seeds_the_stable_target_and_renders_sorted_rows() {
     let mut items = vec![
         make_item("Zulu", "Series"),
         make_item("Alpha", "Series"),
@@ -393,6 +393,10 @@ fn tv_grouped_cursor_mirrors_rendered_sorted_rows() {
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
     assert_eq!(&component.test_layout().left_sorted_indices[..2], &[1, 2]);
+    // First mount seeds the stable target at the shell's item cursor
+    // (`items[1]` = Alpha, the first sorted row), not the shell's numeric
+    // index as the removed cursor mirror did (design.md D4/D5).
+    assert_eq!(component.cursor(), 0);
 
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Down,
@@ -402,7 +406,7 @@ fn tv_grouped_cursor_mirrors_rendered_sorted_rows() {
         message,
         Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
     ));
-    assert_eq!(component.cursor(), 2);
+    assert_eq!(component.cursor(), 1);
 }
 
 #[test]

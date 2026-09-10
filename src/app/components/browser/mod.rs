@@ -178,6 +178,10 @@ impl BrowserComponent {
         if let Some(target) = target.as_ref() {
             self.carrier.select_target(target);
         }
+        // Adjudicated discrete-boundary re-anchor (design.md D5): the shell
+        // owns the identity-gated resting position, so this one seeded scroll
+        // is sanctioned rather than routed through row-local delegation.
+        // ast-grep-ignore: no-render-media-list-mutators
         self.carrier.set_scroll(scroll);
     }
 

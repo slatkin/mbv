@@ -1,32 +1,32 @@
 id: no-render-media-list-mutators
 snapshots:
   ? |
-    // A render component must not move the shared owner's scroll.
-    fn paint(media_list: &mut Wide) {
-        media_list.set_scroll(3);
+    // A destination must not bypass the delegation seam for movement.
+    fn move_cursor(destination: &mut Destination, delta: i64) {
+        destination.carrier.move_selection(delta);
     }
   : labels:
-    - source: media_list.set_scroll(3)
+    - source: destination.carrier.move_selection(delta)
       style: primary
-      start: 101
-      end: 125
+      start: 131
+      end: 172
   ? |
-    // A render component must not place the cursor by index.
-    fn paint(episodes: &mut Wide, index: usize) {
-        episodes.select_index(index);
+    // A destination must not place the cursor by numeric index.
+    fn seed(destination: &mut Destination, index: usize) {
+        destination.list.select_index(index);
     }
   : labels:
-    - source: episodes.select_index(index)
-      style: primary
-      start: 108
-      end: 136
-  ? |
-    // A render component must not replace the shared owner's content.
-    fn paint(book_list: &mut Wide, rows: Vec<Row>) {
-        book_list.set_content(rows);
-    }
-  : labels:
-    - source: book_list.set_content(rows)
+    - source: destination.list.select_index(index)
       style: primary
       start: 120
-      end: 147
+      end: 156
+  ? |
+    // A destination must not seed the shared owner's scroll.
+    fn seed(destination: &mut Destination, scroll: usize) {
+        destination.carrier.set_scroll(scroll);
+    }
+  : labels:
+    - source: destination.carrier.set_scroll(scroll)
+      style: primary
+      start: 118
+      end: 156

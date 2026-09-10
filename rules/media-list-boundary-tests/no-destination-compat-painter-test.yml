@@ -7,11 +7,11 @@ valid:
     }
 invalid:
   - |
-    // Calling the compatibility painter directly is a regression.
+    // Calling the subsystem paint adapter directly is a regression.
     fn paint(f: &mut Frame, area: Rect, list: &mut Wide) {
-        render_wide_media_list(f, area, area, list, true, bg, None);
+        render_wide_media_list_component(f, area, list, policy);
     }
   - |
-    fn paint_inline(f: &mut Frame, area: Rect, list: &Inline) {
-        render_inline_media_browser(f, area, list, 2, true, bg);
+    fn paint_inline(f: &mut Frame, area: Rect, list: &mut Inline) {
+        render_inline_media_browser_component(f, area, list, policy);
     }

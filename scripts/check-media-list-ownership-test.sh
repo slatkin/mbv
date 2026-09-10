@@ -2,13 +2,16 @@
 
 # Self-test for scripts/check-media-list-ownership.sh: proves the inventory
 # check fails against representative forbidden fixtures and passes on a
-# conforming production-like tree (openspec/changes/
-# complete-shared-media-list-ownership row 8.3).
+# conforming production-like tree, asserting the per-flow result lines rather
+# than only an aggregate total (openspec/changes/
+# complete-shared-media-list-ownership row 8.3, design.md D7).
 
-set -u
+set -euo pipefail
 
-readonly CHECKER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-media-list-ownership.sh"
-readonly TEST_ROOT="$(mktemp -d)"
+CHECKER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-media-list-ownership.sh"
+readonly CHECKER
+TEST_ROOT="$(mktemp -d)"
+readonly TEST_ROOT
 
 cleanup() {
     rm -rf "$TEST_ROOT"
@@ -26,30 +29,48 @@ run_checker() {
     "$CHECKER" "$root" 2>&1
 }
 
-# owner file|required shared-owner token (mirrors the checker's inventory)
+# owner file|required shared-owner field token (mirrors the checker's
+# deduplicated inventory)
 readonly -a OWNERS=(
-    'src/app/components/queue.rs|MediaListCarrier<'
-    'src/app/components/home.rs|MediaListCarrier<'
-    'src/app/components/browser/mod.rs|MediaListCarrier<'
-    'src/app/components/music_workspace.rs|MediaListCarrier<'
-    'src/app/components/music_workspace.rs|WideMediaList<'
-    'src/app/components/tv_workspace/mod.rs|WideMediaList<'
-    'src/app/components/feeds.rs|MediaListCarrier<'
-    'src/app/components/audiobookshelf_podcast.rs|MediaListCarrier<'
-    'src/app/components/audiobookshelf_podcast.rs|WideMediaList<'
-    'src/app/components/audiobookshelf_book.rs|MediaListCarrier<'
-    'src/app/components/audiobookshelf_book.rs|WideMediaList<'
+    'src/app/components/queue.rs|: MediaListCarrier<'
+    'src/app/components/home.rs|: MediaListCarrier<'
+    'src/app/components/browser/mod.rs|: MediaListCarrier<'
+    'src/app/components/music_workspace.rs|: MediaListCarrier<'
+    'src/app/components/music_workspace.rs|: WideMediaList<'
+    'src/app/components/tv_workspace/mod.rs|: WideMediaList<'
+    'src/app/components/feeds.rs|: MediaListCarrier<'
+    'src/app/components/audiobookshelf_podcast.rs|: MediaListCarrier<'
+    'src/app/components/audiobookshelf_podcast.rs|: WideMediaList<'
+    'src/app/components/audiobookshelf_book.rs|: MediaListCarrier<'
+    'src/app/components/audiobookshelf_book.rs|: WideMediaList<'
 )
 
+# The deduplicated distinct-flow names the checker reports on success.
+readonly -a FLOWS=(
+    'queue slots'
+    'home rows'
+    'generic Emby catalog rows (Movies, homevideos)'
+    'grouped Music albums'
+    'grouped Music tracks'
+    'TV series and episodes'
+    'Feeds entries'
+    'Podcast shows'
+    'Podcast filtered episodes'
+    'Book titles'
+    'Book chapter/audio-part rows'
+)
+
+# Writes a *field-shaped* shared-owner declaration for every inventory entry.
 seed_owners() {
     local root=$1
-    local entry file token
+    local entry file token field=0
 
     for entry in "${OWNERS[@]}"; do
         IFS='|' read -r file token <<<"$entry"
         mkdir -p "$root/$(dirname "$file")" || return 1
-        printf 'struct Owner;\nfn own() -> %sString> { todo!() }\n' "$token" \
-            >> "$root/$file" || return 1
+        printf 'struct Owner;\nstruct Seed%s { carrier%sString> }\n' \
+            "$field" "$token" >> "$root/$file" || return 1
+        field=$((field + 1))
     done
 }
 
@@ -61,15 +82,36 @@ seed_components() {
         > "$root/src/app/components/benign.rs" || return 1
 }
 
-# A conforming production-like tree passes and reports every in-scope flow.
+# A conforming production-like tree passes, reports every flow by name, and
+# reports the deduplicated count.
 repo="$TEST_ROOT/pass"
 seed_owners "$repo" || fail 'unable to seed conforming owners'
 seed_components "$repo" || fail 'unable to seed conforming components'
 if ! output=$(run_checker "$repo"); then
     fail "checker rejected a conforming inventory: $output"
 fi
-[[ "$output" == *'14 in-scope flows store the shared owner'* ]] ||
-    fail 'checker did not report the full in-scope inventory'
+for flow in "${FLOWS[@]}"; do
+    [[ "$output" == *"ok: $flow"* ]] ||
+        fail "checker did not report the '$flow' flow"
+done
+[[ "$output" == *'11 in-scope flows store the shared owner'* ]] ||
+    fail 'checker did not report the deduplicated in-scope count'
+if [[ "$output" == *'14 in-scope flows'* ]]; then
+    fail 'checker reported the inflated pre-dedup flow count'
+fi
+
+# A return-type-only owner is not a stored field and must fail.
+repo="$TEST_ROOT/return-type-only"
+seed_components "$repo" || fail 'unable to seed return-type-only components'
+mkdir -p "$repo/src/app/components/tv_workspace"
+printf 'struct Owner;\nfn own() -> WideMediaList<String> { todo!() }\n' \
+    > "$repo/src/app/components/tv_workspace/mod.rs" ||
+    fail 'unable to write the return-type-only fixture'
+if output=$(run_checker "$repo"); then
+    fail 'checker accepted a return-type-only shared owner'
+fi
+[[ "$output" == *'TV series and episodes: src/app/components/tv_workspace/mod.rs does not store the shared owner'* ]] ||
+    fail 'checker missed the return-type-only TV owner'
 
 # A flow whose owner file no longer stores the shared owner fails.
 repo="$TEST_ROOT/missing-owner"
@@ -80,8 +122,8 @@ printf 'struct Destination;\n' > "$repo/src/app/components/tv_workspace/mod.rs" 
 if output=$(run_checker "$repo"); then
     fail 'checker accepted a flow that lost the shared owner'
 fi
-[[ "$output" == *'TV series: src/app/components/tv_workspace/mod.rs does not store the shared owner'* ]] ||
-    fail 'checker missed the missing TV series owner'
+[[ "$output" == *'TV series and episodes: src/app/components/tv_workspace/mod.rs does not store the shared owner'* ]] ||
+    fail 'checker missed the missing TV owner'
 
 # A destination that reintroduces authoritative row state fails.
 repo="$TEST_ROOT/destination-mirror"

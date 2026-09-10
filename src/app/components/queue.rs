@@ -120,13 +120,18 @@ impl QueueComponent {
     }
 
     /// Deliver an authoritative cursor command independently of row delivery.
+    /// This is the adjudicated Queue shell-push seam (design.md D5): the shell
+    /// owns the Queue cursor command, so this one numeric re-anchor and its
+    /// resting-scroll clamp are sanctioned rather than delegated.
     pub(in crate::app) fn set_cursor(&mut self, cursor: QueueCursorUpdate) {
         if let QueueCursorUpdate::Set(idx) = cursor {
+            // ast-grep-ignore: no-render-media-list-mutators
             self.carrier.select_index(idx);
         }
         let scroll = self.carrier.scroll();
         let clamped = scroll.min(self.carrier.cursor());
         if clamped != scroll {
+            // ast-grep-ignore: no-render-media-list-mutators
             self.carrier.set_scroll(clamped);
         }
     }
