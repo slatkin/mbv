@@ -19,9 +19,7 @@ use crate::app::render::{render_pill_bar, render_placeholder, PillBar};
 use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
 use crate::app::ui_util::fmt_duration_approx;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
 
-use ratatui::widgets::Block;
 use ratatui::Frame;
 use tuirealm::component::Component;
 
@@ -172,8 +170,11 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             height: hero_content_area.height.saturating_sub(hero_height),
             ..hero_content_area
         };
-        let (_, chapters_content_area) =
-            wide_hero::wide_hero_hero_content_box(frame, chapters_area);
+        let (_, chapters_content_area) = wide_hero::wide_hero_hero_content_box(
+            frame,
+            chapters_area,
+            wide_hero::LeftPaneFocus::Workspace(focused),
+        );
         render_book_rows(
             frame,
             chapters_content_area,
@@ -191,13 +192,6 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
         );
         let list_panel = right_pane.list_panel;
         let content_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
-        if list_panel.height > 0 {
-            frame.render_widget(
-                Block::default()
-                    .style(Style::default().bg(palette::resolve_surface_focus(focused))),
-                list_panel,
-            );
-        }
         // Paint the rail frame before the rows: the border primitive rewrites
         // every panel cell background, so it must not run after the list.
         wide_hero_browser_border(frame, list_panel, focused);

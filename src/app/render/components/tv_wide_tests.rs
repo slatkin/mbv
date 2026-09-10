@@ -374,6 +374,57 @@ fn wide_tv_episode_list_uses_shared_focus_surfaces_when_focused() {
     );
 }
 
+/// `unify-surface-colour` 4.6: TV's overview box is the pane's soft content
+/// body while the library column holds focus and keeps today's `#2d353b`
+/// inset while it rests — matching the episode selection box beside it
+/// instead of staying a fixed dark box that never lit up.
+#[test]
+fn wide_tv_overview_box_follows_the_pane_focus_like_the_episode_box() {
+    let mut app = tv_app();
+    // An overview gets its own inset box below the title/metadata rows.
+    app.libs[0].nav_stack[0].items[0].overview =
+        "A series overview long enough to reserve an inset box of its own.".into();
+
+    let paint = |focused: bool| -> (ratatui::buffer::Buffer, Rect, Rect) {
+        let mut component = TvWorkspaceComponent::new();
+        component.set_content(
+            app.wide_tv_render_ctx(0, None)
+                .with_image_state(false, false),
+        );
+        component.set_focused(focused);
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+        terminal.draw(|f| component.view(f, f.area())).unwrap();
+        let hero = component.test_layout().tv_wide_left_area;
+        let episode_box = component.test_layout().tv_wide_episode_list_area;
+        (terminal.backend().buffer().clone(), hero, episode_box)
+    };
+
+    // Focused: the overview box lights up to the episode box's own fill.
+    let (focused_buffer, hero, episode_box) = paint(true);
+    let episode_fill =
+        focused_buffer[(episode_box.x.saturating_sub(PANE_PAD_X), episode_box.y + 1)].bg;
+    let overview_focused = (hero.x..hero.right())
+        .flat_map(|x| (hero.y..episode_box.y).map(move |y| (x, y)))
+        .find(|&(x, y)| focused_buffer[(x, y)].bg == episode_fill)
+        .expect("the focused overview box lights up with the pane");
+    assert_eq!(
+        focused_buffer[overview_focused].bg, episode_fill,
+        "TV's overview box matches the episode selection box while the pane holds focus"
+    );
+
+    // Resting: the same box returns to today's `#2d353b` inset.
+    let (resting_buffer, hero, episode_box) = paint(false);
+    let overview_resting = (hero.x..hero.right())
+        .flat_map(|x| (hero.y..episode_box.y).map(move |y| (x, y)))
+        .find(|&(x, y)| resting_buffer[(x, y)].bg == palette::SURFACE_BACKDROP)
+        .expect("the resting overview box keeps its backdrop inset");
+    assert_eq!(
+        resting_buffer[overview_resting].bg,
+        palette::SURFACE_BACKDROP,
+        "the resting overview box keeps today's #2d353b inset"
+    );
+}
+
 /// `unify-surface-colour` 3.2: every panel fill in the wide TV workspace
 /// follows the library column's focus, never the episode cursor. Moving the
 /// cursor from the series rail to the episode list changes no fill, while
@@ -475,6 +526,40 @@ fn wide_tv_panel_fills_follow_the_library_column_not_the_episode_cursor() {
         palette::SURFACE_BACKDROP,
         "episode box rests when the queue column holds focus"
     );
+}
+
+/// `unify-surface-colour` 4.5: the wide-hero rail panel body has exactly one
+/// filler. The six screens' duplicate `list_panel` fills were removed, so the
+/// shared `wide_hero_browser_border` writes the whole panel — including the
+/// flush edge outside the padded row flow — with the `LibraryPanel` surface.
+/// A buffer test cannot distinguish one agreeing filler from two, so this
+/// pins the surface across the full panel that the shared painter owns.
+#[test]
+fn wide_tv_rail_panel_body_is_filled_by_the_shared_border_painter() {
+    let app = tv_app();
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(
+        app.wide_tv_render_ctx(0, None)
+            .with_image_state(false, false),
+    );
+    component.set_focused(true);
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal.draw(|f| component.view(f, f.area())).unwrap();
+
+    let padded = component.test_layout().tv_wide_list_area;
+    let panel_x = padded.x.saturating_sub(PANE_PAD_X);
+    let panel_width = padded.width + PANE_PAD_X * 2;
+    let panel_fill =
+        palette::surface_colors_for_column_focus(palette::Surface::LibraryPanel, true).fill;
+    // A non-selected body row (the rail's second content row): every cell
+    // across the full panel width carries the shared painter's surface.
+    for x in panel_x..panel_x + panel_width {
+        assert_eq!(
+            terminal.backend().buffer()[(x, padded.y + 2)].bg,
+            panel_fill,
+            "rail panel body cell {x} is filled by the shared LibraryPanel painter"
+        );
+    }
 }
 
 /// migrate-home-feeds 5.1 (§5 geometry test): the shared Wide hero

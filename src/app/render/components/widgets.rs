@@ -128,11 +128,14 @@ pub(in crate::app) fn render_scrollbar_with_viewport_at(
     );
 }
 
-/// Paints a colored background block spanning display rows `[top_pad_abs, bottom_pad_abs]`
-/// (absolute/unscrolled indices into the complete display row sequence), clamped to the
-/// visible scroll window `[offset, offset+visible)`. The block fills the full row width
-/// supplied by `area.x` and `area.width` (interior content can indent itself further).
-/// Call before rendering list/row content so the background shows through.
+/// Paints a surface's background block spanning display rows
+/// `[top_pad_abs, bottom_pad_abs]` (absolute/unscrolled indices into the
+/// complete display row sequence), clamped to the visible scroll window
+/// `[offset, offset+visible)`. The block fills the full row width supplied by
+/// `area.x` and `area.width` (interior content can indent itself further).
+/// `surface` is the row the block punches through to and `focused` is that
+/// surface's own column focus; the table resolves the fill. Call before
+/// rendering list/row content so the background shows through.
 pub(in crate::app) fn render_selected_block_background(
     f: &mut Frame,
     area: Rect,
@@ -140,8 +143,10 @@ pub(in crate::app) fn render_selected_block_background(
     visible: usize,
     top_pad_abs: usize,
     bottom_pad_abs: usize,
-    bg: Color,
+    surface: palette::Surface,
+    focused: bool,
 ) {
+    let bg = palette::surface_colors_for_column_focus(surface, focused).fill;
     let vis_top = top_pad_abs.max(offset);
     let vis_bot = bottom_pad_abs.min(offset + visible.saturating_sub(1));
     if vis_top <= vis_bot {
@@ -184,7 +189,10 @@ pub(in crate::app) fn render_selected_block_borders(
         SelectedBlockBorderStyle::FocusedRail { focused } => (
             "\u{2594}",
             "\u{2581}",
-            Some(palette::resolve_surface_focus(focused)),
+            Some(
+                palette::surface_colors_for_column_focus(palette::Surface::LibraryPanel, focused)
+                    .fill,
+            ),
         ),
     };
     let mut border_style = Style::default().fg(palette::PROGRESS_TRACK);
@@ -233,11 +241,7 @@ pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focuse
         return Rect::default();
     }
 
-    let bg = if focused {
-        palette::SURFACE_ACCENT_SOFT
-    } else {
-        palette::SURFACE_BACKDROP
-    };
+    let bg = palette::surface_colors_for_column_focus(palette::Surface::QueuePanel, focused).fill;
     f.render_widget(Block::default().style(Style::default().bg(bg)), area);
 
     area
@@ -248,12 +252,16 @@ pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focuse
 /// appearance for every interactive pill selector (Home sections, feed
 /// groups, music groups, letter filters, and series seasons).
 fn selector_pill_style(selected: bool) -> Style {
-    if selected {
-        Style::default()
-            .fg(palette::PILL_SELECTED_FG)
-            .bg(palette::PILL_SELECTED_BG)
+    let surface = if selected {
+        palette::Surface::PillChipSelected
     } else {
-        Style::default().fg(palette::PILL_FG).bg(palette::PILL_BG)
+        palette::Surface::PillChip
+    };
+    let bg = palette::surface_colors_for_column_focus(surface, false).fill;
+    if selected {
+        Style::default().fg(palette::PILL_SELECTED_FG).bg(bg)
+    } else {
+        Style::default().fg(palette::PILL_FG).bg(bg)
     }
 }
 
@@ -319,6 +327,13 @@ pub(in crate::app) fn render_pill_bar(
         return selector_tabs;
     }
     let area = Rect { height: 1, ..area };
+    // The pill row and its chips are fixed chrome-band surfaces (their fill
+    // never follows panel focus); the table still owns their values.
+    let pill_row_bg =
+        palette::surface_colors_for_column_focus(palette::Surface::PillRow, false).fill;
+    let pill_bg = palette::surface_colors_for_column_focus(palette::Surface::PillChip, false).fill;
+    let pill_selected_bg =
+        palette::surface_colors_for_column_focus(palette::Surface::PillChipSelected, false).fill;
     let n = bar.labels.len();
     let bar_w = area.width as usize;
     let prefix_w = bar.prefix.map(|p| p.width()).unwrap_or(0);
@@ -388,7 +403,7 @@ pub(in crate::app) fn render_pill_bar(
 
     // The row surface is part of the canonical shell.
     f.render_widget(
-        Block::default().style(Style::default().bg(palette::PILL_ROW_BG)),
+        Block::default().style(Style::default().bg(pill_row_bg)),
         area,
     );
 
@@ -400,7 +415,7 @@ pub(in crate::app) fn render_pill_bar(
                 "  ",
                 Style::default()
                     .fg(palette::STATUS_AVAILABLE)
-                    .bg(palette::PILL_ROW_BG),
+                    .bg(pill_row_bg),
             ));
         } else {
             spans.push(Span::styled(
@@ -442,31 +457,15 @@ pub(in crate::app) fn render_pill_bar(
         spans.push(Span::styled(
             "◢",
             Style::default()
-                .fg(if selected {
-                    palette::PILL_SELECTED_BG
-                } else {
-                    palette::PILL_BG
-                })
-                .bg(if abs_idx == 0 {
-                    palette::PILL_ROW_BG
-                } else {
-                    palette::PILL_BG
-                }),
+                .fg(if selected { pill_selected_bg } else { pill_bg })
+                .bg(if abs_idx == 0 { pill_row_bg } else { pill_bg }),
         ));
         spans.push(Span::styled(pill, style));
         spans.push(Span::styled(
             "◤",
             Style::default()
-                .fg(if selected {
-                    palette::PILL_SELECTED_BG
-                } else {
-                    palette::PILL_BG
-                })
-                .bg(if is_last_pill {
-                    palette::PILL_ROW_BG
-                } else {
-                    palette::PILL_BG
-                }),
+                .fg(if selected { pill_selected_bg } else { pill_bg })
+                .bg(if is_last_pill { pill_row_bg } else { pill_bg }),
         ));
         x_cursor += pill_w;
     }
@@ -486,7 +485,7 @@ pub(in crate::app) fn render_pill_bar(
     if remaining > 0 {
         spans.push(Span::styled(
             " ".repeat(remaining),
-            Style::default().bg(palette::PILL_ROW_BG),
+            Style::default().bg(pill_row_bg),
         ));
     }
 

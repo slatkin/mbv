@@ -78,8 +78,6 @@ pub(in crate::app::render) fn podcast_hero_content_rows(
 }
 use crate::app::palette;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::widgets::Block;
 use ratatui::Frame;
 
 /// The component-owned interaction values the podcast renderer needs, passed
@@ -259,12 +257,6 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
 
     let list_panel = right_pane.list_panel;
     let content_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
-    if list_panel.height > 0 {
-        frame.render_widget(
-            Block::default().style(Style::default().bg(palette::resolve_surface_focus(focused))),
-            list_panel,
-        );
-    }
     // Paint the rail frame before the rows: the border primitive rewrites every
     // panel cell background, so it must not run after the canonical list.
     wide_hero_browser_border(frame, list_panel, focused);
@@ -429,7 +421,11 @@ fn render_podcast_hero(
             height: area.bottom().saturating_sub(result.next_row),
             ..area
         };
-        let (_, listing_content_area) = wide_hero::wide_hero_hero_content_box(frame, listing_area);
+        let (_, listing_content_area) = wide_hero::wide_hero_hero_content_box(
+            frame,
+            listing_area,
+            wide_hero::LeftPaneFocus::Workspace(focused),
+        );
         let filter = interaction.episode_filter;
         let labels: Vec<String> = AudiobookshelfEpisodeFilter::ALL
             .iter()

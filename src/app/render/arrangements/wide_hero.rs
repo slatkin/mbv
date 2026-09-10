@@ -271,11 +271,20 @@ pub(in crate::app) fn wide_hero_browser_pane(
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum LeftPaneFocus {
     /// The pane is never focusable (Movies/home-videos/Emby-podcasts/
-    /// feed-group browser, Home, Feeds): always [`palette::SURFACE_RESTING`].
+    /// feed-group browser, Home, Feeds): always the resting `HeroPane`
+    /// surface.
     ReadOnly,
     /// The pane belongs to a focusable workspace (TV, Music, ABS Books, ABS
     /// Podcasts); `true` when that workspace currently holds focus.
     Workspace(bool),
+}
+
+impl LeftPaneFocus {
+    /// Whether the pane holds focus. `Workspace(focused)` follows its bit;
+    /// `ReadOnly` is never focusable, so it is always unfocused.
+    pub(in crate::app) fn is_focused(self) -> bool {
+        matches!(self, Self::Workspace(true))
+    }
 }
 
 /// Paints the Wide hero right pane: fills the [`wide_hero_presentation`]
@@ -298,10 +307,9 @@ pub(in crate::app) fn wide_hero_hero_pane(
     let WideHeroPanes {
         hero: hero_panel, ..
     } = wide_hero_presentation(content_area, override_width)?;
-    let background = match focus {
-        LeftPaneFocus::ReadOnly => palette::SURFACE_RESTING,
-        LeftPaneFocus::Workspace(held) => palette::resolve_surface_focus(held),
-    };
+    let background =
+        palette::surface_colors_for_column_focus(palette::Surface::HeroPane, focus.is_focused())
+            .fill;
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
         hero_panel,
@@ -412,7 +420,8 @@ pub(in crate::app) fn wide_hero_browser_border(f: &mut Frame, list_panel: Rect, 
     if list_panel.height == 0 {
         return;
     }
-    let background = palette::resolve_surface_focus(focused);
+    let background =
+        palette::surface_colors_for_column_focus(palette::Surface::LibraryPanel, focused).fill;
     for y in list_panel.y..list_panel.bottom() {
         for x in list_panel.x..list_panel.right() {
             let cell = f.buffer_mut().cell_mut((x, y)).expect("panel cell exists");
@@ -430,43 +439,31 @@ pub(in crate::app) fn wide_hero_browser_border(f: &mut Frame, list_panel: Rect, 
     );
 }
 
-/// Semantic surface variants for the shared Wide hero content-box framing.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app::render) enum WideHeroContentBoxSurface {
-    Backdrop,
-    FocusedTrackList,
-}
-
-/// Paints the Wide hero arrangement's main content box: a
-/// [`palette::SURFACE_BACKDROP`] inset within the Wide hero left pane,
-/// present on every Wide hero surface with a kind-dependent payload (the
-/// episode listing on TV, the track listing on Music, item description and
-/// metadata elsewhere) and one shared padding value (design.md D9, matching
-/// the pane inset from D6). Returns both rects so callers can use `panel` for
-/// full-bleed row backgrounds and `content` for text layout.
-///
-/// Shared by Music's track panel and Home's overview block.
+/// Paints the Wide hero arrangement's main content box: the
+/// `MainContentBox` surface inset within the Wide hero left pane, present on
+/// every Wide hero surface with a kind-dependent payload (the episode
+/// listing on TV, the track listing on Music, item description and metadata
+/// elsewhere) and one shared padding value (design.md D9, matching the pane
+/// inset from D6). While the containing pane holds focus the box lights up to
+/// the soft content-body value; while it rests — or in the always-`ReadOnly`
+/// panes of Home and Feeds — it keeps the `#2d353b` inset. Returns both rects
+/// so callers can use `panel` for full-bleed row backgrounds and `content`
+/// for text layout.
 pub(in crate::app::render) fn wide_hero_hero_content_box(
     f: &mut Frame,
     area: Rect,
-) -> (Rect, Rect) {
-    wide_hero_hero_content_box_with_surface(f, area, WideHeroContentBoxSurface::Backdrop)
-}
-
-pub(in crate::app::render) fn wide_hero_hero_content_box_with_surface(
-    f: &mut Frame,
-    area: Rect,
-    surface: WideHeroContentBoxSurface,
+    focus: LeftPaneFocus,
 ) -> (Rect, Rect) {
     let panel = Rect {
         x: area.x.saturating_add(PANE_PAD_X),
         width: area.width.saturating_sub(PANE_PAD_X * 2),
         ..area
     };
-    let background = match surface {
-        WideHeroContentBoxSurface::Backdrop => palette::SURFACE_BACKDROP,
-        WideHeroContentBoxSurface::FocusedTrackList => palette::SURFACE_ACCENT_SOFT,
-    };
+    let background = palette::surface_colors_for_column_focus(
+        palette::Surface::MainContentBox,
+        focus.is_focused(),
+    )
+    .fill;
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
         panel,

@@ -18,7 +18,7 @@ use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Span;
-use ratatui::widgets::{Block, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 use ratatui::Frame;
 use tuirealm::component::Component;
 
@@ -307,13 +307,6 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     let list_panel = right_pane.list_panel;
     let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
     layout.tv_wide_list_area = list_area;
-    if list_panel.height > 0 {
-        f.render_widget(
-            Block::default()
-                .style(Style::default().bg(palette::resolve_surface_focus(ctx.focused))),
-            list_panel,
-        );
-    }
     // The canonical rail owns the full panel row: selection markers and
     // selected backgrounds must reach the panel border, while the layout
     // area remains the padded hit/scroll geometry.
@@ -464,7 +457,11 @@ fn render_tv_series_selection(
                 content_area.width.saturating_add(PANE_PAD_X * 2),
                 ov_height,
             );
-            let (_, ov_content) = wide_hero::wide_hero_hero_content_box(f, box_area);
+            let (_, ov_content) = wide_hero::wide_hero_hero_content_box(
+                f,
+                box_area,
+                wide_hero::LeftPaneFocus::Workspace(library_focused),
+            );
             let ov_color = if focused {
                 palette::TEXT_STRONG
             } else {
@@ -504,20 +501,22 @@ fn render_tv_series_selection(
         media_list_area.height,
     );
     let Some(detail) = detail else {
-        let (_, content) = wide_hero::wide_hero_hero_content_box(f, media_list_area);
+        let (_, content) = wide_hero::wide_hero_hero_content_box(
+            f,
+            media_list_area,
+            wide_hero::LeftPaneFocus::Workspace(library_focused),
+        );
         render_placeholder(f, content, " Loading\u{2026}");
         return (true, image_paint);
     };
     let Some(season) = detail.seasons.get(season_cursor) else {
         return (true, image_paint);
     };
-    let (detail_panel, detail_area) = wide_hero::wide_hero_hero_content_box(f, media_list_area);
-    if library_focused {
-        f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_ACCENT_SOFT)),
-            detail_panel,
-        );
-    }
+    let (detail_panel, detail_area) = wide_hero::wide_hero_hero_content_box(
+        f,
+        media_list_area,
+        wide_hero::LeftPaneFocus::Workspace(library_focused),
+    );
     if detail_area.height == 0 || detail_area.width == 0 {
         return (true, image_paint);
     }
@@ -573,7 +572,7 @@ fn render_tv_series_selection(
     episodes.set_geometry(paint_area, episode_list_area);
     episodes.set_paint_policy(WideMediaListPaintPolicy::new(
         focused,
-        SelectedRowSurface::OwningSurface,
+        SelectedRowSurface::OwningLibraryPane,
         None,
     ));
     Component::view(episodes, f, episode_list_area);

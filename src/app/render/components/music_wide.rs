@@ -525,17 +525,15 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
         );
         let track_area = left_layout.track_area;
         if track_area.height > 0 && track_area.width > 0 && !track_list.is_empty() {
-            let track_surface = if ctx.focused {
-                crate::app::render::arrangements::wide_hero::WideHeroContentBoxSurface::FocusedTrackList
-            } else {
-                crate::app::render::arrangements::wide_hero::WideHeroContentBoxSurface::Backdrop
-            };
-            let (track_panel, track_content_area) = crate::app::render::arrangements::wide_hero::
-                wide_hero_hero_content_box_with_surface(f, track_area, track_surface);
+            let (track_panel, track_content_area) = wide_hero::wide_hero_hero_content_box(
+                f,
+                track_area,
+                wide_hero::LeftPaneFocus::Workspace(ctx.focused),
+            );
             track_list.set_geometry(track_panel, track_content_area);
             track_list.set_paint_policy(WideMediaListPaintPolicy::new(
                 left_focused,
-                SelectedRowSurface::OwningSurface,
+                SelectedRowSurface::OwningLibraryPane,
                 None,
             ));
             Component::view(track_list, f, track_area);
@@ -575,13 +573,6 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     // hand-off (design.md D3); published from the arrangement actually
     // painted, not re-derived by the destination.
     output.content_height = Some(browser_area.height as usize);
-    if list_panel.height > 0 {
-        f.render_widget(
-            ratatui::widgets::Block::default()
-                .style(Style::default().bg(palette::resolve_surface_focus(ctx.focused))),
-            list_panel,
-        );
-    }
     // Paint the rail frame before the rows: `wide_hero_browser_border`
     // rewrites every panel cell's background, so it must not run after the
     // canonical list (which owns the selected-row background). Mirrors

@@ -1,15 +1,15 @@
 mod primitives;
 
-// Transitional: the surface table (change row 4.1) has no production callers
-// until row 4.2 migrates the screens onto it. These module-level allows keep
-// `cargo check -p mbv` warning-free until then; row 4.2 removes them together
-// with the last transitional role names.
-#[cfg_attr(not(test), allow(dead_code))]
 mod surface;
-#[cfg_attr(not(test), allow(dead_code))]
 mod surface_resolve;
-#[cfg_attr(not(test), allow(dead_code))]
 mod surface_table;
+
+// The closed surface table is public to `crate::app` (a screen names a
+// `Surface` and the resolver), but its `Level`/`Row`/`FocusSource` machinery
+// stays private to the theme. Re-exported here so `render/mod.rs` and
+// `palette.rs` can bridge the names to production call sites.
+pub(in crate::app) use surface::Surface;
+pub(in crate::app) use surface_resolve::{surface_colors, surface_colors_for_column_focus};
 
 use ratatui::style::Color;
 
@@ -103,6 +103,11 @@ pub fn resolve_surface_focus(focused: bool) -> Color {
 /// [`SURFACE_BACKDROP`], not `resolve_surface_focus(focused)`. Queue is the
 /// one non-library caller whose parent is itself focus-green; it passes
 /// [`SURFACE_FOCUSED`] directly instead of calling this.
+///
+/// Test-only: production callers resolve `Surface::SelectedRow` through the
+/// table (`unify-surface-colour` row 4.2), and row 4.3 retires this alias.
+/// Retained for buffer expectations that still name it.
+#[cfg(test)]
 pub fn list_selected_row_bg() -> Color {
     SURFACE_BACKDROP
 }

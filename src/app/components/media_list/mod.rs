@@ -192,12 +192,16 @@ impl MediaSemanticState {
 
 /// Which semantic surface should receive the selected-row treatment.
 ///
-/// The policy is deliberately closed: callers choose a named surface role,
-/// never a raw Ratatui style or colour.
+/// The policy is deliberately closed: callers choose a named surface
+/// identity, never a raw Ratatui style or colour.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectedRowSurface {
+    /// The library rails' selected row punches through to the app backdrop.
     ListBackdrop,
-    OwningSurface,
+    /// The queue list's selected row shows the queue column's own fill.
+    OwningQueueColumn,
+    /// TV's episode list and Music's track list show the library pane's fill.
+    OwningLibraryPane,
 }
 
 /// Semantic paint policy for one `WideMediaList` view.

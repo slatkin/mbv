@@ -108,7 +108,13 @@ impl App {
         // for posters specifically, so this fills the full reserved area.
         if image_loading && reservation.height > 0 {
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
+                Block::default().style(
+                    Style::default().bg(palette::surface_colors_for_column_focus(
+                        palette::Surface::ArtworkLoadingPlaceholder,
+                        false,
+                    )
+                    .fill),
+                ),
                 reservation,
             );
         }
@@ -242,7 +248,8 @@ impl App {
         left_align: bool,
     ) -> (u16, u16, bool) {
         let rect = self.card_reserved_rect(area, left_align);
-        let bg = palette::resolve_surface_focus(self.focus_state().queue_column_focused());
+        let focus = self.focus_state();
+        let bg = palette::surface_colors(palette::Surface::QueueCardVisualizer, &focus).fill;
         self.render_visualizer(f, rect, bg);
         (rect.height, rect.width, false)
     }

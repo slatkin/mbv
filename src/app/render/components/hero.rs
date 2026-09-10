@@ -189,7 +189,6 @@ pub(in crate::app::render) fn selected_detail_shell(
     hero_rows: u16,
     focused: bool,
 ) {
-    let bg = palette::resolve_surface_focus(focused);
     let visible = hero_rows as usize;
     let top_pad_abs = 1usize;
     let bottom_pad_abs = (hero_rows as usize).saturating_sub(2);
@@ -200,7 +199,8 @@ pub(in crate::app::render) fn selected_detail_shell(
         visible,
         top_pad_abs,
         bottom_pad_abs,
-        bg,
+        palette::Surface::InlineHero,
+        focused,
     );
     crate::app::render::render_selected_block_borders(
         f,
@@ -601,7 +601,11 @@ pub(in crate::app::render) fn render_home_hero_meta_block(
                 height: ov_height,
             };
             Some(
-                crate::app::render::arrangements::wide_hero::wide_hero_hero_content_box(f, ov_area),
+                crate::app::render::arrangements::wide_hero::wide_hero_hero_content_box(
+                    f,
+                    ov_area,
+                    crate::app::render::arrangements::wide_hero::LeftPaneFocus::ReadOnly,
+                ),
             )
         } else {
             None

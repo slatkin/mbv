@@ -344,6 +344,50 @@ fn narrow_podcast_detail_shows_author_description_no_pills_or_table() {
     assert!(output.contains("All"));
 }
 
+/// `unify-surface-colour` 4.6: the narrow inline-hero content box follows the
+/// pane's focus — the soft content body while the podcast component holds
+/// focus, and today's `#2d353b` inset when it rests.
+#[test]
+fn narrow_podcast_inline_hero_content_box_follows_focus() {
+    use tuirealm::component::Component;
+
+    let paint = |focused: bool| -> ratatui::buffer::Buffer {
+        let app = audiobookshelf_app();
+        let mut component = AudiobookshelfPodcastComponent::new();
+        component.set_content(&app.audiobookshelf_browse[0], false);
+        component.set_focused(focused);
+        // Admit the inline detail's episode table.
+        component.enter_episode_focus();
+        let mut term = Terminal::new(TestBackend::new(60, 20)).unwrap();
+        term.draw(|f| component.view(f, f.area())).unwrap();
+        term.backend().buffer().clone()
+    };
+
+    let soft =
+        palette::surface_colors_for_column_focus(palette::Surface::MainContentBox, true).fill;
+    let backdrop =
+        palette::surface_colors_for_column_focus(palette::Surface::MainContentBox, false).fill;
+
+    let focused = paint(true);
+    // The soft content body is painted only by the inline-hero content box.
+    let box_cell = focused
+        .content
+        .iter()
+        .position(|cell| cell.bg == soft)
+        .expect("the focused inline-hero content box lights up");
+
+    let resting = paint(false);
+    assert!(
+        !resting.content.iter().any(|cell| cell.bg == soft),
+        "no content box lights up while the pane rests"
+    );
+    // Both paints cover the same area, so the index is the same cell.
+    assert_eq!(
+        resting.content[box_cell].bg, backdrop,
+        "the inline-hero content box returns to today's #2d353b inset"
+    );
+}
+
 #[test]
 fn wide_podcast_detail_preserves_episode_rows_and_played_filtering() {
     let mut app = audiobookshelf_app();
@@ -625,7 +669,7 @@ fn wide_podcast_selected_row_highlight_follows_the_cursor_subpanel() {
     assert_eq!(buffer[episode_selected].fg, marker_fg);
     assert_eq!(
         buffer[(episode.x.saturating_sub(PANE_PAD_X), episode.y)].bg,
-        palette::SURFACE_BACKDROP,
-        "the episode content box keeps its row-3.2 fill"
+        palette::surface_colors_for_column_focus(palette::Surface::MainContentBox, true).fill,
+        "the episode content box lights up with the pane's focus (row 4.6)"
     );
 }

@@ -5,8 +5,13 @@ use ratatui::{layout::Rect, Frame};
 /// Paints the shared surface used when an item has no artwork.
 pub(in crate::app) fn render_artwork_placeholder(f: &mut Frame, area: Rect) {
     f.render_widget(
-        Block::default()
-            .style(ratatui::style::Style::default().bg(palette::SURFACE_ARTWORK_PLACEHOLDER)),
+        Block::default().style(
+            ratatui::style::Style::default().bg(palette::surface_colors_for_column_focus(
+                palette::Surface::ArtworkPlaceholder,
+                false,
+            )
+            .fill),
+        ),
         area,
     );
 }

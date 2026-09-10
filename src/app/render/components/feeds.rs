@@ -17,8 +17,6 @@ use crate::app::ui_util::trunc_str;
 use mbv_core::config::FeedSubscription;
 use mbv_core::playback_queue::FeedEntry;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::widgets::Block;
 use ratatui::Frame;
 
 use tuirealm::component::Component;
@@ -203,14 +201,14 @@ pub(in crate::app) fn render_feeds_content(
             list_pane_width,
         )
         .expect("wide branch already confirmed wide_hero_presentation fits");
-        let (_, hero_content_area) = wide_hero::wide_hero_hero_content_box(f, hero_content_area);
+        let (_, hero_content_area) = wide_hero::wide_hero_hero_content_box(
+            f,
+            hero_content_area,
+            wide_hero::LeftPaneFocus::ReadOnly,
+        );
         if let Some(entry) = model.selected_entry {
             paint_feed_hero(f, hero_content_area, entry, focused, model.images_enabled);
         }
-        f.render_widget(
-            Block::default().style(Style::default().bg(palette::resolve_surface_focus(focused))),
-            list_panel,
-        );
         // `list_area` is the inset content rect (row/hit geometry); the
         // painter is handed a full-width, vertically-inset paint rect below.
         (

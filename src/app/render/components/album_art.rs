@@ -180,7 +180,13 @@ impl App {
 
         if use_placeholder {
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
+                Block::default().style(
+                    Style::default().bg(palette::surface_colors_for_column_focus(
+                        palette::Surface::ArtworkLoadingPlaceholder,
+                        false,
+                    )
+                    .fill),
+                ),
                 img_rect,
             );
         } else if let Some(state) = self.cached_image_protocol_mut(&cache_key) {

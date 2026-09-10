@@ -9,9 +9,9 @@
 //! `surface_resolve`.
 //!
 //! Only [`Surface`], [`Surface::ALL`] and the resolver's `surface_colors` /
-//! `SurfaceColors` are crate-visible. The level and row accessors are private
-//! to the theme, so a screen cannot resolve a *level* or a row instead of
-//! naming its surface and calling the resolver.
+//! `surface_colors_for_column_focus` are visible to `crate::app`. The level and
+//! row accessors are private to the theme, so a screen cannot resolve a
+//! *level* or a row instead of naming its surface and calling the resolver.
 
 use super::*;
 use ratatui::style::Color;

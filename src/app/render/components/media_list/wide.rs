@@ -198,10 +198,12 @@ fn row_paint_area(paint_area: Rect, content_area: Rect) -> Rect {
 }
 
 fn selected_row_surface_color(surface: SelectedRowSurface, focused: bool) -> Color {
-    match surface {
-        SelectedRowSurface::ListBackdrop => palette::list_selected_row_bg(),
-        SelectedRowSurface::OwningSurface => palette::resolve_surface_focus(focused),
-    }
+    let surface = match surface {
+        SelectedRowSurface::ListBackdrop => palette::Surface::SelectedRow,
+        SelectedRowSurface::OwningQueueColumn => palette::Surface::SelectedRowOnQueueColumn,
+        SelectedRowSurface::OwningLibraryPane => palette::Surface::SelectedRowOnLibraryPane,
+    };
+    palette::surface_colors_for_column_focus(surface, focused).fill
 }
 
 /// Component-view adapter for the retained-result seam. The compatibility
@@ -265,7 +267,7 @@ pub(in crate::app) fn render_grid_media_list_component<Target: Clone + PartialEq
             row,
             selected_row,
             policy.focused(),
-            palette::list_selected_row_bg(),
+            palette::surface_colors_for_column_focus(palette::Surface::SelectedRow, false).fill,
             cell.rect.width as usize,
             false,
             None,

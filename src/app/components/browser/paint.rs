@@ -1,11 +1,8 @@
 use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::widgets::Block;
 use ratatui::Frame;
 
 use super::BrowserComponent;
 use crate::app::components::component_id::BrowserKind;
-use crate::app::palette;
 use crate::app::render::{
     padded_rect, prepare_wide_emby_hero_card, render_count_label, render_home_hero_content,
     render_pill_bar, wide_hero_browser_border, wide_hero_browser_pane, wide_hero_hero_pane,
@@ -104,13 +101,6 @@ impl BrowserComponent {
             self.render_letter_pills_row(f, pills_area, ctx);
         }
 
-        if list_panel.height > 0 {
-            let list_bg = palette::resolve_surface_focus(self.focused);
-            f.render_widget(
-                Block::default().style(Style::default().bg(list_bg)),
-                list_panel,
-            );
-        }
         // `content` is the inset row/hit geometry; `paint` keeps the full
         // panel width so the selected-row bar and flush marker reach the rail
         // border, inset vertically for the framed border rows.
