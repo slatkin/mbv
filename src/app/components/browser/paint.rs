@@ -145,7 +145,7 @@ impl BrowserComponent {
             );
             self.inline_search.set_scroll(new_scroll);
             new_scroll
-        } else if self.carrier.is_empty() {
+        } else if self.carrier.wide().is_empty() {
             crate::app::render::components::widgets::render_placeholder(
                 f,
                 content,

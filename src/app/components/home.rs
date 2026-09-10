@@ -469,7 +469,11 @@ impl HomeComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                let claimed = self.carrier.claims_point(self.list_area, at);
+                // Home's hero is destination-painted chrome outside the
+                // carrier's list area, so the destination keeps claiming it
+                // here (design Non-Goals: chrome stays with the parent).
+                let claimed = self.carrier.claims_point(self.list_area, at)
+                    || self.hero_area.is_some_and(|hero| hero.contains(at));
                 if !claimed {
                     return None;
                 }
@@ -624,7 +628,7 @@ impl HomeComponent {
     fn ensure_carrier(&mut self) {
         let target = self.active_presentation();
         let viewport_height = self.list_area.height.max(1) as usize;
-        self.carrier.ensure(target, viewport_height);
+        self.carrier.ensure_presentation(target, viewport_height);
     }
 }
 

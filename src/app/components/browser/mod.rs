@@ -260,7 +260,7 @@ impl BrowserComponent {
     pub(in crate::app) fn ensure_carrier(&mut self) {
         let target = self.active_presentation();
         let viewport_height = self.painted_viewport_height();
-        self.carrier.ensure(target, viewport_height);
+        self.carrier.ensure_presentation(target, viewport_height);
     }
     /// Handle a mouse event against the component's painted browse geometry.
     ///
@@ -294,8 +294,13 @@ impl BrowserComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
+                // The inline hero block is only claimed by the Inline
+                // presentation that painted it; Wide and Grid never claimed
+                // it (the parent-owned `inline_hero_area` is a sub-region of
+                // the Inline list).
                 let claimed = self.carrier.claims_point(self.layout.left_area, at)
-                    || self.layout.inline_hero_area.contains(at);
+                    || (self.carrier.active() == Presentation::Inline
+                        && self.layout.inline_hero_area.contains(at));
                 if !claimed {
                     return None;
                 }

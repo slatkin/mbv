@@ -331,19 +331,23 @@ One member of the closed set of media-list presentations — Wide, Inline, Grid
 — each a persistent component (WideMediaList, InlineMediaBrowser, or the Grid
 presentation) over the one shared `MediaList<Target>`. A destination derives
 the active Presentation from its kind, breakpoint, and painted chrome; a
-change re-selects among them and never invents a new one. Narrower than the
-general **Variant** term: every media-list Presentation is a Variant, but
-Variant also covers non-media-list named presentations (e.g. hero).
-_Avoid_: mode, control (for the carrying presentation), layout
+change re-selects among them and never invents a new one. Exactly one
+Presentation holds (carries) the owner at a time. Narrower than the general
+**Variant** term: every media-list Presentation is a Variant, but Variant
+also covers non-media-list named presentations (e.g. hero).
+_Avoid_: mode, control (for the carrying presentation), layout, Carrier
 
-**Carrier**:
-The one Presentation that currently holds a logical flow's shared
-`MediaList<Target>` — its rows, cursor, scroll, selection, and retained
-geometry. Exactly one carrier holds the owner at a time; a responsive change
-moves the same owner between the persistent presentation adapters and
-preserves only the outgoing selected-row viewport offset. The owner is never
-copied between carriers.
-_Avoid_: active list, owner swap, second control
+**Carrier** (media-list):
+The destination-side `MediaListCarrier<Target>` container that owns a logical
+flow's persistent Presentation adapters (WideMediaList, InlineMediaBrowser,
+Grid) and tracks which one is active. Exactly one of its Presentations holds
+the shared `MediaList<Target>` — its rows, cursor, scroll, selection, and
+retained geometry — at a time; a responsive change moves the same owner
+between the adapters and preserves only the outgoing selected-row viewport
+offset. The owner is never copied. The Presentation that currently holds the
+owner is the **Presentation** term, not the container.
+_Avoid_: active list, owner swap, second control, active carrier (for the
+owner-holding Presentation)
 
 **Inline Search**:
 A library-scoped search capability embedded in the selected searchable Emby destination. The destination owns the local search control, session, query, result selection, painting, and keyboard/mouse interpretation; the shell owns full-library fetches, recursive album indexing, stale-completion guards, navigation effects, and activation effects. Browser, MusicWorkspace, or TvWorkspace is the sole owner and painter for the current presentation; TV transfers one snapshot between Normal and Wide, while an ordinary tab change dismisses search. It is distinct from the cross-library **Search sidebar**.

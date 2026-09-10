@@ -138,7 +138,7 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     /// persistent adapters and preserves only the outgoing selected-row
     /// viewport offset (design.md D2); no cursor, scroll, or selection is
     /// copied between presentations.
-    pub fn ensure(&mut self, presentation: Presentation, viewport_height: usize) {
+    pub fn ensure_presentation(&mut self, presentation: Presentation, viewport_height: usize) {
         if self.active == presentation {
             return;
         }
@@ -252,12 +252,19 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     }
 
     /// Whether the active presentation's current frame claims `point` inside
-    /// the parent-supplied `list_area`. Wide and Inline claim that region;
-    /// Grid claims its own retained current-frame cells region.
+    /// the parent-supplied `list_area`. Wide claims that region; Inline claims
+    /// it plus its media-list-owned detail block; Grid claims its own retained
+    /// current-frame cells region.
     pub fn claims_point(&self, list_area: Rect, point: Position) -> bool {
         match self.active {
             Presentation::Wide => self.wide.claims_point(list_area, point),
-            Presentation::Inline => self.inline.claims_point(list_area, point),
+            Presentation::Inline => {
+                self.inline.claims_point(list_area, point)
+                    || self
+                        .inline
+                        .current_detail_rect()
+                        .is_some_and(|rect| rect.contains(point))
+            }
             Presentation::Grid => self.grid.claims_current_point(point),
         }
     }
