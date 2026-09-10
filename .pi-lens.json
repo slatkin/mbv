@@ -3,5 +3,8 @@
   "autofix": { "enabled": false },
   "actionableWarnings": {
     "autoFix": { "enabled": false }
+  },
+  "lsp": {
+    "disabledServers": ["typos"]
   }
 }
