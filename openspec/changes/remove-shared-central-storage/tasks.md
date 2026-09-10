@@ -61,7 +61,8 @@
   `SharedQueueState` — it is ctrl snapshot state (queue, source, observed active slot) and is
   unrelated to shared data despite the name. Verify
   `rg -n "start_shared_service|mbv-shared-data-tcp-port|CTRL_CAP_SHARED_MBV_STATE"` returns
-  nothing and the daemon test suites are green.
+  nothing and the daemon test suites are green (including the `mbv-shared-data-tcp-port` parser
+  tests in `api_tests_client.rs`).
 
 - [ ] 2.4 Remove the configuration surface: the five `shared_data_*` fields, their parse and
   save paths, and their validation; drop a leftover `[shared_data]` section on the next

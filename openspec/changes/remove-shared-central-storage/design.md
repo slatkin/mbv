@@ -91,7 +91,8 @@ protocol is undocumented and purpose-built).
 cannot carry a capability `Purpose`, and `interactive-component-framework`'s stale enumeration is
 prose rather than behavior. Task 1.5 therefore edits `openspec/specs/feed-entry-state/spec.md`,
 `feed-subscriptions`, and `interactive-component-framework` directly. Validation is unaffected:
-deltas are matched against requirement and scenario names, not Purpose text.
+deltas are matched against requirement and scenario names, not Purpose text, and task 1.5
+re-runs strict validation after the edits to confirm that rather than assume it.
 
 ## Risks / Trade-offs
 
