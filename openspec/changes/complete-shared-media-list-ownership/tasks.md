@@ -27,8 +27,8 @@
 
 ## 5. Migrate Feeds and Queue
 
-- [ ] 5.1 Move Feeds entries onto one owner with Wide/Inline presentations and common delegation; preserve subscription group and watched-filter chrome, Heading/Spacer exclusion, and row formatting, then verify Wide/Normal navigation, refresh, wheel, click, and one-painter tests pass.
-- [ ] 5.2 Convert Queue rows to the common owner and delegation outcomes while preserving `QueueSlotId`, scope pills, drag gestures, queue mutations, and fixed-row presentation in every Panel mode; verify Queue component, drag, and tick tests pass.
+- [x] 5.1 Move Feeds entries onto one owner with Wide/Inline presentations and common delegation; preserve subscription group and watched-filter chrome, Heading/Spacer exclusion, and row formatting, then verify Wide/Normal navigation, refresh, wheel, click, and one-painter tests pass.
+- [x] 5.2 Convert Queue rows to the common owner and delegation outcomes while preserving `QueueSlotId`, scope pills, drag gestures, queue mutations, and fixed-row presentation in every Panel mode; verify Queue component, drag, and tick tests pass.
 
 ## 6. Migrate Grouped Music and TV Workspaces
 
