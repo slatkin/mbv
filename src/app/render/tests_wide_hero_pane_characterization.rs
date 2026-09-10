@@ -48,8 +48,9 @@ fn direct_terminal(mut draw: impl FnMut(&mut ratatui::Frame)) -> Terminal<TestBa
 }
 
 /// TV already routes through `wide_library_panes(area, PANE_PAD_X,
-/// PANE_PAD_Y)` and `resolve_surface_focus` -- the one destination the
-/// standardization leaves visually unchanged (task 3.2).
+/// PANE_PAD_Y)` and resolves its left pane's fill through the surface table
+/// (`Surface::HeroPane`) -- the one destination the standardization leaves
+/// visually unchanged.
 #[test]
 fn tv_wide_left_pane_unconditional_fill_shared_inset() {
     let mut component = TvWorkspaceComponent::new();

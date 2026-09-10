@@ -1,0 +1,38 @@
+id: no-surface-role-in-painters
+snapshots:
+  ? |
+    fn render() {
+      let bg = palette::PILL_SELECTED_BG;
+    }
+  : labels:
+    - source: PILL_SELECTED_BG
+      style: primary
+      start: 34
+      end: 50
+  ? |
+    fn render() {
+      let bg = palette::SURFACE_FOCUSED;
+    }
+  : labels:
+    - source: SURFACE_FOCUSED
+      style: primary
+      start: 34
+      end: 49
+  ? |
+    fn render() {
+      let bg = palette::resolve_surface_focus(true);
+    }
+  : labels:
+    - source: resolve_surface_focus
+      style: primary
+      start: 34
+      end: 55
+  ? |
+    fn render() {
+      let bg = resolve_surface_focus(true);
+    }
+  : labels:
+    - source: resolve_surface_focus
+      style: primary
+      start: 25
+      end: 46

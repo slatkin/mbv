@@ -106,7 +106,7 @@ pub const INDICATOR_AUDIO_FG: Color = primitives::PURPLE;
 // Playback panel
 pub const PLAYBACK_VALUE_FG: Color = primitives::PLAYBACK_CONTENT_FG; // title/codec value
 pub const PLAYBACK_META_FG: Color = primitives::PLAYBACK_META_FG; // captions/time
-pub const PLAYBACK_THROBBER_FG: Color = primitives::AQUA; // now-playing liveness
+pub const PLAYBACK_THROBBER_FG: Color = primitives::PLAYBACK_THROBBER_FG; // now-playing liveness
 
 // Progress and queue
 pub const PROGRESS_TRACK: Color = primitives::SEEK_TRACK; // unplayed seek/progress track

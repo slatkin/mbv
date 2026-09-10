@@ -1,0 +1,26 @@
+id: no-surface-role-in-painters
+valid:
+  - |
+    fn render(focus: &FocusState) {
+      let style = Style::default()
+        .bg(palette::surface_colors(palette::Surface::QueuePanel, focus).fill);
+      let fg = Style::default().fg(palette::TEXT_PRIMARY);
+      let pill_fg = Style::default().fg(palette::PILL_FG);
+    }
+invalid:
+  - |
+    fn render() {
+      let bg = palette::SURFACE_FOCUSED;
+    }
+  - |
+    fn render() {
+      let bg = palette::PILL_SELECTED_BG;
+    }
+  - |
+    fn render() {
+      let bg = resolve_surface_focus(true);
+    }
+  - |
+    fn render() {
+      let bg = palette::resolve_surface_focus(true);
+    }

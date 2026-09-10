@@ -1,0 +1,35 @@
+# Rule A of unify-surface-colour's guardrails (design D3/D4): screens name
+# surfaces, never roles. See `no-role-background-in-painters` for rule B.
+id: no-surface-role-in-painters
+language: rust
+severity: error
+message: >-
+  A production paint site must name a `Surface` and call the table
+  (`surface_colors` / `surface_colors_for_column_focus`), never a surface role
+  name or a `resolve_surface_*` call (unify-surface-colour design D3/D4).
+  Naming a role here removes the surface from the table: a level edit silently
+  skips it and no test names the surface that moved. Roles are named only in
+  `src/app/render/theme/`, the table's own home; foreground `.fg(...)` roles
+  stay legal.
+files:
+  - "src/**/*.rs"
+ignores:
+  # The theme itself legitimately names the roles it defines and resolves.
+  - "src/app/render/theme/**"
+  # The two re-export modules name roles in `use` lists only.
+  - "src/app/palette.rs"
+  - "src/app/render/mod.rs"
+  # Test code.
+  - "**/*tests*.rs"
+  - "**/test_helpers*.rs"
+  - "**/*_test_support.rs"
+  - "**/*_test_modules.rs"
+rule:
+  any:
+    - kind: identifier
+      regex: "^SURFACE_(FOCUSED|RESTING|BACKDROP|CHROME|ITEM_FOCUSED|SIDEBAR)$"
+    # Only the background-carrying pill roles; the `_FG` ones are foreground.
+    - kind: identifier
+      regex: "^PILL_(ROW_BG|BG|SELECTED_BG)$"
+    - kind: identifier
+      regex: "^resolve_surface"

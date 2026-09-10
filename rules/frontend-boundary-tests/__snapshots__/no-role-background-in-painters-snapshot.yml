@@ -1,0 +1,20 @@
+id: no-role-background-in-painters
+snapshots:
+  ? |
+    fn render() {
+      let style = Style::default().bg(crate::app::palette::PILL_SELECTED_BG);
+    }
+  : labels:
+    - source: Style::default().bg(crate::app::palette::PILL_SELECTED_BG)
+      style: primary
+      start: 28
+      end: 86
+  ? |
+    fn render() {
+      let style = Style::default().bg(palette::ACCENT);
+    }
+  : labels:
+    - source: Style::default().bg(palette::ACCENT)
+      style: primary
+      start: 28
+      end: 64

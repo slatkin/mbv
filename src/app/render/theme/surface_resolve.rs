@@ -99,7 +99,7 @@ fn build(surface: Surface, own_column_focused: bool) -> SurfaceColors {
     let focused = own_column_focused && row.focus != FocusSource::Fixed;
     let mut colors = if focused {
         SurfaceColors::fill(if row.soft {
-            primitives::BG_GREEN_SOFT
+            primitives::SOFT_CONTENT_BODY_BG
         } else {
             row.level.focused_fill()
         })
@@ -163,8 +163,8 @@ mod tests {
             Surface::SelectedRowOnLibraryPane => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE, ACCENT_ACTIVE),
             Surface::LibraryPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::QueuePanel => (primitives::BG_GREEN_SOFT, SURFACE_BACKDROP),
-            Surface::MainContentBox => (primitives::BG_GREEN_SOFT, SURFACE_BACKDROP),
+            Surface::QueuePanel => (primitives::SOFT_CONTENT_BODY_BG, SURFACE_BACKDROP),
+            Surface::MainContentBox => (primitives::SOFT_CONTENT_BODY_BG, SURFACE_BACKDROP),
             Surface::InlineHero => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::PlaybackPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::SidebarBody => (SURFACE_RESTING, SURFACE_RESTING),
@@ -308,12 +308,12 @@ mod tests {
             };
             assert_eq!(
                 surface_colors(surface, &state).fill,
-                primitives::BG_GREEN_SOFT,
+                primitives::SOFT_CONTENT_BODY_BG,
                 "{surface:?} focused soft fill"
             );
         }
         // The soft variant is not the default focused content body.
-        assert_ne!(primitives::BG_GREEN_SOFT, SURFACE_FOCUSED);
+        assert_ne!(primitives::SOFT_CONTENT_BODY_BG, SURFACE_FOCUSED);
         assert_eq!(row(Surface::QueuePanel).resting, SURFACE_BACKDROP);
     }
 
