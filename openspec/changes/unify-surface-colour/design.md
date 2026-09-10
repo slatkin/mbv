@@ -29,7 +29,11 @@
 
 **Non-Goals:**
 
-- Repainting anything: every surface keeps the colour it has today unless a task says otherwise.
+- Repainting anything: every surface keeps the colour it has today unless a task says otherwise. The
+  one intended exception is the wide library's own sub-panels, which stop following the cursor: with
+  the column focused, the rail and the pane's content box both render the focused appearance (the
+  "selection moves inside a focused pane" scenario). That follows from removing the screens' colour
+  choice — the cursor was never a colour input once the column supplies it.
 - Replacing the role constants: they stay the values. This change is about the mapping.
 - Layout, breakpoints, painter ownership, mouse geometry, or per-screen content.
 
@@ -37,10 +41,22 @@
 
 ### D1 — One focus state, computed once
 
-`FocusState { column: Column { Left, Right }, sub: Option<SubSurface> }` is computed once per frame in
-the shell (from `PanelFocus`, the visible panel mode, and the active workspace's cursor) and handed to
-screens as a fact. `FrameChromeGeometry` stops carrying ad-hoc bits and carries the value; a screen
-receives it with its render context.
+`FocusState { column: Column { Left, Right }, right_visible: bool }` is computed once per frame in the
+shell and handed to screens as a fact: which column holds panel focus, and whether the right (library)
+column is on screen at all. `FrameChromeGeometry` stops carrying ad-hoc bits and carries this value; a
+screen receives it with its render context.
+
+The state deliberately carries **no** sub-surface or cursor position. A surface's colour never depends
+on where the cursor sits inside its column — the delta spec's "the selection moves inside a focused
+pane" scenario states that, and the only screen-level use for a sub-surface would be to re-introduce
+the per-screen colour bits this change removes. Passing it in would be dead data that invites exactly
+that regression.
+
+What replaces it, field by field, is in the task 2.1 inventory: the pairs of screen-owned bits
+(`episode_focused` / `track_active` / `chapter_focused`, and the pane's `LeftPaneFocus`) currently
+stand in for "the library column is focused", and the shell's `queue_focused` / `right_focused` stand
+in for the column pair. The per-screen bits survive for behaviour — selection gating, cursor
+ownership, hit geometry — and are removed from the colour path only.
 
 Today each screen re-derives its own colour bit from its own sub-mode; that derivation is what made
 "change the focused panel look" screen-by-screen work.
