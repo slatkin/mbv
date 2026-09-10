@@ -71,6 +71,20 @@ their appearance and shall not be given separate ones. The chrome band level was
 2.1's inventory showed bands (tab bar, status bar, queue header/status rows, sidebar chrome) that none
 of the original four levels described.
 
+A `Surface` identity is **structural, not screen-shaped**: it names a position in the layout — a
+column gutter, a panel body, a pane container, a pane's content box, a recess, a chrome band, a popup
+frame — so the same position in a different screen or provider is the same identity and the same
+table row. What a surface holds (a series list, a track list, chapters) is content, never a surface
+variant: `TvEpisodeBox` / `MusicTrackBox` / `HeroContentBox` were the wrong shape, because each would
+force enum churn for a new screen while the three are one position resolving to one appearance. A
+screen may not invent an identity; a genuinely different appearance is a level difference or a named
+variant, not a new row.
+
+Names SHALL use the domain vocabulary in `CONTEXT.md`: `Panel` is Library's or Queue's, so a sidebar
+has a body and bands rather than panels; the overlay term is **popup**, not dialog; the pane inset is
+the **Main content box**; and the inline-hero avoid-list ("separate detail block", "stacked hero")
+rules out naming a selected row's detail a block of its own.
+
 _Alternative:_ a registry keyed by strings/ids so screens can add surfaces. Rejected — the closed
 enum is what makes "every surface is in the table" checkable.
 
