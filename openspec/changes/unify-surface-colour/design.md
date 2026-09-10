@@ -96,6 +96,12 @@ while the resting arm is `SURFACE_BACKDROP` (`#2d353b`), deliberately **not** th
 here would silently repaint the resting column; the table's column entry is the fix, and until then
 the site names its decision explicitly.
 
+_Accepted consequence (reviewed, section 1)_: the backdrop rect spans the whole right column, so this
+also makes the column's entire gutter follow focus, not only the row above the pill bar — in wide
+`LibraryOnly`, where focus is always the library, the column gutter is permanently `#3c4841`. That is
+the column-surface behaviour itself and was accepted as a wider visible delta than the row alone; the
+buffer tests pin it at wide `LibraryOnly`, wide `Both` library-focused and wide `Both` queue-focused.
+
 ## Risks / Trade-offs
 
 - **[A big mechanical migration can drift the picture]** → every migrated site's expected value is
