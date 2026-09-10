@@ -86,23 +86,26 @@ Destination `AppComponent`s compose reusable plain TuiRealm `Component`s;
 children never mounted/focused/subscribed/given `ComponentId`; destination =
 sole event boundary, translates provider-specific intents.
 
-* `MediaList<Target>` is the one shared owner for each logical media-row flow:
+* The target `MediaList<Target>` shared owner (introduced by
+  `complete-shared-media-list-ownership`) owns each logical media-row flow:
   rows, stable-target selection, cursor/scroll, row-local behavior, and retained
-  geometry. It is embedded beneath the destination and is never mounted,
+  geometry. It will be embedded beneath the destination and never mounted,
   focused, subscribed, or given a `ComponentId`; destinations retain Service
   content, chrome, workspace focus, effects, persistence, and typed translation.
-* `WideMediaList<Target>` is the closed fixed-height 1-column Wide presentation
-  over that owner; it serves Hero rails + Queue fixed rows.
-* `InlineMediaBrowser<Target>` is the closed Normal/Narrow 1-column selected-row
-  replacement presentation over that owner; it is not Inline Search.
-* `Grid` is the closed shared-owner presentation for the existing non-hero
-  two-column catalog policy; it preserves that arrangement and cell geometry.
+* `WideMediaList<Target>` is the target fixed-height 1-column Wide Variant over
+  that owner; it serves Hero rails + Queue fixed rows.
+* `InlineMediaBrowser<Target>` is the target Normal/Narrow 1-column selected-row
+  replacement Variant over that owner; it is not Inline Search.
+* `Grid presentation` is the target shared-owner Variant for the existing
+  non-hero two-column catalog arrangement. The arrangement retains placement,
+  traversal policy, and cell geometry; Grid executes within it.
 * Rows provider-neutral: selectable `Item`s with stable opaque targets +
   non-selectable `Heading`/`Spacer`; parents keep provider content, workspaces,
   pills, images, effects, persistence, message translation.
-* Wide/Inline/Grid transitions use the same owner; only discrete transitions
-  use one `ViewportAnchor` (selected target + row offset), while ordinary
-  refresh preserves/clamps local state and never adopts shell cursor/scroll.
+* Wide/Inline/Grid transitions will use the same owner; only discrete
+  transitions use one `ViewportAnchor` (selected target + row offset), while
+  ordinary refresh preserves/clamps local state and never adopts shell
+  cursor/scroll.
 
 1 owner, 1 painter per surface per breakpoint; no 2nd loop as underpaint/
 fallback. Contract: `openspec/specs/canonical-media-lists/spec.md`.

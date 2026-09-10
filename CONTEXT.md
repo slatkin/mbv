@@ -289,19 +289,41 @@ _Avoid_: pending active index, cursor push, now-playing index, active_idx
 ## Browsing and tabs
 
 **MediaList**:
-The shared provider-neutral owner for one logical media-row flow. It owns rows, stable-target selection, cursor/scroll, delegated row-local behavior, and retained geometry while a closed presentation (Wide, Inline, or Grid) supplies placement and painting. It is embedded beneath the destination Interactive Component; it is never mounted, focused, subscribed, or given a ComponentId. The destination keeps Service content, chrome, workspace focus, effects, persistence, and typed intent translation.
+The target shared provider-neutral owner for one logical media-row flow,
+introduced by `complete-shared-media-list-ownership`. It will own rows,
+stable-target selection, cursor/scroll, delegated row-local behavior, and
+retained geometry while a Variant (Wide, Inline, or Grid presentation) supplies
+painting within its established arrangement. It will be embedded beneath the
+destination Interactive Component; it will never be mounted, focused,
+subscribed, or given a ComponentId. The destination keeps Service content,
+chrome, workspace focus, effects, persistence, and typed intent translation.
 _Avoid_: generic list, generic media list, two-column list
 
 **WideMediaList**:
-A provider-neutral, one-column fixed-row TuiRealm Component embedded by a parent that owns the content authority. It provides the Wide presentation over a `MediaList<Target>` without choosing a Service or destination. It is the canonical control for Wide one-column rails, including Queue; non-hero two-column catalog presentation remains the Grid presentation.
+The target provider-neutral, one-column fixed-row TuiRealm Component over a
+`MediaList<Target>`, introduced by `complete-shared-media-list-ownership`. It
+will provide the Wide Variant without choosing a Service or destination. It is
+the target canonical control for Wide one-column rails, including Queue;
+non-hero two-column catalog presentation remains an arrangement policy.
 _Avoid_: generic list, two-column list, Inline Search
 
 **InlineMediaBrowser**:
-A provider-neutral, one-column TuiRealm Component that provides the Inline presentation over a `MediaList<Target>` and supports selected-row replacement while its parent owns content authority. Normal/Narrow hero-bearing browse surfaces use it for their one-column list. It is distinct from **Inline Search**, which is a library-scoped search capability embedded in a searchable destination and not a media-list control.
+The target provider-neutral, one-column TuiRealm Component over a
+`MediaList<Target>`, introduced by `complete-shared-media-list-ownership`. It
+will provide the Inline Variant with selected-row replacement while its parent
+owns content authority. Normal/Narrow hero-bearing browse surfaces will use it
+for their one-column list. It is distinct from **Inline Search**, which is a
+library-scoped search capability embedded in a searchable destination and not a
+media-list control.
 _Avoid_: Inline Search, detail panel, generic list
 
 **Grid presentation**:
-The closed two-column non-hero catalog presentation over a `MediaList<Target>`. It preserves the existing catalog arrangement, traversal, cell placement, scrollbar, and retained cell hit geometry; it is not a WideMediaList or an InlineMediaBrowser and does not change provider or destination ownership.
+The target shared-owner Variant over a `MediaList<Target>`, introduced by
+`complete-shared-media-list-ownership`, for the existing non-hero two-column
+catalog arrangement. The arrangement retains placement, traversal policy,
+scrollbar, and cell geometry; Grid executes within that arrangement. It is not
+a WideMediaList or an InlineMediaBrowser and does not change provider or
+destination ownership.
 _Avoid_: two-column list, generic list, grid mode
 
 **Inline Search**:
