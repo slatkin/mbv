@@ -175,6 +175,12 @@ fn grouped_album_rows_with_targets(
 #[derive(Default)]
 pub(in crate::app) struct MusicWideRenderOutput {
     pub(in crate::app) image_paint: Option<MusicImagePaint>,
+    /// The padded album-browser content height the Wide presentation actually
+    /// painted this frame, when it painted one. Grouped Music consumes it as
+    /// the receiving viewport height at a responsive hand-off instead of
+    /// re-deriving the arrangement (design.md D3); `None` when the Wide
+    /// presentation did not paint (narrow, or no wide area).
+    pub(in crate::app) content_height: Option<usize>,
 }
 
 /// The active album-row presentation Grouped Music hands to the render layer
@@ -190,17 +196,6 @@ pub(in crate::app) enum MusicAlbumPresentation<'a> {
 /// presentation (design.md D1/D2).
 pub(in crate::app) enum MusicTrackPresentation<'a> {
     Wide(&'a mut WideMediaList<String>),
-}
-
-/// The wide Music right-rail browser content height for `area`, computed from
-/// the same arrangement the painter consumes. Grouped Music uses it to restore
-/// the responsive anchor against the receiving presentation's painted viewport
-/// rather than a stale retained rect.
-pub(in crate::app) fn wide_music_browser_content_height(area: Rect) -> Option<usize> {
-    let panes = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y)?;
-    let right_pane = wide_hero::wide_hero_browser_pane(panes.browser_panel, panes.browser_area);
-    let browser_area = padded_rect(right_pane.list_panel, PANE_PAD_X, PANE_PAD_Y);
-    Some(browser_area.height as usize)
 }
 
 /// Strips the "Artist (Year) " folder-name prefix from an album's display
@@ -399,7 +394,10 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
                 " (empty)"
             },
         );
-        return MusicWideRenderOutput { image_paint: None };
+        return MusicWideRenderOutput {
+            image_paint: None,
+            content_height: None,
+        };
     }
 
     let images_enabled = ctx.images_enabled;
@@ -465,7 +463,10 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
         }
     }
 
-    MusicWideRenderOutput { image_paint }
+    MusicWideRenderOutput {
+        image_paint,
+        content_height: None,
+    }
 }
 
 /// Wide grouped Music paints one full-width album row at a time. The mounted
@@ -564,6 +565,10 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
 
     let list_panel = right_pane.list_panel;
     let browser_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
+    // The painted content height the parent consumes for its responsive
+    // hand-off (design.md D3); published from the arrangement actually
+    // painted, not re-derived by the destination.
+    output.content_height = Some(browser_area.height as usize);
     if list_panel.height > 0 {
         f.render_widget(
             ratatui::widgets::Block::default()

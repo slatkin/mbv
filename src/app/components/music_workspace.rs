@@ -82,6 +82,11 @@ pub struct MusicWorkspaceComponent {
     /// The wide track table's persistent canonical control: the authoritative
     /// track owner for selection/scroll/painting/retained hits (design.md D5).
     pub(super) track_list: WideMediaList<String>,
+    /// The Wide presentation's last painted album-browser content height, as
+    /// returned by the render output (design.md D3/D6). Consumed as the
+    /// receiving viewport height at the next responsive hand-off instead of a
+    /// destination-side re-derivation of the arrangement.
+    wide_browser_content_height: Option<usize>,
     /// Group-pill rects (design.md D6), repopulated in `view()` from
     /// `layout.selector_tabs` — the pill painter's own output — for both
     /// breakpoints. The tag is the 0-based group index.
@@ -119,6 +124,7 @@ impl MusicWorkspaceComponent {
             carrier: MediaListCarrier::new(Presentation::Inline),
             mouse_gestures: MouseGestureState::new(),
             track_list: WideMediaList::new(),
+            wide_browser_content_height: None,
             pill_regions: HitRegions::new(),
             inline_search: InlineSearch::new(),
         }
@@ -126,23 +132,6 @@ impl MusicWorkspaceComponent {
 
     pub(super) fn active_is_wide(&self) -> bool {
         self.carrier.active() == Presentation::Wide
-    }
-
-    fn active_presentation(&self) -> Presentation {
-        if self.active_is_wide() {
-            Presentation::Wide
-        } else {
-            Presentation::Inline
-        }
-    }
-
-    /// Move the shared album owner into the presentation the painted
-    /// breakpoint currently selects before any row-local input or projection
-    /// touches it (design.md D1/D2).
-    fn ensure_carrier(&mut self) {
-        let target = self.active_presentation();
-        let viewport_height = self.layout.left_area.height.max(1) as usize;
-        self.carrier.ensure_presentation(target, viewport_height);
     }
 
     /// The one seam through which Grouped Music offers an already-normalized
@@ -155,7 +144,6 @@ impl MusicWorkspaceComponent {
         input: RowLocalInput,
         pointer_target: Option<String>,
     ) -> RowLocalOutcome<String> {
-        self.ensure_carrier();
         self.carrier.delegate(input, pointer_target)
     }
 
@@ -165,12 +153,10 @@ impl MusicWorkspaceComponent {
     }
 
     pub(super) fn select_active_target(&mut self, target: &str) {
-        self.ensure_carrier();
         self.carrier.select_target(&target.to_string());
     }
 
     fn set_active_scroll(&mut self, scroll: usize) {
-        self.ensure_carrier();
         self.carrier.set_scroll(scroll);
     }
 
@@ -222,7 +208,6 @@ impl MusicWorkspaceComponent {
         let focused = self.context.focused;
         self.context = context;
         self.context.focused = focused;
-        self.ensure_carrier();
         let album_rows = self.context.grouped_rows();
         // The one shared album owner holds the projected rows; only its active
         // presentation is fed, and an unchanged projection does not invalidate
@@ -325,10 +310,11 @@ impl MusicWorkspaceComponent {
     }
 
     /// Shell-driven clear of inline track focus (position restore): the
-    /// deleted track-focus-clear rehome.
+    /// deleted track-focus-clear rehome. This is a focus-only boundary, so the
+    /// track owner keeps its selected row and scroll (design.md D5); the later
+    /// entry boundary (`enter_track_focus`) re-parks the selection explicitly.
     pub(in crate::app) fn clear_track_focus(&mut self) {
         self.track_focused = false;
-        self.track_list.select_first();
     }
 
     /// Handle a mouse event against the wide workspace's painted geometry.
@@ -583,9 +569,11 @@ impl Component for MusicWorkspaceComponent {
         // One shared album owner per logical flow (design.md D1): a breakpoint
         // change reconfigures the same owner and preserves only the outgoing
         // selected-row viewport offset. The receiving content height is the
-        // height the retained offset is restored against.
+        // height the retained offset is restored against: the Wide
+        // presentation's own last painted browser content height (design.md
+        // D3/D6), never a re-derived arrangement.
         let incoming_height = if wide {
-            crate::app::render::wide_music_browser_content_height(area)
+            self.wide_browser_content_height
                 .unwrap_or(area.height as usize)
         } else if self.context.groups.is_empty() {
             area.height as usize
@@ -650,6 +638,9 @@ impl Component for MusicWorkspaceComponent {
                 &mut self.inline_search,
             );
             self.image_paint = output.image_paint;
+            if let Some(height) = output.content_height {
+                self.wide_browser_content_height = Some(height);
+            }
         }
         self.pill_regions.clear();
         for (rect, target) in &self.layout.selector_tabs {
@@ -678,18 +669,9 @@ impl Component for MusicWorkspaceComponent {
 
 impl AppComponent<Msg, UserEvent> for MusicWorkspaceComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        // Keep the shared album owner in the presentation the painted
-        // breakpoint currently selects before any row-local input touches it
-        // (design.md D1).
         match event {
-            Event::Keyboard(key) => {
-                self.ensure_carrier();
-                self.handle_key(key)
-            }
-            Event::Mouse(mouse) => {
-                self.ensure_carrier();
-                self.handle_mouse(mouse)
-            }
+            Event::Keyboard(key) => self.handle_key(key),
+            Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }
     }

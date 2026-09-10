@@ -426,6 +426,33 @@ fn music_workspace_album_change_clears_track_focus() {
 }
 
 #[test]
+fn music_workspace_clear_track_focus_keeps_the_track_owner_selection() {
+    // D5: the track pane's focus and the track owner's selected row are
+    // separate. A focus-only clear (position restore) must not move the
+    // selection or scroll the owner back to its first row.
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_focused(true);
+    component.set_content(context(false));
+    component.set_inline_track_focus_enabled(true);
+    component.enter_track_focus();
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(component.track_focused());
+    assert_eq!(component.track_selected_row(), Some(1));
+
+    component.clear_track_focus();
+
+    assert!(!component.track_focused());
+    assert_eq!(
+        component.track_selected_row(),
+        Some(1),
+        "a focus-only clear leaves the track owner's selection untouched"
+    );
+}
+
+#[test]
 fn music_workspace_re_anchor_overrides_prior_local_move() {
     // A shell re-anchor at a navigation event adopts the shell's cursor
     // unconditionally -- the outcome does not depend on whether the user
