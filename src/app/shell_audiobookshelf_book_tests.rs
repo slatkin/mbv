@@ -137,7 +137,7 @@ fn abs_book_shell_mounts_and_routes_component() {
     else {
         panic!("Down must emit a resolved book index, got {message:?}");
     };
-    assert_eq!(index, "book-2");
+    assert_eq!(index.as_deref(), Some("book-2"));
     model.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
         AudiobookshelfBookMove::Book(index),
     ));
@@ -170,7 +170,10 @@ fn abs_book_shell_mounts_and_routes_component() {
     else {
         panic!("PageDown must emit a resolved book index, got {page:?}");
     };
-    assert!(!index.is_empty(), "page jump resolved a book target");
+    assert!(
+        index.as_ref().is_some_and(|id| !id.is_empty()),
+        "page jump resolved a book target"
+    );
     model.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
         AudiobookshelfBookMove::Book(index),
     ));
@@ -289,7 +292,7 @@ fn abs_book_stays_mounted_and_preserves_selection_across_switch() {
         )))
     ));
     model.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
-        AudiobookshelfBookMove::Book("book-b".to_string()),
+        AudiobookshelfBookMove::Book(Some("book-b".to_string())),
     ));
     model.sync_audiobookshelf_book();
     model.sync_active_destination();
@@ -512,7 +515,7 @@ fn abs_book_request_pulls_panel_focus_to_library() {
     app.panel_focus = PanelFocus::Queue;
     let mut model = Model::new(app);
     model.handle_audiobookshelf_book_request(ShellRequest::AudiobookshelfBookMove(
-        AudiobookshelfBookMove::Book("book-a".to_string()),
+        AudiobookshelfBookMove::Book(Some("book-a".to_string())),
     ));
     assert_eq!(model.app.panel_focus, PanelFocus::Library);
 }

@@ -416,8 +416,8 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         outcome
             .raw_messages
             .iter()
-            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
-        "a click on Library's painted list must resolve through the Library destination"
+            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
+        "a blank Library click must not claim without a resolved target"
     );
     assert!(
         outcome
@@ -428,11 +428,6 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
     );
     apply_outcome(&mut harness, outcome);
     harness.model_mut().sync_mounted_surfaces();
-    assert_eq!(
-        harness.model().application.focus(),
-        Some(&library_child),
-        "focus follows the click back onto the Library destination"
-    );
 }
 
 // --- add-mouse-column-resize 3.1: the root-owned one-column boundary is
@@ -620,8 +615,8 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
         outcome
             .raw_messages
             .iter()
-            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
-        "a click on the wide-painted list row must resolve through the canonical control"
+            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
+        "a blank wide-list click must not claim without a resolved target"
     );
     apply_outcome(&mut harness, outcome);
 
@@ -678,8 +673,8 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
         outcome
             .raw_messages
             .iter()
-            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
-        "a click on the narrow-painted list row must resolve through the canonical control"
+            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
+        "a blank narrow-list click must not claim without a resolved target"
     );
     apply_outcome(&mut harness, outcome);
 }

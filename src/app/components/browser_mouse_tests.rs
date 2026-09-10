@@ -31,7 +31,7 @@ fn browser_reorder_preserves_stable_target_for_click() {
     }));
     assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::BrowserRowClick { target: ref id })) if id == &target
+        Some(Msg::Shell(ShellRequest::BrowserRowClick { target: Some(ref id) })) if id == &target
     ));
 }
 
@@ -76,7 +76,7 @@ fn narrow_canonical_list_click_moves_cursor_and_emits_row_click() {
     assert_eq!(
         message,
         Some(Msg::Shell(ShellRequest::BrowserRowClick {
-            target: "id1".into()
+            target: Some("id1".into())
         })),
         "narrow canonical row click must resolve via inline_browser.resolve_point"
     );
@@ -119,14 +119,14 @@ fn narrow_canonical_list_double_click_emits_row_activate() {
     assert_eq!(
         first,
         Some(Msg::Shell(ShellRequest::BrowserRowClick {
-            target: "id1".into()
+            target: Some("id1".into())
         }))
     );
     let second = browser.on(&down);
     assert_eq!(
         second,
         Some(Msg::Shell(ShellRequest::BrowserRowActivate {
-            target: "id1".to_string()
+            target: Some("id1".to_string())
         }))
     );
 }
@@ -166,7 +166,7 @@ fn narrow_canonical_list_right_click_emits_row_context_menu() {
     assert_eq!(
         message,
         Some(Msg::Shell(ShellRequest::BrowserRowContextMenu {
-            target,
+            target: Some(target),
             anchor: (position.x, position.y),
         }))
     );

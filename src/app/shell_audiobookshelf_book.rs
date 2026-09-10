@@ -22,9 +22,10 @@ impl Model {
                 // component carries the landed value; apply it through the
                 // existing index-taking entry points, never recomputing the
                 // movement from a delta.
-                AudiobookshelfBookMove::Book(target) => {
+                AudiobookshelfBookMove::Book(Some(target)) => {
                     self.app.select_audiobookshelf_book_target(&target)
                 }
+                AudiobookshelfBookMove::Book(None) => {}
                 AudiobookshelfBookMove::Bucket(position) => {
                     self.app.select_audiobookshelf_book_bucket(position)
                 }

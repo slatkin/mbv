@@ -221,7 +221,7 @@ impl AudiobookshelfBookComponent {
 
     fn book_request(&self) -> Msg {
         Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::Book(self.state.selected_id.clone().unwrap_or_default()),
+            AudiobookshelfBookMove::Book(self.state.selected_id.clone()),
         ))
     }
 

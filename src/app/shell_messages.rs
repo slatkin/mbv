@@ -302,7 +302,9 @@ impl Model {
                     // focused keyboard) show move pulls panel focus to the
                     // Library.
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    self.app.select_audiobookshelf_show_target(&library_item_id);
+                    if let Some(library_item_id) = library_item_id.as_deref() {
+                        self.app.select_audiobookshelf_show_target(library_item_id);
+                    }
                     // The component owns the painted cursor; persist the
                     // active tab's slot once after the movement lands so
                     // the saved position tracks the moved cursor (B3).
@@ -376,19 +378,25 @@ impl Model {
                     self.push_emby_browser_content();
                 }
                 ShellRequest::BrowserRowClick { target } => {
-                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                    if let (Some(lib_idx), Some(target)) =
+                        (self.app.tab.emby_library_index(), target)
+                    {
                         self.app.handle_mouse_single_click_emby(lib_idx, target);
                     }
                     self.push_emby_browser_content();
                 }
                 ShellRequest::BrowserRowActivate { target } => {
-                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                    if let (Some(lib_idx), Some(target)) =
+                        (self.app.tab.emby_library_index(), target)
+                    {
                         self.app.handle_mouse_double_click_emby(lib_idx, target);
                     }
                     self.push_emby_browser_content();
                 }
                 ShellRequest::BrowserRowContextMenu { target, anchor } => {
-                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                    if let (Some(lib_idx), Some(target)) =
+                        (self.app.tab.emby_library_index(), target)
+                    {
                         self.app
                             .handle_mouse_right_click_emby(lib_idx, target, anchor.0, anchor.1);
                     }

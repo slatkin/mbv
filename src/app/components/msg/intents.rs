@@ -7,7 +7,7 @@
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HomeRowTarget {
-    pub item_id: String,
+    pub item_id: Option<String>,
     pub source: Option<String>,
     pub from_continue_watching: bool,
 }
@@ -81,8 +81,8 @@ pub enum AlbumCursorKind {
 /// the current App episode target (D17).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PodcastEpisodeTransition {
-    PreviousEpisode(Option<PodcastEpisodeTarget>),
-    NextEpisode(Option<PodcastEpisodeTarget>),
+    PreviousEpisode,
+    NextEpisode,
     PreviousFilter,
     NextFilter,
     Exit,
@@ -115,7 +115,7 @@ pub enum PodcastEpisodeIntent {
 pub enum AudiobookshelfBookMove {
     /// The book-list target the component landed on (arrows, page keys,
     /// Home/End) — applied via the stable-id resolver.
-    Book(String),
+    Book(Option<String>),
     /// The surname-bucket pill position the component landed on (`[`/`]`) —
     /// applied via `App::select_audiobookshelf_book_bucket`.
     Bucket(usize),

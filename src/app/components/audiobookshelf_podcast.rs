@@ -260,7 +260,7 @@ impl AudiobookshelfPodcastComponent {
     /// key resolves its own movement locally and carries only the result.
     fn show_move_request(&self) -> Msg {
         Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: self.state.selected_id.clone().unwrap_or_default(),
+            library_item_id: self.state.selected_id.clone(),
         })
     }
 
@@ -315,7 +315,7 @@ impl AudiobookshelfPodcastComponent {
                 self.move_episode(-1);
                 Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
-                        PodcastEpisodeTransition::PreviousEpisode(self.episode_target()),
+                        PodcastEpisodeTransition::PreviousEpisode,
                     ),
                 ))
             }
@@ -323,7 +323,7 @@ impl AudiobookshelfPodcastComponent {
                 self.move_episode(1);
                 Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
-                        PodcastEpisodeTransition::NextEpisode(self.episode_target()),
+                        PodcastEpisodeTransition::NextEpisode,
                     ),
                 ))
             }

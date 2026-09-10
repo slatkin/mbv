@@ -375,26 +375,26 @@ impl BrowserComponent {
                     return None;
                 }
                 Some(Msg::Shell(ShellRequest::BrowserRowClick {
-                    target: self.selected_row_target().unwrap_or_default(),
+                    target: self.selected_row_target(),
                 }))
             }
             MouseGesture::DoubleClick(at) => {
                 if let Some(&pill) = self.pill_regions.resolve(at) {
                     return Some(Msg::Shell(ShellRequest::BrowserPillClick { target: pill }));
                 }
-                if !self.claim_list_point(at) {
-                    return None;
-                }
-                Some(Msg::Shell(ShellRequest::BrowserRowActivate {
-                    target: self.selected_row_target().unwrap_or_default(),
-                }))
+                self.claim_list_point(at);
+                self.selected_row_target().map(|target| {
+                    Msg::Shell(ShellRequest::BrowserRowActivate {
+                        target: Some(target),
+                    })
+                })
             }
             MouseGesture::RightClick(at) => {
                 if !self.claim_list_point(at) {
                     return None;
                 }
                 Some(Msg::Shell(ShellRequest::BrowserRowContextMenu {
-                    target: self.selected_row_target().unwrap_or_default(),
+                    target: self.selected_row_target(),
                     anchor: (mouse.column, mouse.row),
                 }))
             }
@@ -409,16 +409,18 @@ impl BrowserComponent {
         if !(self.layout.left_area.contains(at) || self.layout.inline_hero_area.contains(at)) {
             return false;
         }
-        if let Some(target) = self.resolve_row_target(at) {
-            if let Some(index) = self.context.items.iter().position(|item| item.id == target) {
-                if self.wide_movies {
-                    self.wide_list.select_index(index);
-                } else if self.uses_inline_control() {
-                    self.inline_browser.select_index(index);
-                } else {
-                    self.cursor = index;
-                }
-            }
+        let Some(target) = self.resolve_row_target(at) else {
+            return false;
+        };
+        let Some(index) = self.context.items.iter().position(|item| item.id == target) else {
+            return false;
+        };
+        if self.wide_movies {
+            self.wide_list.select_index(index);
+        } else if self.uses_inline_control() {
+            self.inline_browser.select_index(index);
+        } else {
+            self.cursor = index;
         }
         true
     }

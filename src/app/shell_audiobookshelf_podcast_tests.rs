@@ -45,13 +45,13 @@ fn abs_podcast_shell_mounts_and_routes_component() {
     else {
         panic!("show movement should carry the resolved show index");
     };
-    assert_eq!(library_item_id, "show-b");
+    assert_eq!(library_item_id.as_deref(), Some("show-b"));
     // The shell applies the resolved index directly through the index-taking
     // entry point (split-audiobookshelf-cursor-ownership D1), preserving the
     // detail-fetch / position-save target.
     model
         .app
-        .select_audiobookshelf_show_target(&library_item_id);
+        .select_audiobookshelf_show_target(library_item_id.as_deref().expect("show target"));
     assert_eq!(model.app.audiobookshelf_browse[0].cursor(), 1);
     let unclaimed = model
         .application
@@ -149,10 +149,7 @@ fn abs_podcast_shell_routes_episode_transition_to_app() {
     else {
         panic!("episode movement should be routed as a typed episode transition");
     };
-    assert!(matches!(
-        transition,
-        PodcastEpisodeTransition::NextEpisode(Some(_))
-    ));
+    assert!(matches!(transition, PodcastEpisodeTransition::NextEpisode));
     // The mounted component owns episode selection; NextEpisode already
     // moved its own selection into the second row. Assert from the
     // component accessor, not the App mirror, since the legacy App move
@@ -614,7 +611,7 @@ fn abs_podcast_show_move_pulls_panel_focus_to_library() {
     model.app.panel_focus = PanelFocus::Queue;
     model.handle_terminal_message(
         Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: "show-a".into(),
+            library_item_id: Some("show-a".into()),
         }),
         &mut false,
         &mut false,

@@ -328,8 +328,14 @@ fn abs_book_component_page_stride_comes_from_painted_geometry() {
 
     let short = page_jump(8);
     let tall = page_jump(24);
-    assert!(!short.is_empty(), "a page jump resolves a target");
-    assert!(!tall.is_empty(), "a taller painted list resolves a target");
+    assert!(
+        short.as_ref().is_some_and(|id| !id.is_empty()),
+        "a page jump resolves a target"
+    );
+    assert!(
+        tall.as_ref().is_some_and(|id| !id.is_empty()),
+        "a taller painted list resolves a target"
+    );
 }
 
 /// split-audiobookshelf-cursor-ownership D4 / task 1.3 → 5.2: when a content
@@ -459,7 +465,7 @@ fn abs_book_mouse_click_resolves_row_and_right_click_is_ignored() {
             &msg,
             Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
                 AudiobookshelfBookMove::Book(index)
-            ))) if !index.is_empty() && clicked >= 0
+            ))) if index.as_ref().is_some_and(|id| !id.is_empty()) && clicked >= 0
         ),
         "click must resolve the painted row, got {msg:?}"
     );
@@ -533,5 +539,8 @@ fn abs_book_mouse_wheel_moves_one_book_row() {
     else {
         panic!("wheel must emit a page-size book move, got {msg:?}");
     };
-    assert!(!index.is_empty(), "wheel must resolve a row target");
+    assert!(
+        index.as_ref().is_some_and(|id| !id.is_empty()),
+        "wheel must resolve a row target"
+    );
 }

@@ -88,7 +88,7 @@ fn abs_podcast_component_keeps_local_show_cursor_and_renders_without_app_state()
     else {
         panic!("show movement should carry the resolved show index");
     };
-    assert_eq!(library_item_id, "show-a");
+    assert_eq!(library_item_id.as_deref(), Some("show-a"));
     assert_eq!(component.cursor(), 0);
 
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
@@ -123,10 +123,7 @@ fn abs_podcast_component_emits_typed_episode_transitions_in_episode_mode() {
     else {
         panic!("episode movement should be a typed episode-transition request, got {message:?}");
     };
-    assert!(matches!(
-        transition,
-        PodcastEpisodeTransition::NextEpisode(Some(_))
-    ));
+    assert!(matches!(transition, PodcastEpisodeTransition::NextEpisode));
 
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char(']'),
@@ -193,9 +190,9 @@ fn abs_podcast_component_cycles_show_title_buckets_with_brackets() {
             })),
             Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
                 library_item_id: if index == 1 {
-                    "zulu".into()
+                    Some("zulu".into())
                 } else {
-                    "alpha".into()
+                    Some("alpha".into())
                 }
             }))
         );
@@ -347,7 +344,7 @@ fn abs_podcast_wheel_moves_one_visual_row_and_ignores_outside_list() {
     assert_eq!(
         component.on(&Event::Mouse(inside)),
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: "show-11".into()
+            library_item_id: Some("show-11".into())
         }))
     );
     // The wheel throttle lives in the private gesture state (ADR 0024, D3);
@@ -363,7 +360,7 @@ fn abs_podcast_wheel_moves_one_visual_row_and_ignores_outside_list() {
     assert_eq!(
         up,
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: "show-10".into()
+            library_item_id: Some("show-10".into())
         })),
         "unexpected upward wheel message: {up:?}"
     );
@@ -462,7 +459,7 @@ fn abs_podcast_row_mouse_selects_the_clicked_show_and_bucket_start() {
     assert_eq!(
         msg,
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: "show-2".into()
+            library_item_id: Some("show-2".into())
         }))
     );
     let bucket = component.geometry().selector_tabs[0].0;

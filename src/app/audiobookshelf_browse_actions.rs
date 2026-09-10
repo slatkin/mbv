@@ -1,5 +1,7 @@
 use super::notify_actions::ToastSeverity;
-use super::types_audiobookshelf_browse::{AudiobookshelfEpisodeFilter, BookRow};
+#[cfg(test)]
+use super::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
+use super::types_audiobookshelf_browse::BookRow;
 use super::App;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, QueueItem};
@@ -174,20 +176,14 @@ impl App {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        let cursor = self
-            .audiobookshelf_browse
-            .get(index)
-            .and_then(|state| {
-                state
-                    .shows
-                    .iter()
-                    .position(|show| show.library_item_id == target)
-            })
-            .unwrap_or_else(|| {
-                self.audiobookshelf_browse
-                    .get(index)
-                    .map_or(0, |state| state.cursor())
-            });
+        let Some(cursor) = self.audiobookshelf_browse.get(index).and_then(|state| {
+            state
+                .shows
+                .iter()
+                .position(|show| show.library_item_id == target)
+        }) else {
+            return;
+        };
         self.select_audiobookshelf_show(cursor);
     }
 
@@ -271,7 +267,7 @@ impl App {
         self.submit_queue_item(item, false);
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(super) fn play_selected_audiobookshelf_episode(
         &mut self,
         index: usize,
@@ -296,7 +292,7 @@ impl App {
     /// local queue is the Composed stage and is intentionally allowed without
     /// owner admission; an active or remote playback target is Bound and must
     /// be eligible.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(super) fn enqueue_selected_audiobookshelf_episode(
         &mut self,
         index: usize,
@@ -320,7 +316,7 @@ impl App {
         self.submit_queue_item(item, false);
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn selected_audiobookshelf_queue_item(
         &self,
         audiobookshelf_library_index: usize,
@@ -442,7 +438,7 @@ impl App {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        let cursor = self
+        let Some(cursor) = self
             .audiobookshelf_book_browse
             .get(index)
             .and_then(|state| {
@@ -451,11 +447,9 @@ impl App {
                     .iter()
                     .position(|book| book.library_item_id == target)
             })
-            .unwrap_or_else(|| {
-                self.audiobookshelf_book_browse
-                    .get(index)
-                    .map_or(0, |state| state.cursor())
-            });
+        else {
+            return;
+        };
         self.select_audiobookshelf_book(cursor);
     }
 

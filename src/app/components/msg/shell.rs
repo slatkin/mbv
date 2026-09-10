@@ -154,7 +154,7 @@ pub enum ShellRequest {
     /// the mounted component.
     HomeContextMenu {
         home_cw_selected: bool,
-        cw_item: Option<mbv_core::api::EmbyItem>,
+        target: super::intents::HomeRowTarget,
     },
     /// Remove the Home item at the component-owned flat cursor from
     /// Continue Watching (Delete), keeping the cw-range guard the legacy
@@ -201,7 +201,7 @@ pub enum ShellRequest {
     /// detail-fetch), saves the position, and re-projects podcast content
     /// without recomputing the movement.
     AudiobookshelfPodcastShowMove {
-        library_item_id: String,
+        library_item_id: Option<String>,
     },
     /// Typed podcast episode-mode transition (task 5.3d.6). Emitted by the
     /// component after its local episode-cursor/filter/exit mutation while
@@ -347,19 +347,19 @@ pub enum ShellRequest {
     /// (design.md D4/D6). The shell applies focus-follows-click and sets the
     /// resting cursor.
     BrowserRowClick {
-        target: String,
+        target: Option<String>,
     },
     /// A row the user double-clicked; `target` is the resolved item index and
     /// the shell activates it (design.md D3/D4).
     BrowserRowActivate {
-        target: String,
+        target: Option<String>,
     },
     /// A row the user right-clicked; `target` is the resolved item index and
     /// `anchor` is the click position the component forwards as the
     /// context-menu anchor — the one legitimate forwarded coordinate
     /// (design.md D4).
     BrowserRowContextMenu {
-        target: String,
+        target: Option<String>,
         anchor: (u16, u16),
     },
     /// A selector pill (letter filter / feed-folder / music group) the user
