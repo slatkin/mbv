@@ -1,5 +1,4 @@
 use super::*;
-use crate::app::components::MusicWorkspaceComponent;
 use std::time::Instant;
 
 impl Model {
@@ -15,23 +14,11 @@ impl Model {
                 apply_terminal_observer(self, event, music_resize, tv_resize)
             }
             Msg::Shell(request) => match request {
-                ShellRequest::MusicAlbumActivate => {
-                    if self.app.tab.emby_library_index().is_some() {
-                        // Outcome 3 reader: get the album from the component, which
-                        // owns the selection cursor.
-                        let album = self
-                            .music_workspace_id
-                            .as_ref()
-                            .and_then(|id| self.application.get_component(id))
-                            .and_then(|comp| {
-                                comp.as_any().downcast_ref::<MusicWorkspaceComponent>()
-                            })
-                            .and_then(|comp| comp.selected_item());
-                        if let Some(album) = album {
-                            if !self.app.is_right_panel_wide() {
-                                self.app.open_album_selection_modal(&album);
-                            }
-                        }
+                ShellRequest::MusicAlbumActivate { item } => {
+                    if self.app.tab.emby_library_index().is_some()
+                        && !self.app.is_right_panel_wide()
+                    {
+                        self.app.open_album_selection_modal(&item);
                     }
                     self.push_music_workspace_content();
                 }
@@ -72,56 +59,28 @@ impl Model {
                 // target resolution: the component owns the cursor,
                 // the shell resolves it to the cached track and runs
                 // the App effect (task 5.3d, Album track focus).
-                ShellRequest::MusicTrackActivate => {
-                    if self.app.tab.emby_library_index().is_some() {
-                        if let Some((album_id, track)) = self.focused_music_track() {
-                            self.app.play_album_track(&album_id, &track);
-                        }
-                    }
+                ShellRequest::MusicTrackActivate { album_id, track } => {
+                    self.app.play_album_track(&album_id, &track);
                     self.push_music_workspace_content();
                 }
-                ShellRequest::MusicTrackEnqueue => {
+                ShellRequest::MusicTrackEnqueue { track } => {
                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                        if let Some((_, track)) = self.focused_music_track() {
-                            self.app.enqueue_lib_item(lib_idx, track);
-                        }
+                        self.app.enqueue_lib_item(lib_idx, track);
                     }
                     self.push_music_workspace_content();
                 }
-                ShellRequest::MusicTrackContextMenu => {
-                    if let Some((_, track)) = self
-                        .app
-                        .tab
-                        .emby_library_index()
-                        .and_then(|_| self.focused_music_track())
-                    {
-                        self.app.open_context_menu_for(track);
-                    }
+                ShellRequest::MusicTrackContextMenu { track } => {
+                    self.app.open_context_menu_for(track);
                     self.push_music_workspace_content();
                 }
-                ShellRequest::MusicTrackContextMenuAt { anchor } => {
+                ShellRequest::MusicTrackContextMenuAt { track, anchor } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    if let Some((_, track)) = self
-                        .app
-                        .tab
-                        .emby_library_index()
-                        .and_then(|_| self.focused_music_track())
-                    {
-                        self.app.open_context_menu_for_at(track, anchor.0, anchor.1);
-                    }
+                    self.app.open_context_menu_for_at(track, anchor.0, anchor.1);
                     self.push_music_workspace_content();
                 }
-                ShellRequest::MusicAlbumContextMenu { anchor } => {
+                ShellRequest::MusicAlbumContextMenu { item, anchor } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    let album = self
-                        .music_workspace_id
-                        .as_ref()
-                        .and_then(|id| self.application.get_component(id))
-                        .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                        .and_then(|comp| comp.selected_item());
-                    if let Some(album) = album {
-                        self.app.open_context_menu_for_at(album, anchor.0, anchor.1);
-                    }
+                    self.app.open_context_menu_for_at(item, anchor.0, anchor.1);
                     self.push_music_workspace_content();
                 }
                 ShellRequest::MusicGroupSwitch { delta } => {
@@ -481,7 +440,7 @@ impl Model {
                 | ShellRequest::TvMoveColumn { .. }
                 | ShellRequest::TvJumpCursor { .. }
                 | ShellRequest::TvActivate { .. }
-                | ShellRequest::TvEpisodeActivate
+                | ShellRequest::TvEpisodeActivate { .. }
                 | ShellRequest::TvBack
                 | ShellRequest::TvCycleLetterPill { .. }
                 | ShellRequest::TvEpisodeMove { .. }

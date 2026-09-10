@@ -44,7 +44,10 @@ pub(in crate::app) struct MusicWideRenderCtx {
     pub(in crate::app) album_tracks: Option<Vec<EmbyItem>>,
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) album_tracks_loading: bool,
-    pub(in crate::app) track_cursor: Option<usize>,
+    /// Parent-owned track-pane focus (design.md D5). The track owner stays
+    /// authoritative for the selected track; this only says whether the track
+    /// pane currently paints focused.
+    pub(in crate::app) track_focused: bool,
 }
 
 impl MusicWideRenderCtx {
@@ -60,7 +63,7 @@ impl MusicWideRenderCtx {
         images_enabled: bool,
         album_tracks: Option<Vec<EmbyItem>>,
         album_tracks_loading: bool,
-        track_cursor: Option<usize>,
+        track_focused: bool,
     ) -> Self {
         let mut counts = HashMap::<&str, usize>::new();
         for album in &list.items {
@@ -93,7 +96,7 @@ impl MusicWideRenderCtx {
             images_enabled,
             album_tracks,
             album_tracks_loading,
-            track_cursor,
+            track_focused,
         }
     }
 
@@ -172,6 +175,32 @@ fn grouped_album_rows_with_targets(
 #[derive(Default)]
 pub(in crate::app) struct MusicWideRenderOutput {
     pub(in crate::app) image_paint: Option<MusicImagePaint>,
+}
+
+/// The active album-row presentation Grouped Music hands to the render layer
+/// this frame (design.md D1/D2). The component derives it from the painted
+/// breakpoint; the same shared owner moves between the two adapters.
+pub(in crate::app) enum MusicAlbumPresentation<'a> {
+    Wide(&'a mut WideMediaList<String>),
+    Inline(&'a mut InlineMediaBrowser<String>),
+}
+
+/// The active track-row presentation Grouped Music hands to the render layer
+/// this frame. Tracks paint fixed one-column rows through the Wide
+/// presentation (design.md D1/D2).
+pub(in crate::app) enum MusicTrackPresentation<'a> {
+    Wide(&'a mut WideMediaList<String>),
+}
+
+/// The wide Music right-rail browser content height for `area`, computed from
+/// the same arrangement the painter consumes. Grouped Music uses it to restore
+/// the responsive anchor against the receiving presentation's painted viewport
+/// rather than a stale retained rect.
+pub(in crate::app) fn wide_music_browser_content_height(area: Rect) -> Option<usize> {
+    let panes = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y)?;
+    let right_pane = wide_hero::wide_hero_browser_pane(panes.browser_panel, panes.browser_area);
+    let browser_area = padded_rect(right_pane.list_panel, PANE_PAD_X, PANE_PAD_Y);
+    Some(browser_area.height as usize)
 }
 
 /// Strips the "Artist (Year) " folder-name prefix from an album's display
@@ -309,8 +338,9 @@ impl App {
             album_tracks_loading,
             // The App side never owns inline track focus: the wide
             // `MusicWorkspaceComponent` repaints over this underpaint with
-            // its local cursor, and narrow keeps track focus explicitly off.
-            None,
+            // its parent-owned track-pane focus, and narrow keeps track focus
+            // explicitly off (design.md D5).
+            false,
         )
     }
 }
@@ -327,8 +357,11 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
     area: Rect,
     ctx: &MusicWideRenderCtx,
     layout: &mut LayoutMain,
-    browser: &mut InlineMediaBrowser<String>,
+    presentation: MusicAlbumPresentation<'_>,
 ) -> MusicWideRenderOutput {
+    let MusicAlbumPresentation::Inline(browser) = presentation else {
+        return MusicWideRenderOutput::default();
+    };
     browser.invalidate_paint();
     // Group pill bar above the album rows, mirroring the narrow browser
     // (`list_narrow.rs`) and the wide sibling's right-pane pill slot. Album
@@ -442,11 +475,15 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     area: Rect,
     ctx: &MusicWideRenderCtx,
     layout: &mut LayoutMain,
-    album_list: &mut WideMediaList<String>,
-    track_list: &mut WideMediaList<String>,
+    album_presentation: MusicAlbumPresentation<'_>,
+    track_presentation: MusicTrackPresentation<'_>,
     inline_search: &mut InlineSearch,
 ) -> MusicWideRenderOutput {
     let mut output = MusicWideRenderOutput::default();
+    let MusicAlbumPresentation::Wide(album_list) = album_presentation else {
+        return output;
+    };
+    let MusicTrackPresentation::Wide(track_list) = track_presentation;
     album_list.invalidate_paint();
     // The pure arrangement is computed exactly once here in
     // `publish_geometry`; the paint path below consumes the returned panes
@@ -456,13 +493,13 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     };
     let browser_panel = panes.browser_panel;
     let browser_area = panes.browser_area;
-    let track_active = ctx.track_cursor.is_some();
+    let track_active = ctx.track_focused;
     let left_focused = ctx.focused && track_active;
     let right_focused = ctx.focused && !track_active;
     let Some(left_area) = wide_hero::wide_hero_hero_pane(
         f,
         area,
-        wide_hero::LeftPaneFocus::Workspace(ctx.focused && ctx.track_cursor.is_some()),
+        wide_hero::LeftPaneFocus::Workspace(ctx.focused && ctx.track_focused),
     ) else {
         return output;
     };

@@ -1,7 +1,11 @@
-//! Interactive Component for grouped Music's wide workspace.
+//! Interactive Component for grouped Music's Wide workspace.
 //!
-//! The shell mirrors album data and cached tracks. Album/track cursor state is
-//! local here; cross-authority effects use typed shell requests.
+//! One shared canonical album owner (a [`MediaListCarrier`]) moves between the
+//! Wide and Inline presentations and is authoritative for the album cursor,
+//! scroll, and selected target. The wide track table is a second canonical
+//! owner; the component keeps only the parent-owned track-pane focus, the group
+//! chrome, and typed shell intents. Row-local input reaches the owners through
+//! the common delegation seam (design.md D3/D5).
 
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -13,7 +17,8 @@ use tuirealm::state::State;
 
 use super::inline_search::{InlineSearch, InlineSearchHost, InlineSearchMouse};
 use super::media_list::{
-    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
+    RowLocalOutcome, ViewportAnchor, WideMediaList,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
@@ -22,7 +27,7 @@ use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{
     render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, wide_hero_presentation,
-    MusicImagePaint, MusicWideRenderCtx,
+    MusicAlbumPresentation, MusicImagePaint, MusicTrackPresentation, MusicWideRenderCtx,
 };
 use crate::app::ui_util::list_duration_secs;
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
@@ -54,7 +59,10 @@ pub struct MusicWorkspaceComponent {
     pub(super) context: MusicWideRenderCtx,
     pub(super) album_columns: usize,
     pub(super) page_rows: usize,
-    pub(super) track_cursor: Option<usize>,
+    /// Parent-owned track-pane focus, separate from the track owner's selected
+    /// row (design.md D5). The track `MediaList` stays authoritative for the
+    /// selected track and its scroll whether or not this pane has focus.
+    pub(super) track_focused: bool,
     /// Selected-album identity from the last pushed context. When it changes
     /// (group switch, recursive-album activation, position restore), inline
     /// track focus must reset: a focused track index refers to the previous
@@ -63,23 +71,18 @@ pub struct MusicWorkspaceComponent {
     layout: LayoutMain,
     image_paint: Option<MusicImagePaint>,
     inline_track_focus_enabled: bool,
-    /// Persistent narrow-presentation control: fed the canonical grouped-album
-    /// row projection by `set_content`, painted by
-    /// `render_narrow_music_group_with_ctx`. Never constructed during a render
-    /// pass.
-    pub(super) narrow_list: InlineMediaBrowser<String>,
+    /// The one shared canonical owner of the grouped-album rows, carried by
+    /// exactly one of the Wide/Inline presentations (design.md D1/D2). It owns
+    /// the album cursor, scroll, and selected target across a breakpoint
+    /// change; the two adapters are never synchronized.
+    pub(super) carrier: MediaListCarrier<String>,
     /// One-shot `ViewportAnchor` carried across a breakpoint flip (§2.5).
     pending_anchor: Option<ViewportAnchor<String>>,
-    /// The presentation the last `view` painted; `None` before the first paint.
-    last_wide: Option<bool>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
-    /// The wide right-rail's persistent canonical album control. Its retained
-    /// current-frame result gives the wide-rail row identity for the mouse path
-    /// (design.md D6); `track_list` does the same for the provider-owned track
-    /// table.
-    pub(super) wide_list: WideMediaList<String>,
+    /// The wide track table's persistent canonical control: the authoritative
+    /// track owner for selection/scroll/painting/retained hits (design.md D5).
     pub(super) track_list: WideMediaList<String>,
     /// Group-pill rects (design.md D6), repopulated in `view()` from
     /// `layout.selector_tabs` — the pill painter's own output — for both
@@ -87,8 +90,8 @@ pub struct MusicWorkspaceComponent {
     pill_regions: HitRegions<usize>,
     /// The embedded Inline Search control (design.md D1). See
     /// `BrowserComponent::inline_search` for the migration-phase notes.
-    /// `pub(super)`, matching `track_cursor`, so the sibling
-    /// `music_workspace_keys` module (split out for file size) can reach it.
+    /// `pub(super)`, matching the sibling key module (split out for file
+    /// size), so `music_workspace_keys` can reach it.
     pub(super) inline_search: InlineSearch,
 }
 
@@ -106,20 +109,18 @@ impl MusicWorkspaceComponent {
                 false,
                 None,
                 false,
-                None,
+                false,
             ),
             album_columns: 1,
             page_rows: 1,
-            track_cursor: None,
+            track_focused: false,
             last_album_id: None,
             layout: LayoutMain::default(),
             image_paint: None,
             inline_track_focus_enabled: false,
-            narrow_list: InlineMediaBrowser::new(),
+            carrier: MediaListCarrier::new(Presentation::Inline),
             pending_anchor: None,
-            last_wide: None,
             mouse_gestures: MouseGestureState::new(),
-            wide_list: WideMediaList::new(),
             track_list: WideMediaList::new(),
             pill_regions: HitRegions::new(),
             inline_search: InlineSearch::new(),
@@ -127,41 +128,53 @@ impl MusicWorkspaceComponent {
     }
 
     pub(super) fn active_is_wide(&self) -> bool {
-        self.last_wide.unwrap_or(false)
+        self.carrier.active() == Presentation::Wide
     }
 
-    pub(super) fn active_target(&self) -> Option<String> {
+    fn active_presentation(&self) -> Presentation {
         if self.active_is_wide() {
-            self.wide_list.selected_target().cloned()
+            Presentation::Wide
         } else {
-            self.narrow_list.selected_target().cloned()
+            Presentation::Inline
         }
+    }
+
+    /// Move the shared album owner into the presentation the painted
+    /// breakpoint currently selects before any row-local input or projection
+    /// touches it (design.md D1/D2).
+    fn ensure_carrier(&mut self) {
+        let target = self.active_presentation();
+        let viewport_height = self.layout.left_area.height.max(1) as usize;
+        self.carrier.ensure_presentation(target, viewport_height);
+    }
+
+    /// The one seam through which Grouped Music offers an already-normalized
+    /// row-local key or pointer gesture to the shared album owner. The owner
+    /// applies the local state transition and returns the closed
+    /// provider-neutral outcome; Music translates external row intents into
+    /// its typed Msgs (design.md D3).
+    pub(super) fn delegate_row_local_input(
+        &mut self,
+        input: RowLocalInput,
+        pointer_target: Option<String>,
+    ) -> RowLocalOutcome<String> {
+        self.ensure_carrier();
+        self.carrier.delegate(input, pointer_target)
+    }
+
+    /// The shared album owner's current stable target, if any.
+    pub(super) fn active_target(&self) -> Option<String> {
+        self.carrier.selected_target().cloned()
     }
 
     pub(super) fn select_active_target(&mut self, target: &str) {
-        if self.active_target().as_deref() == Some(target) {
-            return;
-        }
-        if self.active_is_wide() {
-            self.wide_list.select_target(&target.to_string());
-        } else {
-            self.narrow_list.select_target(&target.to_string());
-        }
+        self.ensure_carrier();
+        self.carrier.select_target(&target.to_string());
     }
 
     fn set_active_scroll(&mut self, scroll: usize) {
-        if self.active_is_wide() {
-            self.wide_list.set_scroll(scroll);
-        } else {
-            self.narrow_list.set_scroll(scroll);
-        }
-    }
-
-    pub(super) fn select_album_index(&mut self, index: usize) {
-        let Some(target) = self.context.album_targets.get(index).cloned() else {
-            return;
-        };
-        self.select_active_target(&target);
+        self.ensure_carrier();
+        self.carrier.set_scroll(scroll);
     }
 
     pub(super) fn selected_album_index(&self) -> usize {
@@ -178,26 +191,13 @@ impl MusicWorkspaceComponent {
     /// The outgoing control's `ViewportAnchor` for the last painted
     /// presentation (mirrors `TvWorkspaceComponent::viewport_anchor`).
     pub(in crate::app) fn viewport_anchor(&self) -> Option<ViewportAnchor<String>> {
-        match self.last_wide {
-            Some(true) => {
-                let content_rect = self.wide_list.current_content_rect()?;
-                let selected_target = self.wide_list.current_selected_target()?.clone();
-                let selected_row = self.wide_list.current_selected_row_rect()?;
-                Some(ViewportAnchor {
-                    selected_target,
-                    selected_row_offset: selected_row.y.saturating_sub(content_rect.y) as usize,
-                })
-            }
-            _ => {
-                let content_rect = self.narrow_list.current_content_rect()?;
-                let selected_target = self.narrow_list.current_selected_target()?.clone();
-                let selected_row = self.narrow_list.current_selected_row_rect()?;
-                Some(ViewportAnchor {
-                    selected_target,
-                    selected_row_offset: selected_row.y.saturating_sub(content_rect.y) as usize,
-                })
-            }
-        }
+        let content_rect = self.carrier.current_content_rect()?;
+        let selected_target = self.carrier.current_selected_target()?.clone();
+        let selected_row = self.carrier.current_selected_row_rect()?;
+        Some(ViewportAnchor {
+            selected_target,
+            selected_row_offset: selected_row.y.saturating_sub(content_rect.y) as usize,
+        })
     }
 
     /// Deliver a `ViewportAnchor` to the kept-mounted workspace; consumed at
@@ -216,7 +216,7 @@ impl MusicWorkspaceComponent {
     pub(in crate::app) fn set_inline_track_focus_enabled(&mut self, enabled: bool) {
         self.inline_track_focus_enabled = enabled;
         if !enabled {
-            self.track_cursor = None;
+            self.track_focused = false;
         }
     }
 
@@ -226,13 +226,13 @@ impl MusicWorkspaceComponent {
                 .selected_album
                 .as_ref()
                 .map(|album| album.id.as_str());
-        // Inline track focus is owned here; a selected-album identity change
+        // Track-pane focus is owned here; a selected-album identity change
         // (group switch, recursive-album activation, position restore) is the
-        // one content-driven reset -- a focused track index refers to the
-        // previous album's track list. That is an event on content identity,
-        // not an echo test (D4).
+        // one content-driven reset -- a focused track refers to the previous
+        // album's track list. That is an event on content identity, not an
+        // echo test (design.md D5).
         if album_changed {
-            self.track_cursor = None;
+            self.track_focused = false;
         }
         self.last_album_id = context
             .selected_album
@@ -243,27 +243,24 @@ impl MusicWorkspaceComponent {
         let focused = self.context.focused;
         self.context = context;
         self.context.focused = focused;
+        self.ensure_carrier();
         let album_rows = self.context.grouped_rows();
-        // Both controls remain mounted and retain their own stable target and
-        // local clamp. Only the active control is ever used for interaction;
-        // the inactive control is deliberately not synchronized here.
-        if self.narrow_list.rows() != album_rows.as_slice() {
-            self.narrow_list.set_content(album_rows.clone());
+        // The one shared album owner holds the projected rows; only its active
+        // presentation is fed, and an unchanged projection does not invalidate
+        // the retained frame (design.md D6).
+        if self.carrier.rows() != album_rows.as_slice() {
+            self.carrier.set_content(album_rows);
         }
-        if self.wide_list.rows() != album_rows.as_slice() {
-            self.wide_list.set_content(album_rows);
+        // The track owner is authoritative for the selected track and its
+        // scroll; `set_content` preserves the stable track target through an
+        // ordinary refresh and locally clamps. Only an album-identity change
+        // re-parks the track-pane selection at its first row.
+        let track_rows = build_track_rows(self.context.album_tracks.as_deref().unwrap_or_default());
+        if self.track_list.rows() != track_rows.as_slice() {
+            self.track_list.set_content(track_rows);
         }
-        self.track_list.set_content(build_track_rows(
-            self.context.album_tracks.as_deref().unwrap_or_default(),
-        ));
-        if let Some(cursor) = self.track_cursor {
-            self.track_list.select_index(cursor);
-        }
-        if let Some(cursor) = self.track_cursor {
-            let count = self.context.album_tracks.as_ref().map_or(0, Vec::len);
-            if count > 0 {
-                self.track_cursor = Some(cursor.min(count - 1));
-            }
+        if album_changed {
+            self.track_list.select_first();
         }
     }
 
@@ -281,18 +278,8 @@ impl MusicWorkspaceComponent {
             .get(cursor)
             .map(|_| self.context.album_targets[cursor].clone())
         {
-            if self.last_wide.is_some() {
-                self.select_active_target(&target);
-                self.set_active_scroll(scroll);
-            } else {
-                // Before the first frame there is no painted active control;
-                // initialize both persistent controls once so the first
-                // presentation receives the explicit resting position.
-                self.narrow_list.select_target(&target.to_string());
-                self.narrow_list.set_scroll(scroll);
-                self.wide_list.select_target(&target.to_string());
-                self.wide_list.set_scroll(scroll);
-            }
+            self.select_active_target(&target);
+            self.set_active_scroll(scroll);
         }
         self.pending_anchor = None;
     }
@@ -308,11 +295,7 @@ impl MusicWorkspaceComponent {
     }
 
     pub(in crate::app) fn album_scroll(&self) -> usize {
-        if self.active_is_wide() {
-            self.wide_list.scroll()
-        } else {
-            self.narrow_list.scroll()
-        }
+        self.carrier.scroll()
     }
 
     pub(in crate::app) fn painted_album_cursor_and_order(&self) -> (usize, &[usize]) {
@@ -333,13 +316,15 @@ impl MusicWorkspaceComponent {
             .cloned()
     }
 
-    pub(in crate::app) fn track_cursor(&self) -> Option<usize> {
-        self.track_cursor
+    /// Whether the parent-owned track pane currently has focus (design.md
+    /// D5). Independent of the track owner's selected row.
+    pub(in crate::app) fn track_focused(&self) -> bool {
+        self.track_focused
     }
 
     /// Whether inline track focus can be entered right now: wide mode
     /// (`inline_track_focus_enabled`) with the selected album's tracks
-    /// cached. Narrow mode keeps `track_cursor` `None` by construction.
+    /// cached. Narrow mode keeps the track pane unfocused by construction.
     pub(super) fn can_enter_track_focus(&self) -> bool {
         self.inline_track_focus_enabled
             && self.context.focused
@@ -352,10 +337,11 @@ impl MusicWorkspaceComponent {
 
     /// Shell-driven entry into inline track focus (recursive album
     /// activation): enters only when the feature is enabled and the selected
-    /// album's tracks are cached; a no-op in narrow mode.
+    /// album's tracks are cached; a no-op in narrow mode. The discrete entry
+    /// boundary parks the track owner at its first row (design.md D5).
     pub(in crate::app) fn enter_track_focus(&mut self) {
         if self.can_enter_track_focus() {
-            self.track_cursor = Some(0);
+            self.track_focused = true;
             self.track_list.select_first();
         }
     }
@@ -363,7 +349,7 @@ impl MusicWorkspaceComponent {
     /// Shell-driven clear of inline track focus (position restore): the
     /// deleted track-focus-clear rehome.
     pub(in crate::app) fn clear_track_focus(&mut self) {
-        self.track_cursor = None;
+        self.track_focused = false;
         self.track_list.select_first();
     }
 
@@ -393,46 +379,22 @@ impl MusicWorkspaceComponent {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
-        let wide = self.last_wide.unwrap_or(false);
+        let wide = self.active_is_wide();
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
                 if wide && self.track_list.claims_current_point(at) {
-                    // Track focus is provider-owned and local to this
-                    // workspace. The shell never recomputes a wheel step.
-                    self.track_list.move_selection(delta);
-                    self.track_cursor = Some(self.track_list.cursor());
+                    // The track owner is local to this workspace; the shell
+                    // never recomputes a wheel step. Track-pane focus is not
+                    // a selection and does not move here.
+                    self.track_list
+                        .delegate(RowLocalInput::Wheel { at, delta }, None);
                     return None;
                 }
-                let claimed = if wide {
-                    self.wide_list.claims_current_point(at)
-                } else {
-                    self.narrow_list.claims_current_point(at)
-                };
-                if !claimed {
+                if !self.carrier.claims_current_point(at) {
                     return None;
                 }
-                if wide {
-                    self.wide_list.move_selection(delta);
-                } else {
-                    self.narrow_list.move_selection(delta);
-                }
-                let target = if wide {
-                    self.wide_list.selected_target().cloned()
-                } else {
-                    self.narrow_list.selected_target().cloned()
-                };
-                let target = target.and_then(|id| {
-                    self.context
-                        .list
-                        .items
-                        .iter()
-                        .enumerate()
-                        .position(|(index, _)| self.context.album_targets[index] == id)
-                })?;
-                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                    target,
-                    kind: AlbumCursorKind::Move,
-                }))
+                self.delegate_row_local_input(RowLocalInput::Wheel { at, delta }, None);
+                self.album_cursor_msg(AlbumCursorKind::Move)
             }
             // Wide album rail and provider-owned track table both resolve from
             // their own retained current-frame geometry. A double click
@@ -441,66 +403,70 @@ impl MusicWorkspaceComponent {
                 if let Some(msg) = self.claim_group_pill(at) {
                     return Some(msg);
                 }
-                if let Some(track) = self.resolve_wide_track(at) {
-                    self.track_cursor = Some(track);
-                    self.track_list.select_index(track);
+                if let Some(target) = self.track_list.resolve_current_point(at).cloned() {
+                    self.track_focused = true;
+                    self.track_list
+                        .delegate(RowLocalInput::Click(at), Some(target));
                     return None;
                 }
-                let album = self.resolve_wide_album(at)?;
-                self.select_album_index(album);
-                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                    target: album,
-                    kind: AlbumCursorKind::Move,
-                }))
+                let target = self.carrier.resolve_current_point(at)?.clone();
+                self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
+                self.album_cursor_msg(AlbumCursorKind::Move)
             }
             MouseGesture::DoubleClick(at) if wide => {
                 if let Some(msg) = self.claim_group_pill(at) {
                     return Some(msg);
                 }
-                if let Some(track) = self.resolve_wide_track(at) {
-                    self.track_cursor = Some(track);
-                    self.track_list.select_index(track);
-                    return Some(Msg::Shell(ShellRequest::MusicTrackActivate));
+                if let Some(target) = self.track_list.resolve_current_point(at).cloned() {
+                    self.track_focused = true;
+                    self.track_list
+                        .delegate(RowLocalInput::Click(at), Some(target));
+                    return self.music_track_activate_msg();
                 }
-                let album = self.resolve_wide_album(at)?;
-                self.select_album_index(album);
-                Some(Msg::Shell(ShellRequest::MusicAlbumActivate))
+                let target = self.carrier.resolve_current_point(at)?.clone();
+                self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
+                Some(Msg::Shell(ShellRequest::MusicAlbumActivate {
+                    item: self.selected_item()?,
+                }))
             }
             MouseGesture::RightClick(at) if wide => {
-                if let Some(track) = self.resolve_wide_track(at) {
-                    self.track_cursor = Some(track);
-                    self.track_list.select_index(track);
-                    return Some(Msg::Shell(ShellRequest::MusicTrackContextMenuAt {
-                        anchor: (at.x, at.y),
-                    }));
+                if let Some(target) = self.track_list.resolve_current_point(at).cloned() {
+                    self.track_focused = true;
+                    self.track_list
+                        .delegate(RowLocalInput::Click(at), Some(target));
+                    return self.music_track_context_msg((at.x, at.y));
                 }
-                let album = self.resolve_wide_album(at)?;
-                self.select_album_index(album);
+                let target = self.carrier.resolve_current_point(at)?.clone();
+                self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
                 Some(Msg::Shell(ShellRequest::MusicAlbumContextMenu {
+                    item: self.selected_item()?,
                     anchor: (at.x, at.y),
                 }))
             }
-            // Narrow: group pills, then album rows (task 6.1).
+            // Narrow: group pills, then album rows.
             MouseGesture::Click(at) => {
                 if let Some(msg) = self.claim_group_pill(at) {
                     return Some(msg);
                 }
-                let album = self.claim_narrow_album(at)?;
-                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                    target: album,
-                    kind: AlbumCursorKind::Move,
-                }))
+                let target = self.carrier.resolve_current_point(at)?.clone();
+                self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
+                self.album_cursor_msg(AlbumCursorKind::Move)
             }
             MouseGesture::DoubleClick(at) => {
                 if let Some(msg) = self.claim_group_pill(at) {
                     return Some(msg);
                 }
-                self.claim_narrow_album(at)?;
-                Some(Msg::Shell(ShellRequest::MusicAlbumActivate))
+                let target = self.carrier.resolve_current_point(at)?.clone();
+                self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
+                Some(Msg::Shell(ShellRequest::MusicAlbumActivate {
+                    item: self.selected_item()?,
+                }))
             }
             MouseGesture::RightClick(at) if !wide => {
-                self.claim_narrow_album(at)?;
+                let target = self.carrier.resolve_current_point(at)?.clone();
+                self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
                 Some(Msg::Shell(ShellRequest::MusicAlbumContextMenu {
+                    item: self.selected_item()?,
                     anchor: (mouse.column, mouse.row),
                 }))
             }
@@ -508,21 +474,62 @@ impl MusicWorkspaceComponent {
         }
     }
 
-    /// Move the album selection to the narrow row under `at`, resolved by the
-    /// embedded `InlineMediaBrowser` against the rect it painted (design.md
-    /// D6). Returns the pushed-context item index, or `None` for a
-    /// heading/spacer row or a point outside the list.
-    fn claim_narrow_album(&mut self, at: Position) -> Option<usize> {
-        let id = self.narrow_list.resolve_current_point(at)?.clone();
-        let album = self
-            .context
-            .list
-            .items
+    /// The pushed-context item index for an album stable target, or `None`
+    /// when the target is not part of the pushed catalog.
+    fn album_index_for_target(&self, target: &str) -> Option<usize> {
+        self.context.album_targets.iter().position(|t| t == target)
+    }
+
+    /// The album-cursor request for the shared owner's current selection. The
+    /// shell only mirrors this index into the App resting cursor; the owner
+    /// stays authoritative (the `BrowserCursorIndex` shape).
+    pub(super) fn album_cursor_msg(&self, kind: AlbumCursorKind) -> Option<Msg> {
+        let target = self.active_target()?;
+        let index = self.album_index_for_target(&target)?;
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+            target: index,
+            kind,
+        }))
+    }
+
+    /// The album item under the shared owner's current selection, resolved
+    /// from the pushed catalog (never an App cursor re-read).
+    pub(in crate::app) fn selected_album_item(&self) -> Option<mbv_core::api::EmbyItem> {
+        let target = self.active_target()?;
+        let index = self.album_index_for_target(&target)?;
+        self.context.list.items.get(index).cloned()
+    }
+
+    /// The track item under the track owner's current selection.
+    pub(in crate::app) fn selected_track_item(&self) -> Option<mbv_core::api::EmbyItem> {
+        let target = self.track_list.selected_target()?;
+        self.context
+            .album_tracks
+            .as_deref()
+            .unwrap_or_default()
             .iter()
-            .enumerate()
-            .position(|(index, _)| self.context.album_targets[index] == id)?;
-        self.select_active_target(&id);
-        Some(album)
+            .find(|track| &track.id == target)
+            .cloned()
+    }
+
+    /// The typed track-activation request carrying the owner-resolved album
+    /// and track identities (design.md D4).
+    pub(super) fn music_track_activate_msg(&self) -> Option<Msg> {
+        let album = self.selected_album_item()?;
+        let track = self.selected_track_item()?;
+        Some(Msg::Shell(ShellRequest::MusicTrackActivate {
+            album_id: album.id,
+            track,
+        }))
+    }
+
+    /// The typed track context-menu request carrying the owner-resolved track.
+    pub(super) fn music_track_context_msg(&self, anchor: (u16, u16)) -> Option<Msg> {
+        let track = self.selected_track_item()?;
+        Some(Msg::Shell(ShellRequest::MusicTrackContextMenuAt {
+            track,
+            anchor,
+        }))
     }
 
     /// If `at` lands on a group pill, emit the relative `MusicGroupSwitch` that
@@ -532,32 +539,6 @@ impl MusicWorkspaceComponent {
         let &target = self.pill_regions.resolve(at)?;
         let delta = target as i64 - self.context.group_cursor as i64;
         (delta != 0).then_some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta }))
-    }
-
-    /// The track ordinal under `at` in the provider-owned Wide track table,
-    /// resolved by the child control's retained current-frame geometry.
-    fn resolve_wide_track(&self, at: Position) -> Option<usize> {
-        let id = self.track_list.resolve_current_point(at)?;
-        self.context
-            .album_tracks
-            .as_deref()
-            .unwrap_or_default()
-            .iter()
-            .position(|track| &track.id == id)
-    }
-
-    /// The album index under `at` on the wide right rail, resolved by the
-    /// embedded canonical control against the rail area it painted, then
-    /// mapped to the pushed context's item index (design.md D6). `None` for a
-    /// heading/spacer row or a point outside the rail.
-    fn resolve_wide_album(&self, at: Position) -> Option<usize> {
-        let id = self.wide_list.resolve_current_point(at)?;
-        self.context
-            .list
-            .items
-            .iter()
-            .enumerate()
-            .position(|(index, _)| self.context.album_targets[index] == *id)
     }
 
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<MusicImagePaint> {
@@ -573,7 +554,10 @@ impl MusicWorkspaceComponent {
 
     #[cfg(test)]
     pub(in crate::app) fn test_narrow_content_rect(&self) -> Rect {
-        self.narrow_list.current_content_rect().unwrap_or_default()
+        self.carrier
+            .inline()
+            .current_content_rect()
+            .unwrap_or_default()
     }
 
     #[cfg(test)]
@@ -612,39 +596,39 @@ impl Component for MusicWorkspaceComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = LayoutMain::default();
         let wide = wide_hero_presentation(area).is_some();
+        let target = if wide {
+            Presentation::Wide
+        } else {
+            Presentation::Inline
+        };
+
+        // One shared album owner per logical flow (design.md D1): a breakpoint
+        // change reconfigures the same owner and preserves only the outgoing
+        // selected-row viewport offset. The receiving content height is the
+        // height the retained offset is restored against.
+        let incoming_height = if wide {
+            crate::app::render::wide_music_browser_content_height(area)
+                .unwrap_or(area.height as usize)
+        } else if self.context.groups.is_empty() {
+            area.height as usize
+        } else {
+            crate::app::render::arrangements::wide_hero::pill_bar_areas(area)
+                .content_area
+                .height as usize
+        };
+        self.carrier
+            .ensure_presentation(target, incoming_height.max(1));
+        if let Some(anchor) = self.pending_anchor.take() {
+            self.carrier
+                .apply_viewport_anchor(&anchor, incoming_height.max(1));
+        }
 
         // The active control owns the painted selection. Use its index for
         // render-derived detail content before cloning the shell snapshot.
         self.context.list.set_cursor(self.selected_album_index());
 
-        if let Some(was_wide) = self.last_wide {
-            if was_wide != wide && self.pending_anchor.is_none() {
-                self.pending_anchor = self.viewport_anchor();
-            }
-        }
-        let flip_anchor = self.pending_anchor.take();
-        if let Some(anchor) = &flip_anchor {
-            if wide {
-                self.context.publish_geometry(area, &mut self.layout);
-                if let Some(content_rect) = self.wide_list.current_content_rect() {
-                    self.wide_list
-                        .apply_viewport_anchor(anchor, content_rect.height as usize);
-                } else {
-                    self.pending_anchor = flip_anchor;
-                }
-            } else {
-                let content_area = if self.context.groups.is_empty() {
-                    area
-                } else {
-                    crate::app::render::arrangements::wide_hero::pill_bar_areas(area).content_area
-                };
-                self.narrow_list
-                    .apply_viewport_anchor(anchor, content_area.height as usize);
-            }
-        }
-
         let mut context = self.context.clone();
-        context.track_cursor = self.track_cursor;
+        context.track_focused = self.track_focused;
         if !wide && self.inline_search.is_active() {
             // Normal Music passes its whole list area to the shared search
             // painter (design.md D3); the ordinary grouped composer does not
@@ -678,7 +662,7 @@ impl Component for MusicWorkspaceComponent {
                 area,
                 &context,
                 &mut self.layout,
-                &mut self.narrow_list,
+                MusicAlbumPresentation::Inline(self.carrier.inline_mut()),
             );
             self.image_paint = output.image_paint;
         } else {
@@ -687,8 +671,8 @@ impl Component for MusicWorkspaceComponent {
                 area,
                 &context,
                 &mut self.layout,
-                &mut self.wide_list,
-                &mut self.track_list,
+                MusicAlbumPresentation::Wide(self.carrier.wide_mut()),
+                MusicTrackPresentation::Wide(&mut self.track_list),
                 &mut self.inline_search,
             );
             self.image_paint = output.image_paint;
@@ -697,7 +681,6 @@ impl Component for MusicWorkspaceComponent {
         for (rect, target) in &self.layout.selector_tabs {
             self.pill_regions.push(*rect, *target);
         }
-        self.last_wide = Some(wide);
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
@@ -721,9 +704,18 @@ impl Component for MusicWorkspaceComponent {
 
 impl AppComponent<Msg, UserEvent> for MusicWorkspaceComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
+        // Keep the shared album owner in the presentation the painted
+        // breakpoint currently selects before any row-local input touches it
+        // (design.md D1).
         match event {
-            Event::Keyboard(key) => self.handle_key(key),
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Keyboard(key) => {
+                self.ensure_carrier();
+                self.handle_key(key)
+            }
+            Event::Mouse(mouse) => {
+                self.ensure_carrier();
+                self.handle_mouse(mouse)
+            }
             _ => None,
         }
     }

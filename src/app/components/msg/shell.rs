@@ -30,26 +30,36 @@ pub enum ShellRequest {
         kind: AlbumCursorKind,
     },
     /// Activate the selected album in narrow mode, where album tracks use the
-    /// selection modal instead of the inline workspace.
-    MusicAlbumActivate,
+    /// selection modal instead of the inline workspace. Carries the
+    /// component-resolved album so the shell effect never re-reads a cursor.
+    MusicAlbumActivate {
+        item: EmbyItem,
+    },
     /// Activate the focused inline album track (Enter, or Ctrl+P while a
-    /// track is focused): the shell resolves the track from
-    /// `MusicWorkspaceComponent::track_cursor()` and plays it through the
-    /// album queue path (`App::play_album_track`).
-    MusicTrackActivate,
+    /// track is focused): carries the owner-resolved album and track
+    /// identities; the shell plays the track through the album queue path
+    /// (`App::play_album_track`).
+    MusicTrackActivate {
+        album_id: String,
+        track: EmbyItem,
+    },
     /// Enqueue the focused inline album track (Ctrl+A while a track is
-    /// focused): the shell resolves the track from the component cursor and
-    /// enqueues it via the library-view enqueue path.
-    MusicTrackEnqueue,
+    /// focused): carries the owner-resolved track identity and enqueues it via
+    /// the library-view enqueue path.
+    MusicTrackEnqueue {
+        track: EmbyItem,
+    },
     /// Open the context menu targeted at the focused inline album track
-    /// ('.' while a track is focused): the shell resolves the track item and
-    /// raises the menu through `App` (target resolution lives at the
-    /// shell/component boundary).
-    MusicTrackContextMenu,
-    /// Right-click on a focused Wide track row: the shell resolves the track
-    /// from `MusicWorkspaceComponent::track_cursor()` and preserves the
-    /// component-provided pointer anchor for menu placement.
+    /// ('.' while a track is focused): carries the owner-resolved track item
+    /// and raises the menu through `App`.
+    MusicTrackContextMenu {
+        track: EmbyItem,
+    },
+    /// Right-click on a focused Wide track row: carries the owner-resolved
+    /// track item and preserves the component-provided pointer anchor for menu
+    /// placement.
     MusicTrackContextMenuAt {
+        track: EmbyItem,
         anchor: (u16, u16),
     },
     /// `[`/`]` in grouped Music: cycle to the previous (`delta == -1`) or next
@@ -57,12 +67,11 @@ pub enum ShellRequest {
     MusicGroupSwitch {
         delta: i64,
     },
-    /// Right-click on a narrow grouped-Music album row: the component has
-    /// already moved its selection cursor to the row under the pointer; the
-    /// shell resolves the album from `MusicWorkspaceComponent::selected_item()`
-    /// and opens its context menu anchored at the click (mirrors the `.`
-    /// keyboard action, which has no anchor).
+    /// Right-click on a narrow grouped-Music album row: carries the
+    /// component-resolved album item and opens its context menu anchored at the
+    /// click (mirrors the `.` keyboard action, which has no anchor).
     MusicAlbumContextMenu {
+        item: EmbyItem,
         anchor: (u16, u16),
     },
     /// Quit the application.
@@ -324,8 +333,11 @@ pub enum ShellRequest {
         item: EmbyItem,
     },
     /// Enter on the focused TV episode pane plays the component-selected
-    /// episode through the existing playback path.
-    TvEpisodeActivate,
+    /// episode. Carries the owner-resolved episode identity (design.md D4);
+    /// the shell never reads a component cursor.
+    TvEpisodeActivate {
+        episode: EmbyItem,
+    },
     /// Esc/Backspace leaves TV selection/back-navigates the App browse stack.
     TvBack,
     /// Series-root `[`/`]` cycle the App-owned letter pill.

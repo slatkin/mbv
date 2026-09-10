@@ -132,7 +132,9 @@ pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };
 pub(in crate::app) use components::music_wide::{
-    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, MusicWideRenderCtx,
+    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx,
+    wide_music_browser_content_height, MusicAlbumPresentation, MusicTrackPresentation,
+    MusicWideRenderCtx,
 };
 pub(in crate::app) use components::playlists::{
     render_playlists_content, render_save_playlist_content, PlaylistsRenderGeometry,
@@ -150,7 +152,9 @@ pub(in crate::app) use components::sessions::render_sessions_overlay_content;
 pub(in crate::app) use components::settings_component::{
     render_settings_content, SettingsRenderGeometry, SettingsRenderModel,
 };
-pub(in crate::app) use components::tv_wide::{render_wide_tv_with_ctx, TvWideRenderCtx};
+pub(in crate::app) use components::tv_wide::{
+    render_wide_tv_with_ctx, TvEpisodePresentation, TvSeriesPresentation, TvWideRenderCtx,
+};
 pub(in crate::app) use components::widgets::{render_count_label, render_pill_bar, PillBar};
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the

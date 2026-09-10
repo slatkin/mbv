@@ -203,6 +203,20 @@ impl App {
     }
 }
 
+/// The active series-row presentation TV hands to the render layer this frame
+/// (design.md D1/D2). The wide workspace keeps the Wide presentation; the
+/// normal presentation lives in the separate `BrowserComponent` destination.
+pub(in crate::app) enum TvSeriesPresentation<'a> {
+    Wide(&'a mut WideMediaList<String>),
+}
+
+/// The active episode-row presentation TV hands to the render layer this
+/// frame (design.md D1/D2). Episodes paint fixed one-column rows through the
+/// Wide presentation.
+pub(in crate::app) enum TvEpisodePresentation<'a> {
+    Wide(&'a mut WideMediaList<String>),
+}
+
 /// App-free wide TV renderer. The shell builds `TvWideRenderCtx` and the
 /// component supplies its local cursor and pane focus through that context.
 pub(in crate::app) fn render_wide_tv_with_ctx(
@@ -210,10 +224,12 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     area: Rect,
     ctx: &TvWideRenderCtx,
     layout: &mut LayoutMain,
-    media_list: &mut WideMediaList<String>,
-    episodes: &mut WideMediaList<String>,
+    series_presentation: TvSeriesPresentation<'_>,
+    episode_presentation: TvEpisodePresentation<'_>,
     inline_search: &mut InlineSearch,
 ) -> (usize, Option<HomeImagePaint>) {
+    let TvSeriesPresentation::Wide(media_list) = series_presentation;
+    let TvEpisodePresentation::Wide(episodes) = episode_presentation;
     layout.tv_wide_episode_list_area = Rect::default();
     layout.tv_wide_season_tabs.clear();
     layout.tv_wide_area = area;

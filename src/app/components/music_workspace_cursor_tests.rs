@@ -9,7 +9,7 @@ use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-fn context(track_cursor: Option<usize>) -> MusicWideRenderCtx {
+fn context(track_focused: bool) -> MusicWideRenderCtx {
     let album = make_item("First Album", "MusicAlbum");
     let mut track = make_item("Track One", "Audio");
     track.index_number = 1;
@@ -26,15 +26,11 @@ fn context(track_cursor: Option<usize>) -> MusicWideRenderCtx {
         true,
         Some(vec![track, second_track]),
         false,
-        track_cursor,
+        track_focused,
     )
 }
 
-fn grouped_context(
-    cursor: usize,
-    order: Vec<usize>,
-    track_cursor: Option<usize>,
-) -> MusicWideRenderCtx {
+fn grouped_context(cursor: usize, order: Vec<usize>, track_focused: bool) -> MusicWideRenderCtx {
     let albums: Vec<_> = (0..4)
         .map(|index| make_item(&format!("Album {index}"), "MusicAlbum"))
         .collect();
@@ -51,15 +47,15 @@ fn grouped_context(
         true,
         None,
         false,
-        track_cursor,
+        track_focused,
     )
 }
 
 #[test]
-fn music_workspace_keeps_track_cursor_local_between_syncs() {
+fn music_workspace_keeps_track_focus_local_between_syncs() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     component.set_inline_track_focus_enabled(true);
     // Enter inline track focus locally, then move within it.
     component.on(&Event::Keyboard(KeyEvent {
@@ -72,8 +68,9 @@ fn music_workspace_keeps_track_cursor_local_between_syncs() {
     }));
     // An ordinary content push (same album) never touches the local track
     // cursor.
-    component.set_content(context(None));
-    assert_eq!(component.track_cursor(), Some(1));
+    component.set_content(context(false));
+    assert!(component.track_focused());
+    assert_eq!(component.track_selected_row(), Some(1));
 }
 
 #[test]
@@ -102,7 +99,7 @@ fn music_workspace_vertical_move_follows_album_display_order() {
         true,
         None,
         false,
-        None,
+        false,
     ));
     // The shell re-anchors the album cursor at the navigation event; an
     // ordinary push no longer carries it.
@@ -126,7 +123,7 @@ fn music_workspace_vertical_move_follows_album_display_order() {
 fn music_workspace_wheel_moves_one_painted_album_row_and_reuses_cursor_request() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(grouped_context(1, vec![2, 0, 3, 1], None));
+    component.set_content(grouped_context(1, vec![2, 0, 3, 1], false));
     component.re_anchor(1, 0);
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal
@@ -153,28 +150,32 @@ fn music_workspace_wheel_moves_one_painted_album_row_and_reuses_cursor_request()
 fn music_workspace_narrow_enter_requests_album_activation() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Enter,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.track_cursor(), None);
-    assert_eq!(message, Some(Msg::Shell(ShellRequest::MusicAlbumActivate)));
+    assert!(!component.track_focused());
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::MusicAlbumActivate { .. }))
+    ));
 }
 
 #[test]
-fn music_workspace_enter_sets_track_cursor_when_inline_track_focus_enabled() {
+fn music_workspace_enter_sets_track_focus_when_inline_track_focus_enabled() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     component.set_inline_track_focus_enabled(true);
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Enter,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.track_cursor(), Some(0));
+    assert!(component.track_focused());
+    assert_eq!(component.track_selected_row(), Some(0));
     component.set_inline_track_focus_enabled(false);
-    assert_eq!(component.track_cursor(), None);
+    assert!(!component.track_focused());
 }
 
 #[test]
@@ -182,7 +183,7 @@ fn music_workspace_selection_follows_shared_hero_gate_boundaries() {
     for (width, height, wide) in [(81, 7, false), (82, 7, true), (82, 6, false)] {
         let mut component = MusicWorkspaceComponent::new();
         component.set_focused(true);
-        component.set_content(context(Some(0)));
+        component.set_content(context(true));
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal
             .draw(|frame| component.view(frame, Rect::new(0, 0, width, height)))
@@ -200,7 +201,7 @@ fn music_workspace_selection_follows_shared_hero_gate_boundaries() {
 fn music_workspace_renders_without_app() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
@@ -217,7 +218,7 @@ fn music_workspace_renders_without_app() {
 fn music_workspace_track_selection_uses_the_shared_focused_row_surface() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     component.set_inline_track_focus_enabled(true);
     component.enter_track_focus();
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
@@ -225,7 +226,8 @@ fn music_workspace_track_selection_uses_the_shared_focused_row_surface() {
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
 
-    assert_eq!(component.track_cursor(), Some(0));
+    assert!(component.track_focused());
+    assert_eq!(component.track_selected_row(), Some(0));
     assert_eq!(component.track_selected_row(), Some(0));
     let track_panel = component
         .test_track_selected_row_rect()
@@ -244,7 +246,7 @@ fn music_workspace_track_selection_uses_the_shared_focused_row_surface() {
 fn music_workspace_focused_track_box_uses_the_soft_surface_role() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     component.set_inline_track_focus_enabled(true);
     component.enter_track_focus();
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
@@ -271,7 +273,7 @@ fn music_workspace_focused_track_box_uses_the_soft_surface_role() {
 fn music_workspace_horizontal_move_is_ignored_at_one_column() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(grouped_context(1, vec![0, 1, 2, 3], None));
+    component.set_content(grouped_context(1, vec![0, 1, 2, 3], false));
     component.re_anchor(1, 0);
     component.set_album_columns(1);
 
@@ -289,7 +291,7 @@ fn music_workspace_horizontal_move_is_ignored_at_one_column() {
 fn music_workspace_page_moves_saturate_at_both_ends() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(grouped_context(0, vec![0, 1, 2, 3], None));
+    component.set_content(grouped_context(0, vec![0, 1, 2, 3], false));
     component.set_album_columns(2);
     component.set_page_rows(2);
 
@@ -331,7 +333,7 @@ fn music_workspace_track_keys_are_consumed_locally_and_do_not_move_album_cursor(
         true,
         Some(tracks),
         false,
-        None,
+        false,
     ));
     component.re_anchor(1, 0);
     component.set_inline_track_focus_enabled(true);
@@ -346,7 +348,8 @@ fn music_workspace_track_keys_are_consumed_locally_and_do_not_move_album_cursor(
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(message, None);
-    assert_eq!(component.track_cursor(), Some(1));
+    assert!(component.track_focused());
+    assert_eq!(component.track_selected_row(), Some(1));
     assert_eq!(component.album_cursor(), 1);
 }
 
@@ -354,7 +357,7 @@ fn music_workspace_track_keys_are_consumed_locally_and_do_not_move_album_cursor(
 fn music_workspace_enter_on_focused_track_emits_activation() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     component.set_inline_track_focus_enabled(true);
     // Enter enters track mode; Enter again activates the focused track.
     component.on(&Event::Keyboard(KeyEvent {
@@ -367,7 +370,7 @@ fn music_workspace_enter_on_focused_track_emits_activation() {
     }));
     assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate))
+        Some(Msg::Shell(ShellRequest::MusicTrackActivate { .. }))
     ));
 }
 
@@ -375,7 +378,7 @@ fn music_workspace_enter_on_focused_track_emits_activation() {
 fn music_workspace_track_esc_exits_locally_without_forwarding() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     component.set_inline_track_focus_enabled(true);
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Enter,
@@ -385,7 +388,7 @@ fn music_workspace_track_esc_exits_locally_without_forwarding() {
         code: Key::Esc,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.track_cursor(), None);
+    assert!(!component.track_focused());
     assert_eq!(message, None);
 }
 
@@ -393,13 +396,14 @@ fn music_workspace_track_esc_exits_locally_without_forwarding() {
 fn music_workspace_album_change_clears_track_focus() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     component.set_inline_track_focus_enabled(true);
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Enter,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.track_cursor(), Some(0));
+    assert!(component.track_focused());
+    assert_eq!(component.track_selected_row(), Some(0));
 
     // A different selected album (group switch / recursive activation)
     // resets the stale track cursor.
@@ -416,9 +420,9 @@ fn music_workspace_album_change_clears_track_focus() {
         true,
         Some(vec![make_item("Other Track", "Audio")]),
         false,
-        None,
+        false,
     ));
-    assert_eq!(component.track_cursor(), None);
+    assert!(!component.track_focused());
 }
 
 #[test]
@@ -428,7 +432,7 @@ fn music_workspace_re_anchor_overrides_prior_local_move() {
     // moved the cursor since the previous projection.
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(grouped_context(0, vec![0, 1, 2, 3], None));
+    component.set_content(grouped_context(0, vec![0, 1, 2, 3], false));
     component.re_anchor(0, 0);
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Down,
@@ -440,7 +444,7 @@ fn music_workspace_re_anchor_overrides_prior_local_move() {
         "local move diverged the cursor"
     );
 
-    component.set_content(grouped_context(2, vec![0, 1, 2, 3], None));
+    component.set_content(grouped_context(2, vec![0, 1, 2, 3], false));
     component.re_anchor(2, 0);
     assert_eq!(component.album_cursor(), 2);
 }
@@ -451,7 +455,7 @@ fn music_workspace_ordinary_push_leaves_album_cursor_alone() {
     // and the component holds no stored copy of a previously pushed value.
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(grouped_context(0, vec![0, 1, 2, 3], None));
+    component.set_content(grouped_context(0, vec![0, 1, 2, 3], false));
     component.re_anchor(0, 0);
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Down,
@@ -460,7 +464,7 @@ fn music_workspace_ordinary_push_leaves_album_cursor_alone() {
     let moved = component.album_cursor();
     assert_ne!(moved, 0);
 
-    component.set_content(grouped_context(3, vec![0, 1, 2, 3], None));
+    component.set_content(grouped_context(3, vec![0, 1, 2, 3], false));
     assert_eq!(component.album_cursor(), moved);
 }
 
@@ -468,7 +472,7 @@ fn music_workspace_ordinary_push_leaves_album_cursor_alone() {
 fn music_workspace_bracket_keys_request_group_switch() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(grouped_context(1, vec![0, 1, 2, 3], None));
+    component.set_content(grouped_context(1, vec![0, 1, 2, 3], false));
 
     let prev = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('['),
@@ -493,13 +497,14 @@ fn music_workspace_bracket_keys_request_group_switch() {
 fn music_workspace_bracket_keys_ignored_with_focused_track() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     component.set_inline_track_focus_enabled(true);
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Enter,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.track_cursor(), Some(0));
+    assert!(component.track_focused());
+    assert_eq!(component.track_selected_row(), Some(0));
 
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('['),

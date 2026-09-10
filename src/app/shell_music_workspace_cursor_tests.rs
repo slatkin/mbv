@@ -41,7 +41,7 @@ fn music_resize_push_uses_current_frame_geometry() {
             (model.app.layout.main.wide_music_right_area.width > 0
                 && model.app.layout.main.wide_music_right_area.height > 0)
         );
-        assert_eq!(wide.track_cursor(), Some(0));
+        assert!(wide.track_focused());
     }
     wide_terminal
         .draw(|frame| model.render_music_workspace_component(frame))
@@ -76,7 +76,7 @@ fn music_resize_push_uses_current_frame_geometry() {
         !(model.app.layout.main.wide_music_right_area.width > 0
             && model.app.layout.main.wide_music_right_area.height > 0)
     );
-    assert_eq!(narrow.track_cursor(), None);
+    assert!(!narrow.track_focused());
 }
 
 #[test]
@@ -100,7 +100,10 @@ fn narrow_music_workspace_requests_album_activation() {
             code: Key::Enter,
             modifiers: KeyModifiers::NONE,
         }));
-    assert_eq!(message, Some(Msg::Shell(ShellRequest::MusicAlbumActivate)));
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::MusicAlbumActivate { .. }))
+    ));
     let mut music_resize = false;
     let mut tv_resize = false;
     model.handle_terminal_message(
@@ -144,7 +147,7 @@ fn wide_music_workspace_allows_enter_for_inline_track_focus() {
         .as_any_mut()
         .downcast_mut::<MusicWorkspaceComponent>()
         .unwrap();
-    assert_eq!(component.track_cursor(), Some(0));
+    assert!(component.track_focused());
 }
 
 #[test]
@@ -182,9 +185,8 @@ fn recursive_album_activation_enters_track_focus_only_in_wide() {
         .as_any_mut()
         .downcast_mut::<MusicWorkspaceComponent>()
         .unwrap();
-    assert_eq!(
-        component.track_cursor(),
-        None,
+    assert!(
+        !component.track_focused(),
         "narrow keeps inline track focus explicitly off"
     );
 
@@ -201,9 +203,8 @@ fn recursive_album_activation_enters_track_focus_only_in_wide() {
         .as_any_mut()
         .downcast_mut::<MusicWorkspaceComponent>()
         .unwrap();
-    assert_eq!(
-        component.track_cursor(),
-        Some(0),
+    assert!(
+        component.track_focused(),
         "wide recursive activation enters track focus"
     );
 }
@@ -238,9 +239,8 @@ fn wide_enter_request_defers_until_the_activated_album_tracks_arrive() {
             .as_any_mut()
             .downcast_mut::<MusicWorkspaceComponent>()
             .unwrap();
-        assert_eq!(
-            component.track_cursor(),
-            None,
+        assert!(
+            !component.track_focused(),
             "tracks not cached yet, so track focus cannot be entered"
         );
     }
@@ -266,9 +266,8 @@ fn wide_enter_request_defers_until_the_activated_album_tracks_arrive() {
         .as_any_mut()
         .downcast_mut::<MusicWorkspaceComponent>()
         .unwrap();
-    assert_eq!(
-        component.track_cursor(),
-        Some(0),
+    assert!(
+        component.track_focused(),
         "the tracks re-push honors the deferred request"
     );
     assert_eq!(model.music_track_focus_request, None, "request consumed");
@@ -317,7 +316,7 @@ fn position_restore_request_clears_track_focus_at_next_sync() {
         .as_any_mut()
         .downcast_mut::<MusicWorkspaceComponent>()
         .unwrap();
-    assert_eq!(component.track_cursor(), None);
+    assert!(!component.track_focused());
 }
 
 /// keep-destination-components-mounted task 3.2: the Music workspace

@@ -159,12 +159,12 @@ fn tv_right_selects_first_episode_for_activation() {
         Some(Msg::Shell(ShellRequest::TvMoveColumn { delta: 1 }))
     ));
     assert_eq!(
-        component.episode_activation_selection(),
-        Some(("series-id".into(), 0, 0))
+        component.selected_episode_item().map(|episode| episode.id),
+        Some("episode-id".into())
     );
     assert!(matches!(
         component.on(&key(Key::Enter)),
-        Some(Msg::Shell(ShellRequest::TvEpisodeActivate))
+        Some(Msg::Shell(ShellRequest::TvEpisodeActivate { .. }))
     ));
 }
 
@@ -207,8 +207,8 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
     component.on(&key(Key::Down));
     component.on(&key(Key::Down));
     assert_eq!(
-        component.episode_activation_selection(),
-        Some(("series-id".into(), 0, 2))
+        component.selected_episode_item().map(|episode| episode.id),
+        Some("episode-3".into())
     );
 
     // An unavailable detail refresh must not erase the mounted component's
@@ -222,8 +222,9 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
         false,
     ));
     assert_eq!(
-        component.episode_activation_selection(),
-        Some(("series-id".into(), 0, 2))
+        component.episode_cursor(),
+        2,
+        "an unavailable detail refresh preserves the episode owner's cursor"
     );
 
     component.set_content(TvWideRenderCtx::new(
@@ -235,15 +236,15 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
         false,
     ));
     assert_eq!(
-        component.episode_activation_selection(),
-        Some(("series-id".into(), 0, 0))
+        component.selected_episode_item().map(|episode| episode.id),
+        Some("episode-1".into())
     );
     assert!(matches!(
         component.on(&Event::Keyboard(KeyEvent {
             code: Key::Enter,
             modifiers: KeyModifiers::NONE
         })),
-        Some(Msg::Shell(ShellRequest::TvEpisodeActivate))
+        Some(Msg::Shell(ShellRequest::TvEpisodeActivate { .. }))
     ));
 
     component.set_content(TvWideRenderCtx::new(
@@ -254,7 +255,7 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
         Some(0),
         false,
     ));
-    assert_eq!(component.episode_activation_selection(), None);
+    assert_eq!(component.selected_episode_item(), None);
 }
 
 #[test]
@@ -408,6 +409,14 @@ fn tv_grouped_cursor_mirrors_rendered_sorted_rows() {
 fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
     let mut component = TvWorkspaceComponent::new();
     component.set_focused(true);
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    let mut episode = make_item("Episode 1", "Episode");
+    episode.id = "episode-1".into();
+    let detail = crate::app::SeriesDetail {
+        seasons: vec![season],
+        episodes: [("season-1".into(), vec![episode])].into_iter().collect(),
+    };
     component.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(
             vec![
@@ -418,7 +427,7 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
             0,
         ),
         None,
-        None,
+        Some(detail),
         0,
         None,
         true,
@@ -459,7 +468,7 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
     component.on(&key(Key::Enter));
     assert!(matches!(
         component.on(&key(Key::Enter)),
-        Some(Msg::Shell(ShellRequest::TvEpisodeActivate))
+        Some(Msg::Shell(ShellRequest::TvEpisodeActivate { .. }))
     ));
 }
 

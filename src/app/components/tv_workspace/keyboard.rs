@@ -72,7 +72,9 @@ impl TvWorkspaceComponent {
                 self.selected_item()
                     .map(|item| ShellRequest::TvActivate { item })
             }
-            Key::Enter => Some(ShellRequest::TvEpisodeActivate),
+            Key::Enter => self
+                .selected_episode_item()
+                .map(|episode| ShellRequest::TvEpisodeActivate { episode }),
             Key::Esc | Key::Backspace => {
                 self.pane = Pane::Series;
                 Some(ShellRequest::TvBack)

@@ -6,29 +6,13 @@ impl MusicWorkspaceComponent {
     }
 
     pub(in crate::app) fn album_selected_row_rect(&self) -> Option<ratatui::layout::Rect> {
-        self.wide_list.current_selected_row_rect()
+        self.carrier.current_selected_row_rect()
     }
 
     pub(in crate::app) fn album_flow_targets(&self) -> Vec<Option<String>> {
-        if self.active_is_wide() {
-            (0..self.wide_list.current_flow_len().unwrap_or_default())
-                .map(|row| {
-                    self.wide_list
-                        .current_flow_target_at(row)
-                        .flatten()
-                        .cloned()
-                })
-                .collect()
-        } else {
-            (0..self.narrow_list.current_flow_len().unwrap_or_default())
-                .map(|row| {
-                    self.narrow_list
-                        .current_flow_target_at(row)
-                        .flatten()
-                        .cloned()
-                })
-                .collect()
-        }
+        (0..self.carrier.current_flow_len().unwrap_or_default())
+            .map(|row| self.carrier.current_flow_target_at(row).flatten().cloned())
+            .collect()
     }
 
     pub(in crate::app) fn album_target_rows(&self, target: usize) -> Vec<usize> {
@@ -41,11 +25,7 @@ impl MusicWorkspaceComponent {
     }
 
     pub(in crate::app) fn album_flow_offset(&self) -> usize {
-        if self.active_is_wide() {
-            self.wide_list.current_flow_offset().unwrap_or_default()
-        } else {
-            self.narrow_list.current_flow_offset().unwrap_or_default()
-        }
+        self.carrier.current_flow_offset().unwrap_or_default()
     }
 
     pub(in crate::app) fn album_tracks_loading(&self) -> bool {

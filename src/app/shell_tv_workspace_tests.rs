@@ -276,8 +276,9 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
             .as_any()
             .downcast_ref::<TvWorkspaceComponent>()
             .unwrap()
-            .episode_activation_selection(),
-        Some(("movie-second".into(), 0, 0)),
+            .selected_episode_item()
+            .map(|episode| episode.id),
+        Some("episode-1".into()),
         "Enter must put the component in the Episodes pane for its selected series"
     );
 
@@ -317,8 +318,9 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
             .as_any()
             .downcast_ref::<TvWorkspaceComponent>()
             .unwrap()
-            .episode_activation_selection(),
-        Some(("movie-second".into(), 0, 0)),
+            .selected_episode_item()
+            .map(|episode| episode.id),
+        Some("episode-1".into()),
         "the Episodes pane must survive the wide→narrow→wide round trip"
     );
 }

@@ -405,7 +405,13 @@ fn narrow_music_applies_the_flip_anchor_at_the_content_viewport_height() {
     let mut terminal = Terminal::new(TestBackend::new(60, 26)).unwrap();
     terminal
         .draw(|f| {
-            render_narrow_music_group_with_ctx(f, area, &ctx, &mut layout, &mut browser);
+            render_narrow_music_group_with_ctx(
+                f,
+                area,
+                &ctx,
+                &mut layout,
+                MusicAlbumPresentation::Inline(&mut browser),
+            );
         })
         .unwrap();
 

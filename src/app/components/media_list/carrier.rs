@@ -122,6 +122,66 @@ impl<Target> MediaListCarrier<Target> {
         }
     }
 
+    /// The active presentation's retained current-frame content rect, when it
+    /// has completed a view. Used by destinations that own a
+    /// presentation-specific viewport geometry contract (Grouped Music's
+    /// responsive anchor hand-off); a fresh/moved presentation retains none.
+    pub fn current_content_rect(&self) -> Option<Rect> {
+        match self.active {
+            Presentation::Wide => self.wide.current_content_rect(),
+            Presentation::Inline => self.inline.current_content_rect(),
+            Presentation::Grid => self.grid.current_content_rect(),
+        }
+    }
+
+    /// The active presentation's retained selected-row rect, when it has
+    /// completed a view with a selectable row.
+    pub fn current_selected_row_rect(&self) -> Option<Rect> {
+        match self.active {
+            Presentation::Wide => self.wide.current_selected_row_rect(),
+            Presentation::Inline => self.inline.current_selected_row_rect(),
+            Presentation::Grid => None,
+        }
+    }
+
+    /// The active presentation's retained selected target, when it has
+    /// completed a view with a selectable row.
+    pub fn current_selected_target(&self) -> Option<&Target> {
+        match self.active {
+            Presentation::Wide => self.wide.current_selected_target(),
+            Presentation::Inline => self.inline.current_selected_target(),
+            Presentation::Grid => None,
+        }
+    }
+
+    /// Number of rows in the active presentation's retained current-frame
+    /// flow, when it has completed a view.
+    pub fn current_flow_len(&self) -> Option<usize> {
+        match self.active {
+            Presentation::Wide => self.wide.current_flow_len(),
+            Presentation::Inline => self.inline.current_flow_len(),
+            Presentation::Grid => None,
+        }
+    }
+
+    /// The retained current-frame flow target at `row`.
+    pub fn current_flow_target_at(&self, row: usize) -> Option<Option<&Target>> {
+        match self.active {
+            Presentation::Wide => self.wide.current_flow_target_at(row),
+            Presentation::Inline => self.inline.current_flow_target_at(row),
+            Presentation::Grid => None,
+        }
+    }
+
+    /// The retained current-frame flow offset.
+    pub fn current_flow_offset(&self) -> Option<usize> {
+        match self.active {
+            Presentation::Wide => self.wide.current_flow_offset(),
+            Presentation::Inline => self.inline.current_flow_offset(),
+            Presentation::Grid => self.grid.current_flow_offset(),
+        }
+    }
+
     /// Whether the active owner has no selectable rows.
     pub fn is_empty(&self) -> bool {
         match self.active {
@@ -142,7 +202,14 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         if self.active == presentation {
             return;
         }
-        let handoff = self.viewport_anchor(viewport_height);
+        // The outgoing presentation's painted content height is the viewport
+        // its retained selected-row offset was measured against; fall back to
+        // the receiving height before the first successful paint.
+        let outgoing_height = self
+            .current_content_rect()
+            .map(|rect| rect.height.max(1) as usize)
+            .unwrap_or_else(|| viewport_height.max(1));
+        let handoff = self.viewport_anchor(outgoing_height);
         let core = match self.active {
             Presentation::Wide => std::mem::take(&mut self.wide).into_media_list(),
             Presentation::Inline => std::mem::take(&mut self.inline).into_media_list(),
