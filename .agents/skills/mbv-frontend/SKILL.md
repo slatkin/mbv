@@ -70,11 +70,18 @@ removed — if you find yourself needing one, the state is on the wrong side.
 
 ## Canonical media-list composition
 
-Use `WideMediaList` for fixed-row, one-column Wide rails and Queue. Use
-`InlineMediaBrowser` for one-column Normal/Narrow selected-row replacement. These
-controls are embedded and painted by their destination parent; `Inline Search`
-is the separate `InlineSearchComponent`, not a media-list variant. Non-hero
-catalogs retain the existing two-column policy.
+Use one embedded `MediaList<Target>` owner per logical media-row flow. It owns
+provider-neutral rows, stable-target selection, cursor/scroll, row-local
+behavior, and retained geometry; it is never mounted, focused, subscribed, or
+given a `ComponentId`. `WideMediaList` is its fixed-row, one-column Wide
+presentation (including Queue), `InlineMediaBrowser` is its one-column
+Normal/Narrow selected-row replacement presentation, and `Grid` is its closed
+presentation over the existing non-hero two-column catalog policy. These
+presentations are embedded and painted by their destination parent; `Inline
+Search` is the separate `InlineSearchComponent`, not a media-list variant.
+Destinations retain Service content, chrome, workspace focus, effects,
+persistence, and typed intent translation; ordinary refresh stays in the owner,
+with one `ViewportAnchor` only for discrete presentation/navigation transitions.
 
 The primary destination owners and painters are Home (`HomeComponent`), generic
 Emby/Movies/homevideos (`BrowserComponent`), TV Series
