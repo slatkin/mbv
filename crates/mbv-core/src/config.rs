@@ -1,4 +1,7 @@
 include!("config_types_paths.rs");
+include!("config_types_setup.rs");
+include!("config_types_queue_state.rs");
+include!("config_test_support.rs");
 include!("config_tests_shared_data.rs");
 include!("config_types_feed.rs");
 include!("config_paths.rs");
@@ -19,6 +22,7 @@ pub mod tests {
     include!("config_tests_settings.rs");
     include!("config_tests_library.rs");
     include!("config_tests_paths.rs");
+    include!("config_tests_paths_env.rs");
     include!("config_tests_credentials.rs");
     include!("config_tests_paths_migration.rs");
     include!("config_tests_emby_admin.rs");
