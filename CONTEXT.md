@@ -288,7 +288,7 @@ _Avoid_: pending active index, cursor push, now-playing index, active_idx
 
 ## Browsing and tabs
 
-**MediaList<Target>**:
+**MediaList**:
 The shared provider-neutral owner for one logical media-row flow. It owns rows, stable-target selection, cursor/scroll, delegated row-local behavior, and retained geometry while a closed presentation (Wide, Inline, or Grid) supplies placement and painting. It is embedded beneath the destination Interactive Component; it is never mounted, focused, subscribed, or given a ComponentId. The destination keeps Service content, chrome, workspace focus, effects, persistence, and typed intent translation.
 _Avoid_: generic list, generic media list, two-column list
 
