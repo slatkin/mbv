@@ -72,7 +72,7 @@ fn home_target(
     from_continue_watching: bool,
 ) -> crate::app::components::msg::HomeRowTarget {
     crate::app::components::msg::HomeRowTarget {
-        item_id: item_id.into(),
+        item_id: Some(item_id.into()),
         source: Some("emby:movies".into()),
         from_continue_watching,
     }
@@ -150,8 +150,24 @@ fn home_reorder_keeps_requested_stable_target() {
     let message = home.on(&key(Key::Enter));
     assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::HomePlay(target))) if target.item_id == "cw2"
+        Some(Msg::Shell(ShellRequest::HomePlay(target))) if target.item_id.as_deref() == Some("cw2")
     ));
+}
+
+#[test]
+fn latest_section_enter_resolves_section_relative_row() {
+    let mut home = two_section_home();
+    assert!(
+        home.restore_section(&crate::app::types_playback::HomeLatestSource::Emby(
+            "movies".into(),
+        ))
+    );
+    home.on(&key(Key::Down));
+    let Some(Msg::Shell(ShellRequest::HomePlay(target))) = home.on(&key(Key::Enter)) else {
+        panic!("latest-section Enter must emit a HomePlay target");
+    };
+    assert_eq!(target.item_id.as_deref(), Some("id"));
+    assert!(!target.from_continue_watching);
 }
 
 #[test]
@@ -316,14 +332,16 @@ fn ctrl_w_emits_toggle_watched_without_a_cursor_payload() {
 #[test]
 fn dot_emits_home_context_menu_with_component_target() {
     let mut home = two_section_home();
-    let target = crate::app::tests::make_item("cw-target", "Movie");
-    home.set_continue_watching_item(Some(target.clone()));
     let msg = home.on(&key(Key::Char('.')));
     assert_eq!(
         msg,
         Some(Msg::Shell(ShellRequest::HomeContextMenu {
             home_cw_selected: true,
-            cw_item: Some(target),
+            target: crate::app::components::msg::HomeRowTarget {
+                item_id: Some("cw1".into()),
+                source: Some("emby:movies".into()),
+                from_continue_watching: true
+            },
         }))
     );
 }

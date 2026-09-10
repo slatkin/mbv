@@ -16,6 +16,17 @@ use mbv_core::audiobookshelf::{
 use mbv_core::playback_queue::{AudiobookshelfQueueItem, FeedEntry, QueueItem};
 use mbv_core::service_runtime::{EmbyBootstrap, EmbyLatestSection};
 
+fn home_flat_target(model: &Model, cursor: usize) -> Option<(QueueItem, bool)> {
+    let mut rows = Vec::new();
+    rows.extend(model.home_content.continue_items.iter().cloned().map(|item| {
+        (QueueItem::Emby(Box::new(item)), true)
+    }));
+    rows.extend(model.home_content.latest.iter().flat_map(|(_, _, items)| {
+        items.iter().cloned().map(|item| (item, false))
+    }));
+    rows.into_iter().nth(cursor)
+}
+
 fn feed_item(title: &str) -> FeedEntry {
     FeedEntry {
         guid: format!("guid-{title}"),
@@ -323,29 +334,29 @@ fn flat_cursor_resolution_spans_emby_and_audiobookshelf_sections() {
 
     // Flat index 0 is the Continue Watching item.
     assert!(matches!(
-        model.home_flat_target(0),
+        home_flat_target(&model, 0),
         Some((QueueItem::Emby(item), true)) if item.display_name() == "CW item"
     ));
 
     // The Emby pill's flat range sits right after Continue Watching: flat
     // index 1 is "Movie one", 2 is "Movie two".
     assert!(matches!(
-        model.home_flat_target(1),
+        home_flat_target(&model, 1),
         Some((QueueItem::Emby(item), false)) if item.display_name() == "Movie one"
     ));
     assert!(matches!(
-        model.home_flat_target(2),
+        home_flat_target(&model, 2),
         Some((QueueItem::Emby(item), false)) if item.display_name() == "Movie two"
     ));
 
     // The Audiobookshelf pill's flat range sits right after the Emby pill's:
     // flat index 3 is "Episode 1", 4 is "Episode 2".
     assert!(matches!(
-        model.home_flat_target(3),
+        home_flat_target(&model, 3),
         Some((QueueItem::Audiobookshelf(item), false)) if item.title == "Episode 1"
     ));
     assert!(matches!(
-        model.home_flat_target(4),
+        home_flat_target(&model, 4),
         Some((QueueItem::Audiobookshelf(item), false)) if item.title == "Episode 2"
     ));
 }
@@ -420,7 +431,7 @@ fn home_play_and_enqueue_leave_audiobookshelf_tab_state_untouched() {
         HomeLatestSource::Audiobookshelf("abs-pod".into()),
         vec![QueueItem::Audiobookshelf(abs_episode("1"))],
             )];
-    let (item, from_cw) = model.home_flat_target(0).expect("flat target 0");
+    let (item, from_cw) = home_flat_target(&model, 0).expect("flat target 0");
     assert!(item.is_audiobookshelf());
     assert!(!from_cw);
 
@@ -539,7 +550,7 @@ fn home_play_and_enqueue_leave_feeds_tab_state_untouched() {
             .map(QueueItem::Feed)
             .collect(),
             )];
-    let (item, from_cw) = model.home_flat_target(0).expect("flat target 0");
+    let (item, from_cw) = home_flat_target(&model, 0).expect("flat target 0");
     assert!(item.is_feed());
     assert!(!from_cw);
 

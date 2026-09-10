@@ -121,6 +121,7 @@ pub struct Model {
     /// Shell-owned semantic Home section preference and one-time restore marker.
     pub(super) home_section_pref_semantic: Option<HomeLatestSource>,
     pub(super) home_section_pending: Option<HomeLatestSource>,
+    pub(super) home_context_item: Option<mbv_core::api::EmbyItem>,
     /// Fingerprint of the inputs `sync_queue` last projected into the mounted
     /// `QueueComponent`. `sync_queue` runs every run-loop tick; rebuilding the
     /// row vec (slot clone + per-row `format!`) on a tick where nothing the
@@ -409,6 +410,7 @@ impl Model {
             home_content: HomeContent::new(),
             home_section_pref_semantic: home_section.clone(),
             home_section_pending: home_section,
+            home_context_item: None,
             last_queue_projection: None,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.

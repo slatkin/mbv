@@ -73,10 +73,6 @@ pub struct HomeComponent {
     /// Section-pill rects as last-push-wins rectangles (design.md D6),
     /// repopulated in `view()` from `pill_targets`.
     pill_regions: HitRegions<usize>,
-    /// The current Continue Watching column target supplied by the shell's
-    /// Model-owned `home_content` snapshot. It remains separate from the
-    /// component's flat cursor, matching the legacy Home context-menu target.
-    cw_item: Option<mbv_core::api::EmbyItem>,
     /// The cover image (if any) `view()` computed but could not paint
     /// itself (no `App`/image-cache authority); the shell takes it via
     /// `take_image_paint` right after `application.view()` returns and
@@ -120,19 +116,11 @@ impl HomeComponent {
             pill_targets: Vec::new(),
             mouse_gestures: MouseGestureState::new(),
             pill_regions: HitRegions::new(),
-            cw_item: None,
             image_paint: None,
             list_area: Rect::default(),
             selected_item_rect: None,
             hero_area: None,
         }
-    }
-
-    pub(in crate::app) fn set_continue_watching_item(
-        &mut self,
-        item: Option<mbv_core::api::EmbyItem>,
-    ) {
-        self.cw_item = item;
     }
 
     /// Replace the shell-owned content snapshot. Section/cursor clamp to
@@ -395,15 +383,17 @@ impl HomeComponent {
     /// only its local navigation and typed effect requests; destination-
     /// independent chords are resolved by the central router.
     fn row_target(&self) -> super::msg::HomeRowTarget {
+        let (start, _) = self.section_range(self.section).unwrap_or((0, 0));
+        let local_cursor = self.cursor().saturating_sub(start);
         let item = if self.section == 0 {
-            self.continue_items.get(self.cursor())
+            self.continue_items.get(local_cursor)
         } else {
             self.latest
                 .get(self.section - 1)
-                .and_then(|(_, _, items)| items.get(self.cursor()))
+                .and_then(|(_, _, items)| items.get(local_cursor))
         };
         super::msg::HomeRowTarget {
-            item_id: item.map(|item| item.id().to_owned()).unwrap_or_default(),
+            item_id: item.map(|item| item.id().to_owned()),
             source: self
                 .latest
                 .get(self.section.saturating_sub(1))
@@ -458,7 +448,7 @@ impl HomeComponent {
             Key::Char('.') if self.section == 0 => {
                 Some(Msg::Shell(ShellRequest::HomeContextMenu {
                     home_cw_selected: true,
-                    cw_item: self.cw_item.clone(),
+                    target: self.row_target(),
                 }))
             }
             Key::Char('.') => None,

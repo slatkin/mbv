@@ -9,7 +9,6 @@ use super::components::{ComponentId, HomeComponent};
 use super::notify_actions::ToastSeverity;
 use super::shell::Model;
 use super::types_playback::HomeContent;
-use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use std::time::Instant;
 
@@ -96,11 +95,12 @@ impl Model {
         target: &super::components::msg::HomeRowTarget,
     ) -> Option<(QueueItem, bool)> {
         if target.from_continue_watching {
+            let item_id = target.item_id.as_deref()?;
             return self
                 .home_content
                 .continue_items
                 .iter()
-                .find(|item| item.id == target.item_id)
+                .find(|item| item.id == item_id)
                 .cloned()
                 .map(|item| (QueueItem::Emby(Box::new(item)), true));
         }
@@ -111,41 +111,10 @@ impl Model {
             .and_then(|(_, _, items)| {
                 items
                     .iter()
-                    .find(|item| item.id() == target.item_id)
+                    .find(|item| Some(item.id()) == target.item_id.as_deref())
                     .cloned()
             })
             .map(|item| (item, false))
-    }
-
-    #[allow(dead_code)]
-    pub(super) fn home_flat_target(&self, cursor: usize) -> Option<(QueueItem, bool)> {
-        let mut pos = 0usize;
-        for item in &self.home_content.continue_items {
-            if pos == cursor {
-                return Some((QueueItem::Emby(Box::new(item.clone())), true));
-            }
-            pos += 1;
-        }
-        for (_, _, items) in &self.home_content.latest {
-            for item in items {
-                if pos == cursor {
-                    return Some((item.clone(), false));
-                }
-                pos += 1;
-            }
-        }
-        None
-    }
-
-    /// The component-selected Continue Watching item for shell effects.
-    pub(super) fn home_cw_item(&self) -> Option<EmbyItem> {
-        let cursor = self
-            .application
-            .get_component(&ComponentId::Home)
-            .and_then(|component| component.as_any().downcast_ref::<HomeComponent>())
-            .filter(|home| home.section() == 0)
-            .map(HomeComponent::cursor)?;
-        self.home_content.continue_items.get(cursor).cloned()
     }
 
     /// Synchronous startup/commit fetch drain for `fetch_home` (task 5.3d):

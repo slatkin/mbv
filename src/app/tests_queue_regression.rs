@@ -93,7 +93,7 @@ fn shell_frame_uses_queue_component_geometry_for_keyboard_context_menu_anchor() 
     assert!(queue_selected.y > model.app.layout.main.queue_area.y);
     let message = Msg::Shell(ShellRequest::HomeContextMenu {
         home_cw_selected: false,
-        cw_item: None,
+        target: crate::app::components::msg::HomeRowTarget { item_id: None, source: None, from_continue_watching: true },
     });
     model.handle_terminal_message(message, &mut resize_music, &mut resize_tv);
     model.sync_mounted_surfaces();

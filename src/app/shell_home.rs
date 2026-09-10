@@ -28,8 +28,18 @@ impl Model {
             }
             ShellRequest::HomeContextMenu {
                 home_cw_selected,
-                cw_item,
-            } => self.app.open_context_menu(home_cw_selected, cw_item),
+                target,
+            } => {
+                let cw_item = self
+                    .home_stable_target(&target)
+                    .and_then(|(item, from_cw)| from_cw.then_some(item))
+                    .and_then(|item| match item {
+                        QueueItem::Emby(item) => Some(*item),
+                        _ => None,
+                    });
+                self.home_context_item = cw_item.clone();
+                self.app.open_context_menu(home_cw_selected, cw_item);
+            }
             // Delete / watched-toggle refetch Home: re-project (5.3d).
             ShellRequest::HomeDelete(target) => {
                 if target.from_continue_watching {
@@ -37,7 +47,7 @@ impl Model {
                         .home_content
                         .continue_items
                         .iter()
-                        .find(|item| item.id == target.item_id)
+                        .find(|item| Some(item.id.as_str()) == target.item_id.as_deref())
                         .cloned()
                     {
                         self.app.remove_from_continue_watching(item);
@@ -91,7 +101,6 @@ impl Model {
             .iter()
             .map(|(title, source, items)| (title.clone(), source.clone(), items.clone()))
             .collect();
-        let cw_item = self.home_cw_item();
         let use_nerd_fonts = self.app.use_nerd_fonts;
         let images_enabled = self.app.images_enabled();
         // Snapshot the pending persisted-pill restore before the component
@@ -101,7 +110,6 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(&ComponentId::Home) {
             if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
                 home.set_content(continue_items, latest, self.home_content.loading);
-                home.set_continue_watching_item(cw_item);
                 home.set_use_nerd_fonts(use_nerd_fonts);
                 home.set_images_enabled(images_enabled);
                 if let Some(pending_source) = &pending {
@@ -175,7 +183,7 @@ mod tests {
         from_continue_watching: bool,
     ) -> crate::app::components::msg::HomeRowTarget {
         crate::app::components::msg::HomeRowTarget {
-            item_id: item_id.into(),
+            item_id: Some(item_id.into()),
             source: (!from_continue_watching).then(|| "emby:lib".into()),
             from_continue_watching,
         }
@@ -594,7 +602,11 @@ mod tests {
         // Keyboard '.' now routes through HomeComponent→HomeContextMenu (task 8.1).
         model.handle_home_request(ShellRequest::HomeContextMenu {
             home_cw_selected: model.home_continue_watching_selected(),
-            cw_item: model.home_cw_item(),
+            target: crate::app::components::msg::HomeRowTarget {
+                item_id: None,
+                source: None,
+                from_continue_watching: false,
+            },
         });
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_non_cw)) =
             model.app.pending_overlay
@@ -634,7 +646,11 @@ mod tests {
         // Keyboard '.' now routes through HomeComponent→HomeContextMenu (task 8.1).
         model.handle_home_request(ShellRequest::HomeContextMenu {
             home_cw_selected: model.home_continue_watching_selected(),
-            cw_item: model.home_cw_item(),
+            target: crate::app::components::msg::HomeRowTarget {
+                item_id: Some("id0".into()),
+                source: None,
+                from_continue_watching: true,
+            },
         });
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_cw)) =
             model.app.pending_overlay
@@ -654,9 +670,14 @@ mod tests {
     fn shell_home_context_menu_request_uses_explicit_target() {
         let mut model = Model::new(make_app_stub());
         let target = make_item("cw-target", "Movie");
+        model.home_content.continue_items = vec![target.clone()];
         model.handle_home_request(ShellRequest::HomeContextMenu {
             home_cw_selected: true,
-            cw_item: Some(target),
+            target: crate::app::components::msg::HomeRowTarget {
+                item_id: Some(target.id.clone()),
+                source: None,
+                from_continue_watching: true,
+            },
         });
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay
