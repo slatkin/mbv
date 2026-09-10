@@ -432,7 +432,7 @@ sidebar's focusable body but not the name `Panel`, which `CONTEXT.md` reserves f
 
 The canonical set is now declared in `src/app/render/theme/surface.rs` (the `Surface` enum and
 `ALL`), `surface_table.rs` (the rows, `Surface::level`, `RESTING_DEVIATIONS`) and
-`surface_resolve.rs` (the resolver) — 33 variants, `Surface::ALL`; this table places every identity
+`surface_resolve.rs` (the resolver) — 34 variants, `Surface::ALL`; this table places every identity
 in the task 2.1 inventory against it, so "no identity unplaced" is checkable by a reader. Sites are
 the inventory's `file:line`; where the inventory groups a shared painter, every listed caller is
 covered.
