@@ -420,6 +420,13 @@ impl<Target> MediaList<Target> {
         self.scroll = offset.min(self.rows.len().saturating_sub(1));
     }
 
+    /// Store an offset without the row-count clamp. The Grid presentation
+    /// defers the display-line clamp to the painted viewport while its column
+    /// policy is still unknown.
+    pub(crate) fn set_scroll_unclamped(&mut self, offset: usize) {
+        self.scroll = offset;
+    }
+
     /// Move the cursor by `delta` selectable rows, clamped to the ends.
     fn move_selection(&mut self, delta: i64) {
         if !self.selectable.is_empty() {

@@ -320,7 +320,7 @@ impl BrowserComponent {
     /// Gesture recognition (click / double-click / right-click / wheel) comes
     /// from the private `MouseGestureState` (ADR 0024, design.md D3). Row
     /// identity comes only from the active presentation's retained
-    /// current-frame geometry (design.md D6): the Wide/Inline/Gr​id adapters each
+    /// current-frame geometry (design.md D6): the Wide/Inline/Grid adapters each
     /// resolve their own cells, and no parent row map or cell arithmetic runs
     /// beside them. The component emits a semantic `Msg` with a resolved
     /// target — never raw coordinates — except the context-menu anchor, which

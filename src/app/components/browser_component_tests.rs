@@ -238,6 +238,70 @@ fn browser_control_transition_preserves_the_selected_viewport_offset() {
     );
 }
 
+/// Row 4.2 regression: a Grid scroll offset is a display-line offset whose
+/// packing depends on the column policy the arrangement supplies at paint
+/// time. A selected-row viewport offset retained across an Inline→Grid
+/// handoff must restore at the same painted row from the viewport top — not
+/// at roughly double the line position, which is what resolving the offset
+/// against the pre-handoff one-column packing produces.
+#[test]
+fn grid_handoff_preserves_the_two_column_selected_row_offset() {
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Generic);
+    browser.set_content(BrowserContent::from_items(make_items(24)));
+    browser.set_focused(true);
+
+    // Paint the two-column Grid (the pane meets the two-column threshold;
+    // fewer than 50 items keep the rows ungrouped), then move down two
+    // painted item rows (each Down strides one painted row = two columns):
+    // the selection sits at display line 2. The 10-row terminal keeps the
+    // grid's 12 display lines taller than the viewport, so the retained
+    // offset placement is exercised instead of saturating to the top.
+    let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    for _ in 0..2 {
+        browser.handle_tui_key(TuiKeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        });
+    }
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    let grid_anchor = browser
+        .viewport_anchor(browser.painted_viewport_height())
+        .expect("two-column grid has a selected item");
+    assert_eq!(grid_anchor.selected_row_offset, 2);
+
+    // Hand the owner to Inline (a hero appears) and back to Grid (it goes).
+    browser.set_narrow_extras(NarrowBrowseExtras {
+        hero_placeholder: true,
+        ..NarrowBrowseExtras::default()
+    });
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    browser.set_narrow_extras(NarrowBrowseExtras::default());
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+
+    let anchor_after = browser
+        .viewport_anchor(browser.painted_viewport_height())
+        .expect("grid has a selected item after the handoff back");
+    assert_eq!(
+        anchor_after.selected_target, grid_anchor.selected_target,
+        "the handoff must keep the selected item"
+    );
+    assert_eq!(
+        anchor_after.selected_row_offset, grid_anchor.selected_row_offset,
+        "the two-column offset must survive the Inline↔Grid handoff at the \
+         retained painted-row offset, not resolved against the pre-policy \
+         one-column packing"
+    );
+}
+
 /// Wide-Movies exact parity: a Movies-keyed component on a >=82-wide
 /// rendered list uses its own kind and painted geometry, and the right
 /// rail strides ONE item per row, matching its painted one-column geometry.

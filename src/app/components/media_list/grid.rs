@@ -44,6 +44,14 @@ pub struct GridMediaList<Target> {
     gap: u16,
     policy: GridPaintPolicy,
     configured_geometry: Option<(Rect, Rect)>,
+    /// Whether the arrangement has supplied the column policy for this
+    /// presentation. Scroll offsets are display-line offsets whose packing
+    /// depends on that policy; before it arrives they are stored unresolved
+    /// and interpreted only by the first painted viewport.
+    column_policy: bool,
+    /// A [`ViewportAnchor`] received before the column policy was known;
+    /// placed when the first painted viewport resolves.
+    pending_anchor: Option<(ViewportAnchor<Target>, usize)>,
     paint: Option<GridPaint<Target>>,
 }
 
@@ -63,12 +71,17 @@ impl<Target> GridMediaList<Target> {
             core,
             // One column until the arrangement configures its policy before
             // the first paint; a pre-paint input stride must not claim a
-            // two-column policy the parent has not supplied.
+            // two-column policy the parent has not supplied. Until the policy
+            // arrives the display-line packing is unknown, so scroll offsets
+            // are stored unresolved and viewport anchors are placed at the
+            // first painted viewport.
             columns: 1,
             cell_width: 0,
             gap: 2,
             policy: GridPaintPolicy::new(false),
             configured_geometry: None,
+            column_policy: false,
+            pending_anchor: None,
             paint: None,
         }
     }
@@ -79,6 +92,7 @@ impl<Target> GridMediaList<Target> {
 
     pub fn set_columns(&mut self, columns: usize, cell_width: u16, gap: u16) {
         self.columns = columns.max(1);
+        self.column_policy = true;
         self.cell_width = cell_width;
         self.gap = gap;
         self.paint = None;
@@ -107,9 +121,17 @@ impl<Target> GridMediaList<Target> {
         self.core.scroll()
     }
 
-    /// Store the shared owner's display-line scroll offset.
+    /// Store the shared owner's display-line scroll offset. Before the
+    /// arrangement supplies the column policy the line packing is unknown, so
+    /// the offset is stored unclamped and the painted viewport clamps it
+    /// (`resolve_viewport`); clamping against the pre-policy one-column
+    /// packing would accept a value the real two-column flow never resolves.
     pub fn set_scroll(&mut self, offset: usize) {
         self.paint = None;
+        if !self.column_policy {
+            self.core.set_scroll_unclamped(offset);
+            return;
+        }
         let max = self.display_lines().len().saturating_sub(1);
         self.core.set_scroll(offset.min(max));
     }
@@ -182,10 +204,23 @@ impl<Target> GridMediaList<Target> {
     /// the geometry allows, clamping otherwise (design.md D3).
     pub fn apply_viewport_anchor(&mut self, anchor: &ViewportAnchor<Target>, viewport_height: usize)
     where
-        Target: PartialEq,
+        Target: Clone + PartialEq,
     {
         self.paint = None;
         self.core.select_target(&anchor.selected_target);
+        if !self.column_policy {
+            // The display-line placement needs the column policy; defer it to
+            // the first painted viewport rather than resolving the selected
+            // line against the pre-policy one-column packing (a two-column
+            // offset would restore at roughly double the line position).
+            self.pending_anchor = Some((anchor.clone(), viewport_height));
+            return;
+        }
+        self.place_anchor(anchor, viewport_height);
+    }
+
+    /// Place a resolved anchor's offset in the current column packing.
+    fn place_anchor(&mut self, anchor: &ViewportAnchor<Target>, viewport_height: usize) {
         let height = viewport_height.max(1);
         let lines = self.display_lines();
         let Some((line, _)) = self.selected_line(&lines) else {
@@ -333,10 +368,18 @@ impl<Target> GridMediaList<Target> {
 
     pub(crate) fn cells(&mut self, content: Rect) -> Vec<(GridCell<Target>, usize)>
     where
-        Target: Clone,
+        Target: Clone + PartialEq,
     {
         if content.is_empty() {
             return Vec::new();
+        }
+        // The painted viewport is the first column-policy-aware resolution, so
+        // an anchor deferred before the policy arrived places here. A stale
+        // anchor (the selection moved on since) is dropped.
+        if let Some((anchor, height)) = self.pending_anchor.take() {
+            if self.selected_target() == Some(&anchor.selected_target) {
+                self.place_anchor(&anchor, height);
+            }
         }
         let width = if self.cell_width == 0 {
             content
