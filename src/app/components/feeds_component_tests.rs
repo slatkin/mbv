@@ -733,9 +733,9 @@ fn feeds_mouse_double_click_plays_the_resolved_entry() {
             row,
             modifiers: KeyModifiers::NONE,
         }));
-        terminal
-            .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
-            .unwrap();
+        // A selection-only click leaves the painted frame valid, so the second
+        // Down resolves the same row without an intervening redraw (design.md
+        // D6, ADR 0024).
         let msg = component.on(&Event::<UserEvent>::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: list.x,

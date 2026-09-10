@@ -193,7 +193,7 @@ fn feeds_wide_left_pane_fills_when_an_entry_is_selected() {
 fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
     use crate::app::components::media_list::WideMediaList;
     use crate::app::layout::LayoutMain;
-    use crate::app::render::{render_feeds_content, FeedsCarrier, FeedsRenderModel};
+    use crate::app::render::{render_feeds_content, FeedsPresentation, FeedsRenderModel};
     use crate::app::types_feed_tab::WatchedFilter;
 
     let subscriptions = vec![FeedSubscription {
@@ -220,7 +220,7 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
                 selected_entry: None,
                 images_enabled: true,
             },
-            FeedsCarrier::Wide(&mut canonical_list),
+            FeedsPresentation::Wide(&mut canonical_list),
         );
     });
     let hero = layout.hero_area;
@@ -249,7 +249,7 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
                 selected_entry: None,
                 images_enabled: true,
             },
-            FeedsCarrier::Wide(&mut focused_list),
+            FeedsPresentation::Wide(&mut focused_list),
         );
     });
     let focused_hero = focused_layout.hero_area;

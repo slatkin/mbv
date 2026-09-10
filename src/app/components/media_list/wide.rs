@@ -331,19 +331,16 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
         self.core.apply_viewport_anchor(anchor, viewport_height);
     }
 
-    /// Offer one already-normalized row-local input to the shared owner. A
-    /// non-unhandled outcome invalidates the completed frame's retained facts
-    /// (matching the Grid presentation), so stale geometry cannot claim input.
+    /// Offer one already-normalized row-local input to the shared owner. Every
+    /// delegate outcome is selection-only and changes no row-flow geometry, so
+    /// the completed frame's retained facts stay valid for a continuing pointer
+    /// gesture (matching `select_target`); the next `view` re-publishes them.
     pub fn delegate(
         &mut self,
         input: RowLocalInput,
         target: Option<Target>,
     ) -> RowLocalOutcome<Target> {
-        let outcome = self.core.delegate(input, target);
-        if !matches!(outcome, RowLocalOutcome::Unhandled) {
-            self.invalidate_paint();
-        }
-        outcome
+        self.core.delegate(input, target)
     }
 }
 

@@ -39,28 +39,28 @@ pub(in crate::app) struct FeedsRenderModel<'a> {
     pub images_enabled: bool,
 }
 
-/// The active media-list carrier Feeds paints this frame (design.md D1): the
-/// Wide presentation for the Wide hero list or the Inline presentation for
+/// The active media-list presentation Feeds paints this frame (design.md D1):
+/// the Wide presentation for the Wide hero list or the Inline presentation for
 /// inline Narrow. Exactly one is handed over per view; the same shared
 /// `MediaList` owner moves between them.
-pub(in crate::app) enum FeedsCarrier<'a> {
+pub(in crate::app) enum FeedsPresentation<'a> {
     Wide(&'a mut WideMediaList<String>),
     Inline(&'a mut InlineMediaBrowser<String>),
 }
 
 /// Paints the Feeds destination's parent-owned pill strip + watched-filter
-/// chrome + Wide hero detail pane, then mounts the active canonical carrier
-/// (`FeedsCarrier::Wide` for Wide hero Wide, `FeedsCarrier::Inline` for inline
-/// Narrow) into the list sub-rect below the pill strip. Only the handed-over
-/// presentation paints; the shared `MediaList` owner keeps cursor/scroll and
-/// there is no render write-back.
+/// chrome + Wide hero detail pane, then mounts the active canonical
+/// presentation (`FeedsPresentation::Wide` for Wide hero Wide,
+/// `FeedsPresentation::Inline` for inline Narrow) into the list sub-rect below
+/// the pill strip. Only the handed-over presentation paints; the shared
+/// `MediaList` owner keeps cursor/scroll and there is no render write-back.
 pub(in crate::app) fn render_feeds_content(
     f: &mut Frame,
     area: Rect,
     focused: bool,
     layout: &mut LayoutMain,
     model: FeedsRenderModel<'_>,
-    control: FeedsCarrier<'_>,
+    presentation: FeedsPresentation<'_>,
 ) {
     if area.height == 0 || area.width == 0 {
         return;
@@ -221,7 +221,7 @@ pub(in crate::app) fn render_feeds_content(
     }
 
     if wide {
-        let FeedsCarrier::Wide(canonical_list) = control else {
+        let FeedsPresentation::Wide(canonical_list) = presentation else {
             return;
         };
         let paint_rect = Rect {
@@ -242,7 +242,7 @@ pub(in crate::app) fn render_feeds_content(
         layout.selected_item_rect = canonical_list.current_selected_row_rect();
         layout.inline_hero_area = Rect::default();
     } else {
-        let FeedsCarrier::Inline(inline_list) = control else {
+        let FeedsPresentation::Inline(inline_list) = presentation else {
             return;
         };
         let desired_detail_rows =

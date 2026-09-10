@@ -27,7 +27,9 @@ pub(in crate::app) use components::daemon_lost_modal::render_daemon_lost_modal_c
 pub(in crate::app) use components::detail::{
     compact_banner_layout, render_compact_detail_with_ctx, CompactBannerLayout, CompactDetailCtx,
 };
-pub(in crate::app) use components::feeds::{render_feeds_content, FeedsCarrier, FeedsRenderModel};
+pub(in crate::app) use components::feeds::{
+    render_feeds_content, FeedsPresentation, FeedsRenderModel,
+};
 pub(in crate::app) use components::feeds_manage::{
     render_feeds_manage_content, FeedsManageRenderModel,
 };
@@ -35,6 +37,7 @@ pub(in crate::app) use components::help::{
     help_destination, render_help_panel, HelpDestination, HelpRenderGeometry,
 };
 pub(in crate::app) use components::home::{render_home_content, HomeCarrier};
+pub(in crate::app) use components::queue::{render_queue_body, QueuePresentation};
 
 #[cfg(test)]
 pub(crate) fn reset_home_media_list_paints() {

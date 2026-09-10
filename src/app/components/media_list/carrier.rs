@@ -273,19 +273,12 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     }
 
     /// Whether the active presentation's current frame claims `point` inside
-    /// the parent-supplied `list_area`. Wide claims that region; Inline claims
-    /// it plus its media-list-owned detail block; Grid claims its own retained
-    /// current-frame cells region.
+    /// the parent-supplied `list_area`. Wide and Inline claim that region;
+    /// Grid claims its own retained current-frame cells region.
     pub fn claims_point(&self, list_area: Rect, point: Position) -> bool {
         match self.active {
             Presentation::Wide => self.wide.claims_point(list_area, point),
-            Presentation::Inline => {
-                self.inline.claims_point(list_area, point)
-                    || self
-                        .inline
-                        .current_detail_rect()
-                        .is_some_and(|rect| rect.contains(point))
-            }
+            Presentation::Inline => self.inline.claims_point(list_area, point),
             Presentation::Grid => self.grid.claims_current_point(point),
         }
     }
@@ -299,38 +292,20 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     pub fn claims_current_point(&self, point: Position) -> bool {
         match self.active {
             Presentation::Wide => self.wide.claims_current_point(point),
-            Presentation::Inline => {
-                self.inline.claims_current_point(point)
-                    || self
-                        .inline
-                        .current_detail_rect()
-                        .is_some_and(|rect| rect.contains(point))
-            }
+            Presentation::Inline => self.inline.claims_current_point(point),
             Presentation::Grid => self.grid.claims_current_point(point),
         }
     }
 
     /// Resolve `point` to a stable target from the active presentation's
-    /// retained current-frame geometry. The Inline presentation maps the whole
+    /// retained current-frame geometry. The Inline presentation maps its whole
     /// selected-row replacement block, not only its first flow row, to the
-    /// selected target.
+    /// retained selected target.
     pub fn resolve_current_point(&self, point: Position) -> Option<&Target> {
         match self.active {
             Presentation::Wide => self.wide.resolve_current_point(point),
             Presentation::Grid => self.grid.resolve_current_point(point),
-            Presentation::Inline => {
-                if let Some(target) = self.inline.resolve_current_point(point) {
-                    return Some(target);
-                }
-                if self
-                    .inline
-                    .current_detail_rect()
-                    .is_some_and(|rect| rect.contains(point))
-                {
-                    return self.inline.current_selected_target();
-                }
-                None
-            }
+            Presentation::Inline => self.inline.resolve_current_point(point),
         }
     }
 

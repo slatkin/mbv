@@ -652,3 +652,64 @@ fn inline_component_retains_detail_and_resolves_from_the_current_view() {
     assert!(browser.current_claim_rect().is_none());
     assert!(browser.current_detail_rect().is_none());
 }
+
+#[test]
+fn inline_delegate_keeps_the_completed_frame_for_pointer_continuity() {
+    let mut browser = InlineMediaBrowser::new();
+    browser.set_content(vec![
+        lifecycle_item("one"),
+        lifecycle_item("two"),
+        lifecycle_item("three"),
+    ]);
+    browser.select_target(&"two".to_string());
+    let area = Rect::new(0, 0, 24, 5);
+    browser.set_geometry(area, area);
+    let mut terminal = Terminal::new(TestBackend::new(28, 6)).unwrap();
+    terminal
+        .draw(|frame| {
+            browser.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
+                true,
+                SelectedRowSurface::ListBackdrop,
+                2,
+            ));
+            Component::view(&mut browser, frame, area);
+        })
+        .unwrap();
+    let detail = browser
+        .current_detail_rect()
+        .expect("admitted detail block");
+    // A selection-only delegation must not invalidate the frame the pointer is
+    // still resolving against; the whole admitted detail block maps to the
+    // retained selected target (design.md D6, ADR 0024).
+    browser.delegate(
+        super::RowLocalInput::Click(Position::new(detail.x, detail.y)),
+        Some("two".to_string()),
+    );
+    assert_eq!(
+        browser.resolve_current_point(Position::new(detail.x, detail.y + 1)),
+        Some(&"two".to_string())
+    );
+    assert!(browser.current_detail_rect().is_some());
+}
+
+#[test]
+fn wide_delegate_keeps_the_completed_frame_for_pointer_continuity() {
+    let mut list = WideMediaList::new();
+    list.set_content(vec![lifecycle_item("one"), lifecycle_item("two")]);
+    let area = Rect::new(0, 0, 12, 2);
+    list.set_geometry(area, area);
+    let mut terminal = Terminal::new(TestBackend::new(16, 4)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut list, frame, area))
+        .unwrap();
+    // A click selecting another row is selection-only; the painted frame
+    // remains valid so a following drag/wheel still resolves (design.md D6).
+    list.delegate(
+        super::RowLocalInput::Click(Position::new(0, 1)),
+        Some("two".to_string()),
+    );
+    assert_eq!(
+        list.resolve_current_point(Position::new(0, 1)),
+        Some(&"two".to_string())
+    );
+}

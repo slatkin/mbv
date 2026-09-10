@@ -10,7 +10,7 @@ use tuirealm::state::State;
 
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
-    RowLocalInput, RowLocalOutcome, SelectedRowSurface, WideMediaListPaintPolicy,
+    RowLocalInput, RowLocalOutcome,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
@@ -20,7 +20,10 @@ use super::msg::{
 };
 use super::user_event::UserEvent;
 use crate::app::palette;
-use crate::app::render::{render_queue_title_content, QueueRenderGeometry, QueueTitleModel};
+use crate::app::render::{
+    render_queue_body, render_queue_title_content, QueuePresentation, QueueRenderGeometry,
+    QueueTitleModel,
+};
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use crate::app::ui_util::{fmt_duration_short, fmt_playback_pct};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -184,6 +187,15 @@ impl QueueComponent {
         self.carrier
             .selected_target()
             .map(|&slot_id| (self.scope, slot_id))
+    }
+
+    /// Move the shared owner into the active presentation when they diverge.
+    /// Queue keeps the Wide presentation in every panel mode (spec), so this
+    /// preserves the fixed-row contract while keeping the owner behind the
+    /// carrier's presentation seam.
+    fn ensure_carrier(&mut self) {
+        self.carrier
+            .ensure_presentation(Presentation::Wide, self.area.height.max(1) as usize);
     }
 
     fn move_cursor(&mut self, delta: i64) -> Option<Msg> {
@@ -480,6 +492,7 @@ impl Component for QueueComponent {
         // previous area when this panel is hidden or resized: stale geometry
         // would repaint the old queue panel and leave a ghost behind.
         self.area = area;
+        self.ensure_carrier();
         self.geometry = QueueRenderGeometry::default();
         if let (Some(title_area), Some(title)) = (self.title_area, self.title.as_ref()) {
             render_queue_title_content(frame, title_area, title, &mut self.geometry);
@@ -493,14 +506,13 @@ impl Component for QueueComponent {
             self.scope_regions
                 .push(self.geometry.scope_remote_area, QueueScope::Remote);
         }
-        self.carrier
-            .wide_mut()
-            .set_paint_policy(WideMediaListPaintPolicy::new(
-                self.focused,
-                SelectedRowSurface::OwningSurface,
-                self.throbber,
-            ));
-        Component::view(self.carrier.wide_mut(), frame, area);
+        render_queue_body(
+            frame,
+            area,
+            QueuePresentation::Wide(self.carrier.wide_mut()),
+            self.focused,
+            self.throbber,
+        );
         if area.height < 1 {
             return;
         }
@@ -533,6 +545,9 @@ impl Component for QueueComponent {
 
 impl AppComponent<Msg, UserEvent> for QueueComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
+        // Keep the shared owner in the presentation the fixed Queue contract
+        // selects before any row-local input touches it (design.md D1).
+        self.ensure_carrier();
         match event {
             Event::Keyboard(key) => self.handle_key(key),
             Event::Mouse(mouse) => self.handle_mouse(mouse),

@@ -28,7 +28,7 @@ use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{
     current_time_secs, feed_display_rows, feed_duration_text, render_feeds_content, FeedDisplayRow,
-    FeedsCarrier, FeedsRenderModel,
+    FeedsPresentation, FeedsRenderModel,
 };
 use crate::app::types_feed_tab::WatchedFilter;
 use mbv_core::config::FeedSubscription;
@@ -413,10 +413,11 @@ impl FeedsComponent {
                 let target = self.resolve_row_id(at)?;
                 // Select the painted row through the same delegation seam the
                 // first click uses, then play the resolved entry (Home shape).
+                // A target with no visible entry returns no message, matching
+                // the pre-migration `position(...)?` guard.
                 self.delegate_row_local_input(RowLocalInput::Click(at), Some(target.clone()));
-                Some(Msg::Shell(ShellRequest::FeedsPlay(
-                    self.entry_for_target(&target).cloned(),
-                )))
+                let entry = self.entry_for_target(&target)?.clone();
+                Some(Msg::Shell(ShellRequest::FeedsPlay(Some(entry))))
             }
             _ => None,
         }
@@ -458,10 +459,10 @@ impl Component for FeedsComponent {
             .selected_target()
             .and_then(|target| self.entry_for_target(target))
             .cloned();
-        let control = if self.carrier.active() == Presentation::Wide {
-            FeedsCarrier::Wide(self.carrier.wide_mut())
+        let presentation = if self.carrier.active() == Presentation::Wide {
+            FeedsPresentation::Wide(self.carrier.wide_mut())
         } else {
-            FeedsCarrier::Inline(self.carrier.inline_mut())
+            FeedsPresentation::Inline(self.carrier.inline_mut())
         };
         let mut layout = LayoutMain::default();
         render_feeds_content(
@@ -478,7 +479,7 @@ impl Component for FeedsComponent {
                 selected_entry: selected_entry.as_ref(),
                 images_enabled: self.images_enabled,
             },
-            control,
+            presentation,
         );
         self.layout = layout;
     }

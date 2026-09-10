@@ -170,22 +170,28 @@ impl<Target> InlineMediaBrowser<Target> {
 
     pub fn resolve_current_point(&self, point: Position) -> Option<&Target> {
         let paint = self.paint.as_ref()?;
-        if !paint.claim_rect.contains(point)
+        if !self.claims_current_point(point)
             || point.y < paint.content_rect.y
             || point.y >= paint.content_rect.bottom()
         {
             return None;
         }
         let flow_row = (point.y - paint.content_rect.y) as usize + paint.row_geometry.offset();
-        match paint.row_geometry.source_row(flow_row) {
-            Some(source_row) => self.core.rows().get(source_row)?.selectable_target(),
-            None => match paint.row_geometry.selected_row() {
-                Some(block_start) if paint.detail_rect.is_some() && flow_row == block_start => {
-                    self.core.selected_target()
-                }
-                _ => None,
-            },
+        if let Some(source_row) = paint.row_geometry.source_row(flow_row) {
+            return self.core.rows().get(source_row)?.selectable_target();
         }
+        // The admitted detail block replaces the selected row: every flow row
+        // of the block resolves to the retained selected target, so an inline
+        // hero click or drag continuation carries the row that was painted.
+        if let (Some(detail), Some(block_start)) =
+            (paint.detail_rect, paint.row_geometry.selected_row())
+        {
+            let block_end = block_start.saturating_add(detail.height as usize);
+            if (block_start..block_end).contains(&flow_row) {
+                return paint.selected_target.as_ref();
+            }
+        }
+        None
     }
 
     pub fn rows(&self) -> &[MediaListRow<Target>] {
@@ -415,19 +421,17 @@ impl<Target: Clone + PartialEq> InlineMediaBrowser<Target> {
         self.core.apply_viewport_anchor(anchor, viewport_height);
     }
 
-    /// Offer one already-normalized row-local input to the shared owner. A
-    /// non-unhandled outcome invalidates the completed frame's retained facts
-    /// so stale geometry cannot claim input.
+    /// Offer one already-normalized row-local input to the shared owner. Every
+    /// delegate outcome is selection-only and changes no row-flow geometry, so
+    /// the completed frame's retained facts stay valid for a continuing pointer
+    /// gesture (matching the Wide presentation); the next `view` re-publishes
+    /// them.
     pub fn delegate(
         &mut self,
         input: RowLocalInput,
         target: Option<Target>,
     ) -> RowLocalOutcome<Target> {
-        let outcome = self.core.delegate(input, target);
-        if !matches!(outcome, RowLocalOutcome::Unhandled) {
-            self.invalidate_paint();
-        }
-        outcome
+        self.core.delegate(input, target)
     }
 }
 
