@@ -9,6 +9,7 @@ use crate::app::ui_util::move_cursor;
 use ratatui::layout::{Position, Rect};
 
 mod anchor;
+mod carrier;
 mod grid;
 mod grouping;
 mod inline;
@@ -17,6 +18,7 @@ mod tests;
 mod wide;
 
 pub use anchor::ViewportAnchor;
+pub use carrier::{MediaListCarrier, Presentation};
 pub use grid::{GridMediaList, GridPaintPolicy};
 pub use grouping::letter_grouped_rows;
 pub use inline::{InlineLayout, InlineMediaBrowser};

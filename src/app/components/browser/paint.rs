@@ -35,17 +35,18 @@ impl BrowserComponent {
             // fails on the same rect (`body_area == area`). If a degenerate
             // rect ever reaches here, keep a canonical render rather than
             // routing to the legacy painter.
+            let policy = crate::app::components::media_list::WideMediaListPaintPolicy::new(
+                self.focused,
+                crate::app::components::media_list::SelectedRowSurface::ListBackdrop,
+                None,
+            );
             crate::app::render::render_wide_media_list_component(
                 f,
                 body_area,
-                &mut self.wide_list,
-                crate::app::components::media_list::WideMediaListPaintPolicy::new(
-                    self.focused,
-                    crate::app::components::media_list::SelectedRowSurface::ListBackdrop,
-                    None,
-                ),
+                self.carrier.wide_mut(),
+                policy,
             );
-            return self.wide_list.current_flow_offset().unwrap_or(0);
+            return self.carrier.wide().current_flow_offset().unwrap_or(0);
         };
         let browser_panel = panes.browser_panel;
 
@@ -144,7 +145,7 @@ impl BrowserComponent {
             );
             self.inline_search.set_scroll(new_scroll);
             new_scroll
-        } else if self.wide_list.is_empty() {
+        } else if self.carrier.is_empty() {
             crate::app::render::components::widgets::render_placeholder(
                 f,
                 content,
@@ -156,18 +157,19 @@ impl BrowserComponent {
             );
             0
         } else {
+            let policy = crate::app::components::media_list::WideMediaListPaintPolicy::new(
+                self.focused,
+                crate::app::components::media_list::SelectedRowSurface::ListBackdrop,
+                None,
+            );
             crate::app::render::render_wide_media_list_component(
                 f,
                 paint,
-                &mut self.wide_list,
-                crate::app::components::media_list::WideMediaListPaintPolicy::new(
-                    self.focused,
-                    crate::app::components::media_list::SelectedRowSurface::ListBackdrop,
-                    None,
-                ),
+                self.carrier.wide_mut(),
+                policy,
             );
-            let offset = self.wide_list.current_flow_offset().unwrap_or(0);
-            self.layout.selected_item_rect = self.wide_list.current_selected_row_rect();
+            let offset = self.carrier.wide().current_flow_offset().unwrap_or(0);
+            self.layout.selected_item_rect = self.carrier.wide().current_selected_row_rect();
             offset
         };
 

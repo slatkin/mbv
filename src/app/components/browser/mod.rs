@@ -24,8 +24,8 @@ use super::browser_narrow::NarrowBrowseExtras;
 use super::component_id::BrowserKind;
 use super::inline_search::{InlineSearch, InlineSearchHost, InlineSearchMouse};
 use super::media_list::{
-    letter_grouped_rows, GridMediaList, InlineMediaBrowser, MediaKind, MediaListRow,
-    MediaSemanticState, ViewportAnchor, WideMediaList,
+    letter_grouped_rows, MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState,
+    Presentation, ViewportAnchor,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
@@ -41,17 +41,6 @@ mod paint;
 mod state;
 
 pub(in crate::app) use content::{BrowserContent, BrowserIdentity};
-
-/// Which closed presentation currently carries the one shared media-list
-/// owner (design.md D1). Exactly one variant holds the owner's rows, cursor,
-/// scroll, and selection; a presentation change moves the same owner between
-/// the persistent presentation adapters — no row-local state is ever copied.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Presentation {
-    Wide,
-    Inline,
-    Grid,
-}
 
 pub struct BrowserComponent {
     kind: BrowserKind,
@@ -84,15 +73,8 @@ pub struct BrowserComponent {
     /// its target when new content makes it available again.
     preserved_anchor: Option<ViewportAnchor<String>>,
     /// The one shared canonical owner of this logical row flow, carried by
-    /// exactly one of the three persistent presentations below.
-    carrier: Presentation,
-    /// Wide presentation over the shared owner (Movies/home-video hero rail).
-    wide_list: WideMediaList<String>,
-    /// Inline presentation over the shared owner (hero-bearing narrow paths,
-    /// Movies/home-video narrow).
-    inline_browser: InlineMediaBrowser<String>,
-    /// Grid presentation over the shared owner (non-hero two-column catalogs).
-    grid: GridMediaList<String>,
+    /// exactly one of the three persistent presentations (design.md D1).
+    carrier: MediaListCarrier<String>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
@@ -149,10 +131,7 @@ impl BrowserComponent {
             image_paint: None,
             narrow_extras: NarrowBrowseExtras::default(),
             preserved_anchor: None,
-            carrier: Presentation::Inline,
-            wide_list: WideMediaList::new(),
-            inline_browser: InlineMediaBrowser::new(),
-            grid: GridMediaList::new(),
+            carrier: MediaListCarrier::new(Presentation::Inline),
             mouse_gestures: MouseGestureState::new(),
             pill_regions: HitRegions::new(),
             inline_search: InlineSearch::new(),
@@ -197,9 +176,9 @@ impl BrowserComponent {
             .get(cursor.min(self.context.item_count().saturating_sub(1)))
             .map(|item| item.id.clone());
         if let Some(target) = target.as_ref() {
-            self.carrier_select_target(target);
+            self.carrier.select_target(target);
         }
-        self.carrier_set_scroll(scroll);
+        self.carrier.set_scroll(scroll);
     }
 
     /// Records the browse identity of the current shell content push and
@@ -259,11 +238,7 @@ impl BrowserComponent {
     /// target and locally clamps otherwise (design.md D3).
     fn feed_owner(&mut self) {
         let rows = self.project_rows();
-        match self.carrier {
-            Presentation::Wide => self.wide_list.set_content(rows),
-            Presentation::Inline => self.inline_browser.set_content(rows),
-            Presentation::Grid => self.grid.set_content(rows),
-        }
+        self.carrier.set_content(rows);
     }
 
     /// The presentation the component's kind, breakpoint, and painted chrome
@@ -284,36 +259,8 @@ impl BrowserComponent {
     /// cursor, scroll, or selection is ever copied between presentations.
     pub(in crate::app) fn ensure_carrier(&mut self) {
         let target = self.active_presentation();
-        if self.carrier == target {
-            return;
-        }
-        let handoff = self.carrier_viewport_anchor(self.painted_viewport_height());
-        match self.carrier {
-            Presentation::Wide => {
-                let core = std::mem::take(&mut self.wide_list).into_media_list();
-                self.receive_core(target, core);
-            }
-            Presentation::Inline => {
-                let core = std::mem::take(&mut self.inline_browser).into_media_list();
-                self.receive_core(target, core);
-            }
-            Presentation::Grid => {
-                let core = std::mem::take(&mut self.grid).into_media_list();
-                self.receive_core(target, core);
-            }
-        }
-        self.carrier = target;
-        if let Some(anchor) = handoff {
-            self.apply_anchor_to_carrier(&anchor, self.painted_viewport_height());
-        }
-    }
-
-    fn receive_core(&mut self, target: Presentation, core: super::media_list::MediaList<String>) {
-        match target {
-            Presentation::Wide => self.wide_list = WideMediaList::from_media_list(core),
-            Presentation::Inline => self.inline_browser = InlineMediaBrowser::from_media_list(core),
-            Presentation::Grid => self.grid = GridMediaList::from_media_list(core),
-        }
+        let viewport_height = self.painted_viewport_height();
+        self.carrier.ensure(target, viewport_height);
     }
     /// Handle a mouse event against the component's painted browse geometry.
     ///
@@ -347,16 +294,8 @@ impl BrowserComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                let claimed = if self.wide_movies {
-                    self.wide_list.claims_point(self.layout.left_area, at)
-                } else if self.uses_inline_control() {
-                    self.inline_browser.claims_point(self.layout.left_area, at)
-                        || self.layout.inline_hero_area.contains(at)
-                } else {
-                    // The Grid presentation claims from its retained
-                    // current-frame geometry (design.md D6).
-                    self.grid.claims_current_point(at)
-                };
+                let claimed = self.carrier.claims_point(self.layout.left_area, at)
+                    || self.layout.inline_hero_area.contains(at);
                 if !claimed {
                     return None;
                 }
@@ -412,7 +351,7 @@ impl BrowserComponent {
             return false;
         };
         self.ensure_carrier();
-        self.carrier_select_target(&target)
+        self.carrier.select_target(&target)
     }
 
     /// The stable target under `point`, resolved only from the retained
@@ -420,27 +359,11 @@ impl BrowserComponent {
     /// active list (design.md D6). The inline hero covers the selected item,
     /// so a hero click carries the current selection.
     fn resolve_row_target(&self, point: Position) -> Option<String> {
-        if self.wide_movies {
-            return self.wide_list.resolve_current_point(point).cloned();
-        }
-        if self.uses_inline_control() {
-            if let Some(target) = self.inline_browser.resolve_current_point(point).cloned() {
-                return Some(target.to_owned());
-            }
-            if self
-                .inline_browser
-                .current_detail_rect()
-                .is_some_and(|rect| rect.contains(point))
-            {
-                return self.inline_browser.current_selected_target().cloned();
-            }
-            return None;
-        }
-        self.grid.resolve_current_point(point).cloned()
+        self.carrier.resolve_current_point(point).cloned()
     }
 
     fn selected_row_target(&self) -> Option<String> {
-        self.active_selected_target()
+        self.carrier.selected_target().cloned()
     }
 
     #[cfg(test)]
@@ -450,31 +373,20 @@ impl BrowserComponent {
 
     #[cfg(test)]
     pub(crate) fn test_inline_targets(&self) -> (Rect, Vec<Option<String>>) {
-        let base = self
-            .inline_browser
-            .current_content_rect()
-            .unwrap_or_default();
-        let detail = self
-            .inline_browser
-            .current_detail_rect()
-            .map_or(0, |rect| rect.height);
+        let inline = self.carrier.inline();
+        let base = inline.current_content_rect().unwrap_or_default();
+        let detail = inline.current_detail_rect().map_or(0, |rect| rect.height);
         let area = Rect {
             y: base.y.saturating_add(detail),
             height: base.height.saturating_sub(detail),
             ..base
         };
-        let offset = self
-            .inline_browser
+        let offset = inline
             .current_flow_offset()
             .unwrap_or(0)
             .saturating_add(detail as usize);
         let targets = (offset..offset.saturating_add(area.height as usize))
-            .map(|row| {
-                self.inline_browser
-                    .current_flow_target_at(row)
-                    .flatten()
-                    .cloned()
-            })
+            .map(|row| inline.current_flow_target_at(row).flatten().cloned())
             .collect();
         (area, targets)
     }
@@ -484,7 +396,7 @@ impl BrowserComponent {
         let (area, _) = self.test_inline_targets();
         (0..area.height)
             .map(|row| Position::new(area.x, area.y + row))
-            .find(|point| self.inline_browser.resolve_current_point(*point) == Some(&target))
+            .find(|point| self.carrier.inline().resolve_current_point(*point) == Some(&target))
     }
 
     /// Test-only cursor seed (task 5.3d.16): `set_content` no longer mirrors
@@ -494,7 +406,7 @@ impl BrowserComponent {
     pub(crate) fn set_cursor_for_test(&mut self, cursor: usize) {
         if let Some(item) = self.context.items.get(cursor) {
             let target = item.id.clone();
-            self.carrier_select_target(&target);
+            self.carrier.select_target(&target);
         }
     }
 
@@ -594,9 +506,9 @@ impl Component for BrowserComponent {
             // shell executes it via `App::paint_home_image`, mirroring the
             // wide path and `HomeComponent`).
             let control = if self.uses_inline_control() {
-                NarrowBrowseControl::Inline(&mut self.inline_browser)
+                NarrowBrowseControl::Inline(self.carrier.inline_mut())
             } else {
-                NarrowBrowseControl::Grid(&mut self.grid)
+                NarrowBrowseControl::Grid(self.carrier.grid_mut())
             };
             let (_scroll, image_paint) = crate::app::render::render_narrow_browse_with_ctx(
                 frame,

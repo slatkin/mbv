@@ -20,8 +20,8 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
-    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, RowIntent, RowLocalInput,
-    RowLocalOutcome, ViewportAnchor, WideMediaList,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
+    RowLocalInput, RowLocalOutcome,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
@@ -46,29 +46,15 @@ fn home_progress_badge(item: &QueueItem) -> Option<String> {
         .map(|pct| format!("{pct}%"))
 }
 
-/// Which closed presentation currently carries Home's one shared media-list
-/// owner (design.md D1). Exactly one variant holds the owner's rows, cursor,
-/// scroll, and selection; a breakpoint change moves the same owner between
-/// the persistent presentation adapters — no row-local state is ever copied.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Presentation {
-    Wide,
-    Inline,
-}
-
 /// The Interactive Component for the Home destination.
 pub struct HomeComponent {
     continue_items: Vec<QueueItem>,
     latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
     /// The one shared canonical owner of the active section's rows, carried by
-    /// exactly one of the two persistent presentations below (design.md D1).
-    /// The owner holds rows, cursor, scroll, and selected target; a breakpoint
-    /// change moves the same owner between carriers.
-    carrier: Presentation,
-    /// Wide presentation over the shared owner (Wide hero rail).
-    wide_list: WideMediaList<String>,
-    /// Inline presentation over the shared owner (inline Narrow).
-    inline_list: InlineMediaBrowser<String>,
+    /// exactly one of the persistent presentations (design.md D1). The owner
+    /// holds rows, cursor, scroll, and selected target; a breakpoint change
+    /// moves the same owner between carriers.
+    carrier: MediaListCarrier<String>,
     loading: bool,
     section: usize,
     /// Which presentation the last `view()` painted (Wide hero Wide vs inline
@@ -118,9 +104,7 @@ impl HomeComponent {
         Self {
             continue_items: Vec::new(),
             latest: Vec::new(),
-            carrier: Presentation::Inline,
-            wide_list: WideMediaList::new(),
-            inline_list: InlineMediaBrowser::new(),
+            carrier: MediaListCarrier::new(Presentation::Inline),
             loading: false,
             section: 0,
             wide: false,
@@ -186,7 +170,7 @@ impl HomeComponent {
                 semantic_state: MediaSemanticState::Ordinary,
             })
             .collect();
-        self.carrier_set_content(rows);
+        self.carrier.set_content(rows);
     }
 
     #[cfg(test)]
@@ -232,7 +216,7 @@ impl HomeComponent {
     /// selectable index over the active section's rows; the component keeps no
     /// cursor of its own.
     pub(in crate::app) fn cursor(&self) -> usize {
-        let index = self.carrier_cursor();
+        let index = self.carrier.cursor();
         self.visible_indices().get(index).copied().unwrap_or(0)
     }
 
@@ -326,10 +310,7 @@ impl HomeComponent {
         pointer_target: Option<String>,
     ) -> RowLocalOutcome<String> {
         self.ensure_carrier();
-        match self.carrier {
-            Presentation::Wide => self.wide_list.delegate(input, pointer_target),
-            Presentation::Inline => self.inline_list.delegate(input, pointer_target),
-        }
+        self.carrier.delegate(input, pointer_target)
     }
 
     /// Home's typed request target for a stable item identity the shared owner
@@ -386,7 +367,7 @@ impl HomeComponent {
     /// The typed effect target for Home's current selection (the shared
     /// owner's stable target, never a cursor-minus-section-index lookup).
     fn row_target(&self) -> super::msg::HomeRowTarget {
-        self.home_row_target(self.carrier_selected_target().cloned())
+        self.home_row_target(self.carrier.selected_target().cloned())
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -488,12 +469,7 @@ impl HomeComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                let claimed = if self.carrier == Presentation::Wide {
-                    self.wide_list.claims_point(self.list_area, at)
-                } else {
-                    self.inline_list.claims_point(self.list_area, at)
-                        || self.hero_area.is_some_and(|hero| hero.contains(at))
-                };
+                let claimed = self.carrier.claims_point(self.list_area, at);
                 if !claimed {
                     return None;
                 }
@@ -562,17 +538,7 @@ impl HomeComponent {
     /// covers the selected item, so a hero click carries the current
     /// selection.
     fn resolve_row_id(&self, point: Position) -> Option<String> {
-        if self.carrier == Presentation::Wide {
-            return self.wide_list.resolve_current_point(point).cloned();
-        }
-        if self
-            .inline_list
-            .current_detail_rect()
-            .is_some_and(|detail| detail.contains(point))
-        {
-            return self.inline_list.current_selected_target().cloned();
-        }
-        self.inline_list.resolve_current_point(point).cloned()
+        self.carrier.resolve_current_point(point).cloned()
     }
 
     /// Test seam: reset the private gesture recognizer so a synchronous test
@@ -599,9 +565,12 @@ impl HomeComponent {
                 .collect()
         }
         let flat = self.visible_indices();
-        if self.carrier == Presentation::Wide {
+        if self.carrier.active() == Presentation::Wide {
             rows(
-                &self.wide_list.row_geometry(self.list_area.height as usize),
+                &self
+                    .carrier
+                    .wide()
+                    .row_geometry(self.list_area.height as usize),
                 self.list_area,
                 &flat,
             )
@@ -609,7 +578,8 @@ impl HomeComponent {
             let detail_rows = self.hero_area.map_or(0, |hero| hero.height as usize);
             let mut map = rows(
                 &self
-                    .inline_list
+                    .carrier
+                    .inline()
                     .row_geometry(self.list_area.height as usize, detail_rows),
                 self.list_area,
                 &flat,
@@ -625,7 +595,7 @@ impl HomeComponent {
     /// active vector).
     #[cfg(test)]
     pub(crate) fn test_active_rows(&self) -> &[MediaListRow<String>] {
-        self.carrier_rows()
+        self.carrier.rows()
     }
 
     /// The active carrier's resting scroll offset. `set_content` never seeds
@@ -634,7 +604,7 @@ impl HomeComponent {
     /// breakpoint transition can override it for discrete jumps.
     #[cfg(test)]
     pub(crate) fn test_active_scroll(&self) -> usize {
-        self.carrier_scroll()
+        self.carrier.scroll()
     }
 
     /// The presentation the painted breakpoint currently selects (design.md
@@ -653,94 +623,8 @@ impl HomeComponent {
     /// or selection is copied between presentations.
     fn ensure_carrier(&mut self) {
         let target = self.active_presentation();
-        if self.carrier == target {
-            return;
-        }
         let viewport_height = self.list_area.height.max(1) as usize;
-        let handoff = self.carrier_viewport_anchor(viewport_height);
-        match self.carrier {
-            Presentation::Wide => {
-                let core = std::mem::take(&mut self.wide_list).into_media_list();
-                self.inline_list = InlineMediaBrowser::from_media_list(core);
-            }
-            Presentation::Inline => {
-                let core = std::mem::take(&mut self.inline_list).into_media_list();
-                self.wide_list = WideMediaList::from_media_list(core);
-            }
-        }
-        self.carrier = target;
-        if let Some(anchor) = handoff {
-            self.apply_anchor_to_carrier(&anchor, viewport_height);
-        }
-    }
-
-    /// The selected stable target of the presentation carrying the shared
-    /// owner.
-    fn carrier_selected_target(&self) -> Option<&String> {
-        match self.carrier {
-            Presentation::Wide => self.wide_list.selected_target(),
-            Presentation::Inline => self.inline_list.selected_target(),
-        }
-    }
-
-    /// The cursor as an index into the carrier's selectable rows.
-    fn carrier_cursor(&self) -> usize {
-        match self.carrier {
-            Presentation::Wide => self.wide_list.cursor(),
-            Presentation::Inline => self.inline_list.cursor(),
-        }
-    }
-
-    fn carrier_set_content(&mut self, rows: Vec<MediaListRow<String>>) {
-        match self.carrier {
-            Presentation::Wide => self.wide_list.set_content(rows),
-            Presentation::Inline => self.inline_list.set_content(rows),
-        }
-    }
-
-    /// Resolve the carrier's selected target and screen-row offset into the
-    /// stable anchor exchanged across a breakpoint seam.
-    fn carrier_viewport_anchor(&self, viewport_height: usize) -> Option<ViewportAnchor<String>> {
-        let selected_target = self.carrier_selected_target()?.clone();
-        let selected_row_offset = match self.carrier {
-            Presentation::Wide => self.wide_list.selected_row_offset(viewport_height)?,
-            Presentation::Inline => self.inline_list.selected_row_offset(viewport_height)?,
-        };
-        Some(ViewportAnchor {
-            selected_target,
-            selected_row_offset,
-        })
-    }
-
-    /// Apply an anchor to the presentation carrying the shared owner.
-    fn apply_anchor_to_carrier(&mut self, anchor: &ViewportAnchor<String>, viewport_height: usize) {
-        match self.carrier {
-            Presentation::Wide => self
-                .wide_list
-                .apply_viewport_anchor(anchor, viewport_height),
-            Presentation::Inline => self
-                .inline_list
-                .apply_viewport_anchor(anchor, viewport_height),
-        }
-    }
-
-    /// The active carrier's resting scroll offset (test-only; Home does not
-    /// read scroll in production).
-    #[cfg(test)]
-    fn carrier_scroll(&self) -> usize {
-        match self.carrier {
-            Presentation::Wide => self.wide_list.scroll(),
-            Presentation::Inline => self.inline_list.scroll(),
-        }
-    }
-
-    /// The active carrier's projected rows (test-only).
-    #[cfg(test)]
-    fn carrier_rows(&self) -> &[MediaListRow<String>] {
-        match self.carrier {
-            Presentation::Wide => self.wide_list.rows(),
-            Presentation::Inline => self.inline_list.rows(),
-        }
+        self.carrier.ensure(target, viewport_height);
     }
 }
 
@@ -761,10 +645,10 @@ impl Component for HomeComponent {
         self.ensure_carrier();
 
         let cursor = self.cursor();
-        let control = if self.carrier == Presentation::Wide {
-            HomeCarrier::Wide(&mut self.wide_list)
+        let control = if self.carrier.active() == Presentation::Wide {
+            HomeCarrier::Wide(self.carrier.wide_mut())
         } else {
-            HomeCarrier::Inline(&mut self.inline_list)
+            HomeCarrier::Inline(self.carrier.inline_mut())
         };
         let result = crate::app::render::render_home_content(
             f,
