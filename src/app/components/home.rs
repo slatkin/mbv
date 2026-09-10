@@ -20,13 +20,14 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
-    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, RowIntent, RowLocalInput,
+    RowLocalOutcome, ViewportAnchor, WideMediaList,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
-use crate::app::render::{HomeImagePaint, HomeListControl};
+use crate::app::render::{HomeCarrier, HomeImagePaint};
 use crate::app::types_playback::HomeLatestSource;
 use crate::app::ui_util::fmt_duration_short;
 use mbv_core::api::TICKS_PER_SECOND;
@@ -79,7 +80,6 @@ pub struct HomeComponent {
     /// content); set once by the shell after construction.
     use_nerd_fonts: bool,
     images_enabled: bool,
-    panel_area: Option<Rect>,
     pill_targets: Vec<(Rect, usize)>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle.
@@ -127,7 +127,6 @@ impl HomeComponent {
             focused: false,
             use_nerd_fonts: false,
             images_enabled: true,
-            panel_area: None,
             pill_targets: Vec::new(),
             mouse_gestures: MouseGestureState::new(),
             pill_regions: HitRegions::new(),
@@ -195,10 +194,6 @@ impl HomeComponent {
         self.focused = focused;
     }
 
-    pub(in crate::app) fn set_panel_area(&mut self, area: Option<Rect>) {
-        self.panel_area = area;
-    }
-
     pub(in crate::app) fn set_use_nerd_fonts(&mut self, use_nerd_fonts: bool) {
         self.use_nerd_fonts = use_nerd_fonts;
     }
@@ -225,8 +220,7 @@ impl HomeComponent {
             self.section = idx + 1;
             self.clamp_section();
             self.project_active_section();
-            self.ensure_carrier();
-            self.carrier_select_first();
+            self.delegate_row_local_input(RowLocalInput::First, None);
             true
         } else {
             false
@@ -321,21 +315,35 @@ impl HomeComponent {
         }
     }
 
-    /// Move only the active carrier; a parked adapter is an empty handoff
-    /// target and must not become a second live authority.
-    pub(in crate::app) fn move_local_cursor(&mut self, delta: i64) {
+    /// The one seam through which Home offers an already-normalized row-local
+    /// key or pointer gesture to the shared owner carrying its active section.
+    /// The owner applies the local state transition and returns the closed
+    /// provider-neutral outcome; Home translates external row intents into its
+    /// typed Msgs (design.md D3).
+    fn delegate_row_local_input(
+        &mut self,
+        input: RowLocalInput,
+        pointer_target: Option<String>,
+    ) -> RowLocalOutcome<String> {
         self.ensure_carrier();
-        self.carrier_move_selection(delta);
+        match self.carrier {
+            Presentation::Wide => self.wide_list.delegate(input, pointer_target),
+            Presentation::Inline => self.inline_list.delegate(input, pointer_target),
+        }
     }
 
-    fn select_start(&mut self) {
-        self.ensure_carrier();
-        self.carrier_select_first();
-    }
-
-    fn select_end(&mut self) {
-        self.ensure_carrier();
-        self.carrier_select_last();
+    /// Home's typed request target for a stable item identity the shared owner
+    /// resolved, or the owner's current selection for a local effect. The
+    /// identity is never re-derived from a cursor minus a section start index.
+    fn home_row_target(&self, item_id: Option<String>) -> super::msg::HomeRowTarget {
+        super::msg::HomeRowTarget {
+            item_id,
+            source: self
+                .latest
+                .get(self.section.saturating_sub(1))
+                .map(|(_, source, _)| source.pref_key()),
+            from_continue_watching: self.section == 0,
+        }
     }
 
     /// Select `section_idx` (clamped to the nearest valid section). Returns
@@ -357,8 +365,7 @@ impl HomeComponent {
         // A discrete section change re-projects the active section and parks
         // the shared owner at its first row (no per-section cursor cache).
         self.project_active_section();
-        self.ensure_carrier();
-        self.carrier_select_first();
+        self.delegate_row_local_input(RowLocalInput::First, None);
         true
     }
 
@@ -376,27 +383,10 @@ impl HomeComponent {
         self.select_section(sections[next_pos])
     }
 
-    /// Handle a keyboard event using TuiRealm key types. Home claims
-    /// only its local navigation and typed effect requests; destination-
-    /// independent chords are resolved by the central router.
+    /// The typed effect target for Home's current selection (the shared
+    /// owner's stable target, never a cursor-minus-section-index lookup).
     fn row_target(&self) -> super::msg::HomeRowTarget {
-        let (start, _) = self.section_range(self.section).unwrap_or((0, 0));
-        let local_cursor = self.cursor().saturating_sub(start);
-        let item = if self.section == 0 {
-            self.continue_items.get(local_cursor)
-        } else {
-            self.latest
-                .get(self.section - 1)
-                .and_then(|(_, _, items)| items.get(local_cursor))
-        };
-        super::msg::HomeRowTarget {
-            item_id: item.map(|item| item.id().to_owned()),
-            source: self
-                .latest
-                .get(self.section.saturating_sub(1))
-                .map(|(_, source, _)| source.pref_key()),
-            from_continue_watching: self.section == 0,
-        }
+        self.home_row_target(self.carrier_selected_target().cloned())
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -411,11 +401,11 @@ impl HomeComponent {
         }
         match key.code {
             Key::Up => {
-                self.move_local_cursor(-1);
+                self.delegate_row_local_input(RowLocalInput::Move(-1), None);
                 None
             }
             Key::Down => {
-                self.move_local_cursor(1);
+                self.delegate_row_local_input(RowLocalInput::Move(1), None);
                 None
             }
             Key::Char('[') if !ctrl => {
@@ -427,30 +417,41 @@ impl HomeComponent {
                 self.section_msg(changed)
             }
             Key::PageUp => {
-                self.move_local_cursor(-(self.page_size() as i64));
+                self.delegate_row_local_input(RowLocalInput::Page(-1), None);
                 None
             }
             Key::PageDown => {
-                self.move_local_cursor(self.page_size() as i64);
+                self.delegate_row_local_input(RowLocalInput::Page(1), None);
                 None
             }
             Key::Home => {
-                self.select_start();
+                self.delegate_row_local_input(RowLocalInput::First, None);
                 None
             }
             Key::End => {
-                self.select_end();
+                self.delegate_row_local_input(RowLocalInput::Last, None);
                 None
             }
             Key::Char('.') if self.section == 0 => {
+                let target = match self.delegate_row_local_input(RowLocalInput::Context, None) {
+                    RowLocalOutcome::External(RowIntent::Context(target)) => {
+                        self.home_row_target(Some(target))
+                    }
+                    _ => self.row_target(),
+                };
                 Some(Msg::Shell(ShellRequest::HomeContextMenu {
                     home_cw_selected: true,
-                    target: self.row_target(),
+                    target,
                 }))
             }
             Key::Char('.') => None,
             Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target()))),
-            Key::Enter => Some(Msg::Shell(ShellRequest::HomePlay(self.row_target()))),
+            Key::Enter => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
+                RowLocalOutcome::External(RowIntent::Activate(target)) => Some(Msg::Shell(
+                    ShellRequest::HomePlay(self.home_row_target(Some(target))),
+                )),
+                _ => None,
+            },
             Key::Char('a') if ctrl => {
                 Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target())))
             }
@@ -465,13 +466,6 @@ impl HomeComponent {
 
     fn section_msg(&self, changed: bool) -> Option<Msg> {
         changed.then_some(Msg::Shell(ShellRequest::HomeSectionSelected(self.section)))
-    }
-
-    fn page_size(&self) -> usize {
-        self.panel_area
-            .map(|a| a.height as usize)
-            .unwrap_or(1)
-            .max(1)
     }
 
     /// Handle a TuiRealm mouse event. `None` means the event isn't Home's to
@@ -503,7 +497,7 @@ impl HomeComponent {
                 if !claimed {
                     return None;
                 }
-                self.move_local_cursor(delta);
+                self.delegate_row_local_input(RowLocalInput::Wheel { at, delta }, None);
                 // Return a framework-visible claim after mutating local state;
                 // the shell resolves effects from the component's selected
                 // stable target rather than an App-wide cursor mirror.
@@ -558,8 +552,7 @@ impl HomeComponent {
             return false;
         }
         if let Some(id) = self.resolve_row_id(at) {
-            self.ensure_carrier();
-            self.carrier_select_target(&id);
+            self.delegate_row_local_input(RowLocalInput::Click(at), Some(id));
         }
         true
     }
@@ -690,37 +683,6 @@ impl HomeComponent {
         }
     }
 
-    /// Move the shared owner's selection to `target` when present.
-    fn carrier_select_target(&mut self, target: &str) -> bool {
-        let target = target.to_string();
-        match self.carrier {
-            Presentation::Wide => self.wide_list.select_target(&target),
-            Presentation::Inline => self.inline_list.select_target(&target),
-        }
-    }
-
-    fn carrier_select_first(&mut self) {
-        match self.carrier {
-            Presentation::Wide => self.wide_list.select_first(),
-            Presentation::Inline => self.inline_list.select_first(),
-        }
-    }
-
-    fn carrier_select_last(&mut self) {
-        match self.carrier {
-            Presentation::Wide => self.wide_list.select_last(),
-            Presentation::Inline => self.inline_list.select_last(),
-        }
-    }
-
-    /// Move the shared owner's selection by `delta` selectable rows.
-    fn carrier_move_selection(&mut self, delta: i64) {
-        match self.carrier {
-            Presentation::Wide => self.wide_list.move_selection(delta),
-            Presentation::Inline => self.inline_list.move_selection(delta),
-        }
-    }
-
     /// The cursor as an index into the carrier's selectable rows.
     fn carrier_cursor(&self) -> usize {
         match self.carrier {
@@ -800,9 +762,9 @@ impl Component for HomeComponent {
 
         let cursor = self.cursor();
         let control = if self.carrier == Presentation::Wide {
-            HomeListControl::Wide(&mut self.wide_list)
+            HomeCarrier::Wide(&mut self.wide_list)
         } else {
-            HomeListControl::Inline(&mut self.inline_list)
+            HomeCarrier::Inline(&mut self.inline_list)
         };
         let result = crate::app::render::render_home_content(
             f,

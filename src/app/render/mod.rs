@@ -34,7 +34,7 @@ pub(in crate::app) use components::feeds_manage::{
 pub(in crate::app) use components::help::{
     help_destination, render_help_panel, HelpDestination, HelpRenderGeometry,
 };
-pub(in crate::app) use components::home::{render_home_content, HomeListControl};
+pub(in crate::app) use components::home::{render_home_content, HomeCarrier};
 
 #[cfg(test)]
 pub(crate) fn reset_home_media_list_paints() {

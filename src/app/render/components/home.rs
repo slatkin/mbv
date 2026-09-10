@@ -49,14 +49,14 @@ fn home_item_at(
 /// Wide presentation for the Wide hero rail or the Inline presentation for
 /// inline Narrow. Exactly one is handed over per view; the same shared
 /// `MediaList` owner moves between them.
-pub(in crate::app) enum HomeListControl<'a> {
+pub(in crate::app) enum HomeCarrier<'a> {
     Wide(&'a mut WideMediaList<String>),
     Inline(&'a mut InlineMediaBrowser<String>),
 }
 
 /// Paints Home's parent-owned hero + section pills + list-surface chrome
 /// without `App` (design D2), then mounts the active canonical carrier
-/// (`HomeListControl::Wide` for Wide hero Wide, `HomeListControl::Inline` for
+/// (`HomeCarrier::Wide` for Wide hero Wide, `HomeCarrier::Inline` for
 /// inline Narrow) into the list area. `section` is the already-resolved
 /// selected pill; `cursor` is the component's already-clamped flat cursor
 /// (used only to pick the hero item and anchor the replacement block). Only
@@ -70,7 +70,7 @@ pub(in crate::app) fn render_home_content(
     latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
     section: usize,
     cursor: usize,
-    control: HomeListControl<'_>,
+    control: HomeCarrier<'_>,
     use_nerd_fonts: bool,
     images_enabled: bool,
 ) -> HomeContentOutput {
@@ -438,9 +438,9 @@ pub(in crate::app) fn render_home_content(
     } else {
         // The carrier the caller configured always matches `two_column`: both
         // are derived from the same `wide_hero_presentation` predicate.
-        debug_assert_eq!(two_column, matches!(&control, HomeListControl::Wide(_)));
+        debug_assert_eq!(two_column, matches!(&control, HomeCarrier::Wide(_)));
         match control {
-            HomeListControl::Wide(wide_list) => {
+            HomeCarrier::Wide(wide_list) => {
                 // Full panel width so the selected-row bar and flush marker
                 // reach the rail border; `list_area` is already inset
                 // vertically and stays the hit/scroll geometry rect.
@@ -458,7 +458,7 @@ pub(in crate::app) fn render_home_content(
                 wide_list.view(f, paint_rect);
                 wide_list.current_selected_row_rect()
             }
-            HomeListControl::Inline(inline_list) => {
+            HomeCarrier::Inline(inline_list) => {
                 inline_list.set_geometry(list_area, list_area);
                 inline_list.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
                     focused,

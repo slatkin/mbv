@@ -1,6 +1,6 @@
 use super::{
-    letter_grouped_rows, MediaList, MediaListRow, RowGeometry, ViewportAnchor,
-    WideMediaListPaintPolicy, WideViewport,
+    letter_grouped_rows, MediaList, MediaListRow, RowGeometry, RowLocalInput, RowLocalOutcome,
+    ViewportAnchor, WideMediaListPaintPolicy, WideViewport,
 };
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -329,6 +329,21 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
     ) {
         self.invalidate_paint();
         self.core.apply_viewport_anchor(anchor, viewport_height);
+    }
+
+    /// Offer one already-normalized row-local input to the shared owner. A
+    /// non-unhandled outcome invalidates the completed frame's retained facts
+    /// (matching the Grid presentation), so stale geometry cannot claim input.
+    pub fn delegate(
+        &mut self,
+        input: RowLocalInput,
+        target: Option<Target>,
+    ) -> RowLocalOutcome<Target> {
+        let outcome = self.core.delegate(input, target);
+        if !matches!(outcome, RowLocalOutcome::Unhandled) {
+            self.invalidate_paint();
+        }
+        outcome
     }
 }
 
