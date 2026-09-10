@@ -5,8 +5,8 @@
 
 ## 2. Boundary Ownership
 
-- [ ] 2.1 Add the boundary Interactive Component (private gesture state, gap-only arming, live-width message emission, DragEnd no-op), its `ComponentId`, and the mount; verify with focused component tests covering exact-edge arming, one-column resolution, clamping, click-only no-op, DragEnd emitting nothing, and eligibility cancellation resetting gesture state.
-- [ ] 2.2 Add the shell tab→area mapping for the active wide surface with per-arm painted-split eligibility (empty/loading/no-selection states arm nothing), per-frame sync from the `LayoutMain` rects, the pinned pointer→width resolution (near gap column exact, outer column one wider, tracking outside the gap once changed), and the exhaustive dispatch arm applying the live width; verify with a sentinel buffer test proving the gap's appearance is unchanged on a representative surface and on an empty/loading state, and a test proving pane gestures adjacent to the gap still resolve to their own components.
+- [x] 2.1 Add the boundary Interactive Component (private gesture state, gap-only arming, live-width message emission, DragEnd no-op), its `ComponentId`, and the mount; verify with focused component tests covering exact-edge arming, one-column resolution, clamping, click-only no-op, DragEnd emitting nothing, and eligibility cancellation resetting gesture state.
+- [x] 2.2 Add the shell tab→area mapping for the active wide surface with per-arm painted-split eligibility (empty/loading/no-selection states arm nothing), per-frame sync from the `LayoutMain` rects, the pinned pointer→width resolution (near gap column exact, outer column one wider, tracking outside the gap once changed), and the exhaustive dispatch arm applying the live width; verify with a sentinel buffer test proving the gap's appearance is unchanged on a representative surface and on an empty/loading state, and a test proving pane gestures adjacent to the gap still resolve to their own components.
 
 ## 3. Reset Semantics
 
