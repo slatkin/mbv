@@ -105,6 +105,28 @@ has a body and bands rather than panels; the overlay term is **popup**, not dial
 the **Main content box**; and the inline-hero avoid-list ("separate detail block", "stacked hero")
 rules out naming a selected row's detail a block of its own.
 
+**The value map (decided, user-chosen).** Every surface keeps the colour it has today, including the
+fact that two levels share a value:
+
+| level | focused | resting |
+| --- | --- | --- |
+| column/pane | `#3c4841` (`SURFACE_FOCUSED`) | `#2d353b` (`SURFACE_BACKDROP`) |
+| content body | `#3c4841` (`SURFACE_FOCUSED`) | `#333c43` (`SURFACE_RESTING`) |
+| content body, soft variant | `#48584e` (`SURFACE_ACCENT_SOFT`, retired as a name) | `#333c43` |
+| recess, chrome band, popup | as each surface paints today (`SURFACE_CHROME`, `SURFACE_BACKDROP`, `PILL_ROW_BG`, the popup frame role) | |
+
+The **soft content body** is the table's one declared variant: the lighter green that today's
+`SURFACE_ACCENT_SOFT` carries, for the content surfaces that read as content inside a container — the
+queue panel, the TV episode box and the Music track box today, and the pane content boxes that start
+following focus in this change (TV's overview box, the inline-hero content box). It is a property of
+the surface **row**, so a screen still only names its surface and never a variant.
+
+_Rejected alternatives, recorded:_ making the two greens two *levels* (column `#3c4841`, every content
+body `#48584e`) would repaint every focused panel body including the now-playing band, which the user
+had already rejected by asking for that band's original colour; normalising to one green
+(`#3c4841` everywhere) would take the lighter green away from the three surfaces that carry it today.
+Both are visible repaints for no gain the user asked for, so the default-plus-variant map wins.
+
 _Alternative:_ a registry keyed by strings/ids so screens can add surfaces. Rejected — the closed
 enum is what makes "every surface is in the table" checkable.
 
@@ -308,7 +330,7 @@ deduplicated.
 | `render/components/chrome.rs:219,221,246,248,255,280,282,299,311` | sidebar header/footer rows | chrome band | `render_panel_shell_at` | header/footer rects | `style` variant | `SURFACE_CHROME` / `SURFACE_ITEM_FOCUSED` / `SURFACE_RESTING` | `SidebarBand` |
 | `render/components/chrome_tabs.rs:43` | tab bar background | chrome band | `render_tabs` | `FrameChromeGeometry.tab_bar_area` | none | `SURFACE_CHROME` | `TabBar` |
 | `render/components/chrome_tabs.rs:131` | tab bar inactive tab glyph | chrome band | `render_tabs` | tab row cell | none | `Color::Rgb(73, 81, 86)` raw (see Findings) | `TabBar` |
-| `render/components/modal_frame.rs:46` | popup frame body | popup | `render_modal_frame_inner` | centered rect from `f.area()` | none | caller's `bg` | `PopupFrame` |
+| `render/components/modal_frame.rs:46` | popup frame body | popup | `render_modal_frame_inner` | centred rect from `f.area()` | none | caller's `bg` | `PopupFrame` |
 | `render/components/confirm_modal.rs:29` | popup frame body | popup | `render_confirm_modal_content` | modal rect | none | `SURFACE_FOCUSED` | `PopupFrame` |
 | `render/components/daemon_lost_modal.rs:29` | popup frame body | popup | `render_daemon_lost_modal_content` | modal rect | none | `SURFACE_FOCUSED` | `PopupFrame` |
 | `render/components/feeds_manage.rs:60` | popup frame body (feed list) | popup | `render_feeds_manage_list` | modal rect | none | `SURFACE_FOCUSED` | `PopupFrame` |
