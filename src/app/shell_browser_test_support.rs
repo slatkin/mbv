@@ -242,3 +242,44 @@ fn shell_tv_refresh_runs_library_refresh_effect() {
     assert_eq!(request, ShellRequest::EmbyLibraryRefresh);
     assert!(model.app.libs[0].nav_stack[0].loading);
 }
+
+/// A single Emby Movies library holding one folder (`Folder A`) and one
+/// playable movie (`Movie B`), shared by the shell browser effect, geometry
+/// and position tests.
+pub(super) fn browser_app_with_folder_and_movie() -> App {
+    let mut app = make_app_stub();
+    app.tab = TabSelection::EmbyLibrary(0);
+
+    let mut library = make_item("Movies", "CollectionFolder");
+    library.id = "lib-movies".into();
+    library.is_folder = true;
+    library.collection_type = "movies".into();
+
+    let mut folder = make_item("Folder A", "CollectionFolder");
+    folder.id = "folder-a".into();
+    folder.is_folder = true;
+
+    let mut movie = make_item("Movie B", "Movie");
+    movie.id = "movie-b".into();
+
+    app.libs.push(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            parent_id: "lib-movies".into(),
+            title: "Movies".into(),
+            items: vec![folder, movie],
+            total_count: 2,
+            resting: BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        }],
+        ..LibraryTab::new(library)
+    });
+
+    app
+}
