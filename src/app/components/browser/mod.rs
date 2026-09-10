@@ -315,7 +315,7 @@ impl BrowserComponent {
                 ctx.letter_filter.is_some(),
             );
         } else {
-            let rows = ctx.items.iter().map(|item| row_for(item)).collect();
+            let rows = ctx.items.iter().map(row_for).collect();
             self.wide_list.set_content(rows);
         }
     }
@@ -446,8 +446,7 @@ impl BrowserComponent {
             return None;
         }
         self.resolve_left_cursor(point.x, point.y)
-            .map(|index| self.context.items.get(index).map(|item| item.id.clone()))
-            .flatten()
+            .and_then(|index| self.context.items.get(index).map(|item| item.id.clone()))
     }
 
     fn selected_row_target(&self) -> Option<String> {

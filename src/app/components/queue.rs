@@ -488,7 +488,6 @@ impl Component for QueueComponent {
                     .style(Style::default().fg(palette::TEXT_MUTED)),
                 area,
             );
-            return;
         }
         // The persistent canonical child is the sole Queue body painter and
         // retains the current painted row geometry for later point resolution.
