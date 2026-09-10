@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 
 use super::indicators;
-use crate::app::layout::LayoutPlayback;
+use crate::app::layout::{FocusState, LayoutPlayback};
 use crate::app::ui_util::*;
 use crate::app::{palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -13,33 +13,12 @@ use ratatui::Frame;
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 
-/// The right (library) column's chrome backdrop surface for one frame.
-///
-/// The focused arm is the library column's focused surface. The resting arm is
-/// deliberately `SURFACE_BACKDROP` (`#2d353b`), NOT the panel resting role
-/// `SURFACE_RESTING` (`#333c43`) that the neighbouring left/queue arm resolves
-/// through `palette::resolve_surface_focus`; a resting library column is the
-/// shared library backdrop, not a resting panel. Do not replace this with
-/// `resolve_surface_focus` to "fix" that asymmetry.
-///
-/// Transitional: `unify-surface-colour` row 4.2 replaces this pair with the
-/// surface table, which owns it as one row.
-fn library_column_surface(right_focused: bool) -> Color {
-    if right_focused {
-        palette::SURFACE_FOCUSED
-    } else {
-        palette::SURFACE_BACKDROP
-    }
-}
-
 pub(in crate::app) fn render_legacy_backdrops(
     frame: &mut Frame,
     left_area: Rect,
     right_area: Rect,
-    queue_focused: bool,
-    right_focused: bool,
+    focus: &FocusState,
     left_visible: bool,
-    right_visible: bool,
 ) {
     if left_visible {
         // One column is left unpainted for the Queue boundary component;
@@ -49,16 +28,24 @@ pub(in crate::app) fn render_legacy_backdrops(
             ..left_area
         };
         frame.render_widget(
-            Block::default()
-                .style(Style::default().bg(palette::resolve_surface_focus(queue_focused))),
+            Block::default().style(
+                Style::default()
+                    .bg(palette::surface_colors(palette::Surface::QueueColumn, focus).fill),
+            ),
             backdrop,
         );
     }
-    if right_visible {
+    if focus.right_visible() {
         // The right column is the surface the library panel sits on, so it
         // follows panel focus; the left arm above stays the queue column's.
         frame.render_widget(
-            Block::default().style(Style::default().bg(library_column_surface(right_focused))),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::LibraryColumn,
+                    focus,
+                )
+                .fill),
+            ),
             right_area,
         );
     }

@@ -60,6 +60,7 @@ pub const TEXT_ON_ACCENT: Color = primitives::BASE; // near-black text painted o
 pub const TEXT_ACCENT_MUTED: Color = primitives::BG_GREEN; // "loaded"/"playing"/confirmed value text
 pub const TEXT_DETAIL_META: Color = primitives::MUTED_GREEN; // detail-screen label/meta text
 pub const TEXT_METADATA: Color = primitives::FOAM; // secondary metadata (durations, pct, badges)
+pub const TEXT_TAB_INACTIVE: Color = primitives::TAB_INACTIVE_FG; // tab bar's inactive tab glyph
 
 // Status
 pub const STATUS_ERROR: Color = primitives::RED;

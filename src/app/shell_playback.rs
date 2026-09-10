@@ -40,15 +40,11 @@ impl Model {
         let show_controls = state.active
             || self.app.connected_session_id.is_some()
             || self.app.cast_attachment.is_some();
-        let focused = self.app.focus_state().queue_column_focused();
+        let focus = self.app.focus_state();
         let projection = PlaybackProjection {
             state,
             show_controls,
-            panel_bg: if focused {
-                palette::SURFACE_FOCUSED
-            } else {
-                palette::SURFACE_PLAYBACK
-            },
+            panel_bg: palette::surface_colors(palette::Surface::PlaybackPanel, &focus).fill,
             narrow_player: self.app.effective_panel_mode() == PanelMode::QueueOnly,
             now_playing_title: now_playing_title.clone(),
             title_parts: now_playing_title

@@ -6,7 +6,7 @@ use crate::app::ui_util::*;
 use crate::app::{palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
 use ratatui::Frame;
@@ -40,7 +40,9 @@ impl App {
     ) {
         // Fill the tab bar area with the tab box's own background.
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
+            Block::default().style(Style::default().bg(
+                palette::surface_colors_for_column_focus(palette::Surface::TabBar, false).fill,
+            )),
             area,
         );
 
@@ -128,7 +130,7 @@ impl App {
                 } else {
                     Line::from(Span::styled(
                         format!("  {n}  "),
-                        Style::default().fg(Color::Rgb(73, 81, 86)),
+                        Style::default().fg(palette::TEXT_TAB_INACTIVE),
                     ))
                 };
                 let width = line.width() as u16;

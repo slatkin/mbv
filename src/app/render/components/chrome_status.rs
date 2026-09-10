@@ -24,8 +24,10 @@ impl App {
             remote_state,
             RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
         );
+        let pill_bg =
+            palette::surface_colors_for_column_focus(palette::Surface::StatusBarPill, false).fill;
         let glyph_style = Style::default()
-            .bg(palette::SURFACE_STATUS_PILL)
+            .bg(pill_bg)
             .fg(ratatui::style::Color::White);
 
         let target = match remote_state {
@@ -60,10 +62,10 @@ impl App {
             } else {
                 ratatui::style::Color::Black
             })
-            .bg(palette::SURFACE_STATUS_PILL);
+            .bg(pill_bg);
 
         vec![
-            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+            Span::styled(" ", Style::default().bg(pill_bg)),
             Span::styled(
                 if self.use_nerd_fonts {
                     "\u{f1616}"
@@ -73,7 +75,7 @@ impl App {
                 glyph_style,
             ),
             Span::styled(label, label_style),
-            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+            Span::styled(" ", Style::default().bg(pill_bg)),
         ]
     }
 
@@ -124,8 +126,10 @@ impl App {
             crate::config::QueueSource::Playlist { name, .. } => (format!("{gap}{name}"), true),
             _ => (format!("{gap}none"), false),
         };
+        let pill_bg =
+            palette::surface_colors_for_column_focus(palette::Surface::StatusBarPill, false).fill;
         let glyph_style = Style::default()
-            .bg(palette::SURFACE_STATUS_PILL)
+            .bg(pill_bg)
             .fg(ratatui::style::Color::White);
         let label_style = Style::default()
             .fg(if on {
@@ -133,10 +137,10 @@ impl App {
             } else {
                 palette::TEXT_SECONDARY
             })
-            .bg(palette::SURFACE_STATUS_PILL);
+            .bg(pill_bg);
 
         vec![
-            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+            Span::styled(" ", Style::default().bg(pill_bg)),
             Span::styled(
                 if self.use_nerd_fonts {
                     "\u{f03a}"
@@ -146,7 +150,7 @@ impl App {
                 glyph_style,
             ),
             Span::styled(label, label_style),
-            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+            Span::styled(" ", Style::default().bg(pill_bg)),
         ]
     }
 
@@ -156,28 +160,28 @@ impl App {
             let cfg = &*config;
             cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
         };
+        let pill_bg =
+            palette::surface_colors_for_column_focus(palette::Surface::StatusBarPill, false).fill;
         if self.queue_dirty {
             Some(vec![
-                Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+                Span::styled(" ", Style::default().bg(pill_bg)),
                 Span::styled(
                     " UNSAVED ",
                     Style::default()
                         .fg(palette::TEXT_FOCUS_ACCENT)
-                        .bg(palette::SURFACE_STATUS_PILL)
+                        .bg(pill_bg)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+                Span::styled(" ", Style::default().bg(pill_bg)),
             ])
         } else if autosave_on {
             Some(vec![
-                Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+                Span::styled(" ", Style::default().bg(pill_bg)),
                 Span::styled(
                     " AUTOSAVE ",
-                    Style::default()
-                        .fg(palette::ACCENT)
-                        .bg(palette::SURFACE_STATUS_PILL),
+                    Style::default().fg(palette::ACCENT).bg(pill_bg),
                 ),
-                Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+                Span::styled(" ", Style::default().bg(pill_bg)),
             ])
         } else {
             None
@@ -185,25 +189,29 @@ impl App {
     }
 
     pub(in crate::app) fn mute_status_spans(&self) -> Option<Vec<Span<'static>>> {
+        let pill_bg =
+            palette::surface_colors_for_column_focus(palette::Surface::StatusBarPill, false).fill;
         self.playback_display_target()
             .displayed_mute(self)
             .then(|| {
                 vec![
-                    Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+                    Span::styled(" ", Style::default().bg(pill_bg)),
                     Span::styled(
                         "muted",
                         Style::default()
                             .fg(palette::STATUS_ERROR)
-                            .bg(palette::SURFACE_STATUS_PILL)
+                            .bg(pill_bg)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+                    Span::styled(" ", Style::default().bg(pill_bg)),
                 ]
             })
     }
 
     pub(in crate::app) fn volume_status_spans(&self) -> Vec<Span<'static>> {
         let volume = self.playback_display_target().displayed_volume(self);
+        let pill_bg =
+            palette::surface_colors_for_column_focus(palette::Surface::StatusBarPill, false).fill;
         // Speaker glyph reflects the volume state (0 / low / mid / high).
         let icon = if volume == 0 {
             "\u{1F507}"
@@ -215,18 +223,16 @@ impl App {
             "\u{1F50A}"
         };
         vec![
-            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+            Span::styled(" ", Style::default().bg(pill_bg)),
             Span::styled(
                 icon,
-                Style::default()
-                    .fg(palette::PLAYBACK_META_FG)
-                    .bg(palette::SURFACE_STATUS_PILL),
+                Style::default().fg(palette::PLAYBACK_META_FG).bg(pill_bg),
             ),
             Span::styled(
                 format!(" {volume}"),
                 Style::default()
                     .fg(palette::ACCENT)
-                    .bg(palette::SURFACE_STATUS_PILL)
+                    .bg(pill_bg)
                     .add_modifier(Modifier::BOLD),
             ),
         ]
@@ -302,7 +308,13 @@ impl App {
         show_session_pill: bool,
     ) {
         // Keep the row itself darker so the pills read as segments sitting on top of it.
-        let bar_style = Style::default().bg(palette::SURFACE_CHROME);
+        let bar_style = Style::default().bg(palette::surface_colors_for_column_focus(
+            palette::Surface::StatusBar,
+            false,
+        )
+        .fill);
+        let pill_bg =
+            palette::surface_colors_for_column_focus(palette::Surface::StatusBarPill, false).fill;
         f.render_widget(Block::default().style(bar_style), area);
         layout.ind_mu = Rect::default();
 
@@ -464,10 +476,7 @@ impl App {
             if let Some((label, color)) = source_label {
                 append_right(
                     &mut right_spans,
-                    Span::styled(
-                        format!(" {label} "),
-                        Style::default().fg(color).bg(palette::SURFACE_STATUS_PILL),
-                    ),
+                    Span::styled(format!(" {label} "), Style::default().fg(color).bg(pill_bg)),
                 );
             }
             if !username.is_empty() {
@@ -476,15 +485,11 @@ impl App {
                 }
                 right_spans.push(Span::styled(
                     " 🯅",
-                    Style::default()
-                        .fg(palette::TEXT_METADATA)
-                        .bg(palette::SURFACE_STATUS_PILL),
+                    Style::default().fg(palette::TEXT_METADATA).bg(pill_bg),
                 ));
                 right_spans.push(Span::styled(
                     format!(" {username} "),
-                    Style::default()
-                        .fg(palette::PLAYBACK_META_FG)
-                        .bg(palette::SURFACE_STATUS_PILL),
+                    Style::default().fg(palette::PLAYBACK_META_FG).bg(pill_bg),
                 ));
             }
             // Service-state glyphs — Emby, Audiobookshelf, stay-alive, shared-data —

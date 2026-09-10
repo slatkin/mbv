@@ -121,9 +121,12 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
             height: 1,
             ..ctx.area
         };
+        let bottom_bg =
+            palette::surface_colors_for_column_focus(palette::Surface::PlaybackBottomRow, false)
+                .fill;
         frame.render_widget(
             Paragraph::new(Span::raw(" ".repeat(bottom_area.width as usize)))
-                .style(Style::default().bg(palette::SURFACE_BACKDROP)),
+                .style(Style::default().bg(bottom_bg)),
             bottom_area,
         );
         if ctx.show_controls {
@@ -159,7 +162,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
                 };
                 frame.render_widget(
                     Paragraph::new(line)
-                        .style(Style::default().bg(palette::SURFACE_BACKDROP))
+                        .style(Style::default().bg(bottom_bg))
                         .alignment(alignment),
                     inset_area,
                 );
@@ -240,7 +243,8 @@ pub(in crate::app) fn render_title_row(
     } else {
         palette::TEXT_MUTED
     };
-    let pill_bg = palette::SURFACE_BACKDROP;
+    let pill_bg =
+        palette::surface_colors_for_column_focus(palette::Surface::PlaybackStatusPill, false).fill;
     let mut codec_value_next = false;
     let mut right = ctx
         .status_indicators

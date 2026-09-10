@@ -273,6 +273,15 @@ impl App {
             let mut top_rows = layout.card.height;
             let mut stacked_rows = 0;
             if is_queue_only && (!idle_collapse || show_controls) {
+                // Queue-only has no right column, so the playback strip takes
+                // the surface table's mode-driven chrome-band arm: the panel
+                // and its recess rows resolve to the chrome band while the
+                // right column is off screen.
+                let focus = self.focus_state();
+                let panel_bg =
+                    palette::surface_colors(palette::Surface::PlaybackPanel, &focus).fill;
+                let recess_bg =
+                    palette::surface_colors(palette::Surface::PlaybackRecess, &focus).fill;
                 if is_wide {
                     let panel_area = Rect {
                         x: left_content.x + layout.card.width + 2,
@@ -281,7 +290,7 @@ impl App {
                         height: layout.card.height.max(player_h),
                     };
                     f.render_widget(
-                        Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
+                        Block::default().style(Style::default().bg(panel_bg)),
                         panel_area,
                     );
                     crate::app::render::render_player_panel(
@@ -292,7 +301,7 @@ impl App {
                             player_h,
                             show_controls,
                             now_playing_title,
-                            palette::SURFACE_CHROME,
+                            recess_bg,
                         ),
                     );
                     top_rows = layout.card.height.max(player_h);
@@ -311,7 +320,7 @@ impl App {
                             player_h,
                             show_controls,
                             now_playing_title,
-                            palette::SURFACE_CHROME,
+                            recess_bg,
                         ),
                     );
                     stacked_rows = player_h;
@@ -414,10 +423,8 @@ impl App {
             f,
             left_area,
             right_full_area,
-            focus.queue_column_focused(),
-            focus.library_column_focused(),
+            &focus,
             self.effective_panel_mode() != PanelMode::LibraryOnly,
-            focus.right_visible(),
         );
 
         // Tab bar at the very top of the right column.
