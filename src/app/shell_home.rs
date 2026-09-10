@@ -169,6 +169,17 @@ mod tests {
         model.handle_terminal_message(Msg::Shell(request), &mut false, &mut false);
     }
     use crate::app::tests::{make_app_stub, make_item, make_items};
+
+    fn home_target(
+        item_id: &str,
+        from_continue_watching: bool,
+    ) -> crate::app::components::msg::HomeRowTarget {
+        crate::app::components::msg::HomeRowTarget {
+            item_id: item_id.into(),
+            source: (!from_continue_watching).then(|| "emby:lib".into()),
+            from_continue_watching,
+        }
+    }
     use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -319,7 +330,7 @@ mod tests {
         model.push_home_content();
 
         // HomeEnqueue: the requested CW row (id2) is queued, not row 0.
-        model.handle_home_request(ShellRequest::HomeEnqueue(2));
+        model.handle_home_request(ShellRequest::HomeEnqueue(home_target("id2", true)));
         let queued = model.app.player_tab.emby_items();
         assert_eq!(queued.len(), 1);
         assert_eq!(queued[0].id, "id2");
@@ -328,7 +339,7 @@ mod tests {
         // resume flashes "Emby is unavailable" — while a folder-flat target
         // would return early (folder guard).
         model.app.status.clear();
-        model.handle_home_request(ShellRequest::HomePlay(0));
+        model.handle_home_request(ShellRequest::HomePlay(home_target("id0", true)));
         assert_eq!(
             model.app.status, "Emby is unavailable",
             "play must act on the supplied CW target, not skip on the parked section state"
@@ -338,7 +349,7 @@ mod tests {
         // the emby-gated removal flashes — while an out-of-range flat target
         // would be skipped by the delete guard.
         model.app.status.clear();
-        model.handle_home_request(ShellRequest::HomeDelete(0));
+        model.handle_home_request(ShellRequest::HomeDelete(home_target("id0", true)));
         assert_eq!(
             model.app.status, "Emby is unavailable",
             "delete must act on the supplied CW target, not skip on an out-of-range target"
@@ -349,7 +360,7 @@ mod tests {
         // the emby-gated effect still acts (flashes unavailable) rather than
         // skipping.
         model.app.status.clear();
-        model.handle_home_request(ShellRequest::HomeToggleWatched);
+        model.handle_home_request(ShellRequest::HomeToggleWatched(home_target("id1", true)));
         assert_eq!(
             model.app.status, "Emby is unavailable",
             "toggle must act on the continue_cursor target, not skip on parked state"
@@ -469,7 +480,12 @@ mod tests {
         // mutate App's independent Continue Watching column cursor or the
         // per-latest pill cursor, and does not activate.
         model.app.status.clear();
-        route(&mut model, ShellRequest::HomeRowClick);
+        route(
+            &mut model,
+            ShellRequest::HomeRowClick {
+                target: home_target("id0", true),
+            },
+        );
         assert_eq!(
             model.app.effective_panel_focus(),
             PanelFocus::Library,
@@ -485,7 +501,12 @@ mod tests {
         // shell activates it via home_play, which flashes on the missing Emby
         // service — proving it acted on the clicked CW target, not the non-CW
         // folder.
-        route(&mut model, ShellRequest::HomeRowActivate { target: 0 });
+        route(
+            &mut model,
+            ShellRequest::HomeRowActivate {
+                target: home_target("id0", true),
+            },
+        );
         assert_eq!(
             model.app.status, "Emby is unavailable",
             "double click must activate the clicked flat target"
@@ -505,7 +526,10 @@ mod tests {
         // by Home — a CW movie, not the folder.
         route(
             &mut model,
-            ShellRequest::HomeRowContextMenu { anchor: (70, 20) },
+            ShellRequest::HomeRowContextMenu {
+                target: home_target("id0", true),
+                anchor: (70, 20),
+            },
         );
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu)) =
             model.app.pending_overlay

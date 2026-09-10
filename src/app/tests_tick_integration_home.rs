@@ -111,7 +111,7 @@ fn home_narrow_tick_wheel_and_click_use_current_inline_geometry() {
     assert!(outcome
         .messages
         .iter()
-        .any(|message| matches!(message, Msg::Shell(ShellRequest::HomeRowClick))));
+        .any(|message| matches!(message, Msg::Shell(ShellRequest::HomeRowClick { target: _ }))));
     assert_eq!(home(&harness).cursor(), 2);
     reset_home_media_list_paints();
     let terminal = draw(&mut harness, 60, 20);

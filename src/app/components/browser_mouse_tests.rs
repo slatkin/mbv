@@ -1,5 +1,40 @@
 use super::*;
 
+#[test]
+fn browser_reorder_preserves_stable_target_for_click() {
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    let mut items = make_items(3);
+    browser.set_content(BrowserContent::from_items(items.clone()));
+    browser.set_focused(true);
+    browser.set_narrow_extras(NarrowBrowseExtras {
+        hero_placeholder: true,
+        ..NarrowBrowseExtras::default()
+    });
+    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    let target = "id1".to_string();
+    items.reverse();
+    browser.set_content(BrowserContent::from_items(items));
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    let position = browser
+        .test_inline_target_position(target.clone())
+        .unwrap_or(Position::new(1, 1));
+    let message = browser.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: position.x,
+        row: position.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::BrowserRowClick { target: ref id })) if id == &target
+    ));
+}
+
 /// Narrow canonical-list path (task 6.2): with `wide_movies` false and the
 /// hero-capable browse surface reserving an inline hero block
 /// (`hero_placeholder`), the active control is the embedded
@@ -29,7 +64,7 @@ fn narrow_canonical_list_click_moves_cursor_and_emits_row_click() {
     let (area, _targets) = browser.test_inline_targets();
     let target = browser.cursor();
     let position = browser
-        .test_inline_target_position(target)
+        .test_inline_target_position(format!("id{target}"))
         .unwrap_or(Position::new(area.x, area.y));
 
     let message = browser.on(&Event::Mouse(MouseEvent {
@@ -40,7 +75,9 @@ fn narrow_canonical_list_click_moves_cursor_and_emits_row_click() {
     }));
     assert_eq!(
         message,
-        Some(Msg::Shell(ShellRequest::BrowserRowClick { target: 1 })),
+        Some(Msg::Shell(ShellRequest::BrowserRowClick {
+            target: "id1".into()
+        })),
         "narrow canonical row click must resolve via inline_browser.resolve_point"
     );
     assert_eq!(browser.cursor(), 1);
@@ -68,11 +105,11 @@ fn narrow_canonical_list_double_click_emits_row_activate() {
     let down = Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
         column: browser
-            .test_inline_target_position(target)
+            .test_inline_target_position(format!("id{target}"))
             .unwrap_or(Position::new(area.x, area.y))
             .x,
         row: browser
-            .test_inline_target_position(target)
+            .test_inline_target_position(format!("id{target}"))
             .unwrap_or(Position::new(area.x, area.y))
             .y,
         modifiers: KeyModifiers::NONE,
@@ -81,12 +118,16 @@ fn narrow_canonical_list_double_click_emits_row_activate() {
     let first = browser.on(&down);
     assert_eq!(
         first,
-        Some(Msg::Shell(ShellRequest::BrowserRowClick { target: 1 }))
+        Some(Msg::Shell(ShellRequest::BrowserRowClick {
+            target: "id1".into()
+        }))
     );
     let second = browser.on(&down);
     assert_eq!(
         second,
-        Some(Msg::Shell(ShellRequest::BrowserRowActivate { target: 1 }))
+        Some(Msg::Shell(ShellRequest::BrowserRowActivate {
+            target: "id1".to_string()
+        }))
     );
 }
 
@@ -109,10 +150,12 @@ fn narrow_canonical_list_right_click_emits_row_context_menu() {
     let (_area, targets) = browser.test_inline_targets();
     let target_row = targets
         .iter()
-        .position(|target| matches!(target, Some(idx) if *idx != browser.cursor()))
+        .position(
+            |target| matches!(target, Some(id) if id.as_str() != format!("id{}", browser.cursor())),
+        )
         .expect("a non-selected row is painted below the inline hero");
-    let target = targets[target_row].unwrap();
-    let position = browser.test_inline_target_position(target).unwrap();
+    let target = targets[target_row].clone().unwrap();
+    let position = browser.test_inline_target_position(target.clone()).unwrap();
 
     let message = browser.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Right),

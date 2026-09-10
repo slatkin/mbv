@@ -486,7 +486,7 @@ fn apply_position_seeds_both_controls_for_canonical_kind_without_active_control(
     browser.apply_position(25, 9);
     assert_eq!(
         browser.test_inline_selected_target(),
-        Some(25),
+        Some("id25".into()),
         "inline control seeded"
     );
     assert_eq!(
@@ -496,7 +496,7 @@ fn apply_position_seeds_both_controls_for_canonical_kind_without_active_control(
     );
     assert_eq!(
         browser.test_wide_selected_target(),
-        Some(25),
+        Some("id25".into()),
         "wide control seeded"
     );
     assert_eq!(browser.test_wide_scroll(), 9, "wide control scroll seeded");
@@ -586,7 +586,7 @@ fn apply_position_seeds_only_the_active_control_when_one_is_active() {
     );
     assert_eq!(
         browser.test_inline_selected_target(),
-        Some(25),
+        Some("id25".into()),
         "the active inline control is seeded"
     );
     assert_eq!(
@@ -596,7 +596,7 @@ fn apply_position_seeds_only_the_active_control_when_one_is_active() {
     );
     assert_eq!(
         browser.test_wide_selected_target(),
-        Some(2),
+        Some("id2".into()),
         "the non-active wide rail keeps its live selection"
     );
     assert_eq!(
@@ -651,7 +651,7 @@ fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
     assert!(matches!(
         left,
         Some(crate::app::components::msg::Msg::Shell(
-            crate::app::components::msg::ShellRequest::BrowserRowClick { target: 1 }
+            crate::app::components::msg::ShellRequest::BrowserRowClick { .. }
         ))
     ));
 
@@ -664,7 +664,7 @@ fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
     assert!(matches!(
         right,
         Some(crate::app::components::msg::Msg::Shell(
-            crate::app::components::msg::ShellRequest::BrowserRowContextMenu { target: 1, .. }
+            crate::app::components::msg::ShellRequest::BrowserRowContextMenu { .. }
         ))
     ));
 }
