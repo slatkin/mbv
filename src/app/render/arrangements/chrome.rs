@@ -52,7 +52,7 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
     } else {
         Rect::default()
     };
-    let right_visible = input.panel_mode != PanelMode::QueueOnly;
+    let right_visible = input.focus.right_visible();
 
     let content_h = area.height;
     let left_area = if input.panel_mode == PanelMode::LibraryOnly {
@@ -159,7 +159,6 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         tabs_area,
         player_area,
         status_area,
-        right_visible,
         focus: input.focus,
     }
 }
@@ -193,19 +192,19 @@ mod tests {
         // library panel sits on.
         let both_library = wide(PanelMode::Both, PanelFocus::Library);
         assert!(both_library.focus.library_column_focused());
-        assert!(both_library.right_visible);
+        assert!(both_library.focus.right_visible());
         assert!(!both_library.focus.queue_column_focused());
 
         // Wide Both with queue focus: the column is still visible but resting.
         let both_queue = wide(PanelMode::Both, PanelFocus::Queue);
         assert!(!both_queue.focus.library_column_focused());
-        assert!(both_queue.right_visible);
+        assert!(both_queue.focus.right_visible());
         assert!(both_queue.focus.queue_column_focused());
 
         // QueueOnly: no right column exists, so it never reports focus even
         // though the stored focus bit is Library.
         let queue_only = wide(PanelMode::QueueOnly, PanelFocus::Library);
-        assert!(!queue_only.right_visible);
+        assert!(!queue_only.focus.right_visible());
         assert!(!queue_only.focus.library_column_focused());
         assert!(!queue_only.focus.queue_column_focused());
     }
@@ -226,7 +225,7 @@ mod tests {
             queue_column_width: 60,
             terminal_width: narrow_width,
         });
-        assert!(library_half.right_visible);
+        assert!(library_half.focus.right_visible());
         assert!(library_half.focus.library_column_focused());
 
         let queue_half = chrome_geometry(ChromeGeometryInput {
@@ -236,7 +235,7 @@ mod tests {
             queue_column_width: 60,
             terminal_width: narrow_width,
         });
-        assert!(!queue_half.right_visible);
+        assert!(!queue_half.focus.right_visible());
         assert!(!queue_half.focus.library_column_focused());
     }
 }

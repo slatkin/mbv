@@ -98,7 +98,7 @@ impl App {
         // primitive instead of reading the painted `layout.tabs_area`.
         let area = ratatui::layout::Rect::new(0, 0, self.terminal_width, self.terminal_height);
         let chrome = self.compute_chrome_geometry(area);
-        let tab_w = if chrome.right_visible {
+        let tab_w = if chrome.focus.right_visible() {
             crate::app::render::arrangements::chrome::tab_strip_text_width(
                 chrome.tab_bar_area.width,
             )

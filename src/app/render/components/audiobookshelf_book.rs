@@ -147,7 +147,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
         let hero_content_area = wide_hero::wide_hero_hero_pane(
             frame,
             area,
-            wide_hero::LeftPaneFocus::Workspace(focused && interaction.chapter_focused),
+            wide_hero::LeftPaneFocus::Workspace(focused),
             list_pane_width,
         )
         .expect("wide branch already confirmed wide_hero_presentation fits");
@@ -194,13 +194,13 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
         if list_panel.height > 0 {
             frame.render_widget(
                 Block::default()
-                    .style(Style::default().bg(palette::resolve_surface_focus(rail_focused))),
+                    .style(Style::default().bg(palette::resolve_surface_focus(focused))),
                 list_panel,
             );
         }
         // Paint the rail frame before the rows: the border primitive rewrites
         // every panel cell background, so it must not run after the list.
-        wide_hero_browser_border(frame, list_panel, rail_focused);
+        wide_hero_browser_border(frame, list_panel, focused);
 
         book_list.set_geometry(list_panel, content_area);
         book_list.set_paint_policy(WideMediaListPaintPolicy::new(

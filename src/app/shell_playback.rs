@@ -1,6 +1,6 @@
 use super::components::{PlaybackComponent, PlaybackProjection, PlaybackRequest};
 use super::shell::Model;
-use super::{palette, PanelFocus, PanelMode};
+use super::{palette, PanelMode};
 
 impl Model {
     pub(super) fn sync_playback(&mut self) {
@@ -40,7 +40,7 @@ impl Model {
         let show_controls = state.active
             || self.app.connected_session_id.is_some()
             || self.app.cast_attachment.is_some();
-        let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
+        let focused = self.app.focus_state().queue_column_focused();
         let projection = PlaybackProjection {
             state,
             show_controls,

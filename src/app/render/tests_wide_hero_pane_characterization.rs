@@ -291,8 +291,7 @@ fn feeds_wide_left_pane_unfilled_with_no_selected_entry() {
 
 /// ABS Books (task 2.2): the `.style(Color)` foreground-only bug is fixed --
 /// the wide right hero pane is filled via `wide_hero_hero_pane`, focus-green
-/// (`LeftPaneFocus::Workspace`) only when a chapter is selected while
-/// focused.
+/// (`LeftPaneFocus::Workspace`) whenever the library column holds focus.
 #[test]
 fn abs_books_wide_left_pane_fills_via_shared_primitive() {
     let app = make_audiobookshelf_book_app();
@@ -308,15 +307,17 @@ fn abs_books_wide_left_pane_fills_via_shared_primitive() {
     let panes = wide_library_panes(area, 0, PANE_PAD_Y, None).expect("wide fits");
     let hero_panel = panes.hero_panel;
     let buffer = terminal.backend().buffer();
-    // No chapter is selected in this fixture, so the workspace is not held:
-    // the pane stays resting, not focus-green.
+    // The library column holds focus, so the pane is focus-green from the
+    // start. Before `unify-surface-colour` 3.2 this was `SURFACE_RESTING`
+    // while no chapter was selected: the per-screen `chapter_focused` bit no
+    // longer chooses the pane fill.
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.y)].bg,
-        palette::SURFACE_RESTING
+        palette::SURFACE_FOCUSED
     );
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.bottom() - 1)].bg,
-        palette::SURFACE_RESTING
+        palette::SURFACE_FOCUSED
     );
 
     component.on(&Event::Keyboard(KeyEvent {
@@ -325,6 +326,7 @@ fn abs_books_wide_left_pane_fills_via_shared_primitive() {
     }));
     let focused_terminal = direct_terminal(|f| component.view(f, area));
     let focused_buffer = focused_terminal.backend().buffer();
+    // Moving the cursor into the chapter pane changes no fill.
     assert_eq!(
         focused_buffer[(hero_panel.x, hero_panel.y)].bg,
         palette::SURFACE_FOCUSED
@@ -333,8 +335,8 @@ fn abs_books_wide_left_pane_fills_via_shared_primitive() {
 
 /// ABS Podcasts (task 2.1): the wide right hero pane fills via
 /// `wide_hero_hero_pane`.
-/// D8's gain: this surface goes focus-green when the episode workspace holds
-/// focus (mirroring TV), not a bare `focused`.
+/// D8's gain: this surface goes focus-green whenever the library column holds
+/// focus, not only when the episode workspace holds the cursor.
 #[test]
 fn abs_podcasts_wide_left_pane_fills_via_shared_primitive() {
     let app = crate::app::tests_podcast::audiobookshelf_app();
@@ -349,21 +351,161 @@ fn abs_podcasts_wide_left_pane_fills_via_shared_primitive() {
     let hero = geometry.hero_area;
     assert!(hero.width > 0 && hero.height > 0, "hero={hero:?}");
     let buffer = terminal.backend().buffer();
-    // No episode is selected in this fixture: the show list holds focus, so
-    // the pane stays resting even though the surface is focused overall
-    // (D8/D3: never a bare `focused`).
-    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
-    assert_ne!(
-        buffer[(hero.x, hero.y)].bg,
-        palette::resolve_surface_focus(true)
-    );
+    // The library column holds focus, so the pane is focus-green from the
+    // start. Before `unify-surface-colour` 3.2 this was `SURFACE_RESTING`
+    // while the show list held the cursor: the per-screen `episode_focused`
+    // bit no longer chooses the pane fill.
+    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_FOCUSED);
 
     component.enter_episode_focus();
     let focused_terminal = direct_terminal(|f| component.view(f, area));
     let focused_buffer = focused_terminal.backend().buffer();
+    // Moving the cursor into the episode pane changes no fill.
     assert_eq!(
         focused_buffer[(hero.x, hero.y)].bg,
         palette::SURFACE_FOCUSED
+    );
+}
+
+/// `unify-surface-colour` 3.2: the wide ABS Books rail and hero pane both
+/// follow the library column's focus, not the chapter cursor. Moving the
+/// cursor from the book rail into the chapter pane changes no fill.
+#[test]
+fn abs_books_panel_fills_follow_the_library_column_not_the_chapter_cursor() {
+    use crate::app::render::arrangements::wide_hero::wide_hero_browser_pane;
+
+    let app = make_audiobookshelf_book_app();
+    let mut component = AudiobookshelfBookComponent::new();
+    if let Some(state) = app.audiobookshelf_book_browse.first() {
+        component.set_content(state, app.images_enabled());
+        component.set_focused(true);
+    }
+    let area = wide_area();
+    let panes = wide_library_panes(area, 0, PANE_PAD_Y, None).expect("wide fits");
+    let list_panel = wide_hero_browser_pane(panes.browser_panel, panes.browser_area).list_panel;
+    let hero_panel = panes.hero_panel;
+
+    let terminal = direct_terminal(|f| component.view(f, area));
+    let buffer = terminal.backend().buffer();
+    let rail_fill = buffer[(list_panel.x, list_panel.y)].bg;
+    let hero_fill = buffer[(hero_panel.x, hero_panel.y)].bg;
+    // The selected book row sits at the rail's first content row; while the
+    // rail holds the cursor it carries the punch-through surface.
+    let rail_selected = (list_panel.x + PANE_PAD_X, list_panel.y + PANE_PAD_Y);
+    assert_eq!(
+        rail_fill,
+        palette::resolve_surface_focus(true),
+        "book rail body follows the library column's focus"
+    );
+    assert_eq!(
+        hero_fill,
+        palette::SURFACE_FOCUSED,
+        "hero pane follows the library column's focus"
+    );
+    assert_ne!(
+        buffer[rail_selected].bg, rail_fill,
+        "book rail selected-row highlight while the rail holds the cursor"
+    );
+
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Left,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let terminal = direct_terminal(|f| component.view(f, area));
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[(list_panel.x, list_panel.y)].bg,
+        rail_fill,
+        "book rail body fill is unchanged when the cursor moves into the chapter pane"
+    );
+    assert_eq!(
+        buffer[(hero_panel.x, hero_panel.y)].bg,
+        hero_fill,
+        "hero pane fill is unchanged when the cursor moves into the chapter pane"
+    );
+    assert_eq!(
+        buffer[rail_selected].bg, rail_fill,
+        "book rail selected-row highlight is gone while the chapter pane holds the cursor"
+    );
+
+    // Queue column holds panel focus: both panels rest.
+    component.set_focused(false);
+    let terminal = direct_terminal(|f| component.view(f, area));
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[(list_panel.x, list_panel.y)].bg,
+        palette::resolve_surface_focus(false),
+        "book rail body rests when the queue column holds focus"
+    );
+    assert_eq!(
+        buffer[(hero_panel.x, hero_panel.y)].bg,
+        palette::resolve_surface_focus(false),
+        "hero pane rests when the queue column holds focus"
+    );
+}
+
+/// `unify-surface-colour` 3.2: the wide ABS Podcasts rail and hero pane both
+/// follow the library column's focus, not the episode cursor. Moving the
+/// cursor from the show rail into the episode pane changes no fill.
+#[test]
+fn abs_podcasts_panel_fills_follow_the_library_column_not_the_episode_cursor() {
+    use crate::app::render::arrangements::wide_hero::{
+        wide_hero_browser_pane, wide_hero_presentation,
+    };
+
+    let app = crate::app::tests_podcast::audiobookshelf_app();
+    let mut component = AudiobookshelfPodcastComponent::new();
+    if let Some(state) = app.audiobookshelf_browse.first() {
+        component.set_content(state, app.images_enabled());
+        component.set_focused(true);
+    }
+    let area = wide_area();
+    let panes = wide_hero_presentation(area, None).expect("wide fits");
+    let list_panel = wide_hero_browser_pane(panes.browser, panes.browser).list_panel;
+    let hero_panel = panes.hero;
+
+    let terminal = direct_terminal(|f| component.view(f, area));
+    let buffer = terminal.backend().buffer();
+    let rail_fill = buffer[(list_panel.x, list_panel.y)].bg;
+    let hero_fill = buffer[(hero_panel.x, hero_panel.y)].bg;
+    assert_eq!(
+        rail_fill,
+        palette::resolve_surface_focus(true),
+        "show rail body follows the library column's focus"
+    );
+    assert_eq!(
+        hero_fill,
+        palette::SURFACE_FOCUSED,
+        "hero pane follows the library column's focus"
+    );
+
+    component.enter_episode_focus();
+    let terminal = direct_terminal(|f| component.view(f, area));
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[(list_panel.x, list_panel.y)].bg,
+        rail_fill,
+        "show rail body fill is unchanged when the cursor moves into the episode pane"
+    );
+    assert_eq!(
+        buffer[(hero_panel.x, hero_panel.y)].bg,
+        hero_fill,
+        "hero pane fill is unchanged when the cursor moves into the episode pane"
+    );
+
+    // Queue column holds panel focus: both panels rest.
+    component.set_focused(false);
+    let terminal = direct_terminal(|f| component.view(f, area));
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[(list_panel.x, list_panel.y)].bg,
+        palette::resolve_surface_focus(false),
+        "show rail body rests when the queue column holds focus"
+    );
+    assert_eq!(
+        buffer[(hero_panel.x, hero_panel.y)].bg,
+        palette::resolve_surface_focus(false),
+        "hero pane rests when the queue column holds focus"
     );
 }
 

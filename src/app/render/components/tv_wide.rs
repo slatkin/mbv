@@ -145,7 +145,7 @@ impl App {
                 terminal_width: self.terminal_width,
             },
         );
-        if !chrome.right_visible {
+        if !chrome.focus.right_visible() {
             return None;
         }
         Some(
@@ -256,7 +256,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     let Some(left_area) = wide_hero::wide_hero_hero_pane(
         f,
         area,
-        wide_hero::LeftPaneFocus::Workspace(ctx.focused && ctx.episode_cursor.is_some()),
+        wide_hero::LeftPaneFocus::Workspace(ctx.focused),
         ctx.list.list_pane_width,
     ) else {
         return (0, None);
@@ -269,6 +269,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         f,
         left_area,
         episode_focused,
+        ctx.focused,
         ctx.selected_series.as_ref(),
         ctx.series_detail.as_ref(),
         ctx.season_cursor,
@@ -309,7 +310,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     if list_panel.height > 0 {
         f.render_widget(
             Block::default()
-                .style(Style::default().bg(palette::resolve_surface_focus(right_focused))),
+                .style(Style::default().bg(palette::resolve_surface_focus(ctx.focused))),
             list_panel,
         );
     }
@@ -321,7 +322,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         width: list_panel.width,
         ..list_area
     };
-    wide_hero::wide_hero_browser_border(f, list_panel, right_focused);
+    wide_hero::wide_hero_browser_border(f, list_panel, ctx.focused);
     let final_scroll = if inline_search.is_active() {
         // Wide hero Wide passes only the right-rail library-list area
         // (design.md D3); the episode/Hero pane painted above remains
@@ -367,6 +368,7 @@ fn render_tv_series_selection(
     f: &mut Frame,
     area: Rect,
     focused: bool,
+    library_focused: bool,
     selected_series: Option<&EmbyItem>,
     detail: Option<&SeriesDetail>,
     season_cursor: usize,
@@ -510,7 +512,7 @@ fn render_tv_series_selection(
         return (true, image_paint);
     };
     let (detail_panel, detail_area) = wide_hero::wide_hero_hero_content_box(f, media_list_area);
-    if focused {
+    if library_focused {
         f.render_widget(
             Block::default().style(Style::default().bg(palette::SURFACE_ACCENT_SOFT)),
             detail_panel,

@@ -225,7 +225,6 @@ impl App {
             tabs_area: _,
             player_area: _,
             status_area,
-            right_visible,
             focus,
         } = *chrome;
         // Header row removed — the tab bar above indicates current location.
@@ -370,7 +369,7 @@ impl App {
                 );
             }
         }
-        if right_visible {
+        if focus.right_visible() {
             self.render_library(f, render_lib_area, layout, cursor_scroll);
         }
 
@@ -407,7 +406,6 @@ impl App {
             right_full_area,
             tab_bar_area,
             tabs_area,
-            right_visible,
             focus,
             ..
         } = *chrome;
@@ -419,11 +417,11 @@ impl App {
             focus.queue_column_focused(),
             focus.library_column_focused(),
             self.effective_panel_mode() != PanelMode::LibraryOnly,
-            right_visible,
+            focus.right_visible(),
         );
 
         // Tab bar at the very top of the right column.
-        if right_visible {
+        if focus.right_visible() {
             self.render_tabs(f, tab_bar_area, tabs_area, layout);
         }
     }

@@ -232,7 +232,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     let hero_content_area = wide_hero::wide_hero_hero_pane(
         frame,
         area,
-        wide_hero::LeftPaneFocus::Workspace(focused && interaction.episode_focused),
+        wide_hero::LeftPaneFocus::Workspace(focused),
         list_pane_width,
     )
     .expect("wide branch already confirmed wide_hero_presentation fits");

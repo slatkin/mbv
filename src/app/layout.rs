@@ -207,6 +207,14 @@ impl FocusState {
         }
     }
 
+    /// Whether the right (library) column is on screen at all this frame.
+    ///
+    /// The one home for the fact `FrameChromeGeometry` used to duplicate as
+    /// its own `right_visible` field.
+    pub(crate) fn right_visible(&self) -> bool {
+        self.right_visible
+    }
+
     /// Whether the queue (left) column holds panel focus this frame.
     pub(crate) fn queue_column_focused(&self) -> bool {
         self.column == Column::Left
@@ -266,8 +274,6 @@ pub(crate) struct FrameChromeGeometry {
     pub player_area: Rect,
     /// Status-bar rect at the bottom of the right panel.
     pub status_area: Rect,
-    /// Whether the right panel is visible this frame (`panel_mode != QueueOnly`).
-    pub right_visible: bool,
     /// Which column holds panel focus this frame, and whether the right
     /// (library) column is on screen at all. The one value both column
     /// surfaces resolve from, so neither fact is re-derived per screen:

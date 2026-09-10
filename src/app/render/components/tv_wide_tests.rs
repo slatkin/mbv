@@ -374,6 +374,109 @@ fn wide_tv_episode_list_uses_shared_focus_surfaces_when_focused() {
     );
 }
 
+/// `unify-surface-colour` 3.2: every panel fill in the wide TV workspace
+/// follows the library column's focus, never the episode cursor. Moving the
+/// cursor from the series rail to the episode list changes no fill, while
+/// the selected-row highlight keeps following the cursor (the part that must
+/// not move).
+#[test]
+fn wide_tv_panel_fills_follow_the_library_column_not_the_episode_cursor() {
+    let mut app = tv_app();
+    let mut second_episode = make_item("Episode Two", "Episode");
+    second_episode.id = "episode-2".into();
+    app.series_detail_cache
+        .get_mut("series")
+        .unwrap()
+        .episodes
+        .get_mut("season-1")
+        .unwrap()
+        .push(second_episode);
+    let mut component = TvWorkspaceComponent::new();
+    component.set_content(
+        app.wide_tv_render_ctx(0, None)
+            .with_image_state(false, false),
+    );
+    component.set_focused(true);
+
+    // Cursor on the series rail.
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal.draw(|f| component.view(f, f.area())).unwrap();
+    let rail = component.test_layout().tv_wide_list_area;
+    let episode_box = component.test_layout().tv_wide_episode_list_area;
+    let episode_fill_x = episode_box.x.saturating_sub(PANE_PAD_X);
+    let rail_body = terminal.backend().buffer()[(rail.x, rail.y + 2)].bg;
+    let episode_fill = terminal.backend().buffer()[(episode_fill_x, episode_box.y + 1)].bg;
+    assert_eq!(
+        rail_body,
+        palette::resolve_surface_focus(true),
+        "rail body follows the library column's focus"
+    );
+    assert_eq!(
+        episode_fill,
+        palette::SURFACE_ACCENT_SOFT,
+        "episode box follows the library column's focus"
+    );
+    // The rail holds the cursor, so its selected row is the punch-through
+    // surface against the focused body.
+    assert_eq!(
+        terminal.backend().buffer()[(rail.x, rail.y + 1)].bg,
+        palette::SURFACE_BACKDROP,
+        "rail selected-row highlight while the rail holds the cursor"
+    );
+
+    // Move the cursor into the episode list.
+    component.on(&tuirealm::event::Event::Keyboard(
+        tuirealm::event::KeyEvent {
+            code: tuirealm::event::Key::Right,
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        },
+    ));
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal.draw(|f| component.view(f, f.area())).unwrap();
+    let rail = component.test_layout().tv_wide_list_area;
+    let episode_box = component.test_layout().tv_wide_episode_list_area;
+    assert_eq!(
+        terminal.backend().buffer()[(rail.x, rail.y + 2)].bg,
+        rail_body,
+        "rail body fill is unchanged when the cursor moves into the episode list"
+    );
+    assert_eq!(
+        terminal.backend().buffer()[(episode_fill_x, episode_box.y + 1)].bg,
+        episode_fill,
+        "episode box fill is unchanged when the cursor moves into it"
+    );
+    // The highlight moved with the cursor: the episode list now marks its
+    // selected row, and the rail's selected row is indistinguishable from the
+    // body.
+    assert_ne!(
+        terminal.backend().buffer()[(episode_box.x, episode_box.y)].bg,
+        episode_fill,
+        "episode selected-row highlight only while the episode pane holds the cursor"
+    );
+    assert_eq!(
+        terminal.backend().buffer()[(rail.x, rail.y + 1)].bg,
+        rail_body,
+        "rail selected-row highlight is gone while the episode pane holds the cursor"
+    );
+
+    // Queue column holds panel focus: both panels rest.
+    component.set_focused(false);
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal.draw(|f| component.view(f, f.area())).unwrap();
+    let rail = component.test_layout().tv_wide_list_area;
+    let episode_box = component.test_layout().tv_wide_episode_list_area;
+    assert_eq!(
+        terminal.backend().buffer()[(rail.x, rail.y + 2)].bg,
+        palette::resolve_surface_focus(false),
+        "rail body rests when the queue column holds focus"
+    );
+    assert_eq!(
+        terminal.backend().buffer()[(episode_fill_x, episode_box.y + 1)].bg,
+        palette::SURFACE_BACKDROP,
+        "episode box rests when the queue column holds focus"
+    );
+}
+
 /// migrate-home-feeds 5.1 (§5 geometry test): the shared Wide hero
 /// primitive owns the one-row status-bar reserve, so wide TV's framed series
 /// rail paints its `▁` bottom border two rows above `tv_wide_area`'s bottom,
@@ -400,11 +503,13 @@ fn wide_tv_series_rail_leaves_exactly_one_row_above_the_status_bar() {
     );
 }
 
-/// Library wide view: exactly one of the two panes carries the focus-green
-/// background at a time. When the episode (left) pane takes focus the right
-/// series rail must drop to `SURFACE_RESTING`, never stay green.
+/// Library wide view: the rail's panel fill follows the *column* focus, not
+/// which sub-panel holds the cursor. When the episode (left) pane takes the
+/// cursor the right series rail keeps the focused surface, because the
+/// library column still holds panel focus (the "selection moves inside a
+/// focused pane" scenario).
 #[test]
-fn wide_tv_left_focus_drops_the_right_rail_to_the_resting_surface() {
+fn wide_tv_rail_keeps_the_focused_surface_when_the_episode_pane_takes_the_cursor() {
     let app = tv_app();
     let mut component = TvWorkspaceComponent::new();
     component.set_content(
@@ -423,10 +528,12 @@ fn wide_tv_left_focus_drops_the_right_rail_to_the_resting_surface() {
 
     let rail = component.test_layout().tv_wide_list_area;
     // A row two below the letter heading is panel body, not the selected row.
+    // Before `unify-surface-colour` 3.2 this was `SURFACE_RESTING`; the
+    // per-screen `episode_focused` bit no longer chooses the fill.
     assert_eq!(
         terminal.backend().buffer()[(rail.x, rail.y + 2)].bg,
-        palette::SURFACE_RESTING,
-        "right rail must lose focus-green when the episode pane is focused"
+        palette::resolve_surface_focus(true),
+        "right rail keeps the focused surface while the library column holds focus"
     );
 }
 

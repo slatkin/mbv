@@ -269,6 +269,110 @@ fn music_workspace_focused_track_box_uses_the_soft_surface_role() {
     );
 }
 
+/// `unify-surface-colour` 3.2: wide Music's panel fills follow the library
+/// column's focus, not the track cursor. Moving the cursor from the album
+/// rail into the track list changes no fill; the selected-row highlight stays
+/// with the cursor.
+#[test]
+fn music_workspace_panel_fills_follow_the_library_column_not_the_track_cursor() {
+    use crate::app::render::arrangements::library::wide_library_panes;
+    use crate::app::render::arrangements::wide_hero::{PANE_PAD_X, PANE_PAD_Y};
+
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_focused(true);
+    component.set_content(context(false));
+    component.set_inline_track_focus_enabled(true);
+    let area = Rect::new(0, 0, 100, 30);
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal.draw(|frame| component.view(frame, area)).unwrap();
+
+    // Surfaces pinned: the wide Music browser pane's hero fill, the album
+    // rail panel body, and the track-list content box.
+    let hero_panel = wide_library_panes(area, 0, PANE_PAD_Y, None)
+        .expect("wide fits")
+        .hero_panel;
+    let rail = component.layout().wide_music_browser_area;
+    let rail_panel = (
+        rail.x.saturating_sub(PANE_PAD_X),
+        rail.y.saturating_sub(PANE_PAD_Y),
+    );
+    let track_content = component
+        .test_track_content_rect()
+        .expect("track content geometry retained");
+    let buffer = terminal.backend().buffer();
+    let hero_fill = buffer[(hero_panel.x, hero_panel.y)].bg;
+    let rail_fill = buffer[rail_panel].bg;
+    let track_fill = buffer[(track_content.x, track_content.y + 1)].bg;
+    assert_eq!(
+        rail_fill,
+        crate::app::palette::resolve_surface_focus(true),
+        "album rail body follows the library column's focus"
+    );
+    assert_eq!(
+        track_fill,
+        crate::app::palette::SURFACE_ACCENT_SOFT,
+        "track-list box follows the library column's focus"
+    );
+
+    // The rail holds the cursor: its selected album row carries the
+    // punch-through surface.
+    let rail_selected = component
+        .layout()
+        .selected_item_rect
+        .expect("rail selected row published");
+    assert_ne!(
+        buffer[(rail_selected.x + 4, rail_selected.y)].bg,
+        rail_fill,
+        "rail selected-row highlight while the rail holds the cursor"
+    );
+
+    component.enter_track_focus();
+    terminal.draw(|frame| component.view(frame, area)).unwrap();
+    let track_content = component
+        .test_track_content_rect()
+        .expect("track content geometry retained");
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[rail_panel].bg, rail_fill,
+        "rail body fill is unchanged when the cursor moves into the track list"
+    );
+    assert_eq!(
+        buffer[(track_content.x, track_content.y + 1)].bg,
+        track_fill,
+        "track-list box fill is unchanged when the cursor moves into it"
+    );
+    assert_eq!(
+        buffer[(hero_panel.x, hero_panel.y)].bg,
+        hero_fill,
+        "hero pane fill is unchanged when the cursor moves into the track list"
+    );
+    // The highlight followed the cursor: the rail's selected album row is now
+    // indistinguishable from the body.
+    assert_eq!(
+        buffer[(rail_selected.x + 4, rail_selected.y)].bg,
+        rail_fill,
+        "rail selected-row highlight is gone while the track list holds the cursor"
+    );
+
+    // Queue column holds panel focus: both rest.
+    component.set_focused(false);
+    terminal.draw(|frame| component.view(frame, area)).unwrap();
+    let track_content = component
+        .test_track_content_rect()
+        .expect("track content geometry retained");
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[rail_panel].bg,
+        crate::app::palette::resolve_surface_focus(false),
+        "rail body rests when the queue column holds focus"
+    );
+    assert_eq!(
+        buffer[(track_content.x, track_content.y + 1)].bg,
+        crate::app::palette::SURFACE_BACKDROP,
+        "track-list box rests when the queue column holds focus"
+    );
+}
+
 #[test]
 fn music_workspace_horizontal_move_is_ignored_at_one_column() {
     let mut component = MusicWorkspaceComponent::new();

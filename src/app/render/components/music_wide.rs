@@ -505,7 +505,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     let Some(left_area) = wide_hero::wide_hero_hero_pane(
         f,
         area,
-        wide_hero::LeftPaneFocus::Workspace(ctx.focused && ctx.track_focused),
+        wide_hero::LeftPaneFocus::Workspace(ctx.focused),
         ctx.list.list_pane_width,
     ) else {
         return output;
@@ -525,7 +525,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
         );
         let track_area = left_layout.track_area;
         if track_area.height > 0 && track_area.width > 0 && !track_list.is_empty() {
-            let track_surface = if left_focused {
+            let track_surface = if ctx.focused {
                 crate::app::render::arrangements::wide_hero::WideHeroContentBoxSurface::FocusedTrackList
             } else {
                 crate::app::render::arrangements::wide_hero::WideHeroContentBoxSurface::Backdrop
@@ -578,7 +578,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     if list_panel.height > 0 {
         f.render_widget(
             ratatui::widgets::Block::default()
-                .style(Style::default().bg(palette::resolve_surface_focus(right_focused))),
+                .style(Style::default().bg(palette::resolve_surface_focus(ctx.focused))),
             list_panel,
         );
     }
@@ -586,7 +586,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     // rewrites every panel cell's background, so it must not run after the
     // canonical list (which owns the selected-row background). Mirrors
     // `render_wide_tv_with_ctx`.
-    wide_hero::wide_hero_browser_border(f, list_panel, right_focused);
+    wide_hero::wide_hero_browser_border(f, list_panel, ctx.focused);
     if browser_area.height > 0 && browser_area.width > 0 {
         if inline_search.is_active() {
             // Wide hero Wide passes only the right-rail library-list area
