@@ -412,6 +412,79 @@ A screen or provider name in this enum is a defect: `TvEpisodeBox`, `MusicTrackB
 named a screen's detail rather than the position it occupies. Likewise `SidebarBody` carries the
 sidebar's focusable body but not the name `Panel`, which `CONTEXT.md` reserves for Library/Queue.
 
+### Identity → `Surface` mapping (task 4.1)
+
+The canonical set is now declared in `src/app/render/theme/surface.rs` (33 variants, `Surface::ALL`);
+this table places every identity in the task 2.1 inventory against it, so "no identity unplaced" is
+checkable by a reader. Sites are the inventory's `file:line`; where the inventory groups a shared
+painter, every listed caller is covered.
+
+| inventory identity (sites) | declared `Surface` |
+| --- | --- |
+| queue column gutter, 1-col drag strip (`chrome.rs:53`, `queue_boundary.rs:121`) | `QueueColumn` |
+| library column gutter (`chrome.rs:61`), wide Music browser pane container (`music_wide.rs:549`) | `LibraryColumn` |
+| wide hero split gap gutter (`wide_hero_boundary.rs:121`) | `WideSplitGutter` |
+| hero pane fill (`wide_hero.rs:302-306`) | `HeroPane` |
+| selected block background (`widgets.rs:151`), legacy list row/cell + marker (`list_rows.rs:341,354,383,469`), Wide/Grid list row and cell (`media_list/wide.rs:202,268`) | `SelectedRow` |
+| queue list's selected row (`queue.rs:36`) | `SelectedRowOnQueuePanel` |
+| TV episode-list and Music track-list selected rows (`tv_wide.rs:576`, `music_wide.rs:538`) | `SelectedRowOnMainContentBox` |
+| context menu selected row (`context_menu.rs:38`) | `ContextMenuSelectedRow` |
+| wide-hero rail body + frame (`wide_hero.rs:415-422`), Movies/home-video rail (`browser/paint.rs:108-110`), TV series rail (`tv_wide.rs:312`), Music album rail (`music_wide.rs:581`), ABS book rail (`audiobookshelf_book.rs:197`), ABS podcast show rail (`audiobookshelf_podcast.rs:264`), Feeds rail (`feeds.rs:211`), Home wide list panel (`home.rs:370-372`) | `LibraryPanel` |
+| queue panel body (`widgets.rs:237-241`) | `QueuePanel` |
+| pane content box: TV episode listing (`tv_wide.rs:515`), Music track listing (`wide_hero.rs:468`), generic pane inset (`wide_hero.rs:467`), TV overview box and inline-hero content box (row 4.6) | `MainContentBox` |
+| selected row's inline detail (`hero.rs:192-196`) | `InlineHero` |
+| now-playing panel body (`shell_playback.rs:48-50`), projection panel bg (`playback.rs:55`), Queue-only wide body + context bg (`shell_draw.rs:286,297,316`) | `PlaybackPanel` |
+| sidebar body (`chrome.rs:188-191`) | `SidebarBody` (expanded), `PlainSidebarBody` (plain shell) |
+| now-playing panel content rows (`chrome_player.rs:52,65,93,109,201,410`) | `PlaybackRecess` |
+| now-playing bottom "On Now" row (`chrome_player.rs:126,162`) | `PlaybackBottomRow` |
+| now-playing status pill (`chrome_player.rs:243`) | `PlaybackStatusPill` |
+| status bar body (`chrome_status.rs:305`) | `StatusBar` |
+| status bar pills/chips (`chrome_status.rs:28-487`) | `StatusBarPill` |
+| queue title row, scope pills, scope target, status strip (`queue.rs:166,175,197,219,231,297`) | `QueuePanelBand` |
+| queue card visualizer background (`card.rs:245-249`) | `QueueCardVisualizer` |
+| artwork placeholder (`artwork_placeholder.rs:9`) | `ArtworkPlaceholder` |
+| artwork loading placeholder (`card.rs:111`, `album_art.rs:183`, `detail_series_view.rs:125`, `home_hero_emby.rs:121,272,286`) | `ArtworkLoadingPlaceholder` |
+| pill selector row background (`widgets.rs:391,403,489`, `hero.rs:666,669`) | `PillRow` |
+| pill chip (`widgets.rs:254,256`) | `PillChip` (unselected), `PillChipSelected` (selected) |
+| search sidebar selected chip (`search_sidebar.rs:161`) | `PillChipSelected` |
+| Home pill-bar spacer band (`home.rs:402-405`) | `PillRowGap` |
+| sidebar header/footer rows (`chrome.rs:219-311`) | `SidebarBand` (expanded), `PlainSidebarBand` (plain shell) |
+| tab bar background (`chrome_tabs.rs:43`) | `TabBar` |
+| tab bar inactive glyph (`chrome_tabs.rs:131`) | `TabBar` (foreground glyph; row 4.4 makes it a role) |
+| popup frame body + list spacer (`modal_frame.rs:46` and its ten callers, `selection_modal.rs:96`) | `PopupFrame` |
+| popup dim backdrop (`backdrop.rs:dim_backdrop`) | `PopupDimBackdrop` |
+
+Splits against the sketch (each a second appearance the sketch collapsed; the theme resolves one
+colour per row, so both values need a row):
+
+- `SelectedRow` → `SelectedRow`, `SelectedRowOnQueuePanel`, `SelectedRowOnMainContentBox`: the library
+  rails punch through to the app backdrop (`list_selected_row_bg()`), while the queue list and the
+  TV/Music panes follow their owning pane (`resolve_surface_focus`), and the two panes follow
+  different columns.
+- `SelectedRow` → `ContextMenuSelectedRow`: `ACCENT_ACTIVE` is not the column/pane level's value.
+- `SidebarBody`/`SidebarBand` → `PlainSidebarBody`/`PlainSidebarBand`: the plain (non-hero) shell
+  paints `SURFACE_SIDEBAR`/`SURFACE_ITEM_FOCUSED`, not the expanded panel's
+  `SURFACE_RESTING`/`SURFACE_CHROME`.
+- `PillChip` → `PillChip` + `PillChipSelected`: selection is its own row, not a third input to
+  `surface_colors`.
+
+Two placements the inventory deliberately left open are resolved as follows. `QueueCardVisualizer`
+is declared at `recess` (it is a non-focusable inset) but resolves the content-body pair, because
+the queue card is the queue's now-playing content and not an inset inside a panel: `card.rs:245`
+paints `resolve_surface_focus(queue_column_focused())`, i.e. `SURFACE_FOCUSED` when the queue column
+holds focus and `SURFACE_RESTING` otherwise — exactly the content-body default, so its picture is
+unchanged. `ContextMenuSelectedRow` keeps today's picture as a declared named variant: the
+column/pane level's normal values are `SURFACE_FOCUSED` `#3c4841` / `SURFACE_RESTING` `#333c43`, and
+`context_menu.rs:38` paints `ACCENT_ACTIVE` `#a7c080`, so the second appearance is declared rather
+than retired.
+
+The table's one mode-driven row is the playback strip: with no right column on screen, Queue-only
+paints `PlaybackPanel` and `PlaybackRecess` as the chrome band (`shell_draw.rs:286,297,316`), read
+from `FocusState::right_visible()`. Resting-side deviations (rows whose resting value is not their
+level's default) are `LibraryColumn`, `WideSplitGutter`, `SelectedRow`, `ContextMenuSelectedRow`,
+`QueuePanel`, `MainContentBox` and `PlainSidebarBody` — declared with reasons in
+`RESTING_DEVIATIONS`; `HeroPane` is the level default, per `CONTEXT.md`.
+
 ### The six mechanisms, site by site
 
 **1. Shared resolvers.** `resolve_surface_focus(focused)` (theme/mod.rs:80) is called at 15

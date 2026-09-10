@@ -1,4 +1,5 @@
 mod primitives;
+mod surface;
 
 use ratatui::style::Color;
 

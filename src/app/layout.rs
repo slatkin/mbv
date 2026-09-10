@@ -240,6 +240,33 @@ impl Default for FocusState {
     }
 }
 
+#[cfg(test)]
+impl FocusState {
+    // Named test constructors, so a unit test outside this module (the theme's
+    // surface table) can state a focus state without naming `PanelFocus`/
+    // `PanelMode` and taking a dependency on them.
+
+    /// A frame with the queue column focused and the right column visible.
+    pub(crate) fn queue_focused_for_test() -> Self {
+        Self::new(PanelFocus::Queue, PanelMode::Both)
+    }
+
+    /// A frame with the library column focused and visible.
+    pub(crate) fn library_focused_for_test() -> Self {
+        Self::new(PanelFocus::Library, PanelMode::Both)
+    }
+
+    /// A frame in the Queue-only mode, with no right column on screen.
+    pub(crate) fn queue_only_for_test(right_focused: bool) -> Self {
+        let focus = if right_focused {
+            PanelFocus::Library
+        } else {
+            PanelFocus::Queue
+        };
+        Self::new(focus, PanelMode::QueueOnly)
+    }
+}
+
 /// Root/chrome frame geometry computed paint-free by
 /// `App::compute_frame_layout` and consumed by `App::render_main` and the
 /// chrome painters. This is the partial typed subresult of the staged
