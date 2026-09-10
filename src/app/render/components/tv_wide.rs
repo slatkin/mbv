@@ -140,7 +140,7 @@ impl App {
             crate::app::render::arrangements::chrome::ChromeGeometryInput {
                 area: Rect::new(0, 0, self.terminal_width, self.terminal_height),
                 panel_mode: self.effective_panel_mode(),
-                panel_focus: self.effective_panel_focus(),
+                focus: self.focus_state(),
                 queue_column_width: self.queue_column_width,
                 terminal_width: self.terminal_width,
             },

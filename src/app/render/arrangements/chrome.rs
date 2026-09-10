@@ -1,7 +1,7 @@
-use crate::app::layout::FrameChromeGeometry;
+use crate::app::layout::{FocusState, FrameChromeGeometry};
 use crate::app::render::components::chrome;
 use crate::app::render::components::widgets::COLUMN_GAP;
-use crate::app::{PanelFocus, PanelMode, TABBAR_LEFT_RESERVE};
+use crate::app::{PanelMode, TABBAR_LEFT_RESERVE};
 use ratatui::layout::Rect;
 
 /// Height of the tab-bar box: 1 row padding + 1 row tab + 1 row spacer.
@@ -16,7 +16,7 @@ pub(in crate::app) const PLAYER_BOX_HEIGHT: u16 = 4;
 pub(in crate::app) struct ChromeGeometryInput {
     pub area: Rect,
     pub panel_mode: PanelMode,
-    pub panel_focus: PanelFocus,
+    pub focus: FocusState,
     pub queue_column_width: u16,
     pub terminal_width: u16,
 }
@@ -73,12 +73,6 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         left_area
     };
     let panel_content_area = chrome::left_panel_content_area(panel_area);
-    let queue_focused = matches!(input.panel_focus, PanelFocus::Queue);
-    // The right column's surface follows panel focus, so the shell paints its
-    // gutter from the same bit the library panel resolves from. `right_visible`
-    // already gates the paint; a queue-only frame must never report a focused
-    // right column even if the stored focus is stale.
-    let right_focused = right_visible && matches!(input.panel_focus, PanelFocus::Library);
 
     // Full-column background behind the card image and queue list.
     let right_full_area = Rect {
@@ -166,14 +160,14 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         player_area,
         status_area,
         right_visible,
-        queue_focused,
-        right_focused,
+        focus: input.focus,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::PanelFocus;
 
     /// A wide frame (>= `MINI_VIEW_THRESHOLD`) with the given effective panel
     /// visibility and focus.
@@ -181,7 +175,7 @@ mod tests {
         chrome_geometry(ChromeGeometryInput {
             area: Rect::new(0, 0, 160, 40),
             panel_mode,
-            panel_focus,
+            focus: FocusState::new(panel_focus, panel_mode),
             queue_column_width: 60,
             terminal_width: 160,
         })
@@ -191,27 +185,29 @@ mod tests {
     fn right_column_is_focused_only_when_visible_and_library_holds_focus() {
         // Wide LibraryOnly: the right column is the whole frame and the
         // library panel holds focus, so the column surface follows it.
-        assert!(wide(PanelMode::LibraryOnly, PanelFocus::Library).right_focused);
+        assert!(wide(PanelMode::LibraryOnly, PanelFocus::Library)
+            .focus
+            .library_column_focused());
 
         // Wide Both with library focus: the column is the surface the focused
         // library panel sits on.
         let both_library = wide(PanelMode::Both, PanelFocus::Library);
-        assert!(both_library.right_focused);
+        assert!(both_library.focus.library_column_focused());
         assert!(both_library.right_visible);
-        assert!(!both_library.queue_focused);
+        assert!(!both_library.focus.queue_column_focused());
 
         // Wide Both with queue focus: the column is still visible but resting.
         let both_queue = wide(PanelMode::Both, PanelFocus::Queue);
-        assert!(!both_queue.right_focused);
+        assert!(!both_queue.focus.library_column_focused());
         assert!(both_queue.right_visible);
-        assert!(both_queue.queue_focused);
+        assert!(both_queue.focus.queue_column_focused());
 
         // QueueOnly: no right column exists, so it never reports focus even
         // though the stored focus bit is Library.
         let queue_only = wide(PanelMode::QueueOnly, PanelFocus::Library);
         assert!(!queue_only.right_visible);
-        assert!(!queue_only.right_focused);
-        assert!(!queue_only.queue_focused);
+        assert!(!queue_only.focus.library_column_focused());
+        assert!(!queue_only.focus.queue_column_focused());
     }
 
     /// Narrow mini-view widths. Below `MINI_VIEW_THRESHOLD` `App` collapses
@@ -226,21 +222,21 @@ mod tests {
         let library_half = chrome_geometry(ChromeGeometryInput {
             area: Rect::new(0, 0, narrow_width, 40),
             panel_mode: PanelMode::LibraryOnly,
-            panel_focus: PanelFocus::Library,
+            focus: FocusState::new(PanelFocus::Library, PanelMode::LibraryOnly),
             queue_column_width: 60,
             terminal_width: narrow_width,
         });
         assert!(library_half.right_visible);
-        assert!(library_half.right_focused);
+        assert!(library_half.focus.library_column_focused());
 
         let queue_half = chrome_geometry(ChromeGeometryInput {
             area: Rect::new(0, 0, narrow_width, 40),
             panel_mode: PanelMode::QueueOnly,
-            panel_focus: PanelFocus::Queue,
+            focus: FocusState::new(PanelFocus::Queue, PanelMode::QueueOnly),
             queue_column_width: 60,
             terminal_width: narrow_width,
         });
         assert!(!queue_half.right_visible);
-        assert!(!queue_half.right_focused);
+        assert!(!queue_half.focus.library_column_focused());
     }
 }

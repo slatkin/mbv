@@ -19,6 +19,7 @@
 //! (e.g. the zero-area guard) -- it can never hold a mix of fields from two
 //! different frames.
 
+use super::{PanelFocus, PanelMode};
 use ratatui::layout::Rect;
 
 /// Seekbar rect, the two divider status indicators that still have a click
@@ -170,6 +171,67 @@ impl LayoutMain {
     }
 }
 
+/// Which column holds panel focus for one frame, and whether the right
+/// (library) column is on screen at all.
+///
+/// One value per frame, derived by `App::focus_state` from the effective
+/// panel focus and the effective panel mode. Deliberately carries no
+/// sub-surface or cursor position: where the selection sits inside a column
+/// never changes that column's colour.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct FocusState {
+    column: Column,
+    right_visible: bool,
+}
+
+/// The column holding panel focus this frame.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Column {
+    /// The queue column (left).
+    Left,
+    /// The library column (right).
+    Right,
+}
+
+impl FocusState {
+    /// Derive the frame's focus state from the effective panel focus and the
+    /// effective panel mode.
+    pub(in crate::app) fn new(panel_focus: PanelFocus, panel_mode: PanelMode) -> Self {
+        let column = match panel_focus {
+            PanelFocus::Queue => Column::Left,
+            PanelFocus::Library => Column::Right,
+        };
+        Self {
+            column,
+            right_visible: panel_mode != PanelMode::QueueOnly,
+        }
+    }
+
+    /// Whether the queue (left) column holds panel focus this frame.
+    pub(crate) fn queue_column_focused(&self) -> bool {
+        self.column == Column::Left
+    }
+
+    /// Whether the right (library) column holds panel focus this frame.
+    ///
+    /// False whenever the right column is not visible, even if a stale
+    /// `Library` focus says otherwise.
+    pub(crate) fn library_column_focused(&self) -> bool {
+        self.right_visible && self.column == Column::Right
+    }
+}
+
+impl Default for FocusState {
+    fn default() -> Self {
+        // The pre-`FocusState` zero value of `FrameChromeGeometry`: no visible
+        // right column and neither column reporting focus.
+        Self {
+            column: Column::Right,
+            right_visible: false,
+        }
+    }
+}
+
 /// Root/chrome frame geometry computed paint-free by
 /// `App::compute_frame_layout` and consumed by `App::render_main` and the
 /// chrome painters. This is the partial typed subresult of the staged
@@ -206,12 +268,13 @@ pub(crate) struct FrameChromeGeometry {
     pub status_area: Rect,
     /// Whether the right panel is visible this frame (`panel_mode != QueueOnly`).
     pub right_visible: bool,
-    /// Whether the queue panel holds panel focus this frame.
-    pub queue_focused: bool,
-    /// Whether the right column is visible AND holds panel focus this frame
-    /// (`right_visible && PanelFocus::Library`). False whenever the right
-    /// column is not visible, even if a stale `Library` focus says otherwise.
-    pub right_focused: bool,
+    /// Which column holds panel focus this frame, and whether the right
+    /// (library) column is on screen at all. The one value both column
+    /// surfaces resolve from, so neither fact is re-derived per screen:
+    /// `focus.queue_column_focused()` is the queue column's focus, and
+    /// `focus.library_column_focused()` is the right column's (false whenever
+    /// the column is not visible, even under a stale `Library` focus).
+    pub focus: FocusState,
 }
 
 /// All per-frame layout geometry, grouped by the view that produces it.
@@ -222,4 +285,52 @@ pub(crate) struct AppLayout {
     pub playback: LayoutPlayback,
     pub main: LayoutMain,
     pub tabs_area: Rect,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn focus_state_reproduces_the_column_focus_facts() {
+        // Wide LibraryOnly: the right column is the whole frame and the
+        // library panel holds focus, so the column surface follows it.
+        let library_only = FocusState::new(PanelFocus::Library, PanelMode::LibraryOnly);
+        assert!(library_only.library_column_focused());
+        assert!(!library_only.queue_column_focused());
+
+        // Wide Both with library focus: the column is the surface the focused
+        // library panel sits on.
+        let both_library = FocusState::new(PanelFocus::Library, PanelMode::Both);
+        assert!(both_library.library_column_focused());
+        assert!(!both_library.queue_column_focused());
+
+        // Wide Both with queue focus: the column is still visible but resting.
+        let both_queue = FocusState::new(PanelFocus::Queue, PanelMode::Both);
+        assert!(!both_queue.library_column_focused());
+        assert!(both_queue.queue_column_focused());
+
+        // QueueOnly: no right column exists, so it never reports focus even
+        // though the stored focus bit is Library.
+        let queue_only = FocusState::new(PanelFocus::Library, PanelMode::QueueOnly);
+        assert!(!queue_only.library_column_focused());
+        assert!(!queue_only.queue_column_focused());
+    }
+
+    /// Narrow mini-view halves. Below `MINI_VIEW_THRESHOLD` `App` collapses
+    /// `mini_view_focus` into one of two effective shapes before deriving this
+    /// state: the library half supplies `LibraryOnly`/`Library` (the right
+    /// column occupies the full frame width and is therefore visible and
+    /// focused), while the queue half supplies `QueueOnly`/`Queue` (no right
+    /// column at all).
+    #[test]
+    fn focus_state_reports_the_two_mini_view_halves() {
+        let library_half = FocusState::new(PanelFocus::Library, PanelMode::LibraryOnly);
+        assert!(library_half.library_column_focused());
+        assert!(!library_half.queue_column_focused());
+
+        let queue_half = FocusState::new(PanelFocus::Queue, PanelMode::QueueOnly);
+        assert!(!queue_half.library_column_focused());
+        assert!(queue_half.queue_column_focused());
+    }
 }

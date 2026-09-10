@@ -68,7 +68,7 @@ impl App {
         chrome_geometry(ChromeGeometryInput {
             area,
             panel_mode: self.effective_panel_mode(),
-            panel_focus: self.effective_panel_focus(),
+            focus: self.focus_state(),
             queue_column_width: self.queue_column_width,
             terminal_width: self.terminal_width,
         })
@@ -226,8 +226,7 @@ impl App {
             player_area: _,
             status_area,
             right_visible,
-            queue_focused,
-            right_focused: _,
+            focus,
         } = *chrome;
         // Header row removed — the tab bar above indicates current location.
         layout.breadcrumbs = Vec::new();
@@ -358,7 +357,7 @@ impl App {
         // internally before reaching the inline presentation path.
 
         if self.effective_panel_mode() != PanelMode::LibraryOnly {
-            render_queue_panel_frame(f, queue_geometry.panel_area, queue_focused);
+            render_queue_panel_frame(f, queue_geometry.panel_area, focus.queue_column_focused());
             layout.queue_title_area = queue_geometry.title_area;
             layout.queue_area = queue_geometry.content_area;
             layout.queue_selected_item_rect = None;
@@ -409,8 +408,7 @@ impl App {
             tab_bar_area,
             tabs_area,
             right_visible,
-            queue_focused,
-            right_focused,
+            focus,
             ..
         } = *chrome;
 
@@ -418,8 +416,8 @@ impl App {
             f,
             left_area,
             right_full_area,
-            queue_focused,
-            right_focused,
+            focus.queue_column_focused(),
+            focus.library_column_focused(),
             self.effective_panel_mode() != PanelMode::LibraryOnly,
             right_visible,
         );

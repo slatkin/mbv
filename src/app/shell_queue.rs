@@ -59,8 +59,8 @@ impl Model {
                 .expect("mount Queue");
         }
 
-        let queue_focused = matches!(self.app.effective_panel_focus(), PanelFocus::Queue)
-            && !self.blocking_overlay_active();
+        let queue_focused =
+            self.app.focus_state().queue_column_focused() && !self.blocking_overlay_active();
         // A mounted sidebar/modal/popup owns focus while it is up; re-activating
         // Queue here would steal the keypress it needs to close itself (mini
         // view keeps `effective_panel_focus` on Queue, so this pass fires every

@@ -1,4 +1,5 @@
 use super::{App, PanelFocus, PanelMode};
+use crate::app::layout::FocusState;
 use std::time::Instant;
 
 impl App {
@@ -27,6 +28,14 @@ impl App {
         } else {
             self.panel_focus
         }
+    }
+
+    /// The active column (and whether the right column is on screen at all)
+    /// for this frame, derived once from [`Self::effective_panel_focus`] and
+    /// [`Self::effective_panel_mode`]. The one place either column's focus is
+    /// decided; the shell hands this value to the geometry it builds.
+    pub(in crate::app) fn focus_state(&self) -> FocusState {
+        FocusState::new(self.effective_panel_focus(), self.effective_panel_mode())
     }
 
     /// Record that the terminal just regained focus, arming the
