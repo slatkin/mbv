@@ -160,10 +160,8 @@ pub enum ShellRequest {
     /// Continue Watching (Delete), keeping the cw-range guard the legacy
     /// Delete arm applied.
     HomeDelete(super::intents::HomeRowTarget),
-    /// Toggle the watched state of the Continue Watching column's own
-    /// (independently tracked) cursor item -- Ctrl+W on Home. Matches the
-    /// legacy `cw_toggle_watched`, which is not addressed by the Home flat
-    /// cursor (preserved, not fixed).
+    /// Toggle watched state for the component-resolved Continue Watching row.
+    /// The shell resolves this stable identity and never consults a cursor.
     HomeToggleWatched(super::intents::HomeRowTarget),
     /// Persist the newly selected Home pill (section index) as the restored
     /// preference, resolved via the mounted component's `source_for_section`
