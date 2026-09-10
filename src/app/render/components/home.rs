@@ -45,14 +45,22 @@ fn home_item_at(
         .cloned()
 }
 
+/// The active media-list carrier Home paints this frame (design.md D1): the
+/// Wide presentation for the Wide hero rail or the Inline presentation for
+/// inline Narrow. Exactly one is handed over per view; the same shared
+/// `MediaList` owner moves between them.
+pub(in crate::app) enum HomeListControl<'a> {
+    Wide(&'a mut WideMediaList<String>),
+    Inline(&'a mut InlineMediaBrowser<String>),
+}
+
 /// Paints Home's parent-owned hero + section pills + list-surface chrome
-/// without `App` (design D2), then mounts the active canonical control
-/// (`canonical_list` for Wide hero Wide, `inline_list` for inline Narrow)
-/// into the list area and rebuilds the pre-#638 hit map from its exported row
-/// geometry. `section` is the already-resolved selected pill; `cursor` is the
-/// component's already-clamped flat cursor (used only to pick the hero item
-/// and anchor the replacement block). Only the image pixel paint is deferred
-/// to the shell.
+/// without `App` (design D2), then mounts the active canonical carrier
+/// (`HomeListControl::Wide` for Wide hero Wide, `HomeListControl::Inline` for
+/// inline Narrow) into the list area. `section` is the already-resolved
+/// selected pill; `cursor` is the component's already-clamped flat cursor
+/// (used only to pick the hero item and anchor the replacement block). Only
+/// the image pixel paint is deferred to the shell.
 #[allow(clippy::too_many_arguments)]
 pub(in crate::app) fn render_home_content(
     f: &mut Frame,
@@ -62,8 +70,7 @@ pub(in crate::app) fn render_home_content(
     latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
     section: usize,
     cursor: usize,
-    canonical_list: &mut WideMediaList<String>,
-    inline_list: &mut InlineMediaBrowser<String>,
+    control: HomeListControl<'_>,
     use_nerd_fonts: bool,
     images_enabled: bool,
 ) -> HomeContentOutput {
@@ -428,68 +435,76 @@ pub(in crate::app) fn render_home_content(
     let selected_item_rect = if control_empty {
         crate::app::render::render_placeholder(f, list_area, " (empty)");
         None
-    } else if two_column {
-        // Full panel width so the selected-row bar and flush marker reach the
-        // rail border; `list_area` is already inset vertically and stays the
-        // hit/scroll geometry rect.
-        let paint_rect = Rect {
-            x: green_panel_full.map_or(list_area.x, |panel| panel.x),
-            width: green_panel_full.map_or(list_area.width, |panel| panel.width),
-            ..list_area
-        };
-        canonical_list.set_geometry(paint_rect, list_area);
-        canonical_list.set_paint_policy(WideMediaListPaintPolicy::new(
-            focused,
-            SelectedRowSurface::ListBackdrop,
-            None,
-        ));
-        canonical_list.view(f, paint_rect);
-        canonical_list.current_selected_row_rect()
     } else {
-        inline_list.set_geometry(list_area, list_area);
-        inline_list.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
-            focused,
-            SelectedRowSurface::ListBackdrop,
-            narrow_desired_hero_rows as usize,
-        ));
-        inline_list.view(f, list_area);
-        match inline_list.current_detail_rect() {
-            Some(hero_area) => {
-                hero_area_out = Some(hero_area);
-                hero::selected_detail_shell(f, hero_area, hero_area.height, focused);
-                let hero_content = library_arrangement::selected_detail_content_area(
-                    hero_area,
-                    SELECTED_BLOCK_SIDE_PADDING,
-                    HERO_BLOCK_EXTRA_ROWS,
-                );
-                match narrow_dims
-                    .take()
-                    .and_then(|dims| narrow_hero_data(dims, hero_content, images_enabled))
-                {
-                    Some(NarrowHeroPaint::Emby(hero_data)) => {
-                        image_paint = home_hero::render_home_hero_content(
-                            f,
-                            &hero_data,
-                            false,
-                            focused,
-                            use_nerd_fonts,
-                        );
-                    }
-                    Some(NarrowHeroPaint::Generic(item, area)) => {
-                        image_paint = home_hero::render_generic_hero_content(
-                            f,
-                            &item,
-                            area,
-                            focused,
-                            use_nerd_fonts,
-                            images_enabled,
-                        );
-                    }
-                    None => {}
-                }
-                Some(hero_area)
+        // The carrier the caller configured always matches `two_column`: both
+        // are derived from the same `wide_hero_presentation` predicate.
+        debug_assert_eq!(two_column, matches!(&control, HomeListControl::Wide(_)));
+        match control {
+            HomeListControl::Wide(wide_list) => {
+                // Full panel width so the selected-row bar and flush marker
+                // reach the rail border; `list_area` is already inset
+                // vertically and stays the hit/scroll geometry rect.
+                let paint_rect = Rect {
+                    x: green_panel_full.map_or(list_area.x, |panel| panel.x),
+                    width: green_panel_full.map_or(list_area.width, |panel| panel.width),
+                    ..list_area
+                };
+                wide_list.set_geometry(paint_rect, list_area);
+                wide_list.set_paint_policy(WideMediaListPaintPolicy::new(
+                    focused,
+                    SelectedRowSurface::ListBackdrop,
+                    None,
+                ));
+                wide_list.view(f, paint_rect);
+                wide_list.current_selected_row_rect()
             }
-            None => inline_list.current_selected_row_rect(),
+            HomeListControl::Inline(inline_list) => {
+                inline_list.set_geometry(list_area, list_area);
+                inline_list.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
+                    focused,
+                    SelectedRowSurface::ListBackdrop,
+                    narrow_desired_hero_rows as usize,
+                ));
+                inline_list.view(f, list_area);
+                match inline_list.current_detail_rect() {
+                    Some(hero_area) => {
+                        hero_area_out = Some(hero_area);
+                        hero::selected_detail_shell(f, hero_area, hero_area.height, focused);
+                        let hero_content = library_arrangement::selected_detail_content_area(
+                            hero_area,
+                            SELECTED_BLOCK_SIDE_PADDING,
+                            HERO_BLOCK_EXTRA_ROWS,
+                        );
+                        match narrow_dims
+                            .take()
+                            .and_then(|dims| narrow_hero_data(dims, hero_content, images_enabled))
+                        {
+                            Some(NarrowHeroPaint::Emby(hero_data)) => {
+                                image_paint = home_hero::render_home_hero_content(
+                                    f,
+                                    &hero_data,
+                                    false,
+                                    focused,
+                                    use_nerd_fonts,
+                                );
+                            }
+                            Some(NarrowHeroPaint::Generic(item, area)) => {
+                                image_paint = home_hero::render_generic_hero_content(
+                                    f,
+                                    &item,
+                                    area,
+                                    focused,
+                                    use_nerd_fonts,
+                                    images_enabled,
+                                );
+                            }
+                            None => {}
+                        }
+                        Some(hero_area)
+                    }
+                    None => inline_list.current_selected_row_rect(),
+                }
+            }
         }
     };
 
