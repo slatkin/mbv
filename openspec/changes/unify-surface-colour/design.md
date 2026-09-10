@@ -372,6 +372,11 @@ deduplicated.
 
 ### Proposed `Surface` name set
 
+_Superseded._ The canonical identity set is the `Surface` enum in `src/app/render/theme/surface.rs` (row
+4.1), and the mapping from each inventory identity to a declared variant is the next section. This
+sketch is kept only as the history of how the names were proposed — do not read a name here as
+binding, and do not add a variant from it without the mapping entry.
+
 **Proposed sketch — the canonical set is declared in the theme by row 4.1 and pinned by the 5.2
 conformance test.** The closed enum D2 needs, one name per distinct *structural* identity in the
 table above: the same layout position in a different screen or provider is the same name. Level is
