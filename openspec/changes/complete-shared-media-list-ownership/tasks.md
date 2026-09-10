@@ -2,9 +2,9 @@
 
 ## 1. Lock the Baseline and Shared Vocabulary
 
-- [ ] 1.1 Inventory the exact production owners and existing tests for every in-scope row flow from the delta spec; record the source/test map in `evidence/ownership-baseline.md` and verify no listed flow or breakpoint is omitted.
-- [ ] 1.2 Add or strengthen only the minimum existing characterization needed to preserve current Wide, Inline, two-column Grid, and provider-workspace behavior; verify the focused tests fail when their respective painter, target, movement, or retained-hit path is intentionally disconnected and pass unchanged at baseline.
-- [ ] 1.3 Add the accepted shared-owner and Grid terminology to `CONTEXT.md` and update `AGENTS.md` plus `.agents/skills/mbv-frontend/SKILL.md` to state the corrected boundary; verify no new term collides with an existing term or an Avoid entry.
+- [x] 1.1 Inventory the exact production owners and existing tests for every in-scope row flow from the delta spec; record the source/test map in `evidence/ownership-baseline.md` and verify no listed flow or breakpoint is omitted.
+- [x] 1.2 Add or strengthen only the minimum existing characterization needed to preserve current Wide, Inline, two-column Grid, and provider-workspace behavior; verify the focused tests fail when their respective painter, target, movement, or retained-hit path is intentionally disconnected and pass unchanged at baseline.
+- [x] 1.3 Add the accepted shared-owner and Grid terminology to `CONTEXT.md` and update `AGENTS.md` plus `.agents/skills/mbv-frontend/SKILL.md` to state the corrected boundary; verify no new term collides with an existing term or an Avoid entry.
 
 ## 2. Establish the Single Shared Owner
 
