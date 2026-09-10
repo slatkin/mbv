@@ -32,14 +32,7 @@ pub(in crate::app) fn render_save_playlist_content(
     } else {
         " Save as Playlist "
     };
-    let inner = render_modal_frame(
-        f,
-        dim_backdrop_active,
-        title_text,
-        52,
-        7,
-        palette::SURFACE_FOCUSED,
-    );
+    let inner = render_modal_frame(f, dim_backdrop_active, title_text, 52, 7);
     let label = "Name: ";
     let cursor = "▏";
     let max_input = inner.width as usize - label.len() - cursor.len() - 2;

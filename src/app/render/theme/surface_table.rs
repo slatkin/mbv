@@ -239,15 +239,15 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_FOCUSED,
         },
-        // The dim backdrop paints no fill of its own: it halves every existing
-        // cell (see `super::super::components::backdrop::dim_backdrop`), so
-        // its row resolves to `Color::Reset` ("no explicit fill") rather than
-        // inventing one.
+        // The dim backdrop paints no fill of its own: it blends every
+        // existing cell halfway toward its own fill (see
+        // `super::super::components::backdrop::dim_backdrop`), so its row is
+        // that blend base rather than a rect fill.
         Surface::PopupDimBackdrop => Row {
             level: Level::Popup,
             focus: FocusSource::Fixed,
             soft: false,
-            resting: Color::Reset,
+            resting: DIM_BACKDROP,
         },
     }
 }

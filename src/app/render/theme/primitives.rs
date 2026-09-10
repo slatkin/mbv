@@ -26,6 +26,7 @@ pub(super) const PLAYBACK_CONTENT_FG: Color = Color::Rgb(131, 192, 146); // play
 pub(super) const PLAYBACK_META_FG: Color = Color::Rgb(133, 146, 137); // playback metadata captions/time (#859289)
 pub(super) const MUTED_GREEN: Color = Color::Rgb(108, 118, 108); // muted greenish-grey for detail/label text (#6c766c)
 pub(super) const TAB_INACTIVE_FG: Color = Color::Rgb(73, 81, 86); // inactive tab-bar tab glyph (#495156)
+pub(super) const DIM_BACKDROP: Color = Color::Rgb(0, 0, 0); // popup dim backdrop: every cell blends halfway toward it
 pub(super) const SOFT_WHITE: Color = Color::Rgb(244, 234, 211); // warm off-white (#f4ead3)
 pub(super) const PILL_SELECTOR_ROW_BG: Color = Color::Rgb(30, 35, 38); // pill-selector row background (#1e2326)
 pub(super) const PILL_SELECTOR_BG: Color = Color::Rgb(30, 35, 38); // unselected pill-selector surface (#1e2326)

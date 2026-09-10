@@ -147,14 +147,7 @@ pub(in crate::app) fn render_library_routes_content(
     let content_h = lines.len() as u16 + 1;
     let height = content_h + 2;
 
-    let inner = render_modal_frame(
-        f,
-        dim_backdrop_active,
-        title,
-        width,
-        height,
-        palette::SURFACE_FOCUSED,
-    );
+    let inner = render_modal_frame(f, dim_backdrop_active, title, width, height);
 
     let hint = "Enter select  ·  Esc back/close";
     f.render_widget(

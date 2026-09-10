@@ -188,7 +188,7 @@ mod tests {
             Surface::NonHeroSidebarBand => (SURFACE_ITEM_FOCUSED, SURFACE_ITEM_FOCUSED),
             Surface::TabBar => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::PopupFrame => (SURFACE_FOCUSED, SURFACE_FOCUSED),
-            Surface::PopupDimBackdrop => (Color::Reset, Color::Reset),
+            Surface::PopupDimBackdrop => (DIM_BACKDROP, DIM_BACKDROP),
         }
     }
 

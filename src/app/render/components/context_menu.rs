@@ -33,9 +33,13 @@ pub(in crate::app) fn render_context_menu_content(
             let style = if !is_selectable {
                 Style::default().fg(palette::TEXT_SECONDARY)
             } else if i == cursor {
-                Style::default()
-                    .fg(palette::TEXT_ON_ACCENT)
-                    .bg(palette::ACCENT_ACTIVE)
+                Style::default().fg(palette::TEXT_ON_ACCENT).bg(
+                    palette::surface_colors_for_column_focus(
+                        palette::Surface::ContextMenuSelectedRow,
+                        false,
+                    )
+                    .fill,
+                )
             } else {
                 Style::default().fg(palette::TEXT_PRIMARY)
             };

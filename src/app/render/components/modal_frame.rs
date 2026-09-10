@@ -1,25 +1,21 @@
 use super::super::super::palette;
 use super::backdrop::dim_backdrop;
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Block, Borders, Clear};
 use ratatui::Frame;
 
-pub fn render_modal_frame(
-    f: &mut Frame,
-    dim_flag: &mut bool,
-    title: &str,
-    w: u16,
-    h: u16,
-    bg: Color,
-) -> Rect {
+pub fn render_modal_frame(f: &mut Frame, dim_flag: &mut bool, title: &str, w: u16, h: u16) -> Rect {
     *dim_flag = true;
-    render_modal_frame_inner(f, title, w, h, bg)
+    render_modal_frame_inner(f, title, w, h)
 }
 
-fn render_modal_frame_inner(f: &mut Frame, title: &str, w: u16, h: u16, bg: Color) -> Rect {
+fn render_modal_frame_inner(f: &mut Frame, title: &str, w: u16, h: u16) -> Rect {
     dim_backdrop(f);
+
+    // The popup frame names its own surface: callers pass no colour.
+    let bg = palette::surface_colors_for_column_focus(palette::Surface::PopupFrame, false).fill;
 
     let full = f.area();
     let w = w.min(full.width.saturating_sub(2));

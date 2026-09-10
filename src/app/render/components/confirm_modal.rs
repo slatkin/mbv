@@ -20,14 +20,7 @@ pub(in crate::app) fn render_confirm_modal_content(
     message: &str,
     hint: &str,
 ) {
-    let inner = render_modal_frame(
-        f,
-        dim_flag,
-        title,
-        60,
-        7,
-        super::super::super::palette::SURFACE_FOCUSED,
-    );
+    let inner = render_modal_frame(f, dim_flag, title, 60, 7);
     let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
     f.render_widget(
         Paragraph::new(Span::styled(

@@ -22,14 +22,7 @@ pub(in crate::app) fn render_remote_reanchor_popup_content(
     let title = " Re-anchor Remote Tracking ";
     let width = 46;
     let height = (targets.len() as u16 + 3).min(12);
-    let inner = render_modal_frame(
-        f,
-        dim_flag,
-        title,
-        width,
-        height + 2,
-        palette::SURFACE_FOCUSED,
-    );
+    let inner = render_modal_frame(f, dim_flag, title, width, height + 2);
     f.render_widget(
         Paragraph::new(Span::styled(
             "Choose the observed occurrence",

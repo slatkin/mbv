@@ -44,14 +44,7 @@ pub(in crate::app) fn render_multiselect_content(
     let content_h = model.items.len() as u16 + 1;
     let height = content_h + 2;
 
-    let inner = render_modal_frame(
-        f,
-        dim_backdrop_active,
-        title,
-        width,
-        height,
-        palette::SURFACE_FOCUSED,
-    );
+    let inner = render_modal_frame(f, dim_backdrop_active, title, width, height);
 
     let hint = "Space toggle  ·  Esc / Enter close";
     f.render_widget(

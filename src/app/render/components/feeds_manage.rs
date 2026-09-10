@@ -51,14 +51,7 @@ fn render_feeds_manage_list(
     let content_h = (model.feeds.len().max(1) as u16) + 1;
     let height = content_h + 2;
 
-    let inner = render_modal_frame(
-        f,
-        dim_backdrop_active,
-        title,
-        width,
-        height,
-        palette::SURFACE_FOCUSED,
-    );
+    let inner = render_modal_frame(f, dim_backdrop_active, title, width, height);
 
     f.render_widget(
         Paragraph::new(Span::styled(hint, Style::default().fg(palette::TEXT_MUTED))),
@@ -162,14 +155,7 @@ fn render_feeds_manage_form(
 
     let width = 58;
     let height = 9;
-    let inner = render_modal_frame(
-        f,
-        dim_backdrop_active,
-        title,
-        width,
-        height,
-        palette::SURFACE_FOCUSED,
-    );
+    let inner = render_modal_frame(f, dim_backdrop_active, title, width, height);
 
     let field_style = |focused: bool| {
         if focused {

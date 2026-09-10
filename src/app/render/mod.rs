@@ -191,8 +191,7 @@ pub(crate) use theme::{
     ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, BORDER_UNFOCUSED, INDICATOR_AUDIO_FG,
     INDICATOR_RESOLUTION_FG, PILL_FG, PILL_OVERFLOW_FG, PILL_SELECTED_FG, PLAYBACK_META_FG,
     PLAYBACK_THROBBER_FG, PLAYBACK_VALUE_FG, PROGRESS_TRACK, SCROLLBAR, STATUS_AVAILABLE,
-    STATUS_ERROR, SURFACE_CHROME, SURFACE_FOCUSED, SURFACE_ITEM_FOCUSED, SURFACE_RESTING,
-    SURFACE_SIDEBAR, TEXT_ACCENT_MUTED, TEXT_DETAIL_META, TEXT_EMPHASIS, TEXT_FOCUS_ACCENT,
+    STATUS_ERROR, TEXT_ACCENT_MUTED, TEXT_DETAIL_META, TEXT_EMPHASIS, TEXT_FOCUS_ACCENT,
     TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_STRONG,
     TEXT_TAB_INACTIVE,
 };
@@ -202,12 +201,15 @@ pub(crate) use theme::{
 #[cfg(test)]
 pub(crate) use theme::{
     list_selected_row_bg, resolve_surface_focus, PILL_BG, PILL_ROW_BG, PILL_SELECTED_BG,
-    SURFACE_ACCENT_SOFT, SURFACE_ARTWORK_PLACEHOLDER, SURFACE_BACKDROP, SURFACE_PLAYBACK,
+    SURFACE_ACCENT_SOFT, SURFACE_ARTWORK_PLACEHOLDER, SURFACE_BACKDROP, SURFACE_CHROME,
+    SURFACE_FOCUSED, SURFACE_PLAYBACK, SURFACE_RESTING,
 };
 // The closed surface table (`unify-surface-colour` D2/D3) is bridged to
 // `palette.rs` the same way. Its visibility is `crate::app`, so it is not part
 // of the wider `pub(crate)` role list above.
-pub(in crate::app) use theme::{surface_colors, surface_colors_for_column_focus, Surface};
+pub(in crate::app) use theme::{
+    dim_backdrop_color, surface_colors, surface_colors_for_column_focus, Surface,
+};
 
 use super::ui_util::natural_sort_key;
 use super::{palette, App};

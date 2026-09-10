@@ -66,6 +66,39 @@ pub const TEXT_DETAIL_META: Color = primitives::MUTED_GREEN; // detail-screen la
 pub const TEXT_METADATA: Color = primitives::FOAM; // secondary metadata (durations, pct, badges)
 pub const TEXT_TAB_INACTIVE: Color = primitives::TAB_INACTIVE_FG; // tab bar's inactive tab glyph
 
+// Popup
+/// The popup dim backdrop's fill: the shade every already-rendered cell is
+/// blended halfway toward while a blocking popup is up. It paints no fill of
+/// its own; its row is the table's popup-level dim row (`Surface::PopupDimBackdrop`).
+pub const DIM_BACKDROP: Color = primitives::DIM_BACKDROP;
+
+/// One cell's colour under the popup dim backdrop: blended halfway toward
+/// `base`, the `PopupDimBackdrop` surface's fill.
+///
+/// `Color::White` and `Color::Black` carry no RGB channels in ratatui, so
+/// they are handled explicitly; indexed and other named variants pass through
+/// undimmed because the running terminal, not ratatui, defines their RGB.
+/// Raw `Color::Rgb` construction lives here, not in the painter, because raw
+/// colour primitives are private to the theme.
+pub fn dim_backdrop_color(color: Color, base: Color) -> Color {
+    let Color::Rgb(br, bg, bb) = base else {
+        return color;
+    };
+    let blend = |r: u8, g: u8, b: u8| {
+        Color::Rgb(
+            ((r as u16 + br as u16) / 2) as u8,
+            ((g as u16 + bg as u16) / 2) as u8,
+            ((b as u16 + bb as u16) / 2) as u8,
+        )
+    };
+    match color {
+        Color::White => blend(255, 255, 255),
+        Color::Black | Color::Reset => base,
+        Color::Rgb(r, g, b) => blend(r, g, b),
+        other => other,
+    }
+}
+
 // Status
 pub const STATUS_ERROR: Color = primitives::RED;
 pub const STATUS_AVAILABLE: Color = primitives::GREEN; // checkmarks, available/positive metadata

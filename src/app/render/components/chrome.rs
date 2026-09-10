@@ -171,12 +171,28 @@ pub(in crate::app) fn render_panel_shell_at(
             sidebar
         };
     }
-    f.render_widget(
-        Block::default().style(Style::default().bg(if style {
-            palette::SURFACE_RESTING
+    // The sidebar has two declared appearances — the expanded shell and the
+    // non-hero shell — each with a body and a band; it is not a panel.
+    let body_bg = palette::surface_colors_for_column_focus(
+        if style {
+            palette::Surface::SidebarBody
         } else {
-            palette::SURFACE_SIDEBAR
-        })),
+            palette::Surface::NonHeroSidebarBody
+        },
+        false,
+    )
+    .fill;
+    let band_bg = palette::surface_colors_for_column_focus(
+        if style {
+            palette::Surface::SidebarBand
+        } else {
+            palette::Surface::NonHeroSidebarBand
+        },
+        false,
+    )
+    .fill;
+    f.render_widget(
+        Block::default().style(Style::default().bg(body_bg)),
         sidebar,
     );
     if !style {
@@ -202,11 +218,7 @@ pub(in crate::app) fn render_panel_shell_at(
     };
     let header_style = Style::default()
         .fg(palette::TEXT_PRIMARY)
-        .bg(if style {
-            palette::SURFACE_CHROME
-        } else {
-            palette::SURFACE_ITEM_FOCUSED
-        })
+        .bg(band_bg)
         .add_modifier(Modifier::BOLD);
     let header_area = if style {
         Rect {
@@ -229,17 +241,13 @@ pub(in crate::app) fn render_panel_shell_at(
         title.to_owned()
     };
     f.render_widget(
-        Paragraph::new(Line::from(vec![Span::styled(title_text, header_style)])).style(if style {
-            Style::default().bg(palette::SURFACE_CHROME)
-        } else {
-            Style::default().bg(palette::SURFACE_ITEM_FOCUSED)
-        }),
+        Paragraph::new(Line::from(vec![Span::styled(title_text, header_style)]))
+            .style(Style::default().bg(band_bg)),
         header_area,
     );
     if !style {
         f.render_widget(
-            Paragraph::new(Span::raw(" "))
-                .style(Style::default().bg(palette::SURFACE_ITEM_FOCUSED)),
+            Paragraph::new(Span::raw(" ")).style(Style::default().bg(band_bg)),
             Rect {
                 x: sidebar.x + sidebar.width - 1,
                 y: sidebar.y,
@@ -263,11 +271,7 @@ pub(in crate::app) fn render_panel_shell_at(
             },
         );
     }
-    let footer_bg = if style {
-        palette::SURFACE_CHROME
-    } else {
-        palette::SURFACE_ITEM_FOCUSED
-    };
+    let footer_bg = band_bg;
     f.render_widget(
         Paragraph::new(Line::from(vec![Span::styled(
             trunc_str(hints, inner_w as usize),
@@ -283,7 +287,7 @@ pub(in crate::app) fn render_panel_shell_at(
     );
     if style {
         f.render_widget(
-            Paragraph::new(Span::raw("")).style(Style::default().bg(palette::SURFACE_RESTING)),
+            Paragraph::new(Span::raw("")).style(Style::default().bg(body_bg)),
             Rect {
                 x: sidebar.x,
                 y: sidebar.y + sidebar.height - 1,
@@ -294,8 +298,7 @@ pub(in crate::app) fn render_panel_shell_at(
     }
     if !style {
         f.render_widget(
-            Paragraph::new(Span::raw(" "))
-                .style(Style::default().bg(palette::SURFACE_ITEM_FOCUSED)),
+            Paragraph::new(Span::raw(" ")).style(Style::default().bg(band_bg)),
             Rect {
                 x: sidebar.x + sidebar.width - 1,
                 y: footer_y,

@@ -51,3 +51,42 @@ fn confirm_modal_buffer_characterization_covers_default_focused_narrow_and_selec
         );
     }
 }
+
+/// `unify-surface-colour` 4.2: the modal frame names `Surface::PopupFrame`
+/// itself, so every caller paints the same popup fill without passing a
+/// colour. Pin the painted body cell through the production resolver.
+#[test]
+fn confirm_modal_frame_paints_the_popup_frame_surface() {
+    use crate::app::palette;
+
+    let width = 70;
+    let height = 16;
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut dim_flag = false;
+    terminal
+        .draw(|f| {
+            crate::app::render::render_confirm_modal_content(
+                f,
+                &mut dim_flag,
+                " Clear Queue ",
+                "Clear the queue?",
+                "[y] Confirm    [Esc] Cancel",
+            )
+        })
+        .unwrap();
+    let frame = palette::surface_colors_for_column_focus(palette::Surface::PopupFrame, false).fill;
+    assert_eq!(
+        frame,
+        palette::SURFACE_FOCUSED,
+        "the popup frame keeps today's focused green"
+    );
+    let buffer = terminal.backend().buffer();
+    // The 60-wide, 7-high frame is centred: x = (70 - 60) / 2 = 5,
+    // y = (16 - 7) / 2 = 4.
+    assert_eq!(
+        buffer[(5, 4)].style().bg,
+        Some(frame),
+        "the frame body paints the PopupFrame surface"
+    );
+}

@@ -20,14 +20,7 @@ pub(in crate::app) fn render_daemon_lost_modal_content(
     daemon_log_path: &str,
     restart_error: Option<&str>,
 ) {
-    let inner = render_modal_frame(
-        f,
-        dim_flag,
-        " Daemon Lost ",
-        64,
-        10,
-        palette::SURFACE_FOCUSED,
-    );
+    let inner = render_modal_frame(f, dim_flag, " Daemon Lost ", 64, 10);
 
     let mut lines = vec![Line::from(Span::styled(
         "The local daemon connection was lost unexpectedly.",

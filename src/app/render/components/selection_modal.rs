@@ -56,14 +56,7 @@ pub(in crate::app) fn render_selection_modal_content(
     let status_h = u16::from(status.is_some());
     let content_h = rows.len() as u16 + status_h + filter_h + spacer_h;
     let height = (content_h + 2).min(SELECTION_MODAL_MAX_HEIGHT);
-    let inner = render_modal_frame(
-        f,
-        dim_backdrop_active,
-        &title,
-        width,
-        height,
-        palette::SURFACE_FOCUSED,
-    );
+    let inner = render_modal_frame(f, dim_backdrop_active, &title, width, height);
 
     let filter_area = Rect {
         x: inner.x,
@@ -93,7 +86,9 @@ pub(in crate::app) fn render_selection_modal_content(
     };
     if spacer_h > 0 {
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_FOCUSED)),
+            Block::default().style(Style::default().bg(
+                palette::surface_colors_for_column_focus(palette::Surface::PopupFrame, false).fill,
+            )),
             spacer_area,
         );
     }
