@@ -576,8 +576,7 @@ impl App {
                     // before its view replaces this legacy frame.
                     if self.is_music_group_view(lib_idx)
                         && self.is_viewing_album_folders(lib_idx)
-                        && crate::app::render::arrangements::wide_hero::wide_hero_presentation(area)
-                            .is_some()
+                        && crate::app::render::arrangements::wide_hero::wide_hero_fits(area)
                     {
                         let ctx = self.wide_music_render_ctx(lib_idx, cursor_scroll);
                         ctx.publish_geometry(area, layout);
@@ -589,8 +588,7 @@ impl App {
                     // input routing (`App::wide_tv_library_area`) and the
                     // shell's render seam can locate them.
                     if self.is_wide_tv_library(lib_idx)
-                        && crate::app::render::arrangements::wide_hero::wide_hero_presentation(area)
-                            .is_some()
+                        && crate::app::render::arrangements::wide_hero::wide_hero_fits(area)
                     {
                         let ctx = self.wide_tv_render_ctx(lib_idx, cursor_scroll);
                         ctx.publish_geometry(area, layout);

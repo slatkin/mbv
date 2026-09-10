@@ -118,7 +118,7 @@ pub(in crate::app) use screens::feeds_model::{
 pub(in crate::app) use arrangements::library::wide_library_panes;
 pub(in crate::app) use arrangements::padded_rect;
 pub(in crate::app) use arrangements::wide_hero::{
-    wide_hero_browser_border, wide_hero_browser_pane, wide_hero_hero_pane, wide_hero_presentation,
+    wide_hero_browser_border, wide_hero_browser_pane, wide_hero_fits, wide_hero_hero_pane,
     LeftPaneFocus, PANE_PAD_X, PANE_PAD_Y,
 };
 pub(in crate::app) use components::home_hero::{
@@ -313,3 +313,5 @@ mod tests_home_inline;
 mod tests_selection_modal;
 #[cfg(test)]
 mod tests_wide_hero_pane_characterization;
+#[cfg(test)]
+mod tests_wide_hero_split_override;

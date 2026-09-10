@@ -27,8 +27,8 @@ use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{
-    current_time_secs, feed_display_rows, feed_duration_text, render_feeds_content, FeedDisplayRow,
-    FeedsPresentation, FeedsRenderModel,
+    current_time_secs, feed_display_rows, feed_duration_text, render_feeds_content, wide_hero_fits,
+    FeedDisplayRow, FeedsPresentation, FeedsRenderModel,
 };
 use crate::app::types_feed_tab::WatchedFilter;
 use mbv_core::config::FeedSubscription;
@@ -52,6 +52,10 @@ pub struct FeedsComponent {
     loading: bool,
     images_enabled: bool,
     focused: bool,
+    /// Session-only Wide hero list-pane width override (per-draw shell push,
+    /// `None` = default ratio). Forwarded into the shared split; never stored
+    /// clamped.
+    list_pane_width: Option<u16>,
     layout: LayoutMain,
     last_subscription_urls: Vec<String>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
@@ -73,6 +77,7 @@ impl FeedsComponent {
             loading: false,
             images_enabled: true,
             focused: false,
+            list_pane_width: None,
             layout: LayoutMain::default(),
             last_subscription_urls: Vec::new(),
             mouse_gestures: MouseGestureState::new(),
@@ -89,6 +94,14 @@ impl FeedsComponent {
     #[cfg(test)]
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
+    }
+
+    /// Records the session-only Wide hero list-pane width override for the
+    /// next `view()`. Pushed each frame by `render_feeds_component`; it is a
+    /// layout fact, not content, so it never enters the event-scoped
+    /// `set_content` projection.
+    pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
+        self.list_pane_width = list_pane_width;
     }
 
     pub(in crate::app) fn set_content(
@@ -141,6 +154,15 @@ impl FeedsComponent {
             .iter()
             .map(|entry| entry.title.as_str())
             .collect()
+    }
+
+    /// Whether the active group/watched filter leaves any entry for the
+    /// painter to project — exactly the predicate `render_feeds_content`'s
+    /// wide branch early-returns on. The group selector and watched filter are
+    /// component-local, so the shell resolves the boundary's painted-split
+    /// eligibility from this fact instead of mirroring that state.
+    pub(in crate::app) fn has_visible_entries(&self) -> bool {
+        !self.visible_entries.is_empty()
     }
 
     pub(in crate::app) fn subscription_names(&self) -> Vec<&str> {
@@ -450,7 +472,7 @@ impl Component for FeedsComponent {
         // change reconfigures the same owner and preserves only the outgoing
         // selected-row viewport offset — the owner is never copied between
         // presentations.
-        let wide = crate::app::render::wide_hero_presentation(area).is_some();
+        let wide = wide_hero_fits(area);
         self.wide = wide;
         self.ensure_carrier();
 
@@ -480,6 +502,7 @@ impl Component for FeedsComponent {
                 images_enabled: self.images_enabled,
             },
             presentation,
+            self.list_pane_width,
         );
         self.layout = layout;
     }

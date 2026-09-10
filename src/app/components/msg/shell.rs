@@ -74,6 +74,12 @@ pub enum ShellRequest {
         item: EmbyItem,
         anchor: (u16, u16),
     },
+    /// Live Wide hero split resize (add-mouse-wide-split-resize). The gap
+    /// boundary component owns the gesture and the resolved list-pane width;
+    /// the shell clamps it against the active surface's content width and
+    /// stores the session override. Live-only: there is no end/persist
+    /// variant, because nothing is persisted.
+    ResizeListPaneLive(u16),
     /// Quit the application.
     Quit,
     /// Dismiss the Help overlay (Esc/F1 while help is open).

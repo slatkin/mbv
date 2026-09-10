@@ -1,7 +1,7 @@
 use super::components::{
     BrowserKey, BrowserKind, ComponentId, InlineSearchHost, MusicWorkspaceComponent,
 };
-use super::render::{wide_hero_presentation, MusicWideRenderCtx};
+use super::render::{wide_hero_fits, MusicWideRenderCtx};
 use super::shell::{Model, MusicTrackFocusRequest};
 use super::TabSelection;
 use mbv_core::config::ServiceKind;
@@ -179,7 +179,7 @@ impl Model {
         // area, so fall back to the narrow main content area (`left_area`) so
         // the component's `view` is still reached.
         let mut area = self.app.layout.main.wide_music_area;
-        let wide = wide_hero_presentation(area).is_some();
+        let wide = wide_hero_fits(area);
         if !wide {
             area = self.app.layout.main.left_area;
         }
@@ -206,6 +206,13 @@ impl Model {
                 .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
                 .is_some_and(|music| music.inline_search().is_active());
             context.publish_geometry(area, &mut self.app.layout.main);
+        }
+        if let Some(comp) = self
+            .application
+            .get_component_mut(id)
+            .and_then(|comp| comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>())
+        {
+            comp.set_list_pane_width(self.app.list_pane_width);
         }
         self.application.view(id, frame, area);
         let projection = self

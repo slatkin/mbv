@@ -13,11 +13,12 @@ pub(in crate::app) fn wide_library_panes(
     area: Rect,
     pad_x: u16,
     pad_y: u16,
+    override_width: Option<u16>,
 ) -> Option<WideLibraryPanes> {
     let wide_hero::WideHeroPanes {
         hero: hero_panel,
         browser: browser_panel,
-    } = wide_hero::wide_hero_presentation(area)?;
+    } = wide_hero::wide_hero_presentation(area, override_width)?;
     let hero_area = padded_rect(hero_panel, pad_x, pad_y);
     let browser_area = Rect {
         x: browser_panel.x,
@@ -59,7 +60,7 @@ mod tests {
             width: crate::app::TWO_COLUMN_THRESHOLD,
             height: WIDE_HERO_MIN_AREA_HEIGHT + 1,
         };
-        let panes = wide_library_panes(area, 2, 1).expect("wide area");
+        let panes = wide_library_panes(area, 2, 1, None).expect("wide area");
         assert_eq!(panes.hero_area.x, panes.hero_panel.x + 2);
         assert_eq!(panes.browser_area.y, panes.browser_panel.y + 1);
         assert!(wide_library_panes(
@@ -69,6 +70,7 @@ mod tests {
             },
             2,
             1,
+            None,
         )
         .is_none());
     }

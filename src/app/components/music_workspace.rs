@@ -26,7 +26,7 @@ use super::msg::{AlbumCursorKind, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{
-    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, wide_hero_presentation,
+    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, wide_hero_fits,
     MusicAlbumPresentation, MusicImagePaint, MusicTrackPresentation, MusicWideRenderCtx,
 };
 use crate::app::ui_util::list_duration_secs;
@@ -96,6 +96,10 @@ pub struct MusicWorkspaceComponent {
     /// `pub(super)`, matching the sibling key module (split out for file
     /// size), so `music_workspace_keys` can reach it.
     pub(super) inline_search: InlineSearch,
+    /// Session-only Wide hero list-pane width override (per-draw shell push,
+    /// `None` = default ratio). Written onto the cloned render context in
+    /// `view()` before the wide composer reads it; never stored clamped.
+    list_pane_width: Option<u16>,
 }
 
 impl MusicWorkspaceComponent {
@@ -127,6 +131,7 @@ impl MusicWorkspaceComponent {
             wide_browser_content_height: None,
             pill_regions: HitRegions::new(),
             inline_search: InlineSearch::new(),
+            list_pane_width: None,
         }
     }
 
@@ -187,6 +192,14 @@ impl MusicWorkspaceComponent {
         if !enabled {
             self.track_focused = false;
         }
+    }
+
+    /// Records the session-only Wide hero list-pane width override for the
+    /// next `view()`. Pushed each frame by
+    /// `render_music_workspace_component`; it is a layout fact, not content,
+    /// so it never enters the event-scoped `set_content` projection.
+    pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
+        self.list_pane_width = list_pane_width;
     }
 
     pub(in crate::app) fn set_content(&mut self, context: MusicWideRenderCtx) {
@@ -563,7 +576,7 @@ impl InlineSearchHost for MusicWorkspaceComponent {
 impl Component for MusicWorkspaceComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = LayoutMain::default();
-        let wide = wide_hero_presentation(area).is_some();
+        let wide = wide_hero_fits(area);
         let target = if wide {
             Presentation::Wide
         } else {
@@ -595,6 +608,7 @@ impl Component for MusicWorkspaceComponent {
 
         let mut context = self.context.clone();
         context.track_focused = self.track_focused;
+        context.list.list_pane_width = self.list_pane_width;
         if !wide && self.inline_search.is_active() {
             // Normal Music passes its whole list area to the shared search
             // painter (design.md D3); the ordinary grouped composer does not

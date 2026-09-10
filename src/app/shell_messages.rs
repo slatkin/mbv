@@ -483,6 +483,21 @@ impl Model {
                 ShellRequest::QueueIntent(intent) => {
                     self.handle_queue_intent(intent);
                 }
+                // Live-only Wide hero split resize (add-mouse-wide-split-resize
+                // design.md): the gap boundary component owns the gesture and
+                // the resolved list-pane width; the shell clamps it against
+                // the active surface's content width and stores the session
+                // override. There is no end/persist arm -- nothing is
+                // persisted.
+                ShellRequest::ResizeListPaneLive(width) => {
+                    if let Some(content_area) = self.wide_hero_boundary_content_area() {
+                        self.app.list_pane_width =
+                            crate::app::list_pane_width::normalize_list_pane_width(
+                                Some(width),
+                                content_area.width,
+                            );
+                    }
+                }
                 // Component owns episode-pane focus/episode_filter; mutated locally in
                 // AudiobookshelfPodcastComponent::handle_key before the request is emitted, and
                 // handle_audiobookshelf_podcast_episode_intent resolves the target from the

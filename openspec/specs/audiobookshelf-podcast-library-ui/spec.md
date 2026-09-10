@@ -10,7 +10,7 @@ Provides an Audiobookshelf podcast browsing experience whose presentation and in
 
 The selected podcast hero SHALL place the selected podcast's Audiobookshelf cover in the same right-aligned image slot, with the same dimensions, scaling, text wrapping, loading treatment, and images-disabled behavior as the selected Series Primary image in the TV Shows hero. The cover SHALL be fetched from the configured Audiobookshelf Service using the selected podcast's provider-native library item identity.
 
-Podcast title, author, and description SHALL occupy the corresponding TV hero text area as hero content lines. Missing metadata SHALL collapse without moving the image or changing the TV hero's structural rules. The hero SHALL show title, author, description, and cover image only — no filter pills and no episode rows.
+Podcast title, author, and description SHALL occupy the corresponding TV hero text area as hero content lines. Missing metadata SHALL collapse without moving the image or changing the TV hero's structural rules. In both Wide and inline detail, the hero SHALL also present the matching downloaded episodes and the `All`, `Played`, and `Unplayed` filter pills in the same structural positions and with the same visibility rules as TV episode content.
 
 #### Scenario: Selected podcast has a cover
 
@@ -54,9 +54,9 @@ Activating a podcast show SHALL only enter the selection modal for episode brows
 
 ### Requirement: Podcast libraries use responsive hero presentations
 
-An Audiobookshelf podcast library SHALL use the shared Wide hero presentation when it meets the wide geometry conditions and selected-row replacement otherwise. In Wide hero, the selected podcast's cover, metadata, and downloaded-episode workspace SHALL occupy the right pane while the single-column podcast-show browser occupies the left rail. In the replacement presentation, the same selected-show detail (title, author, description, cover) SHALL replace the active podcast-show row in list flow. The podcast tab SHALL obtain placement from the shared arrangement and SHALL NOT define a separate fallback.
+An Audiobookshelf podcast library SHALL use the shared Wide hero presentation when it meets the wide geometry conditions and selected-row replacement otherwise. In Wide hero, the selected podcast's cover, metadata, filter pills, and downloaded-episode workspace SHALL occupy the right pane while the single-column podcast-show browser occupies the left rail. In the replacement presentation, the same selected-show detail, including title, author, description, cover, filter pills, and downloaded episode rows, SHALL replace the active podcast-show row in list flow. The podcast tab SHALL obtain placement from the shared arrangement and SHALL NOT define a separate fallback.
 
-The podcast tab SHALL supply podcast-native data without changing the shared placement rule: Podcast show for Series, Audiobookshelf cover for Series Primary image, and matching downloaded episodes for the selection modal. Image shape, metadata lines and order, colour variant, element presence, and image source MAY remain podcast-specific declarations.
+The podcast tab SHALL supply podcast-native data without changing the shared placement rule: Podcast show for Series, Audiobookshelf cover for Series Primary image, and matching downloaded episodes for the detail workspace and selection modal. Image shape, metadata lines and order, colour variant, element presence, and image source MAY remain podcast-specific declarations.
 
 #### Scenario: Podcast library is displayed wide
 
@@ -69,8 +69,8 @@ The podcast tab SHALL supply podcast-native data without changing the shared pla
 - **WHEN** an Audiobookshelf podcast library does not meet the shared wide geometry conditions
 - **THEN** podcast shows render in one scrolling column with alphabetical panel pills
 - **AND** selected-show detail (title, author, description, cover) replaces the active show row
+- **AND** the `All`, `Played`, and `Unplayed` filter pills and matching downloaded episode rows render inside that inline detail using the TV reference presentation
 - **AND** no separate hero area is reserved above the show browser
-- **AND** no episode rows or filter pills render inside the inline hero
 
 #### Scenario: Podcast selection changes
 
@@ -98,7 +98,7 @@ The podcast tab SHALL supply podcast-native data without changing the shared pla
 #### Scenario: Podcast library is displayed
 
 - **WHEN** an Audiobookshelf podcast library is displayed
-- **THEN** it uses Wide hero when wide geometry fits and inline selected-show detail (title, author, description, cover) otherwise
+- **THEN** it uses Wide hero when wide geometry fits and inline selected-show detail otherwise
 
 #### Scenario: Selected show scrolls outside the visible list rows
 
@@ -122,23 +122,25 @@ The podcast tab SHALL supply podcast-native data without changing the shared pla
 
 ### Requirement: Podcast libraries use alphabetical panel pills
 
-The Audiobookshelf podcast tab SHALL render alphabetical browsing pills (All, A–C, D–F, … `#`) in the panel area, one row, with the `⌘` prefix, matching every other library tab. The pills SHALL use the shared `render_pill_bar` widget and SHALL write `layout.selector_tabs`. Episode filter pills (All, Played, Unplayed) SHALL NOT render inside the inline hero. The played/unplayed filter SHALL live in the selection modal, not in the panel or the hero content.
+The Audiobookshelf podcast tab SHALL render one alphabetical browsing pill for each non-empty surname range shared with Audiobookshelf Books (for example A–C, D–F, … V–Z) in the panel area, one row, with the shared pill-bar chrome. Empty surname ranges SHALL be omitted, and the tab SHALL NOT add `All` or `#` bucket pills. The pills SHALL use the shared `render_pill_bar` widget, follow its label truncation and overflow contract, and SHALL write `layout.selector_tabs`. The played-state pills (`All`, `Played`, `Unplayed`) SHALL render as episode filters in selected-show detail rather than as alphabetical panel buckets.
 
 #### Scenario: Podcast tab renders alphabetical pills
 
 - **WHEN** the Audiobookshelf podcast tab is displayed with shows available
-- **THEN** alphabetical browsing pills render in the panel area, one row, with the `⌘` prefix
-- **AND** no pills render inside the inline hero
+- **THEN** one alphabetical browsing pill renders for each non-empty surname range
+- **AND** no `All`, `#`, or empty-range bucket pill renders
+- **AND** episode filter pills render in selected-show detail rather than in the alphabetical panel row
 
 #### Scenario: Podcast tab pills use the shared widget
 
 - **WHEN** the alphabetical pills are rendered
 - **THEN** they use the same `render_pill_bar` widget and `PillBar` structure as every other library tab
+- **AND** they follow the shared label truncation and overflow contract
 - **AND** they write `layout.selector_tabs` for mouse hit-testing
 
 ### Requirement: Downloaded episodes use the selection modal
 
-Downloaded podcast episodes SHALL be listed in the constituent-list modal (see `inline-hero-selection-modal`) when the user presses Enter on a selected podcast show. The modal SHALL render one selectable row per matching episode with the episode title and duration. The inline hero SHALL NOT render episode rows.
+Downloaded podcast episodes SHALL be listed in the constituent-list modal (see `inline-hero-selection-modal`) when the user presses Enter on a selected podcast show. The modal SHALL render one selectable row per matching episode with the episode title and duration. The same matching episodes SHALL also render in Wide and inline selected-show detail using the TV episode-list presentation; rendering them inline SHALL NOT replace or alter the modal's activation behavior.
 
 #### Scenario: User opens the episode modal
 
@@ -155,5 +157,5 @@ Downloaded podcast episodes SHALL be listed in the constituent-list modal (see `
 #### Scenario: Podcast detail is empty or loading
 
 - **WHEN** matching episodes are empty or detail is loading
-- **THEN** the modal shows a scoped empty or loading state
-- **AND** the inline hero is unaffected
+- **THEN** the modal and selected-show episode area each show their scoped empty or loading state when visible
+- **AND** the surrounding selected-show detail remains available

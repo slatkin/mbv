@@ -123,6 +123,8 @@ impl App {
                 .or_else(|| prefs["power_left_width"].as_u64())
                 .map(|v| (v as u16).max(LEFT_WIDTH_DEFAULT))
                 .unwrap_or(LEFT_WIDTH_DEFAULT),
+            // Session-only; every launch starts at the default Wide hero split.
+            list_pane_width: None,
             panel_mode: PanelMode::default(),
             // Mini view always starts on the queue panel; not persisted.
             mini_view_focus: PanelFocus::Queue,

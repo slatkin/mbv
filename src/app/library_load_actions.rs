@@ -80,6 +80,13 @@ impl App {
                 if self.normalize_stale_browse_destination() {
                     return;
                 }
+                // Refreshing the active library view reverts the Wide hero
+                // split to the shared arrangement's default ratio. This reset
+                // is deliberately inside the library arm, not at the function
+                // top: refreshing while the Queue panel holds focus must leave
+                // the split untouched (design.md "Refresh reset lives in the
+                // library-side refresh arm").
+                self.list_pane_width = None;
                 match self.tab {
                     TabSelection::Home => {
                         match self.fetch_home() {

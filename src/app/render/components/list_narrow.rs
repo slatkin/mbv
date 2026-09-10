@@ -446,10 +446,9 @@ impl App {
         // selections without a resolved leaf hero, uses the inline
         // replacement flow. Non-hero catalogs keep their width-derived grid.
         let hero_placeholder = inline_hero.is_none()
-            && crate::app::render::arrangements::wide_hero::wide_hero_presentation(
+            && !crate::app::render::arrangements::wide_hero::wide_hero_fits(
                 self.layout.main.left_area,
             )
-            .is_none()
             && matches!(
                 coll.as_str(),
                 "movies" | "homevideos" | "podcasts" | "tvshows" | "music"

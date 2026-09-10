@@ -347,6 +347,13 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
+        if let Some(comp) = self
+            .application
+            .get_component_mut(id)
+            .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
+        {
+            comp.set_list_pane_width(self.app.list_pane_width);
+        }
         self.application.view(id, frame, area);
         let image_paint = self
             .application

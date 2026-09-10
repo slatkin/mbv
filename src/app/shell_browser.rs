@@ -3,7 +3,7 @@ use super::shell::Model;
 use super::{ConfirmAction, ConfirmModal, TabSelection};
 use crate::app::components::browser::{BrowserContent, BrowserIdentity};
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
-use crate::app::render::{wide_hero_presentation, LibraryListRenderCtx};
+use crate::app::render::{wide_hero_fits, LibraryListRenderCtx};
 use mbv_core::config::ServiceKind;
 use std::time::Instant;
 
@@ -401,7 +401,7 @@ impl Model {
         // inner list area. Derive the presentation from the same shared
         // arrangement predicate used by BrowserComponent::view.
         let area = self.app.layout.main.left_area;
-        let wide = wide_hero_presentation(area).is_some();
+        let wide = wide_hero_fits(area);
         if area.width == 0 || area.height == 0 {
             return;
         }
@@ -438,6 +438,7 @@ impl Model {
                 browser.configure_wide_movies(home_video, letter_pills);
                 browser.set_use_nerd_fonts(self.app.use_nerd_fonts);
                 browser.set_images_enabled(self.app.images_enabled());
+                browser.set_list_pane_width(self.app.list_pane_width);
                 if let Some(extras) = narrow_extras {
                     browser.set_narrow_extras(extras);
                 }

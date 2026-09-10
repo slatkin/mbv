@@ -18,6 +18,8 @@ pub enum ComponentId {
     Playback,
     Queue,
     QueueBoundary,
+    /// The Wide hero split's gap-columns gesture owner (add-mouse-wide-split-resize).
+    WideHeroBoundary,
     Home,
     Browser(BrowserKey),
     /// Wide TV workspace (`TvWorkspaceComponent`). Distinct from

@@ -338,7 +338,7 @@ fn feed_group_picker_wide_borderline_height_keeps_pills_above_rows() {
         area.height, 7,
         "fixture must exercise the borderline wide height"
     );
-    assert!(crate::app::render::wide_hero_presentation(area).is_some());
+    assert!(crate::app::render::wide_hero_fits(area));
     assert!(crate::app::render::wide_library_panes(
         ratatui::layout::Rect {
             y: area.y + 2,
@@ -347,6 +347,7 @@ fn feed_group_picker_wide_borderline_height_keeps_pills_above_rows() {
         },
         2,
         1,
+        None,
     )
     .is_none());
 

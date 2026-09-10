@@ -26,6 +26,20 @@ impl Model {
         }
     }
 
+    /// The boundary's painted-split fact for the Feeds surface: the active
+    /// group/watched filter left at least one entry for the painter to
+    /// project. Resolved at the Model boundary from the mounted
+    /// `FeedsComponent`, which owns that component-local state (the shell does
+    /// not mirror it). With no mounted Feeds component the fact defaults to
+    /// `false` (Feeds is mounted for the whole session, so this is only a
+    /// defensive fallback).
+    pub(super) fn feeds_has_visible_entries(&self) -> bool {
+        self.application
+            .get_component(&ComponentId::Feeds)
+            .and_then(|component| component.as_any().downcast_ref::<FeedsComponent>())
+            .is_some_and(FeedsComponent::has_visible_entries)
+    }
+
     pub(super) fn render_feeds_component(&mut self, frame: &mut ratatui::Frame) {
         if !matches!(self.app.tab, super::TabSelection::Feeds) {
             return;
@@ -33,6 +47,11 @@ impl Model {
         let area = self.app.layout.main.feeds_area;
         if area.width == 0 || area.height == 0 {
             return;
+        }
+        if let Some(comp) = self.application.get_component_mut(&ComponentId::Feeds) {
+            if let Some(feeds) = comp.as_any_mut().downcast_mut::<FeedsComponent>() {
+                feeds.set_list_pane_width(self.app.list_pane_width);
+            }
         }
         self.application.view(&ComponentId::Feeds, frame, area);
     }

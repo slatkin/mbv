@@ -27,7 +27,9 @@ impl BrowserComponent {
     ) -> usize {
         let body_area = area;
 
-        let Some(panes) = wide_library_panes(body_area, PANE_PAD_X, PANE_PAD_Y) else {
+        let Some(panes) =
+            wide_library_panes(body_area, PANE_PAD_X, PANE_PAD_Y, ctx.list_pane_width)
+        else {
             // Defensive structure only: unreachable on canonical Wide paths.
             // `browser/mod.rs` calls `render_wide_movies` solely when
             // `wide_hero_presentation(area).is_some()`, and
@@ -55,9 +57,13 @@ impl BrowserComponent {
         // Right pane: read-only shared hero card (not an interactive hero —
         // `layout.hero_area` stays unset so the hero pane is outside mouse
         // geometry).
-        let hero_content =
-            wide_hero_hero_pane(f, body_area, crate::app::render::LeftPaneFocus::ReadOnly)
-                .expect("wide movies layout has a hero pane");
+        let hero_content = wide_hero_hero_pane(
+            f,
+            body_area,
+            crate::app::render::LeftPaneFocus::ReadOnly,
+            ctx.list_pane_width,
+        )
+        .expect("wide movies layout has a hero pane");
         let hero_data = ctx
             .selected_item()
             .filter(|item| {

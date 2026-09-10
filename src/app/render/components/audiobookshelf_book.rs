@@ -113,6 +113,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
     geometry: &mut AudiobookshelfBookGeometry,
     book_presentation: BookPresentation<'_>,
     chapter_presentation: BookChapterPresentation<'_>,
+    list_pane_width: Option<u16>,
 ) -> Option<super::home_hero::HomeImagePaint> {
     *geometry = AudiobookshelfBookGeometry::default();
     if state.books.is_empty() {
@@ -136,17 +137,18 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
     }
 
     let plan = book_hero_plan(state, area.width, images_enabled);
-    if wide_hero::wide_hero_presentation(area).is_some() {
+    if wide_hero::wide_hero_fits(area) {
         let BookPresentation::Wide(book_list) = book_presentation else {
             return None;
         };
-        let panes = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y)?;
+        let panes = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y, list_pane_width)?;
         geometry.left_area = panes.hero_area;
         geometry.wide = true;
         let hero_content_area = wide_hero::wide_hero_hero_pane(
             frame,
             area,
             wide_hero::LeftPaneFocus::Workspace(focused && interaction.chapter_focused),
+            list_pane_width,
         )
         .expect("wide branch already confirmed wide_hero_presentation fits");
         let hero_height = (book_hero_content_rows(&plan, BOOK_WIDE_OVERVIEW_ROWS) + 1)
