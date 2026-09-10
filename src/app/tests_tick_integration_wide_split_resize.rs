@@ -10,12 +10,12 @@ use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::{
-    ComponentId, Msg, MusicWorkspaceComponent, ShellRequest, UserEvent,
+    BrowserComponent, ComponentId, Msg, MusicWorkspaceComponent, ShellRequest, UserEvent,
 };
 use crate::app::render::make_movie_app;
 use crate::app::tests::make_app_stub;
 use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
-use crate::app::{PanelFocus, PanelMode, TabSelection};
+use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
 use mbv_core::config::{FeedKind, FeedSubscription};
 use mbv_core::playback_queue::FeedEntry;
 
@@ -42,6 +42,49 @@ fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
             .model_mut()
             .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
     }
+}
+
+/// The exact live width a gap drag at `column` resolves to, derived from the
+/// active surface's own reported content area rather than a hardcoded
+/// coordinate.
+fn resolved_width(column: u16, content_area: Rect) -> Option<u16> {
+    crate::app::list_pane_width::normalize_list_pane_width(
+        Some(column.saturating_sub(content_area.x)),
+        content_area.width,
+    )
+}
+
+/// The live-width message, if the boundary owner emitted one for this step.
+fn live_width(outcome: &StepOutcome) -> Option<u16> {
+    outcome.raw_messages.iter().find_map(|msg| match msg {
+        Msg::Shell(ShellRequest::ResizeListPaneLive(width)) => Some(*width),
+        _ => None,
+    })
+}
+
+/// The non-terminal messages the mouse fold actually delivered: one gap
+/// gesture must deliver the boundary owner's claim and nothing else.
+fn delivered_claims(outcome: &StepOutcome) -> Vec<&Msg> {
+    outcome
+        .messages
+        .iter()
+        .filter(|msg| !matches!(msg, Msg::TerminalEvent(_)))
+        .collect()
+}
+
+/// No pane destination may claim the boundary's gap gesture (design.md:
+/// "the panes' hit geometry excludes the gap").
+fn assert_no_pane_gesture(outcome: &StepOutcome, what: &str) {
+    assert!(
+        outcome.raw_messages.iter().all(|msg| !matches!(
+            msg,
+            Msg::Shell(ShellRequest::BrowserRowClick { .. })
+                | Msg::Shell(ShellRequest::MusicAlbumCursor { .. })
+                | Msg::Shell(ShellRequest::QueueRowClick { .. })
+                | Msg::Shell(ShellRequest::FeedsRowClick)
+        )),
+        "{what}: no pane component may claim the gap gesture"
+    );
 }
 
 fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event<UserEvent> {
@@ -136,6 +179,36 @@ fn wide_hero_boundary_arms_nothing_on_an_empty_feeds_surface() {
         "a disarmed boundary must not be mouse-subscribed"
     );
     assert!(harness.model().wide_hero_boundary_gap_rect().is_none());
+
+    // The disarmed boundary delivers nothing: a press-drag-release across the
+    // columns where the split would be must not resize (spec: "No resize
+    // target where no split is painted").
+    let would_be_gap = crate::app::render::wide_library_panes(
+        harness.model().app.layout.main.feeds_area,
+        0,
+        0,
+        None,
+    )
+    .expect("wide feeds")
+    .browser_panel
+    .right();
+    let probe_row = harness.model().app.layout.main.feeds_area.y + 1;
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Drag(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        harness.inject(mouse(kind, would_be_gap, probe_row));
+        let outcome = harness.step();
+        assert_eq!(
+            live_width(&outcome),
+            None,
+            "an empty Feeds surface must never deliver a live width"
+        );
+        assert_no_pane_gesture(&outcome, "empty Feeds");
+        apply_outcome(&mut harness, outcome);
+    }
+    assert_eq!(harness.model().app.list_pane_width, None);
 
     let preserved = with_boundary.backend().buffer().clone();
     harness
@@ -394,4 +467,284 @@ fn wide_split_drag_never_writes_preferences() {
         saved.get("list_pane_width").is_none(),
         "the session split must have no persisted preference key"
     );
+}
+
+/// A full press-drag-release on the gap tracks the pointer at one-column
+/// precision through the real `Application::tick()` path: each drag step
+/// delivers exactly the boundary owner's resolved live width (asserted
+/// exactly, and with no pane claim), the session override follows, the
+/// release is a live-only no-op, and the Movies destination's own cursor and
+/// scroll never move.
+#[test]
+fn tick_wide_hero_boundary_press_drag_release_tracks_exact_live_widths() {
+    let mut app = make_movie_app();
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw_frame(&mut harness);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let browser_id = harness
+        .model()
+        .emby_browser_id
+        .clone()
+        .expect("the Movies browser is mounted");
+    let gap = harness
+        .model()
+        .wide_hero_boundary_gap_rect()
+        .expect("the wide Movies surface paints a split");
+    let content_area = harness
+        .model()
+        .wide_hero_boundary_content_area()
+        .expect("wide Movies content area");
+    let browser_state = |harness: &mut TickHarness| {
+        let browser = harness
+            .model_mut()
+            .application
+            .get_component_mut(&browser_id)
+            .expect("browser mounted")
+            .as_any_mut()
+            .downcast_mut::<BrowserComponent>()
+            .expect("browser component type");
+        (browser.cursor(), browser.scroll())
+    };
+    let before = browser_state(&mut harness);
+
+    // Press: arms the gesture but resizes nothing.
+    harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, gap.y));
+    let outcome = harness.step();
+    assert_eq!(live_width(&outcome), None, "a press must not resize");
+    assert!(
+        delivered_claims(&outcome).is_empty(),
+        "a press inside the gap claims nothing"
+    );
+    apply_outcome(&mut harness, outcome);
+    assert_eq!(harness.model().app.list_pane_width, None);
+
+    // Drag out, further out, then back: each step delivers exactly the
+    // one-column resolved live width and nothing else.
+    for column in [gap.x + 1, gap.x + 5, gap.x - 2] {
+        harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), column, gap.y));
+        let outcome = harness.step();
+        let expected = resolved_width(column, content_area).expect("a valid width");
+        assert_eq!(
+            live_width(&outcome),
+            Some(expected),
+            "drag to column {column} must deliver the exact resolved live width"
+        );
+        assert_eq!(
+            delivered_claims(&outcome).len(),
+            1,
+            "one gap drag delivers only the boundary owner's message"
+        );
+        assert_no_pane_gesture(&outcome, "gap drag");
+        apply_outcome(&mut harness, outcome);
+        assert_eq!(harness.model().app.list_pane_width, Some(expected));
+    }
+    let last = resolved_width(gap.x - 2, content_area).expect("a valid width");
+
+    // Release: live-only, so `DragEnd` emits nothing and nothing is written.
+    harness.inject(mouse(MouseEventKind::Up(MouseButton::Left), gap.x - 2, gap.y));
+    let outcome = harness.step();
+    assert_eq!(live_width(&outcome), None, "release must not resize");
+    assert!(
+        delivered_claims(&outcome).is_empty(),
+        "release claims nothing"
+    );
+    assert_no_pane_gesture(&outcome, "gap release");
+    apply_outcome(&mut harness, outcome);
+    assert_eq!(harness.model().app.list_pane_width, Some(last));
+
+    assert_eq!(
+        browser_state(&mut harness),
+        before,
+        "the Movies pane must not handle the gap gesture"
+    );
+}
+
+/// Overlay arbitration (mouse-input spec: "Overlay arbitration suppresses the
+/// boundary"): while a panel-covering overlay is mounted, a
+/// press-drag-release across the gap columns delivers no gesture to the
+/// boundary owner and leaves the split unchanged. Outcomes are deliberately
+/// not applied so the overlay stays mounted for every pointer event.
+#[test]
+fn tick_wide_hero_boundary_gap_drag_is_suppressed_while_a_panel_overlay_is_mounted() {
+    let mut app = make_movie_app();
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw_frame(&mut harness);
+    harness.model_mut().sync_mounted_surfaces();
+    let gap = harness
+        .model()
+        .wide_hero_boundary_gap_rect()
+        .expect("the wide Movies surface paints a split");
+    assert!(harness.model().wide_hero_boundary_mouse_eligible());
+
+    harness.model_mut().mount_sidebar(SidebarId::Search);
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(
+        !harness.model().panel_mouse_eligible(),
+        "a mounted overlay arbitrates the panel surfaces"
+    );
+    assert!(!harness.model().wide_hero_boundary_mouse_eligible());
+    assert!(
+        !harness
+            .model()
+            .mouse_subscribed
+            .contains(&ComponentId::WideHeroBoundary),
+        "the obscured boundary must not be mouse-subscribed"
+    );
+
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Drag(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        harness.inject(mouse(kind, gap.x + 8, gap.y));
+        let outcome = harness.step();
+        assert_eq!(
+            live_width(&outcome),
+            None,
+            "the obscured boundary must receive no gesture"
+        );
+        assert_no_pane_gesture(&outcome, "overlay suppression");
+    }
+    assert_eq!(
+        harness.model().app.list_pane_width,
+        None,
+        "the split must not change while an overlay arbitrates"
+    );
+}
+
+/// Losing eligibility mid-drag (an overlay mount) resets the boundary's
+/// gesture state before the next delivery, so no stale width can be emitted
+/// after eligibility ends — not while suppressed, and not once eligibility
+/// returns: a drag without a fresh press is inert. A new press arms again.
+#[test]
+fn tick_wide_hero_boundary_mid_drag_eligibility_loss_emits_no_stale_width() {
+    let mut app = make_movie_app();
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw_frame(&mut harness);
+    harness.model_mut().sync_mounted_surfaces();
+    let gap = harness
+        .model()
+        .wide_hero_boundary_gap_rect()
+        .expect("the wide Movies surface paints a split");
+    let content_area = harness
+        .model()
+        .wide_hero_boundary_content_area()
+        .expect("wide Movies content area");
+
+    // Arm a drag on the gap.
+    harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, gap.y));
+    let outcome = harness.step();
+    assert_eq!(live_width(&outcome), None);
+    apply_outcome(&mut harness, outcome);
+
+    // An overlay mounts mid-drag: eligibility is lost and the gesture state
+    // is reset before the drag is delivered.
+    harness.model_mut().mount_sidebar(SidebarId::Search);
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(!harness.model().wide_hero_boundary_mouse_eligible());
+
+    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x + 30, gap.y));
+    let outcome = harness.step();
+    assert_eq!(
+        live_width(&outcome),
+        None,
+        "no stale width may be emitted after eligibility ends"
+    );
+    apply_outcome(&mut harness, outcome);
+    assert_eq!(harness.model().app.list_pane_width, None);
+
+    // Dismissing the overlay restores eligibility, but the pre-overlay drag
+    // anchor is gone: a drag without a fresh press emits nothing.
+    harness.model_mut().dismiss_sidebar(SidebarId::Search);
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness.model().wide_hero_boundary_mouse_eligible());
+    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x + 30, gap.y));
+    let outcome = harness.step();
+    assert_eq!(
+        live_width(&outcome),
+        None,
+        "the reset gesture must not revive when eligibility returns"
+    );
+    apply_outcome(&mut harness, outcome);
+    assert_eq!(harness.model().app.list_pane_width, None);
+
+    // A fresh press arms the gesture again.
+    harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, gap.y));
+    let outcome = harness.step();
+    apply_outcome(&mut harness, outcome);
+    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x + 3, gap.y));
+    let outcome = harness.step();
+    let expected = resolved_width(gap.x + 3, content_area).expect("a valid width");
+    assert_eq!(live_width(&outcome), Some(expected));
+    apply_outcome(&mut harness, outcome);
+    assert_eq!(harness.model().app.list_pane_width, Some(expected));
+}
+
+/// A Feeds surface that fits the wide breakpoint but is still loading (no
+/// visible entries) paints no split: the boundary arms nothing and delivers
+/// no gesture, mirroring the empty state.
+#[test]
+fn wide_hero_boundary_arms_nothing_and_delivers_nothing_while_feeds_load() {
+    let mut app = make_app_stub();
+    app.tab = TabSelection::Feeds;
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    app.feed_tab.subscriptions = vec![FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: FeedKind::Audio,
+    }];
+    app.feed_tab.loading = true;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw_frame(&mut harness);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let area = harness.model().app.layout.main.feeds_area;
+    assert!(
+        crate::app::render::wide_hero_fits(area),
+        "the breakpoint must fit so loading is the only reason to disarm"
+    );
+    assert!(
+        !harness.model().wide_hero_boundary_mouse_eligible(),
+        "a loading Feeds surface must not arm the boundary"
+    );
+    assert!(
+        !harness
+            .model()
+            .mouse_subscribed
+            .contains(&ComponentId::WideHeroBoundary)
+    );
+    assert!(harness.model().wide_hero_boundary_gap_rect().is_none());
+
+    let would_be_gap = crate::app::render::wide_library_panes(area, 0, 0, None)
+        .expect("wide feeds")
+        .browser_panel
+        .right();
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Drag(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        harness.inject(mouse(kind, would_be_gap, area.y + 1));
+        let outcome = harness.step();
+        assert_eq!(
+            live_width(&outcome),
+            None,
+            "a loading Feeds surface must never deliver a live width"
+        );
+        assert_no_pane_gesture(&outcome, "loading Feeds");
+        apply_outcome(&mut harness, outcome);
+    }
+    assert_eq!(harness.model().app.list_pane_width, None);
 }
