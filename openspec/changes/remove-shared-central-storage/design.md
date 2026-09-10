@@ -87,16 +87,35 @@ surface and the redb dependency, and leaves the spec describing a facility that 
 exist); keeping the client code against third-party hosters (no such hosters, and the
 protocol is undocumented and purpose-built).
 
+**8. Three main-spec edits are made directly rather than through a delta.** OpenSpec deltas
+cannot carry a capability `Purpose`, and `interactive-component-framework`'s stale enumeration is
+prose rather than behavior. Task 1.5 therefore edits `openspec/specs/feed-entry-state/spec.md`,
+`feed-subscriptions`, and `interactive-component-framework` directly. Validation is unaffected:
+deltas are matched against requirement and scenario names, not Purpose text.
+
 ## Risks / Trade-offs
 
 - **[Existing users lose feed watched markers once.]** No migration reader is written. →
   Accepted: rows are re-derived from play activity, and the alternative is a `shared.mbvd`
   reader that outlives the feature it exists to retire.
 - **[A machine whose only copy of `library_routes` lived in the shared store loses them.]** →
-  The F2 route picker already writes `config.toml` before persisting to shared data, so a
-  machine that edited routes keeps them. Machine B (which only inherited them) reverts to its
-  own `config.toml`, which is the intended single-machine behavior; worth one release-note
-  line.
+  Verified: the F2 handler saves config (`shell_overlays_menus.rs:696` → `render::save_route_config`
+  → `config::save_config_settings`) *before* persisting to shared data (`:700`), so a machine
+  that edited routes keeps them in `config.toml`. A machine that only inherited them reverts to
+  its own `config.toml` — the intended single-machine behavior, stated in the commit body
+  (task 2.4). The inbound direction (shared records overwriting local files in
+  `apply_shared_snapshot`) is the roaming behavior this change removes, not a competing local
+  authority.
+- **[Resume could write a zero position over a queued slot's position.]** `action.rs:425-440`
+  hydrates an entry and then calls `apply_progress`. → With the local store the hydrated value is
+  the stored position, matching today's shared-connected behavior; task 1.3 pins the queue-slot
+  case with a test rather than leaving it to reasoning.
+- **[A name-based sweep deletes unrelated state.]** `daemon_core.rs:492`'s `SharedQueueState` is
+  ctrl snapshot state (queue, source, observed active slot), not shared data. → Called out
+  explicitly in task 2.3.
+- **[`redb` removal cascades.]** Verified: `mbv-core` is the only workspace package depending on
+  it (no other package's dependencies reference it in `Cargo.lock`) and no other source file
+  imports it. → Dropping it from the two manifests is sufficient.
 - **[Deleting 3.6k lines leaves orphan references.]** → Compiler is the oracle (no
   `#[allow(dead_code)]` escapes), plus a final `rg` sweep for
   `shared_data|shared_client|SharedClient|shared_store|roaming|shared-mbv-state` before the

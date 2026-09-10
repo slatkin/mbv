@@ -66,8 +66,14 @@ None. Feed-entry state keeps its existing capability; only its storage changes.
   (same single writer as today); the surviving feed-state functions relocate from
   `shared_sync.rs` into `src/app/feed_tab_actions.rs`.
 - **Dependencies**: `redb` removed from the workspace.
-- **Specs**: five capabilities as listed above; `ctrl-protocol` is untouched (its capability
-  list never covered shared data, and `CTRL_CAP_SHARED_MBV_STATE` is an unused constant).
+- **Specs**: five capability deltas as listed above. `ctrl-protocol` is untouched (its
+  capability list never covered shared data, and `CTRL_CAP_SHARED_MBV_STATE` is an unused
+  constant, verified at `crates/mbv-core/src/ctrl.rs:31`). Three main-spec edits cannot ride a
+  delta and are done directly (task 1.5): the `feed-entry-state` and `feed-subscriptions`
+  Purposes, and the stale `shared-data` entry in `interactive-component-framework`'s
+  shell-authority enumeration (lines ~194, 200, 205).
 - **Docs**: `CONTEXT.md` (the six "Shared data and roaming" terms plus `FeedEntry`'s roaming
   sentence), `docs/architecture/interactive-tui-component-map.md` (three mentions).
+- **Architecture gates**: `rules/interactive-component-boundary/no-service-client-deps.yml`
+  names `SharedClient` in both its message and its regex and must be updated with the removal.
 - **Issues**: motivates a partial update to #687.

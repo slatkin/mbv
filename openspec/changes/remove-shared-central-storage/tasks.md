@@ -27,14 +27,27 @@
   compiled. `rg -n "shared_client|SharedClientState" src/app/feed_tab_actions.rs` returns
   nothing, and a full `cargo nextest run` is green.
 
+- [ ] 1.5 Correct the main-spec prose a delta cannot carry: the `feed-entry-state` Purpose
+  (`openspec/specs/feed-entry-state/spec.md`) still says "durable roaming state on the existing
+  shared-data transport", and the `feed-subscriptions` Purpose still says the client remembers
+  no playback state. Rewrite both to the local-store end state, and drop the stale `shared-data`
+  entry from the shell-authority enumeration in
+  `openspec/specs/interactive-component-framework/spec.md` (~lines 194, 200, 205). Verify with
+  `rg -n "roaming|shared-data|shared data"` over those three files showing only local-state
+  wording, and `openspec validate remove-shared-central-storage --strict` still passing.
+
 ## 2. Remove the shared-data capability
 
-- [ ] 2.1 Delete the TUI client surface: the remainder of `src/app/shared_sync.rs`,
-  `App.shared_client` / `shared_reconnect_rx`, startup initialization, reconnect/backoff
-  draining, teardown document writes, the fallback and stale-write toasts, the shared-data
-  chrome glyph and its legend entry, and the settings-screen roaming-settings persist hook.
-  Verify: `rg -n "shared_client|SharedClient|shared_sync" src/` returns nothing and
-  `cargo nextest run -p mbv` is green.
+- [ ] 2.1 Delete the TUI client surface: the remainder of `src/app/shared_sync.rs`, every
+  `persist_shared_document` call site (`queue_actions_playlist_mutation.rs`,
+  `library_position_state.rs`, `run_loop_events_teardown.rs`), `App.shared_client` /
+  `shared_reconnect_rx` (`app_struct.rs`), startup initialization (`construct.rs`),
+  reconnect/backoff draining, the fallback and stale-write toasts, the shared-data chrome
+  glyph and its legend entry (`chrome_status.rs`), the settings-screen roaming-settings persist
+  hook (`settings.rs`), the affected test modules, and the `SharedClient` reference in
+  `rules/interactive-component-boundary/no-service-client-deps.yml` (message and regex — a live
+  architecture gate). Verify `rg -n "shared_client|SharedClient|shared_sync|persist_roaming" src/`
+  returns nothing, `ast-grep scan` is clean, and `cargo nextest run -p mbv` is green.
 
 - [ ] 2.2 Delete the core modules (`shared_client`, `shared_client_transport`,
   `shared_client_tests`, `shared_service`, `shared_protocol`, `shared_state`, `shared_store`,
@@ -44,7 +57,9 @@
 
 - [ ] 2.3 Remove daemon-side hosting and advertisement: the shared-data hosting block in
   `daemon_run.rs`, the `mbv-shared-data-tcp-port` session `supported_commands` entry and its
-  parser, and the unused `CTRL_CAP_SHARED_MBV_STATE` constant. Verify
+  parser, and the unused `CTRL_CAP_SHARED_MBV_STATE` constant. Do NOT remove `daemon_core.rs`'s
+  `SharedQueueState` — it is ctrl snapshot state (queue, source, observed active slot) and is
+  unrelated to shared data despite the name. Verify
   `rg -n "start_shared_service|mbv-shared-data-tcp-port|CTRL_CAP_SHARED_MBV_STATE"` returns
   nothing and the daemon test suites are green.
 
@@ -52,7 +67,10 @@
   save paths, and their validation; drop a leftover `[shared_data]` section on the next
   settings save; remove the sections from `dist/config.toml` and `dist/mbvd.toml`. Verify with
   a config test asserting a saved file no longer contains `[shared_data]`, removal of the
-  `config_tests_shared_data` module, and green config tests.
+  `config_tests_shared_data` module, and green config tests. State the user-visible consequence
+  in the commit body: a machine whose `library_routes` existed only in the shared store reverts
+  to its own `config.toml`, while a machine that edited routes keeps them
+  (`shell_overlays_menus.rs:696` saves config before `persist_roaming_settings` at `:700`).
 
 - [ ] 2.5 Remove `mbvd --export-shared-data`: the action, its usage/message strings, and its
   tests. Verify `cargo nextest run -p mbvd` is green and the documented usage line lists no
@@ -64,20 +82,16 @@
   `rg -n "shared-mbv-state|shared data|shared-data|roaming" CONTEXT.md docs/` returns nothing
   that describes a live facility.
 
-- [ ] 2.7 Correct the `feed-subscriptions` Purpose in the main spec to local-state wording
-  (a delta cannot carry a Purpose change) and confirm no other main spec still describes the
-  removed facility. `openspec validate --specs` passes with no zero-delta findings.
-
-- [ ] 2.8 Final gates on the whole change: `cargo fmt --all -- --check`, `cargo clippy
+- [ ] 2.7 Final gates on the whole change: `cargo fmt --all -- --check`, `cargo clippy
   --workspace --all-targets`, `ast-grep scan`, the full `cargo nextest run`, and
-  `openspec validate --change remove-shared-central-storage`. All green with no
+  `openspec validate remove-shared-central-storage --strict`. All green with no
   `#[allow(dead_code)]` added to silence removal fallout.
 
-- [ ] 2.9 Update #687 with this change's outcome: the store's `redb` harness — the issue's
+- [ ] 2.8 Update #687 with this change's outcome: the store's `redb` harness — the issue's
   byte-weight site, already fixed in 47926ae0 — is deleted outright, and the remaining sweep
   of `temp_dir()` sites stays open. Verify with the posted comment, or record why none is
   needed if the issue was closed by 47926ae0.
 
-- [ ] 2.10 Archive the change, syncing the five capability deltas into `openspec/specs/`
+- [ ] 2.9 Archive the change, syncing the five capability deltas into `openspec/specs/`
   without asking (project archive guidance). Verify `openspec validate --specs` after archive
   and that `openspec/specs/shared-mbv-state/` no longer exists.
