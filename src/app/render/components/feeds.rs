@@ -39,21 +39,28 @@ pub(in crate::app) struct FeedsRenderModel<'a> {
     pub images_enabled: bool,
 }
 
+/// The active media-list carrier Feeds paints this frame (design.md D1): the
+/// Wide presentation for the Wide hero list or the Inline presentation for
+/// inline Narrow. Exactly one is handed over per view; the same shared
+/// `MediaList` owner moves between them.
+pub(in crate::app) enum FeedsCarrier<'a> {
+    Wide(&'a mut WideMediaList<String>),
+    Inline(&'a mut InlineMediaBrowser<String>),
+}
+
 /// Paints the Feeds destination's parent-owned pill strip + watched-filter
-/// chrome + Wide hero detail pane, then mounts the active canonical control
-/// (`WideMediaList` for Wide hero Wide, `InlineMediaBrowser` for inline
-/// Narrow) into the list sub-rect below the pill strip and rebuilds the
-/// pre-#638 row-geometry maps from its exported `RowGeometry`. Returns the
-/// resolved scroll offset the painter used this frame (observability only; the
-/// control owns cursor/scroll and there is no render write-back).
+/// chrome + Wide hero detail pane, then mounts the active canonical carrier
+/// (`FeedsCarrier::Wide` for Wide hero Wide, `FeedsCarrier::Inline` for inline
+/// Narrow) into the list sub-rect below the pill strip. Only the handed-over
+/// presentation paints; the shared `MediaList` owner keeps cursor/scroll and
+/// there is no render write-back.
 pub(in crate::app) fn render_feeds_content(
     f: &mut Frame,
     area: Rect,
     focused: bool,
     layout: &mut LayoutMain,
     model: FeedsRenderModel<'_>,
-    canonical_list: &mut WideMediaList<String>,
-    inline_list: &mut InlineMediaBrowser<String>,
+    control: FeedsCarrier<'_>,
 ) {
     if area.height == 0 || area.width == 0 {
         return;
@@ -214,6 +221,9 @@ pub(in crate::app) fn render_feeds_content(
     }
 
     if wide {
+        let FeedsCarrier::Wide(canonical_list) = control else {
+            return;
+        };
         let paint_rect = Rect {
             x: outer_panel.map_or(list_area.x, |panel| panel.x),
             width: outer_panel.map_or(list_area.width, |panel| panel.width),
@@ -232,6 +242,9 @@ pub(in crate::app) fn render_feeds_content(
         layout.selected_item_rect = canonical_list.current_selected_row_rect();
         layout.inline_hero_area = Rect::default();
     } else {
+        let FeedsCarrier::Inline(inline_list) = control else {
+            return;
+        };
         let desired_detail_rows =
             feed_hero_content_rows(true).saturating_add(HERO_BLOCK_EXTRA_ROWS) as usize;
         inline_list.set_geometry(list_area, list_area);

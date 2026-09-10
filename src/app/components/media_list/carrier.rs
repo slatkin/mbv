@@ -178,6 +178,16 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         }
     }
 
+    /// Replace one existing active-owner row by stable target without
+    /// rebuilding indexes or disturbing selection/scroll.
+    pub fn patch_row(&mut self, target: &Target, row: MediaListRow<Target>) -> bool {
+        match self.active {
+            Presentation::Wide => self.wide.patch_row(target, row),
+            Presentation::Inline => self.inline.patch_row(target, row),
+            Presentation::Grid => self.grid.patch_row(target, row),
+        }
+    }
+
     /// Select the active owner's first selectable row.
     pub fn select_first(&mut self) {
         match self.active {
@@ -193,6 +203,17 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
             Presentation::Wide => self.wide.select_last(),
             Presentation::Inline => self.inline.select_last(),
             Presentation::Grid => self.grid.select_last(),
+        }
+    }
+
+    /// Place the active owner's selection at selectable index `index`, clamped
+    /// to the last row. Used for a shell-owned discrete re-anchor (design.md
+    /// D5), not for row-local input, which goes through [`Self::delegate`].
+    pub fn select_index(&mut self, index: usize) {
+        match self.active {
+            Presentation::Wide => self.wide.select_index(index),
+            Presentation::Inline => self.inline.select_index(index),
+            Presentation::Grid => self.grid.select_index(index),
         }
     }
 
@@ -260,6 +281,26 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
             Presentation::Wide => self.wide.claims_point(list_area, point),
             Presentation::Inline => {
                 self.inline.claims_point(list_area, point)
+                    || self
+                        .inline
+                        .current_detail_rect()
+                        .is_some_and(|rect| rect.contains(point))
+            }
+            Presentation::Grid => self.grid.claims_current_point(point),
+        }
+    }
+
+    /// Whether the active presentation's retained current frame claims
+    /// `point`. Unlike [`Self::claims_point`], this respects D6 frame
+    /// invalidation: a presentation configured for a new frame that has not
+    /// completed its view claims nothing, so a destination that re-projects
+    /// its rows on every sync (Feeds) or a stale frame cannot accept pointer
+    /// input.
+    pub fn claims_current_point(&self, point: Position) -> bool {
+        match self.active {
+            Presentation::Wide => self.wide.claims_current_point(point),
+            Presentation::Inline => {
+                self.inline.claims_current_point(point)
                     || self
                         .inline
                         .current_detail_rect()

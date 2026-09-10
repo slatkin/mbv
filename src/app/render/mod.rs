@@ -27,7 +27,7 @@ pub(in crate::app) use components::daemon_lost_modal::render_daemon_lost_modal_c
 pub(in crate::app) use components::detail::{
     compact_banner_layout, render_compact_detail_with_ctx, CompactBannerLayout, CompactDetailCtx,
 };
-pub(in crate::app) use components::feeds::{render_feeds_content, FeedsRenderModel};
+pub(in crate::app) use components::feeds::{render_feeds_content, FeedsCarrier, FeedsRenderModel};
 pub(in crate::app) use components::feeds_manage::{
     render_feeds_manage_content, FeedsManageRenderModel,
 };

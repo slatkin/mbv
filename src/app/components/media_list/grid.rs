@@ -300,6 +300,14 @@ impl<Target> GridMediaList<Target> {
         self.paint = None;
         self.core.set_content(rows);
     }
+    /// Replace one existing row by stable target, preserving selection and scroll.
+    pub fn patch_row(&mut self, target: &Target, row: MediaListRow<Target>) -> bool
+    where
+        Target: Clone + PartialEq,
+    {
+        self.paint = None;
+        self.core.patch_row(target, row)
+    }
     /// Move the cursor to `target` when it is present; returns whether it was.
     /// Selection does not change row flow geometry, so a completed view
     /// remains valid for pointer gestures until the next view begins (matching

@@ -191,9 +191,9 @@ fn feeds_wide_left_pane_fills_when_an_entry_is_selected() {
 /// to an entry once entries exist.
 #[test]
 fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
-    use crate::app::components::media_list::{InlineMediaBrowser, WideMediaList};
+    use crate::app::components::media_list::WideMediaList;
     use crate::app::layout::LayoutMain;
-    use crate::app::render::{render_feeds_content, FeedsRenderModel};
+    use crate::app::render::{render_feeds_content, FeedsCarrier, FeedsRenderModel};
     use crate::app::types_feed_tab::WatchedFilter;
 
     let subscriptions = vec![FeedSubscription {
@@ -204,7 +204,6 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
     let entries = vec![feed_entry("entry-1", "Entry One")];
     let mut layout = LayoutMain::default();
     let mut canonical_list: WideMediaList<String> = WideMediaList::new();
-    let mut inline_list: InlineMediaBrowser<String> = InlineMediaBrowser::new();
     let area = wide_area();
     let terminal = direct_terminal(|f| {
         render_feeds_content(
@@ -221,8 +220,7 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
                 selected_entry: None,
                 images_enabled: true,
             },
-            &mut canonical_list,
-            &mut inline_list,
+            FeedsCarrier::Wide(&mut canonical_list),
         );
     });
     let hero = layout.hero_area;
@@ -251,8 +249,7 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
                 selected_entry: None,
                 images_enabled: true,
             },
-            &mut focused_list,
-            &mut inline_list,
+            FeedsCarrier::Wide(&mut focused_list),
         );
     });
     let focused_hero = focused_layout.hero_area;

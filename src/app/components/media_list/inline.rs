@@ -385,6 +385,12 @@ impl<Target: Clone + PartialEq> InlineMediaBrowser<Target> {
         self.core.set_content(rows);
     }
 
+    /// Replace one existing row by stable target, preserving selection and scroll.
+    pub fn patch_row(&mut self, target: &Target, row: MediaListRow<Target>) -> bool {
+        self.invalidate_paint();
+        self.core.patch_row(target, row)
+    }
+
     /// Move the cursor to `target` when it is present; returns whether it was.
     pub fn select_target(&mut self, target: &Target) -> bool {
         self.invalidate_paint();

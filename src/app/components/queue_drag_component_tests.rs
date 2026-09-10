@@ -60,7 +60,7 @@ fn row_point(component: &QueueComponent, row_offset: u16) -> (u16, u16) {
 
 #[test]
 fn queue_drag_moves_grabbed_row_onto_target() {
-    let (mut component, slots, _terminal) = drawn_component();
+    let (mut component, slots, mut terminal) = drawn_component();
     let first = slots[0].slot_id;
     let third = slots[2].slot_id;
     let (row0_x, row0_y) = row_point(&component, 0);
@@ -73,6 +73,12 @@ fn queue_drag_moves_grabbed_row_onto_target() {
             modifiers: KeyModifiers::NONE,
         }))
         .is_some());
+    // The delegated click invalidates the completed frame's retained facts
+    // (design.md D6); the real run loop redraws after the press before the
+    // drag is delivered, so reproduce that frame here.
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
     assert!(matches!(
         component.on(&Event::Mouse(MouseEvent {
             kind: MouseEventKind::Drag(MouseButton::Left),
@@ -87,7 +93,7 @@ fn queue_drag_moves_grabbed_row_onto_target() {
 
 #[test]
 fn queue_drag_blank_space_keeps_grab_for_later_row() {
-    let (mut component, slots, _terminal) = drawn_component();
+    let (mut component, slots, mut terminal) = drawn_component();
     let first = slots[0].slot_id;
     let third = slots[2].slot_id;
     let (row0_x, row0_y) = row_point(&component, 0);
@@ -100,6 +106,11 @@ fn queue_drag_blank_space_keeps_grab_for_later_row() {
             modifiers: KeyModifiers::NONE,
         }))
         .is_some());
+    // The delegated click invalidates the retained frame facts; redraw the
+    // frame the real run loop paints before the drag arrives.
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
     assert!(component
         .on(&Event::Mouse(MouseEvent {
             kind: MouseEventKind::Drag(MouseButton::Left),
