@@ -472,7 +472,7 @@ impl HomeComponent {
                 // Home's hero is destination-painted chrome outside the
                 // carrier's list area, so the destination keeps claiming it
                 // here (design Non-Goals: chrome stays with the parent).
-                let claimed = self.carrier.claims_point(self.list_area, at)
+                let claimed = self.carrier.claims_current_point(at)
                     || self.hero_area.is_some_and(|hero| hero.contains(at));
                 if !claimed {
                     return None;

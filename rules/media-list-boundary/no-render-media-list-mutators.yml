@@ -1,0 +1,23 @@
+id: no-render-media-list-mutators
+language: rust
+severity: error
+message: >-
+  A Render Component paints a media-list surface; it must not mutate the shared
+  owner (cursor/scroll/content). The destination projects content before view in
+  its content/update method, and row-local input goes through the destination's
+  delegation seam. See
+  openspec/changes/complete-shared-media-list-ownership design.md D6/D7.
+files:
+  - "src/app/render/components/**/*.rs"
+ignores:
+  - "src/app/render/components/media_list/**"
+  - "src/app/render/components/media_list.rs"
+  - "src/app/**/*tests*.rs"
+  - "src/app/**/tests*.rs"
+rule:
+  pattern: $RECV.$METHOD($$$ARGS)
+constraints:
+  METHOD:
+    regex: "^(set_content|select_index|set_scroll|set_scroll_unclamped|move_selection|resolve_viewport|patch_row|select_first|select_last)$"
+  RECV:
+    regex: "(\\.|^)(wide_list|inline_list|canonical_list|book_list|show_list|album_list|track_list|media_list|episodes|chapter_list)$"

@@ -1,5 +1,7 @@
 use crate::app::components::inline_search::InlineSearch;
-use crate::app::components::media_list::WideMediaList;
+use crate::app::components::media_list::{
+    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
+};
 use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
@@ -18,6 +20,7 @@ use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::{Block, Paragraph, Wrap};
 use ratatui::Frame;
+use tuirealm::component::Component;
 
 /// Minimum visible-row floor for the embedded episode `WideMediaList` box
 /// (task 4.2d): a season pill row plus at least this many episode rows, inset
@@ -338,24 +341,13 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         // Legacy rail parity (`item_cell_spans`): the selected row takes the
         // resting surface so it reads against the focused green panel body.
         media_list.set_geometry(paint_area, list_area);
-        let paint = super::media_list::render_wide_media_list(
-            f,
-            paint_area,
-            list_area,
-            media_list,
+        media_list.set_paint_policy(WideMediaListPaintPolicy::new(
             right_focused,
-            palette::list_selected_row_bg(),
+            SelectedRowSurface::ListBackdrop,
             None,
-        );
-        let offset = paint.row_geometry.offset();
-        media_list.finish_view(
-            paint_area,
-            list_area,
-            paint.row_geometry,
-            paint.selected_row_rect,
-        );
-        layout.left_item_rows = paint.left_item_rows;
-        layout.left_row_map = paint.left_row_map;
+        ));
+        Component::view(media_list, f, list_area);
+        let offset = media_list.current_flow_offset().unwrap_or(0);
         // Same key the component sorts the rail rows by, so
         // `left_sorted_indices` matches the painted order;
         // `sort_by_cached_key` computes each key once.
@@ -578,21 +570,12 @@ fn render_tv_series_selection(
         ..episode_list_area
     };
     episodes.set_geometry(paint_area, episode_list_area);
-    let paint = super::media_list::render_wide_media_list(
-        f,
-        paint_area,
-        episode_list_area,
-        episodes,
+    episodes.set_paint_policy(WideMediaListPaintPolicy::new(
         focused,
-        palette::resolve_surface_focus(focused),
+        SelectedRowSurface::OwningSurface,
         None,
-    );
-    episodes.finish_view(
-        paint_area,
-        episode_list_area,
-        paint.row_geometry,
-        paint.selected_row_rect,
-    );
+    ));
+    Component::view(episodes, f, episode_list_area);
     (true, image_paint)
 }
 

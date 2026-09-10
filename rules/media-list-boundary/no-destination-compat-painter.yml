@@ -1,0 +1,21 @@
+id: no-destination-compat-painter
+language: rust
+severity: error
+message: >-
+  `render_wide_media_list` / `render_inline_media_browser` are the internal
+  compatibility painters. A destination paints media rows only through the
+  passed-in canonical control's `Component::view`; it must not call the
+  painters directly. See
+  openspec/changes/complete-shared-media-list-ownership design.md D6/D7 and the
+  canonical-media-lists "WideMediaList owns fixed-row mechanics" spec.
+files:
+  - "src/app/**/*.rs"
+ignores:
+  - "src/app/render/components/media_list/**"
+  - "src/app/render/components/media_list.rs"
+  - "src/app/**/*tests*.rs"
+  - "src/app/**/tests*.rs"
+rule:
+  any:
+    - pattern: render_wide_media_list($$$ARGS)
+    - pattern: render_inline_media_browser($$$ARGS)

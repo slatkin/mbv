@@ -1,5 +1,6 @@
 use crate::app::components::media_list::{
-    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
+    InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaKind, MediaListRow, MediaSemanticState,
+    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
 };
 use crate::app::palette;
 use crate::app::render::arrangements::library as library_arrangement;
@@ -14,9 +15,6 @@ use crate::app::render::components::hero::{
     HeroLine, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
-use crate::app::render::components::media_list::{
-    render_inline_media_browser, render_wide_media_list,
-};
 use crate::app::render::{render_pill_bar, render_placeholder, PillBar};
 use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
 use crate::app::ui_util::fmt_duration_approx;
@@ -25,6 +23,7 @@ use ratatui::style::Style;
 
 use ratatui::widgets::Block;
 use ratatui::Frame;
+use tuirealm::component::Component;
 
 /// Narrow replacement keeps a bounded overview so chapter rows remain visible.
 pub(in crate::app::render) const BOOK_WIDE_OVERVIEW_ROWS: u16 = 4;
@@ -202,26 +201,12 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
         wide_hero_browser_border(frame, list_panel, rail_focused);
 
         book_list.set_geometry(list_panel, content_area);
-        let paint_area = Rect {
-            x: list_panel.x,
-            width: list_panel.width,
-            ..content_area
-        };
-        let paint = render_wide_media_list(
-            frame,
-            paint_area,
-            content_area,
-            book_list,
+        book_list.set_paint_policy(WideMediaListPaintPolicy::new(
             rail_focused,
-            palette::list_selected_row_bg(),
+            SelectedRowSurface::ListBackdrop,
             None,
-        );
-        book_list.finish_view(
-            list_panel,
-            content_area,
-            paint.row_geometry,
-            paint.selected_row_rect,
-        );
+        ));
+        Component::view(book_list, frame, content_area);
         // In the Wide layout the selected book's hero (right pane) is the
         // selected item; record it so conformance/context-menu readers see the
         // same `selected_item_rect` the legacy renderer published.
@@ -292,24 +277,14 @@ fn render_narrow_book(
     } else {
         (hero_block_base + chapter_rows).min(content_area.height.saturating_sub(1).max(1) as usize)
     };
-    let result = render_inline_media_browser(
-        frame,
-        content_area,
-        &*book_list,
-        desired_detail_rows,
+    book_list.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
         focused,
-        palette::list_selected_row_bg(),
-    );
-    let selected_row_rect = result.row_geometry.selected_row_rect(content_area);
-    let hero = result.hero_area;
-    let row_geometry = result.row_geometry;
-    book_list.finish_view(
-        content_area,
-        content_area,
-        row_geometry,
-        selected_row_rect,
-        hero,
-    );
+        SelectedRowSurface::ListBackdrop,
+        desired_detail_rows,
+    ));
+    Component::view(book_list, frame, content_area);
+    let selected_row_rect = book_list.current_selected_row_rect();
+    let hero = book_list.current_detail_rect();
 
     let Some(hero_area) = hero else {
         // Ordinary-row fallback: no inline hero, no selected-item shell.
@@ -499,16 +474,12 @@ fn render_book_rows(
     // The chapter owner already holds the projected rows (design.md D6); the
     // painter only paints and retains the current-frame hit geometry.
     chapter_list.set_geometry(area, area);
-    let paint = render_wide_media_list(
-        frame,
-        area,
-        area,
-        chapter_list,
+    chapter_list.set_paint_policy(WideMediaListPaintPolicy::new(
         focused,
-        palette::list_selected_row_bg(),
+        SelectedRowSurface::ListBackdrop,
         None,
-    );
-    chapter_list.finish_view(area, area, paint.row_geometry, paint.selected_row_rect);
+    ));
+    Component::view(chapter_list, frame, area);
 }
 
 fn book_hero_content_rows(plan: &BookHeroPlan, overview_limit: u16) -> u16 {

@@ -110,7 +110,14 @@ fn narrow_podcast_show_paint_matches_each_one_column_hit_rect() {
 fn narrow_podcasts_replace_selected_show_row_with_detail() {
     let mut app = audiobookshelf_app();
     app.audiobookshelf_browse[0].shows[0].author = Some("Author A".into());
-    let (mut model, terminal) = render_podcast_shell(app, 60, 20, true);
+    // Admit the shared episode owner's rows into the inline detail so the
+    // episode-area retained geometry is non-degenerate (the parent-owned
+    // episode pane holds focus, exactly as the wide workspace does).
+    let (mut model, terminal) = render_podcast_shell_with(app, 60, 20, true, |model| {
+        if let Some(component) = model.abs_podcast_component_mut(0) {
+            component.enter_episode_focus();
+        }
+    });
     let layout = &model.app.layout.main;
 
     assert!(
@@ -418,7 +425,19 @@ fn podcast_each_breakpoint_runs_exactly_one_canonical_list_painter() {
     };
     use tuirealm::component::Component;
 
-    let state = podcast_grid_state();
+    let mut state = podcast_grid_state();
+    // The selected show needs a downloaded episode so the narrow episode
+    // workspace's shared Wide painter actually runs for this frame; the
+    // parent-owned episode pane is focused to admit its rows.
+    state.episodes = Some(vec![
+        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-2".into(),
+            episode_id: "episode-2".into(),
+            title: "Episode 2".into(),
+            published_at: None,
+            duration_seconds: None,
+        },
+    ]);
     let reset = || {
         WIDE_MEDIA_LIST_PAINTS.with(|c| c.set(0));
         INLINE_MEDIA_BROWSER_PAINTS.with(|c| c.set(0));
@@ -437,6 +456,7 @@ fn podcast_each_breakpoint_runs_exactly_one_canonical_list_painter() {
 
     let mut narrow = AudiobookshelfPodcastComponent::new();
     narrow.set_content(&state, false);
+    narrow.enter_episode_focus();
     narrow.set_focused(true);
     reset();
     let mut term = Terminal::new(TestBackend::new(60, 24)).unwrap();

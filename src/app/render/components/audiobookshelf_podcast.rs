@@ -1,5 +1,6 @@
 use crate::app::components::media_list::{
-    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
+    InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaKind, MediaListRow, MediaSemanticState,
+    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
 };
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::arrangements::wide_hero::{
@@ -14,14 +15,12 @@ use crate::app::render::components::hero::{
     HeroLine, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
-use crate::app::render::components::media_list::{
-    render_inline_media_browser, render_wide_media_list,
-};
 use crate::app::render::{render_pill_bar, render_placeholder, HomeImagePaint, PillBar};
 use crate::app::types_audiobookshelf_browse::{
     build_show_title_buckets, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
 };
 use mbv_core::audiobookshelf::AudiobookshelfShow;
+use tuirealm::component::Component;
 
 /// Podcast hero content row budget, shared by the narrow
 /// `App` renderer and `AudiobookshelfPodcastComponent`'s narrow path so both admit
@@ -269,26 +268,12 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     wide_hero_browser_border(frame, list_panel, focused);
 
     show_list.set_geometry(list_panel, content_area);
-    let paint_area = Rect {
-        x: list_panel.x,
-        width: list_panel.width,
-        ..content_area
-    };
-    let paint = render_wide_media_list(
-        frame,
-        paint_area,
-        content_area,
-        show_list,
+    show_list.set_paint_policy(WideMediaListPaintPolicy::new(
         focused,
-        palette::list_selected_row_bg(),
+        SelectedRowSurface::ListBackdrop,
         None,
-    );
-    show_list.finish_view(
-        list_panel,
-        content_area,
-        paint.row_geometry,
-        paint.selected_row_rect,
-    );
+    ));
+    Component::view(show_list, frame, content_area);
     image_paint
 }
 
@@ -332,26 +317,18 @@ fn render_narrow_podcast(
         podcast_hero_content_rows(state, interaction, hero_content_width, images_enabled) as usize
             + HERO_BLOCK_EXTRA_ROWS as usize;
 
-    let result = render_inline_media_browser(
-        frame,
-        content_area,
-        &*show_list,
-        desired_detail_rows,
+    show_list.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
         focused,
-        palette::list_selected_row_bg(),
-    );
-    let geo = result.row_geometry.clone();
-    show_list.finish_view(
-        content_area,
-        content_area,
-        geo.clone(),
-        geo.selected_row_rect(content_area),
-        result.hero_area,
-    );
+        SelectedRowSurface::ListBackdrop,
+        desired_detail_rows,
+    ));
+    Component::view(show_list, frame, content_area);
+    let selected_row_rect = show_list.current_selected_row_rect();
+    let hero = show_list.current_detail_rect();
 
-    let Some(hero_area) = result.hero_area else {
+    let Some(hero_area) = hero else {
         // Ordinary-row fallback: no inline hero, no selected-item shell.
-        geometry.selected_item_rect = geo.selected_row_rect(content_area);
+        geometry.selected_item_rect = selected_row_rect;
         return None;
     };
     selected_detail_shell(frame, hero_area, hero_area.height, focused);
@@ -480,21 +457,12 @@ fn render_podcast_hero(
         // view (design.md D6); the painter only paints and retains the
         // current-frame hit geometry.
         episode_list.set_geometry(episode_area, episode_area);
-        let paint = render_wide_media_list(
-            frame,
-            episode_area,
-            episode_area,
-            episode_list,
+        episode_list.set_paint_policy(WideMediaListPaintPolicy::new(
             focused,
-            palette::list_selected_row_bg(),
+            SelectedRowSurface::ListBackdrop,
             None,
-        );
-        episode_list.finish_view(
-            episode_area,
-            episode_area,
-            paint.row_geometry,
-            paint.selected_row_rect,
-        );
+        ));
+        Component::view(episode_list, frame, episode_area);
     }
     (images_enabled && result.img_rect.is_some()).then(|| HomeImagePaint::AudiobookshelfCover {
         area: result.img_rect.unwrap(),

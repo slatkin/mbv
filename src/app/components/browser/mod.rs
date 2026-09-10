@@ -298,7 +298,7 @@ impl BrowserComponent {
                 // presentation that painted it; Wide and Grid never claimed
                 // it (the parent-owned `inline_hero_area` is a sub-region of
                 // the Inline list).
-                let claimed = self.carrier.claims_point(self.layout.left_area, at)
+                let claimed = self.carrier.claims_current_point(at)
                     || (self.carrier.active() == Presentation::Inline
                         && self.layout.inline_hero_area.contains(at));
                 if !claimed {

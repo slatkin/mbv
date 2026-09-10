@@ -329,23 +329,11 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         }
     }
 
-    /// Whether the active presentation's current frame claims `point` inside
-    /// the parent-supplied `list_area`. Wide and Inline claim that region;
-    /// Grid claims its own retained current-frame cells region.
-    pub fn claims_point(&self, list_area: Rect, point: Position) -> bool {
-        match self.active {
-            Presentation::Wide => self.wide.claims_point(list_area, point),
-            Presentation::Inline => self.inline.claims_point(list_area, point),
-            Presentation::Grid => self.grid.claims_current_point(point),
-        }
-    }
-
     /// Whether the active presentation's retained current frame claims
-    /// `point`. Unlike [`Self::claims_point`], this respects D6 frame
-    /// invalidation: a presentation configured for a new frame that has not
-    /// completed its view claims nothing, so a destination that re-projects
-    /// its rows on every sync (Feeds) or a stale frame cannot accept pointer
-    /// input.
+    /// `point`. This respects D6 frame invalidation: a presentation configured
+    /// for a new frame that has not completed its view claims nothing, so a
+    /// destination that re-projects its rows on every sync (Feeds) or a stale
+    /// frame cannot accept pointer input.
     pub fn claims_current_point(&self, point: Position) -> bool {
         match self.active {
             Presentation::Wide => self.wide.claims_current_point(point),

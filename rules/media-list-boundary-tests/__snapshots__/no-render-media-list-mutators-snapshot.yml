@@ -1,0 +1,32 @@
+id: no-render-media-list-mutators
+snapshots:
+  ? |
+    // A render component must not move the shared owner's scroll.
+    fn paint(media_list: &mut Wide) {
+        media_list.set_scroll(3);
+    }
+  : labels:
+    - source: media_list.set_scroll(3)
+      style: primary
+      start: 101
+      end: 125
+  ? |
+    // A render component must not place the cursor by index.
+    fn paint(episodes: &mut Wide, index: usize) {
+        episodes.select_index(index);
+    }
+  : labels:
+    - source: episodes.select_index(index)
+      style: primary
+      start: 108
+      end: 136
+  ? |
+    // A render component must not replace the shared owner's content.
+    fn paint(book_list: &mut Wide, rows: Vec<Row>) {
+        book_list.set_content(rows);
+    }
+  : labels:
+    - source: book_list.set_content(rows)
+      style: primary
+      start: 120
+      end: 147

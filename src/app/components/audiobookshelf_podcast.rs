@@ -519,7 +519,7 @@ impl AudiobookshelfPodcastComponent {
                 if !self.carrier.claims_current_point(at) {
                     None
                 } else {
-                    self.move_show(RowLocalInput::Move(delta))
+                    self.delegate_show_input(RowLocalInput::Move(delta))
                 }
             }
             MouseGesture::Click(at) => {
@@ -588,10 +588,6 @@ impl AudiobookshelfPodcastComponent {
             }
             _ => None,
         }
-    }
-
-    fn move_show(&mut self, input: RowLocalInput) -> Option<Msg> {
-        self.delegate_show_input(input)
     }
 
     /// Test seam: reset the private gesture recognizer so a synchronous test

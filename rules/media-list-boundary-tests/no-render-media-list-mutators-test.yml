@@ -1,0 +1,28 @@
+id: no-render-media-list-mutators
+valid:
+  - |
+    // A render component may paint through the control's view.
+    fn paint(f: &mut Frame, area: Rect, media_list: &mut Wide) {
+        tuirealm::component::Component::view(media_list, f, area);
+    }
+  - |
+    // Unrelated chrome/Inline Search controls keep their own mutators.
+    fn scroll(inline_search: &mut InlineSearch, offset: usize) {
+        inline_search.set_scroll(offset);
+    }
+invalid:
+  - |
+    // A render component must not move the shared owner's scroll.
+    fn paint(media_list: &mut Wide) {
+        media_list.set_scroll(3);
+    }
+  - |
+    // A render component must not replace the shared owner's content.
+    fn paint(book_list: &mut Wide, rows: Vec<Row>) {
+        book_list.set_content(rows);
+    }
+  - |
+    // A render component must not place the cursor by index.
+    fn paint(episodes: &mut Wide, index: usize) {
+        episodes.select_index(index);
+    }

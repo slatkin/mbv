@@ -1,7 +1,7 @@
 use super::wide_row::wide_media_row;
 use crate::app::components::media_list::{
     GridMediaList, GridPaintPolicy, InlineLayout, InlineMediaBrowser,
-    InlineMediaBrowserPaintPolicy, MediaListRow, RowGeometry, SelectedRowSurface, WideMediaList,
+    InlineMediaBrowserPaintPolicy, RowGeometry, SelectedRowSurface, WideMediaList,
     WideMediaListPaintPolicy,
 };
 use crate::app::palette;
@@ -12,16 +12,14 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 
 /// Resolved paint output for [`render_wide_media_list`]: the flow geometry the
-/// painter laid out (callers rebuild their pre-#638 hit maps from it), the
-/// selected row's absolute rect within the hit/scroll geometry rect, and the
-/// pre-#638 mouse-compat maps the painter used to publish through a `&mut
-/// LayoutMain` out-param. The painter persists the resolved scroll offset into
-/// `list` itself, so no caller can forget to.
-pub(in crate::app) struct MediaListPaint<Target> {
+/// painter laid out and the selected row's absolute rect within the hit/scroll
+/// geometry rect. The painter persists the resolved scroll offset into `list`
+/// itself, so no caller can forget to. This is internal to the media-list
+/// paint subsystem (design.md D6/D7): destinations receive rows only through
+/// the retained `Component::view` facts.
+pub(super) struct MediaListPaint<Target> {
     pub row_geometry: RowGeometry<Target>,
     pub selected_row_rect: Option<Rect>,
-    pub left_item_rows: Vec<Vec<usize>>,
-    pub left_row_map: Vec<Option<usize>>,
 }
 
 /// Paint entry point for the embedded plain `WideMediaList` (design.md D1):
@@ -42,7 +40,7 @@ pub(in crate::app) struct MediaListPaint<Target> {
 /// The painter resolves the scroll offset and stores it back into `list` via
 /// [`WideMediaList::set_scroll`] before returning, so the offset persists across
 /// frames without the caller threading a `usize` back.
-pub(in crate::app) fn render_wide_media_list<Target: Clone>(
+pub(super) fn render_wide_media_list<Target: Clone>(
     f: &mut Frame,
     paint_area: Rect,
     content_area: Rect,
@@ -58,38 +56,6 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
     let selected_row = geometry.selected_row();
     let offset = geometry.offset();
     let total_rows = geometry.len();
-    let left_item_rows: Vec<Vec<usize>> = (0..total_rows)
-        .filter_map(|row| {
-            geometry.source_row(row).and_then(|source_row| {
-                matches!(rows[source_row], MediaListRow::Item { .. }).then_some(vec![source_row])
-            })
-        })
-        .collect();
-    // Pre-#638 mouse compatibility map (kept wired, not rebuilt): read the
-    // painter's own `RowGeometry` and map each painted display row to the
-    // control's selectable index for that item, with letter headings and
-    // spacers left `None`. Walking `RowGeometry::targets` keeps this in step
-    // with the painted flow; the previous projection of source-row indices
-    // mis-targeted by the count of preceding non-item rows every row that
-    // followed a letter heading or spacer.
-    let selectable_by_flow_row: Vec<Option<usize>> = {
-        let mut next_selectable = 0usize;
-        geometry
-            .targets()
-            .map(|target| {
-                target.map(|_| {
-                    let index = next_selectable;
-                    next_selectable += 1;
-                    index
-                })
-            })
-            .collect()
-    };
-    let left_row_map: Vec<Option<usize>> = selectable_by_flow_row
-        .into_iter()
-        .skip(offset)
-        .take(content_area.height as usize)
-        .collect();
 
     let overflows = total_rows > content_area.height as usize;
     let scrollbar = focused && overflows;
@@ -133,8 +99,6 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
     MediaListPaint {
         row_geometry: geometry,
         selected_row_rect,
-        left_item_rows,
-        left_row_map,
     }
 }
 
@@ -142,7 +106,7 @@ pub(in crate::app) fn render_wide_media_list<Target: Clone>(
 /// geometry used for painting and compatibility hit maps, plus the screen rect
 /// of the admitted detail block (the caller paints the hero into it), or `None`
 /// when the block did not fit and the ordinary selected row was painted.
-pub(in crate::app) struct InlinePaintResult<Target> {
+pub(super) struct InlinePaintResult<Target> {
     pub row_geometry: crate::app::components::media_list::RowGeometry<Target>,
     pub hero_area: Option<Rect>,
 }
@@ -154,25 +118,6 @@ pub(in crate::app) struct InlinePaintResult<Target> {
 /// ordinary rows around the reserved detail block, reusing the shared
 /// `wide_media_row` primitive and `hero::inline_display_row` mapping.
 ///
-pub(in crate::app) fn render_inline_media_browser<Target: Clone>(
-    f: &mut Frame,
-    area: Rect,
-    list: &InlineMediaBrowser<Target>,
-    desired_detail_rows: usize,
-    focused: bool,
-    selected_bg: Color,
-) -> InlinePaintResult<Target> {
-    render_inline_media_browser_with_geometry(
-        f,
-        area,
-        area,
-        list,
-        desired_detail_rows,
-        focused,
-        selected_bg,
-    )
-}
-
 fn render_inline_media_browser_with_geometry<Target: Clone>(
     f: &mut Frame,
     paint_area: Rect,

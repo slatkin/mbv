@@ -251,26 +251,6 @@ impl<Target: Clone> WideMediaList<Target> {
             self.core.selected_display_row(),
         )
     }
-
-    /// Resolve a screen `point` inside the painter-supplied `list_area` to the
-    /// target under it (design.md D6). Built on the same `row_geometry` the
-    /// painter consumes, so the hit flow can never drift from the painted one.
-    /// Returns `None` for a point outside `list_area` (horizontally too), a
-    /// heading/spacer row, or a point past the last row.
-    /// Claim the painted list region, including blank and non-selectable rows.
-    /// Parents use this to distinguish an in-region no-op from outside input.
-    pub fn claims_point(&self, list_area: Rect, point: Position) -> bool {
-        list_area.contains(point)
-    }
-
-    pub fn resolve_point(&self, list_area: Rect, point: Position) -> Option<&Target> {
-        if !self.claims_point(list_area, point) {
-            return None;
-        }
-        let row_in_view = (point.y - list_area.y) as usize;
-        let display_row = row_in_view + self.row_geometry(list_area.height as usize).offset();
-        self.core.rows().get(display_row)?.selectable_target()
-    }
 }
 
 impl<Target: Clone + PartialEq> WideMediaList<Target> {

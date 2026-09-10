@@ -135,11 +135,6 @@ impl Model {
                 let idle = now.duration_since(self.app.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
                 self.app.last_nav_at = now;
                 self.app.mark_library_navigation(now);
-                let canonical = self
-                    .emby_browser_component_id()
-                    .and_then(|id| self.application.get_component(&id))
-                    .and_then(|comp| comp.as_any().downcast_ref::<BrowserComponent>())
-                    .is_some_and(BrowserComponent::owns_canonical_position);
                 // Keep only the persistence-facing resting value, using the
                 // index already resolved by the active control. This is not a
                 // live mirror: ordinary content pushes never read it back.
@@ -154,7 +149,7 @@ impl Model {
                         .last()
                         .is_some_and(|level| index < level.items.len())
                 };
-                if canonical && valid_index {
+                if valid_index {
                     if self.app.is_feed_home_video_group_view(lib_idx) {
                         if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
                             state.video_cursor = index;
@@ -163,11 +158,6 @@ impl Model {
                         level.set_resting_cursor(index);
                     }
                     self.app.save_default_library_position(lib_idx);
-                } else if !canonical && valid_index {
-                    if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
-                        level.set_resting_cursor(index);
-                        self.app.save_default_library_position(lib_idx);
-                    }
                 }
                 // Group pickers are a fixed local list and never paginate.
                 if idle && !self.app.is_feed_home_video_group_view(lib_idx) {

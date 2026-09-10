@@ -7,10 +7,6 @@ use crate::app::render::HomeImagePaint;
 impl BrowserComponent {
     /// The authoritative selection of the shared owner, as a `context.items`
     /// index. The owner is the only cursor store; no shell mirror exists.
-    pub(in crate::app) fn owns_canonical_position(&self) -> bool {
-        true
-    }
-
     pub(in crate::app) fn cursor(&self) -> usize {
         self.carrier
             .selected_target()

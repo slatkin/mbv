@@ -1,0 +1,21 @@
+id: no-caller-area-point-claims
+language: rust
+severity: error
+message: >-
+  The caller-supplied-geometry point APIs are deleted. A destination must not
+  resolve a row point from a parent-computed `list_area`; after the canonical
+  presentation has completed its `Component::view`, resolve only from the
+  retained current frame (`claims_current_point(point)` /
+  `resolve_current_point(point)`). See
+  openspec/changes/complete-shared-media-list-ownership design.md D6/D7 and the
+  canonical-media-lists "Canonical geometry has no compatibility path" spec.
+files:
+  - "src/app/**/*.rs"
+ignores:
+  - "src/app/components/media_list/**"
+  - "src/app/**/*tests*.rs"
+  - "src/app/**/tests*.rs"
+rule:
+  any:
+    - pattern: $RECV.claims_point($$$ARGS)
+    - pattern: $RECV.resolve_point($$$ARGS)

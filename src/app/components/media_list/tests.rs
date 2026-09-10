@@ -83,9 +83,14 @@ fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
 
 mod resolve_point {
     use super::super::{
-        InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
+        InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaKind, MediaListRow,
+        MediaSemanticState, SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
     };
+    use ratatui::backend::TestBackend;
     use ratatui::layout::{Position, Rect};
+    use ratatui::Terminal;
+    use tuirealm::component::Component;
+
     fn item(target: &str) -> MediaListRow<String> {
         MediaListRow::Item {
             target: target.into(),
@@ -110,6 +115,20 @@ mod resolve_point {
         list
     }
 
+    /// Complete one retained view so point resolution reads only the current
+    /// frame's geometry (design.md D6).
+    fn paint_wide(list: &mut WideMediaList<String>, area: Rect) {
+        list.set_geometry(area, area);
+        list.set_paint_policy(WideMediaListPaintPolicy::new(
+            false,
+            SelectedRowSurface::ListBackdrop,
+            None,
+        ));
+        let mut terminal =
+            Terminal::new(TestBackend::new(area.right().max(1), area.bottom().max(1))).unwrap();
+        terminal.draw(|f| list.view(f, area)).unwrap();
+    }
+
     #[test]
     fn wide_resolves_against_a_scrolled_viewport() {
         let mut list = wide();
@@ -122,18 +141,19 @@ mod resolve_point {
         };
         // offset is 3 (6 rows, height 3): screen rows 5,6,7 -> c,d,e.
         assert_eq!(list.resolve_viewport(3).offset, 3);
+        paint_wide(&mut list, area);
         assert_eq!(
-            list.resolve_point(area, Position { x: 4, y: 5 }),
+            list.resolve_current_point(Position { x: 4, y: 5 }),
             Some(&"c".to_string())
         );
         assert_eq!(
-            list.resolve_point(area, Position { x: 4, y: 7 }),
+            list.resolve_current_point(Position { x: 4, y: 7 }),
             Some(&"e".to_string())
         );
         // Past the painted height / below the area.
-        assert_eq!(list.resolve_point(area, Position { x: 4, y: 8 }), None);
+        assert_eq!(list.resolve_current_point(Position { x: 4, y: 8 }), None);
         // Left of the area.
-        assert_eq!(list.resolve_point(area, Position { x: 1, y: 5 }), None);
+        assert_eq!(list.resolve_current_point(Position { x: 1, y: 5 }), None);
     }
 
     #[test]
@@ -146,15 +166,16 @@ mod resolve_point {
             width: 10,
             height: 6,
         };
-        assert_eq!(list.resolve_point(area, Position { x: 1, y: 0 }), None); // heading
-        assert!(list.claims_point(area, Position { x: 1, y: 0 }));
-        assert!(!list.claims_point(area, Position { x: 10, y: 0 }));
+        paint_wide(&mut list, area);
+        assert_eq!(list.resolve_current_point(Position { x: 1, y: 0 }), None); // heading
+        assert!(list.claims_current_point(Position { x: 1, y: 0 }));
+        assert!(!list.claims_current_point(Position { x: 10, y: 0 }));
         assert_eq!(
-            list.resolve_point(area, Position { x: 1, y: 1 }),
+            list.resolve_current_point(Position { x: 1, y: 1 }),
             Some(&"a".to_string())
         );
         // Row past the last content row but still inside the area.
-        assert_eq!(list.resolve_point(area, Position { x: 1, y: 6 }), None);
+        assert_eq!(list.resolve_current_point(Position { x: 1, y: 6 }), None);
     }
 
     fn inline() -> InlineMediaBrowser<String> {
@@ -170,44 +191,56 @@ mod resolve_point {
         browser
     }
 
+    fn paint_inline(browser: &mut InlineMediaBrowser<String>, area: Rect, detail_rows: usize) {
+        browser.set_geometry(area, area);
+        browser.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
+            false,
+            SelectedRowSurface::ListBackdrop,
+            detail_rows,
+        ));
+        let mut terminal =
+            Terminal::new(TestBackend::new(area.right().max(1), area.bottom().max(1))).unwrap();
+        terminal.draw(|f| browser.view(f, area)).unwrap();
+    }
+
     #[test]
     fn inline_resolves_rows_around_the_detail_block() {
-        let browser = inline();
+        let mut browser = inline();
         let area = Rect {
             x: 0,
             y: 0,
             width: 20,
             height: 6,
         };
+        paint_inline(&mut browser, area, 2);
         // flow: 0 Heading, 1 a, 2 detail(b), 3 detail-cont, 4 c, 5 d
+        assert_eq!(browser.resolve_current_point(Position { x: 1, y: 0 }), None);
         assert_eq!(
-            browser.resolve_point(area, 2, Position { x: 1, y: 0 }),
-            None
-        );
-        assert_eq!(
-            browser.resolve_point(area, 2, Position { x: 1, y: 1 }),
+            browser.resolve_current_point(Position { x: 1, y: 1 }),
             Some(&"a".to_string())
         );
         assert_eq!(
-            browser.resolve_point(area, 2, Position { x: 1, y: 2 }),
+            browser.resolve_current_point(Position { x: 1, y: 2 }),
             Some(&"b".to_string())
         );
-        // Detail-block continuation row: no target.
+        // The admitted detail block maps every continuation row to the
+        // retained selected target, so an inline hero click or drag
+        // continuation carries the row that was painted (design.md D6).
         assert_eq!(
-            browser.resolve_point(area, 2, Position { x: 1, y: 3 }),
-            None
+            browser.resolve_current_point(Position { x: 1, y: 3 }),
+            Some(&"b".to_string())
         );
         assert_eq!(
-            browser.resolve_point(area, 2, Position { x: 1, y: 4 }),
+            browser.resolve_current_point(Position { x: 1, y: 4 }),
             Some(&"c".to_string())
         );
         // Outside the area horizontally.
         assert_eq!(
-            browser.resolve_point(area, 2, Position { x: 40, y: 2 }),
+            browser.resolve_current_point(Position { x: 40, y: 2 }),
             None
         );
-        assert!(browser.claims_point(area, Position { x: 1, y: 3 }));
-        assert!(!browser.claims_point(area, Position { x: 40, y: 2 }));
+        assert!(browser.claims_current_point(Position { x: 1, y: 3 }));
+        assert!(!browser.claims_current_point(Position { x: 40, y: 2 }));
     }
 }
 

@@ -1,0 +1,17 @@
+id: no-destination-compat-painter
+valid:
+  - |
+    // Destinations paint rows only through the passed-in control's view.
+    fn paint(f: &mut Frame, area: Rect, list: &mut Wide) {
+        tuirealm::component::Component::view(list, f, area);
+    }
+invalid:
+  - |
+    // Calling the compatibility painter directly is a regression.
+    fn paint(f: &mut Frame, area: Rect, list: &mut Wide) {
+        render_wide_media_list(f, area, area, list, true, bg, None);
+    }
+  - |
+    fn paint_inline(f: &mut Frame, area: Rect, list: &Inline) {
+        render_inline_media_browser(f, area, list, 2, true, bg);
+    }

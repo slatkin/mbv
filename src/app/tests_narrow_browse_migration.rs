@@ -631,6 +631,10 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
             }))
             .expect("scroll emits typed request");
         model.handle_terminal_message(msg, &mut music_resize, &mut tv_resize);
+        // The wheel move re-resolves the viewport and invalidates the retained
+        // frame; production draws between events, so refresh the painted claim
+        // here too (design.md D6).
+        draw(&mut model, &mut term);
     }
     let control_cursor = model
         .application
