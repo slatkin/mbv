@@ -92,6 +92,10 @@ mod tests_podcast;
 mod tests_podcast_playback;
 
 #[cfg(test)]
+#[path = "audiobookshelf_browse_actions_sibling_tests.rs"]
+mod audiobookshelf_browse_actions_sibling_tests;
+
+#[cfg(test)]
 #[path = "tests_podcast_context_menu.rs"]
 mod tests_podcast_context_menu;
 
