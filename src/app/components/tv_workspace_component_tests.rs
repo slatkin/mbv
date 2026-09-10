@@ -392,7 +392,11 @@ fn tv_first_mount_seeds_the_stable_target_and_renders_sorted_rows() {
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    assert_eq!(&component.test_layout().left_sorted_indices[..2], &[1, 2]);
+    assert_eq!(
+        component.selected_item().map(|item| item.display_name()),
+        Some("Alpha".to_string()),
+        "first mount must resolve the stable target in natural-sort order"
+    );
     // First mount seeds the stable target at the shell's item cursor
     // (`items[1]` = Alpha, the first sorted row), not the shell's numeric
     // index as the removed cursor mirror did (design.md D4/D5).

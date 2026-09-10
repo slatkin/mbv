@@ -162,23 +162,6 @@ impl<'a> InlineReplacementPlan<'a> {
         )
     }
 
-    pub(in crate::app::render) fn row_targets(&self) -> Vec<Option<usize>> {
-        (0..self.total_display_rows)
-            .map(|display_row| match self.display_row(display_row) {
-                Some(super::hero::InlineDisplayRow::Replacement) => {
-                    (display_row == self.selected_row).then_some(self.selected_item)
-                }
-                Some(super::hero::InlineDisplayRow::Source(source_row)) => {
-                    match &self.display_rows[source_row] {
-                        DisplayRow::Item(items) => items.first().copied(),
-                        DisplayRow::Spacer | DisplayRow::LetterHeader(_) => None,
-                    }
-                }
-                None => None,
-            })
-            .collect()
-    }
-
     pub(in crate::app::render) fn item_rows(&self) -> Vec<Vec<usize>> {
         (0..self.total_display_rows)
             .map(|display_row| match self.display_row(display_row) {

@@ -43,8 +43,6 @@ pub(in crate::app) fn render_letter_grouped_rows(
     // items within each group appear in article-stripped alphabetical order.
     let mut sorted_indices: Vec<usize> = (0..n).collect();
     sorted_indices.sort_by_key(|&i| natural_sort_key(effective_sort_str(&items[i])));
-    // Publish the sorted order so cursor navigation can follow display order.
-    layout.left_sorted_indices = sorted_indices.clone();
 
     // With a letter-range pill active, the visible slice is already
     // narrowed to one range (e.g. `A–C`) -- bucket by the individual
@@ -111,12 +109,6 @@ pub(in crate::app) fn render_letter_grouped_rows(
     // Publish the full row structure (parallel to the display rows,
     // empty entries for headers) so column-aware cursor movement and
     // mouse hit-testing can resolve cells between frames.
-    let row_targets = plan.row_targets();
-    layout.left_row_map = (offset..total_display)
-        .take(visible)
-        .enumerate()
-        .map(|(visible_row, _)| row_targets[offset + visible_row])
-        .collect();
     layout.left_item_rows = plan.item_rows();
 
     let show_scrollbar = focused && total_display > visible;

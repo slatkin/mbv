@@ -171,40 +171,6 @@ fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_s
     assert!(boundary_layout.selected_item_rect.is_some());
 }
 
-#[test]
-fn wide_letter_grouped_row_map_indexes_items_without_counting_headings() {
-    // Regression: the Wide `left_row_map` used to project source-row indices,
-    // so every painted row after a letter heading or spacer was off by the
-    // count of those non-item rows. It must instead map each painted row to
-    // the control's selectable index, leaving headings/spacers `None`.
-    use crate::app::components::browser::{BrowserComponent, BrowserContent};
-    use crate::app::components::component_id::BrowserKind;
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
-    use tuirealm::component::Component;
-
-    let items = (0..55)
-        .map(|i| {
-            let mut item = make_item(
-                &format!("{} Movie {i:02}", (b'A' + (i % 26) as u8) as char),
-                "Movie",
-            );
-            item.id = format!("movie-{i}");
-            item
-        })
-        .collect();
-    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(items));
-    browser.set_focused(true);
-    browser.apply_position(54, 40);
-
-    let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
-    terminal
-        .draw(|frame| browser.view(frame, frame.area()))
-        .unwrap();
-    assert!(browser.test_layout().selected_item_rect.is_some());
-}
-
 /// migrate-home-feeds 4.6 regression: after the full wide-Movies arrangement
 /// paint, the focused selected row's background is the surface *containing*
 /// the list panel (`SURFACE_BACKDROP`), and the rail-framing helper — which

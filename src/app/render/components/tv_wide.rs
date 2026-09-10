@@ -347,18 +347,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
             None,
         ));
         Component::view(media_list, f, list_area);
-        let offset = media_list.current_flow_offset().unwrap_or(0);
-        // Same key the component sorts the rail rows by, so
-        // `left_sorted_indices` matches the painted order;
-        // `sort_by_cached_key` computes each key once.
-        let mut order: Vec<usize> = (0..ctx.list.items.len()).collect();
-        order.sort_by_cached_key(|&index| {
-            crate::app::ui_util::natural_sort_key(crate::app::render::effective_sort_str(
-                &ctx.list.items[index],
-            ))
-        });
-        layout.left_sorted_indices = order;
-        offset
+        media_list.current_flow_offset().unwrap_or(0)
     };
     (final_scroll, image_paint)
 }

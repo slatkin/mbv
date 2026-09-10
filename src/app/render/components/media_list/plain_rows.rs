@@ -37,10 +37,6 @@ pub(in crate::app) fn render_plain_rows(
         hero_rows,
     } = ctx;
     let n = items.len();
-    // Publish the identity display order just like letter-grouped lists publish
-    // their sorted order; the fresh frame layout makes this authoritative for
-    // cursor and hit testing even when the list has no grouping.
-    layout.left_sorted_indices = (0..n).collect();
     let visible = content_area.height as usize;
     let cell_w = library_cell_width(content_area, cols) as usize;
 
@@ -152,12 +148,6 @@ pub(in crate::app) fn render_plain_rows(
         })
         .collect();
 
-    let row_targets = plan.row_targets();
-    layout.left_row_map = (offset..total_display)
-        .take(visible)
-        .enumerate()
-        .map(|(visible_row, _)| row_targets[offset + visible_row])
-        .collect();
     // Publish the full row structure (parallel to the display rows,
     // empty entries for headers) so column-aware cursor movement and
     // mouse hit-testing can resolve cells between frames.

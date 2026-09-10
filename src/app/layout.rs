@@ -72,16 +72,12 @@ pub(crate) struct LayoutMain {
     pub panel_area: Rect,
     /// Content bounds inside `panel_area`, shared with panel mouse hit-testing.
     pub panel_content_area: Rect,
-    pub left_row_map: Vec<Option<usize>>,
     /// Item rows of the last-rendered flat library list (plain and
     /// letter-grouped renderers), parallel to the display-row sequence:
     /// each entry holds the item indices occupying that display row, left to
     /// right (empty for headers/fillers). Column-aware cursor movement and
     /// mouse hit-testing resolve cells from this between frames.
     pub left_item_rows: Vec<Vec<usize>>,
-    /// Source-item order published by the authoritative grouped display plan
-    /// (and identity order for ungrouped lists).
-    pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
     /// The exact full-height trailing column reserved for Queue boundary resizing.
     pub queue_boundary_area: Rect,

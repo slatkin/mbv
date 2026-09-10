@@ -277,40 +277,6 @@ fn abs_podcast_placeholder_does_not_claim_stale_wheel_area_at_any_breakpoint() {
     }
 }
 
-fn abs_podcast_row_mouse_selects_the_clicked_show_and_bucket_start() {
-    let state = narrow_grid_component_state();
-    let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(&state, false);
-    component.set_focused(true);
-    view_narrow(&mut component, 100, 6);
-    let list = component.geometry().list_area;
-    let msg = component.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: list.x,
-        row: list.y,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(
-        msg,
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: Some("show-2".into())
-        }))
-    );
-    let bucket = component.geometry().selector_tabs[0].0;
-    let msg = component.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: bucket.x,
-        row: bucket.y,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert!(matches!(
-        msg,
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: _
-        }))
-    ));
-}
-
 /// Task 5.3d.10c: the component owns its painted geometry (list/right/hero/
 /// inline-hero/selected-item rects), so the shell can read it after render
 /// ownership moved off `App`. The same mounted component is rendered wide then
