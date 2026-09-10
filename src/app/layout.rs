@@ -208,6 +208,10 @@ pub(crate) struct FrameChromeGeometry {
     pub right_visible: bool,
     /// Whether the queue panel holds panel focus this frame.
     pub queue_focused: bool,
+    /// Whether the right column is visible AND holds panel focus this frame
+    /// (`right_visible && PanelFocus::Library`). False whenever the right
+    /// column is not visible, even if a stale `Library` focus says otherwise.
+    pub right_focused: bool,
 }
 
 /// All per-frame layout geometry, grouped by the view that produces it.

@@ -29,6 +29,47 @@ fn library_buffer_characterization_covers_wide_unfocused_narrow_and_selected_sta
 // It tested the legacy wide Movies layout, which is now handled by
 // BrowserComponent (5.3d.17a). Component rendering is tested separately.
 
+/// `unify-surface-colour` section 1: the right column's gutter (the chrome
+/// backdrop outside the padded library content) follows the library panel's
+/// focus — `SURFACE_FOCUSED` while the library holds focus, `SURFACE_BACKDROP`
+/// once the queue takes it. The left/queue arm is unaffected.
+#[test]
+fn wide_library_column_gutter_follows_panel_focus() {
+    let cases = [
+        (
+            crate::app::PanelMode::LibraryOnly,
+            crate::app::PanelFocus::Library,
+            crate::app::palette::SURFACE_FOCUSED,
+            "wide LibraryOnly focused",
+        ),
+        (
+            crate::app::PanelMode::Both,
+            crate::app::PanelFocus::Library,
+            crate::app::palette::SURFACE_FOCUSED,
+            "wide Both focused",
+        ),
+        (
+            crate::app::PanelMode::Both,
+            crate::app::PanelFocus::Queue,
+            crate::app::palette::SURFACE_BACKDROP,
+            "wide Both queue-focused",
+        ),
+    ];
+    for (panel_mode, panel_focus, expected, label) in cases {
+        let mut app = make_movie_app();
+        app.panel_mode = panel_mode;
+        app.panel_focus = panel_focus;
+        app.terminal_width = 120;
+        let chrome = app.compute_chrome_geometry(ratatui::layout::Rect::new(0, 0, 120, 30));
+        let terminal = super::test_helpers::render_app_to_terminal(&mut app, 120, 30);
+        let buffer = terminal.backend().buffer();
+        // First content row of the right column, on the unpadded gutter column
+        // the backdrop (not the library content) owns.
+        let gutter = buffer[(chrome.right_area.x, chrome.right_area.y + 1)].bg;
+        assert_eq!(gutter, expected, "{label}: column gutter surface");
+    }
+}
+
 #[test]
 fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_targets() {
     let mut app = make_movie_app();

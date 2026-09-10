@@ -221,6 +221,84 @@ fn player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel() {
     }
 }
 
+/// `unify-surface-colour` section 1 (D5): the row directly above the pill bar
+/// belongs to the library column, not the playback panel. In the wide layouts
+/// the panel paints only its three content rows; the bottom row shows the
+/// column's chrome backdrop — `SURFACE_FOCUSED` while the library holds focus,
+/// `SURFACE_BACKDROP` once the queue takes it. The panel's own rows keep their
+/// existing fill in both states.
+#[test]
+fn wide_panel_bottom_row_follows_the_library_column_surface() {
+    fn render(panel_focus: crate::app::PanelFocus) -> (Terminal<TestBackend>, Rect) {
+        let mut app = make_app_stub();
+        app.panel_mode = crate::app::PanelMode::Both;
+        app.panel_focus = panel_focus;
+        app.terminal_width = 120;
+        app.use_nerd_fonts = false;
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.queue_len = 1;
+            st.current_idx = 0;
+            st.runtime_ticks = 90 * TICKS_PER_SECOND;
+        }
+        let mut model = crate::app::shell::Model::new(app);
+        let mut terminal = Terminal::new(TestBackend::new(120, 20)).unwrap();
+        terminal
+            .draw(|f| model.app.compose_base_frame(f, None))
+            .unwrap();
+        model.sync_playback();
+        terminal
+            .draw(|f| {
+                model.app.compose_base_frame(f, None);
+                model.render_playback_component(f);
+            })
+            .unwrap();
+        let area = model.app.layout.playback.player_area;
+        (terminal, area)
+    }
+
+    let (terminal, area) = render(crate::app::PanelFocus::Library);
+    assert!(
+        area.height >= 4,
+        "wide Both reserves the full player box: {area:?}"
+    );
+    let buf = terminal.backend().buffer();
+    assert_eq!(
+        buf[(area.x, area.y)].bg,
+        palette::SURFACE_PLAYBACK,
+        "the panel's seekbar row keeps its fill while the library holds focus"
+    );
+    assert_eq!(
+        buf[(area.x, area.y + 2)].bg,
+        palette::SURFACE_PLAYBACK,
+        "the panel's blank row keeps its fill while the library holds focus"
+    );
+    assert_eq!(
+        buf[(area.x, area.y + 3)].bg,
+        palette::SURFACE_FOCUSED,
+        "the row above the pill bar follows the focused library column"
+    );
+    assert_ne!(
+        buf[(area.x, area.y + 3)].bg,
+        palette::SURFACE_BACKDROP,
+        "the focused library column must light that row up"
+    );
+
+    let (terminal, area) = render(crate::app::PanelFocus::Queue);
+    let buf = terminal.backend().buffer();
+    assert_eq!(
+        buf[(area.x, area.y)].bg,
+        palette::SURFACE_FOCUSED,
+        "the queue-focused panel content row keeps its fill"
+    );
+    assert_eq!(
+        buf[(area.x, area.y + 3)].bg,
+        palette::SURFACE_BACKDROP,
+        "the row above the pill bar rests with the unfocused library column"
+    );
+}
+
 #[test]
 fn narrow_queue_only_panel_puts_title_on_bottom_now_playing_row() {
     let mut app = make_app_stub();

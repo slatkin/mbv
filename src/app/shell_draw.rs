@@ -227,6 +227,7 @@ impl App {
             status_area,
             right_visible,
             queue_focused,
+            right_focused: _,
         } = *chrome;
         // Header row removed — the tab bar above indicates current location.
         layout.breadcrumbs = Vec::new();
@@ -409,6 +410,7 @@ impl App {
             tabs_area,
             right_visible,
             queue_focused,
+            right_focused,
             ..
         } = *chrome;
 
@@ -417,6 +419,7 @@ impl App {
             left_area,
             right_full_area,
             queue_focused,
+            right_focused,
             self.effective_panel_mode() != PanelMode::LibraryOnly,
             right_visible,
         );

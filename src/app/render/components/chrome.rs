@@ -18,6 +18,7 @@ pub(in crate::app) fn render_legacy_backdrops(
     left_area: Rect,
     right_area: Rect,
     queue_focused: bool,
+    right_focused: bool,
     left_visible: bool,
     right_visible: bool,
 ) {
@@ -35,8 +36,14 @@ pub(in crate::app) fn render_legacy_backdrops(
         );
     }
     if right_visible {
+        // The right column is the surface the library panel sits on, so it
+        // follows panel focus; the left arm above stays the queue column's.
         frame.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+            Block::default().style(Style::default().bg(if right_focused {
+                palette::SURFACE_FOCUSED
+            } else {
+                palette::SURFACE_BACKDROP
+            })),
             right_area,
         );
     }

@@ -111,7 +111,11 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
         );
     }
 
-    if ctx.player_h >= 4 {
+    // The row directly above the pill bar is the library column's first
+    // content row in the wide layouts, not this panel's: the shell's chrome
+    // backdrop already covers it, so only the narrow (`QueueOnly`) player —
+    // where the row is the panel's own — paints it and its "On Now" title.
+    if ctx.player_h >= 4 && ctx.narrow_player {
         let bottom_area = Rect {
             y: ctx.area.y + 3,
             height: 1,
