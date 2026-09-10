@@ -100,10 +100,11 @@ if [[ "$output" == *'14 in-scope flows'* ]]; then
     fail 'checker reported the inflated pre-dedup flow count'
 fi
 
-# A return-type-only owner is not a stored field and must fail.
+# A return-type-only owner is not a stored field and must fail even when every
+# other flow stores its owner correctly.
 repo="$TEST_ROOT/return-type-only"
+seed_owners "$repo" || fail 'unable to seed return-type-only owners'
 seed_components "$repo" || fail 'unable to seed return-type-only components'
-mkdir -p "$repo/src/app/components/tv_workspace"
 printf 'struct Owner;\nfn own() -> WideMediaList<String> { todo!() }\n' \
     > "$repo/src/app/components/tv_workspace/mod.rs" ||
     fail 'unable to write the return-type-only fixture'
@@ -112,6 +113,8 @@ if output=$(run_checker "$repo"); then
 fi
 [[ "$output" == *'TV series and episodes: src/app/components/tv_workspace/mod.rs does not store the shared owner'* ]] ||
     fail 'checker missed the return-type-only TV owner'
+[[ "$output" != *'ok: TV series and episodes'* ]] ||
+    fail 'checker accepted the return-type-only TV owner as a stored field'
 
 # A flow whose owner file no longer stores the shared owner fails.
 repo="$TEST_ROOT/missing-owner"
