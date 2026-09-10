@@ -199,20 +199,17 @@ fn row_paint_area(paint_area: Rect, content_area: Rect) -> Rect {
 
 /// The colour a selected row punches through to.
 ///
-/// A selected row paints only while it holds the cursor, which implies its own
-/// column holds panel focus, so the punch-through surface's focused fill is
-/// always the colour. The cursor never chooses it (design D1/D3): moving the
-/// cursor gates *whether* a row paints, not what colour it is.
-fn selected_row_surface_color(surface: SelectedRowSurface) -> Color {
+/// `focused` is the paint policy's focus bit for this list (the containing
+/// panel/column focus): the punch-through surface resolves its focused fill
+/// while the bit is set and its resting fill otherwise. [`wide_media_row`]
+/// applies the colour only to a row that is both selected and focused.
+fn selected_row_surface_color(surface: SelectedRowSurface, focused: bool) -> Color {
     let surface = match surface {
         SelectedRowSurface::ListBackdrop => palette::Surface::SelectedRow,
         SelectedRowSurface::OwningQueueColumn => palette::Surface::SelectedRowOnQueueColumn,
         SelectedRowSurface::OwningLibraryPane => palette::Surface::SelectedRowOnLibraryPane,
     };
-    // `true` is this surface's own column focus, proven by the row being
-    // selected: the `focused` gating bit that reaches the painter is a cursor
-    // bit and must not choose the colour.
-    palette::surface_colors_for_column_focus(surface, true).fill
+    palette::surface_colors_for_column_focus(surface, focused).fill
 }
 
 /// Component-view adapter for the retained-result seam. The compatibility
@@ -235,7 +232,7 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone>(
         content_rect,
         list,
         policy.focused(),
-        selected_row_surface_color(policy.selected_surface()),
+        selected_row_surface_color(policy.selected_surface(), policy.focused()),
         policy.throbber(),
     );
     list.finish_view(
@@ -315,7 +312,7 @@ pub(in crate::app) fn render_inline_media_browser_component<Target: Clone>(
         list,
         policy.desired_detail_rows(),
         policy.focused(),
-        selected_row_surface_color(policy.selected_surface()),
+        selected_row_surface_color(policy.selected_surface(), policy.focused()),
     );
     let selected_row_rect = paint.row_geometry.selected_row_rect(content_rect);
     list.finish_view(
@@ -325,4 +322,44 @@ pub(in crate::app) fn render_inline_media_browser_component<Target: Clone>(
         selected_row_rect,
         paint.hero_area,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `unify-surface-colour` 4.2 (review fix): the selected row's punch-through
+    /// colour follows the paint policy's focus bit, so an unfocused queue panel
+    /// or library rail resolves today's resting value. The painter applies the
+    /// colour only to a focused, selected row (see
+    /// `components::media_list::tests::wide_selected_row_highlight_is_painted_only_while_focused`).
+    #[test]
+    fn selected_row_surface_color_follows_the_column_focus() {
+        // Queue panel and library rail punch through their containing column:
+        // focused green while the column holds focus, resting otherwise.
+        for surface in [
+            SelectedRowSurface::OwningQueueColumn,
+            SelectedRowSurface::OwningLibraryPane,
+        ] {
+            assert_eq!(
+                selected_row_surface_color(surface, true),
+                palette::SURFACE_FOCUSED,
+                "{surface:?} focused fill"
+            );
+            assert_eq!(
+                selected_row_surface_color(surface, false),
+                palette::SURFACE_RESTING,
+                "{surface:?} resting fill"
+            );
+        }
+        // The library punch-through is fixed: it is the backdrop beneath the
+        // list panel in both states.
+        for focused in [true, false] {
+            assert_eq!(
+                selected_row_surface_color(SelectedRowSurface::ListBackdrop, focused),
+                palette::SURFACE_BACKDROP,
+                "library punch-through is the backdrop (focused={focused})"
+            );
+        }
+    }
 }

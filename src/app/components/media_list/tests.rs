@@ -746,3 +746,74 @@ fn wide_delegate_keeps_the_completed_frame_for_pointer_continuity() {
         Some(&"two".to_string())
     );
 }
+
+/// `unify-surface-colour` 4.2 (review fix): the selected-row highlight is
+/// painted only while the paint policy's focus bit is set. With the bit clear,
+/// a selected row in an unfocused queue panel or library rail leaves the
+/// containing panel body showing through unchanged (there is no resting hole
+/// painted); the resting punch-through value itself is pinned by
+/// `render::components::media_list::wide::tests::selected_row_surface_color_follows_the_column_focus`.
+#[test]
+fn wide_selected_row_highlight_is_painted_only_while_focused() {
+    use crate::app::palette;
+    use ratatui::style::{Color, Style};
+
+    // Stands in for the containing panel body, so a skipped highlight is
+    // observable rather than masked by a same-coloured panel fill.
+    const BODY: Color = Color::Red;
+
+    for surface in [
+        SelectedRowSurface::OwningQueueColumn,
+        SelectedRowSurface::OwningLibraryPane,
+    ] {
+        for focused in [true, false] {
+            let mut list = WideMediaList::<String>::new();
+            list.set_content(vec![
+                MediaListRow::Heading { text: "A".into() },
+                MediaListRow::Item {
+                    target: "a".into(),
+                    primary: "a".into(),
+                    trailing: None,
+                    duration: None,
+                    kind: MediaKind::Media,
+                    semantic_state: MediaSemanticState::Ordinary,
+                },
+            ]);
+            list.select_first();
+            let area = Rect {
+                x: 0,
+                y: 0,
+                width: 12,
+                height: 2,
+            };
+            list.set_geometry(area, area);
+            list.set_paint_policy(WideMediaListPaintPolicy::new(focused, surface, None));
+            let mut terminal = Terminal::new(TestBackend::new(12, 2)).unwrap();
+            terminal
+                .draw(|f| {
+                    f.render_widget(
+                        ratatui::widgets::Block::default().style(Style::default().bg(BODY)),
+                        area,
+                    );
+                    list.view(f, area);
+                })
+                .unwrap();
+            let buffer = terminal.backend().buffer();
+            // Row 0 is the heading; the selected item is row 1.
+            let selected = buffer[(0, 1)].style().bg;
+            if focused {
+                assert_eq!(
+                    selected,
+                    Some(palette::SURFACE_FOCUSED),
+                    "{surface:?} focused selected-row fill"
+                );
+            } else {
+                assert_eq!(
+                    selected,
+                    Some(BODY),
+                    "{surface:?} unfocused selected row leaves the panel body showing"
+                );
+            }
+        }
+    }
+}

@@ -377,8 +377,8 @@ pub(in crate::app) fn render_home_content(
         // painter is handed a full-width, vertically-inset paint rect.
         padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y)
     } else {
-        // Narrow Home leaves the `chrome.rs` SURFACE_BACKDROP showing behind
-        // its rows (Movies narrow parity); the inline hero shell then reads as
+        // Narrow Home leaves the shell's app backdrop showing behind its
+        // rows (Movies narrow parity); the inline hero shell then reads as
         // a recessed card against it. Reverts the 14fb8435 pane flood.
         list_area
     };
@@ -394,11 +394,9 @@ pub(in crate::app) fn render_home_content(
     // containing the list panel, which is a resting surface in both layouts
     // (the wide list panel is focus-green, but its parent container is not).
 
-    // Keep the row immediately below the Home pill bar free of list text.
-    // The wide layout uses the list panel surface; the single-column
-    // layout inherits the ordinary library panel surface (no green
-    // focus fill -- Home's panel background matches every other
-    // inline browser's regardless of focus).
+    // Keep the row immediately below the Home pill bar free of list text: it
+    // is a chrome-band spacer (`PillRowGap`), painted the app backdrop in
+    // both the wide and single-column layouts and in both focus states.
     if spacer_area.y < area.bottom() && spacer_area.width > 0 {
         let panel_bg =
             palette::surface_colors_for_column_focus(palette::Surface::PillRowGap, false).fill;
