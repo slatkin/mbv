@@ -45,10 +45,10 @@
 
 ## 8. Delete Compatibility and Enforce the Boundary
 
-- [ ] 8.1 After the final caller migrates, make direct cursor/scroll/movement/point-selection mutators private to the shared subsystem and delete caller-area `resolve_point`/`claims_point`, mutable `RowGeometry` exports, compatibility painters, parent row maps, and fallback geometry; verify production search finds no in-scope caller and focused hit-lifecycle tests pass.
-- [ ] 8.2 Add narrowly scoped ast-grep rules and fixtures rejecting destination calls to shared row mutators, compatibility painters, and row-map reconstruction while allowing legitimate parent chrome state; verify `ast-grep test` and `ast-grep scan` pass.
-- [ ] 8.3 Add one maintained architecture inventory check proving every in-scope logical row flow stores the shared owner and no destination stores authoritative media-row cursor/scroll/selection fields; verify the check fails against representative forbidden fixtures and passes on production.
-- [ ] 8.4 Consolidate redundant destination ownership tests only where the shared and integration tests supersede them; verify each retained test protects a distinct provider behavior or real TuiRealm composition boundary and the focused suite remains green.
+- [x] 8.1 After the final caller migrates, make direct cursor/scroll/movement/point-selection mutators private to the shared subsystem and delete caller-area `resolve_point`/`claims_point`, mutable `RowGeometry` exports, compatibility painters, parent row maps, and fallback geometry; verify production search finds no in-scope caller and focused hit-lifecycle tests pass.
+- [x] 8.2 Add narrowly scoped ast-grep rules and fixtures rejecting destination calls to shared row mutators, compatibility painters, and row-map reconstruction while allowing legitimate parent chrome state; verify `ast-grep test` and `ast-grep scan` pass.
+- [x] 8.3 Add one maintained architecture inventory check proving every in-scope logical row flow stores the shared owner and no destination stores authoritative media-row cursor/scroll/selection fields; verify the check fails against representative forbidden fixtures and passes on production.
+- [x] 8.4 Consolidate redundant destination ownership tests only where the shared and integration tests supersede them; verify each retained test protects a distinct provider behavior or real TuiRealm composition boundary and the focused suite remains green.
 
 ## 9. Prove the Original Outcome and Close PR #686
 
