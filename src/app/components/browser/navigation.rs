@@ -87,10 +87,20 @@ impl BrowserComponent {
     fn move_active_selection(&mut self, delta: i64) -> Option<usize> {
         let target = if self.wide_movies {
             self.wide_list.move_selection(delta);
-            self.wide_list.selected_target().copied()
+            self.wide_list.selected_target().and_then(|target| {
+                self.context
+                    .items
+                    .iter()
+                    .position(|item| item.id == *target)
+            })
         } else if self.uses_inline_control() {
             self.inline_browser.move_selection(delta);
-            self.inline_browser.selected_target().copied()
+            self.inline_browser.selected_target().and_then(|target| {
+                self.context
+                    .items
+                    .iter()
+                    .position(|item| item.id == *target)
+            })
         } else {
             return None;
         };
@@ -283,20 +293,29 @@ impl BrowserComponent {
         viewport_height: usize,
     ) -> Option<ViewportAnchor<String>> {
         let target = if self.wide_movies {
-            self.wide_list.selected_target().copied()
+            self.wide_list.selected_target().and_then(|target| {
+                self.context
+                    .items
+                    .iter()
+                    .position(|item| item.id == *target)
+            })
         } else if self.uses_inline_control() {
-            self.inline_browser.selected_target().copied()
+            self.inline_browser.selected_target().and_then(|target| {
+                self.context
+                    .items
+                    .iter()
+                    .position(|item| item.id == *target)
+            })
         } else {
             None
         }?;
-        let item = self.context.items.get(target)?;
         let selected_row_offset = if self.wide_movies {
             self.wide_list.selected_row_offset(viewport_height)?
         } else {
             self.inline_browser.selected_row_offset(viewport_height)?
         };
         Some(ViewportAnchor {
-            selected_target: item.id.clone(),
+            selected_target: self.context.items.get(target)?.id.clone(),
             selected_row_offset,
         })
     }
@@ -317,21 +336,24 @@ impl BrowserComponent {
         else {
             return false;
         };
+        let Some(item) = self.context.items.get(target) else {
+            return false;
+        };
         let control_anchor = ViewportAnchor {
-            selected_target: target,
+            selected_target: item.id.clone(),
             selected_row_offset: anchor.selected_row_offset,
         };
         if self.wide_movies {
             self.wide_list
                 .apply_viewport_anchor(&control_anchor, viewport_height);
-            if self.wide_list.selected_target() != Some(&target) {
+            if self.wide_list.selected_target() != Some(&anchor.selected_target) {
                 return false;
             }
             true
         } else if self.uses_inline_control() {
             self.inline_browser
                 .apply_viewport_anchor(&control_anchor, viewport_height);
-            if self.inline_browser.selected_target() != Some(&target) {
+            if self.inline_browser.selected_target() != Some(&anchor.selected_target) {
                 return false;
             }
             true

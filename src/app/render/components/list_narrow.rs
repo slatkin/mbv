@@ -37,7 +37,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     extras: &NarrowBrowseExtras,
     focused: bool,
     layout: &mut LayoutMain,
-    browser: &mut InlineMediaBrowser<usize>,
+    browser: &mut InlineMediaBrowser<String>,
 ) -> (usize, Option<HomeImagePaint>) {
     let mut content_area = area;
 

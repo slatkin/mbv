@@ -16,13 +16,13 @@ impl Model {
     /// targets or Model-owned effects.
     pub(super) fn handle_home_request(&mut self, request: ShellRequest) {
         match request {
-            ShellRequest::HomePlay(cursor) => {
-                if let Some((item, from_cw)) = self.home_flat_target(cursor) {
+            ShellRequest::HomePlay(target) => {
+                if let Some((item, from_cw)) = self.home_stable_target(&target) {
                     self.app.home_play_target(item, from_cw);
                 }
             }
-            ShellRequest::HomeEnqueue(cursor) => {
-                if let Some((item, from_cw)) = self.home_flat_target(cursor) {
+            ShellRequest::HomeEnqueue(target) => {
+                if let Some((item, from_cw)) = self.home_stable_target(&target) {
                     self.app.home_enqueue_target(item, from_cw);
                 }
             }
@@ -31,15 +31,23 @@ impl Model {
                 cw_item,
             } => self.app.open_context_menu(home_cw_selected, cw_item),
             // Delete / watched-toggle refetch Home: re-project (5.3d).
-            ShellRequest::HomeDelete(cursor) => {
-                if let Some(item) = self.home_content.continue_items.get(cursor).cloned() {
-                    self.app.remove_from_continue_watching(item);
+            ShellRequest::HomeDelete(target) => {
+                if target.from_continue_watching {
+                    if let Some(item) = self
+                        .home_content
+                        .continue_items
+                        .iter()
+                        .find(|item| item.id == target.item_id)
+                        .cloned()
+                    {
+                        self.app.remove_from_continue_watching(item);
+                    }
                 }
                 self.push_home_content();
             }
-            ShellRequest::HomeToggleWatched => {
-                if let Some(item) = self.home_cw_item() {
-                    self.app.cw_toggle_watched(item);
+            ShellRequest::HomeToggleWatched(target) => {
+                if let Some((QueueItem::Emby(item), _)) = self.home_stable_target(&target) {
+                    self.app.cw_toggle_watched(*item);
                 }
                 self.push_home_content();
             }

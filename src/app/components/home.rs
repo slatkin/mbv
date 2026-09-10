@@ -394,6 +394,24 @@ impl HomeComponent {
     /// Handle a keyboard event using TuiRealm key types. Home claims
     /// only its local navigation and typed effect requests; destination-
     /// independent chords are resolved by the central router.
+    fn row_target(&self) -> super::msg::HomeRowTarget {
+        let item = if self.section == 0 {
+            self.continue_items.get(self.cursor())
+        } else {
+            self.latest
+                .get(self.section - 1)
+                .and_then(|(_, _, items)| items.get(self.cursor()))
+        };
+        super::msg::HomeRowTarget {
+            item_id: item.map(|item| item.id().to_owned()).unwrap_or_default(),
+            source: self
+                .latest
+                .get(self.section.saturating_sub(1))
+                .map(|(_, source, _)| source.pref_key()),
+            from_continue_watching: self.section == 0,
+        }
+    }
+
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if !self.focused {
             return None;
@@ -444,14 +462,16 @@ impl HomeComponent {
                 }))
             }
             Key::Char('.') => None,
-            Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor()))),
-            Key::Enter => Some(Msg::Shell(ShellRequest::HomePlay(self.cursor()))),
-            Key::Char('a') if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor()))),
-            Key::Char('w') if ctrl && self.section == 0 => {
-                Some(Msg::Shell(ShellRequest::HomeToggleWatched))
+            Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target()))),
+            Key::Enter => Some(Msg::Shell(ShellRequest::HomePlay(self.row_target()))),
+            Key::Char('a') if ctrl => {
+                Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target())))
             }
+            Key::Char('w') if ctrl && self.section == 0 => Some(Msg::Shell(
+                ShellRequest::HomeToggleWatched(self.row_target()),
+            )),
             Key::Char('w') if ctrl => None,
-            Key::Delete => Some(Msg::Shell(ShellRequest::HomeDelete(self.cursor()))),
+            Key::Delete => Some(Msg::Shell(ShellRequest::HomeDelete(self.row_target()))),
             _ => None,
         }
     }
@@ -512,7 +532,9 @@ impl HomeComponent {
                 if !self.claim_row(at) {
                     return None;
                 }
-                Some(Msg::Shell(ShellRequest::HomeRowClick))
+                Some(Msg::Shell(ShellRequest::HomeRowClick {
+                    target: self.row_target(),
+                }))
             }
             MouseGesture::DoubleClick(at) => {
                 if let Some(&section_idx) = self.pill_regions.resolve(at) {
@@ -525,7 +547,7 @@ impl HomeComponent {
                     return None;
                 }
                 Some(Msg::Shell(ShellRequest::HomeRowActivate {
-                    target: self.cursor(),
+                    target: self.row_target(),
                 }))
             }
             MouseGesture::RightClick(at) => {
@@ -533,6 +555,7 @@ impl HomeComponent {
                     return None;
                 }
                 Some(Msg::Shell(ShellRequest::HomeRowContextMenu {
+                    target: self.row_target(),
                     anchor: (mouse.column, mouse.row),
                 }))
             }

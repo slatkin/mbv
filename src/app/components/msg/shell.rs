@@ -147,9 +147,9 @@ pub enum ShellRequest {
     /// Semantic feed-management action; local form edits stay in the component.
     FeedsManageIntent(FeedsManageIntent),
     /// Play the Home item at the component-owned flat cursor (task 3.4).
-    HomePlay(usize),
+    HomePlay(super::intents::HomeRowTarget),
     /// Enqueue the Home item at the component-owned flat cursor.
-    HomeEnqueue(usize),
+    HomeEnqueue(super::intents::HomeRowTarget),
     /// Open Home's context menu for the Continue Watching target resolved by
     /// the mounted component.
     HomeContextMenu {
@@ -159,12 +159,12 @@ pub enum ShellRequest {
     /// Remove the Home item at the component-owned flat cursor from
     /// Continue Watching (Delete), keeping the cw-range guard the legacy
     /// Delete arm applied.
-    HomeDelete(usize),
+    HomeDelete(super::intents::HomeRowTarget),
     /// Toggle the watched state of the Continue Watching column's own
     /// (independently tracked) cursor item -- Ctrl+W on Home. Matches the
     /// legacy `cw_toggle_watched`, which is not addressed by the Home flat
     /// cursor (preserved, not fixed).
-    HomeToggleWatched,
+    HomeToggleWatched(super::intents::HomeRowTarget),
     /// Persist the newly selected Home pill (section index) as the restored
     /// preference, resolved via the mounted component's `source_for_section`
     /// at the Model boundary (task 5.3d, numeric Home section deletion).
@@ -172,17 +172,20 @@ pub enum ShellRequest {
     /// A row the user single-clicked in the Home list or inline hero. The
     /// component has already moved its own selection to the resolved row; the
     /// shell only pulls panel focus to the Library (design.md D4/D5).
-    HomeRowClick,
+    HomeRowClick {
+        target: super::intents::HomeRowTarget,
+    },
     /// A row the user double-clicked; `target` is the component-resolved flat
     /// index and the shell activates it (design.md D3/D4).
     HomeRowActivate {
-        target: usize,
+        target: super::intents::HomeRowTarget,
     },
     /// A right-click in the Home list; `anchor` is the click position the
     /// component forwards as the context-menu anchor — the one legitimate
     /// forwarded coordinate (design.md D4). The component has already moved
     /// its selection to the row under the click.
     HomeRowContextMenu {
+        target: super::intents::HomeRowTarget,
         anchor: (u16, u16),
     },
     /// A Home section pill the user clicked; `target` is the section index the
@@ -346,19 +349,19 @@ pub enum ShellRequest {
     /// (design.md D4/D6). The shell applies focus-follows-click and sets the
     /// resting cursor.
     BrowserRowClick {
-        target: usize,
+        target: String,
     },
     /// A row the user double-clicked; `target` is the resolved item index and
     /// the shell activates it (design.md D3/D4).
     BrowserRowActivate {
-        target: usize,
+        target: String,
     },
     /// A row the user right-clicked; `target` is the resolved item index and
     /// `anchor` is the click position the component forwards as the
     /// context-menu anchor — the one legitimate forwarded coordinate
     /// (design.md D4).
     BrowserRowContextMenu {
-        target: usize,
+        target: String,
         anchor: (u16, u16),
     },
     /// A selector pill (letter filter / feed-folder / music group) the user

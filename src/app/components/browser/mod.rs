@@ -79,11 +79,11 @@ pub struct BrowserComponent {
     /// `render_wide_movies`. Targets are item indices into `context.items`
     /// (Browser's existing typed row identity); task 3.7 removes the mirrored
     /// cursor/scroll, task 3.5c re-points navigation onto this control.
-    wide_list: WideMediaList<usize>,
+    wide_list: WideMediaList<String>,
     /// Persistent canonical control for the applicable Narrow hero-bearing
     /// browse paths. Driven by `render_narrow_browse_with_ctx` instead of a
     /// per-frame `InlineMediaBrowser::new()`.
-    inline_browser: InlineMediaBrowser<usize>,
+    inline_browser: InlineMediaBrowser<String>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
@@ -257,7 +257,7 @@ impl BrowserComponent {
                 .then(|| item.production_year.to_string());
             let semantic_state = emby_semantic_state(item);
             rows.push(MediaListRow::Item {
-                target: index,
+                target: item.id.clone(),
                 primary,
                 trailing,
                 duration: None,
@@ -282,7 +282,7 @@ impl BrowserComponent {
             return;
         }
         let ctx = &self.context;
-        let row_for = |index: usize, item: &EmbyItem| -> MediaListRow<usize> {
+        let row_for = |item: &EmbyItem| -> MediaListRow<String> {
             let primary = if item.is_folder && item.item_type == "Folder" && item.total_count > 0 {
                 format!("{} \u{b7} {} items", item.display_name(), item.total_count)
             } else if item.is_folder && item.unplayed_item_count > 0 && item.item_type != "Series" {
@@ -292,7 +292,7 @@ impl BrowserComponent {
             };
             let semantic_state = emby_semantic_state(item);
             MediaListRow::Item {
-                target: index,
+                target: item.id.clone(),
                 primary,
                 trailing: (!item.is_folder && item.production_year > 0)
                     .then(|| item.production_year.to_string()),
@@ -307,8 +307,7 @@ impl BrowserComponent {
             let items = ctx
                 .items
                 .iter()
-                .enumerate()
-                .map(|(index, item)| (effective_sort_str(item).to_string(), row_for(index, item)))
+                .map(|item| (effective_sort_str(item).to_string(), row_for(item)))
                 .collect();
             self.wide_list.set_letter_grouped_content(
                 items,
@@ -316,12 +315,7 @@ impl BrowserComponent {
                 ctx.letter_filter.is_some(),
             );
         } else {
-            let rows = ctx
-                .items
-                .iter()
-                .enumerate()
-                .map(|(index, item)| row_for(index, item))
-                .collect();
+            let rows = ctx.items.iter().map(|item| row_for(item)).collect();
             self.wide_list.set_content(rows);
         }
     }
@@ -381,7 +375,7 @@ impl BrowserComponent {
                     return None;
                 }
                 Some(Msg::Shell(ShellRequest::BrowserRowClick {
-                    target: self.cursor(),
+                    target: self.selected_row_target().unwrap_or_default(),
                 }))
             }
             MouseGesture::DoubleClick(at) => {
@@ -392,7 +386,7 @@ impl BrowserComponent {
                     return None;
                 }
                 Some(Msg::Shell(ShellRequest::BrowserRowActivate {
-                    target: self.cursor(),
+                    target: self.selected_row_target().unwrap_or_default(),
                 }))
             }
             MouseGesture::RightClick(at) => {
@@ -400,7 +394,7 @@ impl BrowserComponent {
                     return None;
                 }
                 Some(Msg::Shell(ShellRequest::BrowserRowContextMenu {
-                    target: self.cursor(),
+                    target: self.selected_row_target().unwrap_or_default(),
                     anchor: (mouse.column, mouse.row),
                 }))
             }
@@ -416,12 +410,14 @@ impl BrowserComponent {
             return false;
         }
         if let Some(target) = self.resolve_row_target(at) {
-            if self.wide_movies {
-                self.wide_list.select_index(target);
-            } else if self.uses_inline_control() {
-                self.inline_browser.select_index(target);
-            } else {
-                self.cursor = target;
+            if let Some(index) = self.context.items.iter().position(|item| item.id == target) {
+                if self.wide_movies {
+                    self.wide_list.select_index(index);
+                } else if self.uses_inline_control() {
+                    self.inline_browser.select_index(index);
+                } else {
+                    self.cursor = index;
+                }
             }
         }
         true
@@ -432,24 +428,39 @@ impl BrowserComponent {
     /// covers the selected item, so a hero click carries the current cursor.
     /// The non-hero generic grid has no canonical control, so it falls back to
     /// the parent's painted row map.
-    fn resolve_row_target(&self, point: Position) -> Option<usize> {
+    fn resolve_row_target(&self, point: Position) -> Option<String> {
         if self.wide_movies {
-            return self.wide_list.resolve_current_point(point).copied();
+            return self.wide_list.resolve_current_point(point).cloned();
         }
         if self.uses_inline_control() {
-            if let Some(target) = self.inline_browser.resolve_current_point(point).copied() {
-                return Some(target);
+            if let Some(target) = self.inline_browser.resolve_current_point(point).cloned() {
+                return Some(target.to_owned());
             }
             if self
                 .inline_browser
                 .current_detail_rect()
                 .is_some_and(|rect| rect.contains(point))
             {
-                return self.inline_browser.current_selected_target().copied();
+                return self.inline_browser.current_selected_target().cloned();
             }
             return None;
         }
         self.resolve_left_cursor(point.x, point.y)
+            .map(|index| self.context.items.get(index).map(|item| item.id.clone()))
+            .flatten()
+    }
+
+    fn selected_row_target(&self) -> Option<String> {
+        if self.wide_movies {
+            self.wide_list.selected_target().cloned()
+        } else if self.uses_inline_control() {
+            self.inline_browser.selected_target().cloned()
+        } else {
+            self.context
+                .items
+                .get(self.cursor())
+                .map(|item| item.id.clone())
+        }
     }
 
     /// Resolve the list item under `(col, row)` from the component's own
@@ -495,7 +506,7 @@ impl BrowserComponent {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_inline_targets(&self) -> (Rect, Vec<Option<usize>>) {
+    pub(crate) fn test_inline_targets(&self) -> (Rect, Vec<Option<String>>) {
         let base = self
             .inline_browser
             .current_content_rect()
@@ -519,14 +530,14 @@ impl BrowserComponent {
                 self.inline_browser
                     .current_flow_target_at(row)
                     .flatten()
-                    .copied()
+                    .cloned()
             })
             .collect();
         (area, targets)
     }
 
     #[cfg(test)]
-    pub(crate) fn test_inline_target_position(&self, target: usize) -> Option<Position> {
+    pub(crate) fn test_inline_target_position(&self, target: String) -> Option<Position> {
         let (area, _) = self.test_inline_targets();
         (0..area.height)
             .map(|row| Position::new(area.x, area.y + row))

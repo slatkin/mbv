@@ -23,7 +23,7 @@ mod shell;
 pub use self::hit_regions::TvHit;
 pub use self::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
-    ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,
+    ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, HomeRowTarget, PodcastEpisodeIntent,
     PodcastEpisodeTransition, RemoteReanchorIntent, SavePlaylistIntent, SettingsIntent,
 };
 pub use self::playback::PlaybackRequest;

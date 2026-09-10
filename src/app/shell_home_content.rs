@@ -91,6 +91,33 @@ impl Model {
     /// Returns the item and whether it came from Continue Watching, so the
     /// App effect keeps the CW-vs-`latest` distinction with an explicit
     /// target (never a re-read App cursor).
+    pub(super) fn home_stable_target(
+        &self,
+        target: &super::components::msg::HomeRowTarget,
+    ) -> Option<(QueueItem, bool)> {
+        if target.from_continue_watching {
+            return self
+                .home_content
+                .continue_items
+                .iter()
+                .find(|item| item.id == target.item_id)
+                .cloned()
+                .map(|item| (QueueItem::Emby(Box::new(item)), true));
+        }
+        self.home_content
+            .latest
+            .iter()
+            .find(|(_, source, _)| target.source.as_deref() == Some(source.pref_key().as_str()))
+            .and_then(|(_, _, items)| {
+                items
+                    .iter()
+                    .find(|item| item.id() == target.item_id)
+                    .cloned()
+            })
+            .map(|item| (item, false))
+    }
+
+    #[allow(dead_code)]
     pub(super) fn home_flat_target(&self, cursor: usize) -> Option<(QueueItem, bool)> {
         let mut pos = 0usize;
         for item in &self.home_content.continue_items {

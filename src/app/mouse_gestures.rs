@@ -52,14 +52,14 @@ impl App {
         }
     }
 
-    pub(super) fn handle_mouse_single_click_emby(&mut self, lib_idx: usize, target: usize) {
+    pub(super) fn handle_mouse_single_click_emby(&mut self, lib_idx: usize, target: String) {
         self.set_panel_focus(super::PanelFocus::Library);
         if let Some(level) = self
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.nav_stack.last_mut())
         {
-            if target < level.items.len() {
+            if let Some(target) = level.items.iter().position(|item| item.id == target) {
                 level.set_resting_cursor(target);
                 self.save_default_library_position(lib_idx);
             }
@@ -97,20 +97,27 @@ impl App {
         }
     }
 
-    pub(super) fn handle_mouse_double_click_emby(&mut self, lib_idx: usize, target: usize) {
-        self.handle_mouse_single_click_emby(lib_idx, target);
+    pub(super) fn handle_mouse_double_click_emby(&mut self, lib_idx: usize, target: String) {
+        self.handle_mouse_single_click_emby(lib_idx, target.clone());
         if self.is_viewing_album_folders(lib_idx) {
             let album = self.libs[lib_idx]
                 .nav_stack
                 .last()
-                .and_then(|level| level.items.get(target))
+                .and_then(|level| level.items.iter().find(|item| item.id == target))
                 .cloned();
             self.activate_album_folder_row(album);
         } else if !self.activate_selected_series(lib_idx) {
             // The double-click already landed `target` as the level cursor;
             // resolve the item at it and activate via the item-taking tail
             // (task 4.3, R1: `select`'s cursor read is gone).
-            if let Some(item) = self.current_lib_item(lib_idx, target) {
+            if let Some(item) = self.current_lib_item(
+                lib_idx,
+                self.libs[lib_idx]
+                    .nav_stack
+                    .last()
+                    .and_then(|level| level.items.iter().position(|item| item.id == target))
+                    .unwrap_or(usize::MAX),
+            ) {
                 self.select_item(lib_idx, item);
             }
         }
@@ -132,7 +139,7 @@ impl App {
     pub(super) fn handle_mouse_right_click_emby(
         &mut self,
         lib_idx: usize,
-        target: usize,
+        target: String,
         col: u16,
         row: u16,
     ) {

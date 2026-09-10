@@ -13,12 +13,22 @@ impl BrowserComponent {
         if self.wide_movies {
             self.wide_list
                 .selected_target()
-                .copied()
+                .and_then(|target| {
+                    self.context
+                        .items
+                        .iter()
+                        .position(|item| item.id == *target)
+                })
                 .unwrap_or(self.cursor)
         } else if self.uses_inline_control() {
             self.inline_browser
                 .selected_target()
-                .copied()
+                .and_then(|target| {
+                    self.context
+                        .items
+                        .iter()
+                        .position(|item| item.id == *target)
+                })
                 .unwrap_or(self.cursor)
         } else {
             self.cursor
@@ -41,8 +51,8 @@ impl BrowserComponent {
     /// legacy fields when none is active), so they cannot observe a control
     /// that is seeded but not currently active.
     #[cfg(test)]
-    pub(crate) fn test_inline_selected_target(&self) -> Option<usize> {
-        self.inline_browser.selected_target().copied()
+    pub(crate) fn test_inline_selected_target(&self) -> Option<String> {
+        self.inline_browser.selected_target().cloned()
     }
 
     #[cfg(test)]
@@ -51,8 +61,8 @@ impl BrowserComponent {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_wide_selected_target(&self) -> Option<usize> {
-        self.wide_list.selected_target().copied()
+    pub(crate) fn test_wide_selected_target(&self) -> Option<String> {
+        self.wide_list.selected_target().cloned()
     }
 
     #[cfg(test)]

@@ -394,24 +394,28 @@ impl Model {
                     }
                     self.push_emby_browser_content();
                 }
-                ShellRequest::HomeRowClick => {
+                ShellRequest::HomeRowClick { .. } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
                     self.push_home_content();
                 }
                 ShellRequest::HomeRowActivate { target } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    if let Some((item, from_cw)) = self.home_flat_target(target) {
+                    if let Some((item, from_cw)) = self.home_stable_target(&target) {
                         self.app.home_play_target(item, from_cw);
                     }
                     self.push_home_content();
                 }
-                ShellRequest::HomeRowContextMenu { anchor } => {
+                ShellRequest::HomeRowContextMenu { target, anchor } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
                     self.app.open_context_menu_at(
                         anchor.0,
                         anchor.1,
-                        self.home_continue_watching_selected(),
-                        self.home_cw_item(),
+                        target.from_continue_watching,
+                        self.home_stable_target(&target)
+                            .and_then(|(item, _)| match item {
+                                mbv_core::playback_queue::QueueItem::Emby(item) => Some(*item),
+                                _ => None,
+                            }),
                     );
                     self.push_home_content();
                 }
@@ -427,7 +431,7 @@ impl Model {
                 | ShellRequest::HomeEnqueue(_)
                 | ShellRequest::HomeContextMenu { .. }
                 | ShellRequest::HomeDelete(_)
-                | ShellRequest::HomeToggleWatched
+                | ShellRequest::HomeToggleWatched(_)
                 | ShellRequest::HomeSectionSelected(_)) => self.handle_home_request(request),
                 ShellRequest::QueueScopeClick { scope } => {
                     self.app.handle_mouse_selector_click_queue(scope);

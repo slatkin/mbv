@@ -5,6 +5,25 @@
 //! representing semantic user intent, with the component owning key
 //! interpretation and the shell owning the corresponding `App` side effect.
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HomeRowTarget {
+    pub item_id: String,
+    pub source: Option<String>,
+    pub from_continue_watching: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PodcastEpisodeTarget {
+    pub(super) library_item_id: String,
+    pub(super) episode_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BookChapterTarget {
+    pub(super) book_library_item_id: String,
+    pub(super) chapter_index: usize,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsIntent {
     Back,
