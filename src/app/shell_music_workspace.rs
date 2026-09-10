@@ -168,6 +168,13 @@ impl Model {
         let Some(id) = self.music_workspace_id.as_ref() else {
             return;
         };
+        // The queue-only mode hides the library panel; narrow Music falls back
+        // to `left_area`, which is only republished as the library content
+        // rect when the base frame renders the library. Without this guard the
+        // workspace would paint its albums over the queue-owned frame.
+        if !self.library_panel_visible() {
+            return;
+        }
         // Wide Music paints into `wide_music_area`; narrow Music has no wide
         // area, so fall back to the narrow main content area (`left_area`) so
         // the component's `view` is still reached.

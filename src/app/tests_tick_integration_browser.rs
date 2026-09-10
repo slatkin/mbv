@@ -73,6 +73,10 @@ fn browser_narrow_tick_click_uses_retained_geometry_and_the_inline_painter_once(
     let mut app = make_movie_app();
     app.panel_focus = PanelFocus::Library;
     app.panel_mode = PanelMode::LibraryOnly;
+    // At 60 columns the stored panel mode is ignored and the mini view
+    // derives the visible panel from `mini_view_focus`; a narrow *library*
+    // view must select Library here.
+    app.mini_view_focus = PanelFocus::Library;
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     let browser_id = harness.model().emby_browser_id.clone().expect("browser id");

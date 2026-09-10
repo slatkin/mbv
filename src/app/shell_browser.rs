@@ -389,6 +389,13 @@ impl Model {
         let Some(id) = self.emby_browser_id.as_ref() else {
             return;
         };
+        // The queue-only mode hides the library panel; the browser's area
+        // (`left_area`) is only republished as the library content rect when
+        // the base frame renders the library, so without this guard the
+        // browser would paint its rows and hero over the queue-owned frame.
+        if !self.library_panel_visible() {
+            return;
+        }
         // When the wide Movies/home-video layout is active, the component
         // paints the full Wide hero rect; otherwise it paints the narrow
         // inner list area. Derive the presentation from the same shared
