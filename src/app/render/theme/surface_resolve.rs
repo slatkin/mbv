@@ -183,6 +183,7 @@ mod tests {
             Surface::PillRow => (PILL_ROW_BG, PILL_ROW_BG),
             Surface::PillChip => (PILL_BG, PILL_BG),
             Surface::PillChipSelected => (PILL_SELECTED_BG, PILL_SELECTED_BG),
+            Surface::QueueScopePillSelected => (ACCENT, ACCENT),
             Surface::PillRowGap => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::SidebarBand => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::NonHeroSidebarBand => (SURFACE_ITEM_FOCUSED, SURFACE_ITEM_FOCUSED),

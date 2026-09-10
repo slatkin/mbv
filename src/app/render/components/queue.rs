@@ -257,13 +257,12 @@ pub(in crate::app) fn render_queue_title_content(
         height: 1,
         ..button_area
     };
-    // The unselected scope pill is the table's `PillChip` surface. Its
-    // selected arm stays the aqua `ACCENT` because that colour is the Direct
-    // remote indicator (`CONTEXT.md`, "Direct remote control"), not a surface
-    // level.
     let pill_bg = palette::surface_colors_for_column_focus(palette::Surface::PillChip, false).fill;
+    let selected_pill_bg =
+        palette::surface_colors_for_column_focus(palette::Surface::QueueScopePillSelected, false)
+            .fill;
     let local_bg = if model.local_selected {
-        palette::ACCENT
+        selected_pill_bg
     } else {
         pill_bg
     };
@@ -275,7 +274,7 @@ pub(in crate::app) fn render_queue_title_content(
     let remote_bg = if model.local_selected {
         pill_bg
     } else {
-        palette::ACCENT
+        selected_pill_bg
     };
     let remote_fg = if model.local_selected {
         palette::PILL_FG

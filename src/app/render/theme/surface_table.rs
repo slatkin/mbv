@@ -206,6 +206,15 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: PILL_SELECTED_BG,
         },
+        // The queue's selected scope pill paints the Direct-remote aqua
+        // (`CONTEXT.md`, "Direct remote control") rather than the library
+        // pill's selected blue, so it carries its own row.
+        Surface::QueueScopePillSelected => Row {
+            level: Level::ChromeBand,
+            focus: FocusSource::Fixed,
+            soft: false,
+            resting: ACCENT,
+        },
         // Home's pill-bar spacer band paints the backdrop today.
         Surface::PillRowGap => Row {
             level: Level::ChromeBand,

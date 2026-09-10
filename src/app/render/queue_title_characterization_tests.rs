@@ -300,3 +300,72 @@ fn queue_panel_band_keeps_the_chrome_band_surface_in_both_focus_states() {
         );
     }
 }
+
+/// `unify-surface-colour` 4.2 review: the queue's **selected** scope pill is the
+/// table's `QueueScopePillSelected` surface (the Direct-remote aqua), not a
+/// screen-named accent, so both arms keep that value in both focus states.
+#[test]
+fn queue_scope_pill_selected_keeps_the_aqua_surface_in_both_focus_states() {
+    let selected_pill =
+        palette::surface_colors_for_column_focus(palette::Surface::QueueScopePillSelected, false)
+            .fill;
+    let unselected_pill =
+        palette::surface_colors_for_column_focus(palette::Surface::PillChip, false).fill;
+    assert_eq!(
+        selected_pill,
+        palette::ACCENT,
+        "the selected scope pill keeps today's aqua value"
+    );
+    assert_ne!(
+        selected_pill, unselected_pill,
+        "the selected and unselected scope pills differ"
+    );
+
+    for local_selected in [true, false] {
+        for focus in [PanelFocus::Queue, PanelFocus::Library] {
+            let mut app = direct_app();
+            app.panel_mode = PanelMode::Both;
+            app.panel_focus = focus;
+            app.set_queue_scope(if local_selected {
+                QueueScope::Local
+            } else {
+                QueueScope::Remote
+            });
+            assert_eq!(
+                app.viewed_queue_scope() == QueueScope::Local,
+                local_selected,
+                "the test needs the intended scope selected"
+            );
+            let (model, term) = render_queue_shell(app, WIDTH, HEIGHT);
+            let (local_scope, remote_scope) = model
+                .application
+                .get_component(&ComponentId::Queue)
+                .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+                .map(QueueComponent::test_scope_pill_areas)
+                .expect("QueueComponent should be mounted");
+            assert!(
+                local_scope.width > 0 && remote_scope.width > 0,
+                "characterization needs both scope pills \
+                 (local_selected={local_selected}, focus={focus:?})"
+            );
+            let buffer = term.backend().buffer();
+            let (local_bg, remote_bg) = if local_selected {
+                (selected_pill, unselected_pill)
+            } else {
+                (unselected_pill, selected_pill)
+            };
+            assert_eq!(
+                buffer[(local_scope.x, local_scope.y)].style().bg,
+                Some(local_bg),
+                "local scope pill background \
+                 (local_selected={local_selected}, focus={focus:?})"
+            );
+            assert_eq!(
+                buffer[(remote_scope.x, remote_scope.y)].style().bg,
+                Some(remote_bg),
+                "remote scope pill background \
+                 (local_selected={local_selected}, focus={focus:?})"
+            );
+        }
+    }
+}

@@ -159,6 +159,11 @@ declare_surfaces!(
     PillRow,
     PillChip,
     PillChipSelected,
+    // The queue's selected scope pill: its aqua is the Direct-remote
+    // indicator (`CONTEXT.md`, "Direct remote control"), not the library
+    // pill's selected blue, so it is its own row rather than a variant of
+    // `PillChipSelected`.
+    QueueScopePillSelected,
     PillRowGap,
     SidebarBand,
     NonHeroSidebarBand,

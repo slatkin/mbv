@@ -459,6 +459,7 @@ covered.
 | status bar body (`chrome_status.rs:305`) | `StatusBar` |
 | status bar pills/chips (`chrome_status.rs:28-487`) | `StatusBarPill` |
 | queue title row, scope pills, scope target, status strip (`queue.rs:166,175,197,219,231,297`) | `QueuePanelBand` |
+| queue's selected scope pill (`queue.rs:258-287`) | `QueueScopePillSelected` |
 | queue card visualizer background (`card.rs:245-249`) | `QueueCardVisualizer` |
 | artwork placeholder (`artwork_placeholder.rs:9`) | `ArtworkPlaceholder` |
 | artwork loading placeholder (`card.rs:111`, `album_art.rs:183`, `detail_series_view.rs:125`, `home_hero_emby.rs:121,272,286`) | `ArtworkLoadingPlaceholder` |
