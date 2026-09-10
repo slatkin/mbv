@@ -1,7 +1,7 @@
 use super::test_helpers::render_queue_shell;
 use crate::app::components::{ComponentId, QueueComponent};
 use crate::app::tests::{make_app_stub, make_item, make_remote_app_stub, make_session};
-use crate::app::{palette, App, QueueScope};
+use crate::app::{palette, App, PanelFocus, PanelMode, QueueScope};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier};
@@ -262,4 +262,41 @@ fn queue_title_attached_emby_without_nerd_fonts() {
 #[test]
 fn queue_title_attached_emby_with_nerd_fonts() {
     assert_state(attached_app("Emby"), true, true, false, Some("device"));
+}
+
+/// `unify-surface-colour` 4.2: the queue panel's title band is the chrome-band
+/// `QueuePanelBand` surface, so it keeps the chrome value in both focus states
+/// and never follows the queue column's focus green.
+#[test]
+fn queue_panel_band_keeps_the_chrome_band_surface_in_both_focus_states() {
+    let expected =
+        palette::surface_colors_for_column_focus(palette::Surface::QueuePanelBand, false).fill;
+    assert_eq!(
+        expected,
+        palette::SURFACE_CHROME,
+        "the queue band keeps today's chrome value"
+    );
+
+    for focus in [PanelFocus::Queue, PanelFocus::Library] {
+        let mut app = make_app_stub();
+        app.panel_mode = PanelMode::Both;
+        app.panel_focus = focus;
+        let (model, term) = render_queue_shell(app, WIDTH, HEIGHT);
+        let area = title_area(&model.app);
+        assert!(
+            area.width > 0 && area.y < HEIGHT,
+            "characterization needs the queue title row"
+        );
+        assert_eq!(
+            model.application.focus() == Some(&ComponentId::Queue),
+            focus == PanelFocus::Queue,
+            "the queue component's focus must follow the panel focus (focus={focus:?})"
+        );
+        let buffer = term.backend().buffer();
+        assert_eq!(
+            buffer[(area.x, area.y)].style().bg,
+            Some(expected),
+            "queue title band must not follow panel focus (focus={focus:?})"
+        );
+    }
 }

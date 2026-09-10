@@ -93,7 +93,7 @@ impl App {
         Self::set_status_pill_style(
             &mut local_spans,
             palette::TEXT_FOCUS_ACCENT,
-            palette::SURFACE_CHROME,
+            palette::surface_colors_for_column_focus(palette::Surface::QueuePanelBand, false).fill,
         );
         if let Some(icon) = local_spans.get_mut(1) {
             icon.style = icon.style.fg(palette::TEXT_METADATA);
@@ -162,8 +162,10 @@ pub(in crate::app) fn render_queue_title_content(
     }
     geometry.scope_local_area = Rect::default();
     geometry.scope_remote_area = Rect::default();
+    let band_bg =
+        palette::surface_colors_for_column_focus(palette::Surface::QueuePanelBand, false).fill;
     frame.render_widget(
-        Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
+        Block::default().style(Style::default().bg(band_bg)),
         Rect { height: 1, ..area },
     );
     let mut local_spans = vec![
@@ -172,7 +174,7 @@ pub(in crate::app) fn render_queue_title_content(
         Span::raw(model.local_label.clone()),
         Span::raw(" "),
     ];
-    let local_bg = palette::SURFACE_CHROME;
+    let local_bg = band_bg;
     let local_fg = palette::TEXT_FOCUS_ACCENT;
     for span in &mut local_spans {
         span.style = Style::default().fg(local_fg).bg(local_bg);
@@ -216,7 +218,7 @@ pub(in crate::app) fn render_queue_title_content(
         ..area
     };
     frame.render_widget(
-        Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
+        Block::default().style(Style::default().bg(band_bg)),
         target_area,
     );
     frame.render_widget(
@@ -228,7 +230,7 @@ pub(in crate::app) fn render_queue_title_content(
                 } else {
                     palette::TEXT_FOCUS_ACCENT
                 })
-                .bg(palette::SURFACE_CHROME)
+                .bg(band_bg)
                 .add_modifier(Modifier::BOLD),
         )])),
         target_area,
@@ -255,10 +257,15 @@ pub(in crate::app) fn render_queue_title_content(
         height: 1,
         ..button_area
     };
+    // The unselected scope pill is the table's `PillChip` surface. Its
+    // selected arm stays the aqua `ACCENT` because that colour is the Direct
+    // remote indicator (`CONTEXT.md`, "Direct remote control"), not a surface
+    // level.
+    let pill_bg = palette::surface_colors_for_column_focus(palette::Surface::PillChip, false).fill;
     let local_bg = if model.local_selected {
         palette::ACCENT
     } else {
-        palette::PILL_BG
+        pill_bg
     };
     let local_fg = if model.local_selected {
         palette::TEXT_FOCUS_ACCENT
@@ -266,7 +273,7 @@ pub(in crate::app) fn render_queue_title_content(
         palette::PILL_FG
     };
     let remote_bg = if model.local_selected {
-        palette::PILL_BG
+        pill_bg
     } else {
         palette::ACCENT
     };
@@ -293,10 +300,9 @@ pub(in crate::app) fn render_queue_status(
     playlist: Vec<Span<'static>>,
     autosave: Option<Vec<Span<'static>>>,
 ) {
-    frame.render_widget(
-        Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
-        area,
-    );
+    let band_bg =
+        palette::surface_colors_for_column_focus(palette::Surface::QueuePanelBand, false).fill;
+    frame.render_widget(Block::default().style(Style::default().bg(band_bg)), area);
     frame.render_widget(Paragraph::new(Line::from(playlist)), area);
     if let Some(spans) = autosave {
         let width = spans
