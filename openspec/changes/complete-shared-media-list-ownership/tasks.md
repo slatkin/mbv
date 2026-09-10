@@ -38,10 +38,10 @@
 
 ## 7. Migrate Audiobookshelf Workspaces
 
-- [ ] 7.1 Move Audiobookshelf Podcast show rows onto one owner across Wide/Inline presentations and common delegation, preserving title buckets, detail loading, images, and typed intents; verify Wide/Normal refresh, breakpoint, keyboard, mouse, and one-painter tests pass.
-- [ ] 7.2 Replace Podcast `episode_selection` with explicit episode-pane focus, project filtered episode rows before view, and make the episode owner authoritative; remove render-time `set_content`/`select_index` and episode row maps, then verify filter transitions and episode activation at Wide/Normal use retained shared geometry.
-- [ ] 7.3 Move Audiobookshelf Book rows onto one owner across Wide/Inline presentations and common delegation, preserving surname buckets, detail loading, images, and typed intents; verify Wide/Normal refresh, breakpoint, keyboard, mouse, and one-painter tests pass.
-- [ ] 7.4 Replace Book `chapter_selection` with explicit chapter-pane focus, project chapter/audio-part rows before view, and make the chapter owner authoritative; remove render-time `set_content`/`select_index` and chapter row maps, then verify chapter focus and absolute seek resolve the stable book-qualified target at Wide/Normal.
+- [x] 7.1 Move Audiobookshelf Podcast show rows onto one owner across Wide/Inline presentations and common delegation, preserving title buckets, detail loading, images, and typed intents; verify Wide/Normal refresh, breakpoint, keyboard, mouse, and one-painter tests pass.
+- [x] 7.2 Replace Podcast `episode_selection` with explicit episode-pane focus, project filtered episode rows before view, and make the episode owner authoritative; remove render-time `set_content`/`select_index` and episode row maps, then verify filter transitions and episode activation at Wide/Normal use retained shared geometry.
+- [x] 7.3 Move Audiobookshelf Book rows onto one owner across Wide/Inline presentations and common delegation, preserving surname buckets, detail loading, images, and typed intents; verify Wide/Normal refresh, breakpoint, keyboard, mouse, and one-painter tests pass.
+- [x] 7.4 Replace Book `chapter_selection` with explicit chapter-pane focus, project chapter/audio-part rows before view, and make the chapter owner authoritative; remove render-time `set_content`/`select_index` and chapter row maps, then verify chapter focus and absolute seek resolve the stable book-qualified target at Wide/Normal.
 
 ## 8. Delete Compatibility and Enforce the Boundary
 
