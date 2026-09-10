@@ -232,10 +232,13 @@ impl Model {
             }
             TabSelection::Feeds => {
                 let area = self.app.layout.main.feeds_area;
-                let state = &self.app.feed_tab;
+                // Mirrors `render_feeds_content`'s own wide-paint gate: the
+                // split is painted only with subscriptions and a non-empty
+                // *filtered* visible list, so a filter that empties the list
+                // disarms the boundary just like an empty library.
                 (crate::app::render::wide_hero_fits(area)
-                    && !state.subscriptions.is_empty()
-                    && !state.all_entries.is_empty())
+                    && !self.app.feed_tab.subscriptions.is_empty()
+                    && self.feeds_has_visible_entries())
                 .then_some(area)
             }
             TabSelection::AudiobookshelfLibrary(index) => self.abs_wide_hero_content_area(index),

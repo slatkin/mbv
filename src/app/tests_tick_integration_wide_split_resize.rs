@@ -7,7 +7,7 @@
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
-use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::{
     ComponentId, Msg, MusicWorkspaceComponent, ShellRequest, UserEvent,
@@ -16,6 +16,24 @@ use crate::app::render::make_movie_app;
 use crate::app::tests::make_app_stub;
 use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
 use crate::app::{PanelFocus, PanelMode, TabSelection};
+use mbv_core::config::{FeedKind, FeedSubscription};
+use mbv_core::playback_queue::FeedEntry;
+
+fn feed_entry(guid: &str, title: &str) -> FeedEntry {
+    FeedEntry {
+        guid: guid.into(),
+        title: title.into(),
+        enclosure_url: Some(format!("https://example.test/{guid}.mp3")),
+        link: None,
+        mime_type: Some("audio/mpeg".into()),
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: Some(FeedKind::Audio),
+        feed_id: Some("https://example.test/feed".into()),
+        position_ticks: 0,
+        played: false,
+    }
+}
 
 fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
     let (mut music_resize, mut tv_resize) = (false, false);
@@ -133,6 +151,64 @@ fn wide_hero_boundary_arms_nothing_on_an_empty_feeds_surface() {
         preserved,
         "no gap is painted, so the mounted boundary must be inert"
     );
+}
+
+/// A Feeds surface whose group/watched filter empties the visible list paints
+/// no split — the painter's wide branch gates on the filtered
+/// `visible_entries`, not the unfiltered `all_entries` — so the boundary must
+/// not arm there either. The same populated surface does arm before the
+/// filter empties it, proving the fix does not over-disarm.
+#[test]
+fn wide_hero_boundary_arms_nothing_when_a_feed_filter_empties_the_visible_list() {
+    let mut app = make_app_stub();
+    app.tab = TabSelection::Feeds;
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    app.feed_tab.subscriptions = vec![FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: FeedKind::Audio,
+    }];
+    app.feed_tab.entries = vec![vec![feed_entry("one", "One"), feed_entry("two", "Two")]];
+    app.feed_tab.rebuild_all_entries();
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let _ = draw_frame(&mut harness);
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert!(
+        crate::app::render::wide_hero_fits(harness.model().app.layout.main.feeds_area),
+        "the breakpoint must fit so the filter is the only reason to disarm"
+    );
+    assert!(
+        harness.model().wide_hero_boundary_mouse_eligible(),
+        "an unfiltered Feeds surface with entries paints the split and must arm"
+    );
+    assert!(harness.model().wide_hero_boundary_gap_rect().is_some());
+
+    // Cycle the watched filter `All -> Played`; every entry is unplayed, so
+    // the painter's visible list is empty and its wide branch is skipped.
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('w'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    let _ = draw_frame(&mut harness);
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert!(
+        !harness.model().wide_hero_boundary_mouse_eligible(),
+        "a filtered-to-empty Feeds surface must not arm the boundary"
+    );
+    assert!(
+        !harness
+            .model()
+            .mouse_subscribed
+            .contains(&ComponentId::WideHeroBoundary),
+        "a disarmed boundary must not be mouse-subscribed"
+    );
+    assert!(harness.model().wide_hero_boundary_gap_rect().is_none());
 }
 
 /// The boundary owns only the gap columns: a click on the pane column

@@ -156,6 +156,15 @@ impl FeedsComponent {
             .collect()
     }
 
+    /// Whether the active group/watched filter leaves any entry for the
+    /// painter to project — exactly the predicate `render_feeds_content`'s
+    /// wide branch early-returns on. The group selector and watched filter are
+    /// component-local, so the shell resolves the boundary's painted-split
+    /// eligibility from this fact instead of mirroring that state.
+    pub(in crate::app) fn has_visible_entries(&self) -> bool {
+        !self.visible_entries.is_empty()
+    }
+
     pub(in crate::app) fn subscription_names(&self) -> Vec<&str> {
         self.subscriptions
             .iter()
