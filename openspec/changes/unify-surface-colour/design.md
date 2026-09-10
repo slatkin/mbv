@@ -205,6 +205,10 @@ buffer tests pin it at wide `LibraryOnly`, wide `Both` library-focused and wide 
 - **[A big mechanical migration can drift the picture]** → every migrated site's expected value is
   today's value; the conformance test pins the picture surface-by-surface, and the change lands in
   screen-sized units so any drift is one screen wide and reviewable.
+- **[One load-sensitive pre-existing flake]** → a parallel full-suite run aborted once with SIGABRT in
+  `app::tests_home_latest::home_play_and_enqueue_leave_feeds_tab_state_untouched`; twenty isolated runs
+  of that test pass, its paths are untouched by this change, and at the time the table had no
+  production callers at all. Recorded rather than fixed here, and section 6 re-runs the suite.
 - **[The closed `Surface` enum can lag a new region]** → the ast-grep rule fails on any role name in a
   screen, so a new region cannot choose a colour at all; it must add a `Surface` row.
 - **[Value aliasing can survive inside the table]** → two surfaces may still share a value; that is
