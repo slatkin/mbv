@@ -9,17 +9,19 @@ three "focused" panels untouched (queue panel, TV episode box, Music track box, 
 role with a different value), and never touched a fourth group at all because those screens picked
 their own colour bit (`episode_focused`, `track_active`, `chapter_focused`).
 
-The audit at the abandoned change's start commit (`dad91c0f`), production code only:
+The audit at the abandoned change's start commit (`dad91c0f`), re-measured at `23ddf05a` (see
+`design.md` § Audit reconciliation), production code only:
 
-- **one visual decision, two roles**: `SURFACE_FOCUSED` `#3c4841` (≈18 files via the shared lever)
+- **one visual decision, two roles**: `SURFACE_FOCUSED` `#3c4841` (14 files via the shared lever)
   and `SURFACE_ACCENT_SOFT` `#48584e` (3 sites, named directly, zero lever call sites);
 - **two roles, one value**: `SURFACE_RESTING` = `SURFACE_PLAYBACK` = `#333c43`;
-- **one role, six meanings**: `SURFACE_BACKDROP` painted the library column, a recess inset, the
-  unfocused queue panel, a hero content box, the player's recess rows, and the visualizer background
-  — and also aliased `SURFACE_ARTWORK_PLACEHOLDER`;
+- **one role, nine meanings**: `SURFACE_BACKDROP` paints the library column, the wide split gap, the
+  wide Music browser panel, a hero content box, the unfocused queue panel, the narrow player's
+  recess row, the player's status pill, the pill-bar spacer row, and (via `list_selected_row_bg`)
+  every selected-row punch-through — and also aliases `SURFACE_ARTWORK_PLACEHOLDER`;
 - **a surface role aliasing a text role**: `SURFACE_FOCUSED` = `TEXT_ACCENT_MUTED`;
-- **30 direct role-name production sites** against 18 files using the shared lever, so a third of the
-  decisions are reachable by rename but not by intent;
+- **73 direct role-name production lines in 23 files** against 14 files using the shared lever, so a
+  third of the decisions are reachable by rename but not by intent;
 - **per-screen colour choices** on top of the roles (the granular focus bits).
 
 So "change the focused panel look" is not one edit, and "the theme is the single source of truth"
