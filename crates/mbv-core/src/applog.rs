@@ -169,6 +169,6 @@ mod tests {
         });
         let contents = std::fs::read_to_string(&path).unwrap_or_default();
         assert!(contents.contains("hello"));
-        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

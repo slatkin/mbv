@@ -60,6 +60,9 @@ fn control_stream_shutdown_unblocks_a_concurrent_blocking_read() {
 
 #[test]
 fn disconnect_causes_the_reader_thread_to_observe_the_shutdown_and_exit() {
+    // See `announced_daemon_shutdown_...`: the handshake credential lookup
+    // runs on the connect worker thread.
+    let _scratch = crate::config::TestTempDir::new().as_xdg_home();
     // #233: the only pre-existing teardown was an implicit Drop of the
     // writer thread's fd duplicate, which never affected the reader
     // thread's *separate* duplicate of the same socket -- so the
@@ -168,6 +171,10 @@ fn spawn_test_daemon_up_to_state(
 
 #[test]
 fn announced_daemon_shutdown_sets_is_shutdown_announced_and_emits_no_stopped_event() {
+    // The handshake's `load_or_create_control_credential()` resolves
+    // `state_dir()` on the connect worker thread, so it needs the
+    // process-wide scratch dir, not the thread-local guard.
+    let _scratch = crate::config::TestTempDir::new().as_xdg_home();
     // Task 7.4: the reader thread's `is_structured_disconnect` branch (task
     // 1.5) must route an announced `DaemonShutdown` to `is_shutdown_announced()`
     // and `PlayerEvent::DaemonShutdownAnnounced`, never a synthetic `Stopped`
@@ -234,6 +241,9 @@ fn announced_daemon_shutdown_sets_is_shutdown_announced_and_emits_no_stopped_eve
 
 #[test]
 fn unannounced_disconnect_leaves_is_shutdown_announced_false_and_emits_stopped() {
+    // See `announced_daemon_shutdown_...`: the handshake credential lookup
+    // runs on the connect worker thread.
+    let _scratch = crate::config::TestTempDir::new().as_xdg_home();
     // The other half of the boundary: a daemon that vanishes with no
     // `Disconnected` event (a crash) must not be mistaken for a clean
     // shutdown -- getting this backwards means a silent exit on a real
@@ -295,6 +305,9 @@ fn unannounced_disconnect_leaves_is_shutdown_announced_false_and_emits_stopped()
 
 #[test]
 fn connect_endpoint_propagates_active_remote_playback_status() {
+    // See `announced_daemon_shutdown_...`: the handshake credential lookup
+    // runs on the connect worker thread.
+    let _scratch = crate::config::TestTempDir::new().as_xdg_home();
     // #175: a local `mbv` connected as the ctrl client of a remote
     // `mbvd` must mirror the daemon's active playback into
     // `RemotePlayer.status` -- that's the shared `Arc<Mutex<PlayerStatus>>`

@@ -596,8 +596,13 @@ fn save_last_cast_receiver_none_clears_a_previously_saved_record() {
 #[test]
 fn save_config_settings_reports_rename_failure_with_path() {
     let dir = std::env::temp_dir().join(format!("mbv-save-config-error-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let error = write_config_text_at(&dir, "").unwrap_err();
+    // Make the destination a non-empty directory so `rename` fails. The tmp
+    // file is derived from `path`, so keeping `path` inside `dir` is what
+    // keeps the cleanup below complete -- a bare directory path would put the
+    // tmp file alongside it as an orphan.
+    let path = dir.join("config.toml");
+    std::fs::create_dir_all(&path).unwrap();
+    let error = write_config_text_at(&path, "").unwrap_err();
     assert!(error.contains("rename"));
     assert!(error.contains(dir.to_str().unwrap()));
     std::fs::remove_dir_all(dir).unwrap();

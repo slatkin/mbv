@@ -401,10 +401,11 @@ mod tests {
     use super::*;
 
     fn test_db() -> Database {
-        let dir = std::env::temp_dir().join(format!("mbv-shared-test-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("test.mbvd");
-        let db = Database::create(&path).unwrap();
+        // In-memory backend: these tests exercise document semantics, not
+        // file persistence, so they must not touch the filesystem at all.
+        let db = Database::builder()
+            .create_with_backend(redb::backends::InMemoryBackend::new())
+            .unwrap();
         let txn = db.begin_write().unwrap();
         let _ = txn.open_table(DB_TABLE);
         let _ = txn.open_table(FEED_ENTRY_STATE_TABLE);

@@ -587,6 +587,87 @@ impl Drop for TestStateDirGuard {
     }
 }
 
+/// Scratch directory for tests that must exercise a real filesystem path.
+///
+/// Removes itself on drop -- including when the test panics -- so a failing
+/// run cannot accumulate directories under the system temp dir.
+#[cfg(any(test, feature = "test-support"))]
+pub struct TestTempDir {
+    dir: PathBuf,
+    xdg_home: bool,
+    prev_state_home: Option<std::ffi::OsString>,
+    prev_config_home: Option<std::ffi::OsString>,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+impl TestTempDir {
+    /// Fresh `mbv-test-<uuid>` directory under the system temp dir.
+    pub fn new() -> Self {
+        let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&dir);
+        Self {
+            dir,
+            xdg_home: false,
+            prev_state_home: std::env::var_os("XDG_STATE_HOME"),
+            prev_config_home: std::env::var_os("XDG_CONFIG_HOME"),
+        }
+    }
+
+    /// Also makes this the process-wide `XDG_STATE_HOME`/`XDG_CONFIG_HOME`, so
+    /// code that resolves `state_dir()`/`config_dir()` on a *spawned* thread
+    /// (which the thread-local `TestStateDirGuard` cannot reach) lands here
+    /// rather than in the process-wide fallback dir, which is never removed.
+    ///
+    /// Consumes and returns `self` (rather than lending) so the caller's
+    /// `let _scratch = TestTempDir::new().as_xdg_home();` binds an owned guard
+    /// that lives to the end of the test -- a borrowed return would drop the
+    /// temporary at the end of that statement, restoring the env and deleting
+    /// the directory before the test body ran.
+    pub fn as_xdg_home(mut self) -> Self {
+        std::env::set_var("XDG_STATE_HOME", &self.dir);
+        std::env::set_var("XDG_CONFIG_HOME", &self.dir);
+        std::env::remove_var("MBV_SYSTEM");
+        self.xdg_home = true;
+        self
+    }
+
+    pub fn path(&self) -> &std::path::Path {
+        &self.dir
+    }
+
+    pub fn join(&self, name: impl AsRef<std::path::Path>) -> PathBuf {
+        self.dir.join(name)
+    }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+impl Default for TestTempDir {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+impl Drop for TestTempDir {
+    fn drop(&mut self) {
+        // Restore before deleting: a later test in the same process must never
+        // inherit a scratch path that is about to disappear.
+        if self.xdg_home {
+            restore_env("XDG_STATE_HOME", self.prev_state_home.take());
+            restore_env("XDG_CONFIG_HOME", self.prev_config_home.take());
+        }
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+fn restore_env(name: &str, value: Option<std::ffi::OsString>) {
+    match value {
+        Some(value) => std::env::set_var(name, value),
+        None => std::env::remove_var(name),
+    }
+}
+
 pub(crate) fn state_dir() -> PathBuf {
     #[cfg(any(test, feature = "test-support"))]
     if let Some(dir) = TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow().clone()) {
