@@ -10,8 +10,8 @@
 
 - [x] 2.1 Replace presentation-owned `ListCore` copies with one persistent shared media-list owner per logical row flow, preserving provider-neutral rows, stable-target refresh, cursor/scroll clamping, and retained-result invalidation; verify focused shared-control tests pass.
 - [x] 2.2 Convert Wide and Inline into closed presentations over that same owner, retaining fixed-row and selected-row-replacement behavior without presentation-to-presentation state copying; verify existing Wide/Inline buffer and viewport tests pass and a responsive test observes one owner before and after the presentation change.
-- [ ] 2.3 Add the Grid presentation over the shared owner using the existing non-hero two-column arrangement, traversal, scrollbar, and current-frame cell geometry; verify one relational/buffer characterization and one point-resolution test preserve the current two-column behavior.
-- [ ] 2.4 Add the provider-neutral row-local input delegation contract and closed outcomes, keeping global precedence in the Keyboard Router and gesture timing in the parent; verify shared tests cover unhandled, consumed, selected-target-changed, activation, context, movement, paging, edge selection, click, and wheel behavior without provider data.
+- [x] 2.3 Add the Grid presentation over the shared owner using the existing non-hero two-column arrangement, traversal, scrollbar, and current-frame cell geometry; verify one relational/buffer characterization and one point-resolution test preserve the current two-column behavior.
+- [x] 2.4 Add the provider-neutral row-local input delegation contract and closed outcomes, keeping global precedence in the Keyboard Router and gesture timing in the parent; verify shared tests cover unhandled, consumed, selected-target-changed, activation, context, movement, paging, edge selection, click, and wheel behavior without provider data.
 
 ## 3. Convert Stable Target Boundaries
 
