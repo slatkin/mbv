@@ -14,7 +14,9 @@ use tuirealm::state::State;
 
 use super::media_list::{InlineMediaBrowser, ViewportAnchor, WideMediaList};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use super::msg::{Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, ShellRequest};
+use super::msg::{
+    Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition, ShellRequest,
+};
 use super::user_event::UserEvent;
 use crate::app::render::{
     podcast_show_rows, render_audiobookshelf_podcast_content, wide_hero_presentation,
@@ -158,6 +160,19 @@ impl AudiobookshelfPodcastComponent {
         self.episode_selection
     }
 
+    pub(in crate::app) fn episode_target(&self) -> Option<PodcastEpisodeTarget> {
+        let index = self.episode_selection?;
+        let episode = self
+            .state
+            .visible_episodes(self.episode_filter)
+            .into_iter()
+            .nth(index)?;
+        Some(PodcastEpisodeTarget {
+            library_item_id: episode.library_item_id.clone(),
+            episode_id: episode.episode_id.clone(),
+        })
+    }
+
     pub(in crate::app) fn episode_filter(&self) -> AudiobookshelfEpisodeFilter {
         self.episode_filter
     }
@@ -245,7 +260,7 @@ impl AudiobookshelfPodcastComponent {
     /// key resolves its own movement locally and carries only the result.
     fn show_move_request(&self) -> Msg {
         Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: self.state.cursor(),
+            library_item_id: self.state.selected_id.clone().unwrap_or_default(),
         })
     }
 
@@ -300,7 +315,7 @@ impl AudiobookshelfPodcastComponent {
                 self.move_episode(-1);
                 Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
-                        PodcastEpisodeTransition::PreviousEpisode,
+                        PodcastEpisodeTransition::PreviousEpisode(self.episode_target()),
                     ),
                 ))
             }
@@ -308,7 +323,7 @@ impl AudiobookshelfPodcastComponent {
                 self.move_episode(1);
                 Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
-                        PodcastEpisodeTransition::NextEpisode,
+                        PodcastEpisodeTransition::NextEpisode(self.episode_target()),
                     ),
                 ))
             }
@@ -341,13 +356,19 @@ impl AudiobookshelfPodcastComponent {
             // episode-selection and wide/narrow conditions from App state at
             // the Model boundary and runs the existing App effect (D17).
             Key::Char(' ') => Some(Msg::Shell(
-                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::FocusOrPlay),
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+                    PodcastEpisodeIntent::FocusOrPlay(self.episode_target()),
+                ),
             )),
             Key::Enter => Some(Msg::Shell(
-                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay),
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                    self.episode_target(),
+                )),
             )),
             Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(Msg::Shell(
-                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue),
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue(
+                    self.episode_target(),
+                )),
             )),
             _ => None,
         }
@@ -454,7 +475,7 @@ impl AudiobookshelfPodcastComponent {
                 MouseGesture::DoubleClick(at) => self.show_index_at(at).map(|index| {
                     self.select_show(index);
                     Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(
-                        PodcastEpisodeIntent::OpenOrPlay,
+                        PodcastEpisodeIntent::OpenOrPlay(self.episode_target()),
                     ))
                 }),
                 _ => None,

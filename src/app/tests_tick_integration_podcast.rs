@@ -138,7 +138,7 @@ fn podcast_tick_wheel_is_claimed_only_over_active_control() {
         }));
         let outcome = on.step();
         assert!(outcome.raw_messages.contains(&Msg::Shell(
-            ShellRequest::AudiobookshelfPodcastShowMove { index: 1 }
+            ShellRequest::AudiobookshelfPodcastShowMove { library_item_id: "show-1".into() }
         )));
         assert_eq!(selected_id(&mut on), "show-1");
     }

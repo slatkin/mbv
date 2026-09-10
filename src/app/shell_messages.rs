@@ -289,7 +289,7 @@ impl Model {
                     self.handle_audiobookshelf_podcast_episode_intent(intent);
                     self.push_audiobookshelf_podcast_content();
                 }
-                ShellRequest::AudiobookshelfPodcastShowMove { index } => {
+                ShellRequest::AudiobookshelfPodcastShowMove { library_item_id } => {
                     // Resolved podcast show-list cursor
                     // (split-audiobookshelf-cursor-ownership D1). The
                     // component already resolved its own movement and
@@ -302,7 +302,7 @@ impl Model {
                     // focused keyboard) show move pulls panel focus to the
                     // Library.
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    self.app.select_audiobookshelf_show(index);
+                    self.app.select_audiobookshelf_show_target(&library_item_id);
                     // The component owns the painted cursor; persist the
                     // active tab's slot once after the movement lands so
                     // the saved position tracks the moved cursor (B3).

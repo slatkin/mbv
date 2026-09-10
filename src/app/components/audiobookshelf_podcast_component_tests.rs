@@ -84,10 +84,11 @@ fn abs_podcast_component_keeps_local_show_cursor_and_renders_without_app_state()
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { index })) = message else {
+    let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { library_item_id })) = message
+    else {
         panic!("show movement should carry the resolved show index");
     };
-    assert_eq!(index, 0, "single show clamps the resolved cursor to 0");
+    assert_eq!(library_item_id, "show-a");
     assert_eq!(component.cursor(), 0);
 
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
@@ -122,7 +123,10 @@ fn abs_podcast_component_emits_typed_episode_transitions_in_episode_mode() {
     else {
         panic!("episode movement should be a typed episode-transition request, got {message:?}");
     };
-    assert_eq!(transition, PodcastEpisodeTransition::NextEpisode);
+    assert!(matches!(
+        transition,
+        PodcastEpisodeTransition::NextEpisode(Some(_))
+    ));
 
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char(']'),
@@ -188,7 +192,11 @@ fn abs_podcast_component_cycles_show_title_buckets_with_brackets() {
                 modifiers: KeyModifiers::NONE,
             })),
             Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-                index
+                library_item_id: if index == 1 {
+                    "zulu".into()
+                } else {
+                    "alpha".into()
+                }
             }))
         );
     }
@@ -211,7 +219,9 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
     assert!(matches!(
         space,
         Some(Msg::Shell(
-            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::FocusOrPlay)
+            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::FocusOrPlay(
+                None
+            ))
         ))
     ));
 
@@ -222,7 +232,9 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
     assert!(matches!(
         enter,
         Some(Msg::Shell(
-            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay)
+            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                None
+            ))
         ))
     ));
 
@@ -233,7 +245,7 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
     assert!(matches!(
         ctrl_a,
         Some(Msg::Shell(
-            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue)
+            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue(None))
         ))
     ));
 
@@ -289,7 +301,7 @@ fn abs_podcast_narrow_one_column_navigation_uses_page_rows() {
             modifiers: KeyModifiers::NONE
         })),
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 3
+            library_item_id: _
         }))
     ));
     assert!(matches!(
@@ -298,7 +310,7 @@ fn abs_podcast_narrow_one_column_navigation_uses_page_rows() {
             modifiers: KeyModifiers::NONE
         })),
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 4
+            library_item_id: _
         }))
     ));
     let mut page_component = AudiobookshelfPodcastComponent::new();
@@ -335,7 +347,7 @@ fn abs_podcast_wheel_moves_one_visual_row_and_ignores_outside_list() {
     assert_eq!(
         component.on(&Event::Mouse(inside)),
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 3
+            library_item_id: "show-11".into()
         }))
     );
     // The wheel throttle lives in the private gesture state (ADR 0024, D3);
@@ -351,7 +363,7 @@ fn abs_podcast_wheel_moves_one_visual_row_and_ignores_outside_list() {
     assert_eq!(
         up,
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 2
+            library_item_id: "show-10".into()
         })),
         "unexpected upward wheel message: {up:?}"
     );
@@ -450,7 +462,7 @@ fn abs_podcast_row_mouse_selects_the_clicked_show_and_bucket_start() {
     assert_eq!(
         msg,
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 0
+            library_item_id: "show-2".into()
         }))
     );
     let bucket = component.geometry().selector_tabs[0].0;
@@ -463,7 +475,7 @@ fn abs_podcast_row_mouse_selects_the_clicked_show_and_bucket_start() {
     assert!(matches!(
         msg,
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 0
+            library_item_id: _
         }))
     ));
 }
@@ -702,7 +714,9 @@ fn abs_podcast_mouse_double_click_emits_open_or_play_and_right_click_ignored() {
     assert_eq!(
         msg,
         Some(Msg::Shell(
-            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay)
+            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                None
+            ))
         ))
     );
     assert_eq!(component.cursor(), clicked);

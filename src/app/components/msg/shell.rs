@@ -201,7 +201,7 @@ pub enum ShellRequest {
     /// detail-fetch), saves the position, and re-projects podcast content
     /// without recomputing the movement.
     AudiobookshelfPodcastShowMove {
-        index: usize,
+        library_item_id: String,
     },
     /// Typed podcast episode-mode transition (task 5.3d.6). Emitted by the
     /// component after its local episode-cursor/filter/exit mutation while

@@ -170,6 +170,27 @@ impl App {
         }
     }
 
+    pub(super) fn select_audiobookshelf_show_target(&mut self, target: &str) {
+        let Some(index) = self.tab.audiobookshelf_index() else {
+            return;
+        };
+        let cursor = self
+            .audiobookshelf_browse
+            .get(index)
+            .and_then(|state| {
+                state
+                    .shows
+                    .iter()
+                    .position(|show| show.library_item_id == target)
+            })
+            .unwrap_or_else(|| {
+                self.audiobookshelf_browse
+                    .get(index)
+                    .map_or(0, |state| state.cursor())
+            });
+        self.select_audiobookshelf_show(cursor);
+    }
+
     /// Resolve the downloaded episode at `episode_index` at the Audiobookshelf
     /// playback boundary. Queue submission remains the responsibility of the
     /// later action stage; browse state never sees credentials or playback
@@ -211,6 +232,46 @@ impl App {
     /// 5.3d.11 U5); the App only supplies the provider-native snapshot, while
     /// canonical queue ownership and the eligible Player boundary remain here
     /// with the other ordinary actions.
+    pub(super) fn play_selected_audiobookshelf_episode_target(
+        &mut self,
+        index: usize,
+        target: &crate::app::components::msg::PodcastEpisodeTarget,
+    ) {
+        let Some(item) = self.selected_audiobookshelf_queue_item_target(index, target) else {
+            return;
+        };
+        if !self.player.can_admit_audiobookshelf() {
+            self.flash(
+                "Audiobookshelf playback owner is unavailable".into(),
+                ToastSeverity::Error,
+            );
+            return;
+        }
+        self.submit_queue_item(item, true);
+    }
+
+    pub(super) fn enqueue_selected_audiobookshelf_episode_target(
+        &mut self,
+        index: usize,
+        target: &crate::app::components::msg::PodcastEpisodeTarget,
+    ) {
+        let Some(item) = self.selected_audiobookshelf_queue_item_target(index, target) else {
+            return;
+        };
+        let scope = self.viewed_queue_scope();
+        let bound = scope == self.playing_queue_scope()
+            && (self.player.is_remote() || self.player.status.lock().unwrap().active);
+        if bound && !self.player.can_admit_audiobookshelf() {
+            self.flash(
+                "Audiobookshelf playback owner is unavailable".into(),
+                ToastSeverity::Error,
+            );
+            return;
+        }
+        self.submit_queue_item(item, false);
+    }
+
+    #[allow(dead_code)]
     pub(super) fn play_selected_audiobookshelf_episode(
         &mut self,
         index: usize,
@@ -235,6 +296,7 @@ impl App {
     /// local queue is the Composed stage and is intentionally allowed without
     /// owner admission; an active or remote playback target is Bound and must
     /// be eligible.
+    #[allow(dead_code)]
     pub(super) fn enqueue_selected_audiobookshelf_episode(
         &mut self,
         index: usize,
@@ -258,6 +320,7 @@ impl App {
         self.submit_queue_item(item, false);
     }
 
+    #[allow(dead_code)]
     fn selected_audiobookshelf_queue_item(
         &self,
         audiobookshelf_library_index: usize,
@@ -271,6 +334,27 @@ impl App {
             .visible_episodes(filter)
             .get(episode_index)?
             .to_owned();
+        self.selected_audiobookshelf_queue_item_target(
+            audiobookshelf_library_index,
+            &crate::app::components::msg::PodcastEpisodeTarget::new(
+                episode.library_item_id.clone(),
+                episode.episode_id.clone(),
+            ),
+        )
+    }
+
+    pub(super) fn selected_audiobookshelf_queue_item_target(
+        &self,
+        audiobookshelf_library_index: usize,
+        target: &crate::app::components::msg::PodcastEpisodeTarget,
+    ) -> Option<QueueItem> {
+        let state = self
+            .audiobookshelf_browse
+            .get(audiobookshelf_library_index)?;
+        let episode = state.episodes.as_deref()?.iter().find(|episode| {
+            episode.library_item_id == target.library_item_id()
+                && episode.episode_id == target.episode_id()
+        })?;
         if episode.library_item_id.trim().is_empty() || episode.episode_id.trim().is_empty() {
             return None;
         }
@@ -354,12 +438,37 @@ impl App {
         }
     }
 
+    pub(super) fn select_audiobookshelf_book_target(&mut self, target: &str) {
+        let Some(index) = self.tab.audiobookshelf_index() else {
+            return;
+        };
+        let cursor = self
+            .audiobookshelf_book_browse
+            .get(index)
+            .and_then(|state| {
+                state
+                    .books
+                    .iter()
+                    .position(|book| book.library_item_id == target)
+            })
+            .unwrap_or_else(|| {
+                self.audiobookshelf_book_browse
+                    .get(index)
+                    .map_or(0, |state| state.cursor())
+            });
+        self.select_audiobookshelf_book(cursor);
+    }
+
     /// The book chapter focus is component-owned interaction state
     /// (split-browse-state-interaction-fields task 2.2): the component tracks
     /// it locally and carries the resolved row at activation time. This
     /// handler exists only so the `ChapterFocus` request stays claimed and
     /// routed (a redraw nudge); it stores nothing shell-side.
-    pub(super) fn set_audiobookshelf_book_chapter_focus(&mut self, _selection: Option<usize>) {}
+    pub(super) fn set_audiobookshelf_book_chapter_focus(
+        &mut self,
+        _selection: Option<crate::app::components::msg::BookChapterTarget>,
+    ) {
+    }
 
     /// Selects bucket `bucket_pos` (a position in `state.buckets`, matching
     /// the pill's click target -- the established pattern from
@@ -397,6 +506,38 @@ impl App {
     /// Chapter-row activation: one absolute seek to `chapters[].start` on the
     /// active book's merged timeline, without stopping/reopening the queue
     /// slot or session (book-playback spec).
+    pub(super) fn activate_audiobookshelf_book_row_target(
+        &mut self,
+        target: Option<crate::app::components::msg::BookChapterTarget>,
+    ) {
+        let Some(target) = target else { return };
+        let Some(index) = self.tab.audiobookshelf_index() else {
+            return;
+        };
+        let Some(state) = self.audiobookshelf_book_browse.get(index) else {
+            return;
+        };
+        let Some((chapters, _)) = state.detail_cache.get(target.book_library_item_id()) else {
+            return;
+        };
+        let Some(chapter) = chapters.get(target.chapter_index()) else {
+            return;
+        };
+        let target_seconds = chapter.start;
+        let active_book = self
+            .playback_queue()
+            .queue
+            .active_slot()
+            .and_then(|slot| slot.item.as_audiobookshelf_book())
+            .is_some_and(|book| book.library_item_id == target.book_library_item_id());
+        if active_book {
+            self.player
+                .send_command(mbv_core::player::PlayerCommand::SeekAbsolute(
+                    target_seconds,
+                ));
+        }
+    }
+
     pub(super) fn activate_audiobookshelf_book_row(&mut self, chapter_selection: Option<usize>) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;

@@ -26,15 +26,11 @@ impl Model {
         // The episode index is an index into the component's *filtered* view,
         // so the resolver needs the component-owned filter too
         // (split-browse-state-interaction-fields task 3.2).
-        let (episode, filter) = self
-            .abs_podcast_component_mut(index)
-            .map(|component| (component.episode_selection(), component.episode_filter()))
-            .unwrap_or((None, Default::default()));
         match intent {
-            super::components::msg::PodcastEpisodeIntent::FocusOrPlay => {
-                if let Some(episode_index) = episode {
+            super::components::msg::PodcastEpisodeIntent::FocusOrPlay(target) => {
+                if let Some(target) = target {
                     self.app
-                        .play_selected_audiobookshelf_episode(index, episode_index, filter);
+                        .play_selected_audiobookshelf_episode_target(index, &target);
                 } else if let Some(component) = self.abs_podcast_component_mut(index) {
                     // Entering episode selection is re-homed onto the mounted
                     // component (task 5.3d.11 U2); the post-request projection
@@ -42,10 +38,10 @@ impl Model {
                     component.set_episode_selection(Some(0));
                 }
             }
-            super::components::msg::PodcastEpisodeIntent::OpenOrPlay => {
-                if let Some(episode_index) = episode {
+            super::components::msg::PodcastEpisodeIntent::OpenOrPlay(target) => {
+                if let Some(target) = target {
                     self.app
-                        .play_selected_audiobookshelf_episode(index, episode_index, filter);
+                        .play_selected_audiobookshelf_episode_target(index, &target);
                 } else if self.app.is_right_panel_wide() {
                     if let Some(component) = self.abs_podcast_component_mut(index) {
                         // Re-homed onto the mounted component (task 5.3d.11 U2),
@@ -56,10 +52,10 @@ impl Model {
                     self.open_podcast_selection_modal();
                 }
             }
-            super::components::msg::PodcastEpisodeIntent::Enqueue => {
-                if let Some(episode_index) = episode {
+            super::components::msg::PodcastEpisodeIntent::Enqueue(target) => {
+                if let Some(target) = target {
                     self.app
-                        .enqueue_selected_audiobookshelf_episode(index, episode_index, filter);
+                        .enqueue_selected_audiobookshelf_episode_target(index, &target);
                 }
             }
         }

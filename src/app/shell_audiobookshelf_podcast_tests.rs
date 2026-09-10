@@ -41,14 +41,17 @@ fn abs_podcast_shell_mounts_and_routes_component() {
             code: Key::Down,
             modifiers: KeyModifiers::NONE,
         }));
-    let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { index })) = message else {
+    let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { library_item_id })) = message
+    else {
         panic!("show movement should carry the resolved show index");
     };
-    assert_eq!(index, 1, "component resolved the next row locally");
+    assert_eq!(library_item_id, "show-b");
     // The shell applies the resolved index directly through the index-taking
     // entry point (split-audiobookshelf-cursor-ownership D1), preserving the
     // detail-fetch / position-save target.
-    model.app.select_audiobookshelf_show(index);
+    model
+        .app
+        .select_audiobookshelf_show_target(&library_item_id);
     assert_eq!(model.app.audiobookshelf_browse[0].cursor(), 1);
     let unclaimed = model
         .application
@@ -146,7 +149,10 @@ fn abs_podcast_shell_routes_episode_transition_to_app() {
     else {
         panic!("episode movement should be routed as a typed episode transition");
     };
-    assert_eq!(transition, PodcastEpisodeTransition::NextEpisode);
+    assert!(matches!(
+        transition,
+        PodcastEpisodeTransition::NextEpisode(Some(_))
+    ));
     // The mounted component owns episode selection; NextEpisode already
     // moved its own selection into the second row. Assert from the
     // component accessor, not the App mirror, since the legacy App move
@@ -166,7 +172,7 @@ fn abs_podcast_shell_routes_action_intent_to_app() {
     // selection back through the U0 accessor.
     model.sync_audiobookshelf_podcast();
     model.sync_active_destination();
-    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::FocusOrPlay);
+    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::FocusOrPlay(None));
     assert_eq!(
         model
             .abs_podcast_component_mut(0)
@@ -178,7 +184,12 @@ fn abs_podcast_shell_routes_action_intent_to_app() {
     // With episode selection active on the component, the enqueue intent
     // reaches the App enqueue seam (the default fixture has one downloaded
     // episode).
-    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::Enqueue);
+    let target = model
+        .abs_podcast_component_mut(0)
+        .expect("podcast component mounted")
+        .episode_target()
+        .expect("selected episode target");
+    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::Enqueue(Some(target)));
     assert_eq!(model.app.player_tab.total_queue_len(), 1);
 }
 
@@ -204,7 +215,14 @@ fn abs_podcast_focus_play_uses_component_selection_not_stale_app_mirror() {
     // A real FocusOrPlay through the Model handler must not re-enter
     // selection: the component's owned selection resolves the play target,
     // which is inert here only because the owner is unavailable.
-    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::FocusOrPlay);
+    let target = model
+        .abs_podcast_component_mut(0)
+        .expect("podcast component mounted")
+        .episode_target()
+        .expect("selected episode target");
+    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::FocusOrPlay(Some(
+        target,
+    )));
     assert!(
         model
             .app
@@ -239,7 +257,12 @@ fn abs_podcast_enqueue_uses_component_selection_over_stale_app_mirror() {
         .expect("podcast component mounted")
         .set_episode_selection(Some(0));
 
-    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::Enqueue);
+    let target = model
+        .abs_podcast_component_mut(0)
+        .expect("podcast component mounted")
+        .episode_target()
+        .expect("selected episode target");
+    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::Enqueue(Some(target)));
     assert_eq!(
         model.app.player_tab.total_queue_len(),
         1,
@@ -288,7 +311,7 @@ fn abs_podcast_shell_space_and_ctrla_are_inert_without_owner() {
     let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(intent))) = space else {
         panic!("space should report a typed action intent");
     };
-    assert_eq!(intent, PodcastEpisodeIntent::FocusOrPlay);
+    assert!(matches!(intent, PodcastEpisodeIntent::FocusOrPlay(Some(_))));
     // Resolve the reported intent at the Model boundary; the play attempt
     // is inert on an unsupported owner, surfacing the owner-unavailable
     // status without enqueuing.
@@ -325,7 +348,7 @@ fn abs_podcast_shell_space_and_ctrla_are_inert_without_owner() {
     let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(intent))) = ctrl_a else {
         panic!("ctrl-a should report as a typed action intent");
     };
-    assert_eq!(intent, PodcastEpisodeIntent::Enqueue);
+    assert!(matches!(intent, PodcastEpisodeIntent::Enqueue(Some(_))));
     // Resolve the reported intent at the Model boundary so the Composed
     // queue is edited; the component only reports, it does not enqueue.
     model.handle_audiobookshelf_podcast_episode_intent(intent);
@@ -541,7 +564,7 @@ fn abs_podcast_stays_mounted_and_preserves_selection_across_switch() {
     assert!(matches!(
         message,
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 1
+            library_item_id: _
         }))
     ));
     model.app.select_audiobookshelf_show(1);
@@ -590,7 +613,9 @@ fn abs_podcast_show_move_pulls_panel_focus_to_library() {
     model.sync_active_destination();
     model.app.panel_focus = PanelFocus::Queue;
     model.handle_terminal_message(
-        Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { index: 0 }),
+        Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            library_item_id: "show-a".into(),
+        }),
         &mut false,
         &mut false,
     );
@@ -618,7 +643,7 @@ fn podcast_episode_activation_branch_flips_on_resize_tick_before_repaint() {
 
     // Narrow: no episode selected yet, so `OpenOrPlay` opens the episode
     // selection modal instead of entering episode focus.
-    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::OpenOrPlay);
+    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::OpenOrPlay(None));
     assert!(
         matches!(
             model.app.pending_overlay,
@@ -643,7 +668,7 @@ fn podcast_episode_activation_branch_flips_on_resize_tick_before_repaint() {
 
     // Wide, on this same tick: activation must enter episode focus on the
     // mounted component, never the narrow modal.
-    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::OpenOrPlay);
+    model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::OpenOrPlay(None));
     assert!(
         model.app.pending_overlay.is_none(),
         "wide activation right after the resize tick must not open the episode modal"
