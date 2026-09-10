@@ -38,14 +38,17 @@ impl PodcastEpisodeTarget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BookChapterTarget {
     pub(crate) book_library_item_id: String,
-    pub(crate) chapter_index: usize,
+    /// The stable row discriminator from the Service data: the chapter number
+    /// for chapter rows, or the audio-part index for the audio-file fallback
+    /// (design.md D4). Never a display position.
+    pub(crate) row_discriminator: usize,
 }
 
 impl BookChapterTarget {
-    pub fn new(book_library_item_id: String, chapter_index: usize) -> Self {
+    pub fn new(book_library_item_id: String, row_discriminator: usize) -> Self {
         Self {
             book_library_item_id,
-            chapter_index,
+            row_discriminator,
         }
     }
 
@@ -53,8 +56,8 @@ impl BookChapterTarget {
         &self.book_library_item_id
     }
 
-    pub(crate) fn chapter_index(&self) -> usize {
-        self.chapter_index
+    pub(crate) fn row_discriminator(&self) -> usize {
+        self.row_discriminator
     }
 }
 

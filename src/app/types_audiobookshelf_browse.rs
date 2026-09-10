@@ -387,6 +387,7 @@ impl AudiobookshelfBookBrowseState {
             chapters
                 .iter()
                 .map(|chapter| BookRow::Chapter {
+                    id: chapter.id,
                     start: chapter.start,
                     end: chapter.end,
                     title: chapter.title.clone(),
@@ -459,8 +460,18 @@ impl AudiobookshelfBookBrowseState {
 /// absent). Both carry provider-native identity; neither is an episode shape.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum BookRow {
-    Chapter { start: f64, end: f64, title: String },
-    AudioFile { index: usize, duration: f64 },
+    /// `id` is the Service chapter number: the stable row discriminator that
+    /// survives a refresh re-composing the visible rows (design.md D4).
+    Chapter {
+        id: usize,
+        start: f64,
+        end: f64,
+        title: String,
+    },
+    AudioFile {
+        index: usize,
+        duration: f64,
+    },
 }
 
 fn compare_publication_dates(left: Option<&str>, right: Option<&str>) -> std::cmp::Ordering {

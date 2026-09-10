@@ -24,6 +24,7 @@ use super::media_list::{
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition, ShellRequest,
+    TerminalObserverEvent,
 };
 use super::user_event::UserEvent;
 use crate::app::render::{
@@ -505,7 +506,17 @@ impl AudiobookshelfPodcastComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                if self.episode_focused || !self.carrier.claims_current_point(at) {
+                if self.episode_focused {
+                    // The focused episode pane owns its rows' wheel input
+                    // (design.md D3/D6): offer the normalized wheel delta to
+                    // the episode owner's retained current-frame geometry.
+                    if !self.episode_list.claims_current_point(at) {
+                        return None;
+                    }
+                    self.move_episode(delta);
+                    return Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed));
+                }
+                if !self.carrier.claims_current_point(at) {
                     None
                 } else {
                     self.move_show(RowLocalInput::Move(delta))
@@ -517,6 +528,18 @@ impl AudiobookshelfPodcastComponent {
                         .delegate(RowLocalInput::Click(at), Some(target));
                     self.sync_show_selection();
                     return self.show_move_request();
+                }
+                // After a show-owner miss, a focused episode pane resolves
+                // the point against the episode owner's retained geometry and
+                // applies the row-local click there (design.md D4/D6).
+                if self.episode_focused {
+                    if let Some(target) = self.episode_list.resolve_current_point(at).cloned() {
+                        self.episode_list
+                            .delegate(RowLocalInput::Click(at), Some(target));
+                        // Selection is local to the episode owner; claim the
+                        // event so the framework keeps this mutation.
+                        return Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed));
+                    }
                 }
                 if let Some((_, bucket)) = self
                     .geometry
@@ -537,17 +560,31 @@ impl AudiobookshelfPodcastComponent {
                 }
             }
             MouseGesture::DoubleClick(at) => {
-                self.carrier
-                    .resolve_current_point(at)
-                    .cloned()
-                    .map(|target| {
-                        self.carrier
-                            .delegate(RowLocalInput::Click(at), Some(target));
-                        self.sync_show_selection();
-                        Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+                if let Some(target) = self.carrier.resolve_current_point(at).cloned() {
+                    self.carrier
+                        .delegate(RowLocalInput::Click(at), Some(target));
+                    self.sync_show_selection();
+                    return Some(Msg::Shell(
+                        ShellRequest::AudiobookshelfPodcastEpisodeIntent(
                             PodcastEpisodeIntent::OpenOrPlay(self.episode_target()),
-                        ))
-                    })
+                        ),
+                    ));
+                }
+                // Double-click on a focused episode row selects it through
+                // the episode owner, then activates the owner-resolved
+                // show-qualified target (design.md D4/D6).
+                if self.episode_focused {
+                    if let Some(target) = self.episode_list.resolve_current_point(at).cloned() {
+                        self.episode_list
+                            .delegate(RowLocalInput::Click(at), Some(target));
+                        return Some(Msg::Shell(
+                            ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+                                PodcastEpisodeIntent::OpenOrPlay(self.episode_target()),
+                            ),
+                        ));
+                    }
+                }
+                None
             }
             _ => None,
         }

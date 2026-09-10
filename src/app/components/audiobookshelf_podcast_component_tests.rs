@@ -1,6 +1,7 @@
 use super::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
 use super::msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition, ShellRequest,
+    TerminalObserverEvent,
 };
 use crate::app::images::audiobookshelf_cover_cache_key;
 use crate::app::shell::Model;
@@ -389,6 +390,110 @@ fn abs_podcast_focus_selection_and_filter_transitions_are_owner_authoritative() 
     );
 }
 
+/// 7.2: a click on a painted episode row resolves through the episode owner's
+/// retained current-frame geometry and becomes its show-qualified selected
+/// target; a double-click selects through the owner and activates the
+/// owner-resolved target.
+#[test]
+fn abs_podcast_episode_row_click_uses_retained_shared_geometry() {
+    let library = AudiobookshelfLibrary {
+        id: "lib".into(),
+        name: "Podcasts".into(),
+        media_type: "podcast".into(),
+    };
+    let mut state = AudiobookshelfBrowseState::new(library);
+    state.append_page(
+        0,
+        20,
+        1,
+        vec![AudiobookshelfShow {
+            library_item_id: "show-a".into(),
+            title: "Show A".into(),
+            author: None,
+            description: None,
+            cover_path: None,
+        }],
+    );
+    state.select(0);
+    state.episodes = Some(vec![
+        AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            published_at: None,
+            duration_seconds: None,
+        },
+        AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-b".into(),
+            title: "Episode B".into(),
+            published_at: None,
+            duration_seconds: None,
+        },
+    ]);
+
+    let mut component = AudiobookshelfPodcastComponent::new();
+    component.set_content(&state, false);
+    component.set_focused(true);
+    // The wide episode rows paint only while the episode pane holds focus.
+    component.enter_episode_focus();
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let content = component
+        .episode_content_rect_for_test()
+        .expect("the focused wide episode pane paints its rows");
+
+    // A single click on the second painted row selects that episode through
+    // the owner's retained geometry and claims the event.
+    let click = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: content.x,
+        row: content.y + 1,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.episode_cursor(), 1);
+    assert_eq!(
+        component.episode_target(),
+        Some(PodcastEpisodeTarget::new(
+            "show-a".into(),
+            "episode-b".into()
+        ))
+    );
+    assert!(matches!(
+        click,
+        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    ));
+
+    // A double-click on the first painted row selects it through the owner
+    // and activates its show-qualified target.
+    component.reset_mouse_gestures_for_test();
+    component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: content.x,
+        row: content.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let activate = component.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: content.x,
+        row: content.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(
+        activate,
+        Some(Msg::Shell(
+            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                Some(PodcastEpisodeTarget::new(
+                    "show-a".into(),
+                    "episode-a".into()
+                ))
+            ))
+        ))
+    );
+}
+
 fn narrow_grid_component_state() -> AudiobookshelfBrowseState {
     let library = AudiobookshelfLibrary {
         id: "lib".into(),
@@ -413,7 +518,6 @@ fn narrow_grid_component_state() -> AudiobookshelfBrowseState {
     state.select(2);
     state
 }
-
 fn view_narrow(component: &mut AudiobookshelfPodcastComponent, width: u16, height: u16) {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal

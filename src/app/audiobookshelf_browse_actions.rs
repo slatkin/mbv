@@ -514,7 +514,13 @@ impl App {
         let Some((chapters, _)) = state.detail_cache.get(target.book_library_item_id()) else {
             return;
         };
-        let Some(chapter) = chapters.get(target.chapter_index()) else {
+        // Resolve the stable Service discriminator (chapter number), never a
+        // display position: a refresh that re-composes the chapter rows must
+        // not make this seek land on a different chapter (design.md D4).
+        let Some(chapter) = chapters
+            .iter()
+            .find(|chapter| chapter.id == target.row_discriminator())
+        else {
             return;
         };
         let target_seconds = chapter.start;
