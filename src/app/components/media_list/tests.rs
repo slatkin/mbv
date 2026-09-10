@@ -211,6 +211,87 @@ mod resolve_point {
     }
 }
 
+#[test]
+fn grid_preserves_two_column_cells_and_resolves_stable_targets() {
+    use super::{GridMediaList, GridPaintPolicy};
+    let mut grid = GridMediaList::new();
+    grid.set_columns(2, 8, 2);
+    grid.set_content(vec![
+        lifecycle_item("a"),
+        lifecycle_item("b"),
+        lifecycle_item("c"),
+    ]);
+    grid.set_geometry(Rect::new(0, 0, 20, 2), Rect::new(1, 1, 18, 2));
+    let mut terminal = Terminal::new(TestBackend::new(24, 5)).unwrap();
+    terminal
+        .draw(|frame| {
+            grid.set_paint_policy(GridPaintPolicy::new(true));
+            Component::view(&mut grid, frame, Rect::new(0, 0, 20, 2));
+        })
+        .unwrap();
+    let cells = grid.current_cells().expect("completed grid frame");
+    assert_eq!(cells.len(), 3);
+    assert_eq!(cells[0].rect.y, cells[1].rect.y);
+    assert_eq!(cells[1].rect.x, cells[0].rect.right() + 2);
+    assert_eq!(
+        grid.resolve_current_point(Position::new(cells[1].rect.x, cells[1].rect.y)),
+        Some(&"b".to_string())
+    );
+    assert_eq!(
+        grid.resolve_current_point(Position::new(cells[2].rect.x, cells[2].rect.y)),
+        Some(&"c".to_string())
+    );
+}
+
+#[test]
+fn row_local_delegation_covers_movement_selection_and_external_intents() {
+    use super::{RowIntent, RowLocalInput, RowLocalOutcome};
+    let mut list = super::MediaList::new();
+    list.set_content(vec![
+        lifecycle_item("a"),
+        lifecycle_item("b"),
+        lifecycle_item("c"),
+    ]);
+    assert_eq!(
+        list.delegate(RowLocalInput::Move(1), None),
+        RowLocalOutcome::SelectedTargetChanged("b".into())
+    );
+    assert_eq!(
+        list.delegate(RowLocalInput::Page(1), None),
+        RowLocalOutcome::SelectedTargetChanged("c".into())
+    );
+    assert_eq!(
+        list.delegate(RowLocalInput::Last, None),
+        RowLocalOutcome::Consumed
+    );
+    assert_eq!(
+        list.delegate(RowLocalInput::Activate, None),
+        RowLocalOutcome::External(RowIntent::Activate("c".into()))
+    );
+    assert_eq!(
+        list.delegate(RowLocalInput::Context, None),
+        RowLocalOutcome::External(RowIntent::Context("c".into()))
+    );
+    assert_eq!(
+        list.delegate(RowLocalInput::Click(Position::new(0, 0)), Some("a".into())),
+        RowLocalOutcome::SelectedTargetChanged("a".into())
+    );
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::DoubleClick(Position::new(0, 0)),
+            Some("a".into())
+        ),
+        RowLocalOutcome::External(RowIntent::Activate("a".into()))
+    );
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::ContextClick(Position::new(0, 0)),
+            Some("a".into())
+        ),
+        RowLocalOutcome::External(RowIntent::Context("a".into()))
+    );
+}
+
 fn lifecycle_item(target: &str) -> MediaListRow<String> {
     MediaListRow::Item {
         target: target.into(),
