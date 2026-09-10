@@ -41,6 +41,7 @@ pub mod sessions;
 pub mod settings;
 pub mod tv_workspace;
 pub mod user_event;
+pub mod wide_hero_boundary;
 
 pub use self::audiobookshelf_book::AudiobookshelfBookComponent;
 pub use self::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
@@ -79,6 +80,7 @@ pub(in crate::app) use self::settings::{
 };
 pub use self::tv_workspace::TvWorkspaceComponent;
 pub use self::user_event::UserEvent;
+pub use self::wide_hero_boundary::WideHeroBoundaryComponent;
 
 #[cfg(test)]
 #[path = "audiobookshelf_book_component_tests.rs"]
@@ -141,3 +143,5 @@ mod selection_modal_component_tests;
 #[cfg(test)]
 #[path = "tv_workspace_component_tests.rs"]
 mod tv_workspace_component_tests;
+#[cfg(test)]
+mod wide_hero_boundary_component_tests;
