@@ -6,9 +6,10 @@
 //! lives in `crate::app::render::components::media_list`.
 
 use crate::app::ui_util::move_cursor;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 
 mod anchor;
+mod grid;
 mod grouping;
 mod inline;
 #[cfg(test)]
@@ -16,6 +17,7 @@ mod tests;
 mod wide;
 
 pub use anchor::ViewportAnchor;
+pub use grid::{GridMediaList, GridPaintPolicy};
 pub use grouping::letter_grouped_rows;
 pub use inline::{InlineLayout, InlineMediaBrowser};
 pub use wide::WideMediaList;
@@ -264,6 +266,37 @@ impl InlineMediaBrowserPaintPolicy {
     }
 }
 
+/// Normalized row-local input offered by a mounted destination after it has
+/// resolved its own precedence and gesture timing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowLocalInput {
+    Move(i64),
+    Page(i64),
+    First,
+    Last,
+    Activate,
+    Context,
+    Click(Position),
+    DoubleClick(Position),
+    ContextClick(Position),
+    Wheel { at: Position, delta: i64 },
+}
+
+/// Provider-neutral result of delegating one row-local input to a list owner.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RowLocalOutcome<Target> {
+    Unhandled,
+    Consumed,
+    SelectedTargetChanged(Target),
+    External(RowIntent<Target>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RowIntent<Target> {
+    Activate(Target),
+    Context(Target),
+}
+
 /// A closed, provider-neutral row vocabulary for embedded media lists.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaListRow<Target> {
@@ -432,6 +465,62 @@ impl<Target> MediaList<Target> {
     fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
         let row = self.selected_display_row()?;
         Some(row.saturating_sub(self.resolve_viewport(viewport_height).offset))
+    }
+
+    /// Apply the row-local portion of an already-normalized input. Pointer
+    /// actions are supplied with their resolved stable target by a presentation
+    /// after it has consulted its retained current-frame geometry.
+    pub fn delegate(
+        &mut self,
+        input: RowLocalInput,
+        pointer_target: Option<Target>,
+    ) -> RowLocalOutcome<Target>
+    where
+        Target: Clone + PartialEq,
+    {
+        let before = self.selected_target().cloned();
+        match input {
+            RowLocalInput::Move(delta) | RowLocalInput::Wheel { delta, .. } => {
+                self.move_selection(delta);
+            }
+            RowLocalInput::Page(delta) => self.move_selection(delta.saturating_mul(5)),
+            RowLocalInput::First => self.select_first(),
+            RowLocalInput::Last => self.select_last(),
+            RowLocalInput::Activate | RowLocalInput::DoubleClick(_) => {
+                return pointer_target
+                    .or_else(|| self.selected_target().cloned())
+                    .map_or(RowLocalOutcome::Unhandled, |target| {
+                        RowLocalOutcome::External(RowIntent::Activate(target))
+                    });
+            }
+            RowLocalInput::Context | RowLocalInput::ContextClick(_) => {
+                return pointer_target
+                    .or_else(|| self.selected_target().cloned())
+                    .map_or(RowLocalOutcome::Unhandled, |target| {
+                        RowLocalOutcome::External(RowIntent::Context(target))
+                    });
+            }
+            RowLocalInput::Click(_) => {
+                if let Some(target) = pointer_target {
+                    if self.select_target(&target) {
+                        return if before.as_ref() == Some(&target) {
+                            RowLocalOutcome::Consumed
+                        } else {
+                            RowLocalOutcome::SelectedTargetChanged(target)
+                        };
+                    }
+                }
+                return RowLocalOutcome::Unhandled;
+            }
+        }
+        let after = self.selected_target().cloned();
+        match (before, after) {
+            (Some(before), Some(after)) if before != after => {
+                RowLocalOutcome::SelectedTargetChanged(after)
+            }
+            (Some(_), Some(_)) | (None, None) => RowLocalOutcome::Consumed,
+            _ => RowLocalOutcome::Unhandled,
+        }
     }
 }
 

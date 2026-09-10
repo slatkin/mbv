@@ -1,7 +1,8 @@
 use super::wide_row::wide_media_row;
 use crate::app::components::media_list::{
-    InlineLayout, InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaListRow, RowGeometry,
-    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
+    GridMediaList, GridPaintPolicy, InlineLayout, InlineMediaBrowser,
+    InlineMediaBrowserPaintPolicy, MediaListRow, RowGeometry, SelectedRowSurface, WideMediaList,
+    WideMediaListPaintPolicy,
 };
 use crate::app::palette;
 use ratatui::layout::Rect;
@@ -290,6 +291,58 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone>(
 }
 
 /// Component-view adapter for the Inline retained-result seam.
+pub(in crate::app) fn render_grid_media_list_component<Target: Clone + PartialEq>(
+    f: &mut Frame,
+    area: Rect,
+    grid: &mut GridMediaList<Target>,
+    policy: GridPaintPolicy,
+) {
+    grid.begin_view();
+    let (claim, content) = grid.geometry(area);
+    if area.is_empty() || claim.is_empty() || content.is_empty() || grid.rows().is_empty() {
+        return;
+    }
+    let cells = grid.cells(content);
+    let rows = grid.rows();
+    let selected = grid.selected_target();
+    for (cell_index, cell) in cells.iter().enumerate() {
+        let source = grid
+            .scroll()
+            .saturating_mul(grid.columns())
+            .saturating_add(cell_index);
+        let Some(row) = rows.get(source) else {
+            continue;
+        };
+        let selected_row = cell
+            .target
+            .as_ref()
+            .zip(selected)
+            .is_some_and(|(a, b)| a == b);
+        let item = wide_media_row(
+            row,
+            selected_row,
+            policy.focused(),
+            palette::list_selected_row_bg(),
+            cell.rect.width as usize,
+            false,
+            None,
+        );
+        f.render_widget(List::new(vec![item]), cell.rect);
+    }
+    if policy.focused() && grid.rows().len() > content.height as usize * grid.columns() {
+        crate::app::render::render_right_scrollbar(
+            f,
+            content,
+            grid.rows()
+                .len()
+                .saturating_sub(content.height as usize * grid.columns()),
+            grid.scroll(),
+            palette::SCROLLBAR,
+        );
+    }
+    grid.finish_view(claim, content, cells);
+}
+
 pub(in crate::app) fn render_inline_media_browser_component<Target: Clone>(
     f: &mut Frame,
     area: Rect,

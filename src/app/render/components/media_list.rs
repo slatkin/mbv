@@ -4,7 +4,8 @@ mod wide_row;
 
 pub(in crate::app) use plain_rows::render_plain_rows;
 pub(in crate::app) use wide::{
-    render_inline_media_browser, render_inline_media_browser_component, render_wide_media_list,
+    render_grid_media_list_component, render_inline_media_browser,
+    render_inline_media_browser_component, render_wide_media_list,
     render_wide_media_list_component,
 };
 
