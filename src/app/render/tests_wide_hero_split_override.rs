@@ -7,7 +7,9 @@
 use super::test_helpers::buffer_to_string;
 use crate::app::components::TvWorkspaceComponent;
 use crate::app::render::arrangements::library::wide_library_panes;
-use crate::app::render::arrangements::wide_hero::{wide_hero_split, WIDE_HERO_PANE_GAP};
+use crate::app::render::arrangements::wide_hero::{
+    wide_hero_split, WIDE_HERO_MIN_PANE_WIDTH, WIDE_HERO_PANE_GAP,
+};
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::TvWideRenderCtx;
 use crate::app::tests::make_item;
@@ -83,5 +85,32 @@ fn an_override_moves_the_painted_panes() {
         moved.hero_panel.x,
         moved.browser_panel.right() + WIDE_HERO_PANE_GAP,
         "the existing gap follows the moved boundary"
+    );
+}
+
+/// One session width serves every Wide hero surface: the same raw override is
+/// clamped against each surface's own content width, and the session value is
+/// never re-clamped in place, so switching to a narrower surface does not
+/// shrink the width the next surface sees.
+#[test]
+fn one_session_width_is_clamped_per_surface_without_mutating_it() {
+    let session = Some(130u16);
+    let wide_area = Rect::new(0, 0, 220, HEIGHT);
+    let narrow_area = Rect::new(0, 0, 110, HEIGHT);
+
+    let wide = wide_library_panes(wide_area, PAD_X, PAD_Y, session).expect("wide fits");
+    let narrow = wide_library_panes(narrow_area, PAD_X, PAD_Y, session).expect("narrow fits");
+
+    assert_eq!(wide.browser_panel.width, 130);
+    assert_eq!(
+        narrow.browser_panel.width,
+        narrow_area.width - WIDE_HERO_MIN_PANE_WIDTH - WIDE_HERO_PANE_GAP,
+        "the narrower surface clamps the session width to its own range"
+    );
+    assert!(narrow.browser_panel.width < wide.browser_panel.width);
+    assert_eq!(
+        session,
+        Some(130),
+        "the session width is never re-clamped in place"
     );
 }

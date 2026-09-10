@@ -112,6 +112,58 @@ fn refresh_current_view_with_queue_focus_leaves_browse_destinations_untouched() 
     assert!(!app.feed_tab.loading);
 }
 
+/// Refreshing the active library view clears the session-only Wide hero split
+/// override, reverting the surface to the shared arrangement's default ratio.
+#[test]
+fn refresh_current_view_reverts_the_wide_split_to_default() {
+    let mut app = mixed_services_app();
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.panel_focus = PanelFocus::Library;
+    app.list_pane_width = Some(64);
+
+    app.refresh_current_view();
+
+    assert_eq!(
+        app.list_pane_width, None,
+        "a library refresh must clear the Wide hero split override"
+    );
+}
+
+/// Refreshing while the Queue panel holds focus must leave the Wide hero split
+/// untouched: the reset lives in the library arm, not at the function top.
+#[test]
+fn refresh_current_view_with_queue_focus_leaves_the_wide_split_alone() {
+    let mut app = mixed_services_app();
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.panel_focus = PanelFocus::Queue;
+    app.list_pane_width = Some(64);
+
+    app.refresh_current_view();
+
+    assert_eq!(
+        app.list_pane_width,
+        Some(64),
+        "a queue-focus refresh must not touch the Wide hero split override"
+    );
+}
+
+/// The split is one session field shared by every Wide hero surface: switching
+/// wide library tabs neither clears nor re-clamps it, so the next surface
+/// consumes the same raw width (clamped against its own content area at paint
+/// time).
+#[test]
+fn switching_wide_library_tabs_keeps_the_session_split_width() {
+    let mut app = mixed_services_app();
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.panel_focus = PanelFocus::Library;
+    app.list_pane_width = Some(64);
+
+    app.set_library_tab(0); // Home (a Wide hero surface)
+    assert_eq!(app.list_pane_width, Some(64), "switch to Home");
+    app.set_library_tab(1); // back to the Emby library
+    assert_eq!(app.list_pane_width, Some(64), "switch back to a library");
+}
+
 /// A stale Emby `lib_idx` reaching a bounds-checked browse helper mutates
 /// nothing and never corrupts another library via a library-zero fallback.
 #[test]

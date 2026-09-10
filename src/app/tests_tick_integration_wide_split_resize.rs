@@ -317,3 +317,81 @@ fn wide_hero_boundary_owns_the_gap_and_adjacent_panes_keep_their_gestures() {
     apply_outcome(&mut harness, outcome);
     assert_eq!(harness.model().app.list_pane_width, Some(expected));
 }
+
+/// The split is session-only: a full press/drag/release on the gap moves the
+/// live split but writes no preference or config value, and the generic
+/// preferences writer has no field to serialize it under.
+#[test]
+fn wide_split_drag_never_writes_preferences() {
+    let mut app = make_movie_app();
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw_frame(&mut harness);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let gap = harness
+        .model()
+        .wide_hero_boundary_gap_rect()
+        .expect("the wide Movies surface paints a split");
+    let content_area = harness
+        .model()
+        .wide_hero_boundary_content_area()
+        .expect("wide Movies content area");
+    let prefs_path = crate::config::prefs_path();
+    let before = std::fs::read(&prefs_path).ok();
+
+    harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, gap.y));
+    let outcome = harness.step();
+    apply_outcome(&mut harness, outcome);
+
+    harness.inject(mouse(
+        MouseEventKind::Drag(MouseButton::Left),
+        gap.x + 6,
+        gap.y,
+    ));
+    let outcome = harness.step();
+    assert!(
+        outcome.raw_messages.iter().any(|msg| matches!(
+            msg,
+            Msg::Shell(ShellRequest::ResizeListPaneLive(_))
+        )),
+        "the drag must reach the live resize path"
+    );
+    apply_outcome(&mut harness, outcome);
+
+    harness.inject(mouse(
+        MouseEventKind::Up(MouseButton::Left),
+        gap.x + 6,
+        gap.y,
+    ));
+    let outcome = harness.step();
+    apply_outcome(&mut harness, outcome);
+
+    let expected = crate::app::list_pane_width::normalize_list_pane_width(
+        Some(gap.x + 6 - content_area.x),
+        content_area.width,
+    );
+    assert_eq!(
+        harness.model().app.list_pane_width,
+        expected,
+        "the drag applied the live session override"
+    );
+    assert!(harness.model().app.list_pane_width.is_some());
+    assert_eq!(
+        std::fs::read(&prefs_path).ok(),
+        before,
+        "a split drag must not write preferences or config"
+    );
+
+    // Even an unrelated preference save has no field to serialize the split
+    // under: it is not part of the persisted schema.
+    harness.model().app.save_prefs();
+    let saved = std::fs::read_to_string(&prefs_path).expect("prefs written");
+    let saved: serde_json::Value = serde_json::from_str(&saved).unwrap();
+    assert!(
+        saved.get("list_pane_width").is_none(),
+        "the session split must have no persisted preference key"
+    );
+}
