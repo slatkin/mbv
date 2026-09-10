@@ -288,13 +288,66 @@ _Avoid_: pending active index, cursor push, now-playing index, active_idx
 
 ## Browsing and tabs
 
+**MediaList**:
+The target shared provider-neutral owner for one logical media-row flow,
+introduced by `complete-shared-media-list-ownership`. It will own rows,
+stable-target selection, cursor/scroll, delegated row-local behavior, and
+retained geometry while a Variant (Wide, Inline, or Grid presentation) supplies
+painting within its established arrangement. It will be embedded beneath the
+destination Interactive Component; it will never be mounted, focused,
+subscribed, or given a ComponentId. The destination keeps Service content,
+chrome, workspace focus, effects, persistence, and typed intent translation.
+_Avoid_: generic list, generic media list, two-column list
+
 **WideMediaList**:
-A provider-neutral, one-column fixed-row TuiRealm Component embedded by a parent that owns the content authority. It provides shared list mechanics without choosing a Service or destination. It is the canonical control for Wide one-column rails, including Queue; non-hero two-column catalog presentation remains a parent arrangement.
+The target provider-neutral, one-column fixed-row TuiRealm Component over a
+`MediaList<Target>`, introduced by `complete-shared-media-list-ownership`. It
+will provide the Wide Variant without choosing a Service or destination. It is
+the target canonical control for Wide one-column rails, including Queue;
+non-hero two-column catalog presentation remains an arrangement policy.
 _Avoid_: generic list, two-column list, Inline Search
 
 **InlineMediaBrowser**:
-A provider-neutral, one-column TuiRealm Component that supports selected-row replacement while its parent owns content authority. Normal/Narrow hero-bearing browse surfaces use it for their one-column list. It is distinct from **Inline Search**, which is a library-scoped search capability embedded in a searchable destination and not a media-list control.
+The target provider-neutral, one-column TuiRealm Component over a
+`MediaList<Target>`, introduced by `complete-shared-media-list-ownership`. It
+will provide the Inline Variant with selected-row replacement while its parent
+owns content authority. Normal/Narrow hero-bearing browse surfaces will use it
+for their one-column list. It is distinct from **Inline Search**, which is a
+library-scoped search capability embedded in a searchable destination and not a
+media-list control.
 _Avoid_: Inline Search, detail panel, generic list
+
+**Grid presentation**:
+The target shared-owner Variant over a `MediaList<Target>`, introduced by
+`complete-shared-media-list-ownership`, for the existing non-hero two-column
+catalog arrangement. The arrangement retains placement, traversal policy,
+scrollbar, and cell geometry; Grid executes within that arrangement. It is not
+a WideMediaList or an InlineMediaBrowser and does not change provider or
+destination ownership.
+_Avoid_: two-column list, generic list, grid mode
+
+**Presentation** (media-list):
+One member of the closed set of media-list presentations — Wide, Inline, Grid
+— each a persistent component (WideMediaList, InlineMediaBrowser, or the Grid
+presentation) over the one shared `MediaList<Target>`. A destination derives
+the active Presentation from its kind, breakpoint, and painted chrome; a
+change re-selects among them and never invents a new one. Exactly one
+Presentation holds (carries) the owner at a time. Narrower than the general
+**Variant** term: every media-list Presentation is a Variant, but Variant
+also covers non-media-list named presentations (e.g. hero).
+_Avoid_: mode, control (for the carrying presentation), layout, Carrier
+
+**Carrier** (media-list):
+The destination-side `MediaListCarrier<Target>` container that owns a logical
+flow's persistent Presentation adapters (WideMediaList, InlineMediaBrowser,
+Grid) and tracks which one is active. Exactly one of its Presentations holds
+the shared `MediaList<Target>` — its rows, cursor, scroll, selection, and
+retained geometry — at a time; a responsive change moves the same owner
+between the adapters and preserves only the outgoing selected-row viewport
+offset. The owner is never copied. The Presentation that currently holds the
+owner is the **Presentation** term, not the container.
+_Avoid_: active list, owner swap, second control, active carrier (for the
+owner-holding Presentation)
 
 **Inline Search**:
 A library-scoped search capability embedded in the selected searchable Emby destination. The destination owns the local search control, session, query, result selection, painting, and keyboard/mouse interpretation; the shell owns full-library fetches, recursive album indexing, stale-completion guards, navigation effects, and activation effects. Browser, MusicWorkspace, or TvWorkspace is the sole owner and painter for the current presentation; TV transfers one snapshot between Normal and Wide, while an ordinary tab change dismisses search. It is distinct from the cross-library **Search sidebar**.

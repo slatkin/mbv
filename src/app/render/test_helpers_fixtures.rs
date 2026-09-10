@@ -173,68 +173,6 @@ pub fn make_music_group_app_with_second_album() -> App {
     app
 }
 
-/// Shared control-geometry assertions for the inline album-detail tests: the
-/// selected album's inline detail (loading indicator or rendered tracks)
-/// must sit between the selected album title and the following sibling
-/// album, and every row in between must be non-selectable. `left_row_map` is
-/// the control-exported `RowGeometry` compatibility map retained for #638;
-/// it is not a legacy replacement-geometry rebuild.
-pub fn assert_inline_detail_frames_between_albums(
-    lines: &[&str],
-    layout: &LayoutMain,
-    title_y: usize,
-    detail_y: usize,
-) {
-    assert!(
-        lines[title_y - 4].trim().is_empty(),
-        "expected the colored top-padding row above the artist header to be blank:\n{}",
-        lines.join("\n")
-    );
-    assert_eq!(
-        lines.iter().filter(|line| line.trim() == "Alpha").count(),
-        1,
-        "plain album framing must not duplicate the artist name:\n{}",
-        lines.join("\n")
-    );
-    assert!(
-        detail_y > title_y,
-        "expected the inline detail row to render below the selected album title:\n{}",
-        lines.join("\n")
-    );
-
-    let second_album_y = lines
-        .iter()
-        .position(|l| l.contains("Second Album"))
-        .expect("expected the following album row");
-    assert!(
-        second_album_y > detail_y,
-        "expected the inline detail to render before sibling albums:\n{}",
-        lines.join("\n")
-    );
-
-    let title_row_idx = layout
-        .left_row_map
-        .iter()
-        .position(|r| *r == Some(0))
-        .expect("expected the selected album (index 0) in the row map");
-    let second_row_idx = layout
-        .left_row_map
-        .iter()
-        .position(|r| *r == Some(1))
-        .expect("expected the following album (index 1) in the row map");
-    assert!(
-        second_row_idx > title_row_idx,
-        "expected the following album's row-map entry after the selected album's"
-    );
-    assert!(
-        layout.left_row_map[title_row_idx + 1..second_row_idx]
-            .iter()
-            .all(Option::is_none),
-        "expected every row between the two albums (borders, padding, detail) to be non-selectable:\n{:?}",
-        layout.left_row_map
-    );
-}
-
 pub fn make_home_video_app() -> App {
     let mut app = make_app_stub();
     app.tab = TabSelection::EmbyLibrary(0);

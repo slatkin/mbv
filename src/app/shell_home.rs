@@ -16,30 +16,48 @@ impl Model {
     /// targets or Model-owned effects.
     pub(super) fn handle_home_request(&mut self, request: ShellRequest) {
         match request {
-            ShellRequest::HomePlay(cursor) => {
-                if let Some((item, from_cw)) = self.home_flat_target(cursor) {
+            ShellRequest::HomePlay(target) => {
+                if let Some((item, from_cw)) = self.home_stable_target(&target) {
                     self.app.home_play_target(item, from_cw);
                 }
             }
-            ShellRequest::HomeEnqueue(cursor) => {
-                if let Some((item, from_cw)) = self.home_flat_target(cursor) {
+            ShellRequest::HomeEnqueue(target) => {
+                if let Some((item, from_cw)) = self.home_stable_target(&target) {
                     self.app.home_enqueue_target(item, from_cw);
                 }
             }
             ShellRequest::HomeContextMenu {
                 home_cw_selected,
-                cw_item,
-            } => self.app.open_context_menu(home_cw_selected, cw_item),
+                target,
+            } => {
+                let cw_item = self
+                    .home_stable_target(&target)
+                    .and_then(|(item, from_cw)| from_cw.then_some(item))
+                    .and_then(|item| match item {
+                        QueueItem::Emby(item) => Some(*item),
+                        _ => None,
+                    });
+                self.home_context_item = cw_item.clone();
+                self.app.open_context_menu(home_cw_selected, cw_item);
+            }
             // Delete / watched-toggle refetch Home: re-project (5.3d).
-            ShellRequest::HomeDelete(cursor) => {
-                if let Some(item) = self.home_content.continue_items.get(cursor).cloned() {
-                    self.app.remove_from_continue_watching(item);
+            ShellRequest::HomeDelete(target) => {
+                if target.from_continue_watching {
+                    if let Some(item) = self
+                        .home_content
+                        .continue_items
+                        .iter()
+                        .find(|item| Some(item.id.as_str()) == target.item_id.as_deref())
+                        .cloned()
+                    {
+                        self.app.remove_from_continue_watching(item);
+                    }
                 }
                 self.push_home_content();
             }
-            ShellRequest::HomeToggleWatched => {
-                if let Some(item) = self.home_cw_item() {
-                    self.app.cw_toggle_watched(item);
+            ShellRequest::HomeToggleWatched(target) => {
+                if let Some((QueueItem::Emby(item), _)) = self.home_stable_target(&target) {
+                    self.app.cw_toggle_watched(*item);
                 }
                 self.push_home_content();
             }
@@ -81,9 +99,8 @@ impl Model {
             .home_content
             .latest
             .iter()
-            .map(|(title, source, items, _cursor)| (title.clone(), source.clone(), items.clone()))
+            .map(|(title, source, items)| (title.clone(), source.clone(), items.clone()))
             .collect();
-        let cw_item = self.home_cw_item();
         let use_nerd_fonts = self.app.use_nerd_fonts;
         let images_enabled = self.app.images_enabled();
         // Snapshot the pending persisted-pill restore before the component
@@ -93,7 +110,6 @@ impl Model {
         if let Some(comp) = self.application.get_component_mut(&ComponentId::Home) {
             if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
                 home.set_content(continue_items, latest, self.home_content.loading);
-                home.set_continue_watching_item(cw_item);
                 home.set_use_nerd_fonts(use_nerd_fonts);
                 home.set_images_enabled(images_enabled);
                 if let Some(pending_source) = &pending {
@@ -161,6 +177,17 @@ mod tests {
         model.handle_terminal_message(Msg::Shell(request), &mut false, &mut false);
     }
     use crate::app::tests::{make_app_stub, make_item, make_items};
+
+    fn home_target(
+        item_id: &str,
+        from_continue_watching: bool,
+    ) -> crate::app::components::msg::HomeRowTarget {
+        crate::app::components::msg::HomeRowTarget {
+            item_id: Some(item_id.into()),
+            source: (!from_continue_watching).then(|| "emby:lib".into()),
+            from_continue_watching,
+        }
+    }
     use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -220,7 +247,6 @@ mod tests {
             "Books".into(),
             crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()),
             vec![],
-            0,
         )];
         model.push_home_content();
         {
@@ -308,12 +334,11 @@ mod tests {
             "Folder".into(),
             crate::app::types_playback::HomeLatestSource::Emby("lib".into()),
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
-            0,
         )];
         model.push_home_content();
 
         // HomeEnqueue: the requested CW row (id2) is queued, not row 0.
-        model.handle_home_request(ShellRequest::HomeEnqueue(2));
+        model.handle_home_request(ShellRequest::HomeEnqueue(home_target("id2", true)));
         let queued = model.app.player_tab.emby_items();
         assert_eq!(queued.len(), 1);
         assert_eq!(queued[0].id, "id2");
@@ -322,7 +347,7 @@ mod tests {
         // resume flashes "Emby is unavailable" — while a folder-flat target
         // would return early (folder guard).
         model.app.status.clear();
-        model.handle_home_request(ShellRequest::HomePlay(0));
+        model.handle_home_request(ShellRequest::HomePlay(home_target("id0", true)));
         assert_eq!(
             model.app.status, "Emby is unavailable",
             "play must act on the supplied CW target, not skip on the parked section state"
@@ -332,7 +357,7 @@ mod tests {
         // the emby-gated removal flashes — while an out-of-range flat target
         // would be skipped by the delete guard.
         model.app.status.clear();
-        model.handle_home_request(ShellRequest::HomeDelete(0));
+        model.handle_home_request(ShellRequest::HomeDelete(home_target("id0", true)));
         assert_eq!(
             model.app.status, "Emby is unavailable",
             "delete must act on the supplied CW target, not skip on an out-of-range target"
@@ -343,8 +368,7 @@ mod tests {
         // the emby-gated effect still acts (flashes unavailable) rather than
         // skipping.
         model.app.status.clear();
-        model.home_content.continue_cursor = 1;
-        model.handle_home_request(ShellRequest::HomeToggleWatched);
+        model.handle_home_request(ShellRequest::HomeToggleWatched(home_target("id1", true)));
         assert_eq!(
             model.app.status, "Emby is unavailable",
             "toggle must act on the continue_cursor target, not skip on parked state"
@@ -377,7 +401,6 @@ mod tests {
                 vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
                     make_item("Movie one", "Movie"),
                 ))],
-                0,
             ),
             (
                 "Podcasts".into(),
@@ -385,7 +408,6 @@ mod tests {
                 vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
                     make_item("Episode one", "Episode"),
                 ))],
-                0,
             ),
         ];
         model.push_home_content();
@@ -420,7 +442,6 @@ mod tests {
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
                 make_item("Movie one", "Movie"),
             ))],
-            0,
         )];
         model.push_home_content();
         model.handle_home_request(ShellRequest::HomeSectionSelected(1));
@@ -460,29 +481,23 @@ mod tests {
             "Folder".into(),
             crate::app::types_playback::HomeLatestSource::Emby("lib".into()),
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
-            0,
         )];
         model.push_home_content();
 
         // Single click on CW row 0: focuses the Library panel, but does not
         // mutate App's independent Continue Watching column cursor or the
         // per-latest pill cursor, and does not activate.
-        model.home_content.continue_cursor = 1;
-        model.home_content.latest[0].3 = 7;
         model.app.status.clear();
-        route(&mut model, ShellRequest::HomeRowClick);
+        route(
+            &mut model,
+            ShellRequest::HomeRowClick {
+                target: home_target("id0", true),
+            },
+        );
         assert_eq!(
             model.app.effective_panel_focus(),
             PanelFocus::Library,
             "single click must focus the Library panel"
-        );
-        assert_eq!(
-            model.home_content.continue_cursor, 1,
-            "single click must not mutate the Continue Watching column cursor"
-        );
-        assert_eq!(
-            model.home_content.latest[0].3, 7,
-            "single click must not mutate the per-latest pill cursor"
         );
         assert!(
             model.app.status.is_empty(),
@@ -494,7 +509,12 @@ mod tests {
         // shell activates it via home_play, which flashes on the missing Emby
         // service — proving it acted on the clicked CW target, not the non-CW
         // folder.
-        route(&mut model, ShellRequest::HomeRowActivate { target: 0 });
+        route(
+            &mut model,
+            ShellRequest::HomeRowActivate {
+                target: home_target("id0", true),
+            },
+        );
         assert_eq!(
             model.app.status, "Emby is unavailable",
             "double click must activate the clicked flat target"
@@ -510,14 +530,14 @@ mod tests {
         );
 
         // Right-click: focuses Library and opens a Pointer-anchored context
-        // menu whose entries resolve from the Continue Watching
-        // `continue_cursor` item — a CW movie, not the folder. (The Home menu
-        // target is continue_cursor, never the clicked row, so preserving it
-        // needs no cursor copy.)
-        model.home_content.continue_cursor = 0;
+        // menu whose entries resolve from the Continue Watching item supplied
+        // by Home — a CW movie, not the folder.
         route(
             &mut model,
-            ShellRequest::HomeRowContextMenu { anchor: (70, 20) },
+            ShellRequest::HomeRowContextMenu {
+                target: home_target("id0", true),
+                anchor: (70, 20),
+            },
         );
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu)) =
             model.app.pending_overlay
@@ -582,7 +602,11 @@ mod tests {
         // Keyboard '.' now routes through HomeComponent→HomeContextMenu (task 8.1).
         model.handle_home_request(ShellRequest::HomeContextMenu {
             home_cw_selected: model.home_continue_watching_selected(),
-            cw_item: model.home_cw_item(),
+            target: crate::app::components::msg::HomeRowTarget {
+                item_id: None,
+                source: None,
+                from_continue_watching: false,
+            },
         });
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_non_cw)) =
             model.app.pending_overlay
@@ -622,7 +646,11 @@ mod tests {
         // Keyboard '.' now routes through HomeComponent→HomeContextMenu (task 8.1).
         model.handle_home_request(ShellRequest::HomeContextMenu {
             home_cw_selected: model.home_continue_watching_selected(),
-            cw_item: model.home_cw_item(),
+            target: crate::app::components::msg::HomeRowTarget {
+                item_id: Some("id0".into()),
+                source: None,
+                from_continue_watching: true,
+            },
         });
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_cw)) =
             model.app.pending_overlay
@@ -642,9 +670,14 @@ mod tests {
     fn shell_home_context_menu_request_uses_explicit_target() {
         let mut model = Model::new(make_app_stub());
         let target = make_item("cw-target", "Movie");
+        model.home_content.continue_items = vec![target.clone()];
         model.handle_home_request(ShellRequest::HomeContextMenu {
             home_cw_selected: true,
-            cw_item: Some(target),
+            target: crate::app::components::msg::HomeRowTarget {
+                item_id: Some(target.id.clone()),
+                source: None,
+                from_continue_watching: true,
+            },
         });
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay

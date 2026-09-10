@@ -11,10 +11,12 @@ mod theme;
 pub(in crate::app) use components::album_art::MusicImagePaint;
 pub(in crate::app) use components::artwork_placeholder::render_artwork_placeholder;
 pub(in crate::app) use components::audiobookshelf_book::{
-    render_audiobookshelf_book_content, AudiobookshelfBookGeometry, BookInteraction,
+    book_rows, render_audiobookshelf_book_content, AudiobookshelfBookGeometry,
+    BookChapterPresentation, BookInteraction, BookPresentation,
 };
 pub(in crate::app) use components::audiobookshelf_podcast::{
-    render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry, PodcastInteraction,
+    render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry,
+    PodcastEpisodePresentation, PodcastInteraction, PodcastShowPresentation,
 };
 #[allow(unused_imports)]
 pub(in crate::app) use components::chrome_player::{
@@ -27,14 +29,75 @@ pub(in crate::app) use components::daemon_lost_modal::render_daemon_lost_modal_c
 pub(in crate::app) use components::detail::{
     compact_banner_layout, render_compact_detail_with_ctx, CompactBannerLayout, CompactDetailCtx,
 };
-pub(in crate::app) use components::feeds::{render_feeds_content, FeedsRenderModel};
+pub(in crate::app) use components::feeds::{
+    render_feeds_content, FeedsPresentation, FeedsRenderModel,
+};
 pub(in crate::app) use components::feeds_manage::{
     render_feeds_manage_content, FeedsManageRenderModel,
 };
 pub(in crate::app) use components::help::{
     help_destination, render_help_panel, HelpDestination, HelpRenderGeometry,
 };
-pub(in crate::app) use components::home::render_home_content;
+pub(in crate::app) use components::home::{render_home_content, HomeCarrier};
+pub(in crate::app) use components::queue::{render_queue_body, QueuePresentation};
+
+#[cfg(test)]
+pub(crate) fn reset_home_media_list_paints() {
+    components::media_list::WIDE_MEDIA_LIST_PAINTS.with(|count| count.set(0));
+    components::media_list::INLINE_MEDIA_BROWSER_PAINTS.with(|count| count.set(0));
+    components::media_list::PLAIN_ROWS_PAINTS.with(|count| count.set(0));
+}
+
+#[cfg(test)]
+pub(crate) fn home_wide_media_list_paints() -> usize {
+    components::media_list::WIDE_MEDIA_LIST_PAINTS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(crate) fn home_inline_media_browser_paints() -> usize {
+    components::media_list::INLINE_MEDIA_BROWSER_PAINTS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(crate) fn reset_browser_media_list_paints() {
+    reset_home_media_list_paints();
+    components::media_list::GRID_MEDIA_LIST_PAINTS.with(|count| count.set(0));
+}
+
+#[cfg(test)]
+pub(crate) fn browser_grid_media_list_paints() -> usize {
+    components::media_list::GRID_MEDIA_LIST_PAINTS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(crate) fn browser_wide_media_list_paints() -> usize {
+    home_wide_media_list_paints()
+}
+
+#[cfg(test)]
+pub(crate) fn browser_inline_media_browser_paints() -> usize {
+    home_inline_media_browser_paints()
+}
+
+#[cfg(test)]
+pub(crate) fn browser_legacy_plain_rows_paints() -> usize {
+    components::media_list::PLAIN_ROWS_PAINTS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(crate) fn reset_podcast_media_list_paints() {
+    reset_home_media_list_paints();
+}
+
+#[cfg(test)]
+pub(crate) fn podcast_wide_media_list_paints() -> usize {
+    home_wide_media_list_paints()
+}
+
+#[cfg(test)]
+pub(crate) fn podcast_inline_media_browser_paints() -> usize {
+    home_inline_media_browser_paints()
+}
 pub(in crate::app) use components::home_hero::HomeImagePaint;
 pub(in crate::app) use components::inline_search::render_inline_search;
 pub(in crate::app) use components::library_routes::{
@@ -62,14 +125,17 @@ pub(in crate::app) use components::home_hero::{
     prepare_wide_emby_hero_card, render_home_hero_content, HeroData,
 };
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
+pub(in crate::app) use components::audiobookshelf_podcast::podcast_show_rows;
 pub(in crate::app) use components::media_list::{
-    render_inline_media_browser_component, render_wide_media_list, render_wide_media_list_component,
+    render_grid_media_list_component, render_inline_media_browser_component,
+    render_wide_media_list_component,
 };
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };
 pub(in crate::app) use components::music_wide::{
-    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, MusicWideRenderCtx,
+    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, MusicAlbumPresentation,
+    MusicTrackPresentation, MusicWideRenderCtx,
 };
 pub(in crate::app) use components::playlists::{
     render_playlists_content, render_save_playlist_content, PlaylistsRenderGeometry,
@@ -87,7 +153,9 @@ pub(in crate::app) use components::sessions::render_sessions_overlay_content;
 pub(in crate::app) use components::settings_component::{
     render_settings_content, SettingsRenderGeometry, SettingsRenderModel,
 };
-pub(in crate::app) use components::tv_wide::{render_wide_tv_with_ctx, TvWideRenderCtx};
+pub(in crate::app) use components::tv_wide::{
+    render_wide_tv_with_ctx, TvEpisodePresentation, TvSeriesPresentation, TvWideRenderCtx,
+};
 pub(in crate::app) use components::widgets::{render_count_label, render_pill_bar, PillBar};
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the

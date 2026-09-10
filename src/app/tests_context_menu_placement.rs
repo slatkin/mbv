@@ -123,7 +123,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     model.home_content.continue_items = make_items(5);
     model.handle_home_request(ShellRequest::HomeContextMenu {
         home_cw_selected: model.home_continue_watching_selected(),
-        cw_item: model.home_cw_item(),
+        target: crate::app::components::msg::HomeRowTarget { item_id: Some("id0".into()), source: None, from_continue_watching: true },
     });
     assert!(
         matches!(

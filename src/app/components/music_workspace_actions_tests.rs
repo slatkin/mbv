@@ -11,7 +11,7 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-fn context(track_cursor: Option<usize>) -> MusicWideRenderCtx {
+fn context(track_focused: bool) -> MusicWideRenderCtx {
     let album = make_item("First Album", "MusicAlbum");
     let mut track = make_item("Track One", "Audio");
     track.index_number = 1;
@@ -28,15 +28,11 @@ fn context(track_cursor: Option<usize>) -> MusicWideRenderCtx {
         true,
         Some(vec![track, second_track]),
         false,
-        track_cursor,
+        track_focused,
     )
 }
 
-fn grouped_context(
-    cursor: usize,
-    order: Vec<usize>,
-    track_cursor: Option<usize>,
-) -> MusicWideRenderCtx {
+fn grouped_context(cursor: usize, order: Vec<usize>, track_focused: bool) -> MusicWideRenderCtx {
     let albums: Vec<_> = (0..4)
         .map(|index| make_item(&format!("Album {index}"), "MusicAlbum"))
         .collect();
@@ -53,7 +49,7 @@ fn grouped_context(
         true,
         None,
         false,
-        track_cursor,
+        track_focused,
     )
 }
 
@@ -61,7 +57,7 @@ fn grouped_context(
 fn music_workspace_track_targeted_actions_emit_typed_messages() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     component.set_inline_track_focus_enabled(true);
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Enter,
@@ -74,7 +70,7 @@ fn music_workspace_track_targeted_actions_emit_typed_messages() {
     }));
     assert!(matches!(
         enqueue,
-        Some(Msg::Shell(ShellRequest::MusicTrackEnqueue))
+        Some(Msg::Shell(ShellRequest::MusicTrackEnqueue { .. }))
     ));
 
     let menu = component.on(&Event::Keyboard(KeyEvent {
@@ -83,7 +79,7 @@ fn music_workspace_track_targeted_actions_emit_typed_messages() {
     }));
     assert!(matches!(
         menu,
-        Some(Msg::Shell(ShellRequest::MusicTrackContextMenu))
+        Some(Msg::Shell(ShellRequest::MusicTrackContextMenu { .. }))
     ));
 }
 
@@ -91,7 +87,7 @@ fn music_workspace_track_targeted_actions_emit_typed_messages() {
 fn ctrl_s_on_album_emits_library_shuffle() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
 
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('s'),
@@ -109,7 +105,7 @@ fn ctrl_s_on_album_emits_library_shuffle() {
 fn ctrl_s_with_track_focus_does_not_shuffle() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     component.set_inline_track_focus_enabled(true);
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Enter,
@@ -122,14 +118,15 @@ fn ctrl_s_with_track_focus_does_not_shuffle() {
     }));
 
     assert_eq!(message, None);
-    assert_eq!(component.track_cursor(), Some(0));
+    assert!(component.track_focused());
+    assert_eq!(component.track_selected_row(), Some(0));
 }
 
 #[test]
 fn dot_on_album_emits_library_context_menu() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     assert!(matches!(
         component.on(&Event::Keyboard(KeyEvent { code: Key::Char('.'), modifiers: KeyModifiers::NONE })),
         Some(Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item }))
@@ -141,26 +138,26 @@ fn dot_on_album_emits_library_context_menu() {
 fn dot_with_track_focus_emits_track_context_menu() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     component.set_inline_track_focus_enabled(true);
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Enter,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(
+    assert!(matches!(
         component.on(&Event::Keyboard(KeyEvent {
             code: Key::Char('.'),
             modifiers: KeyModifiers::NONE
         })),
-        Some(Msg::Shell(ShellRequest::MusicTrackContextMenu))
-    );
+        Some(Msg::Shell(ShellRequest::MusicTrackContextMenu { .. }))
+    ));
 }
 
 #[test]
 fn slash_on_album_emits_open_inline_search() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     assert_eq!(
         component.on(&Event::Keyboard(KeyEvent {
             code: Key::Char('/'),
@@ -174,7 +171,7 @@ fn slash_on_album_emits_open_inline_search() {
 fn slash_with_track_focus_is_unclaimed() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(context(None));
+    component.set_content(context(false));
     component.set_inline_track_focus_enabled(true);
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Enter,
@@ -204,7 +201,7 @@ fn dot_empty_list_is_unclaimed() {
         true,
         None,
         false,
-        None,
+        false,
     ));
     assert_eq!(
         component.on(&Event::Keyboard(KeyEvent {
@@ -230,7 +227,7 @@ fn ctrl_p_empty_list_is_unclaimed() {
         true,
         None,
         false,
-        None,
+        false,
     ));
 
     let message = component.on(&Event::Keyboard(KeyEvent {
@@ -250,7 +247,7 @@ fn music_workspace_wide_search_hides_grouped_rows_and_paints_flat_results() {
     component.set_focused(true);
     // `grouped_context` groups all four albums under a single "Artist"
     // heading; the ordinary wide rail would paint that heading above them.
-    component.set_content(grouped_context(0, vec![0, 1, 2, 3], None));
+    component.set_content(grouped_context(0, vec![0, 1, 2, 3], false));
 
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('/'),
@@ -331,7 +328,7 @@ fn music_workspace_wide_search_hides_grouped_rows_and_paints_flat_results() {
 fn music_workspace_search_right_click_on_result_opens_context_menu() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(grouped_context(0, vec![0, 1, 2, 3], None));
+    component.set_content(grouped_context(0, vec![0, 1, 2, 3], false));
 
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('/'),
@@ -373,7 +370,7 @@ fn music_workspace_search_right_click_on_result_opens_context_menu() {
 fn music_workspace_dismiss_restores_prior_album_position() {
     let mut component = MusicWorkspaceComponent::new();
     component.set_focused(true);
-    component.set_content(grouped_context(0, vec![0, 1, 2, 3], None));
+    component.set_content(grouped_context(0, vec![0, 1, 2, 3], false));
     component.re_anchor(2, 0);
     assert_eq!(component.album_cursor(), 2);
 

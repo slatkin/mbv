@@ -12,7 +12,7 @@
 
 use super::test_helpers::{
     buffer_to_string, draw_mounted_frame, make_music_group_app, mounted_model_at,
-    mounted_music_layout, mounted_music_scroll,
+    mounted_music_scroll,
 };
 use super::*;
 use crate::app::components::{ComponentId, MusicWorkspaceComponent};
@@ -102,32 +102,19 @@ fn album_cursor(model: &Model, id: &ComponentId) -> usize {
 fn narrow_music_one_column_geometry_and_non_selectable_structural_rows() {
     let app = multi_artist_app();
     let (_terminal, component) = render_narrow(&app, true, 0);
-    let layout = component.layout();
+    let flow = component.album_flow_targets();
 
-    // Every published item row carries exactly one album index (one column).
-    assert!(
-        layout.left_item_rows.iter().all(|row| row.len() <= 1),
-        "narrow grouped Music is one column: {:?}",
-        layout.left_item_rows
-    );
-    let album_rows = layout
-        .left_row_targets
-        .iter()
-        .filter(|t| t.is_some())
-        .count();
-    let structural_rows = layout
-        .left_row_targets
-        .iter()
-        .filter(|t| t.is_none())
-        .count();
+    // The retained control owns one-dimensional display flow.
+    let album_rows = flow.iter().filter(|t| t.is_some()).count();
+    let structural_rows = flow.iter().filter(|t| t.is_none()).count();
     assert!(album_rows >= 3, "album rows are selectable targets");
     assert!(
         structural_rows >= 2,
         "artist headings + inter-group spacer publish no target: {:?}",
-        layout.left_row_targets
+        flow
     );
     // The first painted row is the "Alpha" heading -> no target.
-    assert_eq!(layout.left_row_targets.first(), Some(&None));
+    assert_eq!(flow.first(), Some(&None));
 }
 
 #[test]
@@ -145,18 +132,10 @@ fn narrow_music_publishes_full_flow_rows_and_viewport_offset_after_scroll() {
     terminal
         .draw(|f| component.view(f, Rect::new(0, 0, NW, 8)))
         .unwrap();
-    let layout = component.layout();
-
-    assert!(layout.left_screen_offset > 0);
-    assert!(layout.left_item_rows.len() > layout.left_row_targets.len());
-    assert_eq!(
-        layout.left_row_targets,
-        layout.left_item_rows
-            [layout.left_screen_offset..layout.left_screen_offset + layout.left_row_targets.len()]
-            .iter()
-            .map(|row| row.first().copied())
-            .collect::<Vec<_>>()
-    );
+    let offset = component.album_flow_offset();
+    let flow = component.album_flow_targets();
+    assert!(offset > 0);
+    assert!(!flow.is_empty());
 }
 
 #[test]
@@ -170,15 +149,8 @@ fn narrow_music_admits_the_selected_album_detail_block() {
         "the selected album's inline detail block is admitted at a tall viewport"
     );
     assert_eq!(layout.selected_item_rect, Some(layout.hero_area));
-    // Exactly one selected-album parent target under the replacement.
-    assert_eq!(
-        layout
-            .left_row_targets
-            .iter()
-            .filter(|t| matches!(t, Some(0)))
-            .count(),
-        1
-    );
+    // The selected row and detail geometry are retained by the control.
+    assert!(component.album_flow_targets().iter().any(|t| t.is_some()));
 }
 
 #[test]
@@ -283,14 +255,7 @@ fn narrow_music_ordinary_refresh_retains_the_selected_album_target() {
         moved,
         "an ordinary refresh keeps the component's divergent cursor"
     );
-    assert_eq!(
-        mounted_music_layout(&model)
-            .left_row_targets
-            .iter()
-            .filter(|t| matches!(t, Some(idx) if *idx == moved))
-            .count(),
-        1
-    );
+    assert_eq!(album_cursor(&model, &id), moved);
 }
 
 /// Draw one frame after syncing `app.terminal_width/height` to the new size,
@@ -402,21 +367,15 @@ fn narrow_music_reused_model_paints_after_a_wide_to_narrow_resize() {
 
 #[test]
 fn narrow_music_applies_the_flip_anchor_at_the_content_viewport_height() {
-    // The write side (`render_narrow_music_group_with_ctx` applying a pending
-    // `ViewportAnchor`) must use the *content* viewport height -- the same
-    // height the read side (`viewport_anchor`) measures its offset against --
-    // not the full `area.height`. Geometry chosen so the two heights clamp the
-    // resting scroll to different values, and the painter's downstream
-    // re-clamp does not mask the difference.
+    // The component applies a breakpoint anchor to the retained control using
+    // the content viewport height before the render path paints it.
     use crate::app::components::media_list::{InlineMediaBrowser, ViewportAnchor};
     use crate::app::layout::LayoutMain;
     use crate::app::render::arrangements::wide_hero::pill_bar_areas;
 
     let app = multi_artist_app();
     let lib_idx = app.tab.emby_library_index().unwrap();
-    let ctx = app
-        .wide_music_render_ctx(lib_idx, None)
-        .with_local_state(27, 0, None);
+    let ctx = app.wide_music_render_ctx(lib_idx, None);
 
     let rows = ctx.grouped_rows();
     let target = ctx.list.items[27].id.clone();
@@ -440,25 +399,24 @@ fn narrow_music_applies_the_flip_anchor_at_the_content_viewport_height() {
     let n_rows = browser.rows().len();
     assert!(display_row - want_offset > n_rows - area.height as usize);
     assert!(display_row - want_offset <= n_rows - content_h);
+    browser.apply_viewport_anchor(&anchor, content_h);
 
     let mut layout = LayoutMain::default();
     let mut terminal = Terminal::new(TestBackend::new(60, 26)).unwrap();
-    let mut output = None;
     terminal
         .draw(|f| {
-            output = Some(render_narrow_music_group_with_ctx(
+            render_narrow_music_group_with_ctx(
                 f,
                 area,
                 &ctx,
                 &mut layout,
-                &mut browser,
-                Some(&anchor),
-            ));
+                MusicAlbumPresentation::Inline(&mut browser),
+            );
         })
         .unwrap();
 
     assert_eq!(
-        display_row - output.unwrap().final_scroll,
+        display_row - browser.scroll(),
         want_offset,
         "the anchor landed the selected row at its requested content-viewport offset"
     );

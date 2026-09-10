@@ -14,14 +14,11 @@ impl Model {
             return;
         };
         match request {
-            ShellRequest::TvEpisodeActivate => {
-                let Some((series_id, season_cursor, episode_cursor)) =
-                    self.tv_episode_activation_selection()
-                else {
-                    return;
-                };
-                self.app
-                    .play_tv_episode(&series_id, season_cursor, episode_cursor);
+            // The component resolved the episode from its own season detail and
+            // carried the stable item (design.md D4); the shell plays it
+            // directly without reading any component cursor.
+            ShellRequest::TvEpisodeActivate { episode } => {
+                self.app.play_item(episode);
             }
             // Activation, back, and letter-pill effects resolve the
             // component's selection directly (item-targeted) or from the App
@@ -68,14 +65,6 @@ impl Model {
             // every one has an arm above.
             _ => {}
         }
-    }
-
-    fn tv_episode_activation_selection(&self) -> Option<(String, usize, usize)> {
-        let id = self.tv_workspace_id.as_ref()?;
-        self.application
-            .get_component(id)
-            .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
-            .and_then(TvWorkspaceComponent::episode_activation_selection)
     }
 
     pub(super) fn tv_workspace_component_id(&self) -> Option<ComponentId> {

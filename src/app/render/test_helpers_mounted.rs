@@ -108,6 +108,38 @@ pub fn mounted_music_scroll(model: &Model) -> usize {
         .album_scroll()
 }
 
+/// The mounted Music album control's complete current-frame flow targets.
+pub fn mounted_music_flow_targets(model: &Model) -> Vec<Option<String>> {
+    let id = model
+        .music_workspace_id
+        .as_ref()
+        .expect("music workspace component mounted");
+    model
+        .application
+        .get_component(id)
+        .expect("music workspace mounted")
+        .as_any()
+        .downcast_ref::<MusicWorkspaceComponent>()
+        .expect("MusicWorkspaceComponent")
+        .album_flow_targets()
+}
+
+/// Flow rows occupied by a source album index in the mounted Music control.
+pub fn mounted_music_album_target_rows(model: &Model, target: usize) -> Vec<usize> {
+    let id = model
+        .music_workspace_id
+        .as_ref()
+        .expect("music workspace component mounted");
+    model
+        .application
+        .get_component(id)
+        .expect("music workspace mounted")
+        .as_any()
+        .downcast_ref::<MusicWorkspaceComponent>()
+        .expect("MusicWorkspaceComponent")
+        .album_target_rows(target)
+}
+
 /// The mounted `TvWorkspaceComponent`'s own painted geometry.
 pub fn mounted_tv_layout(model: &Model) -> &LayoutMain {
     let id = model

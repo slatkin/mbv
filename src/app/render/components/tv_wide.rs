@@ -1,5 +1,7 @@
 use crate::app::components::inline_search::InlineSearch;
-use crate::app::components::media_list::WideMediaList;
+use crate::app::components::media_list::{
+    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
+};
 use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
@@ -18,6 +20,7 @@ use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::{Block, Paragraph, Wrap};
 use ratatui::Frame;
+use tuirealm::component::Component;
 
 /// Minimum visible-row floor for the embedded episode `WideMediaList` box
 /// (task 4.2d): a season pill row plus at least this many episode rows, inset
@@ -203,6 +206,20 @@ impl App {
     }
 }
 
+/// The active series-row presentation TV hands to the render layer this frame
+/// (design.md D1/D2). The wide workspace keeps the Wide presentation; the
+/// normal presentation lives in the separate `BrowserComponent` destination.
+pub(in crate::app) enum TvSeriesPresentation<'a> {
+    Wide(&'a mut WideMediaList<String>),
+}
+
+/// The active episode-row presentation TV hands to the render layer this
+/// frame (design.md D1/D2). Episodes paint fixed one-column rows through the
+/// Wide presentation.
+pub(in crate::app) enum TvEpisodePresentation<'a> {
+    Wide(&'a mut WideMediaList<String>),
+}
+
 /// App-free wide TV renderer. The shell builds `TvWideRenderCtx` and the
 /// component supplies its local cursor and pane focus through that context.
 pub(in crate::app) fn render_wide_tv_with_ctx(
@@ -210,10 +227,12 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     area: Rect,
     ctx: &TvWideRenderCtx,
     layout: &mut LayoutMain,
-    media_list: &mut WideMediaList<String>,
-    episodes: &mut WideMediaList<String>,
+    series_presentation: TvSeriesPresentation<'_>,
+    episode_presentation: TvEpisodePresentation<'_>,
     inline_search: &mut InlineSearch,
 ) -> (usize, Option<HomeImagePaint>) {
+    let TvSeriesPresentation::Wide(media_list) = series_presentation;
+    let TvEpisodePresentation::Wide(episodes) = episode_presentation;
     layout.tv_wide_episode_list_area = Rect::default();
     layout.tv_wide_season_tabs.clear();
     layout.tv_wide_area = area;
@@ -321,28 +340,14 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     } else {
         // Legacy rail parity (`item_cell_spans`): the selected row takes the
         // resting surface so it reads against the focused green panel body.
-        let paint = super::media_list::render_wide_media_list(
-            f,
-            paint_area,
-            list_area,
-            media_list,
+        media_list.set_geometry(paint_area, list_area);
+        media_list.set_paint_policy(WideMediaListPaintPolicy::new(
             right_focused,
-            palette::list_selected_row_bg(),
+            SelectedRowSurface::ListBackdrop,
             None,
-        );
-        layout.left_item_rows = paint.left_item_rows;
-        layout.left_row_map = paint.left_row_map;
-        // Same key the component sorts the rail rows by, so
-        // `left_sorted_indices` matches the painted order;
-        // `sort_by_cached_key` computes each key once.
-        let mut order: Vec<usize> = (0..ctx.list.items.len()).collect();
-        order.sort_by_cached_key(|&index| {
-            crate::app::ui_util::natural_sort_key(crate::app::render::effective_sort_str(
-                &ctx.list.items[index],
-            ))
-        });
-        layout.left_sorted_indices = order;
-        paint.row_geometry.offset()
+        ));
+        Component::view(media_list, f, list_area);
+        media_list.current_flow_offset().unwrap_or(0)
     };
     (final_scroll, image_paint)
 }
@@ -553,15 +558,13 @@ fn render_tv_series_selection(
         width: detail_panel.width,
         ..episode_list_area
     };
-    super::media_list::render_wide_media_list(
-        f,
-        paint_area,
-        episode_list_area,
-        episodes,
+    episodes.set_geometry(paint_area, episode_list_area);
+    episodes.set_paint_policy(WideMediaListPaintPolicy::new(
         focused,
-        palette::resolve_surface_focus(focused),
+        SelectedRowSurface::OwningSurface,
         None,
-    );
+    ));
+    Component::view(episodes, f, episode_list_area);
     (true, image_paint)
 }
 

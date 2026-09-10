@@ -1,12 +1,13 @@
 //! Interactive Component for the cross-Service Home destination.
 //!
-//! The component owns the selected section (pill) and section identity; the
-//! embedded canonical controls (`WideMediaList` for Wide hero Wide,
-//! `InlineMediaBrowser` for inline Narrow) own the cursor and scroll over the
-//! active section's projected rows. `render_home_content`
+//! The component owns the selected section (pill) and section identity; one
+//! shared canonical `MediaList` owner of the active section's rows moves
+//! between the `WideMediaList` (Wide hero Wide) and `InlineMediaBrowser`
+//! (inline Narrow) Presentations — it owns the cursor and scroll, and the
+//! component keeps no cursor mirror. `render_home_content`
 //! (`render/components/home.rs`) is the parent-owned hero + pill + chrome
-//! painter and mounts the active control into the list area. Content is
-//! mirrored from the shell; Home keyboard interpretation stays local. It emits
+//! painter and mounts the active carrier into the list area. Content is
+//! projected from the shell; Home keyboard interpretation stays local. It emits
 //! typed shell requests for effects that cross the Model boundary;
 //! destination-independent chords are handled by the central router.
 
@@ -19,13 +20,14 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
-    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
+    RowLocalInput, RowLocalOutcome,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
-use crate::app::render::HomeImagePaint;
+use crate::app::render::{HomeCarrier, HomeImagePaint};
 use crate::app::types_playback::HomeLatestSource;
 use crate::app::ui_util::fmt_duration_short;
 use mbv_core::api::TICKS_PER_SECOND;
@@ -48,24 +50,22 @@ fn home_progress_badge(item: &QueueItem) -> Option<String> {
 pub struct HomeComponent {
     continue_items: Vec<QueueItem>,
     latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
-    /// Canonical projection of the active section; the parent retains section
-    /// identity. Both controls are fed the same active-section rows every
-    /// `set_content`; only one is painted per breakpoint. They are the sole
-    /// owner of cursor/scroll — the component keeps no mirror.
-    canonical_list: WideMediaList<String>,
-    inline_list: InlineMediaBrowser<String>,
+    /// The one shared canonical owner of the active section's rows, carried by
+    /// exactly one of the persistent presentations (design.md D1). The owner
+    /// holds rows, cursor, scroll, and selected target; a breakpoint change
+    /// moves the same owner between carriers.
+    carrier: MediaListCarrier<String>,
     loading: bool,
     section: usize,
-    /// Which canonical control the last `view()` painted (Wide hero Wide vs
-    /// inline Narrow). Drives the single `ViewportAnchor` handoff on a
-    /// breakpoint transition and which control `cursor()` reads.
+    /// Which presentation the last `view()` painted (Wide hero Wide vs inline
+    /// Narrow). Derived from the painted breakpoint; a transition moves the
+    /// shared owner between carriers.
     wide: bool,
     focused: bool,
     /// Runtime terminal-capability flag (config-derived, not per-render
     /// content); set once by the shell after construction.
     use_nerd_fonts: bool,
     images_enabled: bool,
-    panel_area: Option<Rect>,
     pill_targets: Vec<(Rect, usize)>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle.
@@ -73,10 +73,6 @@ pub struct HomeComponent {
     /// Section-pill rects as last-push-wins rectangles (design.md D6),
     /// repopulated in `view()` from `pill_targets`.
     pill_regions: HitRegions<usize>,
-    /// The current Continue Watching column target supplied by the shell's
-    /// Model-owned `home_content` snapshot. It remains separate from the
-    /// component's flat cursor, matching the legacy Home context-menu target.
-    cw_item: Option<mbv_core::api::EmbyItem>,
     /// The cover image (if any) `view()` computed but could not paint
     /// itself (no `App`/image-cache authority); the shell takes it via
     /// `take_image_paint` right after `application.view()` returns and
@@ -108,31 +104,21 @@ impl HomeComponent {
         Self {
             continue_items: Vec::new(),
             latest: Vec::new(),
-            canonical_list: WideMediaList::new(),
-            inline_list: InlineMediaBrowser::new(),
+            carrier: MediaListCarrier::new(Presentation::Inline),
             loading: false,
             section: 0,
             wide: false,
             focused: false,
             use_nerd_fonts: false,
             images_enabled: true,
-            panel_area: None,
             pill_targets: Vec::new(),
             mouse_gestures: MouseGestureState::new(),
             pill_regions: HitRegions::new(),
-            cw_item: None,
             image_paint: None,
             list_area: Rect::default(),
             selected_item_rect: None,
             hero_area: None,
         }
-    }
-
-    pub(in crate::app) fn set_continue_watching_item(
-        &mut self,
-        item: Option<mbv_core::api::EmbyItem>,
-    ) {
-        self.cw_item = item;
     }
 
     /// Replace the shell-owned content snapshot. Section/cursor clamp to
@@ -153,10 +139,12 @@ impl HomeComponent {
 
     /// Project only the active Home section's items as canonical `Item` rows
     /// (Home has no `Heading`/`Spacer` vocabulary, so structural-row index
-    /// equals selectable index). Feeds both persistent controls; an ordinary
-    /// refresh preserves the selected target through `ListCore::set_content`
-    /// and locally clamps without any parent cursor/scroll input.
+    /// equals selectable index). Feeds the shared owner wherever it currently
+    /// resides; an ordinary refresh preserves the selected target through
+    /// `MediaList::set_content` and locally clamps without any parent
+    /// cursor/scroll input.
     fn project_active_section(&mut self) {
+        self.ensure_carrier();
         let items = if self.section == 0 {
             &self.continue_items
         } else {
@@ -182,17 +170,12 @@ impl HomeComponent {
                 semantic_state: MediaSemanticState::Ordinary,
             })
             .collect();
-        self.canonical_list.set_content(rows.clone());
-        self.inline_list.set_content(rows);
+        self.carrier.set_content(rows);
     }
 
     #[cfg(test)]
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
-    }
-
-    pub(in crate::app) fn set_panel_area(&mut self, area: Option<Rect>) {
-        self.panel_area = area;
     }
 
     pub(in crate::app) fn set_use_nerd_fonts(&mut self, use_nerd_fonts: bool) {
@@ -221,8 +204,7 @@ impl HomeComponent {
             self.section = idx + 1;
             self.clamp_section();
             self.project_active_section();
-            self.canonical_list.select_first();
-            self.inline_list.select_first();
+            self.delegate_row_local_input(RowLocalInput::First, None);
             true
         } else {
             false
@@ -234,11 +216,7 @@ impl HomeComponent {
     /// selectable index over the active section's rows; the component keeps no
     /// cursor of its own.
     pub(in crate::app) fn cursor(&self) -> usize {
-        let index = if self.wide {
-            self.canonical_list.cursor()
-        } else {
-            self.inline_list.cursor()
-        };
+        let index = self.carrier.cursor();
         self.visible_indices().get(index).copied().unwrap_or(0)
     }
 
@@ -321,24 +299,32 @@ impl HomeComponent {
         }
     }
 
-    /// Move the selection within the active section (clamped to its bounds) on
-    /// both canonical controls in lockstep, so they stay cursor-aligned across
-    /// a breakpoint transition. The keyboard navigation and the Model-boundary
-    /// wheel scroll both use this (task 5.3d, Home wheel-scroll ownership) with
-    /// the same delta semantics as keyboard Up/Down.
-    pub(in crate::app) fn move_local_cursor(&mut self, delta: i64) {
-        self.canonical_list.move_selection(delta);
-        self.inline_list.move_selection(delta);
+    /// The one seam through which Home offers an already-normalized row-local
+    /// key or pointer gesture to the shared owner carrying its active section.
+    /// The owner applies the local state transition and returns the closed
+    /// provider-neutral outcome; Home translates external row intents into its
+    /// typed Msgs (design.md D3).
+    fn delegate_row_local_input(
+        &mut self,
+        input: RowLocalInput,
+        pointer_target: Option<String>,
+    ) -> RowLocalOutcome<String> {
+        self.ensure_carrier();
+        self.carrier.delegate(input, pointer_target)
     }
 
-    fn select_start(&mut self) {
-        self.canonical_list.select_first();
-        self.inline_list.select_first();
-    }
-
-    fn select_end(&mut self) {
-        self.canonical_list.select_last();
-        self.inline_list.select_last();
+    /// Home's typed request target for a stable item identity the shared owner
+    /// resolved, or the owner's current selection for a local effect. The
+    /// identity is never re-derived from a cursor minus a section start index.
+    fn home_row_target(&self, item_id: Option<String>) -> super::msg::HomeRowTarget {
+        super::msg::HomeRowTarget {
+            item_id,
+            source: self
+                .latest
+                .get(self.section.saturating_sub(1))
+                .map(|(_, source, _)| source.pref_key()),
+            from_continue_watching: self.section == 0,
+        }
     }
 
     /// Select `section_idx` (clamped to the nearest valid section). Returns
@@ -358,11 +344,9 @@ impl HomeComponent {
         }
         self.section = resolved;
         // A discrete section change re-projects the active section and parks
-        // the selection at its first row on both controls (no per-section
-        // cursor cache).
+        // the shared owner at its first row (no per-section cursor cache).
         self.project_active_section();
-        self.canonical_list.select_first();
-        self.inline_list.select_first();
+        self.delegate_row_local_input(RowLocalInput::First, None);
         true
     }
 
@@ -380,9 +364,12 @@ impl HomeComponent {
         self.select_section(sections[next_pos])
     }
 
-    /// Handle a keyboard event using TuiRealm key types. Home claims
-    /// only its local navigation and typed effect requests; destination-
-    /// independent chords are resolved by the central router.
+    /// The typed effect target for Home's current selection (the shared
+    /// owner's stable target, never a cursor-minus-section-index lookup).
+    fn row_target(&self) -> super::msg::HomeRowTarget {
+        self.home_row_target(self.carrier.selected_target().cloned())
+    }
+
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if !self.focused {
             return None;
@@ -395,11 +382,11 @@ impl HomeComponent {
         }
         match key.code {
             Key::Up => {
-                self.move_local_cursor(-1);
+                self.delegate_row_local_input(RowLocalInput::Move(-1), None);
                 None
             }
             Key::Down => {
-                self.move_local_cursor(1);
+                self.delegate_row_local_input(RowLocalInput::Move(1), None);
                 None
             }
             Key::Char('[') if !ctrl => {
@@ -411,43 +398,55 @@ impl HomeComponent {
                 self.section_msg(changed)
             }
             Key::PageUp => {
-                self.move_local_cursor(-(self.page_size() as i64));
+                self.delegate_row_local_input(RowLocalInput::Page(-1), None);
                 None
             }
             Key::PageDown => {
-                self.move_local_cursor(self.page_size() as i64);
+                self.delegate_row_local_input(RowLocalInput::Page(1), None);
                 None
             }
             Key::Home => {
-                self.select_start();
+                self.delegate_row_local_input(RowLocalInput::First, None);
                 None
             }
             Key::End => {
-                self.select_end();
+                self.delegate_row_local_input(RowLocalInput::Last, None);
                 None
             }
-            Key::Char('.') => Some(Msg::Shell(ShellRequest::HomeContextMenu {
-                home_cw_selected: self.section == 0,
-                cw_item: self.cw_item.clone(),
-            })),
-            Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor()))),
-            Key::Enter => Some(Msg::Shell(ShellRequest::HomePlay(self.cursor()))),
-            Key::Char('a') if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.cursor()))),
-            Key::Char('w') if ctrl => Some(Msg::Shell(ShellRequest::HomeToggleWatched)),
-            Key::Delete => Some(Msg::Shell(ShellRequest::HomeDelete(self.cursor()))),
+            Key::Char('.') if self.section == 0 => {
+                let target = match self.delegate_row_local_input(RowLocalInput::Context, None) {
+                    RowLocalOutcome::External(RowIntent::Context(target)) => {
+                        self.home_row_target(Some(target))
+                    }
+                    _ => self.row_target(),
+                };
+                Some(Msg::Shell(ShellRequest::HomeContextMenu {
+                    home_cw_selected: true,
+                    target,
+                }))
+            }
+            Key::Char('.') => None,
+            Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target()))),
+            Key::Enter => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
+                RowLocalOutcome::External(RowIntent::Activate(target)) => Some(Msg::Shell(
+                    ShellRequest::HomePlay(self.home_row_target(Some(target))),
+                )),
+                _ => None,
+            },
+            Key::Char('a') if ctrl => {
+                Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target())))
+            }
+            Key::Char('w') if ctrl && self.section == 0 => Some(Msg::Shell(
+                ShellRequest::HomeToggleWatched(self.row_target()),
+            )),
+            Key::Char('w') if ctrl => None,
+            Key::Delete => Some(Msg::Shell(ShellRequest::HomeDelete(self.row_target()))),
             _ => None,
         }
     }
 
     fn section_msg(&self, changed: bool) -> Option<Msg> {
         changed.then_some(Msg::Shell(ShellRequest::HomeSectionSelected(self.section)))
-    }
-
-    fn page_size(&self) -> usize {
-        self.panel_area
-            .map(|a| a.height as usize)
-            .unwrap_or(1)
-            .max(1)
     }
 
     /// Handle a TuiRealm mouse event. `None` means the event isn't Home's to
@@ -470,26 +469,19 @@ impl HomeComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                let claimed = if self.wide {
-                    self.canonical_list.claims_point(self.list_area, at)
-                } else {
-                    self.inline_list.claims_point(self.list_area, at)
-                        || self.hero_area.is_some_and(|hero| hero.contains(at))
-                };
+                // Home's hero is destination-painted chrome outside the
+                // carrier's list area, so the destination keeps claiming it
+                // here (design Non-Goals: chrome stays with the parent).
+                let claimed = self.carrier.claims_current_point(at)
+                    || self.hero_area.is_some_and(|hero| hero.contains(at));
                 if !claimed {
                     return None;
                 }
-                self.move_local_cursor(delta);
-                if self.section == 0 {
-                    Some(Msg::Shell(ShellRequest::HomeContinueCursor {
-                        index: self.cursor(),
-                    }))
-                } else {
-                    // Return a framework-visible claim after mutating local
-                    // state; dropping the message would let the framework's
-                    // mutation be discarded by the mouse fold.
-                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-                }
+                self.delegate_row_local_input(RowLocalInput::Wheel { at, delta }, None);
+                // Return a framework-visible claim after mutating local state;
+                // the shell resolves effects from the component's selected
+                // stable target rather than an App-wide cursor mirror.
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::Click(at) => {
                 if let Some(&section_idx) = self.pill_regions.resolve(at) {
@@ -501,7 +493,9 @@ impl HomeComponent {
                 if !self.claim_row(at) {
                     return None;
                 }
-                Some(Msg::Shell(ShellRequest::HomeRowClick))
+                Some(Msg::Shell(ShellRequest::HomeRowClick {
+                    target: self.row_target(),
+                }))
             }
             MouseGesture::DoubleClick(at) => {
                 if let Some(&section_idx) = self.pill_regions.resolve(at) {
@@ -514,7 +508,7 @@ impl HomeComponent {
                     return None;
                 }
                 Some(Msg::Shell(ShellRequest::HomeRowActivate {
-                    target: self.cursor(),
+                    target: self.row_target(),
                 }))
             }
             MouseGesture::RightClick(at) => {
@@ -522,6 +516,7 @@ impl HomeComponent {
                     return None;
                 }
                 Some(Msg::Shell(ShellRequest::HomeRowContextMenu {
+                    target: self.row_target(),
                     anchor: (mouse.column, mouse.row),
                 }))
             }
@@ -537,8 +532,7 @@ impl HomeComponent {
             return false;
         }
         if let Some(id) = self.resolve_row_id(at) {
-            self.canonical_list.select_target(&id);
-            self.inline_list.select_target(&id);
+            self.delegate_row_local_input(RowLocalInput::Click(at), Some(id));
         }
         true
     }
@@ -548,19 +542,7 @@ impl HomeComponent {
     /// covers the selected item, so a hero click carries the current
     /// selection.
     fn resolve_row_id(&self, point: Position) -> Option<String> {
-        if self.wide {
-            return self
-                .canonical_list
-                .resolve_point(self.list_area, point)
-                .cloned();
-        }
-        if self.hero_area.is_some_and(|hero| hero.contains(point)) {
-            return self.inline_list.selected_target().cloned();
-        }
-        let detail_rows = self.hero_area.map_or(0, |hero| hero.height as usize);
-        self.inline_list
-            .resolve_point(self.list_area, detail_rows, point)
-            .cloned()
+        self.carrier.resolve_current_point(point).cloned()
     }
 
     /// Test seam: reset the private gesture recognizer so a synchronous test
@@ -587,10 +569,11 @@ impl HomeComponent {
                 .collect()
         }
         let flat = self.visible_indices();
-        if self.wide {
+        if self.carrier.active() == Presentation::Wide {
             rows(
                 &self
-                    .canonical_list
+                    .carrier
+                    .wide()
                     .row_geometry(self.list_area.height as usize),
                 self.list_area,
                 &flat,
@@ -599,7 +582,8 @@ impl HomeComponent {
             let detail_rows = self.hero_area.map_or(0, |hero| hero.height as usize);
             let mut map = rows(
                 &self
-                    .inline_list
+                    .carrier
+                    .inline()
                     .row_geometry(self.list_area.height as usize, detail_rows),
                 self.list_area,
                 &flat,
@@ -611,24 +595,40 @@ impl HomeComponent {
         }
     }
 
-    /// The active section's projected canonical rows (both controls hold the
-    /// same vector).
+    /// The active section's projected canonical rows (the carrier holds the
+    /// active vector).
     #[cfg(test)]
     pub(crate) fn test_active_rows(&self) -> &[MediaListRow<String>] {
-        self.inline_list.rows()
+        self.carrier.rows()
     }
 
-    /// The active control's resting scroll offset. `set_content` never seeds
+    /// The active carrier's resting scroll offset. `set_content` never seeds
     /// it, but the render pass persists the resolved scroll offset each frame
     /// (see `render_wide_media_list`). A `ViewportAnchor` handoff at a
     /// breakpoint transition can override it for discrete jumps.
     #[cfg(test)]
     pub(crate) fn test_active_scroll(&self) -> usize {
+        self.carrier.scroll()
+    }
+
+    /// The presentation the painted breakpoint currently selects (design.md
+    /// D2).
+    fn active_presentation(&self) -> Presentation {
         if self.wide {
-            self.canonical_list.scroll()
+            Presentation::Wide
         } else {
-            self.inline_list.scroll()
+            Presentation::Inline
         }
+    }
+
+    /// Move the shared owner into the active presentation when they diverge.
+    /// A responsive change reads the same owner and preserves only the
+    /// outgoing selected-row viewport offset (design.md D1); no cursor, scroll,
+    /// or selection is copied between presentations.
+    fn ensure_carrier(&mut self) {
+        let target = self.active_presentation();
+        let viewport_height = self.list_area.height.max(1) as usize;
+        self.carrier.ensure_presentation(target, viewport_height);
     }
 }
 
@@ -640,31 +640,20 @@ impl Default for HomeComponent {
 
 impl Component for HomeComponent {
     fn view(&mut self, f: &mut Frame, area: Rect) {
-        // One `ViewportAnchor` handoff at a breakpoint transition: carry the
-        // outgoing control's selected target and screen-row offset into the
-        // incoming control (design.md D2). The cursors already track in
-        // lockstep; the anchor keeps the offset continuous across the resize.
+        // One shared owner per logical row flow (design.md D1): a breakpoint
+        // change reconfigures the same owner and preserves only the outgoing
+        // selected-row viewport offset — the owner is never copied between
+        // presentations.
         let wide = crate::app::render::wide_hero_presentation(area).is_some();
-        if wide != self.wide {
-            let viewport_height = self.list_area.height.max(1) as usize;
-            let anchor: Option<ViewportAnchor<String>> = if self.wide {
-                self.canonical_list.viewport_anchor(viewport_height)
-            } else {
-                self.inline_list.viewport_anchor(viewport_height)
-            };
-            if let Some(anchor) = anchor {
-                if wide {
-                    self.canonical_list
-                        .apply_viewport_anchor(&anchor, viewport_height);
-                } else {
-                    self.inline_list
-                        .apply_viewport_anchor(&anchor, viewport_height);
-                }
-            }
-            self.wide = wide;
-        }
+        self.wide = wide;
+        self.ensure_carrier();
 
         let cursor = self.cursor();
+        let control = if self.carrier.active() == Presentation::Wide {
+            HomeCarrier::Wide(self.carrier.wide_mut())
+        } else {
+            HomeCarrier::Inline(self.carrier.inline_mut())
+        };
         let result = crate::app::render::render_home_content(
             f,
             area,
@@ -673,12 +662,10 @@ impl Component for HomeComponent {
             &self.latest,
             self.section,
             cursor,
-            &mut self.canonical_list,
-            &self.inline_list,
+            control,
             self.use_nerd_fonts,
             self.images_enabled,
         );
-        self.section = result.resolved_section;
         self.pill_targets = result.pill_targets;
         self.list_area = result.left_area;
         self.selected_item_rect = result.selected_item_rect;
@@ -714,9 +701,18 @@ impl Component for HomeComponent {
 
 impl AppComponent<Msg, UserEvent> for HomeComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        // Keep the shared owner in the presentation the painted breakpoint
+        // currently selects before any row-local input touches it (design.md
+        // D1).
         match ev {
-            Event::Keyboard(key) => self.handle_key(key),
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Keyboard(key) => {
+                self.ensure_carrier();
+                self.handle_key(key)
+            }
+            Event::Mouse(mouse) => {
+                self.ensure_carrier();
+                self.handle_mouse(mouse)
+            }
             _ => None,
         }
     }

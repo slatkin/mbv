@@ -8,7 +8,7 @@ mod artwork_placeholder_tests;
 pub(super) mod audiobookshelf_book;
 pub(super) mod audiobookshelf_books;
 
-pub(super) mod audiobookshelf_podcast;
+pub(in crate::app) mod audiobookshelf_podcast;
 pub(super) mod backdrop;
 pub(in crate::app) mod card;
 pub(in crate::app) mod chrome;

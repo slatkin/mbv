@@ -1,4 +1,7 @@
-use crate::app::components::media_list::{InlineMediaBrowser, RowGeometry, WideMediaList};
+use crate::app::components::media_list::{
+    InlineMediaBrowser, InlineMediaBrowserPaintPolicy, SelectedRowSurface, WideMediaList,
+    WideMediaListPaintPolicy,
+};
 use crate::app::layout::LayoutMain;
 use crate::app::palette;
 use crate::app::render::arrangements::{padded_rect, wide_hero};
@@ -10,15 +13,15 @@ use crate::app::render::components::widgets::{render_pill_bar, render_placeholde
 use crate::app::render::render_artwork_placeholder;
 use crate::app::render::screens::feeds_model::{feed_entry_meta_line, feed_hero_content_rows};
 use crate::app::types_feed_tab::WatchedFilter;
+use crate::app::ui_util::trunc_str;
 use mbv_core::config::FeedSubscription;
 use mbv_core::playback_queue::FeedEntry;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::style::Style;
+use ratatui::widgets::Block;
 use ratatui::Frame;
 
-use super::media_list::{render_inline_media_browser, render_wide_media_list};
+use tuirealm::component::Component;
 
 /// The parent-owned Feeds chrome model: the subscription/group selector pills
 /// and the watched-filter selector stay outside the canonical control, which
@@ -36,24 +39,31 @@ pub(in crate::app) struct FeedsRenderModel<'a> {
     pub images_enabled: bool,
 }
 
+/// The active media-list presentation Feeds paints this frame (design.md D1):
+/// the Wide presentation for the Wide hero list or the Inline presentation for
+/// inline Narrow. Exactly one is handed over per view; the same shared
+/// `MediaList` owner moves between them.
+pub(in crate::app) enum FeedsPresentation<'a> {
+    Wide(&'a mut WideMediaList<String>),
+    Inline(&'a mut InlineMediaBrowser<String>),
+}
+
 /// Paints the Feeds destination's parent-owned pill strip + watched-filter
-/// chrome + Wide hero detail pane, then mounts the active canonical control
-/// (`WideMediaList` for Wide hero Wide, `InlineMediaBrowser` for inline
-/// Narrow) into the list sub-rect below the pill strip and rebuilds the
-/// pre-#638 row-geometry maps from its exported `RowGeometry`. Returns the
-/// resolved scroll offset the painter used this frame (observability only; the
-/// control owns cursor/scroll and there is no render write-back).
+/// chrome + Wide hero detail pane, then mounts the active canonical
+/// presentation (`FeedsPresentation::Wide` for Wide hero Wide,
+/// `FeedsPresentation::Inline` for inline Narrow) into the list sub-rect below
+/// the pill strip. Only the handed-over presentation paints; the shared
+/// `MediaList` owner keeps cursor/scroll and there is no render write-back.
 pub(in crate::app) fn render_feeds_content(
     f: &mut Frame,
     area: Rect,
     focused: bool,
     layout: &mut LayoutMain,
     model: FeedsRenderModel<'_>,
-    canonical_list: &mut WideMediaList<String>,
-    inline_list: &InlineMediaBrowser<String>,
-) -> usize {
+    presentation: FeedsPresentation<'_>,
+) {
     if area.height == 0 || area.width == 0 {
-        return 0;
+        return;
     }
     layout.feeds_area = area;
     let subscriptions = model.subscriptions;
@@ -66,15 +76,13 @@ pub(in crate::app) fn render_feeds_content(
         let areas = wide_hero::pill_bar_areas(pane);
         let mut selector_tabs = Vec::new();
         if has_subs && areas.pills_area.height > 0 {
-            const MAX_LABEL: usize = 12;
+            const MAX_LABEL: usize = 18;
             let labels: Vec<String> = std::iter::once("All".to_string())
-                .chain(subscriptions.iter().map(|sub| {
-                    if sub.name.len() > MAX_LABEL {
-                        format!("{}…", &sub.name[..MAX_LABEL])
-                    } else {
-                        sub.name.clone()
-                    }
-                }))
+                .chain(
+                    subscriptions
+                        .iter()
+                        .map(|sub| trunc_str(&sub.name, MAX_LABEL)),
+                )
                 .collect();
             let ids: Vec<usize> = (0..labels.len()).collect();
             selector_tabs = render_pill_bar(
@@ -99,39 +107,30 @@ pub(in crate::app) fn render_feeds_content(
             ..areas.content_area
         };
         if has_subs && filter_area.height > 0 {
-            let filter = model.watched_filter;
-            let mut spans = Vec::new();
-            for (i, f_variant) in [
-                crate::app::types_feed_tab::WatchedFilter::All,
-                crate::app::types_feed_tab::WatchedFilter::Watched,
-                crate::app::types_feed_tab::WatchedFilter::Unwatched,
-            ]
-            .iter()
-            .enumerate()
-            {
-                if i > 0 {
-                    spans.push(Span::styled(
-                        " · ",
-                        Style::default().fg(palette::TEXT_MUTED),
-                    ));
-                }
-                let active = *f_variant == filter;
-                spans.push(Span::styled(
-                    f_variant.label().to_string(),
-                    if active {
-                        Style::default()
-                            .fg(palette::ACCENT)
-                            .add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(palette::TEXT_MUTED)
-                    },
-                ));
-            }
-            f.render_widget(
-                Paragraph::new(Line::from(spans))
-                    .style(Style::default().bg(palette::SURFACE_BACKDROP)),
+            let filters = [
+                WatchedFilter::All,
+                WatchedFilter::Watched,
+                WatchedFilter::Unwatched,
+            ];
+            let labels: Vec<String> = filters
+                .iter()
+                .map(|filter| filter.label().to_string())
+                .collect();
+            let filter_base = subscriptions.len() + 1;
+            let ids: Vec<usize> = (0..filters.len())
+                .map(|index| filter_base + index)
+                .collect();
+            let filter_tabs = render_pill_bar(
+                f,
                 filter_area,
+                PillBar {
+                    labels: &labels,
+                    ids: &ids,
+                    selected_pos: model.watched_filter.position(),
+                    prefix: None,
+                },
             );
+            selector_tabs.extend(filter_tabs);
         }
 
         let list_y = filter_area
@@ -154,7 +153,7 @@ pub(in crate::app) fn render_feeds_content(
     layout.selector_tabs = selector_tabs;
     layout.left_area = list_panel;
     if list_panel.height == 0 {
-        return 0;
+        return;
     }
 
     // Empty / help states: no canonical control, one-line placeholder.
@@ -167,7 +166,7 @@ pub(in crate::app) fn render_feeds_content(
             },
             " No feed subscriptions configured",
         );
-        return 0;
+        return;
     }
     if model.visible_entries.is_empty() {
         let msg = if model.loading {
@@ -183,17 +182,17 @@ pub(in crate::app) fn render_feeds_content(
             },
             msg,
         );
-        return 0;
+        return;
     }
 
     let wide = wide_panes.is_some();
 
     // Wide: paint the parent-owned Wide hero detail pane, then frame the
-    // right rail and inset the canonical control inside it so the border can
+    // left browser pane and inset the canonical control inside it so the border can
     // never replace a heading or the last visible entry at a scroll boundary.
     let (list_area, outer_panel) = if let Some(hero_panel) = wide_panes.map(|panes| panes.hero) {
         layout.hero_area = hero_panel;
-        // Wide left hero pane: unconditional fill via the shared primitive
+        // Wide right hero pane: unconditional fill via the shared primitive
         // (D1, persistent pane -- painted even with no selected entry). Feeds
         // is read-only and never focus-green (D3/D8).
         let hero_content_area =
@@ -218,52 +217,44 @@ pub(in crate::app) fn render_feeds_content(
     };
     layout.left_area = list_area;
     if list_area.height == 0 {
-        return 0;
+        return;
     }
 
     if wide {
-        // Full panel width so the selected-row bar and flush marker reach the
-        // rail border; vertically inset so the framed border never overpaints
-        // a heading or the last visible entry.
+        let FeedsPresentation::Wide(canonical_list) = presentation else {
+            return;
+        };
         let paint_rect = Rect {
             x: outer_panel.map_or(list_area.x, |panel| panel.x),
             width: outer_panel.map_or(list_area.width, |panel| panel.width),
             ..list_area
         };
-        // Frame the rail before the row flow: the helper fills the whole
-        // panel background, so it must run before `render_wide_media_list`
-        // paints the selected-row bar (matches TV / Music ordering).
         if let Some(panel) = outer_panel {
             wide_hero::wide_hero_browser_border(f, panel, focused);
         }
-        let paint = render_wide_media_list(
-            f,
-            paint_rect,
-            list_area,
-            canonical_list,
+        canonical_list.set_geometry(paint_rect, list_area);
+        canonical_list.set_paint_policy(WideMediaListPaintPolicy::new(
             focused,
-            palette::list_selected_row_bg(),
+            SelectedRowSurface::ListBackdrop,
             None,
-        );
-        layout.selected_item_rect = paint.selected_row_rect;
-        rebuild_selectable_maps(layout, &paint.row_geometry, list_area);
+        ));
+        canonical_list.view(f, paint_rect);
+        layout.selected_item_rect = canonical_list.current_selected_row_rect();
         layout.inline_hero_area = Rect::default();
-        paint.row_geometry.offset()
     } else {
+        let FeedsPresentation::Inline(inline_list) = presentation else {
+            return;
+        };
         let desired_detail_rows =
             feed_hero_content_rows(true).saturating_add(HERO_BLOCK_EXTRA_ROWS) as usize;
-        let result = render_inline_media_browser(
-            f,
-            list_area,
-            inline_list,
-            desired_detail_rows,
+        inline_list.set_geometry(list_area, list_area);
+        inline_list.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
             focused,
-            palette::list_selected_row_bg(),
-        );
-        let geometry = result.row_geometry;
-        let offset = geometry.offset();
-        rebuild_selectable_maps(layout, &geometry, list_area);
-        match result.hero_area {
+            SelectedRowSurface::ListBackdrop,
+            desired_detail_rows,
+        ));
+        inline_list.view(f, list_area);
+        match inline_list.current_detail_rect() {
             Some(hero_area) => {
                 layout.hero_area = hero_area;
                 layout.inline_hero_area = hero_area;
@@ -289,10 +280,9 @@ pub(in crate::app) fn render_feeds_content(
             None => {
                 layout.hero_area = Rect::default();
                 layout.inline_hero_area = Rect::default();
-                layout.selected_item_rect = geometry.selected_row_rect(list_area);
+                layout.selected_item_rect = inline_list.current_selected_row_rect();
             }
         }
-        offset
     }
 }
 
@@ -336,33 +326,4 @@ fn paint_feed_hero(
     if let Some(image_area) = result.img_rect {
         render_artwork_placeholder(f, image_area);
     }
-}
-
-/// Rebuild the pre-#638 mouse-compat maps from the canonical control's
-/// exported `RowGeometry`: every painted flow row that carries a selectable
-/// target maps to that control's selectable index (which, for Feeds, is the
-/// `visible_entries` index); headings, spacers, and replacement continuation
-/// rows stay `None`. `left_item_rows` is parallel to the full flow; `left_row_map`
-/// is the visible window.
-fn rebuild_selectable_maps<T>(layout: &mut LayoutMain, geometry: &RowGeometry<T>, area: Rect) {
-    let mut next_selectable = 0usize;
-    let per_row: Vec<Option<usize>> = geometry
-        .targets()
-        .map(|target| {
-            target.map(|_| {
-                let index = next_selectable;
-                next_selectable += 1;
-                index
-            })
-        })
-        .collect();
-    layout.left_item_rows = per_row
-        .iter()
-        .map(|slot| slot.map(|index| vec![index]).unwrap_or_default())
-        .collect();
-    layout.left_row_map = per_row
-        .into_iter()
-        .skip(geometry.offset())
-        .take(area.height as usize)
-        .collect();
 }

@@ -9,7 +9,6 @@ use super::components::{ComponentId, HomeComponent};
 use super::notify_actions::ToastSeverity;
 use super::shell::Model;
 use super::types_playback::HomeContent;
-use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use std::time::Instant;
 
@@ -24,9 +23,7 @@ impl Model {
     /// computation) is authoritative, so an assigned refresh also clears a
     /// pending startup skeleton.
     pub(super) fn assign_home_content(&mut self, content: HomeContent) {
-        let old_cursor = self.home_content.continue_cursor;
         self.home_content = content;
-        self.home_content.continue_cursor = old_cursor;
         self.push_home_content();
     }
 
@@ -38,7 +35,6 @@ impl Model {
     pub(super) fn clear_home_content(&mut self) {
         self.home_content.continue_items.clear();
         self.home_content.latest.clear();
-        self.home_content.continue_cursor = 0;
         self.push_home_content();
     }
 
@@ -94,35 +90,31 @@ impl Model {
     /// Returns the item and whether it came from Continue Watching, so the
     /// App effect keeps the CW-vs-`latest` distinction with an explicit
     /// target (never a re-read App cursor).
-    pub(super) fn home_flat_target(&self, cursor: usize) -> Option<(QueueItem, bool)> {
-        let mut pos = 0usize;
-        for item in &self.home_content.continue_items {
-            if pos == cursor {
-                return Some((QueueItem::Emby(Box::new(item.clone())), true));
-            }
-            pos += 1;
+    pub(super) fn home_stable_target(
+        &self,
+        target: &super::components::msg::HomeRowTarget,
+    ) -> Option<(QueueItem, bool)> {
+        if target.from_continue_watching {
+            let item_id = target.item_id.as_deref()?;
+            return self
+                .home_content
+                .continue_items
+                .iter()
+                .find(|item| item.id == item_id)
+                .cloned()
+                .map(|item| (QueueItem::Emby(Box::new(item)), true));
         }
-        for (_, _, items, _) in &self.home_content.latest {
-            for item in items {
-                if pos == cursor {
-                    return Some((item.clone(), false));
-                }
-                pos += 1;
-            }
-        }
-        None
-    }
-
-    /// The Continue Watching column item under the column's own
-    /// `continue_cursor` (Model-owned, task 5.3d) — the authoritative target
-    /// for the CW effects (`cw_play`/`cw_enqueue`/`cw_toggle_watched`), the
-    /// context-menu Home/queue-coupling arms, and the keyboard-threaded
-    /// `cw_item` (§5.3d input thread).
-    pub(super) fn home_cw_item(&self) -> Option<EmbyItem> {
         self.home_content
-            .continue_items
-            .get(self.home_content.continue_cursor)
-            .cloned()
+            .latest
+            .iter()
+            .find(|(_, source, _)| target.source.as_deref() == Some(source.pref_key().as_str()))
+            .and_then(|(_, _, items)| {
+                items
+                    .iter()
+                    .find(|item| Some(item.id()) == target.item_id.as_deref())
+                    .cloned()
+            })
+            .map(|item| (item, false))
     }
 
     /// Synchronous startup/commit fetch drain for `fetch_home` (task 5.3d):

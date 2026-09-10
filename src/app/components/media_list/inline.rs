@@ -1,6 +1,6 @@
 use super::{
-    InlineMediaBrowserPaintPolicy, ListCore, MediaListRow, RowGeometry, ViewportAnchor,
-    WideViewport,
+    InlineMediaBrowserPaintPolicy, MediaList, MediaListRow, RowGeometry, RowLocalInput,
+    RowLocalOutcome, ViewportAnchor, WideViewport,
 };
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -34,11 +34,11 @@ struct InlinePaintResult<Target> {
 /// variable-height detail block when it fits, and falls back to the ordinary
 /// row when it does not (design.md D1). Shares
 /// [`WideMediaList`](super::WideMediaList)'s list mechanics through the
-/// private [`ListCore`]; the fit admission, fallback, and replacement paint
+/// shared [`MediaList`] owner; the fit admission, fallback, and replacement paint
 /// geometry live in [`resolve_inline_layout`](Self::resolve_inline_layout).
 /// Painting is performed by its `Component::view` through the render adapter.
 pub struct InlineMediaBrowser<Target> {
-    core: ListCore<Target>,
+    core: MediaList<Target>,
     policy: InlineMediaBrowserPaintPolicy,
     configured_geometry: Option<(Rect, Rect)>,
     paint: Option<InlinePaintResult<Target>>,
@@ -52,8 +52,14 @@ impl<Target> Default for InlineMediaBrowser<Target> {
 
 impl<Target> InlineMediaBrowser<Target> {
     pub fn new() -> Self {
+        Self::from_media_list(MediaList::new())
+    }
+
+    /// Reconfigure this logical flow as an Inline presentation without
+    /// copying its rows or interaction state.
+    pub fn from_media_list(core: MediaList<Target>) -> Self {
         Self {
-            core: ListCore::new(),
+            core,
             policy: InlineMediaBrowserPaintPolicy::new(
                 false,
                 super::SelectedRowSurface::ListBackdrop,
@@ -62,6 +68,12 @@ impl<Target> InlineMediaBrowser<Target> {
             configured_geometry: None,
             paint: None,
         }
+    }
+
+    /// Return the canonical owner so another presentation can be configured
+    /// over the same logical flow.
+    pub fn into_media_list(self) -> MediaList<Target> {
+        self.core
     }
 
     pub fn invalidate_paint(&mut self) {
@@ -158,22 +170,28 @@ impl<Target> InlineMediaBrowser<Target> {
 
     pub fn resolve_current_point(&self, point: Position) -> Option<&Target> {
         let paint = self.paint.as_ref()?;
-        if !paint.claim_rect.contains(point)
+        if !self.claims_current_point(point)
             || point.y < paint.content_rect.y
             || point.y >= paint.content_rect.bottom()
         {
             return None;
         }
         let flow_row = (point.y - paint.content_rect.y) as usize + paint.row_geometry.offset();
-        match paint.row_geometry.source_row(flow_row) {
-            Some(source_row) => self.core.rows().get(source_row)?.selectable_target(),
-            None => match paint.row_geometry.selected_row() {
-                Some(block_start) if paint.detail_rect.is_some() && flow_row == block_start => {
-                    self.core.selected_target()
-                }
-                _ => None,
-            },
+        if let Some(source_row) = paint.row_geometry.source_row(flow_row) {
+            return self.core.rows().get(source_row)?.selectable_target();
         }
+        // The admitted detail block replaces the selected row: every flow row
+        // of the block resolves to the retained selected target, so an inline
+        // hero click or drag continuation carries the row that was painted.
+        if let (Some(detail), Some(block_start)) =
+            (paint.detail_rect, paint.row_geometry.selected_row())
+        {
+            let block_end = block_start.saturating_add(detail.height as usize);
+            if (block_start..block_end).contains(&flow_row) {
+                return paint.selected_target.as_ref();
+            }
+        }
+        None
     }
 
     pub fn rows(&self) -> &[MediaListRow<Target>] {
@@ -323,46 +341,6 @@ impl<Target> InlineMediaBrowser<Target> {
         self.resolve_inline_layout(viewport_height, desired_detail_rows)
             .row_geometry
     }
-
-    /// Resolve a screen `point` inside the painter-supplied `list_area` to the
-    /// target under it (design.md D6). `detail_rows` is the block height the
-    /// parent painted; the control resolves against the same replacement flow.
-    /// Returns `None` for a point outside `list_area` (horizontally too), a
-    /// heading/spacer row, an inline detail-block continuation row, or a point
-    /// past the last row.
-    /// Claim the painted list region, including blank, heading, and detail rows.
-    /// Parents use this to distinguish an in-region no-op from outside input.
-    pub fn claims_point(&self, list_area: Rect, point: Position) -> bool {
-        list_area.contains(point)
-    }
-
-    pub fn resolve_point(
-        &self,
-        list_area: Rect,
-        detail_rows: usize,
-        point: Position,
-    ) -> Option<&Target>
-    where
-        Target: Clone,
-    {
-        if !self.claims_point(list_area, point) {
-            return None;
-        }
-        let layout = self.resolve_inline_layout(list_area.height as usize, detail_rows);
-        let geom = &layout.row_geometry;
-        let flow_row = (point.y - list_area.y) as usize + geom.offset();
-        match geom.source_row(flow_row) {
-            Some(source_row) => self.core.rows().get(source_row)?.selectable_target(),
-            None => match geom.selected_row() {
-                // The detail block replaces the selected row; only its first
-                // flow row carries the target, continuation rows resolve None.
-                Some(block_start) if layout.detail_rows > 0 && flow_row == block_start => {
-                    self.core.selected_target()
-                }
-                _ => None,
-            },
-        }
-    }
 }
 
 impl<Target: Clone + PartialEq> InlineMediaBrowser<Target> {
@@ -371,6 +349,12 @@ impl<Target: Clone + PartialEq> InlineMediaBrowser<Target> {
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
         self.invalidate_paint();
         self.core.set_content(rows);
+    }
+
+    /// Replace one existing row by stable target, preserving selection and scroll.
+    pub fn patch_row(&mut self, target: &Target, row: MediaListRow<Target>) -> bool {
+        self.invalidate_paint();
+        self.core.patch_row(target, row)
     }
 
     /// Move the cursor to `target` when it is present; returns whether it was.
@@ -395,6 +379,19 @@ impl<Target: Clone + PartialEq> InlineMediaBrowser<Target> {
     ) {
         self.invalidate_paint();
         self.core.apply_viewport_anchor(anchor, viewport_height);
+    }
+
+    /// Offer one already-normalized row-local input to the shared owner. Every
+    /// delegate outcome is selection-only and changes no row-flow geometry, so
+    /// the completed frame's retained facts stay valid for a continuing pointer
+    /// gesture (matching the Wide presentation); the next `view` re-publishes
+    /// them.
+    pub fn delegate(
+        &mut self,
+        input: RowLocalInput,
+        target: Option<Target>,
+    ) -> RowLocalOutcome<Target> {
+        self.core.delegate(input, target)
     }
 }
 

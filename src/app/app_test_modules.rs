@@ -92,6 +92,10 @@ mod tests_podcast;
 mod tests_podcast_playback;
 
 #[cfg(test)]
+#[path = "audiobookshelf_browse_actions_sibling_tests.rs"]
+mod audiobookshelf_browse_actions_sibling_tests;
+
+#[cfg(test)]
 #[path = "tests_podcast_context_menu.rs"]
 mod tests_podcast_context_menu;
 
@@ -178,6 +182,30 @@ mod tests_tick_integration_mouse;
 #[cfg(test)]
 #[path = "tests_tick_integration_music_mouse.rs"]
 mod tests_tick_integration_music_mouse;
+
+#[cfg(test)]
+#[path = "tests_tick_integration_home.rs"]
+mod tests_tick_integration_home; // Home ownership tick coverage
+
+#[cfg(test)]
+#[path = "tests_tick_integration_browser.rs"]
+mod tests_tick_integration_browser; // Browser ownership tick coverage
+
+#[cfg(test)]
+#[path = "tests_tick_integration_tv.rs"]
+mod tests_tick_integration_tv; // TV ownership tick coverage
+
+#[cfg(test)]
+#[path = "tests_tick_integration_feeds.rs"]
+mod tests_tick_integration_feeds; // Feeds ownership tick coverage
+
+#[cfg(test)]
+#[path = "tests_tick_integration_podcast.rs"]
+mod tests_tick_integration_podcast; // Podcast ownership tick coverage
+
+#[cfg(test)]
+#[path = "tests_tick_integration_book.rs"]
+mod tests_tick_integration_book; // Book ownership tick coverage
 
 #[cfg(test)]
 #[path = "tests_tick_integration_mouse_sidebar.rs"]

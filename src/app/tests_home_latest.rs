@@ -16,6 +16,17 @@ use mbv_core::audiobookshelf::{
 use mbv_core::playback_queue::{AudiobookshelfQueueItem, FeedEntry, QueueItem};
 use mbv_core::service_runtime::{EmbyBootstrap, EmbyLatestSection};
 
+fn home_flat_target(model: &Model, cursor: usize) -> Option<(QueueItem, bool)> {
+    let mut rows = Vec::new();
+    rows.extend(model.home_content.continue_items.iter().cloned().map(|item| {
+        (QueueItem::Emby(Box::new(item)), true)
+    }));
+    rows.extend(model.home_content.latest.iter().flat_map(|(_, _, items)| {
+        items.iter().cloned().map(|item| (item, false))
+    }));
+    rows.into_iter().nth(cursor)
+}
+
 fn feed_item(title: &str) -> FeedEntry {
     FeedEntry {
         guid: format!("guid-{title}"),
@@ -91,21 +102,21 @@ fn fetch_home_with_no_emby_preserves_feeds_and_abs_entries_without_error() {
     let feeds = content
         .latest
         .iter()
-        .find(|(_, source, _, _)| matches!(source, HomeLatestSource::Feeds))
+        .find(|(_, source, _)| matches!(source, HomeLatestSource::Feeds))
         .expect("Feeds pill must survive");
     assert_eq!(feeds.2.len(), 1);
     assert_eq!(feeds.2[0].display_name(), "Feed one");
     assert!(content
         .latest
         .iter()
-        .any(|(_, source, _, _)| matches!(source, HomeLatestSource::Audiobookshelf(_))));
+        .any(|(_, source, _)| matches!(source, HomeLatestSource::Audiobookshelf(_))));
 
     // Second refresh: still no Emby error, both pills intact.
     let content = app.fetch_home().expect("second refresh must not fail");
     let feeds = content
         .latest
         .iter()
-        .find(|(_, source, _, _)| matches!(source, HomeLatestSource::Feeds))
+        .find(|(_, source, _)| matches!(source, HomeLatestSource::Feeds))
         .expect("Feeds pill must survive the second refresh");
     assert_eq!(feeds.2.len(), 1);
 }
@@ -126,20 +137,17 @@ fn apply_emby_bootstrap_merges_only_emby_entries() {
             "Podcasts".into(),
             HomeLatestSource::Audiobookshelf("abs-lib".into()),
             Vec::new(),
-            0,
-        ),
+                    ),
         (
             "Feeds".into(),
             HomeLatestSource::Feeds,
             vec![QueueItem::Feed(feed_item("Feed one"))],
-            1,
         ),
         (
             "Movies".into(),
             HomeLatestSource::Emby("movies".into()),
             vec![QueueItem::Emby(Box::new(make_item("Old", "Movie")))],
-            0,
-        ),
+                    ),
     ];
 
     let content = app.apply_emby_bootstrap(
@@ -254,7 +262,7 @@ fn shelf_cache_drives_and_hides_audiobookshelf_pills_without_fetching() {
         1,
         "only the podcast library gets a pill"
     );
-    let (title, source, items, _cursor) = &content.latest[0];
+    let (title, source, items) = &content.latest[0];
     assert_eq!(title, "abs-pod");
     assert!(matches!(
         source,
@@ -284,7 +292,7 @@ fn shelf_cache_drives_and_hides_audiobookshelf_pills_without_fetching() {
         content
             .latest
             .iter()
-            .all(|(_, source, _, _)| !matches!(source, HomeLatestSource::Audiobookshelf(_))),
+            .all(|(_, source, _)| !matches!(source, HomeLatestSource::Audiobookshelf(_))),
         "hidden library's pill must disappear"
     );
     assert!(
@@ -313,8 +321,7 @@ fn flat_cursor_resolution_spans_emby_and_audiobookshelf_sections() {
                 QueueItem::Emby(Box::new(make_item("Movie one", "Movie"))),
                 QueueItem::Emby(Box::new(make_item("Movie two", "Movie"))),
             ],
-            0,
-        ),
+                    ),
         (
             "Podcasts".into(),
             HomeLatestSource::Audiobookshelf("abs-pod".into()),
@@ -322,35 +329,34 @@ fn flat_cursor_resolution_spans_emby_and_audiobookshelf_sections() {
                 QueueItem::Audiobookshelf(abs_episode("1")),
                 QueueItem::Audiobookshelf(abs_episode("2")),
             ],
-            0,
-        ),
+                    ),
     ];
 
     // Flat index 0 is the Continue Watching item.
     assert!(matches!(
-        model.home_flat_target(0),
+        home_flat_target(&model, 0),
         Some((QueueItem::Emby(item), true)) if item.display_name() == "CW item"
     ));
 
     // The Emby pill's flat range sits right after Continue Watching: flat
     // index 1 is "Movie one", 2 is "Movie two".
     assert!(matches!(
-        model.home_flat_target(1),
+        home_flat_target(&model, 1),
         Some((QueueItem::Emby(item), false)) if item.display_name() == "Movie one"
     ));
     assert!(matches!(
-        model.home_flat_target(2),
+        home_flat_target(&model, 2),
         Some((QueueItem::Emby(item), false)) if item.display_name() == "Movie two"
     ));
 
     // The Audiobookshelf pill's flat range sits right after the Emby pill's:
     // flat index 3 is "Episode 1", 4 is "Episode 2".
     assert!(matches!(
-        model.home_flat_target(3),
+        home_flat_target(&model, 3),
         Some((QueueItem::Audiobookshelf(item), false)) if item.title == "Episode 1"
     ));
     assert!(matches!(
-        model.home_flat_target(4),
+        home_flat_target(&model, 4),
         Some((QueueItem::Audiobookshelf(item), false)) if item.title == "Episode 2"
     ));
 }
@@ -378,7 +384,7 @@ fn fetch_home_refreshes_audiobookshelf_pill_from_cache() {
 
     let content = app.fetch_home().expect("fetch succeeds without Emby");
     assert_eq!(content.latest.len(), 1);
-    let (_, source, items, _cursor) = &content.latest[0];
+    let (_, source, items) = &content.latest[0];
     assert!(matches!(
         source,
         HomeLatestSource::Audiobookshelf(lib) if lib == "abs-pod"
@@ -424,9 +430,8 @@ fn home_play_and_enqueue_leave_audiobookshelf_tab_state_untouched() {
         "Podcasts".into(),
         HomeLatestSource::Audiobookshelf("abs-pod".into()),
         vec![QueueItem::Audiobookshelf(abs_episode("1"))],
-        0,
-    )];
-    let (item, from_cw) = model.home_flat_target(0).expect("flat target 0");
+            )];
+    let (item, from_cw) = home_flat_target(&model, 0).expect("flat target 0");
     assert!(item.is_audiobookshelf());
     assert!(!from_cw);
 
@@ -490,7 +495,7 @@ fn feeds_pill_reflects_all_entries_newest_first_independent_of_tab_filter() {
     let feeds = content
         .latest
         .iter()
-        .find(|(_, source, _, _)| matches!(source, HomeLatestSource::Feeds))
+        .find(|(_, source, _)| matches!(source, HomeLatestSource::Feeds))
         .expect("Feeds pill must be present");
     assert_eq!(feeds.0, "Feeds");
     let titles: Vec<String> = feeds.2.iter().map(|i| i.display_name()).collect();
@@ -544,9 +549,8 @@ fn home_play_and_enqueue_leave_feeds_tab_state_untouched() {
             .cloned()
             .map(QueueItem::Feed)
             .collect(),
-        0,
-    )];
-    let (item, from_cw) = model.home_flat_target(0).expect("flat target 0");
+            )];
+    let (item, from_cw) = home_flat_target(&model, 0).expect("flat target 0");
     assert!(item.is_feed());
     assert!(!from_cw);
 
@@ -573,7 +577,7 @@ fn later_arrivals_do_not_reorder_provider_pills() {
 
     // A local `latest` accumulates deltas in arrival order, like the
     // Model-owned splice: Feeds first, then Audiobookshelf.
-    let mut latest: Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)> = Vec::new();
+    let mut latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)> = Vec::new();
     crate::app::library_load_actions::merge_home_sections(
         &mut latest,
         app.feeds_latest_section().into_iter().collect(),

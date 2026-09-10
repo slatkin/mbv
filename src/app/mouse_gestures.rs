@@ -3,7 +3,7 @@
 use crate::app::action::Command;
 use crate::app::components::msg::TvHit;
 use crate::app::{App, QueueScope};
-use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
 use mbv_core::remote_reconciliation::RemoteIntent;
 use std::time::{Duration, Instant};
@@ -52,14 +52,14 @@ impl App {
         }
     }
 
-    pub(super) fn handle_mouse_single_click_emby(&mut self, lib_idx: usize, target: usize) {
+    pub(super) fn handle_mouse_single_click_emby(&mut self, lib_idx: usize, target: String) {
         self.set_panel_focus(super::PanelFocus::Library);
         if let Some(level) = self
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.nav_stack.last_mut())
         {
-            if target < level.items.len() {
+            if let Some(target) = level.items.iter().position(|item| item.id == target) {
                 level.set_resting_cursor(target);
                 self.save_default_library_position(lib_idx);
             }
@@ -97,20 +97,27 @@ impl App {
         }
     }
 
-    pub(super) fn handle_mouse_double_click_emby(&mut self, lib_idx: usize, target: usize) {
-        self.handle_mouse_single_click_emby(lib_idx, target);
+    pub(super) fn handle_mouse_double_click_emby(&mut self, lib_idx: usize, target: String) {
+        self.handle_mouse_single_click_emby(lib_idx, target.clone());
         if self.is_viewing_album_folders(lib_idx) {
             let album = self.libs[lib_idx]
                 .nav_stack
                 .last()
-                .and_then(|level| level.items.get(target))
+                .and_then(|level| level.items.iter().find(|item| item.id == target))
                 .cloned();
             self.activate_album_folder_row(album);
         } else if !self.activate_selected_series(lib_idx) {
             // The double-click already landed `target` as the level cursor;
             // resolve the item at it and activate via the item-taking tail
             // (task 4.3, R1: `select`'s cursor read is gone).
-            if let Some(item) = self.current_lib_item(lib_idx, target) {
+            if let Some(item) = self.current_lib_item(
+                lib_idx,
+                self.libs[lib_idx]
+                    .nav_stack
+                    .last()
+                    .and_then(|level| level.items.iter().position(|item| item.id == target))
+                    .unwrap_or(usize::MAX),
+            ) {
                 self.select_item(lib_idx, item);
             }
         }
@@ -132,7 +139,7 @@ impl App {
     pub(super) fn handle_mouse_right_click_emby(
         &mut self,
         lib_idx: usize,
-        target: usize,
+        target: String,
         col: u16,
         row: u16,
     ) {
@@ -172,16 +179,39 @@ impl App {
         self.open_context_menu(home_cw_selected, None);
     }
 
+    fn resolve_tv_series_target(&self, lib_idx: usize, target: &str) -> Option<(usize, EmbyItem)> {
+        self.libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.last())
+            .and_then(|level| {
+                level
+                    .items
+                    .iter()
+                    .enumerate()
+                    .find(|(_, item)| item.id == target)
+                    .map(|(index, item)| (index, item.clone()))
+            })
+    }
+
     pub(super) fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
         match hit {
             TvHit::SeasonTab(_) | TvHit::EpisodeRow(_) => {
                 self.set_panel_focus(super::PanelFocus::Library);
             }
             TvHit::SeriesRow(target) => {
-                // The component resolved the series under the click; apply it
-                // to `App`'s library cursor before any further pane effect.
-                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                    level.set_resting_cursor(target);
+                self.set_panel_focus(super::PanelFocus::Library);
+                // The component resolved the stable ID from its painted row;
+                // persist that resolved nav index rather than re-reading the
+                // shell's previous cursor. A stale target is a no-op.
+                if let Some((index, _)) = self.resolve_tv_series_target(lib_idx, &target) {
+                    if let Some(level) = self
+                        .libs
+                        .get_mut(lib_idx)
+                        .and_then(|lib| lib.nav_stack.last_mut())
+                    {
+                        level.set_resting_cursor(index);
+                        self.save_default_library_position(lib_idx);
+                    }
                 }
             }
             TvHit::EpisodesPane => {}
@@ -189,14 +219,13 @@ impl App {
     }
 
     pub(super) fn handle_mouse_double_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
-        if let TvHit::SeriesRow(target) = hit {
-            // Apply the clicked series before activating (the click may land
-            // on a series other than the focused one).
-            if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                level.set_resting_cursor(target);
+        if let TvHit::SeriesRow(target) = &hit {
+            // A target can go stale between painting and delivery; in that
+            // case the double-click is intentionally ignored.
+            if let Some((_, item)) = self.resolve_tv_series_target(lib_idx, target) {
+                self.activate_selected_series_item(lib_idx, &item);
             }
-        }
-        if matches!(hit, TvHit::EpisodeRow(_) | TvHit::SeriesRow(_)) {
+        } else if matches!(hit, TvHit::EpisodeRow(_)) {
             self.activate_selected_series(lib_idx);
         }
     }
@@ -208,10 +237,16 @@ impl App {
         col: u16,
         row: u16,
     ) {
+        let tracked_item = if let TvHit::SeriesRow(target) = &hit {
+            self.resolve_tv_series_target(lib_idx, target)
+                .map(|(_, item)| item)
+        } else {
+            None
+        };
         self.handle_mouse_single_click_tv(lib_idx, hit);
         // TV-workspace right-click is never a Home-tab menu, so the
         // Continue-Watching-selected fact and the CW item are harmless
         // `false`/`None`.
-        self.open_context_menu_at(col, row, false, None);
+        self.open_context_menu_at_for_item(col, row, false, None, tracked_item);
     }
 }

@@ -320,20 +320,17 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     // the series; episode activation must not consult that cursor.
     model.app.libs[0].nav_stack[0].set_resting_cursor(1);
 
-    let episode_request = model
+    let episode = model
         .application
         .get_component(&id)
         .expect("TV workspace component mounted")
         .as_any()
         .downcast_ref::<TvWorkspaceComponent>()
         .expect("TV workspace component type")
-        .episode_activation_selection();
-    assert_eq!(episode_request, Some(("movie-focused".into(), 1, 0)));
-    model.handle_tv_request(ShellRequest::TvEpisodeActivate);
-    assert!(model.app.play_tv_episode("movie-focused", 1, 0));
-    assert!(!model.app.play_tv_episode("movie-focused", 0, 0));
-    assert!(!model.app.play_tv_episode("movie-focused", 1, 1));
-    assert!(!model.app.play_tv_episode("missing-series", 1, 0));
+        .selected_episode_item()
+        .expect("component-selected episode");
+    assert_eq!(episode.id, "episode-2");
+    model.handle_tv_request(ShellRequest::TvEpisodeActivate { episode });
 
     // TvBack after activation must restore the parent series-list cursor
     // via go_back's own parent_id lookup — not via any mirror. The stale

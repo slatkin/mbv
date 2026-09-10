@@ -49,6 +49,14 @@ impl Model {
         }
     }
 
+    /// Whether the right-panel library destination is painted this frame.
+    /// The queue-only mode (including the narrow mini view) hides the library
+    /// entirely, so its mounted destination must not paint over the queue that
+    /// now owns the whole frame.
+    pub(super) fn library_panel_visible(&self) -> bool {
+        self.app.effective_panel_mode() != PanelMode::QueueOnly
+    }
+
     fn emby_library_child_id(&self, index: usize) -> Option<ComponentId> {
         let library = self.app.libs.get(index)?;
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
@@ -134,9 +142,10 @@ impl Model {
         // Queue, and Playback (the transport chrome).
         let mut ids = Vec::new();
         let panel_mode = self.app.effective_panel_mode();
-        if let Some(child) = self.library_child_id().filter(|child| {
-            panel_mode != super::PanelMode::QueueOnly && self.application.mounted(child)
-        }) {
+        if let Some(child) = self
+            .library_child_id()
+            .filter(|child| self.library_panel_visible() && self.application.mounted(child))
+        {
             ids.push(child);
         }
         for id in [

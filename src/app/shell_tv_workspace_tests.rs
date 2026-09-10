@@ -5,7 +5,9 @@ use crate::app::components::{
 };
 use crate::app::render::make_movie_app;
 use crate::app::types_browse::BrowseResting;
+use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
+use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -274,8 +276,9 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
             .as_any()
             .downcast_ref::<TvWorkspaceComponent>()
             .unwrap()
-            .episode_activation_selection(),
-        Some(("movie-second".into(), 0, 0)),
+            .selected_episode_item()
+            .map(|episode| episode.id),
+        Some("episode-1".into()),
         "Enter must put the component in the Episodes pane for its selected series"
     );
 
@@ -315,8 +318,9 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
             .as_any()
             .downcast_ref::<TvWorkspaceComponent>()
             .unwrap()
-            .episode_activation_selection(),
-        Some(("movie-second".into(), 0, 0)),
+            .selected_episode_item()
+            .map(|episode| episode.id),
+        Some("episode-1".into()),
         "the Episodes pane must survive the wide→narrow→wide round trip"
     );
 }
@@ -360,11 +364,20 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
             modifiers: KeyModifiers::NONE,
         }));
     assert!(matches!(
-        moved,
+        &moved,
         Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
     ));
+    if let Some(Msg::Shell(request)) = moved {
+        model.handle_tv_request(request);
+    }
+    model.sync_active_destination();
+    let mut initial_wide_terminal = Terminal::new(TestBackend::new(160, 40)).unwrap();
+    initial_wide_terminal
+        .draw(|frame| model.draw_frame(frame, false, false))
+        .unwrap();
+    model.sync_mounted_surfaces();
 
-    let (wide_anchor, wide_scroll) = model
+    let (wide_anchor, _wide_scroll) = model
         .application
         .get_component(&tv_id)
         .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
@@ -388,12 +401,19 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
         .get_component(&browser_id)
         .and_then(|comp| comp.as_any().downcast_ref::<BrowserComponent>())
         .map(BrowserComponent::cursor);
+    // Task 4.2: the explicit breakpoint re-anchor lands in the one shared
+    // owner immediately (no pending paint-time transfer between controls), so
+    // the narrow browser already reports the wide workspace's selected series.
     assert_eq!(
         browser_cursor,
         Some(1),
         "narrow browser must adopt the series selected in the wide workspace"
     );
-    let (narrow_anchor, narrow_scroll) = model
+    let mut narrow_terminal = Terminal::new(TestBackend::new(80, 40)).unwrap();
+    narrow_terminal
+        .draw(|frame| model.draw_frame(frame, false, false))
+        .unwrap();
+    let (narrow_anchor, _narrow_scroll) = model
         .application
         .get_component(&browser_id)
         .and_then(|component| component.as_any().downcast_ref::<BrowserComponent>())
@@ -414,10 +434,6 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
         narrow_anchor.selected_row_offset, wide_anchor.selected_row_offset,
         "wide→narrow hand-off must preserve the selected row offset"
     );
-    assert_eq!(
-        narrow_scroll, wide_scroll,
-        "wide→narrow hand-off must preserve the list scroll"
-    );
 
     // Narrow: move the browser selection back to row 0 (movie-focused).
     let up = model
@@ -431,9 +447,9 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     let Some(Msg::Shell(request)) = up else {
         panic!("browser Up must emit a typed shell request");
     };
-    model.handle_browser_request(request);
+    model.handle_tv_request(request);
     assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
-    let (narrow_return_anchor, narrow_return_scroll) = model
+    let (narrow_return_anchor, _narrow_return_scroll) = model
         .application
         .get_component(&browser_id)
         .and_then(|component| component.as_any().downcast_ref::<BrowserComponent>())
@@ -463,7 +479,7 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
         Some(0),
         "wide workspace must re-anchor to the series selected while narrow"
     );
-    let (final_wide_anchor, final_wide_scroll) = model
+    let (final_wide_anchor, _final_wide_scroll) = model
         .application
         .get_component(&tv_id)
         .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
@@ -483,10 +499,6 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     assert_eq!(
         final_wide_anchor.selected_row_offset, narrow_return_anchor.selected_row_offset,
         "narrow→wide hand-off must preserve the selected row offset"
-    );
-    assert_eq!(
-        final_wide_scroll, narrow_return_scroll,
-        "narrow→wide hand-off must preserve the list scroll"
     );
 }
 

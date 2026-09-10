@@ -3,7 +3,8 @@ INSTALL_DIR := $(HOME)/.local/bin
 DATA_DIR    := $(HOME)/.local/share/mbv
 CONFIG_DIR  := $(HOME)/.config/mbv
 
-.PHONY: all build uninstall clean check-code-file-lines test-check-code-file-lines
+.PHONY: all build uninstall clean check-code-file-lines test-check-code-file-lines \
+	check-media-list-ownership test-check-media-list-ownership
 
 all: build
 
@@ -22,3 +23,9 @@ check-code-file-lines:
 
 test-check-code-file-lines:
 	./scripts/check-code-file-lines-test.sh
+
+check-media-list-ownership:
+	./scripts/check-media-list-ownership.sh
+
+test-check-media-list-ownership:
+	./scripts/check-media-list-ownership-test.sh

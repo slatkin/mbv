@@ -1,6 +1,6 @@
 use super::{
-    letter_grouped_rows, ListCore, MediaListRow, RowGeometry, ViewportAnchor,
-    WideMediaListPaintPolicy, WideViewport,
+    letter_grouped_rows, MediaList, MediaListRow, RowGeometry, RowLocalInput, RowLocalOutcome,
+    ViewportAnchor, WideMediaListPaintPolicy, WideViewport,
 };
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -20,12 +20,12 @@ struct WidePaintResult<Target> {
 
 /// Embedded plain fixed-height, one-column media list: owns the display-row
 /// list, the selectable index over it, the cursor, and the resting scroll
-/// offset through the shared [`ListCore`]. It has no mouse hit-resolution API
+/// offset through its shared [`MediaList`] owner. It has no mouse hit-resolution API
 /// and accepts no column-count or inline-detail options (design.md D1).
 /// Painting is performed by its `Component::view` through the render adapter;
 /// current-frame point resolution is retained alongside the painted flow.
 pub struct WideMediaList<Target> {
-    core: ListCore<Target>,
+    core: MediaList<Target>,
     policy: WideMediaListPaintPolicy,
     configured_geometry: Option<(Rect, Rect)>,
     paint: Option<WidePaintResult<Target>>,
@@ -39,8 +39,14 @@ impl<Target> Default for WideMediaList<Target> {
 
 impl<Target> WideMediaList<Target> {
     pub fn new() -> Self {
+        Self::from_media_list(MediaList::new())
+    }
+
+    /// Reconfigure this logical flow as a Wide presentation without copying
+    /// its rows or interaction state.
+    pub fn from_media_list(core: MediaList<Target>) -> Self {
         Self {
-            core: ListCore::new(),
+            core,
             policy: WideMediaListPaintPolicy::new(
                 false,
                 super::SelectedRowSurface::ListBackdrop,
@@ -49,6 +55,12 @@ impl<Target> WideMediaList<Target> {
             configured_geometry: None,
             paint: None,
         }
+    }
+
+    /// Return the canonical owner so another presentation can be configured
+    /// over the same logical flow.
+    pub fn into_media_list(self) -> MediaList<Target> {
+        self.core
     }
 
     pub fn invalidate_paint(&mut self) {
@@ -239,52 +251,6 @@ impl<Target: Clone> WideMediaList<Target> {
             self.core.selected_display_row(),
         )
     }
-
-    /// Resolve a screen `point` inside the painter-supplied `list_area` to the
-    /// target under it (design.md D6). Built on the same `row_geometry` the
-    /// painter consumes, so the hit flow can never drift from the painted one.
-    /// Returns `None` for a point outside `list_area` (horizontally too), a
-    /// heading/spacer row, or a point past the last row.
-    /// Claim the painted list region, including blank and non-selectable rows.
-    /// Parents use this to distinguish an in-region no-op from outside input.
-    pub fn claims_point(&self, list_area: Rect, point: Position) -> bool {
-        list_area.contains(point)
-    }
-
-    pub fn resolve_point(&self, list_area: Rect, point: Position) -> Option<&Target> {
-        if !self.claims_point(list_area, point) {
-            return None;
-        }
-        let row_in_view = (point.y - list_area.y) as usize;
-        let display_row = row_in_view + self.row_geometry(list_area.height as usize).offset();
-        self.core.rows().get(display_row)?.selectable_target()
-    }
-
-    /// Resolve a screen row `y` inside the painter-supplied `list_area` to the
-    /// selectable-item ordinal painted on that row (design.md D6). Unlike
-    /// [`Self::resolve_point`] this returns a **positional** ordinal (safe when
-    /// targets are not unique) and keys on the row only, matching the legacy
-    /// `left_row_map` row-hit flow the TV workspace feeds to
-    /// `NavLevel::set_resting_cursor`. Returns `None` for a `y` outside the
-    /// vertical span of `list_area`, a heading/spacer row, or a row past the
-    /// last item.
-    pub fn resolve_ordinal_at_y(&self, list_area: Rect, y: u16) -> Option<usize> {
-        if y < list_area.y || y >= list_area.y.saturating_add(list_area.height) {
-            return None;
-        }
-        let geometry = self.row_geometry(list_area.height as usize);
-        let display_row = (y - list_area.y) as usize + geometry.offset();
-        let mut ordinal = 0usize;
-        for (row, target) in geometry.targets().enumerate() {
-            if row == display_row {
-                return target.map(|_| ordinal);
-            }
-            if target.is_some() {
-                ordinal += 1;
-            }
-        }
-        None
-    }
 }
 
 impl<Target: Clone + PartialEq> WideMediaList<Target> {
@@ -343,6 +309,18 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
     ) {
         self.invalidate_paint();
         self.core.apply_viewport_anchor(anchor, viewport_height);
+    }
+
+    /// Offer one already-normalized row-local input to the shared owner. Every
+    /// delegate outcome is selection-only and changes no row-flow geometry, so
+    /// the completed frame's retained facts stay valid for a continuing pointer
+    /// gesture (matching `select_target`); the next `view` re-publishes them.
+    pub fn delegate(
+        &mut self,
+        input: RowLocalInput,
+        target: Option<Target>,
+    ) -> RowLocalOutcome<Target> {
+        self.core.delegate(input, target)
     }
 }
 

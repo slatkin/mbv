@@ -1,0 +1,38 @@
+id: no-render-media-list-mutators
+valid:
+  - |
+    // A destination may paint through the control's view.
+    fn paint(f: &mut Frame, area: Rect, media_list: &mut Wide) {
+        tuirealm::component::Component::view(media_list, f, area);
+    }
+  - |
+    // Content projection before view stays a destination/update-method call.
+    fn project(destination: &mut Destination, rows: Vec<Row>) {
+        destination.carrier.set_content(rows);
+    }
+  - |
+    // A parent-owned scope reset to the top is not a position seed.
+    fn reset_scope(destination: &mut Destination) {
+        destination.carrier.set_scroll(0);
+    }
+  - |
+    // Unrelated chrome/Inline Search controls keep their own mutators.
+    fn scroll(inline_search: &mut InlineSearch, offset: usize) {
+        inline_search.set_scroll(offset);
+    }
+invalid:
+  - |
+    // A destination must not seed the shared owner's scroll.
+    fn seed(destination: &mut Destination, scroll: usize) {
+        destination.carrier.set_scroll(scroll);
+    }
+  - |
+    // A destination must not place the cursor by numeric index.
+    fn seed(destination: &mut Destination, index: usize) {
+        destination.list.select_index(index);
+    }
+  - |
+    // A destination must not bypass the delegation seam for movement.
+    fn move_cursor(destination: &mut Destination, delta: i64) {
+        destination.carrier.move_selection(delta);
+    }

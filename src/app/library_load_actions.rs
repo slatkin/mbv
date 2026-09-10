@@ -367,10 +367,8 @@ impl App {
         // unconditionally (even before Emby connects) without clearing other
         // providers' Home data whenever Emby is the writer. All three
         // provider portions (Emby, Audiobookshelf shelf cache, Feeds tab)
-        // are rebuilt into the local `latest` here; the per-pill cursor
-        // tuples are the preserved-but-vestigial legacy cursor fields (the
-        // mounted `HomeComponent` owns the real flat cursors).
-        let mut latest: Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)> = Vec::new();
+        // are rebuilt into the local `latest` here.
+        let mut latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)> = Vec::new();
         let mut emby_sections: Vec<(String, HomeLatestSource, Vec<QueueItem>)> = Vec::new();
         if let Some(client) = self.emby_client() {
             let client = client.lock().unwrap();
@@ -415,7 +413,6 @@ impl App {
 
         Ok(HomeContent {
             continue_items,
-            continue_cursor: 0,
             latest,
             loading: false,
         })
@@ -506,42 +503,27 @@ impl App {
 /// shelf cache) calls this with its own kind, so it only ever touches its own
 /// entries and leaves other providers' pills untouched.
 pub(super) fn merge_home_sections(
-    latest: &mut Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)>,
+    latest: &mut Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
     sections: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
     kind: impl Fn(&HomeLatestSource) -> bool,
 ) {
     let old_positions: Vec<usize> = latest
         .iter()
         .enumerate()
-        .filter(|(_, (_, source, _, _))| kind(source))
+        .filter(|(_, (_, source, _))| kind(source))
         .map(|(index, _)| index)
         .collect();
-    let old_cursors: HashMap<HomeLatestSource, usize> = latest
-        .iter()
-        .filter_map(|(_, source, _, cursor)| {
-            if kind(source) {
-                Some((source.clone(), *cursor))
-            } else {
-                None
-            }
-        })
-        .collect();
-    let mut merged: Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)> = std::mem::take(latest)
+    let mut merged: Vec<(String, HomeLatestSource, Vec<QueueItem>)> = std::mem::take(latest)
         .into_iter()
-        .filter(|(_, source, _, _)| !kind(source))
+        .filter(|(_, source, _)| !kind(source))
         .collect();
     for (inserted, (title, source, items)) in sections.into_iter().enumerate() {
-        let cursor = old_cursors
-            .get(&source)
-            .copied()
-            .unwrap_or(0)
-            .min(items.len().saturating_sub(1));
         let insert_at = old_positions
             .get(inserted)
             .copied()
             .unwrap_or(merged.len())
             .min(merged.len());
-        merged.insert(insert_at, (title, source, items, cursor));
+        merged.insert(insert_at, (title, source, items));
     }
     // Canonical pill order across providers regardless of arrival order:
     // Emby views, then Audiobookshelf podcast libraries, then Feeds. The
@@ -549,7 +531,7 @@ pub(super) fn merge_home_sections(
     // (Feeds loading before an ABS shelf fetch, Emby bootstrapping last)
     // would otherwise let sections observe arrival order instead. Stable so
     // same-source sections keep their existing relative order.
-    merged.sort_by_key(|(_, source, _, _)| home_latest_source_rank(source));
+    merged.sort_by_key(|(_, source, _)| home_latest_source_rank(source));
     *latest = merged;
 }
 

@@ -147,7 +147,7 @@ Each mounted destination parent owns a private `MouseGestureState`: raw
 `RightClick`, `Scroll` now; `DragStart`/`DragMove`/`DragEnd`,
 `HoverEnter`/`HoverLeave` reserved. The mounted parent maps the gesture to a
 semantic request, delegating canonical list point resolution to the embedded
-control's `resolve_point`. The double-click interval and wheel throttle live in
+control's `resolve_current_point`. The double-click interval and wheel throttle live in
 `MouseGestureState`, per mounted parent.
 
 Keeping all timing in `App`'s shell-side clock (today's pattern) was rejected: it

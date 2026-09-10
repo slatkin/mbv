@@ -22,7 +22,10 @@ impl Model {
                 // component carries the landed value; apply it through the
                 // existing index-taking entry points, never recomputing the
                 // movement from a delta.
-                AudiobookshelfBookMove::Book(index) => self.app.select_audiobookshelf_book(index),
+                AudiobookshelfBookMove::Book(Some(target)) => {
+                    self.app.select_audiobookshelf_book_target(&target)
+                }
+                AudiobookshelfBookMove::Book(None) => {}
                 AudiobookshelfBookMove::Bucket(position) => {
                     self.app.select_audiobookshelf_book_bucket(position)
                 }
@@ -50,21 +53,33 @@ impl Model {
                         self.app.enqueue_selected_audiobookshelf_book(index);
                     }
                 }
-                AudiobookshelfBookIntent::ActivateChapter => {
-                    let chapter_selection = self
-                        .abs_book_id
-                        .as_ref()
-                        .and_then(|id| self.application.get_component(id))
-                        .and_then(|comp| {
-                            comp.as_any().downcast_ref::<AudiobookshelfBookComponent>()
-                        })
-                        .and_then(AudiobookshelfBookComponent::chapter_selection);
-                    self.app.activate_audiobookshelf_book_row(chapter_selection);
+                AudiobookshelfBookIntent::ActivateChapter(chapter_target) => {
+                    self.app
+                        .activate_audiobookshelf_book_row_target(chapter_target);
                 }
             },
             _ => unreachable!("non-book request routed to book handler"),
         }
         self.push_audiobookshelf_book_content();
+    }
+
+    #[cfg(test)]
+    pub(super) fn abs_book_component_mut(
+        &mut self,
+        index: usize,
+    ) -> Option<&mut AudiobookshelfBookComponent> {
+        let active_index = match self.app.tab {
+            TabSelection::AudiobookshelfLibrary(index) => index,
+            _ => return None,
+        };
+        if active_index != index {
+            return None;
+        }
+        let id = self.abs_book_id.as_ref()?;
+        self.application.get_component_mut(id).and_then(|comp| {
+            comp.as_any_mut()
+                .downcast_mut::<AudiobookshelfBookComponent>()
+        })
     }
 
     fn abs_book_component_id(&self, index: usize) -> Option<ComponentId> {

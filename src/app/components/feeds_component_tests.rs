@@ -1,11 +1,12 @@
 use super::feeds::FeedsComponent;
+use super::media_list::MediaListRow;
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::types_feed_tab::WatchedFilter;
 use mbv_core::config::{FeedKind, FeedSubscription};
 use mbv_core::playback_queue::FeedEntry;
 use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{
@@ -294,6 +295,9 @@ fn unfocused_component_handles_mouse_input() {
         kind: MouseEventKind::Down(MouseButton::Left),
         modifiers: KeyModifiers::NONE,
     }));
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
+        .unwrap();
     component.on(&Event::<UserEvent>::Mouse(MouseEvent {
         column: component.layout().left_area.x,
         row: component.layout().left_area.y,
@@ -464,18 +468,24 @@ fn changing_group_invalidates_previous_row_geometry() {
     terminal
         .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
         .unwrap();
-    assert!(!component.layout().left_item_rows.is_empty());
+    let previous_row = component
+        .layout()
+        .selected_item_rect
+        .expect("the initial selected row is painted");
 
     component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
         code: Key::Char(']'),
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(component.layout().left_item_rows.is_empty());
+    component.set_content(&[], &[], &[], false);
+    assert!(component
+        .resolve_row_id(Position::new(previous_row.x, previous_row.y))
+        .is_none());
     component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.cursor(), 1);
+    assert_eq!(component.cursor(), 0);
 }
 
 #[test]
@@ -487,14 +497,7 @@ fn wide_feeds_keep_the_list_out_of_the_inline_hero_flow() {
         .draw(|frame| wide.view(frame, Rect::new(0, 0, crate::app::TWO_COLUMN_THRESHOLD, 20)))
         .unwrap();
     assert_eq!(wide.layout().inline_hero_area, Rect::default());
-    let wide_item_rows = wide
-        .layout()
-        .left_item_rows
-        .iter()
-        .filter(|row| !row.is_empty())
-        .cloned()
-        .collect::<Vec<_>>();
-    assert_eq!(wide_item_rows, vec![vec![0], vec![1]]);
+    assert!(wide.layout().selected_item_rect.is_some());
 
     let mut narrow = component();
     let width = crate::app::TWO_COLUMN_THRESHOLD - 1;
@@ -583,6 +586,15 @@ fn structural_rows_are_non_selectable_and_cursor_movement_skips_them() {
         ["New One", "Recent One", "Old One"]
     );
     assert_eq!(component.cursor(), 0);
+    assert_eq!(component.canonical_selectable_len(), 3);
+    assert_eq!(
+        component
+            .canonical_rows()
+            .iter()
+            .filter(|row| matches!(row, MediaListRow::Heading { .. } | MediaListRow::Spacer))
+            .count(),
+        5
+    );
     for expected in [1, 2, 2] {
         component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
             code: Key::Down,
@@ -603,16 +615,8 @@ fn structural_rows_are_non_selectable_and_cursor_movement_skips_them() {
     terminal
         .draw(|frame| component.view(frame, Rect::new(0, 0, crate::app::TWO_COLUMN_THRESHOLD, 30)))
         .unwrap();
-    let item_rows = &component.layout().left_item_rows;
-    assert_eq!(
-        item_rows.iter().filter(|row| !row.is_empty()).count(),
-        3,
-        "three selectable entries: {item_rows:?}"
-    );
-    assert!(
-        item_rows.len() > 3,
-        "structural rows occupy display rows without a selectable index: {item_rows:?}"
-    );
+    assert_eq!(component.cursor(), 0);
+    assert!(component.layout().selected_item_rect.is_some());
 }
 
 #[test]
@@ -639,18 +643,17 @@ fn breakpoint_flip_carries_one_viewport_anchor() {
         "wide viewport scrolled to the selection"
     );
 
-    // Breakpoint flip Wide -> Narrow: the cursors stay in lockstep and the
-    // single ViewportAnchor keeps the selection on screen.
+    // Breakpoint flip Wide -> Narrow: one ViewportAnchor carries the
+    // selection and keeps it on screen.
     let narrow = wide - 1;
     Terminal::new(TestBackend::new(narrow, 10))
         .unwrap()
         .draw(|frame| component.view(frame, Rect::new(0, 0, narrow, 10)))
         .unwrap();
     assert_eq!(component.cursor(), 15);
-    assert!(
-        component.layout().left_row_map.contains(&Some(15)),
-        "selected entry stays visible after the flip: {:?}",
-        component.layout().left_row_map
+    assert_eq!(
+        component.canonical_selected_target(),
+        Some(&"Entry 15".to_string())
     );
 }
 
@@ -724,16 +727,23 @@ fn feeds_mouse_double_click_plays_the_resolved_entry() {
     for row in (list.y..list.y + list.height).rev() {
         component.reset_mouse_gestures_for_test();
         let mut played = None;
-        for _ in 0..2 {
-            let msg = component.on(&Event::<UserEvent>::Mouse(MouseEvent {
-                kind: MouseEventKind::Down(MouseButton::Left),
-                column: list.x,
-                row,
-                modifiers: KeyModifiers::NONE,
-            }));
-            if let Some(Msg::Shell(ShellRequest::FeedsPlay(Some(entry)))) = msg {
-                played = Some(entry);
-            }
+        let _ = component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: list.x,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }));
+        // A selection-only click leaves the painted frame valid, so the second
+        // Down resolves the same row without an intervening redraw (design.md
+        // D6, ADR 0024).
+        let msg = component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: list.x,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }));
+        if let Some(Msg::Shell(ShellRequest::FeedsPlay(Some(entry)))) = msg {
+            played = Some(entry);
         }
         if let Some(entry) = played {
             assert_eq!(entry.guid, "Second");

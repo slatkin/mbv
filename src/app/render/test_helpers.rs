@@ -26,6 +26,19 @@ pub use mounted::*;
 mod fixtures;
 pub use fixtures::*;
 
+pub fn set_browser_cursor_for_test(model: &mut crate::app::shell::Model, cursor: usize) {
+    model.sync_mounted_surfaces();
+    let id = model.emby_browser_id.clone().expect("browser mounted");
+    model
+        .application
+        .get_component_mut(&id)
+        .expect("browser component")
+        .as_any_mut()
+        .downcast_mut::<BrowserComponent>()
+        .expect("browser component type")
+        .set_cursor_for_test(cursor);
+}
+
 pub fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
     let buf = term.backend().buffer();
     let area = *buf.area();

@@ -1,5 +1,4 @@
 use super::*;
-use crate::app::components::MusicWorkspaceComponent;
 use std::time::Instant;
 
 impl Model {
@@ -15,23 +14,11 @@ impl Model {
                 apply_terminal_observer(self, event, music_resize, tv_resize)
             }
             Msg::Shell(request) => match request {
-                ShellRequest::MusicAlbumActivate => {
-                    if self.app.tab.emby_library_index().is_some() {
-                        // Outcome 3 reader: get the album from the component, which
-                        // owns the selection cursor.
-                        let album = self
-                            .music_workspace_id
-                            .as_ref()
-                            .and_then(|id| self.application.get_component(id))
-                            .and_then(|comp| {
-                                comp.as_any().downcast_ref::<MusicWorkspaceComponent>()
-                            })
-                            .and_then(|comp| comp.selected_item());
-                        if let Some(album) = album {
-                            if !self.app.is_right_panel_wide() {
-                                self.app.open_album_selection_modal(&album);
-                            }
-                        }
+                ShellRequest::MusicAlbumActivate { item } => {
+                    if self.app.tab.emby_library_index().is_some()
+                        && !self.app.is_right_panel_wide()
+                    {
+                        self.app.open_album_selection_modal(&item);
                     }
                     self.push_music_workspace_content();
                 }
@@ -72,56 +59,28 @@ impl Model {
                 // target resolution: the component owns the cursor,
                 // the shell resolves it to the cached track and runs
                 // the App effect (task 5.3d, Album track focus).
-                ShellRequest::MusicTrackActivate => {
-                    if self.app.tab.emby_library_index().is_some() {
-                        if let Some((album_id, track)) = self.focused_music_track() {
-                            self.app.play_album_track(&album_id, &track);
-                        }
-                    }
+                ShellRequest::MusicTrackActivate { album_id, track } => {
+                    self.app.play_album_track(&album_id, &track);
                     self.push_music_workspace_content();
                 }
-                ShellRequest::MusicTrackEnqueue => {
+                ShellRequest::MusicTrackEnqueue { track } => {
                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                        if let Some((_, track)) = self.focused_music_track() {
-                            self.app.enqueue_lib_item(lib_idx, track);
-                        }
+                        self.app.enqueue_lib_item(lib_idx, track);
                     }
                     self.push_music_workspace_content();
                 }
-                ShellRequest::MusicTrackContextMenu => {
-                    if let Some((_, track)) = self
-                        .app
-                        .tab
-                        .emby_library_index()
-                        .and_then(|_| self.focused_music_track())
-                    {
-                        self.app.open_context_menu_for(track);
-                    }
+                ShellRequest::MusicTrackContextMenu { track } => {
+                    self.app.open_context_menu_for(track);
                     self.push_music_workspace_content();
                 }
-                ShellRequest::MusicTrackContextMenuAt { anchor } => {
+                ShellRequest::MusicTrackContextMenuAt { track, anchor } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    if let Some((_, track)) = self
-                        .app
-                        .tab
-                        .emby_library_index()
-                        .and_then(|_| self.focused_music_track())
-                    {
-                        self.app.open_context_menu_for_at(track, anchor.0, anchor.1);
-                    }
+                    self.app.open_context_menu_for_at(track, anchor.0, anchor.1);
                     self.push_music_workspace_content();
                 }
-                ShellRequest::MusicAlbumContextMenu { anchor } => {
+                ShellRequest::MusicAlbumContextMenu { item, anchor } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    let album = self
-                        .music_workspace_id
-                        .as_ref()
-                        .and_then(|id| self.application.get_component(id))
-                        .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                        .and_then(|comp| comp.selected_item());
-                    if let Some(album) = album {
-                        self.app.open_context_menu_for_at(album, anchor.0, anchor.1);
-                    }
+                    self.app.open_context_menu_for_at(item, anchor.0, anchor.1);
                     self.push_music_workspace_content();
                 }
                 ShellRequest::MusicGroupSwitch { delta } => {
@@ -289,7 +248,7 @@ impl Model {
                     self.handle_audiobookshelf_podcast_episode_intent(intent);
                     self.push_audiobookshelf_podcast_content();
                 }
-                ShellRequest::AudiobookshelfPodcastShowMove { index } => {
+                ShellRequest::AudiobookshelfPodcastShowMove { library_item_id } => {
                     // Resolved podcast show-list cursor
                     // (split-audiobookshelf-cursor-ownership D1). The
                     // component already resolved its own movement and
@@ -302,7 +261,9 @@ impl Model {
                     // focused keyboard) show move pulls panel focus to the
                     // Library.
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    self.app.select_audiobookshelf_show(index);
+                    if let Some(library_item_id) = library_item_id.as_deref() {
+                        self.app.select_audiobookshelf_show_target(library_item_id);
+                    }
                     // The component owns the painted cursor; persist the
                     // active tab's slot once after the movement lands so
                     // the saved position tracks the moved cursor (B3).
@@ -376,49 +337,52 @@ impl Model {
                     self.push_emby_browser_content();
                 }
                 ShellRequest::BrowserRowClick { target } => {
-                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                    if let (Some(lib_idx), Some(target)) =
+                        (self.app.tab.emby_library_index(), target)
+                    {
                         self.app.handle_mouse_single_click_emby(lib_idx, target);
                     }
                     self.push_emby_browser_content();
                 }
                 ShellRequest::BrowserRowActivate { target } => {
-                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                    if let (Some(lib_idx), Some(target)) =
+                        (self.app.tab.emby_library_index(), target)
+                    {
                         self.app.handle_mouse_double_click_emby(lib_idx, target);
                     }
                     self.push_emby_browser_content();
                 }
                 ShellRequest::BrowserRowContextMenu { target, anchor } => {
-                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                    if let (Some(lib_idx), Some(target)) =
+                        (self.app.tab.emby_library_index(), target)
+                    {
                         self.app
                             .handle_mouse_right_click_emby(lib_idx, target, anchor.0, anchor.1);
                     }
                     self.push_emby_browser_content();
                 }
-                // Home wheel movement is local; only the resolved Continue
-                // Watching cursor crosses the Model boundary.
-                ShellRequest::HomeContinueCursor { index } => {
-                    self.home_content.continue_cursor =
-                        index.min(self.home_content.continue_items.len().saturating_sub(1));
-                    self.push_home_content();
-                }
-                ShellRequest::HomeRowClick => {
+                ShellRequest::HomeRowClick { .. } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
                     self.push_home_content();
                 }
                 ShellRequest::HomeRowActivate { target } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    if let Some((item, from_cw)) = self.home_flat_target(target) {
+                    if let Some((item, from_cw)) = self.home_stable_target(&target) {
                         self.app.home_play_target(item, from_cw);
                     }
                     self.push_home_content();
                 }
-                ShellRequest::HomeRowContextMenu { anchor } => {
+                ShellRequest::HomeRowContextMenu { target, anchor } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
                     self.app.open_context_menu_at(
                         anchor.0,
                         anchor.1,
-                        self.home_continue_watching_selected(),
-                        self.home_cw_item(),
+                        target.from_continue_watching,
+                        self.home_stable_target(&target)
+                            .and_then(|(item, _)| match item {
+                                mbv_core::playback_queue::QueueItem::Emby(item) => Some(*item),
+                                _ => None,
+                            }),
                     );
                     self.push_home_content();
                 }
@@ -434,7 +398,7 @@ impl Model {
                 | ShellRequest::HomeEnqueue(_)
                 | ShellRequest::HomeContextMenu { .. }
                 | ShellRequest::HomeDelete(_)
-                | ShellRequest::HomeToggleWatched
+                | ShellRequest::HomeToggleWatched(_)
                 | ShellRequest::HomeSectionSelected(_)) => self.handle_home_request(request),
                 ShellRequest::QueueScopeClick { scope } => {
                     self.app.handle_mouse_selector_click_queue(scope);
@@ -476,7 +440,7 @@ impl Model {
                 | ShellRequest::TvMoveColumn { .. }
                 | ShellRequest::TvJumpCursor { .. }
                 | ShellRequest::TvActivate { .. }
-                | ShellRequest::TvEpisodeActivate
+                | ShellRequest::TvEpisodeActivate { .. }
                 | ShellRequest::TvBack
                 | ShellRequest::TvCycleLetterPill { .. }
                 | ShellRequest::TvEpisodeMove { .. }
@@ -519,7 +483,7 @@ impl Model {
                 ShellRequest::QueueIntent(intent) => {
                     self.handle_queue_intent(intent);
                 }
-                // Component owns episode_selection/episode_filter; mutated locally in
+                // Component owns episode-pane focus/episode_filter; mutated locally in
                 // AudiobookshelfPodcastComponent::handle_key before the request is emitted, and
                 // handle_audiobookshelf_podcast_episode_intent resolves the target from the
                 // component, not App state (commit 0227d748, migrate-tui-to-tuirealm task

@@ -1,15 +1,16 @@
 //! Provider-neutral embedded media-list controls (design.md D1/D2/D3).
 //!
-//! [`WideMediaList`] and [`InlineMediaBrowser`] share their list mechanics
-//! through the private [`ListCore`]; only that inner type is shared between
-//! them and there is no third public widget abstraction. [`ViewportAnchor`]
-//! is the value both controls exchange at a breakpoint transition. Painting
+//! [`WideMediaList`] and [`InlineMediaBrowser`] are closed presentations over
+//! one [`MediaList`] owner. [`ViewportAnchor`] is retained only for explicit
+//! transitions between genuinely different owners. Painting
 //! lives in `crate::app::render::components::media_list`.
 
 use crate::app::ui_util::move_cursor;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 
 mod anchor;
+mod carrier;
+mod grid;
 mod grouping;
 mod inline;
 #[cfg(test)]
@@ -17,6 +18,8 @@ mod tests;
 mod wide;
 
 pub use anchor::ViewportAnchor;
+pub use carrier::{MediaListCarrier, Presentation};
+pub use grid::{GridMediaList, GridPaintPolicy};
 pub use grouping::letter_grouped_rows;
 pub use inline::{InlineLayout, InlineMediaBrowser};
 pub use wide::WideMediaList;
@@ -265,6 +268,37 @@ impl InlineMediaBrowserPaintPolicy {
     }
 }
 
+/// Normalized row-local input offered by a mounted destination after it has
+/// resolved its own precedence and gesture timing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowLocalInput {
+    Move(i64),
+    Page(i64),
+    First,
+    Last,
+    Activate,
+    Context,
+    Click(Position),
+    DoubleClick(Position),
+    ContextClick(Position),
+    Wheel { at: Position, delta: i64 },
+}
+
+/// Provider-neutral result of delegating one row-local input to a list owner.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RowLocalOutcome<Target> {
+    Unhandled,
+    Consumed,
+    SelectedTargetChanged(Target),
+    External(RowIntent<Target>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RowIntent<Target> {
+    Activate(Target),
+    Context(Target),
+}
+
 /// A closed, provider-neutral row vocabulary for embedded media lists.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaListRow<Target> {
@@ -296,7 +330,7 @@ impl<Target> MediaListRow<Target> {
     }
 }
 
-/// The clamped one-column viewport of a [`ListCore`] for a given painted
+/// The clamped one-column viewport of a [`MediaList`] for a given painted
 /// height: `offset` is the display-row index at the viewport top, so display
 /// row `i` paints at screen row `i - offset`. `total_rows` counts every
 /// display row (items, headings, spacers alike).
@@ -319,13 +353,11 @@ impl WideViewport {
     }
 }
 
-/// The list mechanics shared by [`WideMediaList`] and [`InlineMediaBrowser`]:
-/// the display-row list, the selectable index over it (which excludes
-/// `Heading`/`Spacer` so they can never be selected, design.md D2), the
-/// cursor, and the resting scroll offset. Private to this module; both public
-/// controls embed one and delegate to it rather than duplicating the
-/// mechanics.
-struct ListCore<Target> {
+/// The single canonical owner for one logical provider-neutral media-row flow.
+///
+/// Presentations embed or receive this owner; they never maintain a second
+/// cursor, scroll, selectable index, or selected-target state.
+pub struct MediaList<Target> {
     /// Every display row in paint order.
     rows: Vec<MediaListRow<Target>>,
     /// Indices into `rows` that are selectable `Item`s, ascending. Rebuilt
@@ -338,8 +370,9 @@ struct ListCore<Target> {
     scroll: usize,
 }
 
-impl<Target> ListCore<Target> {
-    fn new() -> Self {
+impl<Target> MediaList<Target> {
+    /// Creates an empty canonical owner for one logical row flow.
+    pub fn new() -> Self {
         Self {
             rows: Vec::new(),
             selectable: Vec::new(),
@@ -368,7 +401,7 @@ impl<Target> ListCore<Target> {
     }
 
     /// The display-row index the cursor currently points at.
-    fn selected_display_row(&self) -> Option<usize> {
+    pub(crate) fn selected_display_row(&self) -> Option<usize> {
         self.selectable.get(self.cursor).copied()
     }
 
@@ -387,6 +420,13 @@ impl<Target> ListCore<Target> {
     /// Store the offset a painter resolved, so the next frame resumes from it.
     fn set_scroll(&mut self, offset: usize) {
         self.scroll = offset.min(self.rows.len().saturating_sub(1));
+    }
+
+    /// Store an offset without the row-count clamp. The Grid presentation
+    /// defers the display-line clamp to the painted viewport while its column
+    /// policy is still unknown.
+    pub(crate) fn set_scroll_unclamped(&mut self, offset: usize) {
+        self.scroll = offset;
     }
 
     /// Move the cursor by `delta` selectable rows, clamped to the ends.
@@ -435,9 +475,77 @@ impl<Target> ListCore<Target> {
         let row = self.selected_display_row()?;
         Some(row.saturating_sub(self.resolve_viewport(viewport_height).offset))
     }
+
+    /// Apply the row-local portion of an already-normalized input. Pointer
+    /// actions are supplied with their resolved stable target by a presentation
+    /// after it has consulted its retained current-frame geometry.
+    pub fn delegate(
+        &mut self,
+        input: RowLocalInput,
+        pointer_target: Option<Target>,
+    ) -> RowLocalOutcome<Target>
+    where
+        Target: Clone + PartialEq,
+    {
+        let before = self.selected_target().cloned();
+        match input {
+            RowLocalInput::Move(delta) | RowLocalInput::Wheel { delta, .. } => {
+                self.move_selection(delta);
+            }
+            RowLocalInput::Page(delta) => self.move_selection(delta.saturating_mul(5)),
+            RowLocalInput::First => self.select_first(),
+            RowLocalInput::Last => self.select_last(),
+            RowLocalInput::Activate => {
+                return self
+                    .selected_target()
+                    .cloned()
+                    .map_or(RowLocalOutcome::Unhandled, |target| {
+                        RowLocalOutcome::External(RowIntent::Activate(target))
+                    });
+            }
+            RowLocalInput::DoubleClick(_) => {
+                return pointer_target.map_or(RowLocalOutcome::Unhandled, |target| {
+                    RowLocalOutcome::External(RowIntent::Activate(target))
+                });
+            }
+            RowLocalInput::Context => {
+                return self
+                    .selected_target()
+                    .cloned()
+                    .map_or(RowLocalOutcome::Unhandled, |target| {
+                        RowLocalOutcome::External(RowIntent::Context(target))
+                    });
+            }
+            RowLocalInput::ContextClick(_) => {
+                return pointer_target.map_or(RowLocalOutcome::Unhandled, |target| {
+                    RowLocalOutcome::External(RowIntent::Context(target))
+                });
+            }
+            RowLocalInput::Click(_) => {
+                if let Some(target) = pointer_target {
+                    if self.select_target(&target) {
+                        return if before.as_ref() == Some(&target) {
+                            RowLocalOutcome::Consumed
+                        } else {
+                            RowLocalOutcome::SelectedTargetChanged(target)
+                        };
+                    }
+                }
+                return RowLocalOutcome::Unhandled;
+            }
+        }
+        let after = self.selected_target().cloned();
+        match (before, after) {
+            (Some(before), Some(after)) if before != after => {
+                RowLocalOutcome::SelectedTargetChanged(after)
+            }
+            (Some(_), Some(_)) | (None, None) => RowLocalOutcome::Consumed,
+            _ => RowLocalOutcome::Unhandled,
+        }
+    }
 }
 
-impl<Target: PartialEq> ListCore<Target> {
+impl<Target: PartialEq> MediaList<Target> {
     /// The selectable-index position of `target`, if it is present.
     fn position_of(&self, target: &Target) -> Option<usize> {
         self.selectable
@@ -457,7 +565,7 @@ impl<Target: PartialEq> ListCore<Target> {
     }
 }
 
-impl<Target: Clone + PartialEq> ListCore<Target> {
+impl<Target: Clone + PartialEq> MediaList<Target> {
     /// Replace one existing row by stable target without rebuilding indexes or
     /// disturbing selection/scroll. This is for live presentation patches.
     fn patch_row(&mut self, target: &Target, row: MediaListRow<Target>) -> bool {

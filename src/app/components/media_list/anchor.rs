@@ -1,4 +1,4 @@
-use super::ListCore;
+use super::MediaList;
 
 /// The selection state a responsive parent hands from one canonical
 /// media-list control to another at a breakpoint transition (design.md D3):
@@ -13,7 +13,7 @@ pub struct ViewportAnchor<Target> {
     pub selected_row_offset: usize,
 }
 
-impl<Target: Clone + PartialEq> ListCore<Target> {
+impl<Target: Clone + PartialEq> MediaList<Target> {
     /// Produce an anchor from the current selection for a painted viewport
     /// height. `None` when nothing is selectable.
     pub(super) fn viewport_anchor(&self, viewport_height: usize) -> Option<ViewportAnchor<Target>> {

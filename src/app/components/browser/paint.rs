@@ -14,10 +14,9 @@ use crate::app::render::{
 };
 
 impl BrowserComponent {
-    /// Paints the wide Movies/home-video Wide hero layout: a read-only
-    /// shared Emby hero card on the left and the letter-pill/count/search
-    /// row plus the one-column list in the right rail. Mirrors the deleted
-    /// legacy wide renderer so the picture is unchanged.
+    /// Paints the wide Movies/home-video Wide hero layout: the one-column
+    /// list and letter-pill/count/search row in the left browser pane, with a
+    /// read-only shared Emby hero card in the right pane.
     /// Returns the final list scroll (the component owns its cursor/scroll,
     /// so it records it instead of writing the App nav level).
     pub(super) fn render_wide_movies(
@@ -36,27 +35,26 @@ impl BrowserComponent {
             // fails on the same rect (`body_area == area`). If a degenerate
             // rect ever reaches here, keep a canonical render rather than
             // routing to the legacy painter.
-            let paint = crate::app::render::render_wide_media_list(
-                f,
-                body_area,
-                body_area,
-                &mut self.wide_list,
-                self.focused,
-                palette::list_selected_row_bg(),
-                None,
+            let wide = self.carrier.wide_mut();
+            wide.set_geometry(body_area, body_area);
+            wide.set_paint_policy(
+                crate::app::components::media_list::WideMediaListPaintPolicy::new(
+                    self.focused,
+                    crate::app::components::media_list::SelectedRowSurface::ListBackdrop,
+                    None,
+                ),
             );
-            self.layout.left_item_rows = paint.left_item_rows;
-            self.layout.left_row_map = paint.left_row_map;
-            return paint.row_geometry.offset();
+            tuirealm::component::Component::view(wide, f, body_area);
+            return self.carrier.wide().current_flow_offset().unwrap_or(0);
         };
         let browser_panel = panes.browser_panel;
 
         let browser_area = panes.browser_area;
         self.layout.movies_wide_right_area = browser_area;
 
-        // Left pane: read-only shared hero card (not an interactive hero —
-        // `layout.hero_area` stays unset so the left pane is outside mouse
-        // geometry, mirroring the legacy wide renderer).
+        // Right pane: read-only shared hero card (not an interactive hero —
+        // `layout.hero_area` stays unset so the hero pane is outside mouse
+        // geometry).
         let hero_content =
             wide_hero_hero_pane(f, body_area, crate::app::render::LeftPaneFocus::ReadOnly)
                 .expect("wide movies layout has a hero pane");
@@ -119,7 +117,7 @@ impl BrowserComponent {
 
         self.layout.left_area = content;
         // Frame the rail before the row flow: the helper fills the whole
-        // panel background, so it must run before `render_wide_media_list`
+        // panel background, so it must run before the canonical Wide view
         // paints the selected-row bar (matches TV / Music ordering).
         wide_hero_browser_border(f, list_panel, self.focused);
         let final_scroll = if self.inline_search.is_active() {
@@ -146,7 +144,7 @@ impl BrowserComponent {
             );
             self.inline_search.set_scroll(new_scroll);
             new_scroll
-        } else if self.wide_list.is_empty() {
+        } else if self.carrier.wide().is_empty() {
             crate::app::render::components::widgets::render_placeholder(
                 f,
                 content,
@@ -158,38 +156,18 @@ impl BrowserComponent {
             );
             0
         } else {
-            let painted = crate::app::render::render_wide_media_list(
-                f,
-                paint,
-                content,
-                &mut self.wide_list,
-                self.focused,
-                palette::list_selected_row_bg(),
-                None,
+            let wide = self.carrier.wide_mut();
+            wide.set_geometry(paint, content);
+            wide.set_paint_policy(
+                crate::app::components::media_list::WideMediaListPaintPolicy::new(
+                    self.focused,
+                    crate::app::components::media_list::SelectedRowSurface::ListBackdrop,
+                    None,
+                ),
             );
-            self.layout.left_item_rows = painted.left_item_rows;
-            self.layout.left_row_map = painted.left_row_map;
-            let offset = painted.row_geometry.offset();
-            // Export the selected-row anchor from the control's exact painted
-            // flow; the shell consumes it for context-menu placement.
-            self.layout.selected_item_rect = painted.selected_row_rect;
-            // Republish the sorted display order the rail was built from so the
-            // parent's letter-aware keyboard navigation keeps resolving targets
-            // against `self.layout` (mirrors `render_wide_tv_with_ctx`; task
-            // 3.5c re-points navigation onto the control itself).
-            let grouped =
-                !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some());
-            self.layout.left_sorted_indices = if grouped {
-                let mut order: Vec<usize> = (0..ctx.items.len()).collect();
-                order.sort_by_cached_key(|&index| {
-                    crate::app::ui_util::natural_sort_key(crate::app::render::effective_sort_str(
-                        &ctx.items[index],
-                    ))
-                });
-                order
-            } else {
-                (0..ctx.items.len()).collect()
-            };
+            tuirealm::component::Component::view(wide, f, paint);
+            let offset = self.carrier.wide().current_flow_offset().unwrap_or(0);
+            self.layout.selected_item_rect = self.carrier.wide().current_selected_row_rect();
             offset
         };
 

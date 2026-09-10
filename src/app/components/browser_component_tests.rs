@@ -9,6 +9,7 @@ use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::{make_item, make_items};
 
 use ratatui::backend::TestBackend;
+use ratatui::layout::Position;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{
@@ -237,6 +238,70 @@ fn browser_control_transition_preserves_the_selected_viewport_offset() {
     );
 }
 
+/// Row 4.2 regression: a Grid scroll offset is a display-line offset whose
+/// packing depends on the column policy the arrangement supplies at paint
+/// time. A selected-row viewport offset retained across an Inline→Grid
+/// handoff must restore at the same painted row from the viewport top — not
+/// at roughly double the line position, which is what resolving the offset
+/// against the pre-handoff one-column packing produces.
+#[test]
+fn grid_handoff_preserves_the_two_column_selected_row_offset() {
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Generic);
+    browser.set_content(BrowserContent::from_items(make_items(24)));
+    browser.set_focused(true);
+
+    // Paint the two-column Grid (the pane meets the two-column threshold;
+    // fewer than 50 items keep the rows ungrouped), then move down two
+    // painted item rows (each Down strides one painted row = two columns):
+    // the selection sits at display line 2. The 10-row terminal keeps the
+    // grid's 12 display lines taller than the viewport, so the retained
+    // offset placement is exercised instead of saturating to the top.
+    let mut terminal = Terminal::new(TestBackend::new(100, 10)).unwrap();
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    for _ in 0..2 {
+        browser.handle_tui_key(TuiKeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        });
+    }
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    let grid_anchor = browser
+        .viewport_anchor(browser.painted_viewport_height())
+        .expect("two-column grid has a selected item");
+    assert_eq!(grid_anchor.selected_row_offset, 2);
+
+    // Hand the owner to Inline (a hero appears) and back to Grid (it goes).
+    browser.set_narrow_extras(NarrowBrowseExtras {
+        hero_placeholder: true,
+        ..NarrowBrowseExtras::default()
+    });
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    browser.set_narrow_extras(NarrowBrowseExtras::default());
+    terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+
+    let anchor_after = browser
+        .viewport_anchor(browser.painted_viewport_height())
+        .expect("grid has a selected item after the handoff back");
+    assert_eq!(
+        anchor_after.selected_target, grid_anchor.selected_target,
+        "the handoff must keep the selected item"
+    );
+    assert_eq!(
+        anchor_after.selected_row_offset, grid_anchor.selected_row_offset,
+        "the two-column offset must survive the Inline↔Grid handoff at the \
+         retained painted-row offset, not resolved against the pre-policy \
+         one-column packing"
+    );
+}
+
 /// Wide-Movies exact parity: a Movies-keyed component on a >=82-wide
 /// rendered list uses its own kind and painted geometry, and the right
 /// rail strides ONE item per row, matching its painted one-column geometry.
@@ -358,7 +423,8 @@ fn browser_context_menu_requires_bare_dot() {
 #[test]
 fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
     let mut browser = BrowserComponent::new();
-    let items = || make_items(4);
+    // Eight items keep the resting scroll values below the Grid line clamp.
+    let items = || make_items(8);
     browser.set_content(BrowserContent::from_items(items()));
     browser.set_focused(true);
 
@@ -466,6 +532,117 @@ fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
     }
 }
 
+/// Task 4.2: Movies/home-video narrow/wide surfaces share ONE owner whose
+/// presentation changes between Wide and Inline. The identity-gated
+/// `apply_position` re-seed lands in that one owner; whichever presentation
+/// becomes active next surfaces the same target — there is no second control
+/// to seed separately.
+#[test]
+fn apply_position_seeds_the_one_owner_for_canonical_kind_without_active_control() {
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    browser.set_content(BrowserContent::from_items(make_items(40)));
+    browser.set_focused(true);
+    // No narrow hero extras: no presentation has been painted yet.
+
+    // Back-restore push (browse identity changed): the shell re-seeds the
+    // owner from the user's resting position.
+    browser.apply_position(25, 9);
+    assert_eq!(browser.cursor(), 25, "the one owner is seeded");
+    assert_eq!(browser.scroll(), 9, "the one owner scroll is seeded");
+
+    // Wide activation (e.g. a terminal resize): the position now lives in the
+    // active Wide presentation of the same owner, not cursor 0 or a stale
+    // shell value.
+    let mut wide_terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    wide_terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    assert_eq!(
+        browser.cursor(),
+        25,
+        "wide activation must surface the seeded target through the active presentation"
+    );
+
+    // Narrow-with-hero activation: same owner observed through the Inline
+    // presentation via the public `cursor()` seam.
+    let mut narrow_browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    narrow_browser.set_content(BrowserContent::from_items(make_items(40)));
+    narrow_browser.set_focused(true);
+    narrow_browser.apply_position(25, 9);
+    narrow_browser.set_narrow_extras(NarrowBrowseExtras {
+        hero_placeholder: true,
+        ..NarrowBrowseExtras::default()
+    });
+    let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    narrow_terminal
+        .draw(|frame| narrow_browser.view(frame, frame.area()))
+        .unwrap();
+    assert_eq!(
+        narrow_browser.cursor(),
+        25,
+        "narrow hero activation must surface the seeded target through the active presentation"
+    );
+}
+
+/// Task 4.2: with one owner there is no second control whose live selection
+/// could diverge. An active-presentation re-seed moves the owner; a later
+/// breakpoint change reads the same owner and preserves the selection.
+#[test]
+fn apply_position_re_seeds_the_one_owner_and_presentations_preserve_it() {
+    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
+    browser.set_content(BrowserContent::from_items(make_items(40)));
+    browser.set_focused(true);
+
+    // Wide session: the Wide presentation carries the live position.
+    let mut wide_terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    wide_terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    });
+    browser.handle_tui_key(TuiKeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_eq!(browser.cursor(), 2, "wide rail live selection");
+
+    // Narrow-with-hero: the Inline presentation reads the same owner.
+    browser.set_narrow_extras(NarrowBrowseExtras {
+        hero_placeholder: true,
+        ..NarrowBrowseExtras::default()
+    });
+    let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    narrow_terminal
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    assert_eq!(
+        browser.cursor(),
+        2,
+        "inline reads the live target through the one owner"
+    );
+
+    // Back-restore re-seed: the one owner takes the shell position.
+    browser.apply_position(25, 9);
+    assert_eq!(
+        browser.cursor(),
+        25,
+        "the owner takes the restored position"
+    );
+
+    // Returning to Wide reads the same owner — no stale second rail.
+    let mut wide_again = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    wide_again
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
+    assert_eq!(
+        browser.cursor(),
+        25,
+        "wide reads the restored selection through the one owner"
+    );
+}
+
 #[test]
 fn browser_renders_the_shared_generic_rows() {
     let mut browser = BrowserComponent::new();
@@ -485,13 +662,18 @@ fn browser_renders_the_shared_generic_rows() {
     assert!(rendered.contains("Movie one"));
 }
 
+/// Task 4.1: the non-hero generic two-column catalog is the Grid presentation
+/// over the shared owner. A click in the second painted cell must resolve the
+/// second row's stable target from the Grid's retained current-frame cells —
+/// never from a parent row map or fallback cell arithmetic.
 #[test]
 fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
+    let mut first = make_item("first", "Movie");
+    first.id = "first".into();
+    let mut second = make_item("second", "Movie");
+    second.id = "second".into();
     let mut browser = BrowserComponent::new();
-    browser.set_content(BrowserContent::from_items(vec![
-        make_item("first", "Movie"),
-        make_item("second", "Movie"),
-    ]));
+    browser.set_content(BrowserContent::from_items(vec![first, second]));
     browser.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(100, 6)).unwrap();
     terminal
@@ -508,12 +690,13 @@ fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
         row: position.1,
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(matches!(
+    assert_eq!(
         left,
-        Some(crate::app::components::msg::Msg::Shell(
-            crate::app::components::msg::ShellRequest::BrowserRowClick { target: 1 }
-        ))
-    ));
+        Some(Msg::Shell(ShellRequest::BrowserRowClick {
+            target: Some("second".into()),
+        })),
+        "left click must resolve the second cell's stable target via retained Grid geometry"
+    );
 
     let right = browser.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Right),
@@ -521,189 +704,17 @@ fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
         row: position.1,
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(matches!(
+    assert_eq!(
         right,
-        Some(crate::app::components::msg::Msg::Shell(
-            crate::app::components::msg::ShellRequest::BrowserRowContextMenu { target: 1, .. }
-        ))
-    ));
-}
-
-/// Narrow canonical-list path (task 6.2): with `wide_movies` false and the
-/// hero-capable browse surface reserving an inline hero block
-/// (`hero_placeholder`), the active control is the embedded
-/// `InlineMediaBrowser`, not the generic two-column grid — `left_item_rows`
-/// stays empty and row identity comes from `inline_browser.resolve_point`
-/// (design.md D6). A left click below the reserved hero block must move the
-/// cursor to the clicked row and emit the resolved target, exactly like the
-/// wide rail's `browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks`.
-#[test]
-fn narrow_canonical_list_click_moves_cursor_and_emits_row_click() {
-    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(make_items(6)));
-    browser.set_focused(true);
-    browser.set_narrow_extras(NarrowBrowseExtras {
-        hero_placeholder: true,
-        ..NarrowBrowseExtras::default()
-    });
-    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
-    terminal
-        .draw(|frame| browser.view(frame, frame.area()))
-        .unwrap();
-    assert!(
-        browser.test_layout().left_item_rows.is_empty(),
-        "narrow canonical path must not populate the generic-grid row map"
-    );
-
-    let (area, row_map) = {
-        let layout = browser.test_layout();
-        (layout.left_area, layout.left_row_map.clone())
-    };
-    let target_row = row_map
-        .iter()
-        .position(|target| matches!(target, Some(idx) if *idx != browser.cursor()))
-        .expect("a non-selected row is painted below the inline hero");
-    let target = row_map[target_row].unwrap();
-    let position = (area.x, area.y + target_row as u16);
-
-    let message = browser.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: position.0,
-        row: position.1,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(
-        message,
-        Some(Msg::Shell(ShellRequest::BrowserRowClick { target })),
-        "narrow canonical row click must resolve via inline_browser.resolve_point"
-    );
-    assert_eq!(browser.cursor(), target);
-}
-
-/// A double-click on the same narrow canonical row emits activation instead
-/// of a plain cursor move (mirrors the accepted Music narrow precedent,
-/// task 6.1).
-#[test]
-fn narrow_canonical_list_double_click_emits_row_activate() {
-    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(make_items(6)));
-    browser.set_focused(true);
-    browser.set_narrow_extras(NarrowBrowseExtras {
-        hero_placeholder: true,
-        ..NarrowBrowseExtras::default()
-    });
-    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
-    terminal
-        .draw(|frame| browser.view(frame, frame.area()))
-        .unwrap();
-
-    let (area, row_map) = {
-        let layout = browser.test_layout();
-        (layout.left_area, layout.left_row_map.clone())
-    };
-    let target_row = row_map
-        .iter()
-        .position(|target| matches!(target, Some(idx) if *idx != browser.cursor()))
-        .expect("a non-selected row is painted below the inline hero");
-    let target = row_map[target_row].unwrap();
-    let down = Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: area.x,
-        row: area.y + target_row as u16,
-        modifiers: KeyModifiers::NONE,
-    });
-
-    let first = browser.on(&down);
-    assert_eq!(
-        first,
-        Some(Msg::Shell(ShellRequest::BrowserRowClick { target }))
-    );
-    let second = browser.on(&down);
-    assert_eq!(
-        second,
-        Some(Msg::Shell(ShellRequest::BrowserRowActivate { target }))
-    );
-}
-
-/// A right click on a narrow canonical row emits the context menu request
-/// with the raw pointer position as the anchor (design.md D4).
-#[test]
-fn narrow_canonical_list_right_click_emits_row_context_menu() {
-    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(make_items(6)));
-    browser.set_focused(true);
-    browser.set_narrow_extras(NarrowBrowseExtras {
-        hero_placeholder: true,
-        ..NarrowBrowseExtras::default()
-    });
-    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
-    terminal
-        .draw(|frame| browser.view(frame, frame.area()))
-        .unwrap();
-
-    let (area, row_map) = {
-        let layout = browser.test_layout();
-        (layout.left_area, layout.left_row_map.clone())
-    };
-    let target_row = row_map
-        .iter()
-        .position(|target| matches!(target, Some(idx) if *idx != browser.cursor()))
-        .expect("a non-selected row is painted below the inline hero");
-    let target = row_map[target_row].unwrap();
-    let position = (area.x, area.y + target_row as u16);
-
-    let message = browser.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Right),
-        column: position.0,
-        row: position.1,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(
-        message,
         Some(Msg::Shell(ShellRequest::BrowserRowContextMenu {
-            target,
+            target: Some("second".into()),
             anchor: position,
-        }))
-    );
-}
-
-/// A pill click in narrow mode (letter pills painted above the canonical
-/// inline list) resolves via the same `pill_regions` map the wide rail uses
-/// — `handle_mouse` never branches on breakpoint for pill hits.
-#[test]
-fn narrow_canonical_list_pill_click_emits_pill_click() {
-    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(make_items(6)));
-    browser.set_focused(true);
-    browser.set_narrow_extras(NarrowBrowseExtras {
-        hero_placeholder: true,
-        show_letter_pills: true,
-        ..NarrowBrowseExtras::default()
-    });
-    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
-    terminal
-        .draw(|frame| browser.view(frame, frame.area()))
-        .unwrap();
-
-    let (rect, target) = browser
-        .test_layout()
-        .selector_tabs
-        .iter()
-        .find(|(_, target)| *target == 2)
-        .copied()
-        .expect("third letter pill painted");
-
-    let message = browser.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: rect.x,
-        row: rect.y,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(
-        message,
-        Some(Msg::Shell(ShellRequest::BrowserPillClick { target }))
+        })),
+        "right click must resolve the second cell's stable target via retained Grid geometry"
     );
 }
 
 #[path = "browser_inline_search_tests.rs"]
 mod inline_search_tests;
+#[path = "browser_mouse_tests.rs"]
+mod mouse_tests;

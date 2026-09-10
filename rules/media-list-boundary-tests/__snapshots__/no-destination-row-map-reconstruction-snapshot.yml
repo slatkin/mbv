@@ -1,0 +1,29 @@
+id: no-destination-row-map-reconstruction
+snapshots:
+  ? |
+    // A destination reconstructing the legacy parent row map is a regression.
+    fn reconstruct(layout: &mut Layout, plan: &Plan) {
+        layout.left_row_map = plan.row_targets();
+    }
+  : labels:
+    - source: layout.left_row_map
+      style: primary
+      start: 130
+      end: 149
+    - source: left_row_map
+      style: secondary
+      start: 137
+      end: 149
+  ? |
+    fn read_map(layout: &Layout) -> Vec<Vec<usize>> {
+        layout.left_item_rows.clone()
+    }
+  : labels:
+    - source: layout.left_item_rows
+      style: primary
+      start: 54
+      end: 75
+    - source: left_item_rows
+      style: secondary
+      start: 61
+      end: 75

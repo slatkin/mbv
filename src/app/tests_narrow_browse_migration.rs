@@ -521,8 +521,8 @@ fn feed_home_video_group_narrow_uses_shared_inline_hero() {
 #[test]
 fn feed_home_video_group_wide_uses_wide_hero() {
     // Wide: Wide hero. Selected item's detail (overview + meta) is the
-    // left hero card; the right rail is a plain one-column list with the
-    // feed-group pills - no inline expansion in the rail.
+    // right hero card; the left browser pane is a plain one-column list with
+    // the feed-group pills - no inline expansion in the browser.
     let output = feed_snapshot(140, 40);
     assert!(
         output.contains("All") && output.contains("Channel A"),
@@ -530,7 +530,7 @@ fn feed_home_video_group_wide_uses_wide_hero() {
     );
     assert!(
         output.contains("Distinctive wrapping"),
-        "left hero overview missing:\n{output}"
+        "right hero overview missing:\n{output}"
     );
     // Video Two is only ever a rail row (never the selected hero), so it
     // pins single-paint of the rail without the hero-echo of Video One.
@@ -572,7 +572,7 @@ fn feed_home_video_group_metadata_bearing_hero_keeps_complete_frame() {
 }
 
 #[test]
-fn feed_home_video_group_browser_wheel_persists_the_video_cursor() {
+fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
     let mut app = feed_home_video_group_app();
     let state = app.libs[0].feed_home_video.as_mut().unwrap();
     for i in 0..30 {
@@ -631,6 +631,10 @@ fn feed_home_video_group_browser_wheel_persists_the_video_cursor() {
             }))
             .expect("scroll emits typed request");
         model.handle_terminal_message(msg, &mut music_resize, &mut tv_resize);
+        // The wheel move re-resolves the viewport and invalidates the retained
+        // frame; production draws between events, so refresh the painted claim
+        // here too (design.md D6).
+        draw(&mut model, &mut term);
     }
     let control_cursor = model
         .application
@@ -645,7 +649,8 @@ fn feed_home_video_group_browser_wheel_persists_the_video_cursor() {
             .as_ref()
             .unwrap()
             .video_cursor,
-        total_rows - 1
+        total_rows - 1,
+        "shell resting state follows the resolved control selection"
     );
 }
 

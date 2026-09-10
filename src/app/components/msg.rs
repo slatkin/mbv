@@ -22,9 +22,10 @@ mod shell;
 
 pub use self::hit_regions::TvHit;
 pub use self::intents::{
-    AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
-    ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,
-    PodcastEpisodeTransition, RemoteReanchorIntent, SavePlaylistIntent, SettingsIntent,
+    AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget,
+    ConfirmIntent, ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, HomeRowTarget,
+    PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition, RemoteReanchorIntent,
+    SavePlaylistIntent, SettingsIntent,
 };
 pub use self::playback::PlaybackRequest;
 pub use self::queue::{QueueColumnResize, QueueIntent, QueueMove, QueueRequest};

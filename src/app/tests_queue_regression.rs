@@ -93,7 +93,7 @@ fn shell_frame_uses_queue_component_geometry_for_keyboard_context_menu_anchor() 
     assert!(queue_selected.y > model.app.layout.main.queue_area.y);
     let message = Msg::Shell(ShellRequest::HomeContextMenu {
         home_cw_selected: false,
-        cw_item: None,
+        target: crate::app::components::msg::HomeRowTarget { item_id: None, source: None, from_continue_watching: true },
     });
     model.handle_terminal_message(message, &mut resize_music, &mut resize_tv);
     model.sync_mounted_surfaces();
@@ -230,5 +230,57 @@ fn mini_view_panel_does_not_overlay_queue_on_mode_switch() {
         rows(&terminal, 3..8),
         "the frame that switches into queue-only mini view must already match \
          the steady queue-only frame in the rows above the queue list"
+    );
+}
+
+/// Row 5.2 / row 9.2 block correction: at the mini breakpoint the queue panel
+/// is the sole painted surface. The library destination's mounted browser
+/// used `LayoutMain::left_area` as its paint area, but that field is only
+/// republished as the library content rect while the base frame renders the
+/// library; in queue-only mode it stayed the full queue column, so the Emby
+/// browser painted its rows and inline hero straight over the queue. Assert
+/// the compact fixed-row queue paints and the library does not leak in.
+#[test]
+fn mini_view_queue_panel_paints_only_the_queue_not_the_library() {
+    let mut app = crate::app::render::make_queue_app(6);
+    app.terminal_width = 70;
+    app.terminal_height = 24;
+    app.mini_view_focus = PanelFocus::Queue;
+
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(70, 24)).unwrap();
+    terminal
+        .draw(|frame| model.draw_frame(frame, false, false))
+        .unwrap();
+
+    assert_eq!(
+        model.app.effective_panel_mode(),
+        crate::app::PanelMode::QueueOnly,
+        "the mini breakpoint must show the queue panel only"
+    );
+
+    let queue_area = model.app.layout.main.queue_area;
+    let buffer = terminal.backend().buffer();
+    let queue_text = (queue_area.y..queue_area.bottom())
+        .map(|y| {
+            (queue_area.x..queue_area.right())
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert!(
+        queue_text.contains("Queue Item 0"),
+        "the queue mini view must paint its fixed rows:\n{queue_text}"
+    );
+    assert!(
+        !queue_text.contains("Focused Movie") && !queue_text.contains("Second Movie"),
+        "the library browser must not paint over the queue mini view:\n{queue_text}"
+    );
+    assert!(
+        !queue_text.contains("compact movie banner"),
+        "the library inline hero must not leak into the queue mini view:\n{queue_text}"
     );
 }

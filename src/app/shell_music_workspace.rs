@@ -4,32 +4,9 @@ use super::components::{
 use super::render::{wide_hero_presentation, MusicWideRenderCtx};
 use super::shell::{Model, MusicTrackFocusRequest};
 use super::TabSelection;
-use mbv_core::api::EmbyItem;
 use mbv_core::config::ServiceKind;
 
 impl Model {
-    /// Resolve the focused track of the active Music workspace: the
-    /// component owns the cursor index, the shell owns the target resolution
-    /// (album + cached track list). Returns `None` when no track is focused,
-    /// the cache has no entry, or the cursor is out of bounds.
-    pub(super) fn focused_music_track(&self) -> Option<(String, EmbyItem)> {
-        let id = self.music_workspace_id.as_ref()?;
-        let comp = self
-            .application
-            .get_component(id)?
-            .as_any()
-            .downcast_ref::<MusicWorkspaceComponent>()?;
-        let cursor = comp.track_cursor()?;
-        let album = comp.selected_item()?;
-        let track = self
-            .app
-            .album_tracks_cache
-            .get(&album.id)?
-            .get(cursor)?
-            .clone();
-        Some((album.id.clone(), track))
-    }
-
     pub(super) fn music_workspace_component_id(&self) -> Option<ComponentId> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
@@ -103,42 +80,37 @@ impl Model {
         {
             return;
         }
-        // The Music component owns the selection cursor. Derive the selected
-        // album from the component's authoritative selection (its own cursor),
-        // not the App browse cursor. Only on first mount fall back to the
-        // App-derived item.
-        // Resting position: the persistence-facing cursor/scroll the shell
-        // restores on re-entry, and the first-mount re-anchor target.
+        // The persistent album controls own live selection and scroll. The
+        // shell only chooses the content snapshot's selected item: the
+        // resting position on an explicit re-anchor, otherwise the control's
+        // stable selected target when it is still present in the new catalog.
         let resting = self.app.libs[index].nav_stack.last().map(|level| {
             let resting = level.resting();
             (resting.cursor(), resting.scroll())
         });
-        let cursor_scroll = if self.music_workspace_reanchor {
-            resting
-        } else {
-            self.application
-                .get_component(id)
-                .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                .map(|music| (music.album_cursor(), music.album_scroll()))
-                .or(resting)
-        };
-        let list = self.app.library_list_render_ctx(
-            index,
-            cursor_scroll.map_or(0, |(cursor, _)| cursor),
-            cursor_scroll.map_or(0, |(_, scroll)| scroll),
-        );
-        // On a re-anchor tick the component's local cursor is still stale (it
-        // is re-pointed below), so the authoritative album is the resting one
-        // -- resolve the track-fetch target from the list, not that cursor.
-        let selected_album = if self.music_workspace_reanchor {
-            list.selected_item().cloned()
-        } else {
-            self.application
-                .get_component(id)
-                .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                .and_then(MusicWorkspaceComponent::selected_item)
-                .or_else(|| list.selected_item().cloned())
-        };
+        let selected_target = (!self.music_workspace_reanchor)
+            .then(|| {
+                self.application
+                    .get_component(id)
+                    .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
+                    .and_then(MusicWorkspaceComponent::selected_item)
+                    .map(|item| item.id)
+            })
+            .flatten();
+        let selected_cursor = self.app.libs[index]
+            .nav_stack
+            .last()
+            .and_then(|level| {
+                selected_target
+                    .as_deref()
+                    .and_then(|target| level.items.iter().position(|item| item.id == target))
+            })
+            .or_else(|| resting.map(|(cursor, _)| cursor));
+        let cursor_scroll = selected_cursor.map(|cursor| (cursor, 0));
+        let list = self
+            .app
+            .library_list_render_ctx(index, selected_cursor.unwrap_or(0), 0);
+        let selected_album = list.selected_item().cloned();
         if let Some(album) = selected_album.as_ref() {
             if !self.app.album_tracks_cache.contains_key(&album.id)
                 && !self.app.album_tracks_loading.contains(&album.id)
@@ -155,7 +127,7 @@ impl Model {
         // (mount, group switch, recursive activation, saved-position restore)
         // adopts the shell's resting cursor/scroll below, unconditionally.
         let reanchor = std::mem::take(&mut self.music_workspace_reanchor)
-            .then(|| (context.list.cursor(), context.list.scroll()));
+            .then(|| resting.unwrap_or((context.list.cursor(), 0)));
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(music) = comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>() {
                 music.set_content(context);
@@ -180,7 +152,7 @@ impl Model {
                             // keep the request (still bound to this album) so
                             // the tracks re-push honors it. Narrow never enters,
                             // so never retries.
-                            if wide && music.track_cursor().is_none() {
+                            if wide && !music.track_focused() {
                                 self.music_track_focus_request =
                                     Some(MusicTrackFocusRequest::Enter { album_id });
                             }
@@ -196,6 +168,13 @@ impl Model {
         let Some(id) = self.music_workspace_id.as_ref() else {
             return;
         };
+        // The queue-only mode hides the library panel; narrow Music falls back
+        // to `left_area`, which is only republished as the library content
+        // rect when the base frame renders the library. Without this guard the
+        // workspace would paint its albums over the queue-owned frame.
+        if !self.library_panel_visible() {
+            return;
+        }
         // Wide Music paints into `wide_music_area`; narrow Music has no wide
         // area, so fall back to the narrow main content area (`left_area`) so
         // the component's `view` is still reached.

@@ -9,8 +9,8 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
-    MediaKind, MediaListRow, MediaSemanticState, SelectedRowSurface, WideMediaList,
-    WideMediaListPaintPolicy,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
+    RowLocalInput, RowLocalOutcome,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
@@ -20,7 +20,10 @@ use super::msg::{
 };
 use super::user_event::UserEvent;
 use crate::app::palette;
-use crate::app::render::{render_queue_title_content, QueueRenderGeometry, QueueTitleModel};
+use crate::app::render::{
+    render_queue_body, render_queue_title_content, QueuePresentation, QueueRenderGeometry,
+    QueueTitleModel,
+};
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use crate::app::ui_util::{fmt_duration_short, fmt_playback_pct};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -36,11 +39,11 @@ pub(in crate::app) enum QueueCursorUpdate {
 }
 
 pub struct QueueComponent {
-    /// The canonical fixed-row control owns the Queue rows, the local cursor,
-    /// the resting scroll offset, and viewport/scrollbar geometry
-    /// (migrate-queue-to-canonical-list D1/D2). The parent keeps only the
-    /// prepared projection and shell-owned chrome below.
-    list: WideMediaList<QueueSlotId>,
+    /// The one shared canonical owner of the Queue rows, carried by the Wide
+    /// presentation in every panel mode (design.md D1/D2). It owns the local
+    /// cursor, the resting scroll offset, and viewport/scrollbar geometry; the
+    /// parent keeps only the prepared projection and shell-owned chrome below.
+    carrier: MediaListCarrier<QueueSlotId>,
     scope: QueueScope,
     focused: bool,
     empty_text: String,
@@ -61,12 +64,12 @@ pub struct QueueComponent {
 
 impl QueueComponent {
     pub(crate) fn selected_row_rect(&self) -> Option<Rect> {
-        self.list.current_selected_row_rect()
+        self.carrier.wide().current_selected_row_rect()
     }
 
     pub fn new() -> Self {
         Self {
-            list: WideMediaList::new(),
+            carrier: MediaListCarrier::new(Presentation::Wide),
             scope: QueueScope::Local,
             focused: false,
             empty_text: String::new(),
@@ -103,7 +106,7 @@ impl QueueComponent {
 
     /// Replace projected rows while preserving the canonical list's selection.
     pub(in crate::app) fn set_rows(&mut self, slots: Vec<QueueSlot>, playback: PlaybackState) {
-        self.list
+        self.carrier
             .set_content(queue_media_rows(&slots, playback, self.pending_slot));
     }
 
@@ -113,25 +116,30 @@ impl QueueComponent {
         target: &QueueSlotId,
         row: MediaListRow<QueueSlotId>,
     ) -> bool {
-        self.list.patch_row(target, row)
+        self.carrier.patch_row(target, row)
     }
 
     /// Deliver an authoritative cursor command independently of row delivery.
+    /// This is the adjudicated Queue shell-push seam (design.md D5): the shell
+    /// owns the Queue cursor command, so this one numeric re-anchor and its
+    /// resting-scroll clamp are sanctioned rather than delegated.
     pub(in crate::app) fn set_cursor(&mut self, cursor: QueueCursorUpdate) {
         if let QueueCursorUpdate::Set(idx) = cursor {
-            self.list.select_index(idx);
+            // ast-grep-ignore: no-render-media-list-mutators
+            self.carrier.select_index(idx);
         }
-        let scroll = self.list.scroll();
-        let clamped = scroll.min(self.list.cursor());
+        let scroll = self.carrier.scroll();
+        let clamped = scroll.min(self.carrier.cursor());
         if clamped != scroll {
-            self.list.set_scroll(clamped);
+            // ast-grep-ignore: no-render-media-list-mutators
+            self.carrier.set_scroll(clamped);
         }
     }
 
     /// Deliver the current scope and title/chrome independently of row delivery.
     pub(in crate::app) fn set_scope_chrome(&mut self, scope: QueueScope, title: QueueTitleModel) {
         if scope != self.scope {
-            self.list.set_scroll(0);
+            self.carrier.set_scroll(0);
         }
         self.scope = scope;
         self.empty_text = if scope == QueueScope::Local {
@@ -159,7 +167,7 @@ impl QueueComponent {
     }
 
     fn cursor_message(&self) -> Option<Msg> {
-        self.list.selected_target().map(|&slot_id| {
+        self.carrier.selected_target().map(|&slot_id| {
             Msg::Queue(QueueRequest::Cursor {
                 scope: self.scope,
                 slot_id,
@@ -167,17 +175,42 @@ impl QueueComponent {
         })
     }
 
+    /// The one seam through which Queue offers an already-normalized row-local
+    /// key or pointer gesture to the shared owner. The owner applies the local
+    /// state transition and returns the closed provider-neutral outcome; Queue
+    /// translates external row intents into its typed Msgs (design.md D3).
+    fn delegate_row_local_input(
+        &mut self,
+        input: RowLocalInput,
+        pointer_target: Option<QueueSlotId>,
+    ) -> RowLocalOutcome<QueueSlotId> {
+        self.carrier.delegate(input, pointer_target)
+    }
+
+    /// The scope/slot pair for Queue's current selection.
+    fn selected_slot(&self) -> Option<(QueueScope, QueueSlotId)> {
+        self.carrier
+            .selected_target()
+            .map(|&slot_id| (self.scope, slot_id))
+    }
+
+    /// Move the shared owner into the active presentation when they diverge.
+    /// Queue keeps the Wide presentation in every panel mode (spec), so this
+    /// preserves the fixed-row contract while keeping the owner behind the
+    /// carrier's presentation seam.
+    fn ensure_carrier(&mut self) {
+        self.carrier
+            .ensure_presentation(Presentation::Wide, self.area.height.max(1) as usize);
+    }
+
     fn move_cursor(&mut self, delta: i64) -> Option<Msg> {
-        self.list.move_selection(delta);
-        self.cursor_message()
+        match self.delegate_row_local_input(RowLocalInput::Move(delta), None) {
+            RowLocalOutcome::SelectedTargetChanged(_) => self.cursor_message(),
+            _ => None,
+        }
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        let selected = || {
-            self.list
-                .selected_target()
-                .map(|&slot_id| (self.scope, slot_id))
-        };
         match key.code {
             Key::Char('[')
                 if !key
@@ -189,7 +222,7 @@ impl QueueComponent {
                 // Scope is preassigned here, before the request reaches the
                 // shell, so the set_content scope-change reset would not fire;
                 // the component resets its own scroll itself (D3).
-                self.list.set_scroll(0);
+                self.carrier.set_scroll(0);
                 return Some(Msg::Queue(QueueRequest::Scope(self.scope)));
             }
             Key::Char(']')
@@ -202,7 +235,7 @@ impl QueueComponent {
                 // Scope is preassigned here, before the request reaches the
                 // shell, so the set_content scope-change reset would not fire;
                 // the component resets its own scroll itself (D3).
-                self.list.set_scroll(0);
+                self.carrier.set_scroll(0);
                 return Some(Msg::Queue(QueueRequest::Scope(self.scope)));
             }
             Key::Left | Key::Right if key.modifiers == tuirealm::event::KeyModifiers::SHIFT => {
@@ -215,15 +248,9 @@ impl QueueComponent {
                 )));
             }
             Key::Up if key.modifiers.is_empty() => {
-                if self.list.cursor() == 0 {
-                    return None;
-                }
                 return self.move_cursor(-1);
             }
             Key::Down if key.modifiers.is_empty() => {
-                if self.list.cursor() + 1 >= self.list.selectable_len() {
-                    return None;
-                }
                 return self.move_cursor(1);
             }
             Key::PageUp if key.modifiers.is_empty() => {
@@ -233,23 +260,31 @@ impl QueueComponent {
                 return self.move_cursor(self.area.height.saturating_sub(1).max(1) as i64);
             }
             Key::Home if key.modifiers.is_empty() => {
-                self.list.select_first();
+                self.delegate_row_local_input(RowLocalInput::First, None);
                 return self.cursor_message();
             }
             Key::End if key.modifiers.is_empty() => {
-                self.list.select_last();
+                self.delegate_row_local_input(RowLocalInput::Last, None);
                 return self.cursor_message();
             }
             Key::Enter => {
-                return selected()
-                    .map(|(scope, slot_id)| Msg::Queue(QueueRequest::Play { scope, slot_id }));
+                return match self.delegate_row_local_input(RowLocalInput::Activate, None) {
+                    RowLocalOutcome::External(RowIntent::Activate(slot_id)) => {
+                        Some(Msg::Queue(QueueRequest::Play {
+                            scope: self.scope,
+                            slot_id,
+                        }))
+                    }
+                    _ => None,
+                };
             }
             Key::Delete => {
-                return selected()
+                return self
+                    .selected_slot()
                     .map(|(scope, slot_id)| Msg::Queue(QueueRequest::Remove { scope, slot_id }));
             }
             Key::Up if key.modifiers.contains(tuirealm::event::KeyModifiers::SHIFT) => {
-                return selected().map(|(scope, slot_id)| {
+                return self.selected_slot().map(|(scope, slot_id)| {
                     Msg::Queue(QueueRequest::Move {
                         scope,
                         slot_id,
@@ -258,7 +293,7 @@ impl QueueComponent {
                 });
             }
             Key::Down if key.modifiers.contains(tuirealm::event::KeyModifiers::SHIFT) => {
-                return selected().map(|(scope, slot_id)| {
+                return self.selected_slot().map(|(scope, slot_id)| {
                     Msg::Queue(QueueRequest::Move {
                         scope,
                         slot_id,
@@ -295,12 +330,17 @@ impl QueueComponent {
                 // `.` is a selection-dependent chord the focused component
                 // owns (CONTEXT.md "Global chord"): emit the queue context-menu
                 // request for the currently selected row.
-                return Some(Msg::Shell(ShellRequest::QueueContextMenu {
-                    slot_id: self.list.selected_target().copied(),
-                }));
+                return match self.delegate_row_local_input(RowLocalInput::Context, None) {
+                    RowLocalOutcome::External(RowIntent::Context(slot_id)) => {
+                        Some(Msg::Shell(ShellRequest::QueueContextMenu {
+                            slot_id: Some(slot_id),
+                        }))
+                    }
+                    _ => Some(Msg::Shell(ShellRequest::QueueContextMenu { slot_id: None })),
+                };
             }
             Key::Char('i') => {
-                return selected().map(|(scope, slot_id)| {
+                return self.selected_slot().map(|(scope, slot_id)| {
                     Msg::Shell(ShellRequest::QueueIntent(QueueIntent::Navigate {
                         scope,
                         slot_id,
@@ -341,10 +381,10 @@ impl QueueComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Scroll { at, delta } => {
-                if !self.list.claims_current_point(at) {
+                if !self.carrier.claims_current_point(at) {
                     return None;
                 }
-                self.list.move_selection(delta);
+                self.delegate_row_local_input(RowLocalInput::Wheel { at, delta }, None);
                 // Return a framework-visible claim after mutating local state;
                 // dropping the message would let the framework's mutation be
                 // discarded by the mouse fold.
@@ -354,31 +394,39 @@ impl QueueComponent {
                 if let Some(scope) = self.claim_scope_pill(at) {
                     return Some(Msg::Shell(ShellRequest::QueueScopeClick { scope }));
                 }
-                if !self.list.claims_current_point(at) {
+                if !self.carrier.claims_current_point(at) {
                     return None;
                 }
-                self.drag_grab = self.claim_slot(at);
+                let target = self.carrier.resolve_current_point(at).copied();
+                if let Some(target) = target {
+                    self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
+                }
+                self.drag_grab = target;
                 Some(Msg::Shell(ShellRequest::QueueRowClick {
-                    slot_id: self.list.selected_target().copied(),
+                    slot_id: self.carrier.selected_target().copied(),
                 }))
             }
             MouseGesture::DoubleClick(at) => {
                 if let Some(scope) = self.claim_scope_pill(at) {
                     return Some(Msg::Shell(ShellRequest::QueueScopeClick { scope }));
                 }
-                if !self.list.claims_current_point(at) {
+                if !self.carrier.claims_current_point(at) {
                     return None;
                 }
-                self.claim_slot(at);
+                let target = self.carrier.resolve_current_point(at).copied();
+                if let Some(target) = target {
+                    self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
+                }
                 Some(Msg::Shell(ShellRequest::QueueRowActivate {
-                    slot_id: self.list.selected_target().copied(),
+                    slot_id: self.carrier.selected_target().copied(),
                 }))
             }
             MouseGesture::RightClick(at) => {
                 // Legacy parity: a right-click on blank queue space opens no
                 // menu. Only resolve a menu when the click lands on a row —
                 // never fall back to the prior selection (design.md D4).
-                let slot_id = self.claim_slot(at)?;
+                let slot_id = self.carrier.resolve_current_point(at).copied()?;
+                self.delegate_row_local_input(RowLocalInput::ContextClick(at), Some(slot_id));
                 Some(Msg::Shell(ShellRequest::QueueRowContextMenu {
                     slot_id: Some(slot_id),
                     anchor: (mouse.column, mouse.row),
@@ -386,11 +434,11 @@ impl QueueComponent {
             }
             MouseGesture::Drag { to, .. } => {
                 let grabbed = self.drag_grab?;
-                let resolved = self.list.resolve_current_point(to).copied()?;
+                let resolved = self.carrier.resolve_current_point(to).copied()?;
                 if resolved == grabbed {
                     return None;
                 }
-                self.list.select_target(&grabbed);
+                self.delegate_row_local_input(RowLocalInput::Click(to), Some(grabbed));
                 Some(Msg::Queue(QueueRequest::MoveTo {
                     scope: self.scope,
                     slot_id: grabbed,
@@ -409,34 +457,23 @@ impl QueueComponent {
     fn claim_scope_pill(&mut self, at: Position) -> Option<QueueScope> {
         let &scope = self.scope_regions.resolve(at)?;
         self.scope = scope;
-        self.list.set_scroll(0);
+        self.carrier.set_scroll(0);
         Some(scope)
-    }
-
-    /// Resolve the slot under `at` from the embedded control and pin the
-    /// selection to it (a blank click keeps the previous slot, preserving the
-    /// legacy no-op). Returns the resolved slot, if any.
-    fn claim_slot(&mut self, at: Position) -> Option<QueueSlotId> {
-        let slot_id = self.list.resolve_current_point(at).copied();
-        if let Some(id) = slot_id {
-            self.list.select_target(&id);
-        }
-        slot_id
     }
 
     #[cfg(test)]
     pub(crate) fn test_selected_target(&self) -> Option<QueueSlotId> {
-        self.list.selected_target().copied()
+        self.carrier.selected_target().copied()
     }
 
     #[cfg(test)]
     pub(crate) fn test_cursor(&self) -> usize {
-        self.list.cursor()
+        self.carrier.cursor()
     }
 
     #[cfg(test)]
     pub(crate) fn test_scroll(&self) -> usize {
-        self.list.scroll()
+        self.carrier.scroll()
     }
 
     #[cfg(test)]
@@ -460,6 +497,7 @@ impl Component for QueueComponent {
         // previous area when this panel is hidden or resized: stale geometry
         // would repaint the old queue panel and leave a ghost behind.
         self.area = area;
+        self.ensure_carrier();
         self.geometry = QueueRenderGeometry::default();
         if let (Some(title_area), Some(title)) = (self.title_area, self.title.as_ref()) {
             render_queue_title_content(frame, title_area, title, &mut self.geometry);
@@ -473,22 +511,22 @@ impl Component for QueueComponent {
             self.scope_regions
                 .push(self.geometry.scope_remote_area, QueueScope::Remote);
         }
-        self.list.set_paint_policy(WideMediaListPaintPolicy::new(
+        render_queue_body(
+            frame,
+            area,
+            QueuePresentation::Wide(self.carrier.wide_mut()),
             self.focused,
-            SelectedRowSurface::OwningSurface,
             self.throbber,
-        ));
-        Component::view(&mut self.list, frame, area);
+        );
         if area.height < 1 {
             return;
         }
-        if self.list.is_empty() {
+        if self.carrier.is_empty() {
             frame.render_widget(
                 Paragraph::new(self.empty_text.clone())
                     .style(Style::default().fg(palette::TEXT_MUTED)),
                 area,
             );
-            return;
         }
         // The persistent canonical child is the sole Queue body painter and
         // retains the current painted row geometry for later point resolution.
@@ -512,6 +550,9 @@ impl Component for QueueComponent {
 
 impl AppComponent<Msg, UserEvent> for QueueComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
+        // Keep the shared owner in the presentation the fixed Queue contract
+        // selects before any row-local input touches it (design.md D1).
+        self.ensure_carrier();
         match event {
             Event::Keyboard(key) => self.handle_key(key),
             Event::Mouse(mouse) => self.handle_mouse(mouse),

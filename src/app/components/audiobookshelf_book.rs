@@ -1,3 +1,14 @@
+//! Interactive Component for the Audiobookshelf book library.
+//!
+//! The shell projects validated browse content into this stable browser
+//! instance. One shared canonical book owner (a [`MediaListCarrier`]) moves
+//! between the Wide and Inline presentations and is authoritative for the book
+//! cursor, scroll, and selected target; a second canonical chapter/audio-part
+//! owner is authoritative for the focused chapter row. The component keeps only
+//! the parent-owned chapter-pane focus, the surname-bucket chrome, and typed
+//! shell intents. Row-local input reaches the owners through the common
+//! delegation seam (design.md D3/D5).
+
 use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
@@ -6,15 +17,21 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEvent
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{InlineMediaBrowser, ViewportAnchor, WideMediaList};
+use super::media_list::{
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
+    WideMediaList,
+};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use super::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, Msg, ShellRequest};
+use super::msg::{
+    AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, Msg, ShellRequest,
+};
 use super::user_event::UserEvent;
 use crate::app::render::{
-    render_audiobookshelf_book_content, wide_hero_presentation, AudiobookshelfBookGeometry,
-    BookInteraction, HomeImagePaint,
+    book_rows, render_audiobookshelf_book_content, wide_hero_presentation,
+    AudiobookshelfBookGeometry, BookChapterPresentation, BookInteraction, BookPresentation,
+    HomeImagePaint,
 };
-use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
+use crate::app::types_audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 
 pub struct AudiobookshelfBookComponent {
     state: AudiobookshelfBookBrowseState,
@@ -22,11 +39,12 @@ pub struct AudiobookshelfBookComponent {
     /// the shell snapshot wholesale; only later pushes reset stale
     /// component-owned fields (split-audiobookshelf-cursor-ownership D4).
     initialized: bool,
-    /// Component-owned interaction state, never present on the projected
-    /// content type (split-browse-state-interaction-fields task 2.2).
-    chapter_selection: Option<usize>,
+    /// Parent-owned chapter-pane focus, separate from the chapter owner's
+    /// selected row (design.md D5). Entering/leaving focus never moves the
+    /// chapter owner's selection; the owner re-parks it only at discrete
+    /// book-identity re-projection boundaries.
+    chapter_focused: bool,
     selected_bucket: usize,
-    browser_offset: usize,
     focused: bool,
     images_enabled: bool,
     geometry: AudiobookshelfBookGeometry,
@@ -35,20 +53,18 @@ pub struct AudiobookshelfBookComponent {
     /// must follow the rendered wide/chapter geometry rather than that state.
     chapters_visible: bool,
     image_paint: Option<HomeImagePaint>,
-    /// Persistent narrow-presentation control, fed the canonical book-row
-    /// projection by the renderer each frame. Never constructed during a
-    /// render pass. The wide rail composes its own per-frame `WideMediaList`.
-    narrow_list: InlineMediaBrowser<String>,
-    /// Parent-owned chapter control for the wide hero workspace.
-    chapter_list: WideMediaList<String>,
-    /// One-shot `ViewportAnchor` carried across a Wide<->Narrow breakpoint
-    /// flip (§2.5); consumed by the next `view`.
-    pending_anchor: Option<ViewportAnchor<String>>,
+    /// One shared canonical book owner, carried by exactly one of the Wide and
+    /// Inline presentations (design.md D1/D2). It owns the book cursor, scroll,
+    /// and selected target across a breakpoint change; the two adapters are
+    /// never synchronized.
+    carrier: MediaListCarrier<String>,
+    /// The persistent canonical chapter/audio-part owner (design.md D5):
+    /// authoritative for the focused chapter row, scrolling, painting, and
+    /// retained hits. Its rows are projected from the selected book's detail
+    /// before view.
+    chapter_list: WideMediaList<usize>,
     /// The presentation the last `view` painted; `None` before the first paint.
-    last_wide: Option<bool>,
-    /// Selected-row screen offset captured each `view`, so `viewport_anchor`
-    /// can report the outgoing control's anchor at a flip.
-    painted_row_offset: Option<usize>,
+    wide: bool,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
@@ -65,30 +81,38 @@ impl AudiobookshelfBookComponent {
                 },
             ),
             initialized: false,
-            chapter_selection: None,
+            chapter_focused: false,
             selected_bucket: 0,
-            browser_offset: 0,
             focused: false,
             images_enabled: false,
             geometry: AudiobookshelfBookGeometry::default(),
             chapters_visible: false,
             image_paint: None,
-            narrow_list: InlineMediaBrowser::new(),
+            carrier: MediaListCarrier::new(Presentation::Inline),
             chapter_list: WideMediaList::new(),
-            pending_anchor: None,
-            last_wide: None,
-            painted_row_offset: None,
+            wide: false,
             mouse_gestures: MouseGestureState::new(),
         }
     }
 
-    /// The outgoing control's `ViewportAnchor` for the last painted
-    /// presentation (mirrors `AudiobookshelfPodcastComponent::viewport_anchor`).
-    fn viewport_anchor(&self) -> Option<ViewportAnchor<String>> {
-        Some(ViewportAnchor {
-            selected_target: self.state.selected_id.clone()?,
-            selected_row_offset: self.painted_row_offset?,
-        })
+    /// The presentation the painted breakpoint currently selects (design.md
+    /// D2).
+    fn active_presentation(&self) -> Presentation {
+        if self.wide {
+            Presentation::Wide
+        } else {
+            Presentation::Inline
+        }
+    }
+
+    /// Move the shared book owner into the active presentation when they
+    /// diverge. A responsive change reads the same owner and preserves only the
+    /// outgoing selected-row viewport offset (design.md D1); no cursor, scroll,
+    /// or selection is copied between presentations.
+    fn ensure_carrier(&mut self) {
+        let viewport_height = self.geometry.left_area.height.max(1) as usize;
+        self.carrier
+            .ensure_presentation(self.active_presentation(), viewport_height);
     }
 
     /// Test-only: drive framework focus the way `Component::attr` does.
@@ -103,7 +127,7 @@ impl AudiobookshelfBookComponent {
         images_enabled: bool,
     ) {
         // Content and interaction are separate types now: the projected
-        // snapshot carries no `chapter_selection` / `selected_bucket`, so
+        // snapshot carries no `chapter_focused` / `selected_bucket`, so
         // adopting it wholesale cannot clobber them and there is nothing to
         // save and restore (split-browse-state-interaction-fields task 2.2).
         // Whether the book the component was showing survived the new content
@@ -116,11 +140,10 @@ impl AudiobookshelfBookComponent {
                     .any(|book| &book.library_item_id == prior)
             });
         self.state = snapshot.clone();
-        if self.initialized && !survived {
-            // The selected book dropped out of the new content: reset the
-            // derived local state rather than adopting anything.
-            self.chapter_selection = None;
-            self.browser_offset = 0;
+        let identity_changed = self.initialized && !survived;
+        if identity_changed {
+            self.chapter_focused = false;
+            self.state.select(0);
         }
         // Re-anchor the surname-bucket pill onto the selected book
         // (book-browsing spec: refresh/paging preserves the selected book
@@ -137,8 +160,20 @@ impl AudiobookshelfBookComponent {
         self.selected_bucket = self
             .selected_bucket
             .min(self.state.buckets.len().saturating_sub(1));
+        self.set_book_rows();
+        if !self.initialized {
+            if let Some(target) = self.state.selected_id.clone() {
+                self.carrier.select_target(&target);
+            }
+        } else if identity_changed {
+            self.carrier.select_first();
+        }
         self.initialized = true;
         self.images_enabled = images_enabled;
+        self.project_chapter_rows();
+        if identity_changed {
+            self.chapter_list.select_first();
+        }
     }
 
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<HomeImagePaint> {
@@ -151,18 +186,86 @@ impl AudiobookshelfBookComponent {
         &self.geometry
     }
 
-    pub(in crate::app) fn chapter_selection(&self) -> Option<usize> {
-        self.chapter_selection
+    /// Whether the parent-owned chapter pane currently has focus (design.md
+    /// D5). Independent of the chapter owner's selected row.
+    pub(in crate::app) fn chapter_focused(&self) -> bool {
+        self.chapter_focused
+    }
+
+    /// Enter the parent-owned chapter pane without moving the chapter owner's
+    /// selection (design.md D5): focus is not selection.
+    pub(in crate::app) fn enter_chapter_focus(&mut self) {
+        self.chapter_focused = true;
+    }
+
+    /// Leave the parent-owned chapter pane without moving the chapter owner's
+    /// selection or scroll (design.md D5).
+    pub(in crate::app) fn clear_chapter_focus(&mut self) {
+        self.chapter_focused = false;
+    }
+
+    /// The chapter owner's book-qualified stable target, resolved only while
+    /// the chapter pane holds focus (design.md D4/D5). Activation never
+    /// re-derives it from a numeric display position.
+    fn chapter_target(&self) -> Option<BookChapterTarget> {
+        if !self.chapter_focused {
+            return None;
+        }
+        let index = *self.chapter_list.selected_target()?;
+        Some(BookChapterTarget::new(
+            self.state.selected_id.clone()?,
+            index,
+        ))
+    }
+
+    /// The active book owner's stable target index in the projected catalog.
+    fn selected_book_index(&self) -> Option<usize> {
+        let target = self.carrier.selected_target()?;
+        self.state
+            .books
+            .iter()
+            .position(|book| &book.library_item_id == target)
     }
 
     #[cfg(test)]
     pub(crate) fn selected_book_id(&self) -> Option<&str> {
-        self.state.selected_id.as_deref()
+        self.carrier.selected_target().map(String::as_str)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn selected_row_offset_for_test(&self) -> Option<usize> {
+        let height = self.geometry.left_area.height.max(1) as usize;
+        if self.carrier.active() == Presentation::Wide {
+            self.carrier.wide().selected_row_offset(height)
+        } else {
+            self.carrier.inline().selected_row_offset(height)
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn book_row_rect_for_test(&self, row: usize) -> Option<Rect> {
+        let content = if self.carrier.active() == Presentation::Wide {
+            self.carrier.wide().current_content_rect()?
+        } else {
+            self.carrier.inline().current_content_rect()?
+        };
+        Some(Rect {
+            y: content.y + row as u16,
+            height: 1,
+            ..content
+        })
     }
 
     #[cfg(test)]
     pub(crate) fn selected_bucket(&self) -> usize {
         self.selected_bucket
+    }
+
+    /// Test-only: the chapter owner's retained current-frame content rect, the
+    /// shared geometry the chapter hit resolution uses (design.md D6).
+    #[cfg(test)]
+    pub(crate) fn chapter_content_rect_for_test(&self) -> Option<Rect> {
+        self.chapter_list.current_content_rect()
     }
 
     /// The page stride from the component's own painted geometry
@@ -176,48 +279,142 @@ impl AudiobookshelfBookComponent {
             .max(1)
     }
 
-    fn book_request(&self) -> Msg {
-        Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::Book(self.state.cursor()),
-        ))
+    fn book_request(&self) -> Option<Msg> {
+        Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::Book(self.carrier.selected_target().cloned()),
+        )))
     }
 
-    fn bucket_request(&self) -> Msg {
-        Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+    fn bucket_request(&self) -> Option<Msg> {
+        Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
             AudiobookshelfBookMove::Bucket(self.selected_bucket),
-        ))
+        )))
     }
 
-    fn chapter_focus_request(&self) -> Msg {
-        Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::ChapterFocus(self.chapter_selection),
-        ))
+    fn chapter_focus_request(&self) -> Option<Msg> {
+        Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::ChapterFocus(self.chapter_target()),
+        )))
     }
 
-    fn move_book(&mut self, delta: i64) {
-        let Some(bucket) = self.state.buckets.get(self.selected_bucket) else {
+    /// The one seam through which the component offers an already-normalized
+    /// row-local key or pointer gesture to the shared book owner. The owner
+    /// applies the local state transition and returns the closed
+    /// provider-neutral outcome; the component mirrors the owner's selection
+    /// into the projected snapshot and returns the typed book-move request
+    /// (design.md D3).
+    fn move_book(&mut self, input: RowLocalInput) -> Option<Msg> {
+        self.carrier.delegate(input, None);
+        self.sync_book_from_owner();
+        self.book_request()
+    }
+
+    /// Mirror the book owner's stable selection into the projected snapshot,
+    /// resetting the derived chapter-pane focus and re-projecting the chapter
+    /// rows only at a discrete book-identity boundary (design.md D5).
+    fn sync_book_from_owner(&mut self) {
+        let Some(target) = self.carrier.selected_target().cloned() else {
             return;
         };
-        if bucket.end <= bucket.start {
+        let Some(index) = self
+            .state
+            .books
+            .iter()
+            .position(|book| book.library_item_id == target)
+        else {
+            return;
+        };
+        let identity_changed = self.state.selected_id.as_deref() != Some(target.as_str());
+        self.state.select(index);
+        if identity_changed {
+            self.chapter_focused = false;
+            self.project_chapter_rows();
+            self.chapter_list.select_first();
+        }
+    }
+
+    /// Discrete book re-anchor (bucket jump, Home/End, pointer click): the
+    /// stable target is explicitly selected on the owner before any derived
+    /// state is reset (design.md D5).
+    fn select_book_index(&mut self, index: usize) {
+        let Some(target) = self
+            .state
+            .books
+            .get(index)
+            .map(|book| book.library_item_id.clone())
+        else {
+            return;
+        };
+        if self.carrier.select_target(&target) {
+            self.sync_book_from_owner();
+        }
+    }
+
+    /// Project the selected surname bucket's canonical book rows into the book
+    /// owner before view (design.md D6). An unchanged projection keeps the
+    /// retained frame valid.
+    fn set_book_rows(&mut self) {
+        let rows = book_rows(&self.state, self.selected_bucket);
+        if self.carrier.rows() != rows.as_slice() {
+            self.carrier.set_content(rows);
+        }
+    }
+
+    /// Project the selected book's canonical chapter/audio-part rows into the
+    /// chapter owner before view (design.md D6). The row's stable target is the
+    /// chapter/audio-part discriminator; the typed `BookChapterTarget` pairs it
+    /// with the selected book identity (design.md D4).
+    fn project_chapter_rows(&mut self) {
+        let rows = self
+            .state
+            .selected_id
+            .as_deref()
+            .map(|id| chapter_rows(&self.state, id))
+            .unwrap_or_default();
+        if self.chapter_list.rows() != rows.as_slice() {
+            self.chapter_list.set_content(rows);
+        }
+    }
+
+    fn select_bucket(&mut self, bucket_pos: usize) {
+        let Some(bucket) = self.state.buckets.get(bucket_pos).copied() else {
+            return;
+        };
+        self.selected_bucket = bucket_pos;
+        self.set_book_rows();
+        let keep = self
+            .state
+            .selected_id
+            .as_deref()
+            .and_then(|id| {
+                self.state
+                    .books
+                    .iter()
+                    .position(|book| book.library_item_id == id)
+            })
+            .filter(|index| (bucket.start..bucket.end).contains(index));
+        self.select_book_index(keep.unwrap_or(bucket.start));
+    }
+
+    fn cycle_bucket(&mut self, delta: i64) {
+        let count = self.state.buckets.len();
+        if count == 0 {
             return;
         }
-        let cursor = (self.state.cursor() as i64).clamp(bucket.start as i64, bucket.end as i64 - 1);
-        self.state
-            .select((cursor + delta).clamp(bucket.start as i64, bucket.end as i64 - 1) as usize);
+        let next = (self.selected_bucket as i64 + delta).rem_euclid(count as i64) as usize;
+        self.select_bucket(next);
+    }
+
+    fn select_bucket_edge(&mut self, end: bool) {
+        if let Some(bucket) = self.state.buckets.get(self.selected_bucket).copied() {
+            if bucket.end > bucket.start {
+                self.select_book_index(if end { bucket.end - 1 } else { bucket.start });
+            }
+        }
     }
 
     fn move_chapter(&mut self, delta: i64) {
-        let Some(id) = self.state.selected_id.as_deref() else {
-            return;
-        };
-        let count = self.state.visible_rows(id).len();
-        if count > 0 {
-            self.chapter_selection = Some(crate::app::ui_util::move_cursor(
-                self.chapter_selection.unwrap_or(0),
-                delta,
-                count,
-            ));
-        }
+        self.chapter_list.delegate(RowLocalInput::Move(delta), None);
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -225,66 +422,64 @@ impl AudiobookshelfBookComponent {
             return None;
         }
 
-        let chapters_focused = self.chapters_visible && self.chapter_selection.is_some();
+        let chapters_focused = self.chapters_visible && self.chapter_focused;
         match key.code {
             Key::Char('[') if key.modifiers.is_empty() => {
                 self.cycle_bucket(-1);
-                Some(self.bucket_request())
+                self.bucket_request()
             }
             Key::Char(']') if key.modifiers.is_empty() => {
                 self.cycle_bucket(1);
-                Some(self.bucket_request())
+                self.bucket_request()
             }
             Key::Up | Key::Char('k') if chapters_focused => {
                 self.move_chapter(-1);
-                Some(self.chapter_focus_request())
+                self.chapter_focus_request()
             }
             Key::Down | Key::Char('j') if chapters_focused => {
                 self.move_chapter(1);
-                Some(self.chapter_focus_request())
+                self.chapter_focus_request()
             }
             Key::Right if chapters_focused => {
-                self.chapter_selection = None;
-                Some(self.chapter_focus_request())
+                self.clear_chapter_focus();
+                self.chapter_focus_request()
             }
-            Key::Left if self.chapters_visible && !chapters_focused => {
-                self.chapter_selection = Some(0);
-                Some(self.chapter_focus_request())
+            Key::Left if self.chapters_visible && !self.chapter_focused => {
+                self.enter_chapter_focus();
+                self.chapter_focus_request()
             }
-            Key::Up | Key::Char('k') => {
-                self.move_book(-1);
-                Some(self.book_request())
-            }
-            Key::Down | Key::Char('j') => {
-                self.move_book(1);
-                Some(self.book_request())
-            }
+            Key::Up | Key::Char('k') => self.move_book(RowLocalInput::Move(-1)),
+            Key::Down | Key::Char('j') => self.move_book(RowLocalInput::Move(1)),
             Key::PageUp if !chapters_focused => {
-                self.move_book(-(self.page_size() as i64));
-                Some(self.book_request())
+                let rows = self.page_size() as i64;
+                self.move_book(RowLocalInput::Move(-rows))
             }
             Key::PageDown if !chapters_focused => {
-                self.move_book(self.page_size() as i64);
-                Some(self.book_request())
+                let rows = self.page_size() as i64;
+                self.move_book(RowLocalInput::Move(rows))
             }
             Key::Home if !chapters_focused => {
                 self.select_bucket_edge(false);
-                Some(self.book_request())
+                self.book_request()
             }
             Key::End if !chapters_focused => {
                 self.select_bucket_edge(true);
-                Some(self.book_request())
+                self.book_request()
             }
             Key::Esc | Key::Backspace if chapters_focused => {
-                self.chapter_selection = None;
-                Some(self.chapter_focus_request())
+                self.clear_chapter_focus();
+                self.chapter_focus_request()
             }
-            Key::Char(' ') if chapters_focused => Some(Msg::Shell(
-                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::ActivateChapter),
-            )),
-            Key::Enter if chapters_focused => Some(Msg::Shell(
-                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::ActivateChapter),
-            )),
+            Key::Char(' ') if chapters_focused => {
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+                    AudiobookshelfBookIntent::ActivateChapter(self.chapter_target()),
+                )))
+            }
+            Key::Enter if chapters_focused => {
+                Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+                    AudiobookshelfBookIntent::ActivateChapter(self.chapter_target()),
+                )))
+            }
             Key::Char(' ') => Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
                 AudiobookshelfBookIntent::Play,
             ))),
@@ -302,35 +497,8 @@ impl AudiobookshelfBookComponent {
         }
     }
 
-    fn cycle_bucket(&mut self, delta: i64) {
-        let count = self.state.buckets.len();
-        if count > 0 {
-            self.selected_bucket =
-                (self.selected_bucket as i64 + delta).rem_euclid(count as i64) as usize;
-            if let Some(bucket) = self.state.buckets.get(self.selected_bucket).copied() {
-                if !(bucket.start..bucket.end).contains(&self.state.cursor()) {
-                    self.state.select(bucket.start);
-                }
-            }
-        }
-    }
-
-    fn select_bucket_edge(&mut self, end: bool) {
-        if let Some(bucket) = self.state.buckets.get(self.selected_bucket).copied() {
-            if bucket.end > bucket.start {
-                self.state
-                    .select(if end { bucket.end - 1 } else { bucket.start });
-            }
-        }
-    }
-
-    /// Handle a TuiRealm mouse event via the private `MouseGestureState`
-    /// (ADR 0024, design.md D3). Row identity comes from the painted row
-    /// rects (`book_rows`/`chapter_rows`) — the wide rail is composed
-    /// per-frame in the renderer and is not a persistent control, so
-    /// `resolve_point` does not apply there (task 4.1). Effects reuse the
-    /// existing move/intent Msgs (task 4.5). Book has no keyboard
-    /// context-menu action (task 4.6), so right-click is ignored.
+    /// Handle pointer input using retained geometry from the active book owner
+    /// and the chapter owner (design.md D6).
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         // The book surface does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
@@ -344,70 +512,52 @@ impl AudiobookshelfBookComponent {
                     .iter()
                     .find(|(rect, _)| rect.contains(at))
                 {
-                    if let Some(range) = self.state.buckets.get(*bucket).copied() {
-                        self.selected_bucket = *bucket;
-                        self.state.select(range.start);
-                    }
-                    return Some(self.bucket_request());
+                    self.select_bucket(*bucket);
+                    return self.bucket_request();
                 }
-                if let Some((_, index)) = self
-                    .geometry
-                    .book_rows
-                    .iter()
-                    .find(|(rect, _)| rect.contains(at))
-                {
-                    self.state.select(*index);
-                    return Some(self.book_request());
+                if let Some(target) = self.carrier.resolve_current_point(at).cloned() {
+                    self.carrier
+                        .delegate(RowLocalInput::Click(at), Some(target));
+                    self.sync_book_from_owner();
+                    return self.book_request();
                 }
                 if self.chapters_visible {
-                    if let Some((_, index)) = self
-                        .geometry
-                        .chapter_rows
-                        .iter()
-                        .find(|(rect, _)| rect.contains(at))
-                    {
-                        self.chapter_selection = Some(*index);
-                        return Some(self.chapter_focus_request());
+                    if let Some(target) = self.chapter_list.resolve_current_point(at).copied() {
+                        self.enter_chapter_focus();
+                        self.chapter_list
+                            .delegate(RowLocalInput::Click(at), Some(target));
+                        return self.chapter_focus_request();
                     }
                 }
                 None
             }
             MouseGesture::DoubleClick(at) => {
-                if let Some((_, index)) = self
-                    .geometry
-                    .book_rows
-                    .iter()
-                    .find(|(rect, _)| rect.contains(at))
-                {
-                    self.state.select(*index);
-                    return Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
-                        AudiobookshelfBookIntent::Activate,
-                    )));
-                }
-                None
+                self.carrier
+                    .resolve_current_point(at)
+                    .cloned()
+                    .map(|target| {
+                        self.carrier
+                            .delegate(RowLocalInput::Click(at), Some(target));
+                        self.sync_book_from_owner();
+                        Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+                            AudiobookshelfBookIntent::Activate,
+                        ))
+                    })
             }
             MouseGesture::Scroll { at, delta } => {
-                let chapter_focus = self.chapters_visible && self.chapter_selection.is_some();
-                let claimed = if chapter_focus {
-                    self.geometry
-                        .chapter_rows
-                        .iter()
-                        .any(|(rect, _)| rect.contains(at))
-                } else {
-                    self.geometry
-                        .book_rows
-                        .iter()
-                        .any(|(rect, _)| rect.contains(at))
-                };
-                if !claimed {
-                    return None;
-                }
+                let chapter_focus = self.chapters_visible && self.chapter_focused;
                 if chapter_focus {
+                    if !self.chapter_list.claims_current_point(at) {
+                        return None;
+                    }
                     self.move_chapter(delta);
-                    return Some(self.chapter_focus_request());
+                    self.chapter_focus_request()
+                } else {
+                    if !self.carrier.claims_current_point(at) {
+                        return None;
+                    }
+                    self.move_book(RowLocalInput::Move(delta))
                 }
-                self.move_book(delta);
-                Some(self.book_request())
             }
             _ => None,
         }
@@ -422,6 +572,48 @@ impl AudiobookshelfBookComponent {
     }
 }
 
+/// Canonical row projection for one book's chapter/audio-part detail: one
+/// selectable `Item` per visible row, keyed by its stable row discriminator.
+/// Chapters fall back to audio files when the book exposes no chapters
+/// (book-browsing spec: never an empty or broken list state).
+fn chapter_rows(state: &AudiobookshelfBookBrowseState, id: &str) -> Vec<MediaListRow<usize>> {
+    state
+        .visible_rows(id)
+        .into_iter()
+        .map(|row| {
+            // The row target is the stable Service discriminator -- the chapter
+            // number or the audio-part index -- never the `enumerate()` display
+            // position, so a detail refresh that re-composes `visible_rows`
+            // cannot resolve a stale target to a different row (design.md D4).
+            let (target, primary, duration) = match row {
+                BookRow::Chapter {
+                    id,
+                    title,
+                    start,
+                    end,
+                } => (
+                    id,
+                    title,
+                    crate::app::ui_util::list_duration_secs((end - start).max(0.0) as i64),
+                ),
+                BookRow::AudioFile { index, duration } => (
+                    index,
+                    format!("Part {index}"),
+                    crate::app::ui_util::list_duration_secs(duration as i64),
+                ),
+            };
+            MediaListRow::Item {
+                target,
+                primary,
+                trailing: None,
+                duration,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            }
+        })
+        .collect()
+}
+
 impl Default for AudiobookshelfBookComponent {
     fn default() -> Self {
         Self::new()
@@ -434,67 +626,47 @@ impl Component for AudiobookshelfBookComponent {
         // presentation. Clear it before painting a narrow frame so a
         // wide→narrow resize cannot leave keyboard input targeting a hidden
         // chapter pane.
-        let wide = wide_hero_presentation(area).is_some();
-        self.chapters_visible = wide;
+        self.wide = wide_hero_presentation(area).is_some();
+        self.ensure_carrier();
+        self.chapters_visible = self.wide && !self.chapter_list.is_empty();
         if !self.chapters_visible {
-            self.chapter_selection = None;
+            self.chapter_focused = false;
         }
-        // §2.5: at a breakpoint flip carry the outgoing control's anchor into
-        // the incoming one so the selected book keeps its screen-row offset.
-        if let Some(was_wide) = self.last_wide {
-            if was_wide != wide && self.pending_anchor.is_none() {
-                self.pending_anchor = self.viewport_anchor();
-            }
-        }
-        let flip_anchor = self.pending_anchor.take();
-        if let Some(anchor) = &flip_anchor {
-            if let Some(idx) = self
-                .state
-                .books
-                .iter()
-                .position(|book| book.library_item_id == anchor.selected_target)
-            {
-                self.state.select(idx);
-            }
-        }
+        let book_presentation = if self.wide {
+            BookPresentation::Wide(self.carrier.wide_mut())
+        } else {
+            BookPresentation::Inline(self.carrier.inline_mut())
+        };
         self.image_paint = render_audiobookshelf_book_content(
             frame,
             area,
             self.focused,
-            &mut self.state,
+            &self.state,
             BookInteraction {
-                chapter_selection: self.chapter_selection,
+                chapter_focused: self.chapter_focused,
                 selected_bucket: self.selected_bucket,
             },
             self.images_enabled,
             &mut self.geometry,
-            &mut self.browser_offset,
-            &mut self.narrow_list,
-            &mut self.chapter_list,
-            flip_anchor.as_ref(),
+            book_presentation,
+            BookChapterPresentation::Wide(&mut self.chapter_list),
         );
-        self.painted_row_offset = self.geometry.selected_row_offset;
-        self.last_wide = Some(wide);
-        // A wide frame can still have no painted chapter rows (for example
-        // while detail is loading or when the selected book has no chapters).
-        // Do not advertise focus for geometry that was not rendered.
-        if self.geometry.chapter_rows.is_empty() {
-            self.chapters_visible = false;
-            self.chapter_selection = None;
-        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
         None
     }
+
     fn attr(&mut self, attr: Attribute, value: AttrValue) {
         if attr == Attribute::Focus {
             self.focused = matches!(value, AttrValue::Flag(true));
         }
     }
+
     fn state(&self) -> State {
         State::None
     }
+
     fn perform(&mut self, _cmd: Cmd) -> CmdResult {
         CmdResult::NoChange
     }
@@ -503,8 +675,14 @@ impl Component for AudiobookshelfBookComponent {
 impl AppComponent<Msg, UserEvent> for AudiobookshelfBookComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
-            Event::Keyboard(key) => self.handle_key(key),
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Keyboard(key) => {
+                self.ensure_carrier();
+                self.handle_key(key)
+            }
+            Event::Mouse(mouse) => {
+                self.ensure_carrier();
+                self.handle_mouse(mouse)
+            }
             _ => None,
         }
     }

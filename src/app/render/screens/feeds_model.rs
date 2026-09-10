@@ -104,10 +104,9 @@ pub(super) fn format_pub_date(secs: Option<u64>) -> String {
     }
 }
 
-/// Row budget for the feeds hero's text content (design.md decision 6:
-/// element presence -- no image, since feed entries carry no artwork), a
-/// title row (two-column lists only) plus a single metadata line and its
-/// trailing spacer.
+/// Row budget for the feeds hero's text content: an optional title row
+/// (two-column lists only), a single metadata line, and its trailing spacer.
+/// The render call site decides whether artwork is enabled.
 pub(in crate::app::render) fn feed_hero_content_rows(show_title: bool) -> u16 {
     let title_rows = if show_title { HERO_TITLE_ROWS } else { 0 };
     title_rows + 2

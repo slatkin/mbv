@@ -22,6 +22,23 @@ impl WatchedFilter {
         }
     }
 
+    pub fn position(self) -> usize {
+        match self {
+            Self::All => 0,
+            Self::Watched => 1,
+            Self::Unwatched => 2,
+        }
+    }
+
+    pub fn from_position(position: usize) -> Option<Self> {
+        match position {
+            0 => Some(Self::All),
+            1 => Some(Self::Watched),
+            2 => Some(Self::Unwatched),
+            _ => None,
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::All => "All",

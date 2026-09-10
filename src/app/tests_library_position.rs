@@ -518,7 +518,6 @@ fn home_navigation_does_not_persist_library_position_state() {
     // not write library-position state.
     let mut model = crate::app::shell::Model::new(make_app_stub());
     model.home_content.continue_items = make_items(3);
-    model.home_content.continue_cursor = 1;
 
     assert!(model.app.library_position_state.libraries.is_empty());
 }

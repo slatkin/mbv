@@ -3,7 +3,7 @@
 //! They pin two behaviours the `AudiobookshelfBrowseState` content/interaction
 //! split (tasks 3.2–3.4) must not regress:
 //!   1. the selected show is restored on tab re-entry from the saved position;
-//!   2. a component's episode filter and episode-mode selection survive a
+//!   2. a component's episode filter and episode-pane focus survive a
 //!      content refresh that keeps the selected show.
 //!
 //! The reset-on-vanish direction is already covered by
@@ -16,6 +16,8 @@ use super::super::types_tab_selection::TabSelection;
 use crate::app::components::AudiobookshelfPodcastComponent;
 use crate::app::tests::make_app_stub;
 use mbv_core::config::AudiobookshelfSetup;
+use tuirealm::component::AppComponent;
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 fn library() -> mbv_core::audiobookshelf::AudiobookshelfLibrary {
     mbv_core::audiobookshelf::AudiobookshelfLibrary {
@@ -68,18 +70,41 @@ fn show_position_restores_selected_id_after_tab_switch_away_and_back() {
     );
 }
 
+fn episodes() -> Vec<mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode> {
+    ["e1", "e2", "e3"]
+        .iter()
+        .map(
+            |id| mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+                library_item_id: "show-b".into(),
+                episode_id: (*id).into(),
+                title: format!("Episode {id}"),
+                published_at: None,
+                duration_seconds: None,
+            },
+        )
+        .collect()
+}
+
 #[test]
 fn component_episode_filter_and_selection_survive_a_show_refresh() {
     let mut state = AudiobookshelfBrowseState::new(library());
     state.shows = shows(&["a", "b", "c"]);
     state.total = 3;
     state.select(1);
+    state.episodes = Some(episodes());
 
     let mut component = AudiobookshelfPodcastComponent::new();
     component.set_content(&state, false);
     component.set_focused(true);
     component.set_episode_filter(AudiobookshelfEpisodeFilter::Unplayed);
-    component.set_episode_selection(Some(2));
+    component.enter_episode_focus();
+    // Move the episode owner's selection off its first row through the
+    // ordinary delegation seam; the owner, not a destination mirror, holds it.
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.episode_cursor(), 1);
 
     // Refresh that keeps the selected show (show-b): the component's own
     // interaction state must ride through the re-projection unchanged.
@@ -91,9 +116,13 @@ fn component_episode_filter_and_selection_survive_a_show_refresh() {
         AudiobookshelfEpisodeFilter::Unplayed,
         "the episode filter must survive a refresh that keeps the selected show",
     );
+    assert!(
+        component.episode_focused(),
+        "episode-pane focus must survive a refresh that keeps the selected show",
+    );
     assert_eq!(
-        component.episode_selection(),
-        Some(2),
-        "the episode-mode selection must survive a refresh that keeps the selected show",
+        component.episode_cursor(),
+        1,
+        "the episode owner's selected row must survive a refresh that keeps the selected show",
     );
 }

@@ -68,10 +68,19 @@ fn focused_music_track_in_track_mode_resolves_focused_track() {
     let (mut model, id) = wide_track_focus_model(3);
     enter_track_focus(&mut model, &id);
 
-    let (album_id, track) = model
-        .focused_music_track()
-        .expect("focused track should resolve");
-
+    // The component is authoritative: it resolves the owner-selected album and
+    // track and carries both in the typed activation request (D4).
+    let message = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .on(&Event::Keyboard(TuiKeyEvent {
+            code: Key::Enter,
+            modifiers: TuiKeyModifiers::NONE,
+        }));
+    let Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track })) = message else {
+        panic!("expected a track activation, got {message:?}");
+    };
     assert_eq!(album_id, "album-1");
     assert_eq!(track.id, "album-1-track-0");
     assert!(!track.is_folder, "track mode must resolve to the track");
@@ -80,15 +89,22 @@ fn focused_music_track_in_track_mode_resolves_focused_track() {
 #[test]
 fn focused_music_track_falls_back_safely_when_cache_missing() {
     // Async fetch still in flight: `album_tracks_cache` has no entry for
-    // "album-1" yet (the cursor index still resolves to nothing). Must not
-    // panic and the shell target must stay `None`.
-    let (mut model, _) = wide_track_focus_model(0);
+    // "album-1" yet. The component holds no selected track and must not
+    // panic; the shell target stays `None`.
+    let (mut model, id) = wide_track_focus_model(0);
     // `push_tracks(.., 0)` inserts an empty vec; drop even that so the cache
     // genuinely has no entry for the selected album.
     model.app.album_tracks_cache.remove("album-1");
     assert!(!model.app.album_tracks_cache.contains_key("album-1"));
+    let component = model
+        .application
+        .get_component(&id)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<MusicWorkspaceComponent>()
+        .expect("music workspace");
     assert!(
-        model.focused_music_track().is_none(),
+        component.selected_track_item().is_none(),
         "cache-missing focused track must stay None, not panic"
     );
 }
@@ -113,7 +129,7 @@ fn enter_in_track_mode_with_missing_cache_does_not_panic() {
         }));
     assert!(matches!(
         msg,
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate))
+        Some(Msg::Shell(ShellRequest::MusicTrackActivate { .. }))
     ));
     assert_eq!(model.app.libs[0].nav_stack.len(), nav_len_before);
 }
@@ -162,8 +178,14 @@ fn context_menu_for_focused_track_offers_track_scoped_actions_not_folder_actions
     // generic per-item actions, never album-folder scoped ones.
     let (mut model, id) = wide_track_focus_model(3);
     enter_track_focus(&mut model, &id);
-    let (_, track) = model
-        .focused_music_track()
+    let track = model
+        .application
+        .get_component(&id)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<MusicWorkspaceComponent>()
+        .expect("music workspace")
+        .selected_track_item()
         .expect("focused track should resolve");
 
     model.app.open_context_menu_for(track);

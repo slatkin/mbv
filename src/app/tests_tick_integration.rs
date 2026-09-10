@@ -312,16 +312,21 @@ fn wide_music_harness() -> (TickHarness, ComponentId) {
     (harness, id)
 }
 
-fn music_track_cursor(harness: &TickHarness, id: &ComponentId) -> Option<usize> {
-    harness
+/// The focused track-pane row, or `None` when the track pane is unfocused
+/// (design.md D5: focus is parent state, the owner holds the selection).
+fn music_track_focus_row(harness: &TickHarness, id: &ComponentId) -> Option<usize> {
+    let music = harness
         .model()
         .application
         .get_component(id)
         .expect("Music workspace mounted")
         .as_any()
         .downcast_ref::<MusicWorkspaceComponent>()
-        .expect("Music workspace type")
-        .track_cursor()
+        .expect("Music workspace type");
+    music
+        .track_focused()
+        .then(|| music.track_selected_row())
+        .flatten()
 }
 
 fn music_workspace<'a>(
@@ -360,10 +365,10 @@ fn music_library_queue_library_round_trip_keeps_focus_and_pane_state() {
     // state a blur must not disturb.
     harness.inject(key(Key::Enter));
     harness.step();
-    assert_eq!(music_track_cursor(&harness, &id), Some(0));
+    assert_eq!(music_track_focus_row(&harness, &id), Some(0));
     harness.inject(key(Key::Down));
     harness.step();
-    assert_eq!(music_track_cursor(&harness, &id), Some(1));
+    assert_eq!(music_track_focus_row(&harness, &id), Some(1));
 
     // Panel focus moves to Queue through the production sync order.
     harness.model_mut().app.panel_focus = PanelFocus::Queue;
@@ -382,9 +387,9 @@ fn music_library_queue_library_round_trip_keeps_focus_and_pane_state() {
         .expect("tick blurred music");
     assert!(!raw
         .iter()
-        .any(|msg| matches!(msg, Msg::Shell(ShellRequest::MusicTrackActivate))));
+        .any(|msg| matches!(msg, Msg::Shell(ShellRequest::MusicTrackActivate { .. }))));
     assert_eq!(
-        music_track_cursor(&harness, &id),
+        music_track_focus_row(&harness, &id),
         Some(1),
         "blurred Music must not navigate its track pane"
     );
@@ -395,7 +400,7 @@ fn music_library_queue_library_round_trip_keeps_focus_and_pane_state() {
     harness.model_mut().sync_active_destination();
     assert_eq!(harness.model().application.focus(), Some(&id));
     assert_eq!(
-        music_track_cursor(&harness, &id),
+        music_track_focus_row(&harness, &id),
         Some(1),
         "the private track cursor survives the focus round trip"
     );
@@ -409,7 +414,7 @@ fn music_library_queue_library_round_trip_keeps_focus_and_pane_state() {
         .tick(PollStrategy::Once(Duration::from_millis(500)))
         .expect("tick refocused music");
     assert_eq!(
-        music_track_cursor(&harness, &id),
+        music_track_focus_row(&harness, &id),
         Some(0),
         "Music navigates immediately once Library focus returns"
     );
@@ -529,7 +534,7 @@ fn enter_on_inline_search_album_result_defers_to_async_activation() {
         "a failed recursive activation leaves Inline Search open"
     );
     assert_eq!(
-        music_track_cursor(&harness, &id),
+        music_track_focus_row(&harness, &id),
         None,
         "a failed recursive activation does not enter track-selection mode"
     );
@@ -613,7 +618,7 @@ fn recursive_album_activation_event_reanchors_onto_the_activated_album() {
         "the focused album is the activated one, not the pre-search cursor"
     );
     assert_eq!(
-        music_track_cursor(&harness, &id),
+        music_track_focus_row(&harness, &id),
         Some(0),
         "track-selection mode is entered for the activated album"
     );

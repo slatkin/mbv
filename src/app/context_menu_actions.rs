@@ -16,10 +16,9 @@ impl App {
         // the queue; `context_menu_lib_idx()` resolves the explicitly matched
         // Emby library (positive match, `None` on Home/queue) that every
         // Emby-only callee below must receive. `cw_item` is the resolved
-        // Continue Watching column target, resolved by the shell at the Model
-        // boundary from Model-owned `home_content` (task 5.3d); it feeds the
-        // Home-tab arms and the queue-menu's "Remove from Continue Watching"
-        // coupling, and is ignored everywhere else.
+        // Continue Watching column target supplied by the Home component; it
+        // feeds the Home-tab arms and the queue-menu's "Remove from Continue
+        // Watching" coupling, and is ignored everywhere else.
         let lib_idx = self.context_menu_lib_idx();
         match action {
             Some(ContextAction::Play) => {
@@ -670,7 +669,19 @@ impl App {
         home_cw_selected: bool,
         cw_item: Option<EmbyItem>,
     ) {
-        let Some(mut menu) = self.build_context_menu(home_cw_selected, cw_item) else {
+        self.open_context_menu_at_for_item(x, y, home_cw_selected, cw_item, None);
+    }
+
+    pub(super) fn open_context_menu_at_for_item(
+        &mut self,
+        x: u16,
+        y: u16,
+        home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
+        tracked_item: Option<EmbyItem>,
+    ) {
+        let Some(mut menu) = self.build_context_menu_for(tracked_item, home_cw_selected, cw_item)
+        else {
             return;
         };
         menu.anchor = ContextMenuAnchor::Pointer { x, y };

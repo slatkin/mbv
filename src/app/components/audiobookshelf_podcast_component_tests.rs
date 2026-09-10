@@ -1,24 +1,27 @@
 use super::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
-use super::msg::{Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, ShellRequest};
+use super::audiobookshelf_podcast_test_support::{narrow_grid_component_state, view_narrow};
+use super::msg::{
+    Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition, ShellRequest,
+};
 use crate::app::images::audiobookshelf_cover_cache_key;
 use crate::app::shell::Model;
 use crate::app::tests_podcast::audiobookshelf_app;
 use crate::app::types_audiobookshelf_browse::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
 };
-use mbv_core::audiobookshelf::{AudiobookshelfLibrary, AudiobookshelfShow};
+use mbv_core::audiobookshelf::{
+    AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
+    AudiobookshelfShow,
+};
 use mbv_core::config::{AudiobookshelfSetup, ServiceKind};
 use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{
-    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 /// split-audiobookshelf-cursor-ownership D4 / task 1.3 → 5.1: when a content
 /// push drops the show the component had selected, the component resets its
-/// own `episode_selection` / `episode_filter` / `scroll` to their defaults —
+/// own `episode_focused` / `episode_filter` / `scroll` to their defaults —
 /// it never adopts the values carried in the shell's snapshot for those
 /// fields.
 #[test]
@@ -48,7 +51,7 @@ fn abs_podcast_component_drops_stale_episode_state_when_selection_vanishes() {
     let mut component = AudiobookshelfPodcastComponent::new();
     component.set_content(&first, false);
     component.set_focused(true);
-    component.set_episode_selection(Some(1));
+    component.enter_episode_focus();
     component.set_episode_filter(AudiobookshelfEpisodeFilter::Unplayed);
 
     // New content: show-a is gone. The projected content type no longer
@@ -60,10 +63,9 @@ fn abs_podcast_component_drops_stale_episode_state_when_selection_vanishes() {
     component.set_content(&second, false);
     component.set_focused(true);
 
-    assert_eq!(
-        component.episode_selection(),
-        None,
-        "stale episode selection must reset, not adopt the snapshot's Some(5)"
+    assert!(
+        !component.episode_focused(),
+        "stale episode-pane focus must reset, not adopt the snapshot's stale value"
     );
     assert_eq!(
         component.episode_filter(),
@@ -84,10 +86,11 @@ fn abs_podcast_component_keeps_local_show_cursor_and_renders_without_app_state()
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { index })) = message else {
+    let Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { library_item_id })) = message
+    else {
         panic!("show movement should carry the resolved show index");
     };
-    assert_eq!(index, 0, "single show clamps the resolved cursor to 0");
+    assert_eq!(library_item_id.as_deref(), Some("show-a"));
     assert_eq!(component.cursor(), 0);
 
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
@@ -111,7 +114,7 @@ fn abs_podcast_component_emits_typed_episode_transitions_in_episode_mode() {
     let mut component = AudiobookshelfPodcastComponent::new();
     component.set_content(state, false);
     component.set_focused(true);
-    component.set_episode_selection(Some(0));
+    component.enter_episode_focus();
 
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Down,
@@ -122,7 +125,7 @@ fn abs_podcast_component_emits_typed_episode_transitions_in_episode_mode() {
     else {
         panic!("episode movement should be a typed episode-transition request, got {message:?}");
     };
-    assert_eq!(transition, PodcastEpisodeTransition::NextEpisode);
+    assert!(matches!(transition, PodcastEpisodeTransition::NextEpisode));
 
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Char(']'),
@@ -188,7 +191,11 @@ fn abs_podcast_component_cycles_show_title_buckets_with_brackets() {
                 modifiers: KeyModifiers::NONE,
             })),
             Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-                index
+                library_item_id: if index == 1 {
+                    Some("zulu".into())
+                } else {
+                    Some("alpha".into())
+                }
             }))
         );
     }
@@ -211,7 +218,9 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
     assert!(matches!(
         space,
         Some(Msg::Shell(
-            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::FocusOrPlay)
+            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::FocusOrPlay(
+                None
+            ))
         ))
     ));
 
@@ -222,7 +231,9 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
     assert!(matches!(
         enter,
         Some(Msg::Shell(
-            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay)
+            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                None
+            ))
         ))
     ));
 
@@ -233,7 +244,7 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
     assert!(matches!(
         ctrl_a,
         Some(Msg::Shell(
-            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue)
+            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue(None))
         ))
     ));
 
@@ -244,7 +255,12 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
     assert_eq!(unrelated, None);
 }
 
-fn narrow_grid_component_state() -> AudiobookshelfBrowseState {
+/// 7.2: the parent-owned episode-pane focus is separate from the episode
+/// owner's selection, a filter transition re-projects and re-parks the owner at
+/// its first row, and activation carries the show-qualified stable target the
+/// owner resolved (never a numeric index re-derivation).
+#[test]
+fn abs_podcast_focus_selection_and_filter_transitions_are_owner_authoritative() {
     let library = AudiobookshelfLibrary {
         id: "lib".into(),
         name: "Podcasts".into(),
@@ -254,160 +270,121 @@ fn narrow_grid_component_state() -> AudiobookshelfBrowseState {
     state.append_page(
         0,
         20,
-        12,
-        (0..12)
-            .map(|i| AudiobookshelfShow {
-                library_item_id: format!("show-{i}"),
-                title: format!("Show {i}"),
-                author: None,
-                description: None,
-                cover_path: None,
-            })
-            .collect(),
+        1,
+        vec![AudiobookshelfShow {
+            library_item_id: "show-a".into(),
+            title: "Show A".into(),
+            author: None,
+            description: None,
+            cover_path: None,
+        }],
     );
-    state.select(2);
-    state
-}
+    state.select(0);
+    state.episodes = Some(vec![
+        AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            published_at: None,
+            duration_seconds: None,
+        },
+        AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-b".into(),
+            title: "Episode B".into(),
+            published_at: None,
+            duration_seconds: None,
+        },
+    ]);
+    state.progress.insert(
+        ("show-a".into(), "episode-a".into()),
+        AudiobookshelfProgress {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            current_time_seconds: 0.0,
+            is_finished: true,
+        },
+    );
 
-fn view_narrow(component: &mut AudiobookshelfPodcastComponent, width: u16, height: u16) {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    terminal
-        .draw(|frame| component.view(frame, frame.area()))
-        .unwrap();
-}
-
-#[test]
-fn abs_podcast_narrow_one_column_navigation_uses_page_rows() {
-    let state = narrow_grid_component_state();
     let mut component = AudiobookshelfPodcastComponent::new();
     component.set_content(&state, false);
     component.set_focused(true);
-    view_narrow(&mut component, 100, 6);
-    assert_eq!(component.geometry().columns, 1);
-    assert!(matches!(
-        component.on(&Event::Keyboard(KeyEvent {
-            code: Key::Down,
-            modifiers: KeyModifiers::NONE
-        })),
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 3
-        }))
-    ));
-    assert!(matches!(
-        component.on(&Event::Keyboard(KeyEvent {
-            code: Key::Right,
-            modifiers: KeyModifiers::NONE
-        })),
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 4
-        }))
-    ));
-    let mut page_component = AudiobookshelfPodcastComponent::new();
-    page_component.set_content(&state, false);
-    page_component.set_focused(true);
-    view_narrow(&mut page_component, 100, 6);
-    let page_rows = page_component
-        .geometry()
-        .list_area
-        .height
-        .saturating_sub(1)
-        .max(1) as usize;
-    page_component.on(&Event::Keyboard(KeyEvent {
-        code: Key::PageDown,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(page_component.cursor(), 2 + page_rows);
-}
 
-#[test]
-fn abs_podcast_wheel_moves_one_visual_row_and_ignores_outside_list() {
-    let state = narrow_grid_component_state();
-    let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(&state, false);
-    component.set_focused(true);
-    view_narrow(&mut component, 100, 6);
-    let list = component.geometry().list_area;
-    let inside = MouseEvent {
-        kind: MouseEventKind::ScrollDown,
-        column: list.x,
-        row: list.y,
-        modifiers: KeyModifiers::NONE,
-    };
-    assert!(matches!(
-        component.on(&Event::Mouse(inside)),
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 3
-        }))
-    ));
-    // The wheel throttle lives in the private gesture state (ADR 0024, D3);
-    // reset it so the synchronous test loop's second wheel step is recognized.
-    component.reset_mouse_gestures_for_test();
-    let up = component.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::ScrollUp,
-        column: list.x,
-        row: list.y,
+    // Entering episode focus does not move the episode owner's selection.
+    assert_eq!(component.episode_cursor(), 0);
+    component.enter_episode_focus();
+    assert!(component.episode_focused());
+    assert_eq!(component.episode_cursor(), 0);
+
+    // A row-local move changes the owner; focus is unchanged, and the resolved
+    // target is show-qualified.
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(
-        matches!(
-            up,
-            Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-                index: 2
-            }))
-        ),
-        "unexpected upward wheel message: {up:?}"
-    );
-    assert_eq!(component.cursor(), 2);
+    assert!(component.episode_focused());
+    assert_eq!(component.episode_cursor(), 1);
     assert_eq!(
-        component.on(&Event::Mouse(MouseEvent {
-            kind: MouseEventKind::ScrollDown,
-            column: 0,
-            row: 0,
+        component.episode_target(),
+        Some(PodcastEpisodeTarget::new(
+            "show-a".into(),
+            "episode-b".into()
+        ))
+    );
+
+    // Leaving focus does not move the owner's selection.
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Esc,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(!component.episode_focused());
+    assert_eq!(component.episode_cursor(), 1);
+    assert!(component.episode_target().is_none());
+
+    // A filter transition re-projects the filtered rows and re-parks the owner
+    // at its first row (the discrete re-projection boundary design.md D5
+    // allows).
+    component.enter_episode_focus();
+    let filter = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char(']'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        filter,
+        Some(Msg::Shell(
+            ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                PodcastEpisodeTransition::NextFilter
+            )
+        ))
+    ));
+    assert_eq!(
+        component.episode_filter(),
+        AudiobookshelfEpisodeFilter::Played
+    );
+    assert_eq!(component.episode_cursor(), 0);
+    assert_eq!(
+        component.episode_target(),
+        Some(PodcastEpisodeTarget::new(
+            "show-a".into(),
+            "episode-a".into()
+        ))
+    );
+
+    // Activation carries the owner-resolved show-qualified target.
+    assert_eq!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Enter,
             modifiers: KeyModifiers::NONE,
         })),
-        None
+        Some(Msg::Shell(
+            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                Some(PodcastEpisodeTarget::new(
+                    "show-a".into(),
+                    "episode-a".into()
+                ))
+            ))
+        ))
     );
-    assert_eq!(component.cursor(), 2);
-}
-
-#[test]
-fn abs_podcast_row_mouse_selects_the_clicked_show_and_bucket_start() {
-    let state = narrow_grid_component_state();
-    let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(&state, false);
-    component.set_focused(true);
-    view_narrow(&mut component, 100, 6);
-    let rects = component.geometry().show_rows.clone();
-    let (rect, clicked) = rects
-        .iter()
-        .copied()
-        .find(|(_, i)| *i != component.cursor())
-        .expect("a non-selected show row is painted");
-    let msg = component.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: rect.x + rect.width / 2,
-        row: rect.y,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(
-        msg,
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: clicked
-        }))
-    );
-    let bucket = component.geometry().selector_tabs[0].0;
-    let msg = component.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: bucket.x,
-        row: bucket.y,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert!(matches!(
-        msg,
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            index: 0
-        }))
-    ));
 }
 
 #[test]
@@ -469,198 +446,40 @@ fn abs_podcast_cover_fetch_bridged_to_content_push_and_gated_by_images() {
     );
 }
 
-/// Task 5.3d.10c: the component owns its painted geometry (list/right/hero/
-/// inline-hero/selected-item rects), so the shell can read it after render
-/// ownership moved off `App`. The same mounted component is rendered wide then
-/// narrow; the wide right panel must be coherent, and a narrow re-render must
-/// not leak the wide `right_area`. A no-show narrow render resets every hero
-/// field.
 #[test]
-fn abs_podcast_component_geometry_is_wide_coherent_and_narrow_resets_wide() {
-    let mut state = AudiobookshelfBrowseState::new(AudiobookshelfLibrary {
-        id: "abs-podcasts".into(),
-        name: "ABS Podcasts".into(),
-        media_type: "podcast".into(),
-    });
-    state.append_page(
-        0,
-        10,
-        10,
-        vec![AudiobookshelfShow {
-            library_item_id: "show-a".into(),
-            title: "Show A".into(),
-            author: Some("Author".into()),
-            description: Some("An audacious podcast about everything worth hearing.".into()),
-            cover_path: None,
-        }],
-    );
-    state.select(0);
-
-    let mut component = AudiobookshelfPodcastComponent::new();
-    component.set_content(&state, false);
-    component.set_focused(true);
-
-    let wide = Rect::new(0, 0, 100, 40);
-    let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
-    terminal.draw(|frame| component.view(frame, wide)).unwrap();
-    let geometry = component.geometry();
-    assert!(
-        geometry.hero_area.width > 0 && geometry.hero_area.height > 0,
-        "wide hero must be painted"
-    );
-    assert!(
-        geometry.right_area.width > 0 && geometry.right_area.height > 0,
-        "wide right panel must be painted"
-    );
-    assert_eq!(
-        geometry.list_area, geometry.right_area,
-        "wide list == right panel"
-    );
-    assert_eq!(
-        geometry.right_area.x, wide.x,
-        "wide browser/list is the left pane"
-    );
-    assert!(
-        geometry.right_area.right() <= geometry.hero_area.x,
-        "wide hero sits right of the browser/list pane"
-    );
-    assert!(geometry.hero_area.bottom() <= wide.bottom());
-    assert!(geometry.right_area.right() <= wide.right());
-    assert_eq!(
-        geometry.inline_hero_area,
-        Rect::default(),
-        "wide layout has no inline hero"
-    );
-    assert!(
-        geometry.selected_item_rect.is_none(),
-        "wide layout has no selected-item shell"
-    );
-
-    // Re-render the same mounted component narrow: the wide `right_area` must
-    // not survive, and the admitted inline hero must agree across fields.
-    let narrow = Rect::new(0, 0, 60, 40);
-    terminal
-        .draw(|frame| component.view(frame, narrow))
-        .unwrap();
-    let geometry = component.geometry();
-    assert_eq!(
-        geometry.right_area,
-        Rect::default(),
-        "narrow render must reset the wide right_area"
-    );
-    assert!(
-        geometry.list_area.width > 0 && geometry.list_area.height > 0,
-        "narrow list area must be nonzero"
-    );
-    assert!(
-        geometry.list_area.y >= narrow.y && geometry.list_area.bottom() <= narrow.bottom(),
-        "narrow list sits within the area"
-    );
-    assert!(
-        geometry.hero_area.width > 0 && geometry.hero_area.height > 0,
-        "narrow inline hero must be admitted for a short selected show"
-    );
-    assert_eq!(
-        geometry.inline_hero_area, geometry.hero_area,
-        "narrow inline hero must equal the painted hero"
-    );
-    assert_eq!(
-        geometry.selected_item_rect,
-        Some(geometry.hero_area),
-        "narrow selected-item rect must equal the painted hero"
-    );
-    assert!(geometry.hero_area.right() <= narrow.right());
-    assert!(geometry.hero_area.bottom() <= narrow.bottom());
-
-    // No-show narrow render: every hero/right/selected field resets.
-    let empty = AudiobookshelfBrowseState::new(AudiobookshelfLibrary {
-        id: "abs-podcasts".into(),
-        name: "ABS Podcasts".into(),
-        media_type: "podcast".into(),
-    });
-    let mut empty_component = AudiobookshelfPodcastComponent::new();
-    empty_component.set_content(&empty, false);
-    empty_component.set_focused(true);
-    let mut empty_terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
-
-    empty_terminal
-        .draw(|frame| empty_component.view(frame, wide))
-        .unwrap();
-    let empty_wide_geometry = empty_component.geometry();
-    assert!(
-        empty_wide_geometry.right_area.width > 0,
-        "no-show wide layout still paints its right placeholder panel"
-    );
-    assert_eq!(
-        empty_wide_geometry.list_area,
-        empty_wide_geometry.right_area
-    );
-    assert_eq!(
-        empty_wide_geometry.hero_area,
-        Rect::default(),
-        "no-show wide layout must not report an unpainted hero"
-    );
-    assert!(empty_wide_geometry.selected_item_rect.is_none());
-
-    empty_terminal
-        .draw(|frame| empty_component.view(frame, narrow))
-        .unwrap();
-    let empty_narrow_geometry = empty_component.geometry();
-    assert_eq!(
-        empty_narrow_geometry.list_area, narrow,
-        "no-show narrow list_area is the whole area"
-    );
-    assert_eq!(empty_narrow_geometry.right_area, Rect::default());
-    assert_eq!(empty_narrow_geometry.hero_area, Rect::default());
-    assert_eq!(empty_narrow_geometry.inline_hero_area, Rect::default());
-    assert!(empty_narrow_geometry.selected_item_rect.is_none());
-}
-
-/// Task 4.1/4.5: a double-click on a painted show row selects it and emits
-/// the existing OpenOrPlay episode intent; a right-click is ignored
-/// (task 4.6: no keyboard context-menu equivalent).
-#[test]
-fn abs_podcast_mouse_double_click_emits_open_or_play_and_right_click_ignored() {
+fn abs_podcast_refresh_preserves_surviving_target_and_clamps_removed_target() {
     let state = narrow_grid_component_state();
     let mut component = AudiobookshelfPodcastComponent::new();
     component.set_content(&state, false);
     component.set_focused(true);
-    view_narrow(&mut component, 100, 6);
-    let (rect, clicked) = component
-        .geometry()
-        .show_rows
-        .iter()
-        .copied()
-        .find(|(_, i)| *i != component.cursor())
-        .expect("a non-selected show row is painted");
-    // Two quick Downs at the same point = DoubleClick on the second.
-    component.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: rect.x,
-        row: rect.y,
+    view_narrow(&mut component, 100, 12);
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
-    let msg = component.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: rect.x,
-        row: rect.y,
-        modifiers: KeyModifiers::NONE,
-    }));
+    view_narrow(&mut component, 100, 12);
+    let selected = component.selected_id().expect("selected target");
+    let selected_cursor = component.cursor();
+
+    let mut refreshed = state.clone();
+    refreshed.selected_id = Some(selected.clone());
+    refreshed.select(selected_cursor);
+    component.set_content(&refreshed, false);
+    assert_eq!(component.selected_id().as_deref(), Some(selected.as_str()));
     assert_eq!(
-        msg,
-        Some(Msg::Shell(
-            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay)
-        ))
+        component.cursor(),
+        selected_cursor,
+        "refresh keeps a surviving selected target"
     );
-    assert_eq!(component.cursor(), clicked);
+
+    refreshed.shows.truncate(2);
+    refreshed.selected_id = Some(selected);
+    component.set_content(&refreshed, false);
+    view_narrow(&mut component, 100, 12);
+    assert_eq!(component.selected_id().as_deref(), Some("show-0"));
     assert_eq!(
-        component.on(&Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Right),
-            column: rect.x,
-            row: rect.y,
-            modifiers: KeyModifiers::NONE,
-        })),
-        None,
-        "task 4.6: right-click must be ignored on this surface"
+        component.cursor(),
+        0,
+        "refresh clamps when the selected target disappears"
     );
 }

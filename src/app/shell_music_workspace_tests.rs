@@ -26,26 +26,20 @@ fn music_mouse_album_click_emits_and_shell_applies_cursor() {
         .draw(|frame| model.render_music_workspace_component(frame))
         .unwrap();
     let id = model.music_workspace_id.clone().unwrap();
-    let (browser_area, left_row_targets) = {
-        let layout = model
+    let (browser_area, row, target) = {
+        let music = model
             .application
             .get_component(&id)
             .unwrap()
             .as_any()
             .downcast_ref::<MusicWorkspaceComponent>()
-            .unwrap()
-            .layout();
+            .unwrap();
         (
-            layout.wide_music_browser_area,
-            layout.left_row_targets.clone(),
+            music.layout().wide_music_browser_area,
+            music.album_target_rows(1)[0],
+            1,
         )
     };
-    let (row, target) = left_row_targets
-        .iter()
-        .enumerate()
-        .filter_map(|(row, target)| target.as_ref().map(|album| (row, *album)))
-        .nth(1)
-        .expect("second painted album target");
     let message = model
         .application
         .get_component_mut(&id)
@@ -184,7 +178,7 @@ fn push_music_workspace_fetches_selected_album_tracks() {
 }
 
 #[test]
-fn grouped_music_cursor_no_fallthrough_when_left_sorted_indices_empty() {
+fn grouped_music_cursor_no_fallthrough_without_any_library_render() {
     let mut model = Model::new(make_music_group_app());
     // Add sibling albums so the display order (sorted by name) differs
     // from raw insertion order: raw [0 "First Album", 1 "Zebra Album",
@@ -197,9 +191,9 @@ fn grouped_music_cursor_no_fallthrough_when_left_sorted_indices_empty() {
     // Force a single column so the display-order move is deterministic.
     model.app.layout.main.left_area.width = 40;
 
-    // No library-list render has run, so the render-output order the
-    // legacy fallback would have read is empty.
-    assert!(model.app.layout.main.left_sorted_indices.is_empty());
+    // No library-list render has run, so there is no render-output order for a
+    // legacy fallback to read; display order must come from the workspace's
+    // own sorted render context.
 
     model.sync_music_workspace();
 
@@ -225,7 +219,7 @@ fn grouped_music_cursor_no_fallthrough_when_left_sorted_indices_empty() {
         other => panic!("Down must emit an album cursor intent, got {other:?}"),
     };
     // The target is the display-order successor of raw index 0 (== order[1]),
-    // never the raw successor (1) the legacy empty-left_sorted_indices path used.
+    // never the raw successor (1) a raw-index fallback would use.
     assert_eq!(target, order[1]);
     assert_ne!(target, 1, "must not fall through to raw-index navigation");
 

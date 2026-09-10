@@ -87,6 +87,11 @@ mod audiobookshelf_book_component_tests;
 #[path = "audiobookshelf_podcast_component_tests.rs"]
 mod audiobookshelf_podcast_component_tests;
 #[cfg(test)]
+#[path = "audiobookshelf_podcast_geometry_tests.rs"]
+mod audiobookshelf_podcast_geometry_tests;
+#[cfg(test)]
+mod audiobookshelf_podcast_test_support;
+#[cfg(test)]
 #[path = "browser_component_tests.rs"]
 mod browser_component_tests;
 #[cfg(test)]
@@ -110,6 +115,8 @@ mod music_workspace_actions_tests;
 #[cfg(test)]
 #[path = "music_workspace_cursor_tests.rs"]
 mod music_workspace_cursor_tests;
+#[cfg(test)]
+mod music_workspace_test_support;
 #[cfg(test)]
 #[path = "playlists_component_tests.rs"]
 mod playlists_component_tests;

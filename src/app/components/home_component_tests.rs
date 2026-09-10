@@ -46,10 +46,14 @@ fn two_section_home() -> HomeComponent {
     // Home keyboard ownership requires the Library panel to be focused; the
     // keyboard tests below exercise that focused state.
     home.set_focused(true);
+    let mut cw1 = crate::app::tests::make_item("cw1", "Movie");
+    cw1.id = "cw1".into();
+    let mut cw2 = crate::app::tests::make_item("cw2", "Movie");
+    cw2.id = "cw2".into();
     home.set_content(
         vec![
-            QueueItem::Emby(Box::new(crate::app::tests::make_item("cw1", "Movie"))),
-            QueueItem::Emby(Box::new(crate::app::tests::make_item("cw2", "Movie"))),
+            QueueItem::Emby(Box::new(cw1)),
+            QueueItem::Emby(Box::new(cw2)),
         ],
         vec![(
             "Movies".into(),
@@ -61,6 +65,17 @@ fn two_section_home() -> HomeComponent {
         false,
     );
     home
+}
+
+fn home_target(
+    item_id: &str,
+    from_continue_watching: bool,
+) -> crate::app::components::msg::HomeRowTarget {
+    crate::app::components::msg::HomeRowTarget {
+        item_id: Some(item_id.into()),
+        source: Some("emby:movies".into()),
+        from_continue_watching,
+    }
 }
 
 fn key(code: Key) -> Event<crate::app::components::UserEvent> {
@@ -110,7 +125,49 @@ fn enter_emits_typed_play_at_the_flat_cursor() {
     let mut home = two_section_home();
     home.on(&key(Key::Down));
     let msg = home.on(&key(Key::Enter));
-    assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomePlay(1))));
+    assert_eq!(
+        msg,
+        Some(Msg::Shell(ShellRequest::HomePlay(home_target("cw2", true))))
+    );
+}
+
+#[test]
+fn home_reorder_keeps_requested_stable_target() {
+    let mut home = two_section_home();
+    home.on(&key(Key::Down));
+    let mut cw2 = crate::app::tests::make_item("cw2", "Movie");
+    cw2.id = "cw2".into();
+    let mut cw1 = crate::app::tests::make_item("cw1", "Movie");
+    cw1.id = "cw1".into();
+    home.set_content(
+        vec![
+            QueueItem::Emby(Box::new(cw2)),
+            QueueItem::Emby(Box::new(cw1)),
+        ],
+        vec![],
+        false,
+    );
+    let message = home.on(&key(Key::Enter));
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::HomePlay(target))) if target.item_id.as_deref() == Some("cw2")
+    ));
+}
+
+#[test]
+fn latest_section_enter_resolves_section_relative_row() {
+    let mut home = two_section_home();
+    assert!(
+        home.restore_section(&crate::app::types_playback::HomeLatestSource::Emby(
+            "movies".into(),
+        ))
+    );
+    home.on(&key(Key::Down));
+    let Some(Msg::Shell(ShellRequest::HomePlay(target))) = home.on(&key(Key::Enter)) else {
+        panic!("latest-section Enter must emit a HomePlay target");
+    };
+    assert_eq!(target.item_id.as_deref(), Some("id"));
+    assert!(!target.from_continue_watching);
 }
 
 #[test]
@@ -120,7 +177,10 @@ fn home_alt_enter_stays_component_owned() {
         code: Key::Enter,
         modifiers: KeyModifiers::ALT,
     }));
-    assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomePlay(0))));
+    assert_eq!(
+        msg,
+        Some(Msg::Shell(ShellRequest::HomePlay(home_target("cw1", true))))
+    );
 }
 
 #[test]
@@ -135,20 +195,35 @@ fn ctrl_enter_and_ctrl_a_enqueue_at_the_flat_cursor() {
         code: Key::Enter,
         modifiers: KeyModifiers::CONTROL,
     }));
-    assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomeEnqueue(1))));
+    assert_eq!(
+        msg,
+        Some(Msg::Shell(ShellRequest::HomeEnqueue(home_target(
+            "cw2", true
+        ))))
+    );
 
     let msg = home.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('a'),
         modifiers: KeyModifiers::CONTROL,
     }));
-    assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomeEnqueue(1))));
+    assert_eq!(
+        msg,
+        Some(Msg::Shell(ShellRequest::HomeEnqueue(home_target(
+            "cw2", true
+        ))))
+    );
 }
 
 #[test]
 fn delete_emits_typed_remove_at_the_flat_cursor() {
     let mut home = two_section_home();
     let msg = home.on(&key(Key::Delete));
-    assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomeDelete(0))));
+    assert_eq!(
+        msg,
+        Some(Msg::Shell(ShellRequest::HomeDelete(home_target(
+            "cw1", true
+        ))))
+    );
 }
 
 #[test]
@@ -221,26 +296,52 @@ fn unmatched_key_stays_unclaimed() {
     assert_eq!(msg, None);
 }
 #[test]
+fn latest_section_context_menu_and_watched_toggle_are_no_ops() {
+    let mut home = two_section_home();
+    assert!(
+        home.restore_section(&crate::app::types_playback::HomeLatestSource::Emby(
+            "movies".into(),
+        ))
+    );
+
+    assert_eq!(home.on(&key(Key::Char('.'))), None);
+    assert_eq!(
+        home.on(&Event::Keyboard(KeyEvent {
+            code: Key::Char('w'),
+            modifiers: KeyModifiers::CONTROL,
+        })),
+        None
+    );
+}
+
+#[test]
 fn ctrl_w_emits_toggle_watched_without_a_cursor_payload() {
     let mut home = two_section_home();
     let msg = home.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('w'),
         modifiers: KeyModifiers::CONTROL,
     }));
-    assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomeToggleWatched)));
+    assert_eq!(
+        msg,
+        Some(Msg::Shell(ShellRequest::HomeToggleWatched(home_target(
+            "cw1", true
+        ))))
+    );
 }
 
 #[test]
 fn dot_emits_home_context_menu_with_component_target() {
     let mut home = two_section_home();
-    let target = crate::app::tests::make_item("cw-target", "Movie");
-    home.set_continue_watching_item(Some(target.clone()));
     let msg = home.on(&key(Key::Char('.')));
     assert_eq!(
         msg,
         Some(Msg::Shell(ShellRequest::HomeContextMenu {
             home_cw_selected: true,
-            cw_item: Some(target),
+            target: crate::app::components::msg::HomeRowTarget {
+                item_id: Some("cw1".into()),
+                source: Some("emby:movies".into()),
+                from_continue_watching: true
+            },
         }))
     );
 }
@@ -376,6 +477,15 @@ fn breakpoint_transition_hands_off_one_viewport_anchor() {
     assert!(
         home.test_active_scroll() > 0,
         "the handoff seeded the incoming control's resting offset from the anchor",
+    );
+
+    // The reverse transition uses the same single anchor seam, rather than
+    // reseeding the parked Wide control from the beginning of the list.
+    wide.draw(|frame| home.view(frame, frame.area())).unwrap();
+    assert_eq!(home.cursor(), 35, "the reverse handoff retains the target");
+    assert!(
+        home.test_active_scroll() > 0,
+        "the reverse handoff retains the offset"
     );
 }
 

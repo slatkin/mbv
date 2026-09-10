@@ -195,7 +195,8 @@ impl Model {
                     .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
                     .and_then(|menu| menu.action_at(menu.cursor()));
                 self.dismiss_context_menu();
-                self.app.execute_context_action(action, self.home_cw_item());
+                self.app
+                    .execute_context_action(action, self.home_context_item.clone());
             }
             ContextMenuIntent::Dismiss => self.dismiss_context_menu(),
         }
@@ -214,7 +215,8 @@ impl Model {
             .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
             .and_then(|menu| menu.action_at(idx));
         self.dismiss_context_menu();
-        self.app.execute_context_action(action, self.home_cw_item());
+        self.app
+            .execute_context_action(action, self.home_context_item.clone());
     }
 
     fn dismiss_context_menu(&mut self) {

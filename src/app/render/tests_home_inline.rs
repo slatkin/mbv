@@ -28,7 +28,6 @@ fn wide_home_audiobookshelf_hero_paints_cover_slot_and_subtitle() {
             "Books".into(),
             HomeLatestSource::Audiobookshelf("books".into()),
             vec![item],
-            0,
         )];
     });
     let output = buffer_to_string(&terminal);
@@ -102,7 +101,6 @@ fn narrow_home_feed_renders_text_only_without_artwork() {
                 position_ticks: 0,
                 played: false,
             })],
-            0,
         )];
     });
     let output = buffer_to_string(&terminal);

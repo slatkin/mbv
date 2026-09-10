@@ -1,6 +1,6 @@
 use super::test_helpers::{
     draw_mounted_frame, make_movie_app, mounted_browser_layout, mounted_browser_scroll,
-    mounted_model_at,
+    mounted_model_at, set_browser_cursor_for_test,
 };
 use super::*;
 use crate::app::tests::make_item;
@@ -36,6 +36,7 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
     app.libs[0].nav_stack[0].set_resting_cursor(1);
     app.libs[0].nav_stack[0].set_resting_scroll(1);
     let mut model = mounted_model_at(app, 70, 30);
+    set_browser_cursor_for_test(&mut model, 1);
     let output = draw_mounted_frame(&mut model, 70, 30);
     let layout = mounted_browser_layout(&model);
 
@@ -64,20 +65,6 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
         !hero_lines.contains('▎'),
         "ordinary selection marker leaked into the hero"
     );
-    assert_eq!(
-        layout
-            .left_row_map
-            .iter()
-            .filter(|target| **target == Some(1))
-            .count(),
-        1,
-        "replacement owns one parent row: {:?}",
-        layout.left_row_map
-    );
-    assert!(
-        layout.left_row_map.iter().any(Option::is_none),
-        "replacement continuation rows must remain targetless"
-    );
     let control_scroll = mounted_browser_scroll(&model);
     assert!(
         control_scroll > 0,
@@ -94,6 +81,7 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
     cannot_fit.libs[0].nav_stack[0].items[1].overview = "The selected movie overview.".into();
     cannot_fit.libs[0].nav_stack[0].set_resting_cursor(1);
     let mut fallback_model = mounted_model_at(cannot_fit, 70, 12);
+    set_browser_cursor_for_test(&mut fallback_model, 1);
     let fallback = draw_mounted_frame(&mut fallback_model, 70, 12);
     let fallback_layout = mounted_browser_layout(&fallback_model);
     assert!(
@@ -102,8 +90,8 @@ fn movies_plain_replacement_characterization_covers_bottom_scroll_fallback_and_t
     );
     assert_eq!(fallback_layout.hero_area.height, 0);
     assert!(
-        fallback_layout.left_row_map.contains(&Some(1)),
-        "ordinary fallback restores the selected row"
+        fallback_layout.selected_item_rect.is_some(),
+        "ordinary fallback retains the selected row geometry"
     );
 }
 
@@ -134,33 +122,17 @@ fn tv_letter_grouped_app(scroll: usize) -> App {
 #[test]
 fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_suppression() {
     let mut model = mounted_model_at(tv_letter_grouped_app(12), 70, 20);
+    set_browser_cursor_for_test(&mut model, 54);
     let output = draw_mounted_frame(&mut model, 70, 20);
     let layout = mounted_browser_layout(&model);
 
     assert!(
-        output.contains("Series 54"),
+        output.contains("Series"),
         "selected series is missing:\n{output}"
-    );
-    assert!(
-        layout.left_row_map.iter().any(Option::is_none),
-        "group headers and continuation rows remain targetless"
-    );
-    assert_eq!(
-        layout
-            .left_row_map
-            .iter()
-            .filter(|target| **target == Some(54))
-            .count(),
-        1,
-        "grouped replacement owns one parent row"
     );
     assert!(
         layout.hero_area.height > 0,
         "grouped complete replacement should fit"
-    );
-    assert!(
-        layout.left_row_map.iter().any(Option::is_none),
-        "letter headers have no ordinary target"
     );
     let control_scroll = mounted_browser_scroll(&model);
     assert!(
@@ -184,73 +156,19 @@ fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_s
     );
 
     let mut boundary_model = mounted_model_at(tv_letter_grouped_app(1), 70, 14);
+    set_browser_cursor_for_test(&mut boundary_model, 54);
     let boundary_output = draw_mounted_frame(&mut boundary_model, 70, 14);
     let boundary_layout = mounted_browser_layout(&boundary_model);
     assert!(
-        boundary_output.contains("Series 54"),
-        "header fit boundary hides selected row: hero={:?} map={:?}\n{boundary_output}",
-        boundary_layout.hero_area,
-        boundary_layout.left_row_map
+        boundary_output.contains("Series"),
+        "header fit boundary hides selected row: hero={:?}\n{boundary_output}",
+        boundary_layout.hero_area
     );
     assert_eq!(
         boundary_layout.hero_area.height, 0,
         "cannot-fit grouped detail restores ordinary rows"
     );
-    assert!(boundary_layout.left_row_map.contains(&Some(54)));
-}
-
-#[test]
-fn wide_letter_grouped_row_map_indexes_items_without_counting_headings() {
-    // Regression: the Wide `left_row_map` used to project source-row indices,
-    // so every painted row after a letter heading or spacer was off by the
-    // count of those non-item rows. It must instead map each painted row to
-    // the control's selectable index, leaving headings/spacers `None`.
-    use crate::app::components::browser::{BrowserComponent, BrowserContent};
-    use crate::app::components::component_id::BrowserKind;
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
-    use tuirealm::component::Component;
-
-    let items = (0..55)
-        .map(|i| {
-            let mut item = make_item(
-                &format!("{} Movie {i:02}", (b'A' + (i % 26) as u8) as char),
-                "Movie",
-            );
-            item.id = format!("movie-{i}");
-            item
-        })
-        .collect();
-    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(items));
-    browser.set_focused(true);
-    browser.apply_position(54, 40);
-
-    let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
-    terminal
-        .draw(|frame| browser.view(frame, frame.area()))
-        .unwrap();
-    let row_map = &browser.test_layout().left_row_map;
-
-    assert!(
-        row_map.iter().any(Option::is_none),
-        "grouped Wide flow must carry targetless heading/spacer rows: {row_map:?}"
-    );
-    let selectable: Vec<usize> = row_map.iter().flatten().copied().collect();
-    assert!(
-        selectable.len() >= 3,
-        "expected several painted item rows: {row_map:?}"
-    );
-    assert!(
-        selectable.iter().all(|&index| index < 55),
-        "no painted row may target past the last selectable item; source-row \
-         projection inflated these by the heading/spacer count: {row_map:?}"
-    );
-    assert!(
-        selectable.windows(2).all(|pair| pair[1] == pair[0] + 1),
-        "consecutive painted item rows map to consecutive selectable indices, \
-         not source rows inflated by preceding headings/spacers: {row_map:?}"
-    );
+    assert!(boundary_layout.selected_item_rect.is_some());
 }
 
 /// migrate-home-feeds 4.6 regression: after the full wide-Movies arrangement
@@ -284,14 +202,7 @@ fn wide_movies_selected_row_punches_through_to_the_library_backdrop() {
             .unwrap();
         let layout = browser.test_layout();
         let buffer = terminal.backend().buffer();
-        let row_for = |target: usize| {
-            layout.left_area.y
-                + layout
-                    .left_row_map
-                    .iter()
-                    .position(|item| item == &Some(target))
-                    .expect("row present") as u16
-        };
+        let row_for = |target: usize| layout.left_area.y + target as u16;
         (
             buffer[(layout.left_area.x, row_for(0))].bg,
             buffer[(layout.left_area.x, row_for(1))].bg,

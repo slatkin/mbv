@@ -1,0 +1,32 @@
+id: no-render-media-list-mutators
+language: rust
+severity: error
+message: >-
+  A destination paints a media-list surface; it must not mutate the shared
+  owner's row cursor, scroll, or selection directly. Content is projected
+  before view with `set_content`, row-local input goes through the
+  destination's delegation seam, and a discrete re-anchor uses the owner's
+  anchor contract. A parent-owned scope reset to the top (`set_scroll(0)`) is
+  not a position seed and stays allowed. See
+  openspec/changes/complete-shared-media-list-ownership design.md D3/D6/D7 and
+  the canonical-media-lists "Row-local input uses one delegation contract"
+  spec.
+files:
+  - "src/app/components/**/*.rs"
+  - "src/app/render/components/**/*.rs"
+ignores:
+  - "src/app/components/media_list/**"
+  - "src/app/render/components/media_list/**"
+  - "src/app/render/components/media_list.rs"
+  - "src/app/**/*tests*.rs"
+  - "src/app/**/tests*.rs"
+rule:
+  all:
+    - pattern: $RECV.$METHOD($ARG)
+    - not:
+        pattern: $R.set_scroll(0)
+constraints:
+  METHOD:
+    regex: "^(set_scroll|set_scroll_unclamped|select_index|move_selection|resolve_viewport)$"
+  RECV:
+    regex: "(\\.|^)(carrier|list|track_list|chapter_list|episode_list|episodes|wide_list|inline_list|canonical_list|media_list|book_list|show_list|album_list)$"

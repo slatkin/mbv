@@ -135,20 +135,32 @@ impl Model {
                 let idle = now.duration_since(self.app.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
                 self.app.last_nav_at = now;
                 self.app.mark_library_navigation(now);
-                if self.app.is_feed_home_video_group_view(lib_idx) {
-                    if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
-                        if state.selected_len() > 0 {
+                // Keep only the persistence-facing resting value, using the
+                // index already resolved by the active control. This is not a
+                // live mirror: ordinary content pushes never read it back.
+                let valid_index = if self.app.is_feed_home_video_group_view(lib_idx) {
+                    self.app.libs[lib_idx]
+                        .feed_home_video
+                        .as_ref()
+                        .is_some_and(|state| index < state.selected_len())
+                } else {
+                    self.app.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .is_some_and(|level| index < level.items.len())
+                };
+                if valid_index {
+                    if self.app.is_feed_home_video_group_view(lib_idx) {
+                        if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
                             state.video_cursor = index;
-                            self.app.save_default_library_position(lib_idx);
                         }
+                    } else if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
+                        level.set_resting_cursor(index);
                     }
-                    return;
-                }
-                if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
-                    level.set_resting_cursor(index);
                     self.app.save_default_library_position(lib_idx);
                 }
-                if idle {
+                // Group pickers are a fixed local list and never paginate.
+                if idle && !self.app.is_feed_home_video_group_view(lib_idx) {
                     self.app.maybe_fetch_next_page(lib_idx, index);
                 }
             }
@@ -377,6 +389,13 @@ impl Model {
         let Some(id) = self.emby_browser_id.as_ref() else {
             return;
         };
+        // The queue-only mode hides the library panel; the browser's area
+        // (`left_area`) is only republished as the library content rect when
+        // the base frame renders the library, so without this guard the
+        // browser would paint its rows and hero over the queue-owned frame.
+        if !self.library_panel_visible() {
+            return;
+        }
         // When the wide Movies/home-video layout is active, the component
         // paints the full Wide hero rect; otherwise it paints the narrow
         // inner list area. Derive the presentation from the same shared

@@ -9,6 +9,7 @@
 //! [`crate::app::render::render_narrow_browse_with_ctx`] and forwards the
 //! returned [`HomeImagePaint`] to the shell (mirrors `HomeComponent`).
 
+use crate::app::components::media_list::{GridMediaList, InlineMediaBrowser};
 use crate::app::render::CompactBannerLayout;
 
 /// The selected item's inline hero, already resolved by the shell.
@@ -25,6 +26,15 @@ pub(in crate::app) enum NarrowInlineHero {
         images_enabled: bool,
         image_loading: bool,
     },
+}
+
+/// The active canonical control the narrow composer paints for this frame
+/// (design.md D6): the Inline presentation for hero-bearing and
+/// Movies/home-video surfaces, or the Grid presentation for the non-hero
+/// generic catalog. Exactly one is handed over per view.
+pub(in crate::app) enum NarrowBrowseControl<'a> {
+    Inline(&'a mut InlineMediaBrowser<String>),
+    Grid(&'a mut GridMediaList<String>),
 }
 
 /// Shell-resolved extras the narrow composer needs beyond the mirrored
