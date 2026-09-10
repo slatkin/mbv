@@ -101,11 +101,17 @@ pub(super) struct Row {
 /// Declares the closed `Surface` set and the enumerable [`Surface::ALL`] list
 /// from one variant list, so a new variant cannot be added without appearing
 /// in `ALL` (and `row`/`border` fail to compile until it is placed).
+///
+/// The two `allow(dead_code)` attributes cover the identities and `ALL` whose
+/// painter migrates after row 4.2; row 5.2's conformance test enumerates
+/// `ALL`, so they are consumed by that test rather than by a production paint
+/// site. Narrowly scoped here and removed when 5.2 lands.
 macro_rules! declare_surfaces {
     ($($variant:ident),+ $(,)?) => {
         /// A rendered-surface identity: a structural position in the layout,
         /// not a screen. The same position in a different screen or provider
         /// is the same identity; what the surface holds is content.
+        #[allow(dead_code)] // row 5.2's conformance test enumerates ALL
         #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
         pub(in crate::app) enum Surface {
             $($variant),+
@@ -113,6 +119,7 @@ macro_rules! declare_surfaces {
 
         impl Surface {
             /// Every declared surface identity, in declaration order.
+            #[allow(dead_code)] // row 5.2's conformance test is the consumer
             pub(in crate::app) const ALL: &'static [Surface] = &[$(Surface::$variant),+];
         }
     };

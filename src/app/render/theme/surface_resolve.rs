@@ -63,38 +63,31 @@ pub(in crate::app) fn surface_colors(surface: Surface, focus: &FocusState) -> Su
 /// The colours a surface takes when the caller holds only that surface's own
 /// column focus, collapsed to a bool.
 ///
-/// The shared painters (`render/components/**`, `render/arrangements/**`) are
-/// handed one collapsed bool — their own column's panel focus — rather than
-/// the frame's [`FocusState`], because a mounted component receives focus
-/// only as `Attribute::Focus` (`design D1`). This is the table's entry point
-/// for them: the row still decides the value (a `Fixed` row ignores the
-/// bool), so the surface's colour is resolved in one place.
+/// The bool is *this surface's own column panel focus* — never a cursor or a
+/// sub-panel bit; a `Fixed` row ignores it. The permitted callers are the
+/// shared painters (`render/components/**`, `render/arrangements/**`) handed a
+/// collapsed column bit, because a mounted component receives focus only as
+/// `Attribute::Focus` (`design D1`). The row still decides the value, so the
+/// colour is resolved in one place.
 ///
-/// The one row this cannot express is the mode-driven playback strip
+/// The one exclusion is the mode-driven playback strip
 /// ([`Surface::PlaybackPanel`] / [`Surface::PlaybackRecess`] in Queue-only),
 /// whose painters hold the shell's [`FocusState`] and must call
 /// [`surface_colors`].
 pub(in crate::app) fn surface_colors_for_column_focus(
     surface: Surface,
-    column_focused: bool,
+    own_column_focused: bool,
 ) -> SurfaceColors {
-    build(surface, column_focused)
+    build(surface, own_column_focused)
 }
 
 /// The row's fill and border given whether the surface's own column holds
 /// panel focus. A `Fixed` row paints its resting value in every frame.
-fn build(surface: Surface, column_focused: bool) -> SurfaceColors {
+fn build(surface: Surface, own_column_focused: bool) -> SurfaceColors {
     let row = row(surface);
-    // The table is closed: the resolver only ever sees a declared row, and
-    // every row's resting value is its level's default or an explicitly
-    // declared deviation. Both are compile-time-exhaustive by construction
-    // (`row` matches every variant, `surface_table::RESTING_DEVIATIONS` is the
-    // declared list); these holds it at runtime in debug builds, and keep the
-    // declaration helpers reachable from production.
-    debug_assert!(
-        Surface::ALL.contains(&surface),
-        "{surface:?} is resolved but not declared in Surface::ALL"
-    );
+    // The table is closed: `row` matches every variant, and every row's
+    // resting value is its level's default or an explicitly declared
+    // deviation. This holds it at runtime in debug builds.
     debug_assert!(
         surface.level().resting_default().is_none()
             || surface.level().resting_default() == Some(row.resting)
@@ -103,7 +96,7 @@ fn build(surface: Surface, column_focused: bool) -> SurfaceColors {
                 .any(|(declared, _)| *declared == surface),
         "{surface:?} rests at a value that is neither its level default nor a declared deviation"
     );
-    let focused = column_focused && row.focus != FocusSource::Fixed;
+    let focused = own_column_focused && row.focus != FocusSource::Fixed;
     let mut colors = if focused {
         SurfaceColors::fill(if row.soft {
             SURFACE_ACCENT_SOFT
