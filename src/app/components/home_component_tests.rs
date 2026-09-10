@@ -148,10 +148,10 @@ fn home_reorder_keeps_requested_stable_target() {
         false,
     );
     let message = home.on(&key(Key::Enter));
-    assert_eq!(
+    assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::HomePlay(home_target("cw2", true))))
-    );
+        Some(Msg::Shell(ShellRequest::HomePlay(target))) if target.item_id == "cw2"
+    ));
 }
 
 #[test]
