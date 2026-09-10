@@ -244,6 +244,35 @@ fn grid_preserves_two_column_cells_and_resolves_stable_targets() {
 }
 
 #[test]
+fn grid_movement_keeps_selected_target_in_the_painted_window() {
+    use super::{GridMediaList, GridPaintPolicy};
+    let mut grid = GridMediaList::new();
+    grid.set_columns(2, 8, 2);
+    grid.set_content((0..30).map(|n| lifecycle_item(&n.to_string())).collect());
+    let area = Rect::new(0, 0, 20, 5);
+    let mut terminal = Terminal::new(TestBackend::new(24, 7)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut grid, frame, area))
+        .unwrap();
+    let outcome = grid.delegate(super::RowLocalInput::Move(25), None);
+    assert!(matches!(
+        outcome,
+        super::RowLocalOutcome::SelectedTargetChanged(_)
+    ));
+    grid.set_paint_policy(GridPaintPolicy::new(true));
+    terminal
+        .draw(|frame| Component::view(&mut grid, frame, area))
+        .unwrap();
+    let selected = grid.selected_target().cloned().expect("selection");
+    assert!(grid.current_flow_offset().unwrap() > 0);
+    assert!(grid
+        .current_cells()
+        .unwrap()
+        .iter()
+        .any(|cell| cell.target.as_ref() == Some(&selected)));
+}
+
+#[test]
 fn row_local_delegation_covers_movement_selection_and_external_intents() {
     use super::{RowIntent, RowLocalInput, RowLocalOutcome};
     let mut list = super::MediaList::new();
@@ -265,12 +294,38 @@ fn row_local_delegation_covers_movement_selection_and_external_intents() {
         RowLocalOutcome::Consumed
     );
     assert_eq!(
+        list.delegate(RowLocalInput::First, None),
+        RowLocalOutcome::SelectedTargetChanged("a".into())
+    );
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::Wheel {
+                at: Position::new(0, 0),
+                delta: 1
+            },
+            None
+        ),
+        RowLocalOutcome::SelectedTargetChanged("b".into())
+    );
+    assert_eq!(
+        list.delegate(RowLocalInput::Click(Position::new(0, 0)), None),
+        RowLocalOutcome::Unhandled
+    );
+    assert_eq!(
+        list.delegate(RowLocalInput::DoubleClick(Position::new(0, 0)), None),
+        RowLocalOutcome::Unhandled
+    );
+    assert_eq!(
+        list.delegate(RowLocalInput::ContextClick(Position::new(0, 0)), None),
+        RowLocalOutcome::Unhandled
+    );
+    assert_eq!(
         list.delegate(RowLocalInput::Activate, None),
-        RowLocalOutcome::External(RowIntent::Activate("c".into()))
+        RowLocalOutcome::External(RowIntent::Activate("b".into()))
     );
     assert_eq!(
         list.delegate(RowLocalInput::Context, None),
-        RowLocalOutcome::External(RowIntent::Context("c".into()))
+        RowLocalOutcome::External(RowIntent::Context("b".into()))
     );
     assert_eq!(
         list.delegate(RowLocalInput::Click(Position::new(0, 0)), Some("a".into())),

@@ -290,7 +290,7 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone>(
     );
 }
 
-/// Component-view adapter for the Inline retained-result seam.
+/// Component-view adapter for the Grid retained-cell seam.
 pub(in crate::app) fn render_grid_media_list_component<Target: Clone + PartialEq>(
     f: &mut Frame,
     area: Rect,
@@ -343,6 +343,7 @@ pub(in crate::app) fn render_grid_media_list_component<Target: Clone + PartialEq
     grid.finish_view(claim, content, cells);
 }
 
+/// Component-view adapter for the Inline retained-result seam.
 pub(in crate::app) fn render_inline_media_browser_component<Target: Clone>(
     f: &mut Frame,
     area: Rect,

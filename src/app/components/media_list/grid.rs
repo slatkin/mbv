@@ -103,6 +103,33 @@ impl<Target> GridMediaList<Target> {
     pub fn scroll(&self) -> usize {
         self.core.scroll()
     }
+
+    /// Store the shared owner's display-row scroll offset.
+    pub fn set_scroll(&mut self, offset: usize) {
+        self.paint = None;
+        self.core.set_scroll(offset);
+    }
+
+    /// Resolve the shared display-row viewport for a grid's cell capacity.
+    pub fn resolve_viewport(&self, viewport_height: usize) -> super::WideViewport {
+        let height = viewport_height.max(1);
+        let total_rows = self.core.rows().len().div_ceil(self.columns);
+        let mut offset = self.core.scroll().min(total_rows.saturating_sub(height));
+        if let Some(row) = self.core.selected_display_row() {
+            let line = row / self.columns;
+            if line < offset {
+                offset = line;
+            } else if line >= offset + height {
+                offset = line + 1 - height;
+            }
+        }
+        super::WideViewport {
+            offset,
+            height,
+            total_rows,
+        }
+    }
+
     pub(crate) fn columns(&self) -> usize {
         self.columns
     }
@@ -192,12 +219,9 @@ impl<Target> GridMediaList<Target> {
             self.cell_width
         };
         let viewport_rows = content.height as usize;
-        let offset = self.core.scroll().min(
-            self.core
-                .rows()
-                .len()
-                .saturating_sub(viewport_rows * self.columns),
-        );
+        // The shared owner stores display-row offsets. Grid converts that
+        // offset to the source-row stride only while laying out cells.
+        let offset = self.resolve_viewport(viewport_rows).offset;
         self.core.set_scroll(offset);
         self.core
             .rows()

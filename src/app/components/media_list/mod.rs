@@ -399,7 +399,7 @@ impl<Target> MediaList<Target> {
     }
 
     /// The display-row index the cursor currently points at.
-    fn selected_display_row(&self) -> Option<usize> {
+    pub(crate) fn selected_display_row(&self) -> Option<usize> {
         self.selectable.get(self.cursor).copied()
     }
 
@@ -486,19 +486,31 @@ impl<Target> MediaList<Target> {
             RowLocalInput::Page(delta) => self.move_selection(delta.saturating_mul(5)),
             RowLocalInput::First => self.select_first(),
             RowLocalInput::Last => self.select_last(),
-            RowLocalInput::Activate | RowLocalInput::DoubleClick(_) => {
-                return pointer_target
-                    .or_else(|| self.selected_target().cloned())
+            RowLocalInput::Activate => {
+                return self
+                    .selected_target()
+                    .cloned()
                     .map_or(RowLocalOutcome::Unhandled, |target| {
                         RowLocalOutcome::External(RowIntent::Activate(target))
                     });
             }
-            RowLocalInput::Context | RowLocalInput::ContextClick(_) => {
-                return pointer_target
-                    .or_else(|| self.selected_target().cloned())
+            RowLocalInput::DoubleClick(_) => {
+                return pointer_target.map_or(RowLocalOutcome::Unhandled, |target| {
+                    RowLocalOutcome::External(RowIntent::Activate(target))
+                });
+            }
+            RowLocalInput::Context => {
+                return self
+                    .selected_target()
+                    .cloned()
                     .map_or(RowLocalOutcome::Unhandled, |target| {
                         RowLocalOutcome::External(RowIntent::Context(target))
                     });
+            }
+            RowLocalInput::ContextClick(_) => {
+                return pointer_target.map_or(RowLocalOutcome::Unhandled, |target| {
+                    RowLocalOutcome::External(RowIntent::Context(target))
+                });
             }
             RowLocalInput::Click(_) => {
                 if let Some(target) = pointer_target {
