@@ -1,5 +1,5 @@
 use super::{
-    letter_grouped_rows, ListCore, MediaListRow, RowGeometry, ViewportAnchor,
+    letter_grouped_rows, MediaList, MediaListRow, RowGeometry, ViewportAnchor,
     WideMediaListPaintPolicy, WideViewport,
 };
 use ratatui::layout::{Position, Rect};
@@ -20,12 +20,12 @@ struct WidePaintResult<Target> {
 
 /// Embedded plain fixed-height, one-column media list: owns the display-row
 /// list, the selectable index over it, the cursor, and the resting scroll
-/// offset through the shared [`ListCore`]. It has no mouse hit-resolution API
+/// offset through its shared [`MediaList`] owner. It has no mouse hit-resolution API
 /// and accepts no column-count or inline-detail options (design.md D1).
 /// Painting is performed by its `Component::view` through the render adapter;
 /// current-frame point resolution is retained alongside the painted flow.
 pub struct WideMediaList<Target> {
-    core: ListCore<Target>,
+    core: MediaList<Target>,
     policy: WideMediaListPaintPolicy,
     configured_geometry: Option<(Rect, Rect)>,
     paint: Option<WidePaintResult<Target>>,
@@ -39,8 +39,14 @@ impl<Target> Default for WideMediaList<Target> {
 
 impl<Target> WideMediaList<Target> {
     pub fn new() -> Self {
+        Self::from_media_list(MediaList::new())
+    }
+
+    /// Reconfigure this logical flow as a Wide presentation without copying
+    /// its rows or interaction state.
+    pub fn from_media_list(core: MediaList<Target>) -> Self {
         Self {
-            core: ListCore::new(),
+            core,
             policy: WideMediaListPaintPolicy::new(
                 false,
                 super::SelectedRowSurface::ListBackdrop,
@@ -49,6 +55,12 @@ impl<Target> WideMediaList<Target> {
             configured_geometry: None,
             paint: None,
         }
+    }
+
+    /// Return the canonical owner so another presentation can be configured
+    /// over the same logical flow.
+    pub fn into_media_list(self) -> MediaList<Target> {
+        self.core
     }
 
     pub fn invalidate_paint(&mut self) {

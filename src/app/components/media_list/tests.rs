@@ -277,6 +277,35 @@ fn media_lists_preserve_refresh_clamp_and_transfer_grouped_anchor() {
 }
 
 #[test]
+fn responsive_presentations_reuse_one_media_list_owner() {
+    let mut wide = WideMediaList::new();
+    wide.set_content(vec![
+        lifecycle_item("one"),
+        lifecycle_item("two"),
+        lifecycle_item("three"),
+    ]);
+    wide.select_target(&"two".to_string());
+    wide.set_scroll(1);
+    let rows_before = wide.rows().to_vec();
+    let selected_before = wide.selected_target().cloned();
+    let scroll_before = wide.scroll();
+
+    // Moving the owner between closed presentations is a reconfiguration, not
+    // a state transfer: the owner itself is moved without cloning its rows.
+    let owner = wide.into_media_list();
+    let inline = InlineMediaBrowser::from_media_list(owner);
+    assert_eq!(inline.rows(), rows_before.as_slice());
+    assert_eq!(inline.selected_target(), selected_before.as_ref());
+    assert_eq!(inline.scroll(), scroll_before);
+
+    let owner = inline.into_media_list();
+    let wide_again = WideMediaList::from_media_list(owner);
+    assert_eq!(wide_again.rows(), rows_before.as_slice());
+    assert_eq!(wide_again.selected_target(), selected_before.as_ref());
+    assert_eq!(wide_again.scroll(), scroll_before);
+}
+
+#[test]
 fn browser_refresh_preserves_local_target_until_explicit_anchor_reanchors() {
     let rows = vec![
         lifecycle_item("a"),

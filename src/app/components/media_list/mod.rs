@@ -1,9 +1,8 @@
 //! Provider-neutral embedded media-list controls (design.md D1/D2/D3).
 //!
-//! [`WideMediaList`] and [`InlineMediaBrowser`] share their list mechanics
-//! through the private [`ListCore`]; only that inner type is shared between
-//! them and there is no third public widget abstraction. [`ViewportAnchor`]
-//! is the value both controls exchange at a breakpoint transition. Painting
+//! [`WideMediaList`] and [`InlineMediaBrowser`] are closed presentations over
+//! one [`MediaList`] owner. [`ViewportAnchor`] is retained only for explicit
+//! transitions between genuinely different owners. Painting
 //! lives in `crate::app::render::components::media_list`.
 
 use crate::app::ui_util::move_cursor;
@@ -296,7 +295,7 @@ impl<Target> MediaListRow<Target> {
     }
 }
 
-/// The clamped one-column viewport of a [`ListCore`] for a given painted
+/// The clamped one-column viewport of a [`MediaList`] for a given painted
 /// height: `offset` is the display-row index at the viewport top, so display
 /// row `i` paints at screen row `i - offset`. `total_rows` counts every
 /// display row (items, headings, spacers alike).
@@ -319,13 +318,11 @@ impl WideViewport {
     }
 }
 
-/// The list mechanics shared by [`WideMediaList`] and [`InlineMediaBrowser`]:
-/// the display-row list, the selectable index over it (which excludes
-/// `Heading`/`Spacer` so they can never be selected, design.md D2), the
-/// cursor, and the resting scroll offset. Private to this module; both public
-/// controls embed one and delegate to it rather than duplicating the
-/// mechanics.
-struct ListCore<Target> {
+/// The single canonical owner for one logical provider-neutral media-row flow.
+///
+/// Presentations embed or receive this owner; they never maintain a second
+/// cursor, scroll, selectable index, or selected-target state.
+pub struct MediaList<Target> {
     /// Every display row in paint order.
     rows: Vec<MediaListRow<Target>>,
     /// Indices into `rows` that are selectable `Item`s, ascending. Rebuilt
@@ -338,8 +335,9 @@ struct ListCore<Target> {
     scroll: usize,
 }
 
-impl<Target> ListCore<Target> {
-    fn new() -> Self {
+impl<Target> MediaList<Target> {
+    /// Creates an empty canonical owner for one logical row flow.
+    pub fn new() -> Self {
         Self {
             rows: Vec::new(),
             selectable: Vec::new(),
@@ -437,7 +435,7 @@ impl<Target> ListCore<Target> {
     }
 }
 
-impl<Target: PartialEq> ListCore<Target> {
+impl<Target: PartialEq> MediaList<Target> {
     /// The selectable-index position of `target`, if it is present.
     fn position_of(&self, target: &Target) -> Option<usize> {
         self.selectable
@@ -457,7 +455,7 @@ impl<Target: PartialEq> ListCore<Target> {
     }
 }
 
-impl<Target: Clone + PartialEq> ListCore<Target> {
+impl<Target: Clone + PartialEq> MediaList<Target> {
     /// Replace one existing row by stable target without rebuilding indexes or
     /// disturbing selection/scroll. This is for live presentation patches.
     fn patch_row(&mut self, target: &Target, row: MediaListRow<Target>) -> bool {
