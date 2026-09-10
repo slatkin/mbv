@@ -60,9 +60,16 @@ The levels are, shallowest first: **column/pane** — the surface a panel sits o
 gutters the shell paints and the hero pane fill; **panel** — a focusable panel body (queue panel,
 library panel, a screen's episode/track/chapter box, a hero content box, a dialog's list); **recess**
 — a non-focusable inset inside a panel (the now-playing panel's own rows and status pills, the
-visualizer background); **dialog** — an overlay frame that never follows a panel. A surface's level
-is what an edit to that level reaches, so two surfaces at the same level share their appearance and
-shall not be given separate ones.
+visualizer background); **chrome band** — non-focusable structural chrome that never follows panel
+focus (the tab bar, the status bar, a column's header/status rows, the pill row, the now-playing
+panel's status pills band); **dialog** — an overlay frame and its dim backdrop, which never follow a
+panel. A selected row is not a level of its own: it is a hole in its panel through which the
+containing column surface shows, so it takes the column/pane level wherever the row sits.
+
+A surface's level is what an edit to that level reaches, so two surfaces at the same level share
+their appearance and shall not be given separate ones. The chrome band level was added after task
+2.1's inventory showed bands (tab bar, status bar, queue header/status rows, sidebar chrome) that none
+of the original four levels described.
 
 _Alternative:_ a registry keyed by strings/ids so screens can add surfaces. Rejected — the closed
 enum is what makes "every surface is in the table" checkable.
