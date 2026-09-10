@@ -15,9 +15,9 @@
 
 ## 3. Convert Stable Target Boundaries
 
-- [ ] 3.1 Change Browser row targets from item positions to stable content identity at the source-of-truth projection, then update component and shell callers; verify reorder/refresh preserves the same target and Browser effects resolve the intended item.
-- [ ] 3.2 Introduce stable Home row targets and change play, enqueue, delete, watched-toggle, and context requests to carry the component-resolved target; remove shell cursor queries and flat-index re-resolution, then verify the existing Home effect-boundary tests act on the requested row after reorder.
-- [ ] 3.3 Strengthen nested workspace targets where identity is parent-relative: show-qualified Podcast episodes and book-qualified chapter/audio-part rows; update typed intents before callers and verify same-local-id siblings resolve independently.
+- [x] 3.1 Change Browser row targets from item positions to stable content identity at the source-of-truth projection, then update component and shell callers; verify reorder/refresh preserves the same target and Browser effects resolve the intended item.
+- [x] 3.2 Introduce stable Home row targets and change play, enqueue, delete, watched-toggle, and context requests to carry the component-resolved target; remove shell cursor queries and flat-index re-resolution, then verify the existing Home effect-boundary tests act on the requested row after reorder.
+- [x] 3.3 Strengthen nested workspace targets where identity is parent-relative: show-qualified Podcast episodes and book-qualified chapter/audio-part rows; update typed intents before callers and verify same-local-id siblings resolve independently.
 
 ## 4. Migrate Browser and Home
 
