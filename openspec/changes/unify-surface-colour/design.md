@@ -127,6 +127,33 @@ had already rejected by asking for that band's original colour; normalising to o
 (`#3c4841` everywhere) would take the lighter green away from the three surfaces that carry it today.
 Both are visible repaints for no gain the user asked for, so the default-plus-variant map wins.
 
+**Row shape: level-driven focused appearance, declared resting deviations.** Row 4.1 raised this and
+the answer is part of the design, because a level-driven table cannot both stay level-driven and leave
+today's resting values alone: the inventory proves that surfaces sharing a level do not rest at one
+value. So a row declares:
+
+- a **level** (metadata, and the thing an edit is expressed against);
+- a **focused appearance** — the level's focused value, or the declared soft content-body variant.
+  This is level-driven: one edit to a level's focused appearance reaches every row of that level;
+- a **resting appearance** — today's value for that surface, because this change touches no resting
+  surface. Where a row's resting value differs from its level's resting default (`#333c43`,
+  `SURFACE_RESTING` — the value `CONTEXT.md` pins as the Hero pane's resting fill) the row declares a
+  **named deviation with its reason**; the deviations are listed where the table is declared and
+  counted in section 6's report, so they are visible and removable one at a time.
+
+_Why not the alternative:_ making the resting side level-driven too would repaint `HeroPane`,
+`QueueColumn` and `QueuePanel` (and contradict `CONTEXT.md`'s definition of the Hero pane), which is
+the repaint the user ruled out; leaving every appearance as a bare per-row value with no level rule
+would make the level decorative and re-create today's problem. Level-driven where the change is about
+appearance, declared-and-counted where reality differs.
+
+**Selection is its own row, not a third input.** A selected list row and a selected pill are distinct
+surfaces (`SelectedRow`, `PillChipSelected`) rather than a `selected` flag threaded through
+`surface_colors`, so the signature stays `(Surface, &FocusState)` and the conformance test can
+enumerate variants. `SelectedRow` is the hole in its panel through which the containing column
+surface shows; a popup's context-menu row is the one row at that level with a different value and is
+declared as a named variant rather than silently.
+
 _Alternative:_ a registry keyed by strings/ids so screens can add surfaces. Rejected — the closed
 enum is what makes "every surface is in the table" checkable.
 
