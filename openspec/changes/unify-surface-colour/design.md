@@ -79,10 +79,22 @@ change's task-1.1 classification (a grep-derived table) is exactly how the four 
 ### D5 — The row above the pill bar belongs to the library column (the one behaviour kept)
 
 `chrome_geometry.player_area` is four rows; only the first three are the playback panel's content.
-The fourth is the library column's first content row and must render the library column surface
-(`right_focused`), not the panel's recess. `QueueOnly` keeps the row as the panel's own (its
-"On Now" title lives there). This is the only behaviour salvaged from
-`openspec/changes/archive`-bound `focus-aware-column-surface`.
+The fourth is the library column's first content row and must render the library column surface, not
+the panel's recess. `QueueOnly` keeps the row as the panel's own (its "On Now" title lives there);
+the mini-view discriminator is `narrow_player`, i.e. `effective_panel_mode() == PanelMode::QueueOnly`.
+This is the only behaviour salvaged from `focus-aware-column-surface`.
+
+The ownership is **geographic, not incidental**: the row is the library column's first content row,
+not "the row the panel happens to leave free". A layout that no longer paints the playback panel in
+the wide layouts therefore changes nothing about this row — it is already the column's — and the
+panel's own three content rows above it are that layout's business, not this change's. The buffer
+test asserts the row's own fill, so the invariant survives the panel being removed.
+
+_Note for the migration in section 4_: the row's focused arm resolves to today's `SURFACE_FOCUSED`
+while the resting arm is `SURFACE_BACKDROP` (`#2d353b`), deliberately **not** the panel resting role
+(`SURFACE_RESTING`, `#333c43`) that the neighbouring queue arm uses. Substituting the panel resolver
+here would silently repaint the resting column; the table's column entry is the fix, and until then
+the site names its decision explicitly.
 
 ## Risks / Trade-offs
 
