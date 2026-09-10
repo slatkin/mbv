@@ -56,17 +56,19 @@ boxes, the popup frame, the recess rows — and one function mapping it plus the
 stay as the values, so a level's appearance is still changed by editing one role, and the table
 proves which surfaces that reaches.
 
-The levels are, shallowest first: **column/pane** — the surface a panel sits on, including the column
-gutters the shell paints and the hero pane fill; **panel** — a focusable panel body (queue panel,
-library panel, a screen's episode/track/chapter box, a pane's main content box, a popup's list); **recess**
-— a non-focusable inset inside a panel (the now-playing panel's own rows and status pills, the
-visualizer background); **chrome band** — non-focusable structural chrome that never follows panel
-focus (the tab bar, the status bar, a column's header/status rows, the pill row and the spacer band
+The levels are, shallowest first: **column/pane** — the surface a content body sits on, including
+the column gutters the shell paints and the hero pane fill; **content body** — a focusable content
+region that holds content: a panel's body (Library/Queue), a screen's main content box, a sidebar's
+body, a popup's list. The level name deliberately avoids the reserved word `Panel`, which is
+legitimate only in surface *names* like `LibraryPanel`/`QueuePanel` — those really are panels;
+**recess** — a non-focusable inset inside a content body (the now-playing panel's own rows and
+status pills, the visualizer background); **chrome band** — non-focusable structural chrome that
+never follows panel focus (the tab bar, the status bar, a column's header/status rows, the pill row and the spacer band
 below it, a sidebar's header/footer); **popup** — an overlay frame and its dim backdrop, which never
-follow a panel. A selected row is not a level of its own: it is a hole in its panel through which the
+follow a panel. A selected row is not a level of its own: it is a hole in its content body through which the
 containing column surface shows, so it takes the column/pane level wherever the row sits. The
 now-playing panel's own rows and status pills are a recess, not a chrome band: they sit inside a
-panel.
+content body.
 
 A surface's level is what an edit to that level reaches, so two surfaces at the same level share
 their appearance and shall not be given separate ones. The chrome band level was added after task
@@ -229,7 +231,7 @@ Named here because the primary grep returns them and they are deliberately **not
 
 `level` is D2's nesting level the surface *is*, not the role it names today. One row per site;
 sites are grouped by surface identity in reading order (the column/pane rows — including the
-selected-row punch-through — then panel, then recess, then chrome band, then popup). The final
+selected-row punch-through — then content body, then recess, then chrome band, then popup). The final
 column is the proposed closed-enum name, a **sketch**: the canonical set is declared in the theme by
 row 4.1 and pinned by the 5.2 conformance test. The table after the inventory is that name set,
 deduplicated.
@@ -247,25 +249,26 @@ deduplicated.
 | `render/components/list_rows.rs:469` | selected marker gutter | column/pane | `draw_column_selection_markers` | `content_area` + selected row | none | `list_selected_row_bg()` | `SelectedRow` |
 | `render/components/media_list/wide.rs:202-203` → `wide_row.rs:199` | selected media row (WideMediaList) | column/pane | `selected_row_surface_color` → `wide_media_row` | retained row paint area | `focused` + `SelectedRowSurface` policy | `list_selected_row_bg()` / `resolve_surface_focus(focused)` | `SelectedRow` |
 | `render/components/media_list/wide.rs:268` | selected grid cell (GridMediaList) | column/pane | `render_grid_media_list_component` | cell rect | `policy.focused()` | `list_selected_row_bg()` | `SelectedRow` |
-| `render/arrangements/wide_hero.rs:415-419` | library panel body (wide-hero rail) | panel | `wide_hero_browser_border` | `wide_hero_browser_pane(..).list_panel` | `focused` bit | `resolve_surface_focus` | `LibraryPanel` |
-| `render/arrangements/wide_hero.rs:422` (bg at `widgets.rs:187`) | library panel frame rows (▔/▁) | panel (border of a panel) | `wide_hero_browser_border` → `render_selected_block_borders` | `list_panel` | `focused` | `resolve_surface_focus` (as border fg/bg) | `LibraryPanel` |
-| `components/browser/paint.rs:108-110` | library panel body (wide Movies/home-video rail) | panel | `BrowserComponent::render_wide_movies` | `list_panel` | `self.focused` | `resolve_surface_focus` | `LibraryPanel` |
-| `render/components/tv_wide.rs:312` | library panel body (wide TV series rail) | panel | `render_wide_tv_with_ctx` | `list_panel` | `right_focused` (pane bit) | `resolve_surface_focus` | `LibraryPanel` |
-| `render/components/music_wide.rs:581` | library panel body (wide Music album rail) | panel | `render_wide_music_group_with_ctx` | `list_panel` | `right_focused` (pane bit) | `resolve_surface_focus` | `LibraryPanel` |
-| `render/components/audiobookshelf_book.rs:197` | library panel body (ABS book rail) | panel | `render_audiobookshelf_book_content` | `list_panel` | `rail_focused` (sub-focus bit) | `resolve_surface_focus` | `LibraryPanel` |
-| `render/components/audiobookshelf_podcast.rs:264` | library panel body (ABS podcast show rail) | panel | `render_audiobookshelf_podcast_content` | `list_panel` | `focused` | `resolve_surface_focus` | `LibraryPanel` |
-| `render/components/feeds.rs:211` | library panel body (wide Feeds rail) | panel | `render_feeds_content` | `list_panel` | `focused` | `resolve_surface_focus` | `LibraryPanel` |
-| `render/components/home.rs:370-372` | library panel body (Home wide list panel) | panel | `render_home_content` | `green_panel_full` (the screen's own two-column split) | `focused` | `resolve_surface_focus` | `LibraryPanel` |
-| `render/components/widgets.rs:237-241` | queue panel body | panel | `render_queue_panel_frame` | `queue_geometry.panel_area` ← `queue_panel_geometry(left_content)` (`shell_draw.rs`) | `queue_focused` | `SURFACE_ACCENT_SOFT` / `SURFACE_BACKDROP` | `QueuePanel` |
-| `render/components/tv_wide.rs:515` | pane content box (TV episode listing) | panel | `render_tv_series_selection` | `wide_hero_hero_content_box` slot placement | `episode_focused` (sub-focus bit) | `SURFACE_ACCENT_SOFT` | `MainContentBox` |
-| `render/arrangements/wide_hero.rs:468` (variant chosen in `music_wide.rs`) | pane content box (Music track listing) | panel | `wide_hero_hero_content_box_with_surface` | caller's `track_area` | `left_focused` (`track_active`) | `SURFACE_ACCENT_SOFT` | `MainContentBox` |
-| `render/arrangements/wide_hero.rs:467` | pane content box (generic pane inset) | panel | `wide_hero_hero_content_box` | caller's area | none | `SURFACE_BACKDROP` | `MainContentBox` |
-| `render/components/hero.rs:192-196` | selected row's inline detail (inline hero) | panel | `selected_detail_shell` | caller `hero_area`; callers `audiobookshelf_book.rs:296`, `audiobookshelf_podcast.rs:336`, `feeds.rs:268`, `home.rs:477`, `list_narrow.rs:219`, `music_wide.rs:427` | `focused` | `resolve_surface_focus` | `InlineHero` |
-| `shell_playback.rs:48-50` | now-playing (playback) panel body | panel | `render_playback_component` → `render_player_panel` | `FrameChromeGeometry.player_area` | `PanelFocus::Queue` | `SURFACE_FOCUSED` / `SURFACE_PLAYBACK` | `PlaybackPanel` |
-| `components/playback.rs:55` | PlaybackComponent projection panel bg | panel | `PlaybackComponent` (projection value) | n/a — value, not a rect | `PanelFocus::Queue` | `SURFACE_PLAYBACK` | `PlaybackPanel` |
-| `shell_draw.rs:286` | queue-only wide playback panel body | panel | `render_main` | local `panel_area` from `left_content` + card | none (`QueueOnly`) | `SURFACE_CHROME` | `PlaybackPanel` |
-| `shell_draw.rs:297,316` | queue-only playback panel context bg | panel | `render_main` → `render_player_panel` | local `panel_area` | none | `SURFACE_CHROME` | `PlaybackPanel` |
-| `render/components/chrome.rs:188-191` | sidebar body (help/settings/search/playlists/sessions) | panel | `render_panel_shell_at` | `panel_shell_rect(sidebar)` | `style` variant (not focus) | `SURFACE_RESTING` / `SURFACE_SIDEBAR` | `SidebarBody` |
+| `render/components/context_menu.rs:38` | context menu selected row | column/pane | context menu painter | row rect | `selected` | `ACCENT_ACTIVE` | `SelectedRow` |
+| `render/arrangements/wide_hero.rs:415-419` | library panel body (wide-hero rail) | content body | `wide_hero_browser_border` | `wide_hero_browser_pane(..).list_panel` | `focused` bit | `resolve_surface_focus` | `LibraryPanel` |
+| `render/arrangements/wide_hero.rs:422` (bg at `widgets.rs:187`) | library panel frame rows (▔/▁) | content body (border rows of a content body) | `wide_hero_browser_border` → `render_selected_block_borders` | `list_panel` | `focused` | `resolve_surface_focus` (as border fg/bg) | `LibraryPanel` |
+| `components/browser/paint.rs:108-110` | library panel body (wide Movies/home-video rail) | content body | `BrowserComponent::render_wide_movies` | `list_panel` | `self.focused` | `resolve_surface_focus` | `LibraryPanel` |
+| `render/components/tv_wide.rs:312` | library panel body (wide TV series rail) | content body | `render_wide_tv_with_ctx` | `list_panel` | `right_focused` (pane bit) | `resolve_surface_focus` | `LibraryPanel` |
+| `render/components/music_wide.rs:581` | library panel body (wide Music album rail) | content body | `render_wide_music_group_with_ctx` | `list_panel` | `right_focused` (pane bit) | `resolve_surface_focus` | `LibraryPanel` |
+| `render/components/audiobookshelf_book.rs:197` | library panel body (ABS book rail) | content body | `render_audiobookshelf_book_content` | `list_panel` | `rail_focused` (sub-focus bit) | `resolve_surface_focus` | `LibraryPanel` |
+| `render/components/audiobookshelf_podcast.rs:264` | library panel body (ABS podcast show rail) | content body | `render_audiobookshelf_podcast_content` | `list_panel` | `focused` | `resolve_surface_focus` | `LibraryPanel` |
+| `render/components/feeds.rs:211` | library panel body (wide Feeds rail) | content body | `render_feeds_content` | `list_panel` | `focused` | `resolve_surface_focus` | `LibraryPanel` |
+| `render/components/home.rs:370-372` | library panel body (Home wide list panel) | content body | `render_home_content` | `green_panel_full` (the screen's own two-column split) | `focused` | `resolve_surface_focus` | `LibraryPanel` |
+| `render/components/widgets.rs:237-241` | queue panel body | content body | `render_queue_panel_frame` | `queue_geometry.panel_area` ← `queue_panel_geometry(left_content)` (`shell_draw.rs`) | `queue_focused` | `SURFACE_ACCENT_SOFT` / `SURFACE_BACKDROP` | `QueuePanel` |
+| `render/components/tv_wide.rs:515` | pane content box (TV episode listing) | content body | `render_tv_series_selection` | `wide_hero_hero_content_box` slot placement | `episode_focused` (sub-focus bit) | `SURFACE_ACCENT_SOFT` | `MainContentBox` |
+| `render/arrangements/wide_hero.rs:468` (variant chosen in `music_wide.rs`) | pane content box (Music track listing) | content body | `wide_hero_hero_content_box_with_surface` | caller's `track_area` | `left_focused` (`track_active`) | `SURFACE_ACCENT_SOFT` | `MainContentBox` |
+| `render/arrangements/wide_hero.rs:467` | pane content box (generic pane inset) | content body | `wide_hero_hero_content_box` | caller's area | none | `SURFACE_BACKDROP` | `MainContentBox` |
+| `render/components/hero.rs:192-196` | selected row's inline detail (inline hero) | content body | `selected_detail_shell` | caller `hero_area`; callers `audiobookshelf_book.rs:296`, `audiobookshelf_podcast.rs:336`, `feeds.rs:268`, `home.rs:477`, `list_narrow.rs:219`, `music_wide.rs:427` | `focused` | `resolve_surface_focus` | `InlineHero` |
+| `shell_playback.rs:48-50` | now-playing (playback) panel body | content body | `render_playback_component` → `render_player_panel` | `FrameChromeGeometry.player_area` | `PanelFocus::Queue` | `SURFACE_FOCUSED` / `SURFACE_PLAYBACK` | `PlaybackPanel` |
+| `components/playback.rs:55` | PlaybackComponent projection panel bg | content body | `PlaybackComponent` (projection value) | n/a — value, not a rect | `PanelFocus::Queue` | `SURFACE_PLAYBACK` | `PlaybackPanel` |
+| `shell_draw.rs:286` | queue-only wide playback panel body | content body | `render_main` | local `panel_area` from `left_content` + card | none (`QueueOnly`) | `SURFACE_CHROME` | `PlaybackPanel` |
+| `shell_draw.rs:297,316` | queue-only playback panel context bg | content body | `render_main` → `render_player_panel` | local `panel_area` | none | `SURFACE_CHROME` | `PlaybackPanel` |
+| `render/components/chrome.rs:188-191` | sidebar body (help/settings/search/playlists/sessions) | content body | `render_panel_shell_at` | `panel_shell_rect(sidebar)` | `style` variant (not focus) | `SURFACE_RESTING` / `SURFACE_SIDEBAR` | `SidebarBody` |
 | `render/components/chrome_player.rs:52,65,93,109,201,410` | now-playing panel content rows (seekbar/title/blank) | recess | `render_player_panel` / `render_seekbar` / `render_title_row` | `ctx.area` rows | via `ctx.panel_bg` | `ctx.panel_bg` | `PlaybackRecess` |
 | `render/components/chrome_player.rs:126,162` | now-playing bottom row ("On Now" row) | recess — Mini (`narrow_player`) only; in Wide/Normal the row is inside `LibraryColumn`'s backdrop rect and carries no separate surface (finding 3) | `render_player_panel` | `ctx.area` row +3 | `narrow_player` (mode split, not a focus bit) | `SURFACE_BACKDROP` | `PlaybackBottomRow` |
 | `render/components/chrome_player.rs:243` (applied `:277,283,301`) | now-playing status pill | recess | `render_title_row` | title row's right segment | none | `SURFACE_BACKDROP` | `PlaybackStatusPill` |
@@ -286,7 +289,6 @@ deduplicated.
 | `render/components/home.rs:402-405` | Home pill-bar spacer band (the row below the pill bar) | chrome band | `render_home_content` | `spacer_area` from `wide_hero::pill_bar_areas(area)` (wide) / the narrow pill areas | none | `SURFACE_BACKDROP` (the comment claims a wide-vs-single-column split the code does not implement — finding 8) | `PillRowGap` |
 | `render/components/widgets.rs:254,256` (applied `:446-468`) | pill chip (selected/unselected) | chrome band | `selector_pill_style` / `render_pill_bar` | pill rect | `selected` | `PILL_SELECTED_BG` / `PILL_BG` | `PillChip` |
 | `render/components/search_sidebar.rs:161` | search sidebar selected chip | chrome band | search sidebar painter | chip rect | `selected` | `PILL_SELECTED_BG` | `PillChip` |
-| `render/components/context_menu.rs:38` | context menu selected row | recess | context menu painter | row rect | `selected` | `ACCENT_ACTIVE` | `ContextMenuRow` |
 | `render/components/chrome.rs:219,221,246,248,255,280,282,299,311` | sidebar header/footer rows | chrome band | `render_panel_shell_at` | header/footer rects | `style` variant | `SURFACE_CHROME` / `SURFACE_ITEM_FOCUSED` / `SURFACE_RESTING` | `SidebarBand` |
 | `render/components/chrome_tabs.rs:43` | tab bar background | chrome band | `render_tabs` | `FrameChromeGeometry.tab_bar_area` | none | `SURFACE_CHROME` | `TabBar` |
 | `render/components/chrome_tabs.rs:131` | tab bar inactive tab glyph | chrome band | `render_tabs` | tab row cell | none | `Color::Rgb(73, 81, 86)` raw (see Findings) | `TabBar` |
@@ -316,20 +318,19 @@ the enum's only style input: every name at one level resolves to that level's `S
 | `LibraryColumn` | column/pane | library column gutter, wide Music browser pane container |
 | `WideSplitGutter` | column/pane | wide hero split gap |
 | `HeroPane` | column/pane | wide hero pane fill |
-| `SelectedRow` | column/pane | selected row/cell/marker punch-through, generic selected block |
-| `LibraryPanel` | panel | wide-hero rail body + frame, Home two-column list panel |
-| `QueuePanel` | panel | queue panel body |
-| `MainContentBox` | panel | a pane's content box (TV episode listing, Music track listing, generic pane inset) |
-| `InlineHero` | panel | a selected row's inline detail (six screens) |
-| `PlaybackPanel` | panel | now-playing panel body (right column and queue-only) |
-| `SidebarBody` | panel | sidebar body (help/settings/search/playlists/sessions) |
+| `SelectedRow` | column/pane | selected row/cell/marker punch-through, generic selected block, context menu selected row |
+| `LibraryPanel` | content body | wide-hero rail body + frame, Home two-column list panel |
+| `QueuePanel` | content body | queue panel body |
+| `MainContentBox` | content body | a pane's content box (TV episode listing, Music track listing, generic pane inset) |
+| `InlineHero` | content body | a selected row's inline detail (six screens) |
+| `PlaybackPanel` | content body | now-playing panel body (right column and queue-only) |
+| `SidebarBody` | content body | sidebar body (help/settings/search/playlists/sessions) |
 | `PlaybackRecess` | recess | now-playing panel content rows |
 | `PlaybackBottomRow` | recess | Mini-only "On Now" row |
 | `PlaybackStatusPill` | recess | now-playing panel's status pill |
 | `QueueCardVisualizer` | recess | queue card visualizer background |
 | `ArtworkPlaceholder` | recess | artwork placeholder |
 | `ArtworkLoadingPlaceholder` | recess | artwork loading placeholder (four painters) |
-| `ContextMenuRow` | recess | context menu selected row |
 | `StatusBar` | chrome band | status bar body |
 | `StatusBarPill` | chrome band | status bar pills/chips |
 | `QueuePanelBand` | chrome band | queue title row, scope pills, scope target, status strip |
@@ -366,17 +367,17 @@ column level is named, and row 4.2 owns it.
 production files (command and count in task 2.2's reconciliation). They are every remaining row of
 the inventory whose `role(s)` cell names a role rather than a resolver: the modal frame's ten
 callers, the `SURFACE_BACKDROP` rows, the `SURFACE_CHROME`/`SURFACE_ITEM_FOCUSED`/`SURFACE_SIDEBAR`
-sidebar and queue-chrome rows, and the `SURFACE_ACCENT_SOFT` panel rows.
+sidebar and queue-chrome rows, and the `SURFACE_ACCENT_SOFT` content-body rows.
 
 **3. Duplicate roles carrying one level.**
 
-- `SURFACE_ACCENT_SOFT` (`#48584e`) is the panel level's focus fill at three production sites:
+- `SURFACE_ACCENT_SOFT` (`#48584e`) is the content body level's focus fill at three production sites:
   `widgets.rs:237` (queue panel), `tv_wide.rs:515` (pane content box), `wide_hero.rs:468` (pane
-  content box). `SURFACE_FOCUSED` (`#3c4841`) is the same level's focus fill at every other panel
-  site, so one level has two values and a role edit reaches one group or the other, never both.
-  `SURFACE_ACCENT_SOFT` has zero `resolve_surface_focus` call sites.
+  content box). `SURFACE_FOCUSED` (`#3c4841`) is the same level's focus fill at every other
+  content-body site, so one level has two values and a role edit reaches one group or the other,
+  never both. `SURFACE_ACCENT_SOFT` has zero `resolve_surface_focus` call sites.
 - `SURFACE_PLAYBACK` (`#333c43`) is the now-playing panel/recess value while `SURFACE_RESTING`
-  (`#333c43`) is the resting panel and resting column value — one value spanning three levels, so
+  (`#333c43`) is the resting content-body and column value — one value spanning three levels, so
   a retarget of either moves surfaces at levels the other does not own.
 
 **4. The meanings of `SURFACE_BACKDROP` (`#2d353b`).** Nine distinct rendered meanings at eight
@@ -444,12 +445,15 @@ No fixes here; these are what section 4 and the section 6 report must resolve or
    `render_modal_frame`; `tv_wide.rs:515` picks `SURFACE_ACCENT_SOFT`; `music_wide.rs` picks the
    `WideHeroContentBoxSurface` variant; `home.rs:402` picks `SURFACE_BACKDROP`; `card.rs:245` picks
    the visualizer bg. D3 forbids all of these.
-5. **Two roles for one visible level.** `SURFACE_ACCENT_SOFT` vs `SURFACE_FOCUSED` (panel);
+5. **Two roles for one visible level.** `SURFACE_ACCENT_SOFT` vs `SURFACE_FOCUSED` (content body);
    `SURFACE_STATUS_PILL` aliases `SURFACE_CHROME`; `SURFACE_ARTWORK_PLACEHOLDER` aliases
    `SURFACE_BACKDROP` (`#2d353b`); `BORDER_UNFOCUSED` is a border role used as a fill at six call
    sites across four artwork-loading painters (`card.rs:111`, `album_art.rs:183`,
    `detail_series_view.rs:125`, `home_hero_emby.rs:121,272,286`); `SURFACE_RESTING` = `SURFACE_PLAYBACK` (one value, two levels);
-   `SURFACE_FOCUSED` = `TEXT_ACCENT_MUTED` (`BG_GREEN`), a surface role aliasing a text role.
+   `SURFACE_FOCUSED` = `TEXT_ACCENT_MUTED` (`BG_GREEN`), a surface role aliasing a text role. The
+   context menu's selected row (`context_menu.rs:38`) is now under `SelectedRow` at column/pane yet
+   paints `ACCENT_ACTIVE` — a second appearance for that level; row 4.3 retires it or 4.1 gives it a
+   named variant.
 6. **Raw colour in a production painter.** `chrome_tabs.rs:131` writes
    `Style::default().fg(Color::Rgb(73, 81, 86))` for the tab bar's inactive glyph column. Every
    other production colour goes through a role; this one is a hue chosen in a screen-adjacent
