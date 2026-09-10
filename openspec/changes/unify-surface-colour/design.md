@@ -51,18 +51,18 @@ decision; centralising the colour alone is what the abandoned change did.
 ### D2 — One surface table: `(Surface, &FocusState) -> SurfaceColors`
 
 The theme gains a closed `Surface` identity per rendered region — column surfaces, panels, inset
-boxes, the dialog frame, the recess rows — and one function mapping it plus the focus state to a
+boxes, the popup frame, the recess rows — and one function mapping it plus the focus state to a
 `SurfaceColors { fill, border }`. One row per surface, each row carrying its nesting level. Roles
 stay as the values, so a level's appearance is still changed by editing one role, and the table
 proves which surfaces that reaches.
 
 The levels are, shallowest first: **column/pane** — the surface a panel sits on, including the column
 gutters the shell paints and the hero pane fill; **panel** — a focusable panel body (queue panel,
-library panel, a screen's episode/track/chapter box, a hero content box, a dialog's list); **recess**
+library panel, a screen's episode/track/chapter box, a pane's main content box, a popup's list); **recess**
 — a non-focusable inset inside a panel (the now-playing panel's own rows and status pills, the
 visualizer background); **chrome band** — non-focusable structural chrome that never follows panel
 focus (the tab bar, the status bar, a column's header/status rows, the pill row and the spacer band
-below it, a sidebar's header/footer); **dialog** — an overlay frame and its dim backdrop, which never
+below it, a sidebar's header/footer); **popup** — an overlay frame and its dim backdrop, which never
 follow a panel. A selected row is not a level of its own: it is a hole in its panel through which the
 containing column surface shows, so it takes the column/pane level wherever the row sits. The
 now-playing panel's own rows and status pills are a recess, not a chrome band: they sit inside a
@@ -158,7 +158,7 @@ persistence, protocol, or config. Rollback is a revert.
 ## Surface inventory (task 2.1)
 
 Every production paint site that writes a surface colour (a background fill) or a surface border,
-classified against D2's four levels. This is the migration checklist for section 4 and the
+classified against D2's five levels. This is the migration checklist for section 4 and the
 coverage record for section 5's guardrails.
 
 The interactive-ownership ledger (`docs/architecture/interactive-surface-ledger.md`) already
@@ -228,15 +228,18 @@ Named here because the primary grep returns them and they are deliberately **not
 ### Inventory
 
 `level` is D2's nesting level the surface *is*, not the role it names today. One row per site;
-sites are grouped by surface identity in reading order (column/pane, then panel, then recess, then
-dialog, then the punch-through rows). The final column is the proposed closed-enum name; the table
-after the inventory is that name set, deduplicated.
+sites are grouped by surface identity in reading order (the column/pane rows — including the
+selected-row punch-through — then panel, then recess, then chrome band, then popup). The final
+column is the proposed closed-enum name, a **sketch**: the canonical set is declared in the theme by
+row 4.1 and pinned by the 5.2 conformance test. The table after the inventory is that name set,
+deduplicated.
 
 | file:line | surface identity | level | owner painter (fn) | rect source | focus input | role(s)/resolver named today | proposed `Surface` |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `render/components/chrome.rs:53` | queue column gutter | column/pane | `render_legacy_backdrops` | `FrameChromeGeometry.left_area` minus the 1-col boundary col (`arrangements/chrome.rs`) | `queue_focused` (`PanelFocus::Queue`) | `resolve_surface_focus(queue_focused)` | `QueueColumn` |
 | `components/queue_boundary.rs:121` | queue column gutter (1-col drag strip) | column/pane | `QueueBoundaryComponent::view` | `layout.main.queue_boundary_area` synced by `Model::sync_queue_boundary` (`shell_library.rs:194`) | `PanelFocus::Queue` | `resolve_surface_focus(self.focused)` | `QueueColumn` |
 | `render/components/chrome.rs:61` (decision `chrome.rs:29/31`) | library column gutter | column/pane | `render_legacy_backdrops` → `library_column_surface` | `FrameChromeGeometry.right_full_area` | `right_focused` (`right_visible && PanelFocus::Library`) | `SURFACE_FOCUSED` / `SURFACE_BACKDROP` in the transitional helper row 4.2 owns | `LibraryColumn` |
+| `render/components/music_wide.rs:549` | wide Music browser pane container (the column surface the rail panel sits on) | column/pane | `render_wide_music_group_with_ctx` | `panes.browser_panel` from `MusicWideRenderCtx::publish_geometry` (`wide_library_panes`) | none | `SURFACE_BACKDROP` | `LibraryColumn` |
 | `components/wide_hero_boundary.rs:121` | wide hero split gap gutter | column/pane | `WideHeroBoundaryComponent::view` | `Model::wide_hero_boundary_geometry()` (`shell_library.rs`) → the component's synced area | none | `SURFACE_BACKDROP` | `WideSplitGutter` |
 | `render/arrangements/wide_hero.rs:302-306` | hero pane fill | column/pane | `wide_hero_hero_pane` | `wide_hero_presentation().hero` (the arrangement's own split) | `LeftPaneFocus::ReadOnly` / `Workspace(held)` | `SURFACE_RESTING` / `resolve_surface_focus(held)` | `HeroPane` |
 | `render/components/widgets.rs:151` | selected block background (generic punch-through) | column/pane | `render_selected_block_background` | caller's rect | caller's `bg` argument | caller-supplied | `SelectedRow` |
@@ -254,87 +257,94 @@ after the inventory is that name set, deduplicated.
 | `render/components/feeds.rs:211` | library panel body (wide Feeds rail) | panel | `render_feeds_content` | `list_panel` | `focused` | `resolve_surface_focus` | `LibraryPanel` |
 | `render/components/home.rs:370-372` | library panel body (Home wide list panel) | panel | `render_home_content` | `green_panel_full` (the screen's own two-column split) | `focused` | `resolve_surface_focus` | `LibraryPanel` |
 | `render/components/widgets.rs:237-241` | queue panel body | panel | `render_queue_panel_frame` | `queue_geometry.panel_area` ← `queue_panel_geometry(left_content)` (`shell_draw.rs`) | `queue_focused` | `SURFACE_ACCENT_SOFT` / `SURFACE_BACKDROP` | `QueuePanel` |
-| `render/components/tv_wide.rs:515` | TV episode box | panel | `render_tv_series_selection` | `wide_hero_hero_content_box` slot placement | `episode_focused` (sub-focus bit) | `SURFACE_ACCENT_SOFT` | `TvEpisodeBox` |
-| `render/arrangements/wide_hero.rs:468` (variant chosen in `music_wide.rs`) | Music track box | panel | `wide_hero_hero_content_box_with_surface` | caller's `track_area` | `left_focused` (`track_active`) | `SURFACE_ACCENT_SOFT` | `MusicTrackBox` |
-| `render/arrangements/wide_hero.rs:467` | wide-hero content box (generic inset) | panel — D2 names "a hero content box" a panel, but it renders as a plain inset | `wide_hero_hero_content_box` | caller's area | none | `SURFACE_BACKDROP` | `HeroContentBox` |
-| `render/components/hero.rs:192-196` | inline selected-detail block | panel | `selected_detail_shell` | caller `hero_area`; callers `audiobookshelf_book.rs:296`, `audiobookshelf_podcast.rs:336`, `feeds.rs:268`, `home.rs:477`, `list_narrow.rs:219`, `music_wide.rs:427` | `focused` | `resolve_surface_focus` | `SelectedDetailBlock` |
+| `render/components/tv_wide.rs:515` | pane content box (TV episode listing) | panel | `render_tv_series_selection` | `wide_hero_hero_content_box` slot placement | `episode_focused` (sub-focus bit) | `SURFACE_ACCENT_SOFT` | `MainContentBox` |
+| `render/arrangements/wide_hero.rs:468` (variant chosen in `music_wide.rs`) | pane content box (Music track listing) | panel | `wide_hero_hero_content_box_with_surface` | caller's `track_area` | `left_focused` (`track_active`) | `SURFACE_ACCENT_SOFT` | `MainContentBox` |
+| `render/arrangements/wide_hero.rs:467` | pane content box (generic pane inset) | panel | `wide_hero_hero_content_box` | caller's area | none | `SURFACE_BACKDROP` | `MainContentBox` |
+| `render/components/hero.rs:192-196` | selected row's inline detail (inline hero) | panel | `selected_detail_shell` | caller `hero_area`; callers `audiobookshelf_book.rs:296`, `audiobookshelf_podcast.rs:336`, `feeds.rs:268`, `home.rs:477`, `list_narrow.rs:219`, `music_wide.rs:427` | `focused` | `resolve_surface_focus` | `InlineHero` |
 | `shell_playback.rs:48-50` | now-playing (playback) panel body | panel | `render_playback_component` → `render_player_panel` | `FrameChromeGeometry.player_area` | `PanelFocus::Queue` | `SURFACE_FOCUSED` / `SURFACE_PLAYBACK` | `PlaybackPanel` |
 | `components/playback.rs:55` | PlaybackComponent projection panel bg | panel | `PlaybackComponent` (projection value) | n/a — value, not a rect | `PanelFocus::Queue` | `SURFACE_PLAYBACK` | `PlaybackPanel` |
 | `shell_draw.rs:286` | queue-only wide playback panel body | panel | `render_main` | local `panel_area` from `left_content` + card | none (`QueueOnly`) | `SURFACE_CHROME` | `PlaybackPanel` |
 | `shell_draw.rs:297,316` | queue-only playback panel context bg | panel | `render_main` → `render_player_panel` | local `panel_area` | none | `SURFACE_CHROME` | `PlaybackPanel` |
-| `render/components/chrome.rs:188-191` | sidebar panel body (help/settings/search/playlists/sessions) | panel | `render_panel_shell_at` | `panel_shell_rect(sidebar)` | `style` variant (not focus) | `SURFACE_RESTING` / `SURFACE_SIDEBAR` | `SidebarPanel` |
+| `render/components/chrome.rs:188-191` | sidebar body (help/settings/search/playlists/sessions) | panel | `render_panel_shell_at` | `panel_shell_rect(sidebar)` | `style` variant (not focus) | `SURFACE_RESTING` / `SURFACE_SIDEBAR` | `SidebarBody` |
 | `render/components/chrome_player.rs:52,65,93,109,201,410` | now-playing panel content rows (seekbar/title/blank) | recess | `render_player_panel` / `render_seekbar` / `render_title_row` | `ctx.area` rows | via `ctx.panel_bg` | `ctx.panel_bg` | `PlaybackRecess` |
-| `render/components/chrome_player.rs:126,162` | now-playing bottom row ("On Now" row) | recess — narrow `QueueOnly` only; in the wide layouts this row is the library column's and is row 3 above | `render_player_panel` | `ctx.area` row +3 | `narrow_player` decides panel-vs-column, not a focus bit | `SURFACE_BACKDROP` | `PlaybackBottomRow` |
+| `render/components/chrome_player.rs:126,162` | now-playing bottom row ("On Now" row) | recess — Mini (`narrow_player`) only; in Wide/Normal the row is inside `LibraryColumn`'s backdrop rect and carries no separate surface (finding 3) | `render_player_panel` | `ctx.area` row +3 | `narrow_player` (mode split, not a focus bit) | `SURFACE_BACKDROP` | `PlaybackBottomRow` |
 | `render/components/chrome_player.rs:243` (applied `:277,283,301`) | now-playing status pill | recess | `render_title_row` | title row's right segment | none | `SURFACE_BACKDROP` | `PlaybackStatusPill` |
-| `render/components/chrome_status.rs:305` | status bar body | recess — a chrome band with no D2 level (see Findings) | `render_status_bar` | `FrameChromeGeometry.status_area` | none | `SURFACE_CHROME` | `StatusBar` |
-| `render/components/chrome_status.rs:28,63,66,76,128,136,139,149,161,166,169,173,178,180,192,197,200,218,223,229,469,481,487` | status bar pills/chips | recess | `render_status_bar` pill builders | within `status_area` | none | `SURFACE_STATUS_PILL` | `StatusPill` |
-| `render/components/queue.rs:166` | queue panel title row | recess | `render_queue_title_content` | QueueComponent's title row | none | `SURFACE_CHROME` | `QueuePanelChrome` |
-| `render/components/queue.rs:175,197` | queue scope pill (local) | recess | `render_queue_title_content` | `local_area` | none | `SURFACE_CHROME` | `QueuePanelChrome` |
-| `render/components/queue.rs:219,231` | queue scope target row (remote) | recess | `render_queue_title_content` | `target_area` | none | `SURFACE_CHROME` | `QueuePanelChrome` |
-| `render/components/queue.rs:297` | queue panel status strip | recess | `render_queue_status` | `queue_geometry.pill_row` | none | `SURFACE_CHROME` | `QueuePanelChrome` |
+| `render/components/chrome_status.rs:305` | status bar body | chrome band | `render_status_bar` | `FrameChromeGeometry.status_area` | none | `SURFACE_CHROME` | `StatusBar` |
+| `render/components/chrome_status.rs:28,63,66,76,128,136,139,149,161,166,169,173,178,180,192,197,200,218,223,229,469,481,487` | status bar pills/chips | chrome band | `render_status_bar` pill builders | within `status_area` | none | `SURFACE_STATUS_PILL` | `StatusBarPill` |
+| `render/components/queue.rs:166` | queue panel title row | chrome band | `render_queue_title_content` | QueueComponent's title row | none | `SURFACE_CHROME` | `QueuePanelBand` |
+| `render/components/queue.rs:175,197` | queue scope pill (local) | chrome band | `render_queue_title_content` | `local_area` | none | `SURFACE_CHROME` | `QueuePanelBand` |
+| `render/components/queue.rs:219,231` | queue scope target row (remote) | chrome band | `render_queue_title_content` | `target_area` | none | `SURFACE_CHROME` | `QueuePanelBand` |
+| `render/components/queue.rs:297` | queue panel status strip | chrome band | `render_queue_status` | `queue_geometry.pill_row` | none | `SURFACE_CHROME` | `QueuePanelBand` |
 | `render/components/card.rs:245-249` (fill `visualizer.rs:16,20,44`) | queue card visualizer background | recess | `App::render_visualizer` (decision in `render_card_visualizer`) | `card_reserved_rect` | `PanelFocus::Queue` | `resolve_surface_focus` | `QueueCardVisualizer` |
 | `render/components/artwork_placeholder.rs:9` | artwork placeholder | recess | `render_artwork_placeholder` | caller's artwork slot | none | `SURFACE_ARTWORK_PLACEHOLDER` | `ArtworkPlaceholder` |
 | `render/components/card.rs:111` | artwork loading placeholder (queue card) | recess | `render_card_image` | `card_reserved_rect` | none | `BORDER_UNFOCUSED` (as a fill) | `ArtworkLoadingPlaceholder` |
 | `render/components/album_art.rs:183` | artwork loading placeholder (inline album art) | recess | `render_inline_art_cell` | `img_rect` | none | `BORDER_UNFOCUSED` (as a fill) | `ArtworkLoadingPlaceholder` |
 | `render/components/detail_series_view.rs:125` | artwork loading placeholder (series hero) | recess | series detail painter | `result.img_rect` | none | `BORDER_UNFOCUSED` (as a fill) | `ArtworkLoadingPlaceholder` |
 | `render/components/home_hero_emby.rs:121,272,286` | artwork loading placeholder (Emby hero) | recess | Emby hero painter | image area | none | `BORDER_UNFOCUSED` (as a fill) | `ArtworkLoadingPlaceholder` |
-| `render/components/widgets.rs:391,403,489` | pill selector row background | recess | `render_pill_bar` | `pills_area` | none | `PILL_ROW_BG` | `PillRow` |
-| `render/components/hero.rs:666,669` | pill selector row background (hero shell) | recess | hero pill row painter | pill row | none | `PILL_ROW_BG` | `PillRow` |
-| `render/components/widgets.rs:254,256` (applied `:446-468`) | pill chip (selected/unselected) | recess | `selector_pill_style` / `render_pill_bar` | pill rect | `selected` | `PILL_SELECTED_BG` / `PILL_BG` | `PillChip` |
-| `render/components/search_sidebar.rs:161` | search sidebar selected chip | recess | search sidebar painter | chip rect | `selected` | `PILL_SELECTED_BG` | `PillChip` |
+| `render/components/widgets.rs:391,403,489` | pill selector row background | chrome band | `render_pill_bar` | `pills_area` | none | `PILL_ROW_BG` | `PillRow` |
+| `render/components/hero.rs:666,669` | pill selector row background (hero shell) | chrome band | hero pill row painter | pill row | none | `PILL_ROW_BG` | `PillRow` |
+| `render/components/home.rs:402-405` | Home pill-bar spacer band (the row below the pill bar) | chrome band | `render_home_content` | `spacer_area` from `wide_hero::pill_bar_areas(area)` (wide) / the narrow pill areas | none | `SURFACE_BACKDROP` (the comment claims a wide-vs-single-column split the code does not implement — finding 8) | `PillRowGap` |
+| `render/components/widgets.rs:254,256` (applied `:446-468`) | pill chip (selected/unselected) | chrome band | `selector_pill_style` / `render_pill_bar` | pill rect | `selected` | `PILL_SELECTED_BG` / `PILL_BG` | `PillChip` |
+| `render/components/search_sidebar.rs:161` | search sidebar selected chip | chrome band | search sidebar painter | chip rect | `selected` | `PILL_SELECTED_BG` | `PillChip` |
 | `render/components/context_menu.rs:38` | context menu selected row | recess | context menu painter | row rect | `selected` | `ACCENT_ACTIVE` | `ContextMenuRow` |
-| `render/components/chrome.rs:219,221,246,248,255,280,282,299,311` | sidebar panel header/footer rows | recess | `render_panel_shell_at` | header/footer rects | `style` variant | `SURFACE_CHROME` / `SURFACE_ITEM_FOCUSED` / `SURFACE_RESTING` | `SidebarChrome` |
-| `render/components/chrome_tabs.rs:43` | tab bar background | recess — chrome band, no D2 level | `render_tabs` | `FrameChromeGeometry.tab_bar_area` | none | `SURFACE_CHROME` | `TabBar` |
-| `render/components/chrome_tabs.rs:131` | tab bar inactive tab glyph | recess | `render_tabs` | tab row cell | none | `Color::Rgb(73, 81, 86)` raw (see Findings) | `TabBar` |
-| `render/components/modal_frame.rs:46` | dialog frame body | dialog | `render_modal_frame_inner` | centered rect from `f.area()` | none | caller's `bg` | `DialogFrame` |
-| `render/components/confirm_modal.rs:29` | dialog frame body | dialog | `render_confirm_modal_content` | modal rect | none | `SURFACE_FOCUSED` | `DialogFrame` |
-| `render/components/daemon_lost_modal.rs:29` | dialog frame body | dialog | `render_daemon_lost_modal_content` | modal rect | none | `SURFACE_FOCUSED` | `DialogFrame` |
-| `render/components/feeds_manage.rs:60` | dialog frame body (feed list) | dialog | `render_feeds_manage_list` | modal rect | none | `SURFACE_FOCUSED` | `DialogFrame` |
-| `render/components/feeds_manage.rs:171` | dialog frame body (feed form) | dialog | `render_feeds_manage_form` | modal rect | none | `SURFACE_FOCUSED` | `DialogFrame` |
-| `render/components/library_routes.rs:156` | dialog frame body | dialog | `render_library_routes_content` | modal rect | none | `SURFACE_FOCUSED` | `DialogFrame` |
-| `render/components/multiselect.rs:53` | dialog frame body | dialog | `render_multiselect_content` | modal rect | none | `SURFACE_FOCUSED` | `DialogFrame` |
-| `render/components/playlists.rs:41` | dialog frame body (save/rename) | dialog | `render_save_playlist_content` | modal rect | none | `SURFACE_FOCUSED` | `DialogFrame` |
-| `render/components/remote_reanchor.rs:31` | dialog frame body | dialog | `render_remote_reanchor_popup_content` | modal rect | none | `SURFACE_FOCUSED` | `DialogFrame` |
-| `render/components/selection_modal.rs:65` | dialog frame body | dialog | `render_selection_modal_content` | modal rect | none | `SURFACE_FOCUSED` | `DialogFrame` |
-| `render/components/selection_modal.rs:96` | dialog list spacer | dialog | `render_selection_modal_content` | inner rect + filter height | none | `SURFACE_FOCUSED` | `DialogFrame` |
-| `render/components/backdrop.rs:dim_backdrop` | modal dim backdrop | dialog | `dim_backdrop` | `f.area()` | none | shades every existing cell (no role) | `DimBackdrop` |
+| `render/components/chrome.rs:219,221,246,248,255,280,282,299,311` | sidebar header/footer rows | chrome band | `render_panel_shell_at` | header/footer rects | `style` variant | `SURFACE_CHROME` / `SURFACE_ITEM_FOCUSED` / `SURFACE_RESTING` | `SidebarBand` |
+| `render/components/chrome_tabs.rs:43` | tab bar background | chrome band | `render_tabs` | `FrameChromeGeometry.tab_bar_area` | none | `SURFACE_CHROME` | `TabBar` |
+| `render/components/chrome_tabs.rs:131` | tab bar inactive tab glyph | chrome band | `render_tabs` | tab row cell | none | `Color::Rgb(73, 81, 86)` raw (see Findings) | `TabBar` |
+| `render/components/modal_frame.rs:46` | popup frame body | popup | `render_modal_frame_inner` | centered rect from `f.area()` | none | caller's `bg` | `PopupFrame` |
+| `render/components/confirm_modal.rs:29` | popup frame body | popup | `render_confirm_modal_content` | modal rect | none | `SURFACE_FOCUSED` | `PopupFrame` |
+| `render/components/daemon_lost_modal.rs:29` | popup frame body | popup | `render_daemon_lost_modal_content` | modal rect | none | `SURFACE_FOCUSED` | `PopupFrame` |
+| `render/components/feeds_manage.rs:60` | popup frame body (feed list) | popup | `render_feeds_manage_list` | modal rect | none | `SURFACE_FOCUSED` | `PopupFrame` |
+| `render/components/feeds_manage.rs:171` | popup frame body (feed form) | popup | `render_feeds_manage_form` | modal rect | none | `SURFACE_FOCUSED` | `PopupFrame` |
+| `render/components/library_routes.rs:156` | popup frame body | popup | `render_library_routes_content` | modal rect | none | `SURFACE_FOCUSED` | `PopupFrame` |
+| `render/components/multiselect.rs:53` | popup frame body | popup | `render_multiselect_content` | modal rect | none | `SURFACE_FOCUSED` | `PopupFrame` |
+| `render/components/playlists.rs:41` | popup frame body (save/rename) | popup | `render_save_playlist_content` | modal rect | none | `SURFACE_FOCUSED` | `PopupFrame` |
+| `render/components/remote_reanchor.rs:31` | popup frame body | popup | `render_remote_reanchor_popup_content` | modal rect | none | `SURFACE_FOCUSED` | `PopupFrame` |
+| `render/components/selection_modal.rs:65` | popup frame body | popup | `render_selection_modal_content` | modal rect | none | `SURFACE_FOCUSED` | `PopupFrame` |
+| `render/components/selection_modal.rs:96` | popup list spacer | popup | `render_selection_modal_content` | inner rect + filter height | none | `SURFACE_FOCUSED` | `PopupFrame` |
+| `render/components/backdrop.rs:dim_backdrop` | popup dim backdrop | popup | `dim_backdrop` | `f.area()` | none | shades every existing cell (no role) | `PopupDimBackdrop` |
 
 ### Proposed `Surface` name set
 
-The closed enum D2 needs, one name per distinct identity in the table above. Level is the enum's
-only style input: every name at one level resolves to that level's `SurfaceColors`.
+**Proposed sketch — the canonical set is declared in the theme by row 4.1 and pinned by the 5.2
+conformance test.** The closed enum D2 needs, one name per distinct *structural* identity in the
+table above: the same layout position in a different screen or provider is the same name. Level is
+the enum's only style input: every name at one level resolves to that level's `SurfaceColors`.
 
-| proposed `Surface` | level | distinct identities covered |
+| proposed `Surface` | level | distinct structural identities covered |
 | --- | --- | --- |
 | `QueueColumn` | column/pane | queue column gutter, queue boundary strip |
-| `LibraryColumn` | column/pane | library column gutter |
+| `LibraryColumn` | column/pane | library column gutter, wide Music browser pane container |
 | `WideSplitGutter` | column/pane | wide hero split gap |
 | `HeroPane` | column/pane | wide hero pane fill |
 | `SelectedRow` | column/pane | selected row/cell/marker punch-through, generic selected block |
 | `LibraryPanel` | panel | wide-hero rail body + frame, Home two-column list panel |
 | `QueuePanel` | panel | queue panel body |
-| `TvEpisodeBox` | panel | TV episode box |
-| `MusicTrackBox` | panel | Music track box |
-| `HeroContentBox` | panel | generic wide-hero content inset |
-| `SelectedDetailBlock` | panel | inline selected-detail block (six screens) |
+| `MainContentBox` | panel | a pane's content box (TV episode listing, Music track listing, generic pane inset) |
+| `InlineHero` | panel | a selected row's inline detail (six screens) |
 | `PlaybackPanel` | panel | now-playing panel body (right column and queue-only) |
-| `SidebarPanel` | panel | sidebar panel body (help/settings/search/playlists/sessions) |
+| `SidebarBody` | panel | sidebar body (help/settings/search/playlists/sessions) |
 | `PlaybackRecess` | recess | now-playing panel content rows |
-| `PlaybackBottomRow` | recess | narrow "On Now" row |
-| `PlaybackStatusPill` | recess | now-playing status pill |
-| `StatusBar` | recess | status bar body |
-| `StatusPill` | recess | status bar pills/chips |
-| `QueuePanelChrome` | recess | queue title row, scope pills, scope target, status strip |
+| `PlaybackBottomRow` | recess | Mini-only "On Now" row |
+| `PlaybackStatusPill` | recess | now-playing panel's status pill |
 | `QueueCardVisualizer` | recess | queue card visualizer background |
 | `ArtworkPlaceholder` | recess | artwork placeholder |
-| `ArtworkLoadingPlaceholder` | recess | artwork loading placeholder (five painters) |
-| `PillRow` | recess | pill selector row background |
-| `PillChip` | recess | selected/unselected pill chip, context-menu row |
+| `ArtworkLoadingPlaceholder` | recess | artwork loading placeholder (four painters) |
 | `ContextMenuRow` | recess | context menu selected row |
-| `SidebarChrome` | recess | sidebar panel header/footer rows |
-| `TabBar` | recess | tab bar background and its inactive-tab glyph |
-| `DialogFrame` | dialog | modal/dialog frame body and its list spacer |
-| `DimBackdrop` | dialog | modal dim backdrop |
+| `StatusBar` | chrome band | status bar body |
+| `StatusBarPill` | chrome band | status bar pills/chips |
+| `QueuePanelBand` | chrome band | queue title row, scope pills, scope target, status strip |
+| `PillRow` | chrome band | pill selector row background |
+| `PillChip` | chrome band | selected/unselected pill chip, search sidebar selected chip |
+| `PillRowGap` | chrome band | Home pill-bar spacer band |
+| `SidebarBand` | chrome band | sidebar header/footer rows |
+| `TabBar` | chrome band | tab bar background and its inactive-tab glyph |
+| `PopupFrame` | popup | popup frame body and its list spacer |
+| `PopupDimBackdrop` | popup | popup dim backdrop |
+
+A screen or provider name in this enum is a defect: `TvEpisodeBox`, `MusicTrackBox` and
+`HeroContentBox` were three names for one position (a pane's content box), and `SelectedDetailBlock`
+named a screen's detail rather than the position it occupies. Likewise `SidebarBody` carries the
+sidebar's focusable body but not the name `Panel`, which `CONTEXT.md` reserves for Library/Queue.
 
 ### The six mechanisms, site by site
 
@@ -361,8 +371,8 @@ sidebar and queue-chrome rows, and the `SURFACE_ACCENT_SOFT` panel rows.
 **3. Duplicate roles carrying one level.**
 
 - `SURFACE_ACCENT_SOFT` (`#48584e`) is the panel level's focus fill at three production sites:
-  `widgets.rs:237` (queue panel), `tv_wide.rs:515` (TV episode box), `wide_hero.rs:468` (Music
-  track box). `SURFACE_FOCUSED` (`#3c4841`) is the same level's focus fill at every other panel
+  `widgets.rs:237` (queue panel), `tv_wide.rs:515` (pane content box), `wide_hero.rs:468` (pane
+  content box). `SURFACE_FOCUSED` (`#3c4841`) is the same level's focus fill at every other panel
   site, so one level has two values and a role edit reaches one group or the other, never both.
   `SURFACE_ACCENT_SOFT` has zero `resolve_surface_focus` call sites.
 - `SURFACE_PLAYBACK` (`#333c43`) is the now-playing panel/recess value while `SURFACE_RESTING`
@@ -372,7 +382,7 @@ sidebar and queue-chrome rows, and the `SURFACE_ACCENT_SOFT` panel rows.
 **4. The meanings of `SURFACE_BACKDROP` (`#2d353b`).** Nine distinct rendered meanings at eight
 direct production paint sites plus the `list_selected_row_bg` alias: (a) library column gutter
 (`chrome.rs:31`); (b) wide hero split gap (`wide_hero_boundary.rs:121`); (c) wide Music browser
-containing panel (`music_wide.rs:549`); (d) wide-hero content box (`wide_hero.rs:467`); (e)
+containing panel (`music_wide.rs:549`); (d) pane content box (`wide_hero.rs:467`); (e)
 unfocused queue panel (`widgets.rs:239`); (f) narrow "On Now" row and its title (`chrome_player.rs:126,162`);
 (g) now-playing status pill (`chrome_player.rs:243`); (h) pill-bar spacer / library column first
 content row (`home.rs:402`); (i) selected-row punch-through via `list_selected_row_bg()`
@@ -383,10 +393,10 @@ focus at `card.rs:245`.
 **5. Per-screen colour bits.** The sites whose colour input is a screen-local bit rather than a
 shell fact:
 
-- `episode_focused` — `tv_wide.rs:515` (TV episode box panel), and `tv_wide.rs:262`'s
+- `episode_focused` — `tv_wide.rs:515` (pane content box), and `tv_wide.rs:262`'s
   `LeftPaneFocus::Workspace(ctx.focused && ctx.episode_cursor.is_some())` (hero pane).
 - `track_active` — `music_wide.rs`'s `left_focused = ctx.focused && track_active`, feeding both
-  `wide_hero_hero_pane` and the track-box variant (`wide_hero.rs:468`).
+  `wide_hero_hero_pane` and the pane-content-box variant (`wide_hero.rs:468`).
 - `chapter_focused` — `audiobookshelf_book.rs`'s `focused && interaction.chapter_focused`, feeding
   the hero pane; `rail_focused = focused && !chapter_focused` feeds the rail panel.
 - `episode_focused` (podcast) — `audiobookshelf_podcast.rs`'s `LeftPaneFocus::Workspace(focused && interaction.episode_focused)`.
@@ -419,14 +429,17 @@ No fixes here; these are what section 4 and the section 6 report must resolve or
    before calling it (`browser/paint.rs:110`, `tv_wide.rs:312`, `music_wide.rs:581`,
    `audiobookshelf_book.rs:197`, `audiobookshelf_podcast.rs:264`, `feeds.rs:211`). Two painters
    write one surface; the values agree today only because both resolve the same focus bit.
-2. **Multi-owner identity — TV episode box.** `wide_hero_hero_content_box` paints it
-   `SURFACE_BACKDROP` (recess) and `render_tv_series_selection` repaints it `SURFACE_ACCENT_SOFT`
-   (panel) when focused. The surface's level depends on which painter ran last, not on a declared
-   level.
-3. **Multi-owner row — the row above the pill bar.** Painted by `chrome.rs:61` in wide layouts and
-   by `chrome_player.rs:126` under `narrow_player`. Rect ownership is expressed as a mode flag, so
-   a new layout that paints the panel can silently double-paint or drop the row. Row 1.3's fix is
-   the geographic one; the flag still lives in `render_player_panel`.
+2. **Multi-owner identity — a pane's content box.** `wide_hero_hero_content_box` paints the
+   `MainContentBox` `SURFACE_BACKDROP` and `render_tv_series_selection` repaints the same rect
+   `SURFACE_ACCENT_SOFT` when focused. The surface's level depends on which painter ran last, not on
+   a declared level.
+3. **The row above the pill bar is a mode split, not a second owner.** In Wide and Normal the row is
+   inside `LibraryColumn`'s backdrop rect (`chrome.rs:61`): there is no separate surface — row 1.3
+   made the ownership geographic. Only in Mini does `render_player_panel` paint it as the playback
+   panel's own bottom band (`chrome_player.rs:126`), so `PlaybackBottomRow` is a Mini-only identity
+   and the wide case carries no separate surface. The residual risk is that the discriminator is the
+   `narrow_player` mode flag rather than the rect, so a new layout that paints the panel must keep
+   applying it.
 4. **Screens choosing colour.** The ten modal callers pass `SURFACE_FOCUSED` into
    `render_modal_frame`; `tv_wide.rs:515` picks `SURFACE_ACCENT_SOFT`; `music_wide.rs` picks the
    `WideHeroContentBoxSurface` variant; `home.rs:402` picks `SURFACE_BACKDROP`; `card.rs:245` picks
@@ -441,12 +454,17 @@ No fixes here; these are what section 4 and the section 6 report must resolve or
    `Style::default().fg(Color::Rgb(73, 81, 86))` for the tab bar's inactive glyph column. Every
    other production colour goes through a role; this one is a hue chosen in a screen-adjacent
    painter, exactly the bypass `theme/primitives.rs` privacy is meant to prevent.
-7. **D2's four levels do not cover the chrome bands.** The tab bar (`chrome_tabs.rs:43`), the
-   status bar (`chrome_status.rs:305`), the queue panel's title/status rows (`queue.rs:166,297`)
-   and the sidebar header/footer (`chrome.rs:219-311`) are surfaces but are neither a column, a
-   focusable panel, an inset recess, nor a dialog. They are assigned `recess` above for want of a
-   fifth level; their real role is `SURFACE_CHROME`/`SURFACE_ITEM_FOCUSED`, which the recess level
-   must not take over.
+7. **The chrome band level has no single appearance yet.** D2 says two surfaces at one level share
+   their appearance, but today's chrome bands resolve to six different roles — `SURFACE_CHROME`
+   (tab bar, status bar, queue title/status rows, sidebar header), `SURFACE_ITEM_FOCUSED` and
+   `SURFACE_RESTING` (sidebar header/footer), `SURFACE_STATUS_PILL` (status pills), `PILL_ROW_BG`
+   and `PILL_SELECTED_BG`/`PILL_BG` (pill row/chip), plus the raw `Color::Rgb` at
+   `chrome_tabs.rs:131`. The level's `SurfaceColors` must either collapse these into one appearance
+   or the level model needs named variants.
+8. **Stale comment on the Home pill-bar spacer.** `home.rs:398-401` says "The wide layout uses the
+   list panel surface; the single-column layout inherits the ordinary library panel surface", but
+   `panel_bg` is `SURFACE_BACKDROP` unconditionally at `home.rs:402`. A migrator following the
+   comment would give the wide case a panel colour the code never paints.
 
 ## Audit reconciliation (task 2.2)
 
