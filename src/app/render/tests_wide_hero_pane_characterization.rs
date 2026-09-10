@@ -7,7 +7,10 @@
 //! correct behaviour. Must land in its own commit before any Wide hero paint
 //! or primitive change (ledger migration flow).
 
-use super::test_helpers::{buffer_to_string, make_audiobookshelf_book_app, make_music_group_app};
+use super::test_helpers::{
+    buffer_to_string, make_audiobookshelf_book_app, make_music_group_app,
+    region_has_selection_marker,
+};
 use crate::app::components::{
     AudiobookshelfBookComponent, AudiobookshelfPodcastComponent, FeedsComponent, HomeComponent,
     MusicWorkspaceComponent, TvWorkspaceComponent,
@@ -370,9 +373,21 @@ fn abs_podcasts_wide_left_pane_fills_via_shared_primitive() {
 /// `unify-surface-colour` 3.2: the wide ABS Books rail and hero pane both
 /// follow the library column's focus, not the chapter cursor. Moving the
 /// cursor from the book rail into the chapter pane changes no fill.
+///
+/// 3.4: the chapter pane's selected-row highlight is asserted too, in both
+/// cursor positions. It is observable only through the selection marker,
+/// because the chapter list's `ListBackdrop` selected-row surface equals the
+/// chapter content box's `SURFACE_BACKDROP`.
 #[test]
 fn abs_books_panel_fills_follow_the_library_column_not_the_chapter_cursor() {
     use crate::app::render::arrangements::wide_hero::wide_hero_browser_pane;
+    use crate::app::render::components::list_rows::{selection_marker, MarkerEdge};
+
+    // The marker the media-list painter writes on a focused selected row,
+    // taken from the production primitive rather than hard-coded.
+    let marker = selection_marker(true, MarkerEdge::Left);
+    let marker_glyph = marker.content.to_string();
+    let marker_fg = marker.style.fg.expect("selected-row marker paints");
 
     let app = make_audiobookshelf_book_app();
     let mut component = AudiobookshelfBookComponent::new();
@@ -406,6 +421,10 @@ fn abs_books_panel_fills_follow_the_library_column_not_the_chapter_cursor() {
         buffer[rail_selected].bg, rail_fill,
         "book rail selected-row highlight while the rail holds the cursor"
     );
+    assert!(
+        !region_has_selection_marker(buffer, hero_panel, &marker_glyph),
+        "no chapter selected row is marked while the book rail holds the cursor"
+    );
 
     component.on(&Event::Keyboard(KeyEvent {
         code: Key::Left,
@@ -426,6 +445,21 @@ fn abs_books_panel_fills_follow_the_library_column_not_the_chapter_cursor() {
     assert_eq!(
         buffer[rail_selected].bg, rail_fill,
         "book rail selected-row highlight is gone while the chapter pane holds the cursor"
+    );
+    // The chapter pane now marks its selected chapter, and the book rail's
+    // mark is the only one gone: exactly one sub-panel highlights at a time.
+    let chapter = component
+        .chapter_content_rect_for_test()
+        .expect("the chapter pane paints its rows");
+    assert_eq!(
+        buffer[(chapter.x, chapter.y)].symbol(),
+        marker_glyph.as_str(),
+        "chapter pane marks its selected row while it holds the cursor"
+    );
+    assert_eq!(buffer[(chapter.x, chapter.y)].fg, marker_fg);
+    assert!(
+        region_has_selection_marker(buffer, hero_panel, &marker_glyph),
+        "the chapter selected row is marked inside the hero pane"
     );
 
     // Queue column holds panel focus: both panels rest.

@@ -435,3 +435,20 @@ pub fn assert_list_pane_reserves_one_row_above_status(
         );
     }
 }
+
+/// Whether any cell of `region` carries the media-list selected-row marker
+/// glyph. The per-screen highlight-gating tests need this because a selected
+/// row whose background equals its content box's (the `ListBackdrop`
+/// selected-row surface over a `SURFACE_BACKDROP` box) is visible only through
+/// the marker, so presence and absence must be read from the glyph.
+///
+/// `glyph` is `selection_marker(true, MarkerEdge::Left).content`; callers take
+/// it from that production primitive rather than hard-coding it.
+pub fn region_has_selection_marker(
+    buffer: &ratatui::buffer::Buffer,
+    region: ratatui::layout::Rect,
+    glyph: &str,
+) -> bool {
+    (region.y..region.bottom())
+        .any(|y| (region.x..region.right()).any(|x| buffer[(x, y)].symbol() == glyph))
+}

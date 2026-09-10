@@ -508,16 +508,6 @@ fn podcast_viewport_anchor_round_trips_across_wide_narrow_wide() {
     );
 }
 
-/// Whether any cell of `region` carries the media-list selected-row marker.
-fn region_has_selection_marker(
-    buffer: &ratatui::buffer::Buffer,
-    region: Rect,
-    glyph: &str,
-) -> bool {
-    (region.y..region.bottom())
-        .any(|y| (region.x..region.right()).any(|x| buffer[(x, y)].symbol() == glyph))
-}
-
 /// `unify-surface-colour` 3.3: the wide ABS podcast screen highlights the
 /// selected row of whichever sub-panel holds the cursor -- the show rail or
 /// the episode pane -- and never both, which is what "the selection moves

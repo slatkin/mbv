@@ -315,15 +315,23 @@ fn music_workspace_panel_fills_follow_the_library_column_not_the_track_cursor() 
     );
 
     // The rail holds the cursor: its selected album row carries the
-    // punch-through surface.
+    // punch-through surface, and the track list's selected row does not.
     let rail_selected = component
         .layout()
         .selected_item_rect
         .expect("rail selected row published");
+    let track_selected = component
+        .test_track_selected_row_rect()
+        .expect("track selected row published");
     assert_ne!(
         buffer[(rail_selected.x + 4, rail_selected.y)].bg,
         rail_fill,
         "rail selected-row highlight while the rail holds the cursor"
+    );
+    assert_eq!(
+        buffer[(track_selected.x, track_selected.y)].bg,
+        track_fill,
+        "track-list selected row is unmarked while the album rail holds the cursor"
     );
 
     component.enter_track_focus();
@@ -331,6 +339,9 @@ fn music_workspace_panel_fills_follow_the_library_column_not_the_track_cursor() 
     let track_content = component
         .test_track_content_rect()
         .expect("track content geometry retained");
+    let track_selected = component
+        .test_track_selected_row_rect()
+        .expect("track selected row published");
     let buffer = terminal.backend().buffer();
     assert_eq!(
         buffer[rail_panel].bg, rail_fill,
@@ -347,11 +358,18 @@ fn music_workspace_panel_fills_follow_the_library_column_not_the_track_cursor() 
         "hero pane fill is unchanged when the cursor moves into the track list"
     );
     // The highlight followed the cursor: the rail's selected album row is now
-    // indistinguishable from the body.
+    // indistinguishable from the body, and the track list's selected row takes
+    // its owning focused surface -- observable by background, because the
+    // track list paints `OwningSurface` against the soft content box.
     assert_eq!(
         buffer[(rail_selected.x + 4, rail_selected.y)].bg,
         rail_fill,
         "rail selected-row highlight is gone while the track list holds the cursor"
+    );
+    assert_eq!(
+        buffer[(track_selected.x, track_selected.y)].bg,
+        crate::app::palette::resolve_surface_focus(true),
+        "track-list selected row takes its owning focused surface while it holds the cursor"
     );
 
     // Queue column holds panel focus: both rest.
