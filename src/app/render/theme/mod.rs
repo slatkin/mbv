@@ -1,5 +1,15 @@
 mod primitives;
+
+// Transitional: the surface table (change row 4.1) has no production callers
+// until row 4.2 migrates the screens onto it. These module-level allows keep
+// `cargo check -p mbv` warning-free until then; row 4.2 removes them together
+// with the last transitional role names.
+#[cfg_attr(not(test), allow(dead_code))]
 mod surface;
+#[cfg_attr(not(test), allow(dead_code))]
+mod surface_resolve;
+#[cfg_attr(not(test), allow(dead_code))]
+mod surface_table;
 
 use ratatui::style::Color;
 
