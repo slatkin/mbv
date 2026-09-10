@@ -9,14 +9,6 @@ pub(crate) use crate::app::render::{
     TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_STRONG,
     TEXT_TAB_INACTIVE,
 };
-// Test-only role names whose last production callers moved onto the surface
-// table in `unify-surface-colour` row 4.2 (row 4.3 retires them).
-#[cfg(test)]
-pub(crate) use crate::app::render::{
-    list_selected_row_bg, resolve_surface_focus, PILL_BG, PILL_ROW_BG, PILL_SELECTED_BG,
-    SURFACE_ACCENT_SOFT, SURFACE_ARTWORK_PLACEHOLDER, SURFACE_BACKDROP, SURFACE_CHROME,
-    SURFACE_FOCUSED, SURFACE_PLAYBACK, SURFACE_RESTING,
-};
 // The closed surface table (`unify-surface-colour` D2/D3): a paint site names
 // a `Surface` and calls the resolver instead of naming a role. Re-exported at
 // `crate::app` because that is the table's own visibility.

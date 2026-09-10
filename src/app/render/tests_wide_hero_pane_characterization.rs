@@ -28,6 +28,10 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
+
+fn surface_fill(surface: palette::Surface, focused: bool) -> ratatui::style::Color {
+    palette::surface_colors_for_column_focus(surface, focused).fill
+}
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 const WIDTH: u16 = 100;
@@ -66,11 +70,11 @@ fn tv_wide_left_pane_unconditional_fill_shared_inset() {
 
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.y)].bg,
-        palette::resolve_surface_focus(false)
+        surface_fill(palette::Surface::HeroPane, false)
     );
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.bottom() - 1)].bg,
-        palette::resolve_surface_focus(false)
+        surface_fill(palette::Surface::HeroPane, false)
     );
 }
 
@@ -92,11 +96,11 @@ fn music_wide_left_pane_unconditional_fill_no_horizontal_pad() {
 
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.y)].bg,
-        palette::resolve_surface_focus(false)
+        surface_fill(palette::Surface::HeroPane, false)
     );
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.bottom() - 1)].bg,
-        palette::resolve_surface_focus(false)
+        surface_fill(palette::Surface::HeroPane, false)
     );
 }
 
@@ -131,10 +135,13 @@ fn home_wide_non_emby_latest_fills_the_full_hero_area() {
     let hero = component.hero_area().expect("wide non-Emby hero pane");
     let buffer = terminal.backend().buffer();
 
-    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
+    assert_eq!(
+        buffer[(hero.x, hero.y)].bg,
+        surface_fill(palette::Surface::HeroPane, false)
+    );
     assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].bg,
-        palette::SURFACE_RESTING,
+        surface_fill(palette::Surface::HeroPane, false),
         "the full reported hero area must be filled"
     );
 }
@@ -179,10 +186,13 @@ fn feeds_wide_left_pane_fills_when_an_entry_is_selected() {
     let hero = component.layout().hero_area;
     assert!(hero.width > 0 && hero.height > 0);
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
+    assert_eq!(
+        buffer[(hero.x, hero.y)].bg,
+        surface_fill(palette::Surface::HeroPane, false)
+    );
     assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].bg,
-        palette::SURFACE_RESTING
+        surface_fill(palette::Surface::HeroPane, false)
     );
 }
 
@@ -230,10 +240,13 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
     let hero = layout.hero_area;
     assert!(hero.width > 0 && hero.height > 0, "hero={hero:?}");
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
+    assert_eq!(
+        buffer[(hero.x, hero.y)].bg,
+        surface_fill(palette::Surface::HeroPane, false)
+    );
     assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].bg,
-        palette::SURFACE_RESTING
+        surface_fill(palette::Surface::HeroPane, false)
     );
 
     let mut focused_layout = LayoutMain::default();
@@ -261,11 +274,11 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
     let focused_buffer = focused_terminal.backend().buffer();
     assert_eq!(
         focused_buffer[(focused_hero.x, focused_hero.y)].bg,
-        palette::SURFACE_RESTING
+        surface_fill(palette::Surface::HeroPane, false)
     );
     assert_eq!(
         focused_buffer[(focused_hero.x, focused_hero.bottom() - 1)].bg,
-        palette::SURFACE_RESTING
+        surface_fill(palette::Surface::HeroPane, false)
     );
 }
 
@@ -316,11 +329,11 @@ fn abs_books_wide_left_pane_fills_via_shared_primitive() {
     // longer chooses the pane fill.
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.y)].bg,
-        palette::SURFACE_FOCUSED
+        surface_fill(palette::Surface::HeroPane, true)
     );
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.bottom() - 1)].bg,
-        palette::SURFACE_FOCUSED
+        surface_fill(palette::Surface::HeroPane, true)
     );
 
     component.on(&Event::Keyboard(KeyEvent {
@@ -332,7 +345,7 @@ fn abs_books_wide_left_pane_fills_via_shared_primitive() {
     // Moving the cursor into the chapter pane changes no fill.
     assert_eq!(
         focused_buffer[(hero_panel.x, hero_panel.y)].bg,
-        palette::SURFACE_FOCUSED
+        surface_fill(palette::Surface::HeroPane, true)
     );
 }
 
@@ -358,7 +371,10 @@ fn abs_podcasts_wide_left_pane_fills_via_shared_primitive() {
     // start. Before `unify-surface-colour` 3.2 this was `SURFACE_RESTING`
     // while the show list held the cursor: the per-screen `episode_focused`
     // bit no longer chooses the pane fill.
-    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_FOCUSED);
+    assert_eq!(
+        buffer[(hero.x, hero.y)].bg,
+        surface_fill(palette::Surface::HeroPane, true)
+    );
 
     component.enter_episode_focus();
     let focused_terminal = direct_terminal(|f| component.view(f, area));
@@ -366,7 +382,7 @@ fn abs_podcasts_wide_left_pane_fills_via_shared_primitive() {
     // Moving the cursor into the episode pane changes no fill.
     assert_eq!(
         focused_buffer[(hero.x, hero.y)].bg,
-        palette::SURFACE_FOCUSED
+        surface_fill(palette::Surface::HeroPane, true)
     );
 }
 
@@ -409,12 +425,12 @@ fn abs_books_panel_fills_follow_the_library_column_not_the_chapter_cursor() {
     let rail_selected = (list_panel.x + PANE_PAD_X, list_panel.y + PANE_PAD_Y);
     assert_eq!(
         rail_fill,
-        palette::resolve_surface_focus(true),
+        surface_fill(palette::Surface::LibraryPanel, true),
         "book rail body follows the library column's focus"
     );
     assert_eq!(
         hero_fill,
-        palette::SURFACE_FOCUSED,
+        surface_fill(palette::Surface::HeroPane, true),
         "hero pane follows the library column's focus"
     );
     assert_ne!(
@@ -468,12 +484,12 @@ fn abs_books_panel_fills_follow_the_library_column_not_the_chapter_cursor() {
     let buffer = terminal.backend().buffer();
     assert_eq!(
         buffer[(list_panel.x, list_panel.y)].bg,
-        palette::resolve_surface_focus(false),
+        surface_fill(palette::Surface::LibraryPanel, false),
         "book rail body rests when the queue column holds focus"
     );
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.y)].bg,
-        palette::resolve_surface_focus(false),
+        surface_fill(palette::Surface::HeroPane, false),
         "hero pane rests when the queue column holds focus"
     );
 }
@@ -504,12 +520,12 @@ fn abs_podcasts_panel_fills_follow_the_library_column_not_the_episode_cursor() {
     let hero_fill = buffer[(hero_panel.x, hero_panel.y)].bg;
     assert_eq!(
         rail_fill,
-        palette::resolve_surface_focus(true),
+        surface_fill(palette::Surface::LibraryPanel, true),
         "show rail body follows the library column's focus"
     );
     assert_eq!(
         hero_fill,
-        palette::SURFACE_FOCUSED,
+        surface_fill(palette::Surface::HeroPane, true),
         "hero pane follows the library column's focus"
     );
 
@@ -533,12 +549,12 @@ fn abs_podcasts_panel_fills_follow_the_library_column_not_the_episode_cursor() {
     let buffer = terminal.backend().buffer();
     assert_eq!(
         buffer[(list_panel.x, list_panel.y)].bg,
-        palette::resolve_surface_focus(false),
+        surface_fill(palette::Surface::LibraryPanel, false),
         "show rail body rests when the queue column holds focus"
     );
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.y)].bg,
-        palette::resolve_surface_focus(false),
+        surface_fill(palette::Surface::HeroPane, false),
         "hero pane rests when the queue column holds focus"
     );
 }

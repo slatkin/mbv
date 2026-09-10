@@ -76,11 +76,6 @@ fn confirm_modal_frame_paints_the_popup_frame_surface() {
         })
         .unwrap();
     let frame = palette::surface_colors_for_column_focus(palette::Surface::PopupFrame, false).fill;
-    assert_eq!(
-        frame,
-        palette::SURFACE_FOCUSED,
-        "the popup frame keeps today's focused green"
-    );
     let buffer = terminal.backend().buffer();
     // The 60-wide, 7-high frame is centred: x = (70 - 60) / 2 = 5,
     // y = (16 - 7) / 2 = 4.

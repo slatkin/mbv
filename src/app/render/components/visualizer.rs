@@ -179,7 +179,15 @@ mod tests {
         let backend = TestBackend::new(20, 10);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_visualizer(f, Rect::default(), crate::app::palette::SURFACE_BACKDROP);
+            app.render_visualizer(
+                f,
+                Rect::default(),
+                palette::surface_colors_for_column_focus(
+                    palette::Surface::QueueCardVisualizer,
+                    false,
+                )
+                .fill,
+            );
         })
         .unwrap();
     }

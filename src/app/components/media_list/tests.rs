@@ -2,6 +2,7 @@ use super::{
     InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaKind, MediaListRow, MediaSemanticState,
     SelectedRowSurface, ViewportAnchor, WideMediaList, WideMediaListPaintPolicy,
 };
+use crate::app::palette::{surface_colors_for_column_focus, Surface};
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
@@ -755,7 +756,6 @@ fn wide_delegate_keeps_the_completed_frame_for_pointer_continuity() {
 /// `render::components::media_list::wide::tests::selected_row_surface_color_follows_the_column_focus`.
 #[test]
 fn wide_selected_row_highlight_is_painted_only_while_focused() {
-    use crate::app::palette;
     use ratatui::style::{Color, Style};
 
     // Stands in for the containing panel body, so a skipped highlight is
@@ -802,9 +802,14 @@ fn wide_selected_row_highlight_is_painted_only_while_focused() {
             // Row 0 is the heading; the selected item is row 1.
             let selected = buffer[(0, 1)].style().bg;
             if focused {
+                let expected = match surface {
+                    SelectedRowSurface::OwningQueueColumn => Surface::SelectedRowOnQueueColumn,
+                    SelectedRowSurface::OwningLibraryPane => Surface::SelectedRowOnLibraryPane,
+                    SelectedRowSurface::ListBackdrop => Surface::SelectedRow,
+                };
                 assert_eq!(
                     selected,
-                    Some(palette::SURFACE_FOCUSED),
+                    Some(surface_colors_for_column_focus(expected, true).fill),
                     "{surface:?} focused selected-row fill"
                 );
             } else {

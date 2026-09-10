@@ -6,6 +6,10 @@ use crate::app::components::{ComponentId, HomeComponent};
 use crate::app::tests::make_app_stub;
 use crate::app::{palette, PanelFocus, TabSelection};
 
+fn surface_fill(surface: palette::Surface, focused: bool) -> ratatui::style::Color {
+    palette::surface_colors_for_column_focus(surface, focused).fill
+}
+
 fn home_app() -> App {
     let mut app = make_app_stub();
     app.tab = TabSelection::Home;
@@ -165,7 +169,7 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
         .0;
     assert_eq!(
         buffer[(selected.x + 1, selected.y)].style().bg,
-        Some(palette::PILL_SELECTED_BG),
+        Some(surface_fill(palette::Surface::PillChipSelected, false)),
         "selected pill appearance"
     );
     let row_text = (0..buffer.area().width)
@@ -222,8 +226,14 @@ fn wide_home_selected_row_punches_through_to_the_library_backdrop() {
     };
 
     let (selected, body) = bgs(true);
-    assert_eq!(selected, Some(palette::SURFACE_BACKDROP));
-    assert_eq!(body, Some(palette::resolve_surface_focus(true)));
+    assert_eq!(
+        selected,
+        Some(surface_fill(palette::Surface::SelectedRow, false))
+    );
+    assert_eq!(
+        body,
+        Some(surface_fill(palette::Surface::LibraryPanel, true))
+    );
     assert_ne!(selected, body);
 
     let (selected, body) = bgs(false);
@@ -250,7 +260,7 @@ fn narrow_home_hero_shell_carries_the_focus_surface() {
         .downcast_ref::<HomeComponent>()
         .expect("Home component type");
     let hero = home.hero_area().expect("narrow Home paints an inline hero");
-    let expected = palette::resolve_surface_focus(true);
+    let expected = surface_fill(palette::Surface::InlineHero, true);
     let matches = (hero.left()..hero.right())
         .flat_map(|x| (hero.top()..hero.bottom()).map(move |y| (x, y)))
         .filter(|&(x, y)| terminal.backend().buffer()[(x, y)].style().bg == Some(expected))
@@ -280,11 +290,17 @@ fn narrow_home_inline_hero_contrasts_with_pane_backdrop() {
     let buffer = terminal.backend().buffer();
 
     let hero_bg = buffer[(hero.x + 1, hero.y + 1)].style().bg;
-    assert_eq!(hero_bg, Some(palette::resolve_surface_focus(true)));
+    assert_eq!(
+        hero_bg,
+        Some(surface_fill(palette::Surface::InlineHero, true))
+    );
 
     // A row cell above the hero: pane backdrop from `chrome.rs`, never flooded.
     let backdrop_bg = buffer[(area.x, hero.y.saturating_sub(1))].style().bg;
-    assert_eq!(backdrop_bg, Some(palette::SURFACE_BACKDROP));
+    assert_eq!(
+        backdrop_bg,
+        Some(surface_fill(palette::Surface::LibraryColumn, false))
+    );
     assert_ne!(hero_bg, backdrop_bg, "hero must read as a recessed card");
 }
 

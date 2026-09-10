@@ -2,6 +2,18 @@ use super::test_helpers::*;
 use crate::app::palette;
 use crate::app::tests::make_session;
 
+fn surface_fill(surface: palette::Surface, focused: bool) -> ratatui::style::Color {
+    palette::surface_colors_for_column_focus(surface, focused).fill
+}
+
+fn queue_only_fill(surface: palette::Surface) -> ratatui::style::Color {
+    palette::surface_colors(
+        surface,
+        &crate::app::layout::FocusState::queue_only_for_test(false),
+    )
+    .fill
+}
+
 #[test]
 fn short_window_keeps_queue_in_left_column() {
     let mut app = make_movie_app();
@@ -74,7 +86,7 @@ fn queue_only_renders_queue_focused_when_queue_holds_focus() {
         let cell = &buf[(layout.queue_area.x + 1, layout.queue_area.y + 1)];
         assert_eq!(
             cell.style().bg,
-            Some(palette::SURFACE_ACCENT_SOFT),
+            Some(surface_fill(palette::Surface::QueuePanel, true)),
             "queue-only with queue focus at width {width} must use the queue's focused frame background, got {:?}",
             cell.style().bg
         );
@@ -90,7 +102,7 @@ fn both_mode_focused_queue_keeps_focused_styling() {
     let cell = &buf[(layout.queue_area.x + 1, layout.queue_area.y + 1)];
     assert_eq!(
         cell.style().bg,
-        Some(palette::SURFACE_ACCENT_SOFT),
+        Some(surface_fill(palette::Surface::QueuePanel, true)),
         "focused queue in both mode must keep the queue's focused frame background, got {:?}",
         cell.style().bg
     );
@@ -355,7 +367,7 @@ fn wide_queue_only_leftover_rows_stay_dark_bg_without_duplicate_visualizer() {
     let leftover_cell = &buf[(30, 10)];
     assert_eq!(
         leftover_cell.style().bg,
-        Some(palette::SURFACE_CHROME),
+        Some(queue_only_fill(palette::Surface::PlaybackPanel)),
         "wide playback leftovers must keep DARK_BG, got {:?}",
         leftover_cell.style().bg
     );

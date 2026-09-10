@@ -163,7 +163,16 @@ fn queue_arrow_press_leaves_exactly_one_highlighted_row() {
     let highlighted_rows = (queue_area.y..queue_area.bottom())
         .filter(|&y| {
             (queue_area.x..queue_area.right())
-                .any(|x| buffer[(x, y)].style().bg == Some(crate::app::palette::SURFACE_FOCUSED))
+                .any(|x| {
+                    buffer[(x, y)].style().bg
+                        == Some(
+                            crate::app::palette::surface_colors_for_column_focus(
+                                crate::app::palette::Surface::SelectedRowOnQueueColumn,
+                                true,
+                            )
+                            .fill,
+                        )
+                })
         })
         .count();
     assert_eq!(

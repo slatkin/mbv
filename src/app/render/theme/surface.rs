@@ -90,8 +90,8 @@ pub(super) enum FocusSource {
 pub(super) struct Row {
     pub(super) level: Level,
     pub(super) focus: FocusSource,
-    /// Takes the soft content-body variant (`SURFACE_ACCENT_SOFT`) while
-    /// focused, instead of the level's focused fill.
+    /// Takes the soft content-body variant (`#48584e`, the table's declared
+    /// soft fill) while focused, instead of the level's focused fill.
     pub(super) soft: bool,
     /// The value the row paints while resting: today's value for that
     /// surface.

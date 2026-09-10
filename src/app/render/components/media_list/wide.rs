@@ -341,14 +341,19 @@ mod tests {
             SelectedRowSurface::OwningQueueColumn,
             SelectedRowSurface::OwningLibraryPane,
         ] {
+            let mapped = match surface {
+                SelectedRowSurface::OwningQueueColumn => palette::Surface::SelectedRowOnQueueColumn,
+                SelectedRowSurface::OwningLibraryPane => palette::Surface::SelectedRowOnLibraryPane,
+                SelectedRowSurface::ListBackdrop => palette::Surface::SelectedRow,
+            };
             assert_eq!(
                 selected_row_surface_color(surface, true),
-                palette::SURFACE_FOCUSED,
+                palette::surface_colors_for_column_focus(mapped, true).fill,
                 "{surface:?} focused fill"
             );
             assert_eq!(
                 selected_row_surface_color(surface, false),
-                palette::SURFACE_RESTING,
+                palette::surface_colors_for_column_focus(mapped, false).fill,
                 "{surface:?} resting fill"
             );
         }
@@ -357,7 +362,8 @@ mod tests {
         for focused in [true, false] {
             assert_eq!(
                 selected_row_surface_color(SelectedRowSurface::ListBackdrop, focused),
-                palette::SURFACE_BACKDROP,
+                palette::surface_colors_for_column_focus(palette::Surface::SelectedRow, focused)
+                    .fill,
                 "library punch-through is the backdrop (focused={focused})"
             );
         }

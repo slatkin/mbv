@@ -99,7 +99,8 @@ fn assert_title(
     assert_eq!(row_symbols(app, term), expected, "queue title text");
 
     let buffer = term.backend().buffer();
-    let base = palette::SURFACE_CHROME;
+    let base =
+        palette::surface_colors_for_column_focus(palette::Surface::QueuePanelBand, false).fill;
     let (local_scope, remote_scope) = scopes;
     for x in area.x..area.right() {
         if !local_scope.contains((x, area.y).into()) && !remote_scope.contains((x, area.y).into()) {
@@ -159,7 +160,11 @@ fn assert_title(
                         if local_selected {
                             palette::ACCENT
                         } else {
-                            palette::PILL_BG
+                            palette::surface_colors_for_column_focus(
+                                palette::Surface::PillChip,
+                                false,
+                            )
+                            .fill
                         },
                         false,
                     );
@@ -175,7 +180,11 @@ fn assert_title(
                             palette::TEXT_FOCUS_ACCENT
                         },
                         if local_selected {
-                            palette::PILL_BG
+                            palette::surface_colors_for_column_focus(
+                                palette::Surface::PillChip,
+                                false,
+                            )
+                            .fill
                         } else {
                             palette::ACCENT
                         },
@@ -271,11 +280,6 @@ fn queue_title_attached_emby_with_nerd_fonts() {
 fn queue_panel_band_keeps_the_chrome_band_surface_in_both_focus_states() {
     let expected =
         palette::surface_colors_for_column_focus(palette::Surface::QueuePanelBand, false).fill;
-    assert_eq!(
-        expected,
-        palette::SURFACE_CHROME,
-        "the queue band keeps today's chrome value"
-    );
 
     for focus in [PanelFocus::Queue, PanelFocus::Library] {
         let mut app = make_app_stub();

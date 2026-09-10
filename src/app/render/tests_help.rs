@@ -66,16 +66,6 @@ fn help_sidebar_body_and_band_paint_their_surfaces() {
         .unwrap();
     let body = palette::surface_colors_for_column_focus(palette::Surface::SidebarBody, false).fill;
     let band = palette::surface_colors_for_column_focus(palette::Surface::SidebarBand, false).fill;
-    assert_eq!(
-        body,
-        palette::SURFACE_RESTING,
-        "the expanded sidebar body keeps today's resting value"
-    );
-    assert_eq!(
-        band,
-        palette::SURFACE_CHROME,
-        "the sidebar band keeps today's chrome value"
-    );
     let buffer = terminal.backend().buffer();
     // Body row between the header (y+1) and the footer (y+height-2); the
     // left gutter is never covered by content.

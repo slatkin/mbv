@@ -188,7 +188,7 @@ pub fn assert_surface_pills(
     }
     assert_eq!(
         buffer[(first.x, first.y)].style().bg,
-        Some(palette::PILL_ROW_BG),
+        Some(palette::surface_colors_for_column_focus(palette::Surface::PillRow, false).fill),
         "pill row background"
     );
     for pill_y in &painted_rows {
@@ -237,7 +237,10 @@ pub fn assert_surface_pills(
         .0;
     assert_eq!(
         buffer[(selected.x + 1, selected.y)].style().bg,
-        Some(palette::PILL_SELECTED_BG),
+        Some(
+            palette::surface_colors_for_column_focus(palette::Surface::PillChipSelected, false)
+                .fill,
+        ),
         "selected pill appearance"
     );
 }

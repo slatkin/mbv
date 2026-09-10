@@ -2,7 +2,7 @@ use ratatui::style::Color;
 
 pub(super) const BASE: Color = Color::Rgb(26, 26, 26); // near-black, for text on colored bg
 pub(super) const PANEL_BG: Color = Color::Rgb(60, 66, 74); // #3c424a sidebar/panel background   // near-black, for text on colored bg
-pub(super) const ARTWORK_PLACEHOLDER: Color = Color::Rgb(45, 53, 59); // no-artwork surface
+pub(super) const ARTWORK_LOADING_PLACEHOLDER: Color = Color::Rgb(63, 63, 63); // artwork-loading fill (#3f3f3f), not a border
 pub(super) const OVERLAY: Color = Color::Rgb(63, 63, 63); // gray, unfocused borders
 pub(super) const MUTED: Color = Color::Rgb(108, 108, 108); // dim text, icons
 pub(super) const SUBTLE: Color = Color::Rgb(158, 158, 158); // secondary text
@@ -13,7 +13,8 @@ pub(super) const YELLOW: Color = Color::Rgb(219, 188, 127); // muted gold (#dbbc
 pub(super) const AQUA: Color = Color::Rgb(53, 167, 124); // emby green — folders, watched (#35a77c)
 pub(super) const AMBER: Color = Color::Rgb(199, 152, 71); // audiobookshelf gold (#c79847)
 pub(super) const FOAM: Color = Color::Rgb(58, 148, 197); // project blue (#3a94c5)
-pub(super) const BG_GREEN: Color = Color::Rgb(60, 72, 65); // dark green-grey (#3c4841)
+pub(super) const SURFACE_FOCUSED_BG: Color = Color::Rgb(60, 72, 65); // focused-surface green-grey (#3c4841)
+pub(super) const TEXT_ACCENT_MUTED_FG: Color = Color::Rgb(60, 72, 65); // "loaded"/"playing"/confirmed value text (#3c4841)
 pub(super) const GREEN: Color = Color::Rgb(147, 178, 89); // green (#93b259)
 pub(super) const IRIS: Color = Color::Rgb(167, 192, 128); // sage green — active tab, focused pill text (#A7C080)
 pub(super) const FOCUSED: Color = Color::Rgb(83, 83, 83); // focused item bg (#535353)
@@ -33,7 +34,7 @@ pub(super) const PILL_SELECTOR_BG: Color = Color::Rgb(30, 35, 38); // unselected
 pub(super) const PILL_SELECTOR_FG: Color = Color::Rgb(73, 81, 86); // unselected pill-selector foreground (#495156)
 pub(super) const PILL_SELECTOR_SELECTED_BG: Color = FOAM; // selected pill-selector surface
 pub(super) const PILL_SELECTOR_SELECTED_FG: Color = Color::Rgb(30, 35, 38); // selected pill-selector foreground (#1e2326)
-pub(super) const PILL_SELECTOR_OVERFLOW_FG: Color = BG_GREEN; // pill-selector overflow/edge accent
+pub(super) const PILL_SELECTOR_OVERFLOW_FG: Color = Color::Rgb(60, 72, 65); // pill-selector overflow/edge accent
 pub(super) const SCROLLBAR: Color = BG_GREEN_SOFT; // library/chrome scrollbar track/thumb
 pub(super) const ORANGE: Color = Color::Rgb(229, 152, 117); // warm orange (#e59875)
 pub(super) const PURPLE: Color = Color::Rgb(214, 153, 182); // muted purple (#d699b6)

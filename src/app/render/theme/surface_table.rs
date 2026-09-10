@@ -47,8 +47,8 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_RESTING,
         },
-        // The library punch-through: `list_selected_row_bg()` shows the
-        // backdrop beneath the list panel, never the panel's focus green.
+        // The library punch-through: the backdrop beneath the list panel
+        // shows through, never the panel's focus green.
         Surface::SelectedRow => Row {
             level: Level::ColumnPane,
             focus: FocusSource::Fixed,
@@ -161,13 +161,13 @@ pub(super) const fn row(surface: Surface) -> Row {
             level: Level::Recess,
             focus: FocusSource::Fixed,
             soft: false,
-            resting: SURFACE_ARTWORK_PLACEHOLDER,
+            resting: SURFACE_BACKDROP,
         },
         Surface::ArtworkLoadingPlaceholder => Row {
             level: Level::Recess,
             focus: FocusSource::Fixed,
             soft: false,
-            resting: BORDER_UNFOCUSED,
+            resting: primitives::ARTWORK_LOADING_PLACEHOLDER,
         },
         // --- chrome band ---
         Surface::StatusBar => Row {
@@ -180,7 +180,7 @@ pub(super) const fn row(surface: Surface) -> Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
             soft: false,
-            resting: SURFACE_STATUS_PILL,
+            resting: SURFACE_CHROME,
         },
         Surface::QueuePanelBand => Row {
             level: Level::ChromeBand,

@@ -230,7 +230,11 @@ mod tests {
         component.set_projection(PlaybackProjection {
             state: PlaybackState::default(),
             show_controls: true,
-            panel_bg: palette::SURFACE_PLAYBACK,
+            panel_bg: palette::surface_colors_for_column_focus(
+                palette::Surface::PlaybackPanel,
+                false,
+            )
+            .fill,
             narrow_player: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
             title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],
@@ -285,7 +289,11 @@ mod tests {
         component.set_projection(PlaybackProjection {
             state: PlaybackState::default(),
             show_controls: true,
-            panel_bg: palette::SURFACE_PLAYBACK,
+            panel_bg: palette::surface_colors_for_column_focus(
+                palette::Surface::PlaybackPanel,
+                false,
+            )
+            .fill,
             narrow_player: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
             title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],

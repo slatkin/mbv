@@ -11,6 +11,10 @@ use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
+fn surface_fill(surface: palette::Surface, focused: bool) -> ratatui::style::Color {
+    palette::surface_colors_for_column_focus(surface, focused).fill
+}
+
 fn feed_entry(guid: &str, title: &str, played: bool) -> FeedEntry {
     FeedEntry {
         guid: guid.into(),
@@ -126,8 +130,8 @@ fn wide_feeds_selected_row_punches_through_to_the_library_backdrop() {
     }
 
     let (selected, body) = selected_and_body_bg(true);
-    assert_eq!(selected, crate::app::palette::SURFACE_BACKDROP);
-    assert_eq!(body, crate::app::palette::resolve_surface_focus(true));
+    assert_eq!(selected, surface_fill(palette::Surface::SelectedRow, false));
+    assert_eq!(body, surface_fill(palette::Surface::LibraryPanel, true));
     assert_ne!(selected, body);
 
     let (selected, body) = selected_and_body_bg(false);
@@ -150,7 +154,7 @@ fn wide_feeds_left_hero_pane_is_a_plain_resting_surface() {
     for y in hero.y..hero.bottom() {
         for x in hero.x..hero.right() {
             let cell = &buffer[(x, y)];
-            assert_ne!(cell.bg, crate::app::palette::resolve_surface_focus(true));
+            assert_ne!(cell.bg, surface_fill(palette::Surface::HeroPane, true));
             assert!(
                 cell.symbol() != "▔" && cell.symbol() != "▁",
                 "hero pane must not carry a shell border at ({x},{y})"
@@ -159,7 +163,7 @@ fn wide_feeds_left_hero_pane_is_a_plain_resting_surface() {
     }
     assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].bg,
-        crate::app::palette::SURFACE_RESTING
+        surface_fill(palette::Surface::HeroPane, false)
     );
 }
 

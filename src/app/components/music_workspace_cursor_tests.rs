@@ -1,7 +1,12 @@
 use super::music_workspace::MusicWorkspaceComponent;
 use crate::app::components::msg::{AlbumCursorKind, ShellRequest};
 use crate::app::components::Msg;
+use crate::app::palette::{surface_colors_for_column_focus, Surface};
 use crate::app::render::{LibraryListRenderCtx, MusicWideRenderCtx};
+
+fn surface_fill(surface: Surface, focused: bool) -> ratatui::style::Color {
+    surface_colors_for_column_focus(surface, focused).fill
+}
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -236,7 +241,7 @@ fn music_workspace_track_selection_uses_the_shared_focused_row_surface() {
     for x in [track_panel.x, track_panel.right().saturating_sub(1)] {
         assert_eq!(
             buffer[(x, track_panel.y)].bg,
-            crate::app::palette::SURFACE_FOCUSED,
+            surface_fill(Surface::SelectedRowOnLibraryPane, true),
             "focused track selection reaches track panel edge {x}"
         );
     }
@@ -264,7 +269,7 @@ fn music_workspace_focused_track_box_uses_the_soft_surface_role() {
     let buffer = terminal.backend().buffer();
     assert_eq!(
         buffer[(track_content.x, track_content.y + 1)].bg,
-        crate::app::palette::SURFACE_ACCENT_SOFT,
+        surface_fill(Surface::MainContentBox, true),
         "focused track-list box uses the semantic soft surface role"
     );
 }
@@ -305,12 +310,12 @@ fn music_workspace_panel_fills_follow_the_library_column_not_the_track_cursor() 
     let track_fill = buffer[(track_content.x, track_content.y + 1)].bg;
     assert_eq!(
         rail_fill,
-        crate::app::palette::resolve_surface_focus(true),
+        surface_fill(Surface::LibraryPanel, true),
         "album rail body follows the library column's focus"
     );
     assert_eq!(
         track_fill,
-        crate::app::palette::SURFACE_ACCENT_SOFT,
+        surface_fill(Surface::MainContentBox, true),
         "track-list box follows the library column's focus"
     );
 
@@ -368,7 +373,7 @@ fn music_workspace_panel_fills_follow_the_library_column_not_the_track_cursor() 
     );
     assert_eq!(
         buffer[(track_selected.x, track_selected.y)].bg,
-        crate::app::palette::resolve_surface_focus(true),
+        surface_fill(Surface::SelectedRowOnLibraryPane, true),
         "track-list selected row takes its owning focused surface while it holds the cursor"
     );
 
@@ -381,12 +386,12 @@ fn music_workspace_panel_fills_follow_the_library_column_not_the_track_cursor() 
     let buffer = terminal.backend().buffer();
     assert_eq!(
         buffer[rail_panel].bg,
-        crate::app::palette::resolve_surface_focus(false),
+        surface_fill(Surface::LibraryPanel, false),
         "rail body rests when the queue column holds focus"
     );
     assert_eq!(
         buffer[(track_content.x, track_content.y + 1)].bg,
-        crate::app::palette::SURFACE_BACKDROP,
+        surface_fill(Surface::MainContentBox, false),
         "track-list box rests when the queue column holds focus"
     );
 }
@@ -678,11 +683,6 @@ fn music_wide_pill_row_spacer_is_the_chrome_band_surface() {
         false,
     )
     .fill;
-    assert_eq!(
-        expected,
-        crate::app::palette::SURFACE_BACKDROP,
-        "the spacer keeps today's backdrop value"
-    );
 
     for focused in [true, false] {
         let mut component = MusicWorkspaceComponent::new();

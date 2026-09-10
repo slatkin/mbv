@@ -7,6 +7,10 @@ use ratatui::style::Style;
 use ratatui::widgets::Block;
 use ratatui::Terminal;
 
+fn surface_fill(surface: palette::Surface, focused: bool) -> ratatui::style::Color {
+    palette::surface_colors_for_column_focus(surface, focused).fill
+}
+
 #[test]
 fn pill_bar_does_not_paint_the_reserved_spacer_row() {
     let labels = vec!["All".to_string(), "A-C".to_string()];
@@ -17,7 +21,9 @@ fn pill_bar_does_not_paint_the_reserved_spacer_row() {
         .draw(|f| {
             let area = Rect::new(0, 0, 20, 2);
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+                Block::default().style(
+                    Style::default().bg(surface_fill(palette::Surface::LibraryColumn, false)),
+                ),
                 area,
             );
             render_pill_bar(
@@ -34,9 +40,15 @@ fn pill_bar_does_not_paint_the_reserved_spacer_row() {
         .unwrap();
 
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(19, 0)].bg, palette::PILL_ROW_BG);
+    assert_eq!(
+        buffer[(19, 0)].bg,
+        surface_fill(palette::Surface::PillRow, false)
+    );
     for x in 0..20 {
-        assert_eq!(buffer[(x, 1)].bg, palette::SURFACE_BACKDROP);
+        assert_eq!(
+            buffer[(x, 1)].bg,
+            surface_fill(palette::Surface::LibraryColumn, false)
+        );
     }
 }
 

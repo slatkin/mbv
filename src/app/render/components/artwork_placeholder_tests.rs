@@ -15,7 +15,11 @@ fn artwork_placeholder_paints_requested_extent() {
     for y in 0..5 {
         for x in 0..8 {
             let expected = if area.contains((x, y).into()) {
-                palette::SURFACE_ARTWORK_PLACEHOLDER
+                palette::surface_colors_for_column_focus(
+                    palette::Surface::ArtworkPlaceholder,
+                    false,
+                )
+                .fill
             } else {
                 ratatui::style::Color::Reset
             };

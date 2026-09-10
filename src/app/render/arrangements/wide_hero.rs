@@ -348,8 +348,14 @@ mod wide_hero_hero_pane_tests {
             })
             .unwrap();
         let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
-        assert_eq!(cell.bg, palette::SURFACE_RESTING);
-        assert_ne!(cell.bg, palette::resolve_surface_focus(true));
+        assert_eq!(
+            cell.bg,
+            palette::surface_colors_for_column_focus(palette::Surface::HeroPane, false).fill
+        );
+        assert_ne!(
+            cell.bg,
+            palette::surface_colors_for_column_focus(palette::Surface::HeroPane, true).fill
+        );
     }
 
     #[test]
@@ -370,7 +376,10 @@ mod wide_hero_hero_pane_tests {
             })
             .unwrap();
         let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
-        assert_eq!(cell.bg, palette::resolve_surface_focus(true));
+        assert_eq!(
+            cell.bg,
+            palette::surface_colors_for_column_focus(palette::Surface::HeroPane, true).fill
+        );
 
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         terminal
@@ -380,7 +389,10 @@ mod wide_hero_hero_pane_tests {
             })
             .unwrap();
         let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
-        assert_eq!(cell.bg, palette::resolve_surface_focus(false));
+        assert_eq!(
+            cell.bg,
+            palette::surface_colors_for_column_focus(palette::Surface::HeroPane, false).fill
+        );
     }
 
     #[test]

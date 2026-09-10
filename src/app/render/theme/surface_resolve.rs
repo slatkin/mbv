@@ -99,7 +99,7 @@ fn build(surface: Surface, own_column_focused: bool) -> SurfaceColors {
     let focused = own_column_focused && row.focus != FocusSource::Fixed;
     let mut colors = if focused {
         SurfaceColors::fill(if row.soft {
-            SURFACE_ACCENT_SOFT
+            primitives::BG_GREEN_SOFT
         } else {
             row.level.focused_fill()
         })
@@ -163,8 +163,8 @@ mod tests {
             Surface::SelectedRowOnLibraryPane => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE, ACCENT_ACTIVE),
             Surface::LibraryPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::QueuePanel => (SURFACE_ACCENT_SOFT, SURFACE_BACKDROP),
-            Surface::MainContentBox => (SURFACE_ACCENT_SOFT, SURFACE_BACKDROP),
+            Surface::QueuePanel => (primitives::BG_GREEN_SOFT, SURFACE_BACKDROP),
+            Surface::MainContentBox => (primitives::BG_GREEN_SOFT, SURFACE_BACKDROP),
             Surface::InlineHero => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::PlaybackPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::SidebarBody => (SURFACE_RESTING, SURFACE_RESTING),
@@ -173,12 +173,13 @@ mod tests {
             Surface::PlaybackRecess => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::PlaybackBottomRow => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::PlaybackStatusPill => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::ArtworkPlaceholder => {
-                (SURFACE_ARTWORK_PLACEHOLDER, SURFACE_ARTWORK_PLACEHOLDER)
-            }
-            Surface::ArtworkLoadingPlaceholder => (BORDER_UNFOCUSED, BORDER_UNFOCUSED),
+            Surface::ArtworkPlaceholder => (SURFACE_BACKDROP, SURFACE_BACKDROP),
+            Surface::ArtworkLoadingPlaceholder => (
+                primitives::ARTWORK_LOADING_PLACEHOLDER,
+                primitives::ARTWORK_LOADING_PLACEHOLDER,
+            ),
             Surface::StatusBar => (SURFACE_CHROME, SURFACE_CHROME),
-            Surface::StatusBarPill => (SURFACE_STATUS_PILL, SURFACE_STATUS_PILL),
+            Surface::StatusBarPill => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::QueuePanelBand => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::PillRow => (PILL_ROW_BG, PILL_ROW_BG),
             Surface::PillChip => (PILL_BG, PILL_BG),
@@ -289,10 +290,10 @@ mod tests {
     }
 
     /// The soft content body is the table's one declared variant: it takes the
-    /// retired `SURFACE_ACCENT_SOFT` value while focused and differs from the
-    /// default focused content body, so no soft surface is repainted.
+    /// `#48584e` value while focused and differs from the default focused
+    /// content body, so no soft surface is repainted.
     #[test]
-    fn soft_content_body_matches_the_retired_role() {
+    fn soft_content_body_matches_its_declared_variant() {
         let soft_rows: Vec<Surface> = Surface::ALL
             .iter()
             .copied()
@@ -307,12 +308,12 @@ mod tests {
             };
             assert_eq!(
                 surface_colors(surface, &state).fill,
-                SURFACE_ACCENT_SOFT,
+                primitives::BG_GREEN_SOFT,
                 "{surface:?} focused soft fill"
             );
         }
         // The soft variant is not the default focused content body.
-        assert_ne!(SURFACE_ACCENT_SOFT, SURFACE_FOCUSED);
+        assert_ne!(primitives::BG_GREEN_SOFT, SURFACE_FOCUSED);
         assert_eq!(row(Surface::QueuePanel).resting, SURFACE_BACKDROP);
     }
 

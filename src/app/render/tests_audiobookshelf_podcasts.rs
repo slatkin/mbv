@@ -6,6 +6,10 @@ use crate::app::PanelFocus;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
+fn surface_fill(surface: palette::Surface, focused: bool) -> ratatui::style::Color {
+    palette::surface_colors_for_column_focus(surface, focused).fill
+}
+
 /// Local podcast shell render harness (task 5.3d.10e, Unit A): size the
 /// terminal and set both panel-focus fields so `effective_panel_focus()`
 /// reports `focused` at any width (mini-widths read `mini_view_focus`, 80+
@@ -140,7 +144,7 @@ fn narrow_podcasts_replace_selected_show_row_with_detail() {
     );
     assert_eq!(
         buffer[(hero.x, hero.y + 1)].style().bg,
-        Some(palette::resolve_surface_focus(true))
+        Some(surface_fill(palette::Surface::InlineHero, true))
     );
     assert_eq!(
         buffer[(hero.x + SELECTED_BLOCK_SIDE_PADDING, hero.y + 2)].symbol(),
@@ -575,8 +579,8 @@ fn wide_podcast_selected_row_highlight_follows_the_cursor_subpanel() {
     // Before 3.3 the show rail used the column focus for the paint policy, so
     // it kept this marker while the episode pane held the cursor.
     assert_ne!(
-        palette::list_selected_row_bg(),
-        palette::resolve_surface_focus(true),
+        surface_fill(palette::Surface::SelectedRow, false),
+        surface_fill(palette::Surface::LibraryPanel, true),
         "the selected-row surface must be distinguishable from a focused body"
     );
 
@@ -604,12 +608,12 @@ fn wide_podcast_selected_row_highlight_follows_the_cursor_subpanel() {
     let hero_fill = term.backend().buffer()[(hero.x, hero.y)].bg;
     assert_eq!(
         rail_fill,
-        palette::resolve_surface_focus(true),
+        surface_fill(palette::Surface::LibraryPanel, true),
         "show rail body follows the library column's focus"
     );
     assert_eq!(
         hero_fill,
-        palette::resolve_surface_focus(true),
+        surface_fill(palette::Surface::HeroPane, true),
         "hero pane follows the library column's focus"
     );
     assert_eq!(
@@ -620,7 +624,7 @@ fn wide_podcast_selected_row_highlight_follows_the_cursor_subpanel() {
     assert_eq!(term.backend().buffer()[rail_selected].fg, marker_fg);
     assert_eq!(
         term.backend().buffer()[rail_selected].bg,
-        palette::list_selected_row_bg(),
+        surface_fill(palette::Surface::SelectedRow, false),
         "the marked show row punches through to its selected-row surface"
     );
     assert!(

@@ -195,15 +195,6 @@ pub(crate) use theme::{
     TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_STRONG,
     TEXT_TAB_INACTIVE,
 };
-// Test-only role names: row 4.2 moved their last production callers onto the
-// surface table and row 4.3 retires them. Kept for buffer expectations that
-// still name them.
-#[cfg(test)]
-pub(crate) use theme::{
-    list_selected_row_bg, resolve_surface_focus, PILL_BG, PILL_ROW_BG, PILL_SELECTED_BG,
-    SURFACE_ACCENT_SOFT, SURFACE_ARTWORK_PLACEHOLDER, SURFACE_BACKDROP, SURFACE_CHROME,
-    SURFACE_FOCUSED, SURFACE_PLAYBACK, SURFACE_RESTING,
-};
 // The closed surface table (`unify-surface-colour` D2/D3) is bridged to
 // `palette.rs` the same way. Its visibility is `crate::app`, so it is not part
 // of the wider `pub(crate)` role list above.

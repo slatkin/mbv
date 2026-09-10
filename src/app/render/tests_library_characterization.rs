@@ -6,6 +6,10 @@ use super::*;
 use crate::app::tests::make_item;
 use crate::app::TabSelection;
 
+fn surface_fill(surface: palette::Surface, focused: bool) -> ratatui::style::Color {
+    palette::surface_colors_for_column_focus(surface, focused).fill
+}
+
 #[test]
 fn library_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states() {
     // Note: width 120 triggers wide Movies layout, which is now handled by
@@ -39,19 +43,19 @@ fn wide_library_column_gutter_follows_panel_focus() {
         (
             crate::app::PanelMode::LibraryOnly,
             crate::app::PanelFocus::Library,
-            crate::app::palette::SURFACE_FOCUSED,
+            surface_fill(palette::Surface::LibraryColumn, true),
             "wide LibraryOnly focused",
         ),
         (
             crate::app::PanelMode::Both,
             crate::app::PanelFocus::Library,
-            crate::app::palette::SURFACE_FOCUSED,
+            surface_fill(palette::Surface::LibraryColumn, true),
             "wide Both focused",
         ),
         (
             crate::app::PanelMode::Both,
             crate::app::PanelFocus::Queue,
-            crate::app::palette::SURFACE_BACKDROP,
+            surface_fill(palette::Surface::LibraryColumn, false),
             "wide Both queue-focused",
         ),
     ];
@@ -251,8 +255,8 @@ fn wide_movies_selected_row_punches_through_to_the_library_backdrop() {
     }
 
     let (selected, body) = selected_and_body_bg(true);
-    assert_eq!(selected, crate::app::palette::SURFACE_BACKDROP);
-    assert_eq!(body, crate::app::palette::resolve_surface_focus(true));
+    assert_eq!(selected, surface_fill(palette::Surface::SelectedRow, false));
+    assert_eq!(body, surface_fill(palette::Surface::LibraryPanel, true));
     assert_ne!(selected, body);
 
     let (selected, body) = selected_and_body_bg(false);

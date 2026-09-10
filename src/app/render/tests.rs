@@ -6,6 +6,18 @@ use crate::app::RemoteSlotState;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
+fn surface_fill(surface: palette::Surface, focused: bool) -> ratatui::style::Color {
+    palette::surface_colors_for_column_focus(surface, focused).fill
+}
+
+fn queue_only_fill(surface: palette::Surface) -> ratatui::style::Color {
+    palette::surface_colors(
+        surface,
+        &crate::app::layout::FocusState::queue_only_for_test(false),
+    )
+    .fill
+}
+
 #[test]
 fn volume_pill_icon_follows_volume_state() {
     let mut app = make_app_stub();
@@ -122,14 +134,17 @@ fn title_row_next_area_matches_rendered_next_glyph_width_and_position() {
             &mut layout,
             1,
             true,
-            &Some(("Title".into(), palette::SURFACE_FOCUSED)),
-            palette::SURFACE_PLAYBACK,
+            &Some((
+                "Title".into(),
+                surface_fill(palette::Surface::PlaybackPanel, true),
+            )),
+            surface_fill(palette::Surface::PlaybackPanel, false),
         );
         render_title_row(
             f,
             Rect::new(0, 0, 60, 1),
             "Title",
-            palette::SURFACE_FOCUSED,
+            surface_fill(palette::Surface::PlaybackPanel, true),
             &mut context,
         );
     })
@@ -165,14 +180,17 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
             &mut layout,
             1,
             true,
-            &Some(("Title".into(), palette::SURFACE_FOCUSED)),
-            palette::SURFACE_PLAYBACK,
+            &Some((
+                "Title".into(),
+                surface_fill(palette::Surface::PlaybackPanel, true),
+            )),
+            surface_fill(palette::Surface::PlaybackPanel, false),
         );
         render_title_row(
             f,
             Rect::new(0, 0, 60, 1),
             "Title",
-            palette::SURFACE_FOCUSED,
+            surface_fill(palette::Surface::PlaybackPanel, true),
             &mut context,
         );
     })
@@ -266,17 +284,17 @@ fn wide_panel_bottom_row_follows_the_library_column_surface() {
     let buf = terminal.backend().buffer();
     assert_eq!(
         buf[(area.x, area.y)].bg,
-        palette::SURFACE_PLAYBACK,
+        surface_fill(palette::Surface::PlaybackPanel, false),
         "the panel's seekbar row keeps its fill while the library holds focus"
     );
     assert_eq!(
         buf[(area.x, area.y + 2)].bg,
-        palette::SURFACE_PLAYBACK,
+        surface_fill(palette::Surface::PlaybackPanel, false),
         "the panel's blank row keeps its fill while the library holds focus"
     );
     assert_eq!(
         buf[(area.x, area.y + 3)].bg,
-        palette::SURFACE_FOCUSED,
+        surface_fill(palette::Surface::LibraryColumn, true),
         "the row above the pill bar follows the focused library column"
     );
     // The only assertion that fails if the focused and resting surface
@@ -284,7 +302,7 @@ fn wide_panel_bottom_row_follows_the_library_column_surface() {
     // exists to expose.
     assert_ne!(
         buf[(area.x, area.y + 3)].bg,
-        palette::SURFACE_BACKDROP,
+        surface_fill(palette::Surface::LibraryColumn, false),
         "the focused library column must light that row up"
     );
 
@@ -292,22 +310,22 @@ fn wide_panel_bottom_row_follows_the_library_column_surface() {
     let buf = terminal.backend().buffer();
     assert_eq!(
         buf[(area.x, area.y)].bg,
-        palette::SURFACE_FOCUSED,
+        surface_fill(palette::Surface::PlaybackPanel, true),
         "the queue-focused panel content row keeps its fill"
     );
     assert_eq!(
         buf[(area.x, area.y + 1)].bg,
-        palette::SURFACE_FOCUSED,
+        surface_fill(palette::Surface::PlaybackPanel, true),
         "the queue-focused panel title row keeps its fill"
     );
     assert_eq!(
         buf[(area.x, area.y + 2)].bg,
-        palette::SURFACE_FOCUSED,
+        surface_fill(palette::Surface::PlaybackPanel, true),
         "the queue-focused panel blank row keeps its fill"
     );
     assert_eq!(
         buf[(area.x, area.y + 3)].bg,
-        palette::SURFACE_BACKDROP,
+        surface_fill(palette::Surface::LibraryColumn, false),
         "the row above the pill bar rests with the unfocused library column"
     );
 }
@@ -338,7 +356,7 @@ fn narrow_queue_only_panel_puts_title_on_bottom_now_playing_row() {
                 4,
                 true,
                 &Some(("My Title".to_string(), palette::TEXT_STRONG)),
-                palette::SURFACE_CHROME,
+                queue_only_fill(palette::Surface::PlaybackPanel),
             ),
         );
     })
@@ -387,7 +405,7 @@ fn narrow_now_playing_row_indents_and_marquees_a_long_title() {
                 4,
                 true,
                 &Some((long_title.to_string(), palette::TEXT_STRONG)),
-                palette::SURFACE_CHROME,
+                queue_only_fill(palette::Surface::PlaybackPanel),
             ),
         );
     })
@@ -434,7 +452,7 @@ fn narrow_now_playing_row_indents_and_marquees_a_long_title() {
                     4,
                     true,
                     &Some((long_title.to_string(), palette::TEXT_STRONG)),
-                    palette::SURFACE_CHROME,
+                    queue_only_fill(palette::Surface::PlaybackPanel),
                 ),
             );
         })
@@ -467,7 +485,7 @@ fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
                 1,
                 true,
                 &Some((long_title.to_string(), palette::TEXT_STRONG)),
-                palette::SURFACE_CHROME,
+                queue_only_fill(palette::Surface::PlaybackPanel),
             );
             render_title_row(
                 f,
@@ -533,7 +551,7 @@ fn idle_feed_title_marquees_instead_of_truncating() {
                     4,
                     false, // !show_controls => idle state
                     &None,
-                    palette::SURFACE_CHROME,
+                    queue_only_fill(palette::Surface::PlaybackPanel),
                 ),
             );
         })

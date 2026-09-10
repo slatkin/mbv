@@ -14,6 +14,10 @@ use ratatui::Terminal;
 use std::collections::HashMap;
 use tuirealm::component::{AppComponent, Component};
 
+fn surface_fill(surface: palette::Surface, focused: bool) -> ratatui::style::Color {
+    palette::surface_colors_for_column_focus(surface, focused).fill
+}
+
 /// Paints the wide TV workspace exactly as the live shell does: draw the
 /// legacy `App` base frame (which now only publishes the `tv_wide_*`
 /// hand-off geometry, task 5.3d.18d) then render the mounted
@@ -142,7 +146,7 @@ fn wide_tv_series_placeholder_paints_the_full_portrait_budget() {
         for x in 2..20 {
             assert_eq!(
                 buffer[(x, y)].bg,
-                palette::BORDER_UNFOCUSED,
+                surface_fill(palette::Surface::ArtworkLoadingPlaceholder, false),
                 "unpainted portrait cell at {x},{y}"
             );
         }
@@ -360,7 +364,7 @@ fn wide_tv_episode_list_uses_shared_focus_surfaces_when_focused() {
     let episode_list_area = component.test_layout().tv_wide_episode_list_area;
     assert_eq!(
         terminal.backend().buffer()[(episode_list_area.x, episode_list_area.y)].bg,
-        palette::SURFACE_FOCUSED,
+        surface_fill(palette::Surface::SelectedRowOnLibraryPane, true),
         "selected episode row uses the shared focused surface"
     );
     let unselected_row_y = episode_list_area.y.saturating_add(1);
@@ -370,7 +374,7 @@ fn wide_tv_episode_list_uses_shared_focus_surfaces_when_focused() {
             unselected_row_y
         )]
             .bg,
-        palette::SURFACE_ACCENT_SOFT
+        surface_fill(palette::Surface::MainContentBox, true)
     );
 }
 
@@ -416,11 +420,13 @@ fn wide_tv_overview_box_follows_the_pane_focus_like_the_episode_box() {
     let (resting_buffer, hero, episode_box) = paint(false);
     let overview_resting = (hero.x..hero.right())
         .flat_map(|x| (hero.y..episode_box.y).map(move |y| (x, y)))
-        .find(|&(x, y)| resting_buffer[(x, y)].bg == palette::SURFACE_BACKDROP)
+        .find(|&(x, y)| {
+            resting_buffer[(x, y)].bg == surface_fill(palette::Surface::MainContentBox, false)
+        })
         .expect("the resting overview box keeps its backdrop inset");
     assert_eq!(
         resting_buffer[overview_resting].bg,
-        palette::SURFACE_BACKDROP,
+        surface_fill(palette::Surface::MainContentBox, false),
         "the resting overview box keeps today's #2d353b inset"
     );
 }
@@ -459,19 +465,19 @@ fn wide_tv_panel_fills_follow_the_library_column_not_the_episode_cursor() {
     let episode_fill = terminal.backend().buffer()[(episode_fill_x, episode_box.y + 1)].bg;
     assert_eq!(
         rail_body,
-        palette::resolve_surface_focus(true),
+        surface_fill(palette::Surface::LibraryPanel, true),
         "rail body follows the library column's focus"
     );
     assert_eq!(
         episode_fill,
-        palette::SURFACE_ACCENT_SOFT,
+        surface_fill(palette::Surface::MainContentBox, true),
         "episode box follows the library column's focus"
     );
     // The rail holds the cursor, so its selected row is the punch-through
     // surface against the focused body.
     assert_eq!(
         terminal.backend().buffer()[(rail.x, rail.y + 1)].bg,
-        palette::SURFACE_BACKDROP,
+        surface_fill(palette::Surface::SelectedRow, false),
         "rail selected-row highlight while the rail holds the cursor"
     );
 
@@ -518,12 +524,12 @@ fn wide_tv_panel_fills_follow_the_library_column_not_the_episode_cursor() {
     let episode_box = component.test_layout().tv_wide_episode_list_area;
     assert_eq!(
         terminal.backend().buffer()[(rail.x, rail.y + 2)].bg,
-        palette::resolve_surface_focus(false),
+        surface_fill(palette::Surface::LibraryPanel, false),
         "rail body rests when the queue column holds focus"
     );
     assert_eq!(
         terminal.backend().buffer()[(episode_fill_x, episode_box.y + 1)].bg,
-        palette::SURFACE_BACKDROP,
+        surface_fill(palette::Surface::MainContentBox, false),
         "episode box rests when the queue column holds focus"
     );
 }
@@ -617,7 +623,7 @@ fn wide_tv_rail_keeps_the_focused_surface_when_the_episode_pane_takes_the_cursor
     // per-screen `episode_focused` bit no longer chooses the fill.
     assert_eq!(
         terminal.backend().buffer()[(rail.x, rail.y + 2)].bg,
-        palette::resolve_surface_focus(true),
+        surface_fill(palette::Surface::LibraryPanel, true),
         "right rail keeps the focused surface while the library column holds focus"
     );
 }
@@ -635,7 +641,9 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
         terminal
             .draw(|f| {
                 f.render_widget(
-                    Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+                    Block::default().style(
+                        Style::default().bg(surface_fill(palette::Surface::LibraryColumn, false)),
+                    ),
                     area,
                 );
                 app.render_library(f, area, &mut layout, None);
@@ -653,11 +661,11 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
     // takes the library backdrop so it reads against the green panel body.
     assert_eq!(
         focused_buffer[(fla.x.saturating_sub(1), fla.y.saturating_sub(1))].bg,
-        palette::resolve_surface_focus(true)
+        surface_fill(palette::Surface::LibraryPanel, true)
     );
     assert_eq!(
         focused_buffer[(fla.x, fla.y + 1)].bg,
-        palette::SURFACE_BACKDROP
+        surface_fill(palette::Surface::SelectedRow, false)
     );
     assert_ne!(
         focused_buffer[(fla.x, fla.y + 1)].bg,
@@ -672,7 +680,7 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
     // body.
     assert_eq!(
         unfocused_buffer[(ula.x.saturating_sub(1), ula.y.saturating_sub(1))].bg,
-        palette::resolve_surface_focus(false)
+        surface_fill(palette::Surface::LibraryPanel, false)
     );
     assert_eq!(
         unfocused_buffer[(ula.x, ula.y + 1)].bg,
