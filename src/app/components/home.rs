@@ -97,6 +97,10 @@ pub struct HomeComponent {
     /// 5.3d, Home legacy underpaint removal). `None` when this render
     /// painted no hero (too short, or no hero item).
     hero_area: Option<Rect>,
+    /// Session-only Wide hero list-pane width override (per-draw shell push,
+    /// `None` = default ratio). Forwarded into the shared split; never stored
+    /// clamped.
+    list_pane_width: Option<u16>,
 }
 
 impl HomeComponent {
@@ -118,6 +122,7 @@ impl HomeComponent {
             list_area: Rect::default(),
             selected_item_rect: None,
             hero_area: None,
+            list_pane_width: None,
         }
     }
 
@@ -184,6 +189,14 @@ impl HomeComponent {
 
     pub(in crate::app) fn set_images_enabled(&mut self, images_enabled: bool) {
         self.images_enabled = images_enabled;
+    }
+
+    /// Records the session-only Wide hero list-pane width override for the
+    /// next `view()`. Pushed each frame by `render_home_component`; it is a
+    /// layout fact, not content, so it never enters the event-scoped
+    /// `set_content` projection.
+    pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
+        self.list_pane_width = list_pane_width;
     }
 
     /// Takes the cover image (if any) `view()` computed but could not
@@ -644,7 +657,7 @@ impl Component for HomeComponent {
         // change reconfigures the same owner and preserves only the outgoing
         // selected-row viewport offset — the owner is never copied between
         // presentations.
-        let wide = crate::app::render::wide_hero_presentation(area).is_some();
+        let wide = crate::app::render::wide_hero_fits(area);
         self.wide = wide;
         self.ensure_carrier();
 
@@ -665,6 +678,7 @@ impl Component for HomeComponent {
             control,
             self.use_nerd_fonts,
             self.images_enabled,
+            self.list_pane_width,
         );
         self.pill_targets = result.pill_targets;
         self.list_area = result.left_area;

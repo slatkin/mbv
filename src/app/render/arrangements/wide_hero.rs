@@ -16,9 +16,10 @@ use textwrap::wrap;
 pub(in crate::app::render) const WIDE_HERO_MIN_AREA_HEIGHT: u16 = 6;
 /// Minimum width either Wide hero pane may shrink to (decision 5's
 /// minimum pane width).
-const WIDE_HERO_MIN_PANE_WIDTH: u16 = 40;
-/// Empty columns separating the Wide hero arrangement's two panes.
-const WIDE_HERO_PANE_GAP: u16 = 2;
+pub(in crate::app) const WIDE_HERO_MIN_PANE_WIDTH: u16 = 40;
+/// Empty columns separating the Wide hero arrangement's two panes. The
+/// draggable boundary IS this gap; the split's override clamp reserves it.
+pub(in crate::app) const WIDE_HERO_PANE_GAP: u16 = 2;
 /// Height of the pill row at the top of the Wide hero arrangement's left
 /// (list) pane.
 const WIDE_HERO_PILLS_ROW_HEIGHT: u16 = 1;
@@ -52,15 +53,25 @@ pub(in crate::app) struct WideHeroPanes {
     pub hero: Rect,
 }
 
-pub(in crate::app) fn wide_hero_presentation(content_area: Rect) -> Option<WideHeroPanes> {
-    (content_area.width >= crate::app::TWO_COLUMN_THRESHOLD
-        && content_area.height.saturating_sub(1) >= WIDE_HERO_MIN_AREA_HEIGHT)
-        .then(|| {
-            let (mut browser, mut hero) = wide_hero_split(content_area);
-            hero.height = hero.height.saturating_sub(1);
-            browser.height = browser.height.saturating_sub(1);
-            WideHeroPanes { browser, hero }
-        })
+/// Whether `content_area` fits the Wide hero two-pane presentation (the
+/// shared breakpoint predicate). Callers that only need the breakpoint use
+/// this; geometry is only ever produced by [`wide_hero_presentation`], which
+/// takes the split override, so a breakpoint check can never bypass it.
+pub(in crate::app) fn wide_hero_fits(content_area: Rect) -> bool {
+    content_area.width >= crate::app::TWO_COLUMN_THRESHOLD
+        && content_area.height.saturating_sub(1) >= WIDE_HERO_MIN_AREA_HEIGHT
+}
+
+pub(in crate::app) fn wide_hero_presentation(
+    content_area: Rect,
+    override_width: Option<u16>,
+) -> Option<WideHeroPanes> {
+    wide_hero_fits(content_area).then(|| {
+        let (mut browser, mut hero) = wide_hero_split(content_area, override_width);
+        hero.height = hero.height.saturating_sub(1);
+        browser.height = browser.height.saturating_sub(1);
+        WideHeroPanes { browser, hero }
+    })
 }
 
 #[cfg(test)]
@@ -82,7 +93,7 @@ mod tests {
         let WideHeroPanes {
             hero: left,
             browser: right,
-        } = wide_hero_presentation(area).expect("wide area");
+        } = wide_hero_presentation(area, None).expect("wide area");
         assert_eq!(left.height, area.height - 1);
         assert_eq!(right.height, area.height - 1);
         assert_eq!(left.bottom(), area.bottom() - 1);
@@ -123,16 +134,25 @@ mod tests {
 /// horizontal split: a `WIDE_HERO_PANE_GAP`-column gutter between a
 /// ~40%-width browser (list) pane on the left and the larger hero pane
 /// taking the remainder on the right, each floored at
-/// `WIDE_HERO_MIN_PANE_WIDTH`.
-pub(in crate::app::render) fn wide_hero_split(content_area: Rect) -> (Rect, Rect) {
-    let browser_w = ((content_area.width as u32 * 2 / 5) as u16)
-        .max(WIDE_HERO_MIN_PANE_WIDTH)
-        .min(
-            content_area
-                .width
-                .saturating_sub(WIDE_HERO_MIN_PANE_WIDTH)
-                .saturating_sub(WIDE_HERO_PANE_GAP),
-        );
+/// `WIDE_HERO_MIN_PANE_WIDTH`. A `Some` override replaces the ratio default
+/// after being clamped to the valid range for this `content_area`; callers
+/// reach it only through [`wide_hero_presentation`]/[`wide_library_panes`]
+/// (the `no-wide-hero-split-outside-arrangement` scan rule enforces that).
+/// The clamp lives in `src/app/list_pane_width.rs`.
+pub(in crate::app::render) fn wide_hero_split(
+    content_area: Rect,
+    override_width: Option<u16>,
+) -> (Rect, Rect) {
+    let browser_w =
+        crate::app::list_pane_width::normalize_list_pane_width(override_width, content_area.width)
+            .unwrap_or_else(|| (content_area.width as u32 * 2 / 5) as u16)
+            .max(WIDE_HERO_MIN_PANE_WIDTH)
+            .min(
+                content_area
+                    .width
+                    .saturating_sub(WIDE_HERO_MIN_PANE_WIDTH)
+                    .saturating_sub(WIDE_HERO_PANE_GAP),
+            );
     let hero_w = content_area
         .width
         .saturating_sub(browser_w)
@@ -151,6 +171,34 @@ pub(in crate::app::render) fn wide_hero_split(content_area: Rect) -> (Rect, Rect
             height: content_area.height,
         },
     )
+}
+
+#[cfg(test)]
+mod split_override_tests {
+    use super::*;
+
+    fn content(width: u16) -> Rect {
+        Rect {
+            x: 3,
+            y: 2,
+            width,
+            height: 20,
+        }
+    }
+
+    #[test]
+    fn override_moves_both_panes_with_the_gap_following() {
+        let area = content(120);
+        let (default_browser, default_hero) = wide_hero_split(area, None);
+        let (browser, hero) = wide_hero_split(area, Some(70));
+        // The list pane becomes exactly the override; the hero pane takes the
+        // remainder and the shared gutter stays between them.
+        assert_eq!(browser.width, 70);
+        assert_eq!(hero.x, browser.right() + WIDE_HERO_PANE_GAP);
+        assert_eq!(browser.width + WIDE_HERO_PANE_GAP + hero.width, area.width);
+        assert!(browser.width > default_browser.width);
+        assert!(hero.width < default_hero.width);
+    }
 }
 
 /// The Wide hero arrangement's left (list) pane geometry: a one-row pill
@@ -245,10 +293,11 @@ pub(in crate::app) fn wide_hero_hero_pane(
     f: &mut Frame,
     content_area: Rect,
     focus: LeftPaneFocus,
+    override_width: Option<u16>,
 ) -> Option<Rect> {
     let WideHeroPanes {
         hero: hero_panel, ..
-    } = wide_hero_presentation(content_area)?;
+    } = wide_hero_presentation(content_area, override_width)?;
     let background = match focus {
         LeftPaneFocus::ReadOnly => palette::SURFACE_RESTING,
         LeftPaneFocus::Workspace(held) => palette::resolve_surface_focus(held),
@@ -282,11 +331,11 @@ mod wide_hero_hero_pane_tests {
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         let WideHeroPanes {
             hero: left_panel, ..
-        } = wide_hero_presentation(area).expect("wide fits");
+        } = wide_hero_presentation(area, None).expect("wide fits");
         terminal
             .draw(|f| {
                 let returned =
-                    wide_hero_hero_pane(f, area, LeftPaneFocus::ReadOnly).expect("wide fits");
+                    wide_hero_hero_pane(f, area, LeftPaneFocus::ReadOnly, None).expect("wide fits");
                 assert_eq!(returned, padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y));
             })
             .unwrap();
@@ -301,11 +350,11 @@ mod wide_hero_hero_pane_tests {
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         let WideHeroPanes {
             hero: left_panel, ..
-        } = wide_hero_presentation(area).expect("wide fits");
+        } = wide_hero_presentation(area, None).expect("wide fits");
         let expected = padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y);
         terminal
             .draw(|f| {
-                let returned = wide_hero_hero_pane(f, area, LeftPaneFocus::Workspace(true))
+                let returned = wide_hero_hero_pane(f, area, LeftPaneFocus::Workspace(true), None)
                     .expect("wide fits");
                 assert_eq!(returned.x, left_panel.x + PANE_PAD_X);
                 assert_eq!(returned.y, left_panel.y + PANE_PAD_Y);
@@ -318,7 +367,8 @@ mod wide_hero_hero_pane_tests {
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         terminal
             .draw(|f| {
-                wide_hero_hero_pane(f, area, LeftPaneFocus::Workspace(false)).expect("wide fits");
+                wide_hero_hero_pane(f, area, LeftPaneFocus::Workspace(false), None)
+                    .expect("wide fits");
             })
             .unwrap();
         let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
@@ -336,7 +386,10 @@ mod wide_hero_hero_pane_tests {
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         terminal
             .draw(|f| {
-                assert_eq!(wide_hero_hero_pane(f, area, LeftPaneFocus::ReadOnly), None);
+                assert_eq!(
+                    wide_hero_hero_pane(f, area, LeftPaneFocus::ReadOnly, None),
+                    None
+                );
             })
             .unwrap();
         let buffer = terminal.backend().buffer();

@@ -27,9 +27,8 @@ use super::msg::{
 };
 use super::user_event::UserEvent;
 use crate::app::render::{
-    book_rows, render_audiobookshelf_book_content, wide_hero_presentation,
-    AudiobookshelfBookGeometry, BookChapterPresentation, BookInteraction, BookPresentation,
-    HomeImagePaint,
+    book_rows, render_audiobookshelf_book_content, wide_hero_fits, AudiobookshelfBookGeometry,
+    BookChapterPresentation, BookInteraction, BookPresentation, HomeImagePaint,
 };
 use crate::app::types_audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 
@@ -47,6 +46,10 @@ pub struct AudiobookshelfBookComponent {
     selected_bucket: usize,
     focused: bool,
     images_enabled: bool,
+    /// Session-only Wide hero list-pane width override (per-draw shell push,
+    /// `None` = default ratio). Forwarded into the shared split; never stored
+    /// clamped.
+    list_pane_width: Option<u16>,
     geometry: AudiobookshelfBookGeometry,
     /// Whether the last rendered presentation actually exposes chapter focus.
     /// Narrow layouts may retain chapter state across a projection, so input
@@ -85,6 +88,7 @@ impl AudiobookshelfBookComponent {
             selected_bucket: 0,
             focused: false,
             images_enabled: false,
+            list_pane_width: None,
             geometry: AudiobookshelfBookGeometry::default(),
             chapters_visible: false,
             image_paint: None,
@@ -119,6 +123,14 @@ impl AudiobookshelfBookComponent {
     #[cfg(test)]
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
+    }
+
+    /// Records the session-only Wide hero list-pane width override for the
+    /// next `view()`. Pushed each frame by
+    /// `render_audiobookshelf_book_component`; it is a layout fact, not
+    /// content, so it never enters the event-scoped `set_content` projection.
+    pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
+        self.list_pane_width = list_pane_width;
     }
 
     pub(in crate::app) fn set_content(
@@ -626,7 +638,7 @@ impl Component for AudiobookshelfBookComponent {
         // presentation. Clear it before painting a narrow frame so a
         // wide→narrow resize cannot leave keyboard input targeting a hidden
         // chapter pane.
-        self.wide = wide_hero_presentation(area).is_some();
+        self.wide = wide_hero_fits(area);
         self.ensure_carrier();
         self.chapters_visible = self.wide && !self.chapter_list.is_empty();
         if !self.chapters_visible {
@@ -650,6 +662,7 @@ impl Component for AudiobookshelfBookComponent {
             &mut self.geometry,
             book_presentation,
             BookChapterPresentation::Wide(&mut self.chapter_list),
+            self.list_pane_width,
         );
     }
 

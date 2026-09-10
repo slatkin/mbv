@@ -47,6 +47,7 @@ mod library_load_actions;
 mod library_position_state;
 mod library_route;
 mod library_search_actions;
+mod list_pane_width;
 mod mouse_gestures;
 mod music_actions;
 mod music_grouping;

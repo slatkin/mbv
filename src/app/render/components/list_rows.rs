@@ -224,6 +224,11 @@ pub(in crate::app) struct LibraryListRenderCtx {
     /// focused `BrowserComponent`'s `[`/`]` chord then means group cycling
     /// (`BrowserCycleGroup`) rather than letter-pill cycling.
     pub(in crate::app) group_pills: bool,
+    /// Session-only Wide hero list-pane width override (`None` = default
+    /// ratio). Carried here so the wide TV/Music render contexts that embed
+    /// this struct forward it into the shared split; normalized against the
+    /// active content-area width by the arrangement, never stored clamped.
+    pub(in crate::app) list_pane_width: Option<u16>,
 }
 
 impl LibraryListRenderCtx {
@@ -244,6 +249,7 @@ impl LibraryListRenderCtx {
             search_query: None,
             search_loading: false,
             group_pills: false,
+            list_pane_width: None,
         }
     }
 

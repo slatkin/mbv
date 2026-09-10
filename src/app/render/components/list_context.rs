@@ -29,6 +29,7 @@ impl App {
             search_query: None,
             search_loading: false,
             group_pills: false,
+            list_pane_width: self.list_pane_width,
         }
     }
 }

@@ -188,12 +188,13 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     show_presentation: PodcastShowPresentation<'_>,
     episode_presentation: PodcastEpisodePresentation<'_>,
     geometry: &mut AudiobookshelfPodcastGeometry,
+    list_pane_width: Option<u16>,
 ) -> Option<HomeImagePaint> {
     *geometry = AudiobookshelfPodcastGeometry::default();
     let Some(wide_hero::WideHeroPanes {
         hero: hero_panel,
         browser: right_panel,
-    }) = wide_hero::wide_hero_presentation(area)
+    }) = wide_hero::wide_hero_presentation(area, list_pane_width)
     else {
         return render_narrow_podcast(
             frame,
@@ -232,6 +233,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         frame,
         area,
         wide_hero::LeftPaneFocus::Workspace(focused && interaction.episode_focused),
+        list_pane_width,
     )
     .expect("wide branch already confirmed wide_hero_presentation fits");
     let image_paint = render_podcast_hero(

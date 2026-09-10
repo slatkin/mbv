@@ -32,7 +32,7 @@ use super::mouse::hit::HitRegions;
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
-use crate::app::render::{effective_sort_str, wide_hero_presentation, HomeImagePaint};
+use crate::app::render::{effective_sort_str, wide_hero_fits, HomeImagePaint};
 
 mod content;
 mod keyboard;
@@ -60,6 +60,10 @@ pub struct BrowserComponent {
     /// the component can paint the hero text like every other surface.
     use_nerd_fonts: bool,
     images_enabled: bool,
+    /// Session-only Wide hero list-pane width override (shell-direct push,
+    /// `None` = default ratio). Forwarded into the wide Movies renderer's
+    /// shared split; never stored clamped.
+    list_pane_width: Option<u16>,
     /// The hero cover image `view()` computed but could not paint itself (no
     /// `App`/image-cache authority); the shell takes it right after
     /// `application.view()` and paints it via `App::paint_home_image`
@@ -128,6 +132,7 @@ impl BrowserComponent {
             wide_movies_letter_pills: false,
             use_nerd_fonts: false,
             images_enabled: true,
+            list_pane_width: None,
             image_paint: None,
             narrow_extras: NarrowBrowseExtras::default(),
             preserved_anchor: None,
@@ -142,6 +147,14 @@ impl BrowserComponent {
     /// (task 3.3). Pushed each frame by `render_emby_browser_component`.
     pub(in crate::app) fn set_narrow_extras(&mut self, extras: NarrowBrowseExtras) {
         self.narrow_extras = extras;
+    }
+
+    /// Records the session-only Wide hero list-pane width override for the
+    /// next `view()`. Pushed each frame by `render_emby_browser_component`
+    /// beside the other per-draw layout facts; it is not content, so it never
+    /// travels through `set_content`.
+    pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
+        self.list_pane_width = list_pane_width;
     }
 
     /// Records the position-free content push (task 3.7). Carries no cursor or
@@ -448,7 +461,7 @@ impl Component for BrowserComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         let wide = (matches!(self.kind, BrowserKind::Movies | BrowserKind::HomeVideos)
             || self.narrow_extras.feed_items.is_some())
-            && wide_hero_presentation(area).is_some();
+            && wide_hero_fits(area);
         self.wide_movies = wide;
         // One shared owner per logical row flow (design.md D1): a responsive
         // presentation change reconfigures the same owner and preserves only
@@ -460,6 +473,7 @@ impl Component for BrowserComponent {
             .context
             .clone()
             .with_cursor_scroll(self.cursor(), self.scroll());
+        context.list_pane_width = self.list_pane_width;
         if let Some(items) = self.narrow_extras.feed_items.as_ref() {
             let feed = BrowserContent {
                 items: items.clone(),

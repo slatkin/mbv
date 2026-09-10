@@ -34,6 +34,11 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
+        if let Some(comp) = self.application.get_component_mut(&ComponentId::Feeds) {
+            if let Some(feeds) = comp.as_any_mut().downcast_mut::<FeedsComponent>() {
+                feeds.set_list_pane_width(self.app.list_pane_width);
+            }
+        }
         self.application.view(&ComponentId::Feeds, frame, area);
     }
 }

@@ -28,7 +28,7 @@ use super::msg::{
 };
 use super::user_event::UserEvent;
 use crate::app::render::{
-    podcast_show_rows, render_audiobookshelf_podcast_content, wide_hero_presentation,
+    podcast_show_rows, render_audiobookshelf_podcast_content, wide_hero_fits,
     AudiobookshelfPodcastGeometry, HomeImagePaint, PodcastEpisodePresentation, PodcastInteraction,
     PodcastShowPresentation,
 };
@@ -50,6 +50,10 @@ pub struct AudiobookshelfPodcastComponent {
     initialized: bool,
     focused: bool,
     images_enabled: bool,
+    /// Session-only Wide hero list-pane width override (per-draw shell push,
+    /// `None` = default ratio). Forwarded into the shared split; never stored
+    /// clamped.
+    list_pane_width: Option<u16>,
     geometry: AudiobookshelfPodcastGeometry,
     image_paint: Option<HomeImagePaint>,
     /// One shared canonical show owner, carried by exactly one of the Wide and
@@ -83,6 +87,7 @@ impl AudiobookshelfPodcastComponent {
             initialized: false,
             focused: false,
             images_enabled: false,
+            list_pane_width: None,
             geometry: AudiobookshelfPodcastGeometry::default(),
             image_paint: None,
             carrier: MediaListCarrier::new(Presentation::Inline),
@@ -116,6 +121,14 @@ impl AudiobookshelfPodcastComponent {
     #[cfg(test)]
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
+    }
+
+    /// Records the session-only Wide hero list-pane width override for the
+    /// next `view()`. Pushed each frame by
+    /// `render_audiobookshelf_podcast_component`; it is a layout fact, not
+    /// content, so it never enters the event-scoped `set_content` projection.
+    pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
+        self.list_pane_width = list_pane_width;
     }
 
     pub(in crate::app) fn set_content(
@@ -633,7 +646,7 @@ impl Component for AudiobookshelfPodcastComponent {
         // One shared show owner per logical flow (design.md D1): a breakpoint
         // change reconfigures the same owner and preserves only the outgoing
         // selected-row viewport offset.
-        self.wide = wide_hero_presentation(area).is_some();
+        self.wide = wide_hero_fits(area);
         self.ensure_carrier();
 
         let show_presentation = if self.wide {
@@ -641,6 +654,7 @@ impl Component for AudiobookshelfPodcastComponent {
         } else {
             PodcastShowPresentation::Inline(self.carrier.inline_mut())
         };
+        let list_pane_width = self.list_pane_width;
         self.image_paint = render_audiobookshelf_podcast_content(
             frame,
             area,
@@ -654,6 +668,7 @@ impl Component for AudiobookshelfPodcastComponent {
             show_presentation,
             PodcastEpisodePresentation::Wide(&mut self.episode_list),
             &mut self.geometry,
+            list_pane_width,
         );
     }
 

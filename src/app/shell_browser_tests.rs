@@ -109,9 +109,10 @@ fn shell_emby_browser_wide_movies_guards_hero_to_movie_items() {
             })
             .unwrap();
 
-        let area = crate::app::render::wide_library_panes(model.app.layout.main.left_area, 2, 1)
-            .expect("wide browser panes")
-            .hero_area;
+        let area =
+            crate::app::render::wide_library_panes(model.app.layout.main.left_area, 2, 1, None)
+                .expect("wide browser panes")
+                .hero_area;
         let buffer = terminal.backend().buffer();
         let mut rendered = String::new();
         for y in 0..area.height {

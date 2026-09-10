@@ -129,6 +129,14 @@ impl TvWorkspaceComponent {
         }
     }
 
+    /// Records the session-only Wide hero list-pane width override for the
+    /// next `view()`. Pushed each frame by `render_tv_workspace_component`;
+    /// it is a layout fact, not content, so it never enters the event-scoped
+    /// `set_content` projection.
+    pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
+        self.context.list.list_pane_width = list_pane_width;
+    }
+
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
         let grouped = !context.list.is_search_active()
             && (context.show_letter_pills

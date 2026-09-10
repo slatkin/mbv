@@ -187,6 +187,14 @@ impl Model {
         if area.width == 0 || area.height == 0 {
             return;
         }
+        if let Some(comp) = self.application.get_component_mut(id) {
+            if let Some(book) = comp
+                .as_any_mut()
+                .downcast_mut::<AudiobookshelfBookComponent>()
+            {
+                book.set_list_pane_width(self.app.list_pane_width);
+            }
+        }
         self.application.view(id, frame, area);
         // Component owns painting; read back its painted geometry so the
         // still-required legacy `LayoutMain` readers (overlay/menu anchors)

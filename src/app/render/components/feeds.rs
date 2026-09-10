@@ -61,6 +61,7 @@ pub(in crate::app) fn render_feeds_content(
     layout: &mut LayoutMain,
     model: FeedsRenderModel<'_>,
     presentation: FeedsPresentation<'_>,
+    list_pane_width: Option<u16>,
 ) {
     if area.height == 0 || area.width == 0 {
         return;
@@ -147,7 +148,7 @@ pub(in crate::app) fn render_feeds_content(
 
     // The shared arrangement owns the pill row and spacer (and the status-row
     // reserve on both returned panes).
-    let wide_panes = wide_hero::wide_hero_presentation(area);
+    let wide_panes = wide_hero::wide_hero_presentation(area, list_pane_width);
     let selector_pane = wide_panes.map(|panes| panes.browser).unwrap_or(area);
     let (selector_tabs, list_panel) = render_selector_content(f, selector_pane);
     layout.selector_tabs = selector_tabs;
@@ -195,9 +196,13 @@ pub(in crate::app) fn render_feeds_content(
         // Wide right hero pane: unconditional fill via the shared primitive
         // (D1, persistent pane -- painted even with no selected entry). Feeds
         // is read-only and never focus-green (D3/D8).
-        let hero_content_area =
-            wide_hero::wide_hero_hero_pane(f, area, wide_hero::LeftPaneFocus::ReadOnly)
-                .expect("wide branch already confirmed wide_hero_presentation fits");
+        let hero_content_area = wide_hero::wide_hero_hero_pane(
+            f,
+            area,
+            wide_hero::LeftPaneFocus::ReadOnly,
+            list_pane_width,
+        )
+        .expect("wide branch already confirmed wide_hero_presentation fits");
         let (_, hero_content_area) = wide_hero::wide_hero_hero_content_box(f, hero_content_area);
         if let Some(entry) = model.selected_entry {
             paint_feed_hero(f, hero_content_area, entry, focused, model.images_enabled);

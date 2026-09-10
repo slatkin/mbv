@@ -73,6 +73,7 @@ pub(in crate::app) fn render_home_content(
     control: HomeCarrier<'_>,
     use_nerd_fonts: bool,
     images_enabled: bool,
+    list_pane_width: Option<u16>,
 ) -> HomeContentOutput {
     if area.height == 0 || area.width == 0 {
         return HomeContentOutput {
@@ -100,7 +101,7 @@ pub(in crate::app) fn render_home_content(
 
     // Same threshold the library list uses to switch to two columns, so
     // Home's hero/list split and the library list cross over together.
-    let wide_panes = wide_hero::wide_hero_presentation(area);
+    let wide_panes = wide_hero::wide_hero_presentation(area, list_pane_width);
     let two_column = wide_panes.is_some();
     // Single-column Home's whole panel (content plus the shared tab
     // gutters) is painted green while focused in `render_main`, before
@@ -165,9 +166,13 @@ pub(in crate::app) fn render_home_content(
             unreachable!("wide_panes is present when two_column is true");
         };
         hero_area_out = Some(hero_panel);
-        let mut hero_content =
-            wide_hero::wide_hero_hero_pane(f, area, wide_hero::LeftPaneFocus::ReadOnly)
-                .expect("wide branch already confirmed shared hero presentation fits");
+        let mut hero_content = wide_hero::wide_hero_hero_pane(
+            f,
+            area,
+            wide_hero::LeftPaneFocus::ReadOnly,
+            list_pane_width,
+        )
+        .expect("wide branch already confirmed shared hero presentation fits");
         let hero_col_height = hero_content.height;
 
         hero_data = match emby_item {

@@ -104,8 +104,12 @@ impl TvWideRenderCtx {
     /// stay correct while the component owns the picture.
     pub(in crate::app) fn publish_geometry(&self, area: Rect, layout: &mut LayoutMain) {
         layout.tv_wide_area = area;
-        let Some(panes) = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y)
-        else {
+        let Some(panes) = library_arrangement::wide_library_panes(
+            area,
+            PANE_PAD_X,
+            PANE_PAD_Y,
+            self.list.list_pane_width,
+        ) else {
             return;
         };
         layout.tv_wide_left_area = panes.hero_area;
@@ -159,7 +163,7 @@ impl App {
     /// Wide hero destination, so one predicate serves all of them.
     pub(in crate::app) fn is_right_panel_wide(&self) -> bool {
         self.right_panel_lib_area()
-            .is_some_and(|area| wide_hero::wide_hero_presentation(area).is_some())
+            .is_some_and(wide_hero::wide_hero_fits)
     }
 
     /// The finalized library content rect when the wide Wide hero TV
@@ -175,7 +179,7 @@ impl App {
             return None;
         }
         let lib_area = self.right_panel_lib_area()?;
-        wide_hero::wide_hero_presentation(lib_area).map(|_| lib_area)
+        wide_hero::wide_hero_fits(lib_area).then_some(lib_area)
     }
 
     pub(in crate::app) fn wide_tv_render_ctx(
@@ -237,7 +241,12 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     layout.tv_wide_season_tabs.clear();
     layout.tv_wide_area = area;
 
-    let Some(panes) = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y) else {
+    let Some(panes) = library_arrangement::wide_library_panes(
+        area,
+        PANE_PAD_X,
+        PANE_PAD_Y,
+        ctx.list.list_pane_width,
+    ) else {
         return (0, None);
     };
     let browser_panel = panes.browser_panel;
@@ -248,6 +257,7 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
         f,
         area,
         wide_hero::LeftPaneFocus::Workspace(ctx.focused && ctx.episode_cursor.is_some()),
+        ctx.list.list_pane_width,
     ) else {
         return (0, None);
     };

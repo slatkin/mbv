@@ -181,6 +181,11 @@ pub struct App {
     pub(super) mini_view_focus: PanelFocus,
     pub(super) tab: TabSelection, // which left-panel tab is active
     pub(super) queue_column_width: u16,
+    /// Session-only Wide hero list-pane width override; `None` = the shared
+    /// arrangement's default ~40% ratio. One width shared by every Wide hero
+    /// surface and never persisted; normalized against each surface's active
+    /// content-area width at paint time (`list_pane_width`).
+    pub(super) list_pane_width: Option<u16>,
     pub(super) panel_mode: PanelMode,
     pub(super) library_tab_pending: usize, // restored from prefs; applied once libs have loaded
     pub(super) last_played_item_id: Option<String>,
