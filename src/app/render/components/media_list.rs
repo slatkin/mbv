@@ -20,6 +20,8 @@ thread_local! {
         const { std::cell::Cell::new(0) };
     pub(in crate::app) static INLINE_MEDIA_BROWSER_PAINTS: std::cell::Cell<usize> =
         const { std::cell::Cell::new(0) };
+    pub(in crate::app) static GRID_MEDIA_LIST_PAINTS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]

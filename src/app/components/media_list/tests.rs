@@ -272,6 +272,78 @@ fn grid_movement_keeps_selected_target_in_the_painted_window() {
         .any(|cell| cell.target.as_ref() == Some(&selected)));
 }
 
+/// Task 4.1: the Grid presentation executes the established bucketed
+/// two-column catalog policy — a `Heading`/`Spacer` occupies a full painted
+/// line, a bucket's items pack into fresh item rows (so a ragged trailing row
+/// stays inside its bucket), scroll/viewport facts count display lines, and
+/// `move_item_rows` preserves the column across a header with the ragged
+/// trailing-row clamp.
+#[test]
+fn grid_structural_rows_take_full_lines_and_ragged_traversal_clamps() {
+    use super::{GridMediaList, GridPaintPolicy};
+    let mut grid = GridMediaList::new();
+    grid.set_columns(2, 8, 2);
+    // A bucket: heading + 3 items (rows [a,b],[c] ragged); then a spacer +
+    // heading; B bucket: [d,e].
+    grid.set_content(vec![
+        super::MediaListRow::Heading { text: "A".into() },
+        lifecycle_item("a"),
+        lifecycle_item("b"),
+        lifecycle_item("c"),
+        super::MediaListRow::Spacer,
+        super::MediaListRow::Heading { text: "B".into() },
+        lifecycle_item("d"),
+        lifecycle_item("e"),
+    ]);
+    assert_eq!(
+        grid.display_lines().len(),
+        6,
+        "heading/spacer take a line each; items pack two per line"
+    );
+    let area = Rect::new(0, 0, 20, 6);
+    let mut terminal = Terminal::new(TestBackend::new(24, 8)).unwrap();
+    terminal
+        .draw(|frame| {
+            grid.set_paint_policy(GridPaintPolicy::new(true));
+            Component::view(&mut grid, frame, area);
+        })
+        .unwrap();
+    let cells = grid.current_cells().expect("completed grid frame");
+    // Heading lines paint no cells; the B bucket starts on its own line after
+    // the spacer + heading, never sharing a row with A's ragged item.
+    assert_eq!(cells.len(), 5);
+    let c = cells
+        .iter()
+        .find(|cell| cell.target.as_ref() == Some(&"c".to_string()))
+        .expect("ragged item c painted");
+    let d = cells
+        .iter()
+        .find(|cell| cell.target.as_ref() == Some(&"d".to_string()))
+        .expect("next-bucket item d painted");
+    assert_eq!(
+        d.rect.y,
+        c.rect.y + 3,
+        "spacer + heading lines separate buckets"
+    );
+    assert!(
+        grid.claims_current_point(Position::new(c.rect.x, c.rect.y + 1)),
+        "a heading line is inside the claim but resolves no target"
+    );
+    assert_eq!(
+        grid.resolve_current_point(Position::new(c.rect.x, c.rect.y + 1)),
+        None,
+        "a heading line resolves no cell target"
+    );
+
+    // Down from the ragged item c clamps into its own row (tree order: c is
+    // its row's last item), then the next item row is the following bucket.
+    assert!(grid.select_target(&"c".to_string()));
+    grid.move_item_rows(1);
+    assert_eq!(grid.selected_target(), Some(&"d".to_string()));
+    grid.move_item_rows(-1);
+    assert_eq!(grid.selected_target(), Some(&"c".to_string()));
+}
+
 #[test]
 fn row_local_delegation_covers_movement_selection_and_external_intents() {
     use super::{RowIntent, RowLocalInput, RowLocalOutcome};

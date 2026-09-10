@@ -757,9 +757,13 @@ fn browser_navigation_persists_live_scroll_at_level_boundaries() {
     folder.id = "folder-a".into();
     folder.is_folder = true;
 
+    // Task 4.2: the restored position lands in the one shared owner, whose
+    // scroll is clamped to its own two-row flow. Drill-in persists that live
+    // owner scroll over the stale resting value (task 4.2 removed the second
+    // control that used to absorb the seed invisibly).
     model.handle_browser_request(ShellRequest::BrowserActivate { item: folder });
     assert_eq!(model.app.libs[0].nav_stack.len(), 2);
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 0);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 1);
     assert_eq!(
         model.app.library_position_state.libraries["lib-movies"].levels[0].cursor_index,
         0
@@ -768,9 +772,12 @@ fn browser_navigation_persists_live_scroll_at_level_boundaries() {
     model.app.libs[0].nav_stack[1].set_resting_scroll(3);
     model.sync_emby_browser();
     model.sync_active_destination();
+    // Back persists the owner's live scroll for the child level, then restores
+    // the parent's own live scroll saved at drill-in (task 4.2: one owner, so
+    // the parent's restored viewport is its real last position).
     model.handle_browser_request(ShellRequest::BrowserBack);
     assert_eq!(model.app.libs[0].nav_stack.len(), 1);
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 0);
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 1);
 }
 
 #[test]
@@ -794,6 +801,9 @@ fn teardown_flush_captures_live_browser_scroll_without_navigation() {
     model.persist_emby_browser_scroll_for_active_library();
     model.app.flush_library_position_now();
 
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 0);
+    // Task 4.2: the teardown flush captures the live scroll of the one shared
+    // owner — the explicit `apply_position(0, 6)` seed clamped to the owner's
+    // two-row flow — overwriting the stale resting 0.
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().scroll(), 1);
     assert!(!model.app.library_position_dirty);
 }

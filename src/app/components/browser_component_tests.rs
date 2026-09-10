@@ -359,7 +359,8 @@ fn browser_context_menu_requires_bare_dot() {
 #[test]
 fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
     let mut browser = BrowserComponent::new();
-    let items = || make_items(4);
+    // Eight items keep the resting scroll values below the Grid line clamp.
+    let items = || make_items(8);
     browser.set_content(BrowserContent::from_items(items()));
     browser.set_focused(true);
 
@@ -467,42 +468,27 @@ fn set_content_keeps_the_control_cursor_and_apply_position_moves_it() {
     }
 }
 
-/// The third `apply_position` branch — a canonical kind (Movies/HomeVideos) or
-/// group-pill content with NO active control, i.e. the legacy non-hero
-/// two-column browse — seeds BOTH persistent controls from the resolved
-/// resting state. That is what makes a drill-in + BrowserBack round-trip
-/// surface the user's position through whichever control becomes active on the
-/// next breakpoint paint, instead of landing on cursor 0 or a stale shell
-/// value.
+/// Task 4.2: Movies/home-video narrow/wide surfaces share ONE owner whose
+/// presentation changes between Wide and Inline. The identity-gated
+/// `apply_position` re-seed lands in that one owner; whichever presentation
+/// becomes active next surfaces the same target — there is no second control
+/// to seed separately.
 #[test]
-fn apply_position_seeds_both_controls_for_canonical_kind_without_active_control() {
+fn apply_position_seeds_the_one_owner_for_canonical_kind_without_active_control() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
     browser.set_content(BrowserContent::from_items(make_items(40)));
     browser.set_focused(true);
-    // No narrow hero extras: neither control is active at the reset seam.
+    // No narrow hero extras: no presentation has been painted yet.
 
     // Back-restore push (browse identity changed): the shell re-seeds the
-    // controls from the user's resting position.
+    // owner from the user's resting position.
     browser.apply_position(25, 9);
-    assert_eq!(
-        browser.test_inline_selected_target(),
-        Some("id25".into()),
-        "inline control seeded"
-    );
-    assert_eq!(
-        browser.test_inline_scroll(),
-        9,
-        "inline control scroll seeded"
-    );
-    assert_eq!(
-        browser.test_wide_selected_target(),
-        Some("id25".into()),
-        "wide control seeded"
-    );
-    assert_eq!(browser.test_wide_scroll(), 9, "wide control scroll seeded");
+    assert_eq!(browser.cursor(), 25, "the one owner is seeded");
+    assert_eq!(browser.scroll(), 9, "the one owner scroll is seeded");
 
     // Wide activation (e.g. a terminal resize): the position now lives in the
-    // active wide control, not cursor 0 or a stale shell value.
+    // active Wide presentation of the same owner, not cursor 0 or a stale
+    // shell value.
     let mut wide_terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
     wide_terminal
         .draw(|frame| browser.view(frame, frame.area()))
@@ -510,11 +496,11 @@ fn apply_position_seeds_both_controls_for_canonical_kind_without_active_control(
     assert_eq!(
         browser.cursor(),
         25,
-        "wide activation must surface the seeded target through the active control"
+        "wide activation must surface the seeded target through the active presentation"
     );
 
-    // Narrow-with-hero activation: same seeding observed on the inline side
-    // through the public `cursor()` seam.
+    // Narrow-with-hero activation: same owner observed through the Inline
+    // presentation via the public `cursor()` seam.
     let mut narrow_browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
     narrow_browser.set_content(BrowserContent::from_items(make_items(40)));
     narrow_browser.set_focused(true);
@@ -530,21 +516,20 @@ fn apply_position_seeds_both_controls_for_canonical_kind_without_active_control(
     assert_eq!(
         narrow_browser.cursor(),
         25,
-        "narrow hero activation must surface the seeded target through the active control"
+        "narrow hero activation must surface the seeded target through the active presentation"
     );
 }
 
-/// The third branch must NOT fire while a control IS active (guard): the
-/// active control alone takes the re-seed, and the non-active control keeps
-/// its live selection instead of being clobbered from the shell's resting
-/// value.
+/// Task 4.2: with one owner there is no second control whose live selection
+/// could diverge. An active-presentation re-seed moves the owner; a later
+/// breakpoint change reads the same owner and preserves the selection.
 #[test]
-fn apply_position_seeds_only_the_active_control_when_one_is_active() {
+fn apply_position_re_seeds_the_one_owner_and_presentations_preserve_it() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
     browser.set_content(BrowserContent::from_items(make_items(40)));
     browser.set_focused(true);
 
-    // Wide session: the wide rail owns the live position.
+    // Wide session: the Wide presentation carries the live position.
     let mut wide_terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
     wide_terminal
         .draw(|frame| browser.view(frame, frame.area()))
@@ -559,8 +544,7 @@ fn apply_position_seeds_only_the_active_control_when_one_is_active() {
     });
     assert_eq!(browser.cursor(), 2, "wide rail live selection");
 
-    // Narrow-with-hero: the inline control becomes the active one; the wide
-    // rail keeps its live selection through the breakpoint anchor handoff.
+    // Narrow-with-hero: the Inline presentation reads the same owner.
     browser.set_narrow_extras(NarrowBrowseExtras {
         hero_placeholder: true,
         ..NarrowBrowseExtras::default()
@@ -572,37 +556,26 @@ fn apply_position_seeds_only_the_active_control_when_one_is_active() {
     assert_eq!(
         browser.cursor(),
         2,
-        "inline took the live target at the handoff"
+        "inline reads the live target through the one owner"
     );
-    let wide_scroll_before = browser.test_wide_scroll();
 
-    // Back-restore re-seed with a control active: only the active inline
-    // control takes the shell position; the wide rail is left alone.
+    // Back-restore re-seed: the one owner takes the shell position.
     browser.apply_position(25, 9);
     assert_eq!(
         browser.cursor(),
         25,
-        "active control takes the restored position"
+        "the owner takes the restored position"
     );
+
+    // Returning to Wide reads the same owner — no stale second rail.
+    let mut wide_again = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    wide_again
+        .draw(|frame| browser.view(frame, frame.area()))
+        .unwrap();
     assert_eq!(
-        browser.test_inline_selected_target(),
-        Some("id25".into()),
-        "the active inline control is seeded"
-    );
-    assert_eq!(
-        browser.test_inline_scroll(),
-        9,
-        "the active inline control scroll is seeded"
-    );
-    assert_eq!(
-        browser.test_wide_selected_target(),
-        Some("id2".into()),
-        "the non-active wide rail keeps its live selection"
-    );
-    assert_eq!(
-        browser.test_wide_scroll(),
-        wide_scroll_before,
-        "the non-active wide rail scroll is untouched"
+        browser.cursor(),
+        25,
+        "wide reads the restored selection through the one owner"
     );
 }
 
@@ -625,13 +598,18 @@ fn browser_renders_the_shared_generic_rows() {
     assert!(rendered.contains("Movie one"));
 }
 
+/// Task 4.1: the non-hero generic two-column catalog is the Grid presentation
+/// over the shared owner. A click in the second painted cell must resolve the
+/// second row's stable target from the Grid's retained current-frame cells —
+/// never from a parent row map or fallback cell arithmetic.
 #[test]
 fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
+    let mut first = make_item("first", "Movie");
+    first.id = "first".into();
+    let mut second = make_item("second", "Movie");
+    second.id = "second".into();
     let mut browser = BrowserComponent::new();
-    browser.set_content(BrowserContent::from_items(vec![
-        make_item("first", "Movie"),
-        make_item("second", "Movie"),
-    ]));
+    browser.set_content(BrowserContent::from_items(vec![first, second]));
     browser.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(100, 6)).unwrap();
     terminal
@@ -648,12 +626,13 @@ fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
         row: position.1,
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(matches!(
+    assert_eq!(
         left,
-        Some(crate::app::components::msg::Msg::Shell(
-            crate::app::components::msg::ShellRequest::BrowserRowClick { .. }
-        ))
-    ));
+        Some(Msg::Shell(ShellRequest::BrowserRowClick {
+            target: Some("second".into()),
+        })),
+        "left click must resolve the second cell's stable target via retained Grid geometry"
+    );
 
     let right = browser.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Right),
@@ -661,12 +640,14 @@ fn browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks() {
         row: position.1,
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(matches!(
+    assert_eq!(
         right,
-        Some(crate::app::components::msg::Msg::Shell(
-            crate::app::components::msg::ShellRequest::BrowserRowContextMenu { .. }
-        ))
-    ));
+        Some(Msg::Shell(ShellRequest::BrowserRowContextMenu {
+            target: Some("second".into()),
+            anchor: position,
+        })),
+        "right click must resolve the second cell's stable target via retained Grid geometry"
+    );
 }
 
 #[path = "browser_inline_search_tests.rs"]

@@ -3,13 +3,17 @@
 //! publishes replacement-flow geometry for its callers.
 
 use super::detail::compact_banner_image_cache_key;
-use crate::app::components::browser_narrow::{NarrowBrowseExtras, NarrowInlineHero};
+use crate::app::components::browser_narrow::{
+    NarrowBrowseControl, NarrowBrowseExtras, NarrowInlineHero,
+};
 use crate::app::components::media_list::{
-    InlineMediaBrowser, InlineMediaBrowserPaintPolicy, SelectedRowSurface,
+    GridPaintPolicy, InlineMediaBrowserPaintPolicy, SelectedRowSurface,
 };
 use crate::app::images::series_image_cache_key;
 use crate::app::layout::LayoutMain;
-use crate::app::library_column_width::library_column_count;
+use crate::app::library_column_width::{
+    library_cell_width, library_column_count, LIBRARY_COLUMN_GAP,
+};
 use crate::app::render::arrangements::{library, wide_hero};
 use crate::app::render::components::hero::{
     selected_detail_shell, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS, HERO_TITLE_ROWS,
@@ -37,7 +41,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     extras: &NarrowBrowseExtras,
     focused: bool,
     layout: &mut LayoutMain,
-    browser: &mut InlineMediaBrowser<String>,
+    control: NarrowBrowseControl<'_>,
 ) -> (usize, Option<HomeImagePaint>) {
     let mut content_area = area;
 
@@ -142,40 +146,71 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         return (0, None);
     }
 
-    let use_letter_groups =
-        !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some());
-    // Hero-bearing narrow surfaces use the canonical inline control. The
-    // legacy two-column policy remains for non-hero catalogs.
-    let final_offset = if hero_presentation {
-        // The persistent InlineMediaBrowser is fed by BrowserComponent before
-        // this painter runs. Its rows, selection, and scroll are authoritative;
-        // this function only paints and exports the control's flow geometry.
-        super::media_list::render_inline_media_browser_component(
-            f,
-            list_area,
-            browser,
-            InlineMediaBrowserPaintPolicy::new(
-                focused,
-                SelectedRowSurface::ListBackdrop,
-                inline_hero_rows as usize,
-            ),
-        );
-        layout.hero_area = browser.current_detail_rect().unwrap_or_default();
-        layout.inline_hero_area = layout.hero_area;
-        layout.selected_item_rect = browser.current_selected_row_rect();
-        browser.current_flow_offset().unwrap_or(0)
-    } else {
-        let row_ctx = ctx.rows(list_area, cols, focused, inline_hero_rows);
-        if use_letter_groups {
-            super::list_letter_groups::render_letter_grouped_rows(
+    // Hero-bearing narrow surfaces paint the Inline presentation with its
+    // selected-row replacement admission; Movies/home-video narrow surfaces
+    // paint Inline without replacement; the non-hero generic catalog paints
+    // the Grid presentation over the same shared owner (design.md D2).
+    let final_offset = match control {
+        NarrowBrowseControl::Inline(browser) => {
+            let desired_detail_rows = if hero_presentation {
+                inline_hero_rows as usize
+            } else {
+                0
+            };
+            // The persistent InlineMediaBrowser is fed by BrowserComponent before
+            // this painter runs. Its rows, selection, and scroll are authoritative;
+            // this function only paints and exports the control's flow geometry.
+            super::media_list::render_inline_media_browser_component(
                 f,
-                row_ctx,
-                ctx.letter_filter.clone(),
-                ctx.true_total(),
-                layout,
-            )
-        } else {
-            super::media_list::render_plain_rows(f, row_ctx, layout)
+                list_area,
+                browser,
+                InlineMediaBrowserPaintPolicy::new(
+                    focused,
+                    SelectedRowSurface::ListBackdrop,
+                    desired_detail_rows,
+                ),
+            );
+            layout.hero_area = if hero_presentation {
+                browser.current_detail_rect().unwrap_or_default()
+            } else {
+                Rect::default()
+            };
+            layout.inline_hero_area = layout.hero_area;
+            layout.selected_item_rect = browser.current_selected_row_rect();
+            browser.current_flow_offset().unwrap_or(0)
+        }
+        NarrowBrowseControl::Grid(grid) => {
+            // The arrangement owns column count and cell width; the grid
+            // presentation executes that policy and retains the cells. The
+            // narrow TV season grid keeps its established single-column
+            // stride; every other non-hero catalog derives the count from the
+            // painted list width.
+            let cols = if extras.season_grid {
+                1
+            } else {
+                library_column_count(list_area.width)
+            };
+            grid.set_columns(
+                cols,
+                library_cell_width(list_area, cols),
+                LIBRARY_COLUMN_GAP,
+            );
+            grid.set_geometry(list_area, list_area);
+            super::media_list::render_grid_media_list_component(
+                f,
+                list_area,
+                grid,
+                GridPaintPolicy::new(focused),
+            );
+            layout.selected_item_rect = grid.selected_target().cloned().and_then(|selected| {
+                grid.current_cells().and_then(|cells| {
+                    cells
+                        .iter()
+                        .find(|cell| cell.target.as_ref() == Some(&selected))
+                        .map(|cell| cell.rect)
+                })
+            });
+            grid.current_flow_offset().unwrap_or(0)
         }
     };
 

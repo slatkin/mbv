@@ -63,7 +63,6 @@ impl BrowserComponent {
                     | Key::Char('h')
                     | Key::Char('l')
             ) {
-                self.pending_anchor = None;
                 self.preserved_anchor = None;
             }
             match key.code {
@@ -210,7 +209,7 @@ impl BrowserComponent {
     fn selected_effect_item(&self) -> Option<mbv_core::api::EmbyItem> {
         self.context
             .clone()
-            .with_cursor_scroll(self.cursor, self.scroll)
+            .with_cursor_scroll(self.cursor(), self.scroll())
             .selected_item()
             .cloned()
     }

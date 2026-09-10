@@ -1,4 +1,4 @@
-use super::{MediaList, MediaListRow, RowLocalInput, RowLocalOutcome};
+use super::{MediaList, MediaListRow, RowLocalInput, RowLocalOutcome, ViewportAnchor};
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
@@ -61,7 +61,10 @@ impl<Target> GridMediaList<Target> {
     pub fn from_media_list(core: MediaList<Target>) -> Self {
         Self {
             core,
-            columns: 2,
+            // One column until the arrangement configures its policy before
+            // the first paint; a pre-paint input stride must not claim a
+            // two-column policy the parent has not supplied.
+            columns: 1,
             cell_width: 0,
             gap: 2,
             policy: GridPaintPolicy::new(false),
@@ -104,19 +107,55 @@ impl<Target> GridMediaList<Target> {
         self.core.scroll()
     }
 
-    /// Store the shared owner's display-row scroll offset.
+    /// Store the shared owner's display-line scroll offset.
     pub fn set_scroll(&mut self, offset: usize) {
         self.paint = None;
-        self.core.set_scroll(offset);
+        let max = self.display_lines().len().saturating_sub(1);
+        self.core.set_scroll(offset.min(max));
     }
 
-    /// Resolve the shared display-row viewport for a grid's cell capacity.
+    /// The painted display lines of the grid: each line holds up to
+    /// `columns` selectable source rows; a `Heading`/`Spacer` row flushes the
+    /// current line and occupies a full line alone (the established bucketed
+    /// two-column catalog policy: a bucket always starts a fresh item row).
+    pub(crate) fn display_lines(&self) -> Vec<Vec<usize>> {
+        let mut lines: Vec<Vec<usize>> = Vec::new();
+        let mut current: Vec<usize> = Vec::new();
+        for (index, row) in self.core.rows().iter().enumerate() {
+            if row.selectable_target().is_some() {
+                if current.len() == self.columns {
+                    lines.push(std::mem::take(&mut current));
+                }
+                current.push(index);
+            } else {
+                if !current.is_empty() {
+                    lines.push(std::mem::take(&mut current));
+                }
+                lines.push(vec![index]);
+            }
+        }
+        if !current.is_empty() {
+            lines.push(current);
+        }
+        lines
+    }
+
+    /// The display line holding the selected source row and the selected
+    /// column within that line.
+    fn selected_line(&self, lines: &[Vec<usize>]) -> Option<(usize, usize)> {
+        let row = self.core.selected_display_row()?;
+        let line = lines.iter().position(|line| line.contains(&row))?;
+        let col = lines[line].iter().position(|&r| r == row).unwrap_or(0);
+        Some((line, col))
+    }
+
+    /// Resolve the shared display-line viewport for a grid's line capacity.
     pub fn resolve_viewport(&self, viewport_height: usize) -> super::WideViewport {
         let height = viewport_height.max(1);
-        let total_rows = self.core.rows().len().div_ceil(self.columns);
+        let lines = self.display_lines();
+        let total_rows = lines.len();
         let mut offset = self.core.scroll().min(total_rows.saturating_sub(height));
-        if let Some(row) = self.core.selected_display_row() {
-            let line = row / self.columns;
+        if let Some((line, _)) = self.selected_line(&lines) {
             if line < offset {
                 offset = line;
             } else if line >= offset + height {
@@ -130,8 +169,94 @@ impl<Target> GridMediaList<Target> {
         }
     }
 
+    /// Zero-based screen-row offset from the viewport top to the selected
+    /// row, for the responsive [`ViewportAnchor`] hand-off (design.md D3).
+    pub fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
+        let lines = self.display_lines();
+        let (line, _) = self.selected_line(&lines)?;
+        Some(line.saturating_sub(self.resolve_viewport(viewport_height).offset))
+    }
+
+    /// Restore a [`ViewportAnchor`] at a painted viewport height: select the
+    /// target when present, then place its line at the requested offset where
+    /// the geometry allows, clamping otherwise (design.md D3).
+    pub fn apply_viewport_anchor(&mut self, anchor: &ViewportAnchor<Target>, viewport_height: usize)
+    where
+        Target: PartialEq,
+    {
+        self.paint = None;
+        self.core.select_target(&anchor.selected_target);
+        let height = viewport_height.max(1);
+        let lines = self.display_lines();
+        let Some((line, _)) = self.selected_line(&lines) else {
+            return;
+        };
+        let max = lines.len().saturating_sub(height);
+        let offset = line.saturating_sub(anchor.selected_row_offset).min(max);
+        self.core.set_scroll(offset);
+    }
+
+    /// Move the selection by `item_rows` painted item rows, preserving the
+    /// selected column and falling back to the nearest cell of the target row
+    /// (the established two-column catalog traversal policy, including its
+    /// ragged trailing-row clamp). Header/spacer lines do not participate.
+    pub fn move_item_rows(&mut self, item_rows: i64)
+    where
+        Target: Clone + PartialEq,
+    {
+        let rows = self.core.rows();
+        let item_lines: Vec<Vec<usize>> = self
+            .display_lines()
+            .into_iter()
+            .filter(|line| {
+                line.iter()
+                    .any(|&source| rows[source].selectable_target().is_some())
+            })
+            .collect();
+        let Some((line, col)) = self.selected_line(&item_lines) else {
+            return;
+        };
+        let target_line = if item_rows < 0 {
+            line.saturating_sub(item_rows.unsigned_abs() as usize)
+        } else {
+            (line + item_rows as usize).min(item_lines.len().saturating_sub(1))
+        };
+        let target_row = item_lines
+            .get(target_line)
+            .and_then(|cells| cells.get(col).or(cells.last()))
+            .copied();
+        if let Some(target_row) = target_row {
+            if let Some(target) = rows[target_row].selectable_target().cloned() {
+                self.core.select_target(&target);
+            }
+        }
+    }
+
     pub(crate) fn columns(&self) -> usize {
         self.columns
+    }
+
+    /// No selectable rows at all.
+    pub fn is_empty(&self) -> bool {
+        self.core.is_empty()
+    }
+
+    /// Move the cursor by `delta` selectable rows, clamped to the ends.
+    pub fn move_selection(&mut self, delta: i64) {
+        self.core.move_selection(delta);
+    }
+
+    pub fn select_first(&mut self) {
+        self.core.select_first();
+    }
+
+    pub fn select_last(&mut self) {
+        self.core.select_last();
+    }
+
+    /// Place the cursor at selectable index `index`, clamped to the last row.
+    pub fn select_index(&mut self, index: usize) {
+        self.core.select_index(index);
     }
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>)
     where
@@ -140,11 +265,14 @@ impl<Target> GridMediaList<Target> {
         self.paint = None;
         self.core.set_content(rows);
     }
+    /// Move the cursor to `target` when it is present; returns whether it was.
+    /// Selection does not change row flow geometry, so a completed view
+    /// remains valid for pointer gestures until the next view begins (matching
+    /// the Wide presentation's retained-result contract).
     pub fn select_target(&mut self, target: &Target) -> bool
     where
         Target: PartialEq,
     {
-        self.paint = None;
         self.core.select_target(target)
     }
     pub fn delegate(
@@ -203,7 +331,7 @@ impl<Target> GridMediaList<Target> {
         self.configured_geometry.unwrap_or((area, area))
     }
 
-    pub(crate) fn cells(&mut self, content: Rect) -> Vec<GridCell<Target>>
+    pub(crate) fn cells(&mut self, content: Rect) -> Vec<(GridCell<Target>, usize)>
     where
         Target: Clone,
     {
@@ -219,48 +347,57 @@ impl<Target> GridMediaList<Target> {
             self.cell_width
         };
         let viewport_rows = content.height as usize;
-        // The shared owner stores display-row offsets. Grid converts that
-        // offset to the source-row stride only while laying out cells.
+        // The shared owner stores display-line offsets. Grid resolves that
+        // offset in line space and skips whole lines while laying out cells.
         let offset = self.resolve_viewport(viewport_rows).offset;
         self.core.set_scroll(offset);
-        self.core
-            .rows()
+        let mut cells = Vec::new();
+        for (line_index, line) in self
+            .display_lines()
             .iter()
+            .skip(offset)
+            .take(viewport_rows)
             .enumerate()
-            .skip(offset * self.columns)
-            .take(viewport_rows * self.columns)
-            .map(|(index, row)| {
-                let slot = index - offset * self.columns;
-                let col = slot % self.columns;
-                let line = slot / self.columns;
-                let x = content.x + (width + self.gap) * col as u16;
-                GridCell {
-                    rect: Rect {
-                        x,
-                        y: content.y + line as u16,
-                        width,
-                        height: 1,
-                    },
-                    target: row.selectable_target().cloned(),
+        {
+            let y = content.y + line_index as u16;
+            for (col, &source) in line.iter().enumerate() {
+                if self.core.rows()[source].selectable_target().is_none() {
+                    // Header/spacer lines occupy the full display line and
+                    // resolve no cell.
+                    continue;
                 }
-            })
-            .collect()
+                let x = content.x + (width + self.gap) * col as u16;
+                cells.push((
+                    GridCell {
+                        rect: Rect {
+                            x,
+                            y,
+                            width,
+                            height: 1,
+                        },
+                        target: self.core.rows()[source].selectable_target().cloned(),
+                    },
+                    source,
+                ));
+            }
+        }
+        cells
     }
 
     pub(crate) fn finish_view(
         &mut self,
         claim_rect: Rect,
         content_rect: Rect,
-        cells: Vec<GridCell<Target>>,
+        cells: Vec<(GridCell<Target>, usize)>,
     ) {
-        let total_rows = self.core.rows().len();
+        let total_lines = self.display_lines().len();
         let viewport_rows = content_rect.height as usize;
         self.paint = Some(GridPaint {
             claim_rect,
             content_rect,
             offset: self.core.scroll(),
-            overflows: total_rows > viewport_rows * self.columns,
-            cells,
+            overflows: total_lines > viewport_rows,
+            cells: cells.into_iter().map(|(cell, _)| cell).collect(),
         });
     }
 }

@@ -56,6 +56,12 @@ pub(crate) fn home_inline_media_browser_paints() -> usize {
 #[cfg(test)]
 pub(crate) fn reset_browser_media_list_paints() {
     reset_home_media_list_paints();
+    components::media_list::GRID_MEDIA_LIST_PAINTS.with(|count| count.set(0));
+}
+
+#[cfg(test)]
+pub(crate) fn browser_grid_media_list_paints() -> usize {
+    components::media_list::GRID_MEDIA_LIST_PAINTS.with(std::cell::Cell::get)
 }
 
 #[cfg(test)]

@@ -399,9 +399,12 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
         .get_component(&browser_id)
         .and_then(|comp| comp.as_any().downcast_ref::<BrowserComponent>())
         .map(BrowserComponent::cursor);
+    // Task 4.2: the explicit breakpoint re-anchor lands in the one shared
+    // owner immediately (no pending paint-time transfer between controls), so
+    // the narrow browser already reports the wide workspace's selected series.
     assert_eq!(
         browser_cursor,
-        Some(0),
+        Some(1),
         "narrow browser must adopt the series selected in the wide workspace"
     );
     let mut narrow_terminal = Terminal::new(TestBackend::new(80, 40)).unwrap();

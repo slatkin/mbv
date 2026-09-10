@@ -297,6 +297,8 @@ pub(in crate::app) fn render_grid_media_list_component<Target: Clone + PartialEq
     grid: &mut GridMediaList<Target>,
     policy: GridPaintPolicy,
 ) {
+    #[cfg(test)]
+    super::GRID_MEDIA_LIST_PAINTS.with(|count| count.set(count.get() + 1));
     grid.begin_view();
     let (claim, content) = grid.geometry(area);
     if area.is_empty() || claim.is_empty() || content.is_empty() || grid.rows().is_empty() {
@@ -305,12 +307,8 @@ pub(in crate::app) fn render_grid_media_list_component<Target: Clone + PartialEq
     let cells = grid.cells(content);
     let rows = grid.rows();
     let selected = grid.selected_target();
-    for (cell_index, cell) in cells.iter().enumerate() {
-        let source = grid
-            .scroll()
-            .saturating_mul(grid.columns())
-            .saturating_add(cell_index);
-        let Some(row) = rows.get(source) else {
+    for (cell, source_row) in &cells {
+        let Some(row) = rows.get(*source_row) else {
             continue;
         };
         let selected_row = cell
@@ -329,13 +327,12 @@ pub(in crate::app) fn render_grid_media_list_component<Target: Clone + PartialEq
         );
         f.render_widget(List::new(vec![item]), cell.rect);
     }
-    if policy.focused() && grid.rows().len() > content.height as usize * grid.columns() {
+    let viewport = grid.resolve_viewport(content.height as usize);
+    if policy.focused() && viewport.overflows() {
         crate::app::render::render_right_scrollbar(
             f,
             content,
-            grid.rows()
-                .len()
-                .saturating_sub(content.height as usize * grid.columns()),
+            viewport.total_rows.saturating_sub(viewport.height),
             grid.scroll(),
             palette::SCROLLBAR,
         );
