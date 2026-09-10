@@ -661,3 +661,43 @@ fn music_workspace_bracket_keys_ignored_with_focused_track() {
     }));
     assert_eq!(message, None);
 }
+
+/// `unify-surface-colour` 4.2: the row between the pill bar and the album rail
+/// is the chrome-band spacer (design D2's `PillRowGap`), so it keeps the app
+/// backdrop in both focus states. The pane container itself is left to the
+/// shell's `LibraryColumn`, as TV/Movies/ABS do.
+#[test]
+fn music_wide_pill_row_spacer_is_the_chrome_band_surface() {
+    use crate::app::render::arrangements::library::wide_library_panes;
+    use crate::app::render::arrangements::wide_hero::{
+        wide_hero_browser_pane, PANE_PAD_X, PANE_PAD_Y,
+    };
+
+    let expected = crate::app::palette::surface_colors_for_column_focus(
+        crate::app::palette::Surface::PillRowGap,
+        false,
+    )
+    .fill;
+    assert_eq!(
+        expected,
+        crate::app::palette::SURFACE_BACKDROP,
+        "the spacer keeps today's backdrop value"
+    );
+
+    for focused in [true, false] {
+        let mut component = MusicWorkspaceComponent::new();
+        component.set_focused(focused);
+        component.set_content(context(false));
+        let area = Rect::new(0, 0, 100, 30);
+        let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+        terminal.draw(|frame| component.view(frame, area)).unwrap();
+        let panes = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, None).expect("wide fits");
+        let spacer = wide_hero_browser_pane(panes.browser_panel, panes.browser_area).spacer_area;
+        let buffer = terminal.backend().buffer();
+        assert_eq!(
+            buffer[(spacer.x, spacer.y)].bg,
+            expected,
+            "spacer does not follow the library column's focus (focused={focused})"
+        );
+    }
+}

@@ -13,11 +13,12 @@ use tuirealm::state::State;
 use super::msg::{Msg, PlaybackRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutPlayback;
+#[cfg(test)]
 use crate::app::palette;
 use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::types_playback::PlaybackState;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(in crate::app) struct PlaybackProjection {
     pub state: PlaybackState,
     pub show_controls: bool,
@@ -49,20 +50,11 @@ pub struct PlaybackComponent {
 impl PlaybackComponent {
     pub fn new() -> Self {
         Self {
-            projection: PlaybackProjection {
-                state: PlaybackState::default(),
-                show_controls: false,
-                panel_bg: palette::SURFACE_PLAYBACK,
-                narrow_player: false,
-                now_playing_title: None,
-                title_parts: Vec::new(),
-                status_indicators: None,
-                throbber: Span::raw(""),
-                idle_feed_title: None,
-                use_nerd_fonts: false,
-                stop_available: false,
-                next_available: false,
-            },
+            // `panel_bg` has no surface default: `sync_playback` always sets
+            // the table-resolved fill before the first frame, so the initial
+            // value is never rendered. (`Color::Reset`, from `Default`, paints
+            // nothing.)
+            projection: PlaybackProjection::default(),
             props: Props::default(),
             last_space: None,
             last_escape: None,

@@ -367,7 +367,8 @@ pub(in crate::app) fn render_home_content(
     let pill_targets = render_home_pills(f, pills_area, &labels, section);
 
     let list_area = if let Some(list_panel) = green_panel_full {
-        let panel_bg = palette::resolve_surface_focus(focused);
+        let panel_bg =
+            palette::surface_colors_for_column_focus(palette::Surface::LibraryPanel, focused).fill;
         f.render_widget(
             Block::default().style(Style::default().bg(panel_bg)),
             list_panel,
@@ -399,7 +400,8 @@ pub(in crate::app) fn render_home_content(
     // focus fill -- Home's panel background matches every other
     // inline browser's regardless of focus).
     if spacer_area.y < area.bottom() && spacer_area.width > 0 {
-        let panel_bg = palette::SURFACE_BACKDROP;
+        let panel_bg =
+            palette::surface_colors_for_column_focus(palette::Surface::PillRowGap, false).fill;
         f.render_widget(
             Paragraph::new(" ".repeat(spacer_area.width as usize))
                 .style(Style::default().bg(panel_bg)),

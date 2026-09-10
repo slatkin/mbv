@@ -657,20 +657,15 @@ pub(in crate::app::render) fn render_home_hero_meta_block(
 
 /// Renders the fuzzy-search input (query text plus a `[loading…]` suffix
 /// while a search is in flight) into `area`. A single-row control that
-/// resumes the pill bar row it replaces: same `PILL_ROW_BG` background and
-/// leading `⌘` glyph as `render_pill_bar`'s prefix, so swapping between pills
-/// and search doesn't shift the row's look, just its content.
+/// resumes the pill bar row it replaces: the shared pill-row painter gives it
+/// the same `PillRow` surface and leading `⌘` glyph as `render_pill_bar`'s
+/// prefix, so swapping between pills and search doesn't shift the row's look,
+/// just its content.
 pub(in crate::app) fn render_search_box(f: &mut Frame, area: Rect, query: &str, loading: bool) {
-    use ratatui::widgets::Block;
-
     if area.width == 0 || area.height == 0 {
         return;
     }
-    f.render_widget(
-        Block::default().style(Style::default().bg(palette::PILL_ROW_BG)),
-        area,
-    );
-    let bg = Style::default().bg(palette::PILL_ROW_BG);
+    let bg = Style::default().bg(super::widgets::render_pill_row_surface(f, area));
     let input_text = if loading {
         format!("{query}█ [loading…]")
     } else {

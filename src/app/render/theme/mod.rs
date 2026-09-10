@@ -26,6 +26,10 @@ pub const SURFACE_BACKDROP: Color = primitives::LIBRARY_SIDE_BG;
 pub const SURFACE_CHROME: Color = primitives::DARK_BG;
 pub const SURFACE_FOCUSED: Color = primitives::BG_GREEN;
 pub const SURFACE_RESTING: Color = primitives::PLAYBACK_PANEL_BG; // resting-content / unfocused half
+
+// Test-only since `unify-surface-colour` row 4.2 moved the last production
+// caller onto the `PlaybackPanel` table row; row 4.3 retires the duplicate.
+#[cfg(test)]
 pub const SURFACE_PLAYBACK: Color = primitives::PLAYBACK_PANEL_BG; // now-playing-strip half
 pub const SURFACE_ACCENT_SOFT: Color = primitives::BG_GREEN_SOFT;
 pub const SURFACE_ITEM_FOCUSED: Color = primitives::FOCUSED;
@@ -89,6 +93,10 @@ pub const SCROLLBAR: Color = primitives::SCROLLBAR;
 /// bool: the existing `PanelFocus` (which panel is focused) for
 /// inline screens with one focusable region, or `PanelFocus` combined
 /// with a pane bit (`left_focused`) for Wide hero screens with two.
+///
+/// Test-only since `unify-surface-colour` row 4.2 moved every production
+/// caller onto the surface table; row 4.3 retires it.
+#[cfg(test)]
 pub fn resolve_surface_focus(focused: bool) -> Color {
     if focused {
         SURFACE_FOCUSED

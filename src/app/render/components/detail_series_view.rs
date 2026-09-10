@@ -122,7 +122,13 @@ pub(in crate::app::render) fn render_series_inline_detail(
     if let Some(img_rect) = result.img_rect {
         if img_is_placeholder {
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
+                Block::default().style(
+                    Style::default().bg(palette::surface_colors_for_column_focus(
+                        palette::Surface::ArtworkLoadingPlaceholder,
+                        false,
+                    )
+                    .fill),
+                ),
                 img_rect,
             );
         }

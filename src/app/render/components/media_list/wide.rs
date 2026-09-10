@@ -197,13 +197,22 @@ fn row_paint_area(paint_area: Rect, content_area: Rect) -> Rect {
     }
 }
 
-fn selected_row_surface_color(surface: SelectedRowSurface, focused: bool) -> Color {
+/// The colour a selected row punches through to.
+///
+/// A selected row paints only while it holds the cursor, which implies its own
+/// column holds panel focus, so the punch-through surface's focused fill is
+/// always the colour. The cursor never chooses it (design D1/D3): moving the
+/// cursor gates *whether* a row paints, not what colour it is.
+fn selected_row_surface_color(surface: SelectedRowSurface) -> Color {
     let surface = match surface {
         SelectedRowSurface::ListBackdrop => palette::Surface::SelectedRow,
         SelectedRowSurface::OwningQueueColumn => palette::Surface::SelectedRowOnQueueColumn,
         SelectedRowSurface::OwningLibraryPane => palette::Surface::SelectedRowOnLibraryPane,
     };
-    palette::surface_colors_for_column_focus(surface, focused).fill
+    // `true` is this surface's own column focus, proven by the row being
+    // selected: the `focused` gating bit that reaches the painter is a cursor
+    // bit and must not choose the colour.
+    palette::surface_colors_for_column_focus(surface, true).fill
 }
 
 /// Component-view adapter for the retained-result seam. The compatibility
@@ -226,7 +235,7 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone>(
         content_rect,
         list,
         policy.focused(),
-        selected_row_surface_color(policy.selected_surface(), policy.focused()),
+        selected_row_surface_color(policy.selected_surface()),
         policy.throbber(),
     );
     list.finish_view(
@@ -306,7 +315,7 @@ pub(in crate::app) fn render_inline_media_browser_component<Target: Clone>(
         list,
         policy.desired_detail_rows(),
         policy.focused(),
-        selected_row_surface_color(policy.selected_surface(), policy.focused()),
+        selected_row_surface_color(policy.selected_surface()),
     );
     let selected_row_rect = paint.row_geometry.selected_row_rect(content_rect);
     list.finish_view(

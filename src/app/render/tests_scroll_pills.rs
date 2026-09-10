@@ -112,3 +112,49 @@ fn pill_bar_does_not_pin_a_backwards_selection_to_the_trailing_edge() {
         "selected pill should have a visible successor"
     );
 }
+
+/// `unify-surface-colour` 4.2: the pill selector and the inline search box are
+/// the same layout position in different modes, so both paint the one
+/// `PillRow` surface through the shared row painter; neither names a role.
+#[test]
+fn search_box_and_pill_bar_share_the_pill_row_surface() {
+    use super::components::hero::render_search_box;
+
+    let expected = palette::surface_colors_for_column_focus(palette::Surface::PillRow, false).fill;
+
+    let labels = vec!["All".to_string()];
+    let ids = vec![0];
+    let mut pill_terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
+    pill_terminal
+        .draw(|f| {
+            render_pill_bar(
+                f,
+                Rect::new(0, 0, 20, 1),
+                PillBar {
+                    labels: &labels,
+                    ids: &ids,
+                    selected_pos: 0,
+                    prefix: None,
+                },
+            );
+        })
+        .unwrap();
+
+    let mut search_terminal = Terminal::new(TestBackend::new(20, 1)).unwrap();
+    search_terminal
+        .draw(|f| {
+            render_search_box(f, Rect::new(0, 0, 20, 1), "on", false);
+        })
+        .unwrap();
+
+    let pill_buf = pill_terminal.backend().buffer();
+    let search_buf = search_terminal.backend().buffer();
+    // The pill row's trailing fill is the row surface, not a pill chip.
+    assert_eq!(
+        pill_buf[(19, 0)].bg,
+        expected,
+        "pill bar's row fill carries the PillRow surface"
+    );
+    // The search box paints the same row surface behind its content.
+    assert_eq!(search_buf[(0, 0)].bg, expected, "search box row surface");
+}

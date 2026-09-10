@@ -543,11 +543,20 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
         crate::app::render::render_placeholder(f, left_area, " Loading\u{2026}");
     }
 
-    f.render_widget(
-        ratatui::widgets::Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
-        browser_panel,
-    );
     let right_pane = wide_hero::wide_hero_browser_pane(browser_panel, browser_area);
+    // The row below the pill bar is the chrome-band spacer (design D2's
+    // `PillRowGap`), the same surface Home paints. The pill row and the rail
+    // frame own the rest of the pane, so the container needs no column-surface
+    // fill of its own -- TV, Movies and the ABS screens likewise leave it to
+    // the shell's `LibraryColumn`.
+    if right_pane.spacer_area.height > 0 && right_pane.spacer_area.width > 0 {
+        f.render_widget(
+            ratatui::widgets::Block::default().style(Style::default().bg(
+                palette::surface_colors_for_column_focus(palette::Surface::PillRowGap, false).fill,
+            )),
+            right_pane.spacer_area,
+        );
+    }
     if !inline_search.is_active() && ctx.list.is_search_active() {
         crate::app::render::components::hero::render_search_box(
             f,

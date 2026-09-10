@@ -304,6 +304,19 @@ pub(in crate::app) struct PillBar<'a> {
     pub prefix: Option<&'a str>,
 }
 
+/// Paints the canonical pill-row surface (design D2's `PillRow`) across `area`
+/// and returns its fill.
+///
+/// The pill selector and the inline search box are the same layout position in
+/// different modes, so this is the one painter of that surface: both call it
+/// and neither names a role, which keeps the row's appearance in one place.
+/// The fill never follows panel focus.
+pub(in crate::app) fn render_pill_row_surface(f: &mut Frame, area: Rect) -> Color {
+    let fill = palette::surface_colors_for_column_focus(palette::Surface::PillRow, false).fill;
+    f.render_widget(Block::default().style(Style::default().bg(fill)), area);
+    fill
+}
+
 /// Renders `bar` into `area`, painting the canonical pill-selector row
 /// background, drawing joined angled pills with the selected choice kept on
 /// screen (with `‹`/`›` chevrons when the pills overflow), and returning the
@@ -329,8 +342,6 @@ pub(in crate::app) fn render_pill_bar(
     let area = Rect { height: 1, ..area };
     // The pill row and its chips are fixed chrome-band surfaces (their fill
     // never follows panel focus); the table still owns their values.
-    let pill_row_bg =
-        palette::surface_colors_for_column_focus(palette::Surface::PillRow, false).fill;
     let pill_bg = palette::surface_colors_for_column_focus(palette::Surface::PillChip, false).fill;
     let pill_selected_bg =
         palette::surface_colors_for_column_focus(palette::Surface::PillChipSelected, false).fill;
@@ -402,10 +413,7 @@ pub(in crate::app) fn render_pill_bar(
     };
 
     // The row surface is part of the canonical shell.
-    f.render_widget(
-        Block::default().style(Style::default().bg(pill_row_bg)),
-        area,
-    );
+    let pill_row_bg = render_pill_row_surface(f, area);
 
     let mut spans: Vec<Span> = Vec::new();
     let mut x_cursor = area.x;

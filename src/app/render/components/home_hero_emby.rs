@@ -118,7 +118,13 @@ impl App {
         // Same budget as the real-image branch above, so the placeholder
         // never renders as a too-tall block while no artwork is ready yet.
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors_for_column_focus(
+                    palette::Surface::ArtworkLoadingPlaceholder,
+                    false,
+                )
+                .fill),
+            ),
             Rect {
                 height: natural_h,
                 ..img_area
@@ -269,7 +275,13 @@ impl App {
                     // Series artwork uses the portrait inline-detail budget,
                     // not the generic 16:9 hero budget.
                     f.render_widget(
-                        Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
+                        Block::default().style(
+                            Style::default().bg(palette::surface_colors_for_column_focus(
+                                palette::Surface::ArtworkLoadingPlaceholder,
+                                false,
+                            )
+                            .fill),
+                        ),
                         area,
                     );
                 } else {
@@ -283,7 +295,13 @@ impl App {
             }) => {
                 if show_placeholder {
                     f.render_widget(
-                        Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
+                        Block::default().style(
+                            Style::default().bg(palette::surface_colors_for_column_focus(
+                                palette::Surface::ArtworkLoadingPlaceholder,
+                                false,
+                            )
+                            .fill),
+                        ),
                         area,
                     );
                 } else {
