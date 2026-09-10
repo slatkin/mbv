@@ -18,7 +18,7 @@ use tuirealm::state::State;
 use super::inline_search::{InlineSearch, InlineSearchHost, InlineSearchMouse};
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
-    RowLocalOutcome, ViewportAnchor, WideMediaList,
+    RowLocalOutcome, WideMediaList,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
@@ -76,8 +76,6 @@ pub struct MusicWorkspaceComponent {
     /// the album cursor, scroll, and selected target across a breakpoint
     /// change; the two adapters are never synchronized.
     pub(super) carrier: MediaListCarrier<String>,
-    /// One-shot `ViewportAnchor` carried across a breakpoint flip (§2.5).
-    pending_anchor: Option<ViewportAnchor<String>>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
@@ -119,7 +117,6 @@ impl MusicWorkspaceComponent {
             image_paint: None,
             inline_track_focus_enabled: false,
             carrier: MediaListCarrier::new(Presentation::Inline),
-            pending_anchor: None,
             mouse_gestures: MouseGestureState::new(),
             track_list: WideMediaList::new(),
             pill_regions: HitRegions::new(),
@@ -186,24 +183,6 @@ impl MusicWorkspaceComponent {
                     .position(|candidate| candidate == &target)
             })
             .unwrap_or(0)
-    }
-
-    /// The outgoing control's `ViewportAnchor` for the last painted
-    /// presentation (mirrors `TvWorkspaceComponent::viewport_anchor`).
-    pub(in crate::app) fn viewport_anchor(&self) -> Option<ViewportAnchor<String>> {
-        let content_rect = self.carrier.current_content_rect()?;
-        let selected_target = self.carrier.current_selected_target()?.clone();
-        let selected_row = self.carrier.current_selected_row_rect()?;
-        Some(ViewportAnchor {
-            selected_target,
-            selected_row_offset: selected_row.y.saturating_sub(content_rect.y) as usize,
-        })
-    }
-
-    /// Deliver a `ViewportAnchor` to the kept-mounted workspace; consumed at
-    /// the next `view` against the then-current presentation.
-    pub(in crate::app) fn apply_viewport_anchor(&mut self, anchor: ViewportAnchor<String>) {
-        self.pending_anchor = Some(anchor);
     }
 
     /// Test-only: drive framework focus the way `Component::attr` does when
@@ -281,7 +260,6 @@ impl MusicWorkspaceComponent {
             self.select_active_target(&target);
             self.set_active_scroll(scroll);
         }
-        self.pending_anchor = None;
     }
     pub(in crate::app) fn set_album_columns(&mut self, columns: usize) {
         self.album_columns = columns.max(1);
@@ -618,10 +596,6 @@ impl Component for MusicWorkspaceComponent {
         };
         self.carrier
             .ensure_presentation(target, incoming_height.max(1));
-        if let Some(anchor) = self.pending_anchor.take() {
-            self.carrier
-                .apply_viewport_anchor(&anchor, incoming_height.max(1));
-        }
 
         // The active control owns the painted selection. Use its index for
         // render-derived detail content before cloning the shell snapshot.

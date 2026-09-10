@@ -144,16 +144,6 @@ impl<Target> MediaListCarrier<Target> {
         }
     }
 
-    /// The active presentation's retained selected target, when it has
-    /// completed a view with a selectable row.
-    pub fn current_selected_target(&self) -> Option<&Target> {
-        match self.active {
-            Presentation::Wide => self.wide.current_selected_target(),
-            Presentation::Inline => self.inline.current_selected_target(),
-            Presentation::Grid => None,
-        }
-    }
-
     /// Number of rows in the active presentation's retained current-frame
     /// flow, when it has completed a view.
     pub fn current_flow_len(&self) -> Option<usize> {
