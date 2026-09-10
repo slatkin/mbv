@@ -649,3 +649,54 @@ recorded here so the correction is reproducible.
 No other number in `proposal.md` (the `#3c4841`, `#48584e`, `#333c43`, `#2d353b` values, the
 "two roles / one value", "one role / six meanings" and "surface role aliasing a text role" claims)
 contradicts the tree. The `§ Impact` list stays as written.
+
+## Migration report (task 6.2)
+
+**What the change did.** Colour decisions now have one home and one input. The shell derives one
+`FocusState` per frame (the active column plus whether the right column is visible; deliberately no
+cursor, because selection never changes an appearance). The theme declares one closed `Surface` set —
+34 identities, five levels, and a row per surface naming its level and its focused and resting
+appearance — and resolves `surface_colors(surface, &FocusState)`. Every production painter names a
+surface; none names a role and none calls a resolver. Two ast-grep rules fail the build if that
+changes: no surface role name or resolver in a painter, and no background filled straight from a theme
+role.
+
+**Aliases retired** (each proven byte-identical by a colour-literal multiset comparison per changed
+file): `SURFACE_ACCENT_SOFT` (its value survives as the table's soft content-body variant),
+`SURFACE_PLAYBACK`, `SURFACE_STATUS_PILL`, `SURFACE_ARTWORK_PLACEHOLDER`, the `BORDER_UNFOCUSED` fill
+at its six artwork-loading sites, and the `SURFACE_FOCUSED` = `TEXT_ACCENT_MUTED` alias, so a text
+colour can no longer move a surface appearance. Three primitives shared between a surface role and a
+non-surface role (`BG_GREEN_SOFT`/`SCROLLBAR`, `FOAM`/`PILL_SELECTOR_SELECTED_BG`,
+`AQUA`/`PLAYBACK_THROBBER_FG`) were split, same bytes, two names.
+
+**Coverage.** The task 2.1 inventory classified 66 production paint sites; every one now names a
+surface, and an independent grep finds no production role name or resolver call anywhere outside
+`src/app/render/theme/`. The conformance test (row 5.2) enumerates all 34 surfaces across the
+breakpoints: 15 pinned by it directly, 17 by named existing tests, and two — `WideSplitGutter` and
+`QueueCardVisualizer` — pinned nowhere at buffer level, because both are painted by boundary
+components from their own rects; they are covered only by those components' unit tests.
+
+**What a level edit now reaches.** Editing one focused appearance in the table changes every surface
+of that level, and a screen cannot skip it: naming a role is a build failure. Seven surfaces declare a
+**resting deviation** with its reason (the library column's backdrop, the queue panel's and the
+content box's recess, the non-hero sidebar pair, and `QueueCardVisualizer`), listed where the table is
+declared; each is removable one at a time.
+
+**What moved on screen.** Exactly two things, both authorised: the row above the pill bar is now the
+library column's rather than the playback panel's (section 1, the behaviour kept from
+`focus-aware-column-surface`), and the pane content boxes follow their pane, so TV's overview box and
+the inline-hero box take the soft fill while focused instead of staying dark (row 4.6). Everything
+else is byte-identical, including the whole existing suite: no test expectation's value moved.
+
+**Residuals, recorded rather than hidden:** the two surfaces pinned nowhere at buffer level (above);
+`ACCENT` remains a mixed surface/foreground role; row 4.5's single-painter property rests on the
+deletions plus the 5.1 rules rather than a buffer assertion, because two identical fills are
+indistinguishable in a buffer; and one load-sensitive SIGABRT flake fires occasionally in a Home test
+under parallel full-suite runs and passes in isolation.
+
+**Reviews.** Every unit ran a bounded Standards+Spec review round. Those rounds caught: a vacuous
+`debug_assert` and a bool-taking resolver that would have accepted a cursor bit (row 4.1/unit A); a
+selected-row colour parameter hardcoded to the focused fill, latent rather than live, now pinned on
+both halves (unit C); and — before the rule existed — that an ast-grep rule listing only surface names
+would never have caught the queue's aqua scope pill, which is why row 5.1 additionally bans
+role-painted backgrounds.
