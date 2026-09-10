@@ -316,7 +316,7 @@ pub(super) struct AudiobookshelfBookBrowseState {
     /// The shell's *resting* selected book -- the last committed selection,
     /// written at the select/bucket/restore event and read by position save
     /// and detail-fetch routing. The component owns the live highlight;
-    /// `chapter_selection` and `selected_bucket` are component-only and never
+    /// `chapter_focused` and `selected_bucket` are component-only and never
     /// projected (split-browse-state-interaction-fields D1/D2).
     pub selected_id: Option<String>,
     pub error: Option<String>,

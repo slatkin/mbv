@@ -129,10 +129,10 @@ impl App {
             state.error = None;
             state.detail_cache.clear();
             state.episodes = None;
-            // `episode_selection` / `scroll` are component-owned now
-            // (split-browse-state-interaction-fields task 3.2); the content
-            // push after this reset drops the selected show, which resets the
-            // component's own interaction state.
+            // `episode_filter` / episode-pane focus / `scroll` are
+            // component-owned now (split-browse-state-interaction-fields task
+            // 3.2); the content push after this reset drops the selected show,
+            // which resets the component's own interaction state.
             state.loading_pages.clear();
             // Mark page 0 pending before re-issuing it so the catalog reloads
             // from the first page (the renderer shows a Loading placeholder

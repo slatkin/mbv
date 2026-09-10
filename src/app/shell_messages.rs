@@ -483,7 +483,7 @@ impl Model {
                 ShellRequest::QueueIntent(intent) => {
                     self.handle_queue_intent(intent);
                 }
-                // Component owns episode_selection/episode_filter; mutated locally in
+                // Component owns episode-pane focus/episode_filter; mutated locally in
                 // AudiobookshelfPodcastComponent::handle_key before the request is emitted, and
                 // handle_audiobookshelf_podcast_episode_intent resolves the target from the
                 // component, not App state (commit 0227d748, migrate-tui-to-tuirealm task

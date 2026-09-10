@@ -110,7 +110,7 @@ fn book_narrow_long_chapter_list_keeps_inline_detail_and_clips_rows() {
     term.draw(|f| component.view(f, f.area())).unwrap();
 
     assert!(component.geometry().hero_area.is_some());
-    assert!(!component.geometry().chapter_rows.is_empty());
+    assert!(component.chapter_content_rect_for_test().is_some());
     let text: String = term
         .backend()
         .buffer()
@@ -141,7 +141,7 @@ fn book_narrow_overview_cap_keeps_chapter_rows_below_hero() {
     term.draw(|f| component.view(f, f.area())).unwrap();
 
     assert!(component.geometry().hero_area.is_some());
-    assert!(!component.geometry().chapter_rows.is_empty());
+    assert!(component.chapter_content_rect_for_test().is_some());
     let text: String = term
         .backend()
         .buffer()
@@ -171,7 +171,7 @@ fn book_wide_overview_cap_keeps_chapter_hit_geometry() {
     let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
     term.draw(|f| component.view(f, f.area())).unwrap();
 
-    assert!(!component.geometry().chapter_rows.is_empty());
+    assert!(component.chapter_content_rect_for_test().is_some());
 }
 
 #[test]

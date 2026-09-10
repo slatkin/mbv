@@ -51,7 +51,7 @@ impl Model {
     /// keyboard and mouse selection. The shared `SelectionModalFilterSelected`
     /// shell request dispatches through
     /// `Model::handle_selection_modal_request`, so the modal path must not
-    /// depend on the wide-only `episode_selection` state.
+    /// depend on the wide-only episode-pane focus state.
     pub(super) fn select_podcast_selection_modal_filter(
         &mut self,
         library_item_id: String,

@@ -152,25 +152,25 @@ fn narrow_podcasts_replace_selected_show_row_with_detail() {
     assert!(!model.app.is_right_panel_wide());
 
     // Repoint from the legacy `LayoutMain.audiobookshelf_episode_rows` to the
-    // mounted component's painted geometry (task 5.3d.10, Unit D). Narrow
-    // podcast details paint no episode rows, so the component owns an empty
-    // `episode_rows`.
+    // mounted component's painted episode-owner geometry (task 5.3d.10, Unit
+    // D). Narrow podcast detail paints the downloaded episodes through the
+    // shared episode owner, which retains its current-frame geometry.
     let component_id = model
         .abs_podcast_id
         .as_ref()
         .expect("podcast component mounted");
-    let episode_rows = model
+    let episode_painted = model
         .application
         .get_component_mut(component_id)
         .and_then(|comp| {
             comp.as_any_mut()
                 .downcast_mut::<AudiobookshelfPodcastComponent>()
         })
-        .map(|component| component.geometry().episode_rows.clone())
+        .map(|component| component.episode_content_rect_for_test().is_some())
         .expect("podcast component mounted");
     assert!(
-        !episode_rows.is_empty(),
-        "inline detail renders downloaded episodes"
+        episode_painted,
+        "inline detail renders downloaded episodes through the shared owner"
     );
 }
 
@@ -300,21 +300,18 @@ fn audiobook_podcast_buffer_characterization_covers_default_focused_narrow_and_s
 
 #[test]
 fn narrow_podcast_detail_shows_author_description_no_pills_or_table() {
-    // Before this migration (task 4.1's characterization), this same setup
-    // rendered the author/description as a hand-painted block and showed
-    // the in-hero " ⌘ " filter pill bar + episode table whenever
-    // `episode_selection` was set. Task 4.2 makes author/description plain
-    // `HeroLine`s and gates the pill bar + table on `persistent` (wide
-    // only), so the narrow hero never shows them, even if
-    // `episode_selection` is set (simulated here as a stale value -- Enter
-    // no longer sets it in narrow mode, see `open_podcast_selection_modal`).
+    // Narrow inline detail: the author/description render as plain
+    // `HeroLine`s, and the selected show's filtered episode pill bar + table
+    // are part of the inline replacement block. `episode_focused` (set here
+    // through the same parent-owned focus the wide workspace uses) governs the
+    // admission budget so the episode table fits in the narrow hero.
     let mut app = audiobookshelf_app();
     let state = &mut app.audiobookshelf_browse[0];
     state.shows[0].author = Some("Author A".into());
     state.shows[0].description = Some("A description of the show.".into());
     let (_model, terminal) = render_podcast_shell_with(app, 60, 20, true, |model| {
         if let Some(component) = model.abs_podcast_component_mut(0) {
-            component.set_episode_selection(Some(0));
+            component.enter_episode_focus();
         }
     });
     let output = buffer_to_string(&terminal);
@@ -355,7 +352,7 @@ fn wide_podcast_detail_preserves_episode_rows_and_played_filtering() {
     );
     let (mut model, terminal) = render_podcast_shell_with(app, 100, 30, true, |model| {
         if let Some(component) = model.abs_podcast_component_mut(0) {
-            component.set_episode_selection(Some(0));
+            component.enter_episode_focus();
             component.set_episode_filter(AudiobookshelfEpisodeFilter::Played);
         }
     });
@@ -365,23 +362,23 @@ fn wide_podcast_detail_preserves_episode_rows_and_played_filtering() {
     assert!(layout.hero_area.x > layout.left_area.x);
 
     // Repoint from the legacy `LayoutMain.audiobookshelf_episode_rows` to the
-    // mounted component's painted geometry (task 5.3d.10, Unit D). Wide podcast
-    // detail preserves the painted episode rows through component-owned
-    // geometry; the played filter governs which episodes the component paints.
+    // mounted component's painted episode-owner geometry (task 5.3d.10, Unit
+    // D). Wide podcast detail preserves the painted episode rows through the
+    // shared owner; the played filter governs which episodes it paints.
     let component_id = model
         .abs_podcast_id
         .as_ref()
         .expect("podcast component mounted");
-    let episode_rows = model
+    let episode_painted = model
         .application
         .get_component_mut(component_id)
         .and_then(|comp| {
             comp.as_any_mut()
                 .downcast_mut::<AudiobookshelfPodcastComponent>()
         })
-        .map(|component| component.geometry().episode_rows.clone())
+        .map(|component| component.episode_content_rect_for_test().is_some())
         .expect("podcast component mounted");
-    assert!(!episode_rows.is_empty());
+    assert!(episode_painted);
     assert!(out.contains("Episode A"));
 }
 

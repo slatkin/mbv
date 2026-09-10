@@ -1,5 +1,5 @@
 use crate::app::components::media_list::{
-    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
 };
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::arrangements::wide_hero::{
@@ -63,7 +63,7 @@ pub(in crate::app::render) fn podcast_hero_content_rows(
         .len()
         .min(4) as u16;
     }
-    if interaction.episode_selection.is_some() {
+    if interaction.episode_focused {
         rows += 1 + SERIES_DETAIL_DIVIDER_ROWS as u16;
         rows += state
             .episodes
@@ -85,11 +85,29 @@ use ratatui::Frame;
 
 /// The component-owned interaction values the podcast renderer needs, passed
 /// in rather than read off the projected content type
-/// (split-browse-state-interaction-fields task 3.2).
+/// (split-browse-state-interaction-fields task 3.2). `episode_focused` is the
+/// parent-owned episode-pane focus, separate from the episode owner's selected
+/// row (design.md D5).
 #[derive(Clone, Copy)]
 pub(in crate::app) struct PodcastInteraction {
     pub episode_filter: AudiobookshelfEpisodeFilter,
-    pub episode_selection: Option<usize>,
+    pub episode_focused: bool,
+}
+
+/// The active show-row presentation the podcast destination paints this frame
+/// (design.md D1/D2): the Wide presentation for the Wide hero rail or the
+/// Inline presentation for inline Narrow. Exactly one is handed over per view;
+/// the same shared `MediaList` owner moves between them.
+pub(in crate::app) enum PodcastShowPresentation<'a> {
+    Wide(&'a mut WideMediaList<String>),
+    Inline(&'a mut InlineMediaBrowser<String>),
+}
+
+/// The active episode-row presentation. Episodes always paint fixed
+/// one-column rows through the Wide presentation (design.md D1/D2), in the
+/// wide hero and the narrow inline detail alike.
+pub(in crate::app) enum PodcastEpisodePresentation<'a> {
+    Wide(&'a mut WideMediaList<String>),
 }
 
 /// Geometry painted by the podcast component. Input uses this same geometry,
@@ -97,7 +115,6 @@ pub(in crate::app) struct PodcastInteraction {
 #[derive(Default)]
 pub(in crate::app) struct AudiobookshelfPodcastGeometry {
     pub selector_tabs: Vec<(Rect, usize)>,
-    pub episode_rows: Vec<(Rect, usize)>,
     /// Painted list/browser area: the wide right panel, or the narrow content
     /// area below the pill bar. Mirrors the legacy `LayoutMain.left_area` so
     /// the shell can anchor overlays after render ownership moved to the
@@ -167,12 +184,10 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     area: Rect,
     focused: bool,
     images_enabled: bool,
-    state: &mut AudiobookshelfBrowseState,
+    state: &AudiobookshelfBrowseState,
     interaction: PodcastInteraction,
-    narrow_list: &mut InlineMediaBrowser<String>,
-    wide_show_list: &mut WideMediaList<String>,
-    wide_episode_list: &mut WideMediaList<String>,
-    flip_anchor: Option<&ViewportAnchor<String>>,
+    show_presentation: PodcastShowPresentation<'_>,
+    episode_presentation: PodcastEpisodePresentation<'_>,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
     *geometry = AudiobookshelfPodcastGeometry::default();
@@ -188,12 +203,13 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
             images_enabled,
             state,
             interaction,
-            narrow_list,
-            wide_show_list,
-            wide_episode_list,
-            flip_anchor,
+            show_presentation,
+            episode_presentation,
             geometry,
         );
+    };
+    let PodcastShowPresentation::Wide(show_list) = show_presentation else {
+        return None;
     };
 
     // Wide layout: the list/browser occupies the left pane; the hero panel is
@@ -216,7 +232,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     let hero_content_area = wide_hero::wide_hero_hero_pane(
         frame,
         area,
-        wide_hero::LeftPaneFocus::Workspace(focused && interaction.episode_selection.is_some()),
+        wide_hero::LeftPaneFocus::Workspace(focused && interaction.episode_focused),
     )
     .expect("wide branch already confirmed wide_hero_presentation fits");
     let image_paint = render_podcast_hero(
@@ -228,11 +244,11 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         true,
         images_enabled,
         true,
-        wide_episode_list,
+        episode_presentation,
         geometry,
     );
     if state.shows.is_empty() {
-        wide_show_list.invalidate_paint();
+        show_list.invalidate_paint();
         render_placeholder(frame, right_panel, "No podcast shows");
         return image_paint;
     }
@@ -252,16 +268,7 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     // panel cell background, so it must not run after the canonical list.
     wide_hero_browser_border(frame, list_panel, focused);
 
-    wide_show_list.set_content(podcast_show_rows(&state.shows));
-    if wide_show_list.selected_target().is_none() {
-        if let Some(id) = state.selected_id.as_ref() {
-            wide_show_list.select_target(id);
-        }
-    }
-    if let Some(anchor) = flip_anchor {
-        wide_show_list.apply_viewport_anchor(anchor, content_area.height.max(1) as usize);
-    }
-    wide_show_list.set_geometry(list_panel, content_area);
+    show_list.set_geometry(list_panel, content_area);
     let paint_area = Rect {
         x: list_panel.x,
         width: list_panel.width,
@@ -271,12 +278,12 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
         frame,
         paint_area,
         content_area,
-        wide_show_list,
+        show_list,
         focused,
         palette::list_selected_row_bg(),
         None,
     );
-    wide_show_list.finish_view(
+    show_list.finish_view(
         list_panel,
         content_area,
         paint.row_geometry,
@@ -291,16 +298,17 @@ fn render_narrow_podcast(
     area: Rect,
     focused: bool,
     images_enabled: bool,
-    state: &mut AudiobookshelfBrowseState,
+    state: &AudiobookshelfBrowseState,
     interaction: PodcastInteraction,
-    narrow_list: &mut InlineMediaBrowser<String>,
-    _wide_show_list: &mut WideMediaList<String>,
-    _wide_episode_list: &mut WideMediaList<String>,
-    flip_anchor: Option<&ViewportAnchor<String>>,
+    show_presentation: PodcastShowPresentation<'_>,
+    episode_presentation: PodcastEpisodePresentation<'_>,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
+    let PodcastShowPresentation::Inline(show_list) = show_presentation else {
+        return None;
+    };
     if state.shows.is_empty() {
-        narrow_list.invalidate_paint();
+        show_list.invalidate_paint();
         render_placeholder(
             frame,
             area,
@@ -316,16 +324,7 @@ fn render_narrow_podcast(
     let content_area = parts.content_area;
     geometry.list_area = content_area;
 
-    narrow_list.set_content(podcast_show_rows(&state.shows));
-    if narrow_list.selected_target().is_none() {
-        if let Some(id) = state.selected_id.as_ref() {
-            narrow_list.select_target(id);
-        }
-    }
-    if let Some(anchor) = flip_anchor {
-        narrow_list.apply_viewport_anchor(anchor, content_area.height.max(1) as usize);
-    }
-    narrow_list.set_geometry(content_area, content_area);
+    show_list.set_geometry(content_area, content_area);
     let hero_content_width = content_area
         .width
         .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
@@ -336,13 +335,13 @@ fn render_narrow_podcast(
     let result = render_inline_media_browser(
         frame,
         content_area,
-        &*narrow_list,
+        &*show_list,
         desired_detail_rows,
         focused,
         palette::list_selected_row_bg(),
     );
     let geo = result.row_geometry.clone();
-    narrow_list.finish_view(
+    show_list.finish_view(
         content_area,
         content_area,
         geo.clone(),
@@ -372,7 +371,7 @@ fn render_narrow_podcast(
         true,
         images_enabled,
         false,
-        _wide_episode_list,
+        episode_presentation,
         geometry,
     )
 }
@@ -387,7 +386,7 @@ fn render_podcast_hero(
     show_title: bool,
     images_enabled: bool,
     wide: bool,
-    wide_episode_list: &mut WideMediaList<String>,
+    episode_presentation: PodcastEpisodePresentation<'_>,
     geometry: &mut AudiobookshelfPodcastGeometry,
 ) -> Option<HomeImagePaint> {
     let show = state.selected_show()?;
@@ -435,10 +434,10 @@ fn render_podcast_hero(
         focused,
     );
     // The selected-show detail uses the shared episode presentation in both
-    // hero and replacement modes. Wide keeps the workspace selection gate;
-    // inline detail is visible whenever the selected show has detail.
-    if (wide && interaction.episode_selection.is_some() || !wide) && result.next_row < area.bottom()
-    {
+    // hero and replacement modes. Wide keeps the workspace focus gate; inline
+    // detail is visible whenever the selected show has detail.
+    if (wide && interaction.episode_focused || !wide) && result.next_row < area.bottom() {
+        let PodcastEpisodePresentation::Wide(episode_list) = episode_presentation;
         let listing_area = Rect {
             y: result.next_row,
             height: area.bottom().saturating_sub(result.next_row),
@@ -471,64 +470,31 @@ fn render_podcast_hero(
         );
         geometry.selector_tabs.extend(tabs);
         let row_y = listing_content_area.y + 1;
-        let rows = state
-            .visible_episodes(filter)
-            .into_iter()
-            .map(|episode| MediaListRow::Item {
-                target: episode.episode_id.clone(),
-                primary: episode.title.clone(),
-                trailing: None,
-                duration: episode.duration_seconds.and_then(|seconds| {
-                    crate::app::ui_util::list_duration_secs(seconds.round() as i64)
-                }),
-                kind: MediaKind::Media,
-                semantic_state: state
-                    .progress
-                    .get(&(episode.library_item_id.clone(), episode.episode_id.clone()))
-                    .map(|progress| {
-                        if progress.is_finished {
-                            MediaSemanticState::Played
-                        } else {
-                            MediaSemanticState::Ordinary
-                        }
-                    })
-                    .unwrap_or(MediaSemanticState::Ordinary),
-            })
-            .collect();
-        wide_episode_list.set_content(rows);
-        wide_episode_list.select_index(interaction.episode_selection.unwrap_or(0));
         let episode_area = Rect {
             x: listing_content_area.x,
             y: row_y,
             width: listing_content_area.width,
             height: area.bottom().saturating_sub(row_y),
         };
+        // The episode owner already holds the filtered rows projected before
+        // view (design.md D6); the painter only paints and retains the
+        // current-frame hit geometry.
+        episode_list.set_geometry(episode_area, episode_area);
         let paint = render_wide_media_list(
             frame,
             episode_area,
             episode_area,
-            wide_episode_list,
+            episode_list,
             focused,
             palette::list_selected_row_bg(),
             None,
         );
-        geometry.episode_rows = paint
-            .row_geometry
-            .targets()
-            .enumerate()
-            .filter_map(|(row, target)| target.map(|_| (row, row)))
-            .map(|(row, index)| {
-                (
-                    Rect {
-                        x: episode_area.x,
-                        y: episode_area.y + row as u16,
-                        width: episode_area.width,
-                        height: 1,
-                    },
-                    index,
-                )
-            })
-            .collect();
+        episode_list.finish_view(
+            episode_area,
+            episode_area,
+            paint.row_geometry,
+            paint.selected_row_rect,
+        );
     }
     (images_enabled && result.img_rect.is_some()).then(|| HomeImagePaint::AudiobookshelfCover {
         area: result.img_rect.unwrap(),
@@ -554,10 +520,10 @@ mod tests {
         AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfShow,
     };
 
-    fn interaction(episode_selection: Option<usize>) -> PodcastInteraction {
+    fn interaction(episode_focused: bool) -> PodcastInteraction {
         PodcastInteraction {
             episode_filter: AudiobookshelfEpisodeFilter::All,
-            episode_selection,
+            episode_focused,
         }
     }
 
@@ -609,7 +575,7 @@ mod tests {
             .len()
             .min(4) as u16;
         }
-        if interaction.episode_selection.is_some() {
+        if interaction.episode_focused {
             rows += 1 + SERIES_DETAIL_DIVIDER_ROWS as u16;
             rows += state
                 .episodes
@@ -646,10 +612,10 @@ mod tests {
         });
         // title(1) + author(1) + trailing(1) = 3; no image minimum.
         assert_eq!(
-            podcast_hero_content_rows(&state, interaction(None), 40, false),
+            podcast_hero_content_rows(&state, interaction(false), 40, false),
             3
         );
-        assert_matches_legacy(&state, interaction(None), 40, false);
+        assert_matches_legacy(&state, interaction(false), 40, false);
     }
 
     #[test]
@@ -661,7 +627,7 @@ mod tests {
             description: Some("word ".repeat(80)),
             cover_path: None,
         });
-        assert_matches_legacy(&state, interaction(None), 40, false);
+        assert_matches_legacy(&state, interaction(false), 40, false);
     }
 
     #[test]
@@ -696,7 +662,7 @@ mod tests {
                 duration_seconds: None,
             },
         ]);
-        assert_matches_legacy(&state, interaction(Some(0)), 40, false);
+        assert_matches_legacy(&state, interaction(true), 40, false);
     }
 
     #[test]
@@ -710,9 +676,9 @@ mod tests {
         });
         // Images enabled lifts even a title-only budget to SERIES_IMAGE_ROWS+1.
         assert_eq!(
-            podcast_hero_content_rows(&state, interaction(None), 40, true),
+            podcast_hero_content_rows(&state, interaction(false), 40, true),
             SERIES_IMAGE_ROWS + 1
         );
-        assert_matches_legacy(&state, interaction(None), 40, true);
+        assert_matches_legacy(&state, interaction(false), 40, true);
     }
 }

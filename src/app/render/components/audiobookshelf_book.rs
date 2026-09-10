@@ -1,5 +1,5 @@
 use crate::app::components::media_list::{
-    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, ViewportAnchor, WideMediaList,
+    InlineMediaBrowser, MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
 };
 use crate::app::palette;
 use crate::app::render::arrangements::library as library_arrangement;
@@ -18,8 +18,8 @@ use crate::app::render::components::media_list::{
     render_inline_media_browser, render_wide_media_list,
 };
 use crate::app::render::{render_pill_bar, render_placeholder, PillBar};
-use crate::app::types_audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
-use crate::app::ui_util::{fmt_duration_approx, list_duration_secs};
+use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
+use crate::app::ui_util::fmt_duration_approx;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 
@@ -32,17 +32,34 @@ pub(in crate::app::render) const BOOK_NARROW_OVERVIEW_ROWS: u16 = 4;
 
 /// The component-owned interaction values the book renderer needs, passed in
 /// rather than read off the projected content type
-/// (split-browse-state-interaction-fields task 2.2).
+/// (split-browse-state-interaction-fields task 2.2). `chapter_focused` is the
+/// parent-owned chapter-pane focus, separate from the chapter owner's selected
+/// row (design.md D5).
 #[derive(Clone, Copy)]
 pub(in crate::app) struct BookInteraction {
-    pub chapter_selection: Option<usize>,
+    pub chapter_focused: bool,
     pub selected_bucket: usize,
+}
+
+/// The active book-row presentation the book destination paints this frame
+/// (design.md D1/D2): the Wide presentation for the Wide hero rail or the
+/// Inline presentation for inline Narrow. Exactly one is handed over per view;
+/// the same shared `MediaList` owner moves between them.
+pub(in crate::app) enum BookPresentation<'a> {
+    Wide(&'a mut WideMediaList<String>),
+    Inline(&'a mut InlineMediaBrowser<String>),
+}
+
+/// The active chapter/audio-part presentation. Chapter rows always paint fixed
+/// one-column rows through the Wide presentation (design.md D1/D2), in the
+/// wide hero and the narrow inline detail alike.
+pub(in crate::app) enum BookChapterPresentation<'a> {
+    Wide(&'a mut WideMediaList<usize>),
 }
 
 #[derive(Default)]
 pub(in crate::app) struct AudiobookshelfBookGeometry {
     pub selector_tabs: Vec<(Rect, usize)>,
-    pub chapter_rows: Vec<(Rect, usize)>,
     /// Painted book-list rect: the Wide browser pane on the left, or the
     /// narrow content area below the pill bar. This is the list geometry used
     /// by `lib_page_size()` for its real stride (2.1j).
@@ -91,19 +108,19 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
     frame: &mut Frame,
     area: Rect,
     focused: bool,
-    state: &mut AudiobookshelfBookBrowseState,
+    state: &AudiobookshelfBookBrowseState,
     interaction: BookInteraction,
     images_enabled: bool,
     geometry: &mut AudiobookshelfBookGeometry,
-    narrow_list: &mut InlineMediaBrowser<String>,
-    wide_book_list: &mut WideMediaList<String>,
-    chapter_list: &mut WideMediaList<String>,
-    flip_anchor: Option<&ViewportAnchor<String>>,
+    book_presentation: BookPresentation<'_>,
+    chapter_presentation: BookChapterPresentation<'_>,
 ) -> Option<super::home_hero::HomeImagePaint> {
     *geometry = AudiobookshelfBookGeometry::default();
     if state.books.is_empty() {
-        narrow_list.invalidate_paint();
-        wide_book_list.invalidate_paint();
+        match book_presentation {
+            BookPresentation::Wide(book_list) => book_list.invalidate_paint(),
+            BookPresentation::Inline(book_list) => book_list.invalidate_paint(),
+        }
         render_placeholder(
             frame,
             area,
@@ -121,13 +138,16 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
 
     let plan = book_hero_plan(state, area.width, images_enabled);
     if wide_hero::wide_hero_presentation(area).is_some() {
+        let BookPresentation::Wide(book_list) = book_presentation else {
+            return None;
+        };
         let panes = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y)?;
         geometry.left_area = panes.hero_area;
         geometry.wide = true;
         let hero_content_area = wide_hero::wide_hero_hero_pane(
             frame,
             area,
-            wide_hero::LeftPaneFocus::Workspace(focused && interaction.chapter_selection.is_some()),
+            wide_hero::LeftPaneFocus::Workspace(focused && interaction.chapter_focused),
         )
         .expect("wide branch already confirmed wide_hero_presentation fits");
         let hero_height = (book_hero_content_rows(&plan, BOOK_WIDE_OVERVIEW_ROWS) + 1)
@@ -141,7 +161,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             frame,
             hero_area,
             state,
-            focused && interaction.chapter_selection.is_some(),
+            focused && interaction.chapter_focused,
             true,
             &plan,
             None,
@@ -157,12 +177,10 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             frame,
             chapters_content_area,
             state,
-            interaction.chapter_selection,
-            focused && interaction.chapter_selection.is_some(),
-            chapter_list,
-            geometry,
+            focused && interaction.chapter_focused,
+            chapter_presentation,
         );
-        let rail_focused = focused && interaction.chapter_selection.is_none();
+        let rail_focused = focused && !interaction.chapter_focused;
         let right_pane = wide_hero_browser_pane(panes.browser_panel, panes.browser_area);
         geometry.selector_tabs = render_book_pills(
             frame,
@@ -183,10 +201,7 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
         // every panel cell background, so it must not run after the list.
         wide_hero_browser_border(frame, list_panel, rail_focused);
 
-        wide_book_list.set_geometry(list_panel, content_area);
-        if let Some(anchor) = flip_anchor {
-            wide_book_list.apply_viewport_anchor(anchor, content_area.height.max(1) as usize);
-        }
+        book_list.set_geometry(list_panel, content_area);
         let paint_area = Rect {
             x: list_panel.x,
             width: list_panel.width,
@@ -196,12 +211,12 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
             frame,
             paint_area,
             content_area,
-            wide_book_list,
+            book_list,
             rail_focused,
             palette::list_selected_row_bg(),
             None,
         );
-        wide_book_list.finish_view(
+        book_list.finish_view(
             list_panel,
             content_area,
             paint.row_geometry,
@@ -222,9 +237,8 @@ pub(in crate::app) fn render_audiobookshelf_book_content(
         interaction,
         images_enabled,
         geometry,
-        narrow_list,
-        chapter_list,
-        flip_anchor,
+        book_presentation,
+        chapter_presentation,
     )
 }
 
@@ -233,14 +247,16 @@ fn render_narrow_book(
     frame: &mut Frame,
     area: Rect,
     focused: bool,
-    state: &mut AudiobookshelfBookBrowseState,
+    state: &AudiobookshelfBookBrowseState,
     interaction: BookInteraction,
     images_enabled: bool,
     geometry: &mut AudiobookshelfBookGeometry,
-    narrow_list: &mut InlineMediaBrowser<String>,
-    chapter_list: &mut WideMediaList<String>,
-    flip_anchor: Option<&ViewportAnchor<String>>,
+    book_presentation: BookPresentation<'_>,
+    chapter_presentation: BookChapterPresentation<'_>,
 ) -> Option<super::home_hero::HomeImagePaint> {
+    let BookPresentation::Inline(book_list) = book_presentation else {
+        return None;
+    };
     let parts = wide_hero::pill_bar_areas(area);
     geometry.left_area = parts.content_area;
     geometry.wide = false;
@@ -255,12 +271,8 @@ fn render_narrow_book(
         images_enabled,
     );
 
-    narrow_list.set_geometry(content_area, content_area);
+    book_list.set_geometry(content_area, content_area);
     let visible = content_area.height.max(1) as usize;
-    if let Some(anchor) = flip_anchor {
-        narrow_list.apply_viewport_anchor(anchor, visible);
-    }
-
     let hero_rows = book_hero_content_rows(&plan, BOOK_NARROW_OVERVIEW_ROWS);
     let chapter_count = state
         .selected_id
@@ -270,9 +282,7 @@ fn render_narrow_book(
     // Admit the detail block using only the chapter rows that can fit. The
     // chapter painter owns the remaining area and clips/scrolls the full list.
     let hero_block_base = hero_rows as usize + 1 + HERO_BLOCK_EXTRA_ROWS as usize;
-    let chapter_budget = (content_area.height as usize)
-        .saturating_sub(hero_block_base)
-        .max(1);
+    let chapter_budget = visible.saturating_sub(hero_block_base).max(1);
     let chapter_rows = chapter_count.min(chapter_budget);
     // Preserve the ordinary-row fallback when even the bounded hero shell
     // cannot fit; otherwise cap the projected chapter rows below the strict
@@ -285,7 +295,7 @@ fn render_narrow_book(
     let result = render_inline_media_browser(
         frame,
         content_area,
-        &*narrow_list,
+        &*book_list,
         desired_detail_rows,
         focused,
         palette::list_selected_row_bg(),
@@ -293,7 +303,7 @@ fn render_narrow_book(
     let selected_row_rect = result.row_geometry.selected_row_rect(content_area);
     let hero = result.hero_area;
     let row_geometry = result.row_geometry;
-    narrow_list.finish_view(
+    book_list.finish_view(
         content_area,
         content_area,
         row_geometry,
@@ -325,15 +335,7 @@ fn render_narrow_book(
             .saturating_sub(SELECTED_BLOCK_SIDE_PADDING + hero_rows + 1),
         ..hero_area
     };
-    render_book_rows(
-        frame,
-        chapter_area,
-        state,
-        interaction.chapter_selection,
-        focused && interaction.chapter_selection.is_some(),
-        chapter_list,
-        geometry,
-    );
+    render_book_rows(frame, chapter_area, state, false, chapter_presentation);
     image
 }
 
@@ -472,69 +474,41 @@ fn render_book_rows(
     frame: &mut Frame,
     area: Rect,
     state: &AudiobookshelfBookBrowseState,
-    chapter_selection: Option<usize>,
     focused: bool,
-    chapter_list: &mut WideMediaList<String>,
-    geometry: &mut AudiobookshelfBookGeometry,
+    chapter_presentation: BookChapterPresentation<'_>,
 ) {
+    let BookChapterPresentation::Wide(chapter_list) = chapter_presentation;
     if area.height == 0 {
+        chapter_list.invalidate_paint();
         return;
     }
     let Some(id) = state.selected_id.as_deref() else {
+        chapter_list.invalidate_paint();
         return;
     };
     if state.detail_loading {
+        chapter_list.invalidate_paint();
         render_placeholder(frame, area, " Loading…");
         return;
     }
-    let rows = state.visible_rows(id);
-    if rows.is_empty() {
+    if state.visible_rows(id).is_empty() {
+        chapter_list.invalidate_paint();
         render_placeholder(frame, area, " No chapters available");
         return;
     }
-    let show_length = area.width > 40;
-    let media_rows = rows
-        .iter()
-        .enumerate()
-        .map(|(index, row)| {
-            let (primary, duration) = match row {
-                BookRow::Chapter { title, start, end } => (
-                    title.clone(),
-                    list_duration_secs((end - start).max(0.0) as i64),
-                ),
-                BookRow::AudioFile { index, duration } => (
-                    format!("Part {index}"),
-                    list_duration_secs(*duration as i64),
-                ),
-            };
-            MediaListRow::Item {
-                target: index.to_string(),
-                primary,
-                trailing: None,
-                duration: if show_length { duration } else { None },
-                kind: MediaKind::Media,
-                semantic_state: MediaSemanticState::Ordinary,
-            }
-        })
-        .collect();
-    chapter_list.set_content(media_rows);
-    chapter_list.select_index(chapter_selection.unwrap_or(0));
+    // The chapter owner already holds the projected rows (design.md D6); the
+    // painter only paints and retains the current-frame hit geometry.
+    chapter_list.set_geometry(area, area);
     let paint = render_wide_media_list(
         frame,
         area,
         area,
-        &mut *chapter_list,
+        chapter_list,
         focused,
         palette::list_selected_row_bg(),
         None,
     );
-    geometry.chapter_rows = paint
-        .row_geometry
-        .visible_rows(area)
-        .into_iter()
-        .enumerate()
-        .map(|(screen, rect)| (rect, paint.row_geometry.offset() + screen))
-        .collect();
+    chapter_list.finish_view(area, area, paint.row_geometry, paint.selected_row_rect);
 }
 
 fn book_hero_content_rows(plan: &BookHeroPlan, overview_limit: u16) -> u16 {

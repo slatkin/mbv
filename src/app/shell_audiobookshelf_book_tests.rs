@@ -332,7 +332,7 @@ fn abs_book_stays_mounted_and_preserves_selection_across_switch() {
 
 /// split-audiobookshelf-cursor-ownership D4 / task 5.3: a real shell
 /// content push that drops the component's selected book must not leave
-/// any App-sourced interaction value (here `chapter_selection`) in the
+/// any App-sourced interaction value (here `chapter_focused`) in the
 /// component.
 #[test]
 fn abs_book_shell_push_drops_stale_component_chapter_focus() {
@@ -408,14 +408,15 @@ fn abs_book_shell_push_drops_stale_component_chapter_focus() {
     model.push_audiobookshelf_book_content();
     model.sync_active_destination();
 
-    let chapter_selection = model
+    let chapter_focused = model
         .application
         .get_component(&id)
         .and_then(|comp| comp.as_any().downcast_ref::<AudiobookshelfBookComponent>())
-        .and_then(AudiobookshelfBookComponent::chapter_selection);
+        .map(AudiobookshelfBookComponent::chapter_focused);
     assert_eq!(
-        chapter_selection, None,
-        "the content push must not adopt App's stale chapter selection"
+        chapter_focused,
+        Some(false),
+        "the content push must reset the component's stale chapter focus"
     );
 }
 

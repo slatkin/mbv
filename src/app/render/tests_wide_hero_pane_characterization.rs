@@ -356,7 +356,7 @@ fn abs_podcasts_wide_left_pane_fills_via_shared_primitive() {
         palette::resolve_surface_focus(true)
     );
 
-    component.set_episode_selection(Some(0));
+    component.enter_episode_focus();
     let focused_terminal = direct_terminal(|f| component.view(f, area));
     let focused_buffer = focused_terminal.backend().buffer();
     assert_eq!(

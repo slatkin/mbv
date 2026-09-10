@@ -1,12 +1,17 @@
 use super::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
-use super::msg::{Msg, PodcastEpisodeIntent, PodcastEpisodeTransition, ShellRequest};
+use super::msg::{
+    Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition, ShellRequest,
+};
 use crate::app::images::audiobookshelf_cover_cache_key;
 use crate::app::shell::Model;
 use crate::app::tests_podcast::audiobookshelf_app;
 use crate::app::types_audiobookshelf_browse::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
 };
-use mbv_core::audiobookshelf::{AudiobookshelfLibrary, AudiobookshelfShow};
+use mbv_core::audiobookshelf::{
+    AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
+    AudiobookshelfShow,
+};
 use mbv_core::config::{AudiobookshelfSetup, ServiceKind};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -18,7 +23,7 @@ use tuirealm::event::{
 
 /// split-audiobookshelf-cursor-ownership D4 / task 1.3 → 5.1: when a content
 /// push drops the show the component had selected, the component resets its
-/// own `episode_selection` / `episode_filter` / `scroll` to their defaults —
+/// own `episode_focused` / `episode_filter` / `scroll` to their defaults —
 /// it never adopts the values carried in the shell's snapshot for those
 /// fields.
 #[test]
@@ -48,7 +53,7 @@ fn abs_podcast_component_drops_stale_episode_state_when_selection_vanishes() {
     let mut component = AudiobookshelfPodcastComponent::new();
     component.set_content(&first, false);
     component.set_focused(true);
-    component.set_episode_selection(Some(1));
+    component.enter_episode_focus();
     component.set_episode_filter(AudiobookshelfEpisodeFilter::Unplayed);
 
     // New content: show-a is gone. The projected content type no longer
@@ -60,10 +65,9 @@ fn abs_podcast_component_drops_stale_episode_state_when_selection_vanishes() {
     component.set_content(&second, false);
     component.set_focused(true);
 
-    assert_eq!(
-        component.episode_selection(),
-        None,
-        "stale episode selection must reset, not adopt the snapshot's Some(5)"
+    assert!(
+        !component.episode_focused(),
+        "stale episode-pane focus must reset, not adopt the snapshot's stale value"
     );
     assert_eq!(
         component.episode_filter(),
@@ -112,7 +116,7 @@ fn abs_podcast_component_emits_typed_episode_transitions_in_episode_mode() {
     let mut component = AudiobookshelfPodcastComponent::new();
     component.set_content(state, false);
     component.set_focused(true);
-    component.set_episode_selection(Some(0));
+    component.enter_episode_focus();
 
     let message = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Down,
@@ -251,6 +255,138 @@ fn abs_podcast_component_emits_typed_action_intents_without_raw_key_replay() {
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(unrelated, None);
+}
+
+/// 7.2: the parent-owned episode-pane focus is separate from the episode
+/// owner's selection, a filter transition re-projects and re-parks the owner at
+/// its first row, and activation carries the show-qualified stable target the
+/// owner resolved (never a numeric index re-derivation).
+#[test]
+fn abs_podcast_focus_selection_and_filter_transitions_are_owner_authoritative() {
+    let library = AudiobookshelfLibrary {
+        id: "lib".into(),
+        name: "Podcasts".into(),
+        media_type: "podcast".into(),
+    };
+    let mut state = AudiobookshelfBrowseState::new(library);
+    state.append_page(
+        0,
+        20,
+        1,
+        vec![AudiobookshelfShow {
+            library_item_id: "show-a".into(),
+            title: "Show A".into(),
+            author: None,
+            description: None,
+            cover_path: None,
+        }],
+    );
+    state.select(0);
+    state.episodes = Some(vec![
+        AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            published_at: None,
+            duration_seconds: None,
+        },
+        AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-b".into(),
+            title: "Episode B".into(),
+            published_at: None,
+            duration_seconds: None,
+        },
+    ]);
+    state.progress.insert(
+        ("show-a".into(), "episode-a".into()),
+        AudiobookshelfProgress {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            current_time_seconds: 0.0,
+            is_finished: true,
+        },
+    );
+
+    let mut component = AudiobookshelfPodcastComponent::new();
+    component.set_content(&state, false);
+    component.set_focused(true);
+
+    // Entering episode focus does not move the episode owner's selection.
+    assert_eq!(component.episode_cursor(), 0);
+    component.enter_episode_focus();
+    assert!(component.episode_focused());
+    assert_eq!(component.episode_cursor(), 0);
+
+    // A row-local move changes the owner; focus is unchanged, and the resolved
+    // target is show-qualified.
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(component.episode_focused());
+    assert_eq!(component.episode_cursor(), 1);
+    assert_eq!(
+        component.episode_target(),
+        Some(PodcastEpisodeTarget::new(
+            "show-a".into(),
+            "episode-b".into()
+        ))
+    );
+
+    // Leaving focus does not move the owner's selection.
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Esc,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(!component.episode_focused());
+    assert_eq!(component.episode_cursor(), 1);
+    assert!(component.episode_target().is_none());
+
+    // A filter transition re-projects the filtered rows and re-parks the owner
+    // at its first row (the discrete re-projection boundary design.md D5
+    // allows).
+    component.enter_episode_focus();
+    let filter = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char(']'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(matches!(
+        filter,
+        Some(Msg::Shell(
+            ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                PodcastEpisodeTransition::NextFilter
+            )
+        ))
+    ));
+    assert_eq!(
+        component.episode_filter(),
+        AudiobookshelfEpisodeFilter::Played
+    );
+    assert_eq!(component.episode_cursor(), 0);
+    assert_eq!(
+        component.episode_target(),
+        Some(PodcastEpisodeTarget::new(
+            "show-a".into(),
+            "episode-a".into()
+        ))
+    );
+
+    // Activation carries the owner-resolved show-qualified target.
+    assert_eq!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE,
+        })),
+        Some(Msg::Shell(
+            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                Some(PodcastEpisodeTarget::new(
+                    "show-a".into(),
+                    "episode-a".into()
+                ))
+            ))
+        ))
+    );
 }
 
 fn narrow_grid_component_state() -> AudiobookshelfBrowseState {

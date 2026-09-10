@@ -32,10 +32,10 @@ impl Model {
                     self.app
                         .play_selected_audiobookshelf_episode_target(index, &target);
                 } else if let Some(component) = self.abs_podcast_component_mut(index) {
-                    // Entering episode selection is re-homed onto the mounted
-                    // component (task 5.3d.11 U2); the post-request projection
-                    // preserves this selection through `set_content`.
-                    component.set_episode_selection(Some(0));
+                    // Entering episode-pane focus is re-homed onto the mounted
+                    // component (task 5.3d.11 U2); focus is not selection, so
+                    // the episode owner keeps its selected row (design.md D5).
+                    component.enter_episode_focus();
                 }
             }
             super::components::msg::PodcastEpisodeIntent::OpenOrPlay(target) => {
@@ -46,7 +46,7 @@ impl Model {
                     if let Some(component) = self.abs_podcast_component_mut(index) {
                         // Re-homed onto the mounted component (task 5.3d.11 U2),
                         // same as FocusOrPlay.
-                        component.set_episode_selection(Some(0));
+                        component.enter_episode_focus();
                     }
                 } else {
                     self.open_podcast_selection_modal();

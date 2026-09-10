@@ -1,7 +1,9 @@
 use super::audiobookshelf_book::AudiobookshelfBookComponent;
-use super::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, Msg, ShellRequest};
+use super::msg::{
+    AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, Msg, ShellRequest,
+};
 use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
-use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfLibrary};
+use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfChapter, AudiobookshelfLibrary};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
@@ -112,7 +114,7 @@ fn abs_book_component_returns_none_when_unfocused_without_mutating_state() {
         code: Key::Left,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.chapter_selection(), Some(0));
+    assert!(component.chapter_focused());
     component.set_content(&state, false);
     component.set_focused(false);
 
@@ -126,7 +128,7 @@ fn abs_book_component_returns_none_when_unfocused_without_mutating_state() {
         assert_eq!(message, None);
         assert_eq!(component.selected_book_id(), Some("book-0"));
         assert_eq!(component.selected_bucket(), 0);
-        assert_eq!(component.chapter_selection(), Some(0));
+        assert!(component.chapter_focused());
     }
 }
 
@@ -203,7 +205,7 @@ fn abs_book_component_does_not_focus_hidden_chapters_on_narrow_left() {
             modifiers: KeyModifiers::NONE,
         }));
         assert_eq!(focus, None);
-        assert!(component.chapter_selection().is_none());
+        assert!(!component.chapter_focused());
     }
 
     let movement = component.on(&Event::Keyboard(KeyEvent {
@@ -239,7 +241,7 @@ fn abs_book_component_gates_chapter_focus_after_wide_to_narrow_resize() {
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    assert!(!component.geometry().chapter_rows.is_empty());
+    assert!(component.chapter_content_rect_for_test().is_some());
 
     let focus = component.on(&Event::Keyboard(KeyEvent {
         code: Key::Left,
@@ -338,9 +340,110 @@ fn abs_book_component_page_stride_comes_from_painted_geometry() {
     );
 }
 
+/// 7.4: the parent-owned chapter-pane focus is separate from the chapter
+/// owner's selection, and chapter activation resolves the stable
+/// book-qualified target (book identity plus the owner's row discriminator),
+/// never a render-time numeric index. Narrow keeps chapter focus off.
+#[test]
+fn abs_book_chapter_focus_is_separate_from_selection_and_is_book_qualified() {
+    let mut state = book_state(1, true);
+    let chapters = vec![
+        AudiobookshelfChapter {
+            id: 0,
+            start: 0.0,
+            end: 60.0,
+            title: "Chapter 1".into(),
+        },
+        AudiobookshelfChapter {
+            id: 1,
+            start: 60.0,
+            end: 120.0,
+            title: "Chapter 2".into(),
+        },
+    ];
+    state.books[0].chapters = chapters.clone();
+    state
+        .detail_cache
+        .insert("book-0".into(), (chapters, Vec::new()));
+
+    let mut component = AudiobookshelfBookComponent::new();
+    component.set_content(&state, false);
+    component.set_focused(true);
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+
+    // Entering chapter focus does not move the owner's selection, and the
+    // emitted focus target is book-qualified.
+    let focus = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Left,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(
+        focus,
+        Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::ChapterFocus(Some(BookChapterTarget::new("book-0".into(), 0)))
+        )))
+    );
+    assert!(component.chapter_focused());
+
+    // A row-local move advances the owner; activation carries the new stable
+    // discriminator.
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE,
+        })),
+        Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
+            AudiobookshelfBookIntent::ActivateChapter(Some(BookChapterTarget::new(
+                "book-0".into(),
+                1
+            )))
+        )))
+    );
+
+    // Leaving focus does not move the owner's selection: re-entering focus is
+    // still book-qualified at the same discriminator.
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Right,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(!component.chapter_focused());
+    let reenter = component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Left,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(
+        reenter,
+        Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+            AudiobookshelfBookMove::ChapterFocus(Some(BookChapterTarget::new("book-0".into(), 1)))
+        )))
+    );
+
+    // Narrow renders the chapter rows as inline detail but does not expose
+    // chapter focus: Left stays unclaimed.
+    let mut narrow = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    narrow
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    assert!(!component.chapter_focused());
+    assert_eq!(
+        component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Left,
+            modifiers: KeyModifiers::NONE,
+        })),
+        None
+    );
+}
+
 /// split-audiobookshelf-cursor-ownership D4 / task 1.3 → 5.2: when a content
 /// push drops the book the component had selected, the component resets its
-/// own `chapter_selection` / `browser_offset` / `selected_bucket` rather than
+/// own `chapter_focused` / `browser_offset` / `selected_bucket` rather than
 /// adopting the shell snapshot's copies.
 #[test]
 fn abs_book_component_drops_stale_chapter_focus_when_selection_vanishes() {
@@ -352,7 +455,7 @@ fn abs_book_component_drops_stale_chapter_focus_when_selection_vanishes() {
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    assert!(!component.geometry().chapter_rows.is_empty());
+    assert!(component.chapter_content_rect_for_test().is_some());
 
     // Focus the chapter list locally.
     let focus = component.on(&Event::Keyboard(KeyEvent {
@@ -365,7 +468,7 @@ fn abs_book_component_drops_stale_chapter_focus_when_selection_vanishes() {
             AudiobookshelfBookMove::ChapterFocus(Some(_))
         )))
     ));
-    assert_eq!(component.chapter_selection(), Some(0));
+    assert!(component.chapter_focused());
 
     // New content in which the selected book is gone: the component resets
     // its own chapter focus (the projected type cannot carry one).
@@ -377,9 +480,8 @@ fn abs_book_component_drops_stale_chapter_focus_when_selection_vanishes() {
     component.set_content(&replacement, false);
     component.set_focused(true);
 
-    assert_eq!(
-        component.chapter_selection(),
-        None,
+    assert!(
+        !component.chapter_focused(),
         "stale chapter focus must reset when the selected book vanishes"
     );
 }

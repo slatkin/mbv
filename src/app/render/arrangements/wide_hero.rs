@@ -217,7 +217,7 @@ pub(in crate::app) fn wide_hero_browser_pane(
 /// enum rather than a `bool`: the defect class this primitive exists to
 /// prevent is exactly the read-only-versus-workspace confusion (e.g. passing
 /// a bare `focused` when the correct value is `focused &&
-/// interaction.episode_selection.is_some()`). `ReadOnly` and `Workspace(..)`
+/// interaction.episode_focused`). `ReadOnly` and `Workspace(..)`
 /// are two visibly different call shapes, so a reviewer can check the
 /// variant rather than the expression.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

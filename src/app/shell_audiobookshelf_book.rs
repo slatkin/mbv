@@ -53,9 +53,9 @@ impl Model {
                         self.app.enqueue_selected_audiobookshelf_book(index);
                     }
                 }
-                AudiobookshelfBookIntent::ActivateChapter(chapter_selection) => {
+                AudiobookshelfBookIntent::ActivateChapter(chapter_target) => {
                     self.app
-                        .activate_audiobookshelf_book_row_target(chapter_selection);
+                        .activate_audiobookshelf_book_row_target(chapter_target);
                 }
             },
             _ => unreachable!("non-book request routed to book handler"),

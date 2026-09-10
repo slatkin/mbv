@@ -87,7 +87,7 @@ fn abs_podcast_shell_push_drops_stale_component_episode_state() {
     model
         .abs_podcast_component_mut(0)
         .expect("podcast component mounted")
-        .set_episode_selection(Some(0));
+        .enter_episode_focus();
 
     // App content changes: show-a (the component's selected show) is removed.
     let state = &mut model.app.audiobookshelf_browse[0];
@@ -96,13 +96,12 @@ fn abs_podcast_shell_push_drops_stale_component_episode_state() {
     model.push_audiobookshelf_podcast_content();
     model.sync_active_destination();
 
-    assert_eq!(
-        model
+    assert!(
+        !model
             .abs_podcast_component_mut(0)
             .expect("podcast component mounted")
-            .episode_selection(),
-        None,
-        "the content push must drop the component's stale episode selection"
+            .episode_focused(),
+        "the content push must drop the component's stale episode-pane focus"
     );
 }
 
@@ -135,7 +134,7 @@ fn abs_podcast_shell_routes_episode_transition_to_app() {
     model
         .abs_podcast_component_mut(0)
         .expect("podcast component mounted")
-        .set_episode_selection(Some(0));
+        .enter_episode_focus();
     let message = model
         .application
         .get_component_mut(&id)
@@ -158,7 +157,7 @@ fn abs_podcast_shell_routes_episode_transition_to_app() {
     let component = model
         .abs_podcast_component_mut(0)
         .expect("podcast component mounted");
-    assert_eq!(component.episode_selection(), Some(1));
+    assert_eq!(component.episode_cursor(), 1);
 }
 
 #[test]
@@ -170,13 +169,10 @@ fn abs_podcast_shell_routes_action_intent_to_app() {
     model.sync_audiobookshelf_podcast();
     model.sync_active_destination();
     model.handle_audiobookshelf_podcast_episode_intent(PodcastEpisodeIntent::FocusOrPlay(None));
-    assert_eq!(
-        model
-            .abs_podcast_component_mut(0)
-            .expect("podcast component mounted")
-            .episode_selection(),
-        Some(0)
-    );
+    assert!(model
+        .abs_podcast_component_mut(0)
+        .expect("podcast component mounted")
+        .episode_focused());
 
     // With episode selection active on the component, the enqueue intent
     // reaches the App enqueue seam (the default fixture has one downloaded
@@ -192,7 +188,7 @@ fn abs_podcast_shell_routes_action_intent_to_app() {
 
 /// U5 regression: playback target resolution reads the mounted component's
 /// authoritative episode selection through the U0 accessor, never the App
-/// `episode_selection` mirror. When the component selection is present but
+/// `episode_focused` component state. When the component selection is present but
 /// the App mirror is stale (None), FocusOrPlay must still resolve the
 /// component-selected episode into a real play attempt rather than
 /// re-entering episode selection. Without an eligible owner the play is
@@ -207,7 +203,7 @@ fn abs_podcast_focus_play_uses_component_selection_not_stale_app_mirror() {
     model
         .abs_podcast_component_mut(0)
         .expect("podcast component mounted")
-        .set_episode_selection(Some(0));
+        .enter_episode_focus();
 
     // A real FocusOrPlay through the Model handler must not re-enter
     // selection: the component's owned selection resolves the play target,
@@ -227,12 +223,11 @@ fn abs_podcast_focus_play_uses_component_selection_not_stale_app_mirror() {
             .contains("Audiobookshelf playback owner is unavailable"),
         "component-resolved FocusOrPlay must attempt playback, not re-enter selection"
     );
-    assert_eq!(
+    assert!(
         model
             .abs_podcast_component_mut(0)
             .expect("podcast component mounted")
-            .episode_selection(),
-        Some(0),
+            .episode_focused(),
         "component selection must remain the resolved episode target"
     );
     assert_eq!(
@@ -252,7 +247,7 @@ fn abs_podcast_enqueue_uses_component_selection_over_stale_app_mirror() {
     model
         .abs_podcast_component_mut(0)
         .expect("podcast component mounted")
-        .set_episode_selection(Some(0));
+        .enter_episode_focus();
 
     let target = model
         .abs_podcast_component_mut(0)
@@ -268,7 +263,7 @@ fn abs_podcast_enqueue_uses_component_selection_over_stale_app_mirror() {
     let component = model
         .abs_podcast_component_mut(0)
         .expect("podcast component mounted");
-    assert_eq!(component.episode_selection(), Some(0));
+    assert!(component.episode_focused());
 }
 
 /// The load-bearing space/ctrl-a contract (task 5.3d.7), with an Emby
@@ -293,7 +288,7 @@ fn abs_podcast_shell_space_and_ctrla_are_inert_without_owner() {
     model
         .abs_podcast_component_mut(0)
         .expect("podcast component mounted")
-        .set_episode_selection(Some(0));
+        .enter_episode_focus();
 
     // Space -> FocusOrPlay: reported with selection, resolved inert at the
     // App boundary without an eligible owner.
@@ -313,13 +308,10 @@ fn abs_podcast_shell_space_and_ctrla_are_inert_without_owner() {
     // is inert on an unsupported owner, surfacing the owner-unavailable
     // status without enqueuing.
     model.handle_audiobookshelf_podcast_episode_intent(intent);
-    assert_eq!(
-        model
-            .abs_podcast_component_mut(0)
-            .expect("podcast component mounted")
-            .episode_selection(),
-        Some(0)
-    );
+    assert!(model
+        .abs_podcast_component_mut(0)
+        .expect("podcast component mounted")
+        .episode_focused());
     assert_eq!(
         model.app.player_tab.total_queue_len(),
         0,
@@ -349,13 +341,12 @@ fn abs_podcast_shell_space_and_ctrla_are_inert_without_owner() {
     // Resolve the reported intent at the Model boundary so the Composed
     // queue is edited; the component only reports, it does not enqueue.
     model.handle_audiobookshelf_podcast_episode_intent(intent);
-    assert_eq!(
+    assert!(
         model
             .abs_podcast_component_mut(0)
             .expect("podcast component mounted")
-            .episode_selection(),
-        Some(0),
-        "enqueue intent must preserve the selected episode"
+            .episode_focused(),
+        "enqueue intent must preserve episode-pane focus and the selected episode"
     );
     assert_eq!(model.app.player_tab.total_queue_len(), 1);
     assert_eq!(
@@ -670,17 +661,16 @@ fn podcast_episode_activation_branch_flips_on_resize_tick_before_repaint() {
         model.app.pending_overlay.is_none(),
         "wide activation right after the resize tick must not open the episode modal"
     );
-    let episode_selection = model
+    let episode_focused = model
         .application
         .get_component_mut(&id)
         .expect("podcast component")
         .as_any_mut()
         .downcast_mut::<crate::app::components::AudiobookshelfPodcastComponent>()
         .expect("podcast component type")
-        .episode_selection();
-    assert_eq!(
-        episode_selection,
-        Some(0),
+        .episode_focused();
+    assert!(
+        episode_focused,
         "wide activation must enter episode focus on the component"
     );
 }
