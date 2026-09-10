@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::tests::*;
+use mbv_core::feed_entry_state::{FeedEntryState, FeedEntryStore};
 use mbv_core::playback_queue::FeedEntry;
 
 fn playable_feed_entry(guid: &str) -> FeedEntry {
@@ -15,6 +16,15 @@ fn playable_feed_entry(guid: &str) -> FeedEntry {
         feed_id: None,
         position_ticks: 0,
         played: false,
+    }
+}
+
+/// The same fixture with a `feed_id` set, since the local store keys rows by
+/// `(user_id, feed_id, entry_guid)`.
+fn stored_feed_entry(feed_id: &str, guid: &str) -> FeedEntry {
+    FeedEntry {
+        feed_id: Some(feed_id.into()),
+        ..playable_feed_entry(guid)
     }
 }
 
@@ -373,4 +383,55 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
         "Feeds F5 must not clear the Audiobookshelf catalog"
     );
     assert_eq!(app.player_tab.total_queue_len(), 0);
+}
+
+/// Feed resume position and watched state live in the local store. They are
+/// written through the playback lifecycle path, keyed per user and per feed,
+/// and applied to a fresh fetch after a restart.
+#[test]
+fn local_feed_entry_state_survives_a_restart_and_stays_scoped_to_its_feed() {
+    let _state_dir = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let feed_id = "https://example.test/feed.xml";
+    let other_feed = "https://example.test/other.xml";
+
+    // Written through the same path the playback lifecycle uses.
+    app.write_feed_entry_state(feed_id, "ep-a", 4200, false);
+    app.write_feed_entry_state(feed_id, "ep-b", 0, true);
+    app.write_feed_entry_state(other_feed, "ep-a", 9999, true);
+    app.feed_entry_state.put(
+        "another-user",
+        feed_id,
+        "ep-a",
+        FeedEntryState {
+            position_ticks: 777,
+            played: true,
+        },
+    );
+
+    // A restart: reload from disk, then hydrate a fresh fetch. Only rows for
+    // this user and this feed may be applied.
+    app.feed_entry_state = FeedEntryStore::load();
+    let mut entries = [
+        stored_feed_entry(feed_id, "ep-a"),
+        stored_feed_entry(feed_id, "ep-b"),
+        stored_feed_entry(feed_id, "ep-c"),
+    ];
+    app.hydrate_feed_entries_for_subscription(feed_id, &mut entries);
+
+    assert_eq!(
+        entries[0].position_ticks, 4200,
+        "resume position restored from disk"
+    );
+    assert!(!entries[0].played);
+    assert!(entries[1].played, "watched flag restored from disk");
+    assert_eq!(
+        entries[2].position_ticks, 0,
+        "an entry with no stored row stays as fetched"
+    );
+    assert!(!entries[2].played);
+
+    // Play/resume from the list uses the same stored row.
+    let resumed = app.hydrate_feed_entry_state(stored_feed_entry(feed_id, "ep-a"));
+    assert_eq!(resumed.position_ticks, 4200);
 }

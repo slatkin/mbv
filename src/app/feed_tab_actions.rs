@@ -2,7 +2,9 @@ use super::feed_parse::fetch_and_parse_entries;
 use super::notify_actions::ToastSeverity;
 use super::types_feed_tab::FeedTabRefreshResult;
 use super::{App, LibEvent};
-use mbv_core::playback_queue::QueueItem;
+use mbv_core::feed_entry_state::FeedEntryState;
+use mbv_core::playback_queue::{FeedEntry, QueueItem};
+use std::collections::HashMap;
 
 impl App {
     /// Whether feed subscriptions are configured and the Feeds tab should
@@ -154,7 +156,7 @@ impl App {
     }
 
     /// Play the exact entry selected by the Feeds Interactive Component.
-    pub(super) fn play_feed_entry(&mut self, entry: mbv_core::playback_queue::FeedEntry) {
+    pub(super) fn play_feed_entry(&mut self, entry: FeedEntry) {
         if entry.primary_source().is_none() {
             self.flash(
                 "Feed entry has no playable source".into(),
@@ -168,7 +170,7 @@ impl App {
     }
 
     /// Enqueue the exact entry selected by the Feeds Interactive Component.
-    pub(super) fn enqueue_feed_entry(&mut self, entry: mbv_core::playback_queue::FeedEntry) {
+    pub(super) fn enqueue_feed_entry(&mut self, entry: FeedEntry) {
         if entry.primary_source().is_none() {
             self.flash(
                 "Feed entry has no playable source".into(),
@@ -177,5 +179,157 @@ impl App {
             return;
         }
         self.submit_queue_item(QueueItem::Feed(entry), false);
+    }
+
+    /// The Emby user id that keys local feed-entry state, or an empty sentinel
+    /// for a feed-only client with no Emby Service. The store is machine-local,
+    /// so the sentinel only has to be stable, not globally unique.
+    fn feed_state_user_id(&self) -> String {
+        self.config
+            .lock()
+            .unwrap()
+            .emby_setup
+            .as_ref()
+            .map(|setup| setup.user_id.clone())
+            .unwrap_or_default()
+    }
+
+    /// Copy stored playback state into one entry before it is played or queued.
+    /// A missing feed identity or a missing stored row leaves the entry exactly
+    /// as fetched.
+    pub(super) fn hydrate_feed_entry_state(&mut self, mut entry: FeedEntry) -> FeedEntry {
+        let Some(feed_id) = entry.feed_id.clone() else {
+            return entry;
+        };
+        let user_id = self.feed_state_user_id();
+        if let Some(state) = self.feed_entry_state.get(&user_id, &feed_id, &entry.guid) {
+            entry.position_ticks = state.position_ticks;
+            entry.played = state.played;
+            log::info!(
+                target: "feed_state",
+                "hydrated feed entry guid={} feed_id={} pos={}s played={}",
+                entry.guid,
+                feed_id,
+                state.position_ticks / mbv_core::api::TICKS_PER_SECOND,
+                state.played,
+            );
+        }
+        entry
+    }
+
+    /// Merge stored state into one subscription's freshly fetched entries with a
+    /// single store read rather than one read per entry. Entries with no stored
+    /// row stay as fetched (zero position, unplayed).
+    pub(super) fn hydrate_feed_entries_for_subscription(
+        &mut self,
+        feed_id: &str,
+        entries: &mut [FeedEntry],
+    ) {
+        let user_id = self.feed_state_user_id();
+        let rows = self.feed_entry_state.scan(&user_id, feed_id);
+        if rows.is_empty() {
+            return;
+        }
+        let lookup: HashMap<&str, FeedEntryState> = rows
+            .iter()
+            .map(|(guid, state)| (guid.as_str(), *state))
+            .collect();
+        let mut hydrated = 0usize;
+        for entry in entries.iter_mut() {
+            if let Some(state) = lookup.get(entry.guid.as_str()) {
+                entry.position_ticks = state.position_ticks;
+                entry.played = state.played;
+                hydrated += 1;
+            }
+        }
+        if hydrated > 0 {
+            log::info!(
+                target: "feed_state",
+                "bulk-hydrated {hydrated} entries for feed_id={feed_id}",
+            );
+        }
+    }
+
+    /// Store one entry's playback state and rewrite the state file. A failed
+    /// write is logged and discarded: it never stops playback, and the
+    /// previously written state stays intact.
+    pub(super) fn write_feed_entry_state(
+        &mut self,
+        feed_id: &str,
+        entry_guid: &str,
+        position_ticks: i64,
+        played: bool,
+    ) {
+        let user_id = self.feed_state_user_id();
+        self.feed_entry_state.put(
+            &user_id,
+            feed_id,
+            entry_guid,
+            FeedEntryState {
+                position_ticks,
+                played,
+            },
+        );
+        match self.feed_entry_state.save() {
+            Ok(()) => log::info!(
+                target: "feed_state",
+                "wrote feed entry state guid={} feed_id={} pos={}s played={}",
+                entry_guid,
+                feed_id,
+                position_ticks / mbv_core::api::TICKS_PER_SECOND,
+                played,
+            ),
+            Err(error) => log::warn!(
+                target: "feed_state",
+                "feed state write failed guid={} feed_id={}: {error}",
+                entry_guid,
+                feed_id,
+            ),
+        }
+    }
+
+    /// Resolve an addressable Feed queue slot, derive its lifecycle state,
+    /// update queue progress, and write the resulting `FeedEntryState` without
+    /// invoking Emby progress reporting. `completed` is true for known-runtime
+    /// EOF or stop at/above 95% -- played entries store position zero.
+    /// Unknown-runtime EOF keeps `played` false.
+    pub(super) fn persist_feed_slot_lifecycle(
+        &mut self,
+        slot_id: mbv_core::playback_queue::QueueSlotId,
+        position_ticks: i64,
+        completed: bool,
+    ) {
+        // Extract identity from the slot before any mutable borrow.
+        let (feed_id, entry_guid) = {
+            let queue = self.playback_queue();
+            let Some(slot) = queue.queue.slot(slot_id) else {
+                return;
+            };
+            let QueueItem::Feed(ref entry) = slot.item else {
+                return;
+            };
+            let Some(ref feed_id) = entry.feed_id else {
+                return;
+            };
+            (feed_id.clone(), entry.guid.clone())
+        };
+        let runtime = {
+            let queue = self.playback_queue();
+            queue
+                .queue
+                .slot(slot_id)
+                .map(|s| s.item.runtime_ticks())
+                .unwrap_or(0)
+        };
+        let (store_position, store_played) = if completed && runtime > 0 {
+            (0, true)
+        } else {
+            (position_ticks, false)
+        };
+        let queue_mut = self.playback_queue_mut();
+        let _ = queue_mut
+            .queue
+            .apply_progress(slot_id, store_position, store_played);
+        self.write_feed_entry_state(&feed_id, &entry_guid, store_position, store_played);
     }
 }

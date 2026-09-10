@@ -229,6 +229,7 @@ impl App {
             idle_feed: init.idle_feed,
             feed_seek_pending_slot: None,
             feed_tab: super::types_feed_tab::FeedTabState::default(),
+            feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::load(),
         };
         app.sync_feed_subscriptions();
         app

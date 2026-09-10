@@ -346,6 +346,7 @@ pub(crate) fn make_app_stub() -> App {
         idle_feed: None,
         feed_seek_pending_slot: None,
         feed_tab: super::types_feed_tab::FeedTabState::default(),
+        feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::default(),
     }
 }
 
