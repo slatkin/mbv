@@ -209,7 +209,7 @@ impl BrowserComponent {
                 labels: &labels,
                 ids: &ids,
                 selected_pos,
-                prefix: Some(" ⌘ "),
+                prefix: Some(" ★ "),
             },
         );
     }
