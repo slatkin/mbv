@@ -10,7 +10,7 @@
 
 ## 3. Reset Semantics
 
-- [ ] 3.1 Clear the override inside `refresh_current_view`'s `PanelFocus::Library` arm (not at the function top, so a queue-focus refresh leaves the split untouched) and confirm cross-surface sharing; verify with tests that a library-view refresh returns the split to the default ratio, a queue-focus refresh leaves the split unchanged, switching wide tabs keeps the session width (clamped per surface), and an assertion path showing no preference/config write occurs on drag.
+- [x] 3.1 Clear the override inside `refresh_current_view`'s `PanelFocus::Library` arm (not at the function top, so a queue-focus refresh leaves the split untouched) and confirm cross-surface sharing; verify with tests that a library-view refresh returns the split to the default ratio, a queue-focus refresh leaves the split unchanged, switching wide tabs keeps the session width (clamped per surface), and an assertion path showing no preference/config write occurs on drag.
 
 ## 4. Integration and Documentation
 
