@@ -31,7 +31,7 @@
 ## 5. Guardrails
 
 - [ ] 5.1 Add the ast-grep rule that fails on surface role names and `resolve_surface_*` calls in production screens outside `src/app/render/theme/`, and wire it into `ast-grep scan`. Verify: `ast-grep scan` passes on the migrated tree and fails when a role name is reintroduced in a screen (prove it once, then revert the probe).
-- [ ] 5.2 Add the conformance test enumerating every `Surface` × breakpoint × focus state, asserting the rendered rect's fill equals the table's value. Verify: the test covers every table row, fails if a row's painter is changed to another level's colour (prove it once, then revert), and its expectations are generated from the table rather than duplicated by hand.
+- [ ] 5.2 Add the conformance test enumerating every `Surface` × breakpoint × focus state, asserting the rendered rect's fill equals the table's value. Verify: the test covers every table row, fails if a row's painter is changed to another level's colour (prove it once, then revert), and its expectations are generated from the table rather than duplicated by hand. Pin two things this migration cannot: (a) the wide music browser's container occlusion — the shell's `LibraryColumn` is the only painter of that rect and the spacer row is `PillRowGap`, so a later screen that fills it again fails; (b) an unfocused selected row paints no hole at all, which is what makes the restored `selected_row_surface_color` parameter value-neutral — and if that gating ever changes, the test must also fail unless the row's colour parameter becomes its containing column's focus rather than a cursor bit.
 
 ## 6. Verify
 
